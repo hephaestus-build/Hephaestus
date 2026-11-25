@@ -127,7 +127,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     }
 
                     @Override
-                    public void prepareErasure(PersonDataSelection selection) {
+                    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
                         requestRemoval(selection);
                     }
 
@@ -179,7 +179,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
 
                     // The copies' erasure cancels the jobs and deletes these rows first; this deletes what remains.
                     @Override
-                    public void prepareErasure(PersonDataSelection selection) {}
+                    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {}
 
                     @Override
                     public long erase(PersonDataSelection selection, PersonScope frozenScope) {

@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.net.URI;
@@ -104,6 +105,9 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     private AgentSandboxRepository repository;
 
     @Autowired
+    private WorkspaceLocks workspaceLocks;
+
+    @Autowired
     private AgentRuns runs;
 
     @Autowired
@@ -156,6 +160,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                 .getId();
         sandboxes = new AgentSandboxes(
                 repository,
+                workspaceLocks,
                 runs,
                 claims,
                 new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY)),

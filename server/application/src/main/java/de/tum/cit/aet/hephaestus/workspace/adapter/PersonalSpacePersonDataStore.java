@@ -12,7 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The person's own personal space. Export names it by its slug and creation time; what lives inside it is exported by
- * its own stores. Erasure disposes of the space with its owner's membership, as the erasure of the account does.
+ * its own stores. Erasure ends the space with everything in it, as the erasure of the account does.
  */
 final class PersonalSpacePersonDataStore implements PersonDataContributor {
     /** After the stores whose rows may live inside the space, and before the account store. */
@@ -54,6 +54,14 @@ final class PersonalSpacePersonDataStore implements PersonDataContributor {
                 SELECT json_build_object('slug', slug, 'created_at', created_at)::text
                 FROM workspace WHERE id = ANY(:ids) ORDER BY id
                 """, Map.of("ids", new SqlArrayValue("bigint", ids)), (rs, row) -> mapper.readTree(rs.getString(1)));
+    }
+
+    /** Runs before every store's erasure, the conversation copy store's sandbox deletion included. */
+    @Override
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
+        selection
+                .rows()
+                .forEach(row -> spaces.suspend(Long.parseLong(row.columns().get("id"))));
     }
 
     @Override

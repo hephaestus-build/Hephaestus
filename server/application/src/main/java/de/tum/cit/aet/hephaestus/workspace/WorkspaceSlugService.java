@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Allocates available workspace names and records permanent rename history. */
@@ -80,9 +81,27 @@ public class WorkspaceSlugService {
     public boolean isAvailable(String slug) {
         return WorkspaceSlugValidator.isAssignable(slug)
                 && !workspaceRepository.existsByWorkspaceSlug(slug)
-                && !reservations.existsById(slug)
-                && !reservations.existsById(erasedNamespaces.slugToken(slug))
+                && !isReserved(slug)
                 && !workspaceSlugHistoryRepository.existsByOldSlug(slug);
+    }
+
+    /**
+     * Whether a slug of either kind is reserved: as itself, or as the keyed token that an erased namespace or an ended
+     * personal space keeps instead. The database cannot check the token, whose key it never holds, so every creator
+     * of a slug asks this.
+     */
+    public boolean isReserved(String slug) {
+        return reservations.existsById(slug) || reservations.existsById(erasedNamespaces.slugToken(slug));
+    }
+
+    /**
+     * Keeps an ended personal space's address reserved only as its keyed token, in the caller's transaction: the
+     * plaintext goes, and {@link #isReserved} still answers true.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void retire(String slug) {
+        reservations.release(slug);
+        reservations.reserve(erasedNamespaces.slugToken(slug));
     }
 
     /** The slug that a name normalizes to, before a suffix that avoids a collision. */

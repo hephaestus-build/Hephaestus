@@ -188,6 +188,8 @@ public class PersonDataService {
         return refs;
     }
 
+    private record FrozenErasure(Map<String, PersonDataSelection> selections, PersonScope scope) {}
+
     private record ErasureAdmission(String state, @Nullable String scopeJson) {}
 
     private void requireActiveAdministratorAndLockAccount(long administratorId, @Nullable Long personAccountId) {
@@ -299,11 +301,12 @@ public class PersonDataService {
             try (admission) {
                 // Another pass can commit a store receipt and a new fact while this pass waits for the lease.
                 requireJournalProof(id, recovery);
-                Map<String, PersonDataSelection> frozen = tx.execute(status -> {
+                var admitted = tx.execute(status -> {
                     PersonDataRequest r = lockAdmittedErasure(id);
-                    return r == null ? Map.<String, PersonDataSelection>of() : selections(r);
+                    return r == null ? null : new FrozenErasure(selections(r), scope(r));
                 });
-                if (frozen == null || frozen.isEmpty()) return;
+                if (admitted == null || admitted.selections().isEmpty()) return;
+                Map<String, PersonDataSelection> frozen = admitted.selections();
                 Set<String> inventory = registry.stores().stream()
                         .map(PersonDataContributor::store)
                         .collect(Collectors.toUnmodifiableSet());
@@ -311,7 +314,7 @@ public class PersonDataService {
                     throw new IllegalStateException("Erasure contributor inventory changed");
                 for (var store : registry.stores()) {
                     activeStore = store.store();
-                    store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
+                    store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())), admitted.scope());
                 }
                 for (var store : registry.stores()) {
                     activeStore = store.store();

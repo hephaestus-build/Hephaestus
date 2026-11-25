@@ -9,8 +9,8 @@ public interface WorkspaceMemberships {
 
     long accountIdForUser(long scmUserId);
 
-    /** The team workspaces where the account has a membership row, also one it left. A personal space is none of them. */
-    List<Long> teamWorkspaceIds(long accountId);
+    /** The workspaces where the account has a membership row, also one it left, and its personal space. */
+    List<Long> workspaceIds(long accountId);
 
     /** Whether the account has a membership row in the workspace, also one it left. */
     boolean hasMembership(long workspaceId, long accountId);

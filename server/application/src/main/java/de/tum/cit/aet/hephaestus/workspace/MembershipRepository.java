@@ -197,11 +197,4 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     @WorkspaceAgnostic("Account erasure or verified absorption removes memberships across workspaces")
     @Query("DELETE FROM Membership m WHERE m.id.accountId = :accountId")
     void deleteByAccountId(@Param("accountId") long accountId);
-
-    @Modifying
-    @Query(value = """
-        DELETE FROM membership m USING workspace w
-        WHERE w.id = m.workspace_id AND w.personal_account_id = :accountId
-        """, nativeQuery = true)
-    int deletePersonalOwner(@Param("accountId") long accountId);
 }

@@ -99,8 +99,14 @@ Bootstrap and startup activation read team workspaces only.
 
 An instance admin's person-data preview and export of an account select its team memberships only.
 They name the personal space only by its slug and creation time (`PersonalSpacePersonDataStore`).
-The erasure of an account disposes of its personal space and the membership.
 `WorkspaceKindArchitectureTest` fails when another class calls the any-kind lookup.
+
+The erasure of an account ends its personal space (`WorkspaceLifecycleService.erasePersonalSpace`).
+First, it suspends the space, so no request enters it and no queued run starts (ADR 0126).
+Next, the conversation copy store deletes the space's sandboxes, as it does for the person's team workspaces.
+A failed sandbox deletion stops the erasure, and a resumed erasure deletes the sandbox again.
+Then the cleanup owners of a workspace purge (`WorkspacePurgeContributor`) remove what lives in the space, and the space goes.
+The slug reservation keeps only a keyed token of the slug (`WorkspaceNamespaceReservation`), as for an erased personal namespace.
 
 Every `@WorkspaceScopedController` declares `@TeamOnly` or `@PersonalAllowed`.
 `WorkspaceKindArchitectureTest` fails on a controller that declares neither, or both.

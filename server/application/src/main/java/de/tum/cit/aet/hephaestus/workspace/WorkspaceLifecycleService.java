@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -44,6 +45,8 @@ public class WorkspaceLifecycleService {
 
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
 
+    private final WorkspaceSlugService slugs;
+
     private final List<WorkspacePurgeGuard> purgeGuards;
     private final List<WorkspacePurgeContributor> purgeContributors;
     private final List<WorkspaceResumeGuard> resumeGuards;
@@ -60,6 +63,7 @@ public class WorkspaceLifecycleService {
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
+            WorkspaceSlugService slugs,
             List<WorkspacePurgeGuard> purgeGuards,
             List<WorkspacePurgeContributor> purgeContributors,
             List<WorkspaceResumeGuard> resumeGuards,
@@ -74,6 +78,7 @@ public class WorkspaceLifecycleService {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
+        this.slugs = slugs;
         this.purgeGuards = purgeGuards;
         this.purgeContributors = purgeContributors;
         this.resumeGuards = resumeGuards;
@@ -194,11 +199,7 @@ public class WorkspaceLifecycleService {
 
     private Workspace purge(Workspace workspace) {
         Long workspaceId = workspace.getId();
-        sweepAdmission.admitWorkspacePurge(workspaceId);
-        purgeContributors.stream()
-                .sorted(Comparator.comparingInt(WorkspacePurgeContributor::getOrder))
-                .forEach(contributor -> contributor.deleteWorkspaceData(workspaceId));
-        workspaceMembershipRepository.deleteAllByWorkspaceId(workspaceId);
+        deleteWorkspaceData(workspaceId);
 
         // Bulk deletion would leave these managed children queued for a second orphan-removal
         // delete.
@@ -227,6 +228,52 @@ public class WorkspaceLifecycleService {
                 .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
                 .log("Purged workspace"));
         return purged;
+    }
+
+    /**
+     * Ends the account's personal space, in the transaction of the account's erasure. The cleanup owners of a workspace
+     * purge remove what lives in the space, with the space's configuration trail, then the space itself goes. Its address
+     * stays reserved only as a keyed token, so the database keeps no plaintext of it, and a new personal space never
+     * draws it ({@link WorkspaceSlugService#isReserved}).
+     *
+     * <p>No purge guard runs: the erasure has already closed admission, as the account is {@code DELETING} and its
+     * tokens are revoked. The row lock makes a writer that still names the space wait, then fail on its absence. The
+     * conversation copy store deletes the space's physical sandboxes before this step and keeps custody of a failed
+     * deletion; a sandbox row that is still here goes with the purge, and the reaper deletes its claim. A repeated call
+     * finds no space and does nothing.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void erasePersonalSpace(long accountId) {
+        var space = workspaceRepository.lockPersonalSpace(accountId).orElse(null);
+        if (space == null) return;
+        // Suspended here too, for a path that skipped suspendPersonalSpaceForErasure, such as a restore's recovery.
+        workspaceRepository.suspendPersonalSpace(space.getId());
+        deleteWorkspaceData(space.getId());
+        // Its trail would hold the space's row: config_audit_event's workspace key has no delete action.
+        configAudit.erasePersonalSpaceTrail(space.getId());
+        workspaceRepository.deletePersonalSpace(space.getId());
+        slugs.retire(space.getSlug());
+    }
+
+    /**
+     * Closes a personal space before its erasure removes anything (ADR 0126): the space is {@code SUSPENDED}, so no
+     * request enters it and no queued run is claimed, and no new sandbox starts between the deletion of the space's
+     * sandboxes and {@link #erasePersonalSpace}. It writes no status-change audit row: the teardown deletes the space's
+     * trail, and a row written now would only be deleted with it.
+     * A repeated call changes nothing.
+     */
+    @Transactional
+    public void suspendPersonalSpaceForErasure(long workspaceId) {
+        workspaceRepository.suspendPersonalSpace(workspaceId);
+    }
+
+    /** Runs every cleanup owner in its order, then removes the memberships, which the owners' rows may reference. */
+    private void deleteWorkspaceData(long workspaceId) {
+        sweepAdmission.admitWorkspacePurge(workspaceId);
+        purgeContributors.stream()
+                .sorted(Comparator.comparingInt(WorkspacePurgeContributor::getOrder))
+                .forEach(contributor -> contributor.deleteWorkspaceData(workspaceId));
+        workspaceMembershipRepository.deleteAllByWorkspaceId(workspaceId);
     }
 
     /** The owner's workspace removal: {@link #removeAtProvidersBeforePurge(long, Runnable)}, then the purge. */

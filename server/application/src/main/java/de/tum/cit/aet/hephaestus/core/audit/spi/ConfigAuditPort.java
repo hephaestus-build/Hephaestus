@@ -21,4 +21,11 @@ public interface ConfigAuditPort {
      * @throws ConfigAuditUnavailableException if there is no active, writable transaction
      */
     void record(ConfigAuditEntry entry);
+
+    /**
+     * Deletes the trail of a personal space that its owner's erasure ends, in the caller's transaction. The space had
+     * one member, so its trail is that person's alone. The database refuses this for any other workspace: a team's
+     * rows go only after the retention window.
+     */
+    void erasePersonalSpaceTrail(long workspaceId);
 }

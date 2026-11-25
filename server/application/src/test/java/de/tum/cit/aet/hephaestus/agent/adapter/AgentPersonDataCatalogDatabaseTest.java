@@ -56,7 +56,7 @@ class AgentPersonDataCatalogDatabaseTest {
                 .doesNotContain("00000000-0000-0000-0000-000000992112");
         assertThat(unacknowledgedStore.export(selected, person))
                 .anySatisfy(row -> assertThat(row.path("id").asString()).isEqualTo(job.toString()));
-        assertThatThrownBy(() -> unacknowledgedStore.prepareErasure(selected))
+        assertThatThrownBy(() -> unacknowledgedStore.prepareErasure(selected, person))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Evidence-copy erasure acknowledgement is unavailable");
         assertThat(plain.queryForObject("SELECT id FROM review_job WHERE id=?", UUID.class, job))
@@ -78,7 +78,7 @@ class AgentPersonDataCatalogDatabaseTest {
                 .map(store -> new Selected(store, store.select(person)))
                 .toList();
         frozen.forEach(entry -> entry.store().export(entry.selection(), person));
-        frozen.forEach(entry -> entry.store().prepareErasure(entry.selection()));
+        frozen.forEach(entry -> entry.store().prepareErasure(entry.selection(), person));
         var transactions = new TransactionTemplate(
                 new DataSourceTransactionManager(Objects.requireNonNull(plain.getDataSource())));
         transactions.executeWithoutResult(transaction -> frozen.stream()

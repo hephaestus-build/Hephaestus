@@ -8,12 +8,12 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
+import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,12 +38,13 @@ public class WorkspaceMembershipsAdapter implements WorkspaceMemberships {
     }
 
     @Override
-    public List<Long> teamWorkspaceIds(long accountId) {
-        return memberships.findById_AccountId(accountId).stream()
-                .map(Membership::getWorkspace)
-                .filter(workspace -> !workspace.isPersonal())
-                .map(Workspace::getId)
-                .toList();
+    public List<Long> workspaceIds(long accountId) {
+        var ids = new TreeSet<Long>();
+        memberships
+                .findById_AccountId(accountId)
+                .forEach(membership -> ids.add(membership.getWorkspace().getId()));
+        workspaces.findPersonalSpaceId(accountId).ifPresent(ids::add);
+        return List.copyOf(ids);
     }
 
     @Override

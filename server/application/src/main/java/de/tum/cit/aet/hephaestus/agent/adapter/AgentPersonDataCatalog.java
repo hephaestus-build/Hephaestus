@@ -225,7 +225,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
          * safe: a cancelled job is not cancelled again, and a detached row no longer names the job.
          */
         @Override
-        public void prepareErasure(PersonDataSelection selection) {
+        public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
             Set<JobKey> frozen = keys(selection);
             for (var row : jobs(selection)) {
                 if (!frozen.contains(new JobKey(row.id(), row.workspaceId()))) continue;

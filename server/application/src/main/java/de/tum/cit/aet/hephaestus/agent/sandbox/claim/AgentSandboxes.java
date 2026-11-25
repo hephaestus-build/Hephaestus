@@ -6,9 +6,11 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.time.Duration;
@@ -50,6 +52,7 @@ public class AgentSandboxes {
     private static final Duration SHUTDOWN_MARGIN = Duration.ofMinutes(1);
 
     private final AgentSandboxRepository sandboxes;
+    private final WorkspaceLocks workspaces;
     private final AgentRuns runs;
     private final SandboxClaims claims;
     private final AttemptTokenIssuer tokens;
@@ -61,6 +64,7 @@ public class AgentSandboxes {
     /** @param resolve the address of a host name, as the server's resolver answers it */
     AgentSandboxes(
             AgentSandboxRepository sandboxes,
+            WorkspaceLocks workspaces,
             AgentRuns runs,
             SandboxClaims claims,
             AttemptTokenIssuer tokens,
@@ -69,6 +73,7 @@ public class AgentSandboxes {
             UnaryOperator<String> resolve,
             MeterRegistry meters) {
         this.sandboxes = sandboxes;
+        this.workspaces = workspaces;
         this.runs = runs;
         this.claims = claims;
         this.tokens = tokens;
@@ -79,6 +84,15 @@ public class AgentSandboxes {
         // Registered at start, so an alert on a count that is still zero has a series to read.
         for (Revocation reason : Revocation.values())
             meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value());
+    }
+
+    /** The workspace is not active, so it gets no sandbox: it is suspended, purged, or being erased. */
+    public static final class InactiveWorkspaceException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        InactiveWorkspaceException(long workspaceId) {
+            super("Workspace " + workspaceId + " is not active and gets no sandbox");
+        }
     }
 
     /** Why the server takes a live sandbox back before the reaper would. */
@@ -129,6 +143,10 @@ public class AgentSandboxes {
         // nothing until the migration ends.
         var requested = Objects.requireNonNull(transactions.execute(status -> {
             if (!sandboxes.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
+            // Held until the row commits: an erasure that suspends the workspace waits, and then finds this sandbox
+            // to delete; a request after the suspension gets none. An instance-scoped run has no workspace.
+            if (workspaceId != AgentRunRef.INSTANCE_SCOPE && !workspaces.holdActive(workspaceId))
+                throw new InactiveWorkspaceException(workspaceId);
             return sandboxes
                     .findLive(workspaceId, subjectKey)
                     .map(live -> new Requested(live, false))
@@ -162,6 +180,17 @@ public class AgentSandboxes {
                     e.addSuppressed(release);
                 }
                 throw e;
+            }
+            // An erasure or a revocation can take the row back while the claim is created, and its release then finds
+            // no claim to delete. The token of such a claim names no sandbox, so the claim can read nothing; it goes
+            // now, or at the reaper's next tick if this delete fails.
+            boolean live = Objects.requireNonNull(
+                            transactions.execute(status -> sandboxes.findLive(workspaceId, subjectKey)))
+                    .filter(current -> current.getId().equals(row.getId()))
+                    .isPresent();
+            if (!live) {
+                claims.delete(row.getClaimName());
+                throw new IllegalStateException("The sandbox was taken back as its claim was created");
             }
             SandboxEvents.event(log.atInfo(), "agent.sandbox.requested", row).log("Sandbox requested");
         }

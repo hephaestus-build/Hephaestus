@@ -1282,7 +1282,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("COPIED-PROFILE", "authorLogin", "authorName");
         try {
             // The erasure waits for no server: the copies are erased in PostgreSQL when it returns.
-            store.prepareErasure(selected);
+            store.prepareErasure(selected, person);
             assertThat(jdbc.queryForList(
                             "SELECT state FROM person_evidence_copy WHERE job_id=ANY(?)",
                             String.class,
@@ -1351,7 +1351,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var person = new PersonScope(
                 null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
         try {
-            store.prepareErasure(store.select(person));
+            store.prepareErasure(store.select(person), person);
             assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
 
             inputs.close();
@@ -1422,7 +1422,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                         "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, job.getId()))
                 .contains("42");
 
-        store.prepareErasure(selected);
+        store.prepareErasure(selected, person);
         assertThat(folder).as("this server removes it in its next pass").exists();
         assertThat(owner.catalog().removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
         assertThat(folder).doesNotExist();
@@ -1448,7 +1448,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
         var selected = store.select(scope);
         assertThat(selected.rows()).hasSize(1);
-        store.prepareErasure(selected);
+        store.prepareErasure(selected, scope);
         assertThat(store.erase(selected, scope)).isEqualTo(1);
         databaseTestUtils.erase(Objects.requireNonNull(provider.getId()), "42", "");
         var blocked = job("folder-origin-blocked");
@@ -1525,7 +1525,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
         var selected = serverStore.select(selectedScope);
         assertThat(selected.rows()).hasSize(1);
-        serverStore.prepareErasure(selected);
+        serverStore.prepareErasure(selected, selectedScope);
         assertThat(serverStore.erase(selected, selectedScope)).isEqualTo(1);
         Path folder = mounted.resolve("jobs")
                 .resolve(Long.toString(job.getWorkspaceId()))
@@ -1600,7 +1600,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var selected = store.select(person);
         assertThat(selected.rows()).hasSize(1);
         assertThat(evidence.catalog().jobsContaining(person)).isEmpty();
-        store.prepareErasure(selected);
+        store.prepareErasure(selected, person);
         assertThat(store.erase(selected, person)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT message FROM git_commit WHERE id=998802", String.class))
                 .isEqualTo("Source history stays");

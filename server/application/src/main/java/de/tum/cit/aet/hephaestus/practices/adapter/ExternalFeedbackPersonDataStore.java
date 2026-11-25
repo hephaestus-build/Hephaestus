@@ -47,7 +47,7 @@ final class ExternalFeedbackPersonDataStore extends JdbcPersonDataStore {
     }
 
     @Override
-    public void prepareErasure(PersonDataSelection selection) {
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
         var byWorkspace = inspectionRows(selection).stream()
                 .collect(Collectors.groupingBy(row -> row.path("workspaceId").longValue()));
         byWorkspace.forEach((workspace, rows) -> custody.requireAcknowledged(

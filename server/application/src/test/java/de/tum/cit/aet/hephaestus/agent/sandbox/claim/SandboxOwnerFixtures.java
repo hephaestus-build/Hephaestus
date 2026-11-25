@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.adapter.ConversationSandboxCopiesAdapter;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.jspecify.annotations.Nullable;
 import org.mockito.Mockito;
@@ -27,6 +28,7 @@ public final class SandboxOwnerFixtures {
             ApplicationContext beans, AttemptTokenIssuer issuer, AgentRuns runs, SandboxClaims claims) {
         return new AgentSandboxes(
                 beans.getBean(AgentSandboxRepository.class),
+                beans.getBean(WorkspaceLocks.class),
                 runs,
                 claims,
                 issuer,

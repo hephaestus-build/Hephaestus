@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,9 +35,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +56,9 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentSandboxRepository repository;
+
+    @Autowired
+    private WorkspaceLocks workspaceLocks;
 
     @Autowired
     private AgentRuns runs;
@@ -78,6 +84,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         sandboxes = new AgentSandboxes(
                 repository,
+                workspaceLocks,
                 runs,
                 claims,
                 new AttemptTokenIssuer(AttemptKeyFixtures.keyring(key)),
@@ -177,6 +184,115 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                     .containsOnly(answered.getFirst().id());
         }
         assertThat(claims.creates).hasSize(1);
+    }
+
+    /**
+     * A request that waits behind a suspension, as a person-data erasure suspends a personal space, gets no sandbox once
+     * the suspension commits: no claim can appear after the erasure deleted the workspace's sandboxes.
+     */
+    @Test
+    void shouldGiveNoSandboxToAWorkspaceThatWasSuspendedWhileItsRequestWaited() throws Exception {
+        String subject = "conversation:" + UUID.randomUUID();
+        var suspended = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Future<?> suspension = pool.submit(() -> transactions.executeWithoutResult(status -> {
+                jdbc.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", workspace);
+                suspended.countDown();
+                await(commit);
+            }));
+            assertThat(suspended.await(20, TimeUnit.SECONDS)).isTrue();
+            Future<AgentSandboxes.LiveSandbox> request =
+                    pool.submit(() -> ensure(subject, AgentSandboxKind.CONVERSATION));
+            awaitWorkspaceLockWaiter(request, "%FROM workspace WHERE id%FOR SHARE%");
+            commit.countDown();
+            suspension.get(20, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> request.get(20, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(AgentSandboxes.InactiveWorkspaceException.class);
+        } finally {
+            commit.countDown();
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE workspace_id = ?", Long.class, workspace))
+                .isZero();
+        assertThat(claims.creates).isEmpty();
+    }
+
+    /**
+     * A suspension waits for a request that saw the workspace active, so the sandbox it requests is in the table when
+     * the erasure looks for the workspace's sandboxes to delete.
+     */
+    @Test
+    void shouldHoldASuspensionUntilARequestThatSawTheWorkspaceActiveCommits() throws Exception {
+        var held = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> request = pool.submit(() -> transactions.execute(status -> {
+                boolean active = workspaceLocks.holdActive(workspace);
+                held.countDown();
+                await(commit);
+                return active;
+            }));
+            assertThat(held.await(20, TimeUnit.SECONDS)).isTrue();
+            Future<Integer> suspension = pool.submit(() -> transactions.execute(
+                    status -> jdbc.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", workspace)));
+            awaitWorkspaceLockWaiter(suspension, "%UPDATE workspace SET status%");
+            commit.countDown();
+
+            assertThat(request.get(20, TimeUnit.SECONDS)).isTrue();
+            assertThat(suspension.get(20, TimeUnit.SECONDS)).isOne();
+        } finally {
+            commit.countDown();
+        }
+        Boolean activeAfter = transactions.execute(status -> workspaceLocks.holdActive(workspace));
+        assertThat(activeAfter).isFalse();
+    }
+
+    /**
+     * An erasure that takes a sandbox back while its claim is being created finds no claim to delete. The request then
+     * finds its row gone and deletes the claim it created.
+     */
+    @Test
+    void shouldDeleteAClaimWhoseSandboxWasTakenBackWhileTheClaimWasCreated() {
+        String subject = "conversation:" + UUID.randomUUID();
+        claims.beforeCreate = () -> sandboxes.release(workspace, subject);
+
+        assertThatThrownBy(() -> ensure(subject, AgentSandboxKind.CONVERSATION))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("taken back as its claim was created");
+
+        assertThat(claims.creates).hasSize(1);
+        assertThat(claims.created).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE workspace_id = ?", Long.class, workspace))
+                .isZero();
+    }
+
+    private void awaitWorkspaceLockWaiter(Future<?> watched, String statement) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (System.nanoTime() < deadline) {
+            if (watched.isDone()) {
+                watched.get();
+                throw new AssertionError("the operation completed before the other transaction committed");
+            }
+            Long waiting = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE ?",
+                    Long.class,
+                    statement);
+            if (waiting != null && waiting > 0) return;
+            Thread.sleep(20); // NOPMD - poll interval of a bounded wait
+        }
+        throw new AssertionError("the operation never waited for the other transaction");
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("release timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

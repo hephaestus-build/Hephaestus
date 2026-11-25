@@ -29,12 +29,14 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.PersonalSpaceFixtures;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -219,6 +221,141 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .isZero();
     }
 
+    /**
+     * A personal space that hosted a turn ends with its owner's erasure, and only after its physical sandbox is gone: a
+     * failed claim deletion keeps the space and stops the erasure, and the resumed erasure finishes it (#5094).
+     */
+    @Test
+    void shouldEndAPersonalSpaceOnlyAfterItsPhysicalSandboxIsGone() throws Exception {
+        var person = persistUser("personal-space-copy-person");
+        long personId = accountId(person);
+        long spaceId = PersonalSpaceFixtures.insert(jdbc, personId);
+        UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, spaceId, personId);
+        var otherPerson = persistUser("personal-space-copy-other");
+        var otherWorkspace =
+                createWorkspace("personal-space-copy-other", "Other", "space-copy-other", AccountType.ORG, otherPerson);
+        var administrator = new Account("Personal-space erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId = Objects.requireNonNull(
+                accountRepository.saveAndFlush(administrator).getId());
+        var claims = new PhysicalClaims(root);
+        var owner = SandboxOwnerFixtures.owner(
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                beans.getBean(AgentRuns.class),
+                claims);
+        var copy = owner.ensure(spaceId, "conversation:" + conversation, AgentSandboxKind.CONVERSATION);
+        var other = owner.ensure(
+                otherWorkspace.getId(), "conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        Path copiedPerson = claims.copy(copy.claimName());
+        Path otherCopy = claims.copy(other.claimName());
+        // Every store of the server, so the account step's own teardown of the space runs too.
+        var service = productionService(SandboxOwnerFixtures.revocations(beans, owner));
+        var request = Objects.requireNonNull(
+                        transactions.execute(status -> service.preview(administratorId, personId, List.of())))
+                .request();
+        claims.failDelete = true;
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertNoAcknowledgement(request.getId());
+        assertSandbox(copy, "DELETING");
+        assertThat(copiedPerson).exists();
+        assertThat(jdbc.queryForObject("SELECT status FROM workspace WHERE id=?", String.class, spaceId))
+                .as("the space is closed to requests and run claims, and kept")
+                .isEqualTo("SUSPENDED");
+        assertThat(jdbc.queryForObject("SELECT status FROM account WHERE id=?", String.class, personId))
+                .isEqualTo("DELETING");
+        claims.failDelete = false;
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject("SELECT status FROM account WHERE id=?", String.class, personId))
+                .isEqualTo("DELETED");
+        assertThat(copiedPerson).doesNotExist();
+        assertThat(claims.names()).doesNotContain(copy.claimName());
+        for (String table : List.of("workspace", "agent_sandbox", "conversation", "agent_run"))
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM " + table + " WHERE "
+                                    + (table.equals("workspace") ? "id" : "workspace_id") + "=?",
+                            Integer.class,
+                            spaceId))
+                    .as(table)
+                    .isZero();
+        assertSandbox(other, "REQUESTED");
+        assertThat(otherCopy).exists();
+    }
+
+    /**
+     * A resumed erasure deletes every physical sandbox of the personal space, also when its frozen copy selection does
+     * not name the space, as a selection frozen before the space was selected there does not. The first attempt is
+     * interrupted after the suspension, before the sandbox is gone; the resumed one leaves no sandbox of the space.
+     */
+    @Test
+    void shouldDeleteThePersonalSpacesSandboxOnResumeWhenTheFrozenSelectionLacksTheSpace() throws Exception {
+        var person = persistUser("personal-space-resume-person");
+        long personId = accountId(person);
+        long spaceId = PersonalSpaceFixtures.insert(jdbc, personId);
+        UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, spaceId, personId);
+        var administrator = new Account("Personal-space resume administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId = Objects.requireNonNull(
+                accountRepository.saveAndFlush(administrator).getId());
+        var claims = new PhysicalClaims(root);
+        var owner = SandboxOwnerFixtures.owner(
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                beans.getBean(AgentRuns.class),
+                claims);
+        var copy = owner.ensure(spaceId, "conversation:" + conversation, AgentSandboxKind.CONVERSATION);
+        Path copiedPerson = claims.copy(copy.claimName());
+        var service = productionService(SandboxOwnerFixtures.revocations(beans, owner));
+        var request = Objects.requireNonNull(
+                        transactions.execute(status -> service.preview(administratorId, personId, List.of())))
+                .request();
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+        jdbc.update(
+                """
+                UPDATE person_data_request SET selections_json = jsonb_set(selections_json::jsonb, ?::text[],
+                    (SELECT coalesce(jsonb_agg(row_key), '[]'::jsonb)
+                       FROM jsonb_array_elements(selections_json::jsonb #> ?::text[]) row_key
+                      WHERE row_key #>> '{columns,workspace_id}' <> ?))::text
+                WHERE id = ?
+                """,
+                "{" + ConversationEntryRepository.COPIES_PERSON_DATA_STORE + ",rows}",
+                "{" + ConversationEntryRepository.COPIES_PERSON_DATA_STORE + ",rows}",
+                Long.toString(spaceId),
+                request.getId());
+        assertThat(Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT selections_json FROM person_data_request WHERE id=?", String.class, request.getId())))
+                .doesNotContain(copy.id().toString());
+        claims.failDelete = true;
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertThat(jdbc.queryForObject("SELECT status FROM workspace WHERE id=?", String.class, spaceId))
+                .isEqualTo("SUSPENDED");
+        assertThat(copiedPerson).exists();
+        claims.failDelete = false;
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE workspace_id=?", Integer.class, spaceId))
+                .isZero();
+        assertThat(copiedPerson).doesNotExist();
+        assertThat(claims.names()).doesNotContain(copy.claimName());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM workspace WHERE id=?", Integer.class, spaceId))
+                .isZero();
+    }
+
     /** A stored workspace key without its frozen sandboxes is invalid: the erasure stops instead of skipping a copy. */
     @ParameterizedTest
     @ValueSource(
@@ -280,8 +417,28 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .isFalse();
     }
 
-    private PersonDataService service(ConversationSandboxCopies copies) {
-        var catalog = new ConversationPersonDataCatalog(
+    /** The server's person-data service, with the conversation stores on the given physical copy owner. */
+    private PersonDataService productionService(ConversationSandboxCopies copies) {
+        var catalogs = new ArrayList<PersonDataCatalog>(
+                beans.getBeansOfType(PersonDataCatalog.class).values());
+        catalogs.removeIf(ConversationPersonDataCatalog.class::isInstance);
+        catalogs.add(conversationCatalog(copies));
+        return new PersonDataService(
+                beans.getBean(PersonDataScopeResolver.class),
+                new PersonDataRegistry(catalogs),
+                beans.getBean(PersonDataRequestRepository.class),
+                beans.getBean(PersonDataErasureHold.class),
+                beans.getBean(IssuedJwtRepository.class),
+                beans.getBean(PlatformTransactionManager.class),
+                mapper,
+                jdbc,
+                beans.getBean(MeterRegistry.class),
+                beans.getBean(PrivacyJournal.class),
+                beans.getBean(PrivacyJournalShipping.class));
+    }
+
+    private ConversationPersonDataCatalog conversationCatalog(ConversationSandboxCopies copies) {
+        return new ConversationPersonDataCatalog(
                 beans.getBean(NamedParameterJdbcTemplate.class),
                 mapper,
                 beans.getBean(ConversationRedaction.class),
@@ -291,6 +448,10 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 beans.getBean(ConversationContextChanges.class),
                 copies,
                 beans.getBean(WorkspaceMemberships.class));
+    }
+
+    private PersonDataService service(ConversationSandboxCopies copies) {
+        var catalog = conversationCatalog(copies);
         var store = catalog.contributors().stream()
                 .filter(contributor -> contributor.store().equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .findFirst()

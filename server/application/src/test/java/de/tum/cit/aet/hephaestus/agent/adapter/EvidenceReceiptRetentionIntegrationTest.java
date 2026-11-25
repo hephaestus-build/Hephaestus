@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -98,7 +99,9 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
                 "copy_id", UUID.randomUUID().toString(),
                 "workspace_id", "973210"))));
 
-        assertThatCode(() -> receipts.contributors().getFirst().prepareErasure(frozen))
+        assertThatCode(() -> receipts.contributors()
+                        .getFirst()
+                        .prepareErasure(frozen, new PersonScope(null, List.of(), List.of())))
                 .doesNotThrowAnyException();
     }
 

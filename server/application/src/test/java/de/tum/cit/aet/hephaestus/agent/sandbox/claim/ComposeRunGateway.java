@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
@@ -150,6 +151,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                 plans);
         sandboxes = new AgentSandboxes(
                 context.getBean(AgentSandboxRepository.class),
+                context.getBean(WorkspaceLocks.class),
                 runs,
                 claims,
                 new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY)),

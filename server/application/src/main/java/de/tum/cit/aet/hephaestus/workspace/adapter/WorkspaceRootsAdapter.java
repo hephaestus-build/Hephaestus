@@ -74,6 +74,14 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     }
 
     @Override
+    public boolean holdActive(long workspaceId) {
+        return workspaces
+                .lockStatusForShare(workspaceId)
+                .map(Workspace.WorkspaceStatus.ACTIVE.name()::equals)
+                .orElse(false);
+    }
+
+    @Override
     public Optional<Workspace> lockByInstallation(long installationId) {
         return workspaces.findByInstallationIdForUpdate(installationId);
     }
