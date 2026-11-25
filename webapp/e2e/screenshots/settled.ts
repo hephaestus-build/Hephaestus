@@ -6,14 +6,20 @@ import { expect, type Page, type Request } from "@playwright/test";
  */
 const LOADING = '[data-slot="skeleton"], [aria-busy="true"]';
 
-/**
- * How long the page must stay still: no document change and no read ending. The app's shortest poll is
- * 2 s (`DELIVERY_POLL_MS`), so every page has such a moment between its reads.
- */
+/** How long the document must stay unchanged to count as rendered. */
 const QUIET_MS = 300;
 
+/** How long one sample waits for the document to hold still before it reports that it does not. */
+const SAMPLE_MS = 2000;
+
+/** A read that ended this recently may not have rendered its answer yet. */
+const RENDER_MS = 100;
+
+/** The whole wait, below every test's own timeout, so that a failure names what still blocks. */
+const SETTLE_MS = 45_000;
+
 /**
- * The requests that carry the page's data: reads. Images, fonts and scripts have their own wait, and
+ * The requests that carry the page's data: reads. Images, fonts and scripts have their own check, and
  * a write, such as a page-experience beacon the last document sent on its way out, is not data to show.
  */
 function isData(request: Request): boolean {
@@ -39,7 +45,7 @@ export function watchRequests(page: Page): void {
 	if (watched.has(page)) {
 		return;
 	}
-	const state: Watched = { open: new Set(), ended: 0 };
+	const state: Watched = { open: new Set(), ended: Number.NEGATIVE_INFINITY };
 	watched.set(page, state);
 	page.on("request", (request) => {
 		if (isData(request)) {
@@ -56,14 +62,13 @@ export function watchRequests(page: Page): void {
 }
 
 /**
- * Waits until the page shows its content: no placeholder, no read open and none ended in the last
- * `QUIET_MS`, a document that has not changed for `QUIET_MS`, and its fonts and eager images ready.
- * All of it holds at one moment, in the document that is current then. The test's own timeout bounds
- * the wait.
+ * Waits until the page shows its content. One sample at a time, each in one document: the document
+ * holds still for `QUIET_MS`, then it shows no placeholder and its fonts and eager images are ready,
+ * and no read is open or has just ended. The wait passes on the first sample with nothing that blocks,
+ * and on timeout it names what the last sample found.
  *
- * Not `networkidle`: that waits for 500 ms with no request at all, and its timeout names no cause.
- * Here a read that never ends fails the wait with its address, and a query that shows no loading
- * state is still waited for, through its read.
+ * Not `networkidle`: that needs 500 ms with no request at all, which overlapping polls can deny for
+ * the whole test, and its timeout names no cause.
  */
 export async function settled(page: Page): Promise<void> {
 	watchRequests(page);
@@ -71,65 +76,87 @@ export async function settled(page: Page): Promise<void> {
 	if (state === undefined) {
 		throw new Error("watchRequests did not record the page");
 	}
-	for (;;) {
-		await expect(page.locator(LOADING), "the page loads its data").toHaveCount(0, { timeout: 0 });
-		await expect
-			.poll(() => [...state.open].map((request) => `${request.method()} ${request.url()}`), {
-				message: "the page's reads end",
-				timeout: 0,
-			})
-			.toEqual([]);
-		if (!(await still(page))) {
-			continue;
-		}
-		// Checked after the page held still: a placeholder that a redirect brought, or a read that
-		// started or ended meanwhile, starts the wait again.
-		const placeholders = await page.locator(LOADING).count();
-		if (
-			placeholders === 0 &&
-			state.open.size === 0 &&
-			performance.now() - state.ended >= QUIET_MS
-		) {
-			return;
-		}
-	}
+	await expect
+		.poll(async () => blockers(page, state), {
+			message: "the page shows its content",
+			timeout: SETTLE_MS,
+			intervals: [100],
+		})
+		.toEqual([]);
 }
 
-/**
- * The document stays unchanged for `QUIET_MS`, and then its fonts and eager images are ready, all in
- * one call in one document. False when they are not, or when the page navigated meanwhile. Timers,
- * not a clock: a screenshot test fixes the page's clock, and its timers still run. A lazy image below
- * the fold loads only when the page scrolls to it.
- */
-async function still(page: Page): Promise<boolean> {
+/** What keeps the page from counting as ready now; empty when nothing does. */
+async function blockers(page: Page, state: Watched): Promise<string[]> {
+	const reads = () => [...state.open].map((request) => `open read ${request.url()}`);
+	if (state.open.size > 0) {
+		return reads();
+	}
+	let inPage: string[];
 	try {
-		return await page.evaluate(async (quietMs) => {
-			const { promise, resolve } = Promise.withResolvers<undefined>();
-			const done = () => {
-				observer.disconnect();
-				resolve(undefined);
-			};
-			let timer = setTimeout(done, quietMs);
-			const observer = new MutationObserver(() => {
-				clearTimeout(timer);
-				timer = setTimeout(done, quietMs);
-			});
-			observer.observe(document, {
-				subtree: true,
-				childList: true,
-				attributes: true,
-				characterData: true,
-			});
-			await promise;
-			return (
-				document.fonts.status === "loaded" &&
-				[...document.images].every((image) => image.complete || image.loading === "lazy")
-			);
-		}, QUIET_MS);
+		inPage = await page.evaluate(sample, {
+			quietMs: QUIET_MS,
+			sampleMs: SAMPLE_MS,
+			loading: LOADING,
+		});
 	} catch (error) {
 		if (error instanceof Error && error.message.includes("Execution context was destroyed")) {
-			return false;
+			return ["the page navigated"];
 		}
 		throw error;
 	}
+	const recent =
+		performance.now() - state.ended < RENDER_MS
+			? ["a read ended too recently to have rendered"]
+			: [];
+	return [...inPage, ...reads(), ...recent];
+}
+
+/**
+ * Runs in the page. Waits until the document has not changed for `quietMs`, at most `sampleMs`, and
+ * then reports what the document still lacks. Timers, not a clock: a screenshot test fixes the page's
+ * clock, and its timers still run. A lazy image below the fold loads only when the page scrolls to it.
+ */
+async function sample({
+	quietMs,
+	sampleMs,
+	loading,
+}: {
+	quietMs: number;
+	sampleMs: number;
+	loading: string;
+}): Promise<string[]> {
+	const { promise, resolve } = Promise.withResolvers<boolean>();
+	let timer = setTimeout(() => resolve(true), quietMs);
+	const limit = setTimeout(() => resolve(false), sampleMs);
+	const observer = new MutationObserver(() => {
+		clearTimeout(timer);
+		timer = setTimeout(() => resolve(true), quietMs);
+	});
+	observer.observe(document, {
+		subtree: true,
+		childList: true,
+		attributes: true,
+		characterData: true,
+	});
+	const still = await promise;
+	observer.disconnect();
+	clearTimeout(timer);
+	clearTimeout(limit);
+	const found: string[] = [];
+	if (!still) {
+		found.push(`the document kept changing for ${sampleMs} ms`);
+	}
+	const placeholders = document.querySelectorAll(loading).length;
+	if (placeholders > 0) {
+		found.push(`${placeholders} loading placeholders`);
+	}
+	if (document.fonts.status !== "loaded") {
+		found.push("fonts still loading");
+	}
+	for (const image of document.images) {
+		if (!image.complete && image.loading !== "lazy") {
+			found.push(`image still loading ${image.currentSrc || image.src}`);
+		}
+	}
+	return found;
 }
