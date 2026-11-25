@@ -123,6 +123,7 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
         }
 
         if (queueState == QueueState.PAST_START_WINDOW) assertEndsWithoutStarting(turn);
+        if (queueState == QueueState.PAST_DEADLINE) assertEndsWithoutStarting(turn, AgentRunStopReason.DEADLINE);
         if (queueState == QueueState.BEHIND_PREDECESSOR) {
             reaper.reap();
             assertQueuedWithoutLease(turn);
@@ -172,6 +173,32 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     void shouldRefuseADigestPastItsContactWindowEvenIfItsDueTimeMoved() throws SQLException {
+        var digest = enqueueDigest();
+        try (var _ = lockTurnForReaper(digest)) {
+            awaitDigestCutoff(digest);
+            jdbc.update(
+                    "UPDATE agent_run SET available_at = clock_timestamp() WHERE id = ?",
+                    runOf(digest).id());
+
+            assertStartPaths(digest, AgentRunKind.DIGEST, false, List.of());
+        }
+        assertEndsWithoutStarting(digest);
+    }
+
+    @Test
+    void shouldEndAnExpiredDigestWhenALaterQuestionIsQueued() throws SQLException {
+        var digest = enqueueDigest();
+        ConversationTurn question;
+        try (var _ = lockTurnForReaper(digest)) {
+            question = ask(conversation).turn();
+            awaitDigestCutoff(digest);
+        }
+
+        assertEndsWithoutStarting(digest);
+        assertStartPaths(question, AgentRunKind.TURN, true, List.of());
+    }
+
+    private ConversationTurn enqueueDigest() {
         String requestId = UUID.randomUUID().toString();
         assertThat(turns.submitDigest(
                         workspace,
@@ -182,20 +209,16 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
                                 JsonNodeFactory.instance.objectNode(),
                                 Duration.ofSeconds(3))))
                 .isTrue();
-        var digest =
-                turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
-        var run = runOf(digest);
-        try (var _ = lockTurnForReaper(digest)) {
-            await().atMost(Duration.ofSeconds(10))
-                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject("""
+        return turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
+    }
+
+    private void awaitDigestCutoff(ConversationTurn digest) {
+        await().atMost(Duration.ofSeconds(10))
+                .until(() -> Boolean.TRUE.equals(
+                        jdbc.queryForObject("""
                 SELECT created_at + make_interval(secs => start_within_seconds) <= clock_timestamp()
                   FROM agent_run WHERE id = ?
-                """, Boolean.class, run.id())));
-            jdbc.update("UPDATE agent_run SET available_at = clock_timestamp() WHERE id = ?", run.id());
-
-            assertStartPaths(digest, AgentRunKind.DIGEST, false, List.of());
-        }
-        assertEndsWithoutStarting(digest);
+                """, Boolean.class, runOf(digest).id())));
     }
 
     /** The scheduled reaper must take this lock before it ends the turn. The run's claim stays free to proceed. */
@@ -265,11 +288,15 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     private void assertEndsWithoutStarting(ConversationTurn turn) {
+        assertEndsWithoutStarting(turn, AgentRunStopReason.NOT_STARTED);
+    }
+
+    private void assertEndsWithoutStarting(ConversationTurn turn, AgentRunStopReason reason) {
         reaper.reap();
 
         var run = runRows.findByRef(runOf(turn).id(), workspace).orElseThrow();
         assertThat(run.getState()).isEqualTo(AgentRunState.ENDED);
-        assertThat(run.getStopReason()).isEqualTo(AgentRunStopReason.NOT_STARTED);
+        assertThat(run.getStopReason()).isEqualTo(reason);
         assertThat(run.getLeaseEpoch()).isZero();
         var ended = turnRows.findById(turn.getId()).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(ConversationTurn.Status.FAILED);

@@ -914,6 +914,30 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseToLeaseADigestWhenSchedulingSampledTheClockBeforeTheCutoffButEnqueuePassedIt() {
+        week = WeeklyDigestWindow.previousWeek(Instant.now().minus(Duration.ofDays(7)), BERLIN);
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var cutoff = week.end().atZone(BERLIN).with(DigestSchedule.TOO_LATE).toInstant();
+
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            // The scheduler sampled time before closing. The database clock is already past closing.
+            assertThat(schedule(Clock.fixed(cutoff.minusSeconds(30), BERLIN)).enqueueDue())
+                    .isOne();
+            var stimulus = digestEntry().orElseThrow();
+            var turn = turnRows.findById(Objects.requireNonNull(stimulus.getTurnId()))
+                    .orElseThrow();
+            assertThat(runs.claimSubject(
+                            workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST)))
+                    .as("the cutoff comes from the scheduled week")
+                    .isEmpty();
+            assertThat(runs.find(new AgentRunRef(turn.getRunId(), workspaceId)))
+                    .hasValueSatisfying(run -> assertThat(run.getLeaseEpoch()).isZero());
+        });
+    }
+
+    @Test
     void shouldSkipADigestWhenLessThanOneSecondRemainsInItsDeliveryWindow() {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         var nearClosing = week.end().plus(Duration.ofHours(21)).minusMillis(500);
