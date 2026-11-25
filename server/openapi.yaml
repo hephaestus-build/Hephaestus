@@ -20748,9 +20748,7 @@ components:
       - GITHUB
       - GITLAB
       - OTHER_WORK
-      - APP
-      - SLACK
-      - NEXT_CONVERSATION
+      - CONVERSATION
       - PRACTICE_PAGES
     FeedbackMode:
       type: string

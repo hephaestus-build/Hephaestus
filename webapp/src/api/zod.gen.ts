@@ -996,9 +996,7 @@ export const zFeedbackLocation = z.enum([
 	"GITHUB",
 	"GITLAB",
 	"OTHER_WORK",
-	"APP",
-	"SLACK",
-	"NEXT_CONVERSATION",
+	"CONVERSATION",
 	"PRACTICE_PAGES",
 ]);
 

@@ -1,0 +1,3 @@
+# #5104: the staff feedback review locates feedback for the conversation as one value, CONVERSATION, and no longer
+# reads the developer's conversation (ADR 0125 decision 1). The location filter loses its per-surface values.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/locations removed the enum value `SLACK` from the `query` request parameter `location`

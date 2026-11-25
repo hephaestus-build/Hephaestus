@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
+import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -19,8 +20,9 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
@@ -30,8 +32,18 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegrationTest {
+    /** A read of the developer's conversation; a column such as {@code conversation_entry_id} is not one. */
+    private static final Pattern CONVERSATION_TABLE =
+            Pattern.compile("\\bconversation(_entry|_turn)?\\b", Pattern.CASE_INSENSITIVE);
+
+    /** The location value, which names no table. Only this literal is removed, so no identifier can hide. */
+    private static final String LOCATION_LITERAL = "'CONVERSATION'";
+
     @Autowired
     WebTestClient client;
+
+    @Autowired
+    SqlRequestTrace requests;
 
     @MockitoBean
     RegisteredItemLabels labels;
@@ -323,38 +335,146 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .expectBody(Void.class);
     }
 
+    /**
+     * The staff review locates feedback for a developer's conversation without reading that conversation: one location,
+     * whether an answer in the app or in Slack raised it, or none did yet. The developer is another account than the
+     * admin who reads. The trace covers the statements that each request prepares on its own thread, the page count
+     * included.
+     */
     @Test
     @WithAdminUser
-    void shouldLocateConversationFeedbackByTheOriginOfTheHephaestusMessageThatShowedIt() {
+    void shouldLocateConversationFeedbackWithoutReadingTheDevelopersConversation() {
+        long developer =
+                Objects.requireNonNull(persistAccount("Conversation developer").getId());
+        workspaceMembershipService.createMembership(workspace, developer, Membership.WorkspaceRole.MEMBER);
         var inApp = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
         var inSlack = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
         var waiting = piece(FeedbackDestination.CONVERSATION, FeedbackState.READY, null);
+        for (var piece : List.of(inApp, inSlack, waiting)) {
+            jdbc.update("UPDATE feedback SET person_account_id = ? WHERE id = ?", developer, piece.getId());
+        }
         UUID conversation = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,?,?)",
                 conversation,
                 workspace.getId(),
-                developerId,
+                developer,
                 Timestamp.from(AT),
                 Timestamp.from(AT));
         shownIn(inApp, conversation, 1, "APP");
         shownIn(inSlack, conversation, 2, "SLACK");
 
-        for (var expected : List.of(
-                Map.entry("APP", inApp), Map.entry("SLACK", inSlack), Map.entry("NEXT_CONVERSATION", waiting))) {
-            client.get()
-                    .uri(route() + "?location=" + expected.getKey())
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.totalElements")
-                    .isEqualTo(1)
-                    .jsonPath("$.content[0].id")
-                    .isEqualTo(expected.getValue().getId().toString());
+        readsNoConversation(
+                "the first page of one, which counts the rest",
+                requests.measure(
+                                client,
+                                http -> http.get()
+                                        .uri(route() + "?location=CONVERSATION&size=1")
+                                        .headers(TestAuthUtils.withCurrentUser())
+                                        .exchange()
+                                        .expectStatus()
+                                        .isOk()
+                                        .expectBody()
+                                        .jsonPath("$.totalElements")
+                                        .isEqualTo(3)
+                                        .jsonPath("$.content[*].location")
+                                        .isEqualTo(List.of("CONVERSATION")))
+                        .sql());
+        readsNoConversation(
+                "the location counts",
+                requests.measure(
+                                client,
+                                http -> http.get()
+                                        .uri(route() + "/locations")
+                                        .headers(TestAuthUtils.withCurrentUser())
+                                        .exchange()
+                                        .expectStatus()
+                                        .isOk()
+                                        .expectBody()
+                                        .jsonPath("$.length()")
+                                        .isEqualTo(1)
+                                        .jsonPath("$[0].reason")
+                                        .isEqualTo("CONVERSATION")
+                                        .jsonPath("$[0].count")
+                                        .isEqualTo(3))
+                        .sql());
+        readsNoConversation(
+                "the reason counts",
+                requests.measure(
+                                client,
+                                http -> http.get()
+                                        .uri(route() + "/reasons")
+                                        .headers(TestAuthUtils.withCurrentUser())
+                                        .exchange()
+                                        .expectStatus()
+                                        .isOk()
+                                        .expectBody(Void.class))
+                        .sql());
+        for (var piece : List.of(inApp, inSlack, waiting)) {
+            readsNoConversation(
+                    "the detail of " + piece.getId(),
+                    requests.measure(
+                                    client,
+                                    http -> http.get()
+                                            .uri(route() + "/" + piece.getId())
+                                            .headers(TestAuthUtils.withCurrentUser())
+                                            .exchange()
+                                            .expectStatus()
+                                            .isOk()
+                                            .expectBody()
+                                            .jsonPath("$.location")
+                                            .isEqualTo("CONVERSATION"))
+                            .sql());
+            readsNoConversation(
+                    "the decisions of " + piece.getId(),
+                    requests.measure(
+                                    client,
+                                    http -> http.get()
+                                            .uri(route() + "/" + piece.getId() + "/decisions")
+                                            .headers(TestAuthUtils.withCurrentUser())
+                                            .exchange()
+                                            .expectStatus()
+                                            .isOk()
+                                            .expectBody(Void.class))
+                            .sql());
+            readsNoConversation(
+                    "the lineage of " + piece.getId(),
+                    requests.measure(
+                                    client,
+                                    http -> http.get()
+                                            .uri("/workspaces/" + workspace.getWorkspaceSlug()
+                                                    + "/practices/reviews/lineage?kind=FEEDBACK&feedbackId="
+                                                    + piece.getId())
+                                            .headers(TestAuthUtils.withCurrentUser())
+                                            .exchange()
+                                            .expectStatus()
+                                            .isOk()
+                                            .expectBody(Void.class))
+                            .sql());
         }
+        readsNoConversation(
+                "the review's feedback checks",
+                requests.measure(
+                                client,
+                                http -> http.get()
+                                        .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/practices/reviews/"
+                                                + reviewId + "/feedback-checks")
+                                        .headers(TestAuthUtils.withCurrentUser())
+                                        .exchange()
+                                        .expectStatus()
+                                        .isOk()
+                                        .expectBody(Void.class))
+                        .sql());
+    }
+
+    private static void readsNoConversation(String request, List<String> sql) {
+        assertThat(sql)
+                .as("the statements of %s", request)
+                .isNotEmpty()
+                .noneMatch(statement -> CONVERSATION_TABLE
+                        .matcher(statement.replace(LOCATION_LITERAL, "''"))
+                        .find());
     }
 
     /** A conversation copy of {@code parent} posted in a Hephaestus message written on {@code surface}. */

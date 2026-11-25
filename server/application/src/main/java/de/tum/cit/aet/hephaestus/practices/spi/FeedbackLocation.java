@@ -4,8 +4,6 @@ public enum FeedbackLocation {
     GITHUB,
     GITLAB,
     OTHER_WORK,
-    APP,
-    SLACK,
-    NEXT_CONVERSATION,
+    CONVERSATION,
     PRACTICE_PAGES;
 }

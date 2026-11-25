@@ -173,8 +173,9 @@ const gitlabItem = reviewFeedback.find((item) => item.location === "GITLAB")?.it
 
 /**
  * One row per location. Each names where its feedback went in words and with the provider's mark: a
- * comment on the GitHub pull request or GitLab merge request, a conversation with Hephaestus in the app or
- * in Slack, the next conversation, or a card on the developer's practice pages.
+ * comment on the GitHub pull request or GitLab merge request, the developer's conversation with
+ * Hephaestus, or a card on the developer's practice pages. Feedback for the conversation has the same
+ * location label whether it was raised in the app or in Slack.
  */
 export const EveryLocation: Story = {
 	args: {
@@ -206,22 +207,8 @@ export const EveryLocation: Story = {
 					...firstFeedback,
 					id: "location-conversation",
 					destination: "CONVERSATION",
-					location: "APP",
+					location: "CONVERSATION",
 					state: "DELIVERED",
-				},
-				{
-					...firstFeedback,
-					id: "location-slack",
-					destination: "CONVERSATION",
-					location: "SLACK",
-					state: "DELIVERED",
-				},
-				{
-					...firstFeedback,
-					id: "location-next-conversation",
-					destination: "CONVERSATION",
-					location: "NEXT_CONVERSATION",
-					state: "READY",
 				},
 				{
 					...firstFeedback,
@@ -238,8 +225,6 @@ export const EveryLocation: Story = {
 		await expect(canvas.getByText("On GitHub")).toBeVisible();
 		await expect(canvas.getByText("On GitLab")).toBeVisible();
 		canvas.getByText("On the work");
-		canvas.getByText("In conversation in the app");
-		canvas.getByText("In conversation in Slack");
 		canvas.getByText("In conversation");
 		canvas.getByText("On the practice page");
 		await expectNoPageOverflow();
@@ -259,7 +244,7 @@ export const WithdrawnFeedback: Story = {
 					...firstFeedback,
 					id: "ready-conversation",
 					destination: "CONVERSATION",
-					location: "NEXT_CONVERSATION",
+					location: "CONVERSATION",
 					state: "READY",
 					stopReason: null,
 					withdrawn: false,
@@ -268,7 +253,7 @@ export const WithdrawnFeedback: Story = {
 					...firstFeedback,
 					id: "withdrawn-ready-conversation",
 					destination: "CONVERSATION",
-					location: "NEXT_CONVERSATION",
+					location: "CONVERSATION",
 					state: "READY",
 					stopReason: null,
 					withdrawn: true,
@@ -296,7 +281,7 @@ export const WithdrawnFeedback: Story = {
 					...firstFeedback,
 					id: "withdrawn-delivered-conversation",
 					destination: "CONVERSATION",
-					location: "APP",
+					location: "CONVERSATION",
 					state: "DELIVERED",
 					stopReason: null,
 					withdrawn: true,

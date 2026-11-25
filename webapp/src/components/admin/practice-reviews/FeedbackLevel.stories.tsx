@@ -1174,7 +1174,7 @@ export const ReadyForConversation: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		await expectHeaderChip(panelElement, "Ready for conversation");
-		within(panelElement).getByText("For a conversation");
+		within(panelElement).getByText("For their conversation with Hephaestus");
 		within(panelElement).getByText(/which is what delivers it/u);
 	},
 };
