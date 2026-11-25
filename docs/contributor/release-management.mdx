@@ -814,6 +814,7 @@ Later failing verdicts add nothing, and the next passing verdict closes the issu
 
 A check that ends without a verdict, for example after a GitHub API error or a timeout, concludes nothing about the hosts.
 The report then fails, and **CI / Scheduled failures** reports the run.
+A host that you remove from the watch sends no more verdicts, so close its open issue by hand.
 The hosts' own Alertmanager notifies no one unless its site configuration names a receiver.
 
 | Check | Fails when | Response |

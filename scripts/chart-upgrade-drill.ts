@@ -177,8 +177,8 @@ try {
 	];
 	// The new chart first applies in phase 2, or in the rolling upgrade. Each release builds the PostgreSQL image again
 	// with the distribution's current security fixes, so its image may change there and restart PostgreSQL once. Its
-	// arguments, and the memory the chart derives from them, may change with the release in the same restart. Any other
-	// change to its Pod template fails the drill, and phase 3 must keep PostgreSQL.
+	// arguments, the memory the chart derives from them, and its probe timeouts may change with the release in the same
+	// restart. Any other change to its Pod template fails the drill, and phase 3 must keep PostgreSQL.
 	const firstApply = stops.length > 0 ? ["server.stopped=true", ...pin] : pin;
 	const postgresqlChanges = changedPostgresql(
 		await render(checkout, work, profile, ...(stops.length > 0 ? phase1 : [])),
