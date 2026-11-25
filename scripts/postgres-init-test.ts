@@ -24,21 +24,34 @@ const password = randomBytes(16).toString("hex");
 const user = "999:999";
 
 // Every Docker call ends by its deadline, so the waits below keep theirs and the cleanup cannot hang. A call
-// that runs out returns a null status, which each caller treats as a failed call.
+// that runs out returns a null status. Every step that the drill decides on fails on it; only pg_isready's
+// readiness answer counts it as not ready yet, and its wait still fails at its own deadline.
 const bounded = (milliseconds: number) => ({
 	timeout: milliseconds,
 	killSignal: "SIGKILL" as const,
 });
 const quick = bounded(15_000);
 
-/** How a Docker call ended: a timeout ends with ETIMEDOUT, a call that could not start with another code. */
-function howItEnded(result: { status: number | null; error?: Error }): string {
+/** How a Docker call ended: its exit code, its timeout, too much output, the signal that ended it, or why it could not start. */
+function howItEnded(result: {
+	status: number | null;
+	signal: NodeJS.Signals | null;
+	error?: Error;
+}): string {
 	const code =
 		result.error !== undefined && "code" in result.error ? String(result.error.code) : undefined;
 	if (code === "ETIMEDOUT") {
 		return "timed out";
 	}
-	return code === undefined ? `exit ${String(result.status)}` : `failed to run (${code})`;
+	if (code === "ENOBUFS") {
+		return "wrote more output than the limit";
+	}
+	if (code !== undefined) {
+		return `failed to run (${code})`;
+	}
+	return result.status === null
+		? `ended by ${String(result.signal)}`
+		: `exit ${String(result.status)}`;
 }
 
 function docker(...args: string[]): string {
@@ -67,7 +80,7 @@ async function waitReady(step: string): Promise<void> {
 	const deadline = Date.now() + 90_000;
 	while (!ready()) {
 		if (Date.now() > deadline) {
-			throw new Error(`${step}: PostgreSQL is not ready after 90 s:\n${logs()}`);
+			throw new Error(`${step}: PostgreSQL is not ready after 90 s:\n${logsForError()}`);
 		}
 		await sleep(1000);
 	}
@@ -87,7 +100,10 @@ function procStatus(pid: string): string {
 	if (result.status === 0) {
 		return result.stdout;
 	}
-	if (result.status === 1 && result.stderr.includes("No such file or directory")) {
+	if (
+		result.status === 1 &&
+		result.stderr.includes(`cat: /proc/${pid}/status: No such file or directory`)
+	) {
 		return "";
 	}
 	throw new Error(
@@ -99,19 +115,32 @@ async function waitFor(what: string, done: () => boolean): Promise<void> {
 	const deadline = Date.now() + 15_000;
 	while (!done()) {
 		if (Date.now() > deadline) {
-			throw new Error(`Timed out waiting for ${what}:\n${logs()}`);
+			throw new Error(`Timed out waiting for ${what}:\n${logsForError()}`);
 		}
 		await sleep(200);
 	}
 }
 
+/** The container's log. A call that did not finish fails, because the drill decides on what the log says. */
 function logs(): string {
 	const result = spawnSync("docker", ["logs", container], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 		...quick,
 	});
+	if (result.status !== 0) {
+		throw new Error(`docker logs ${container} ${howItEnded(result)}:\n${result.stderr}`);
+	}
 	return `${result.stdout}${result.stderr}`;
+}
+
+/** The log for an error message: a failed read is reported in its place, so the original error stays visible. */
+function logsForError(): string {
+	try {
+		return logs();
+	} catch (error) {
+		return error instanceof Error ? error.message : String(error);
+	}
 }
 
 function start(entrypoint?: string): void {
@@ -185,10 +214,12 @@ try {
 	);
 	await waitFor(`PID 1 to reap the orphan ${orphan}`, () => procStatus(orphan) === "");
 	if (/untracked child process|terminating any other active server processes/u.test(logs())) {
-		throw new Error(`PostgreSQL treated an orphan as a crashed backend:\n${logs()}`);
+		throw new Error(`PostgreSQL treated an orphan as a crashed backend:\n${logsForError()}`);
 	}
 	if (!ready()) {
-		throw new Error(`PostgreSQL stopped accepting connections after an orphan exited:\n${logs()}`);
+		throw new Error(
+			`PostgreSQL stopped accepting connections after an orphan exited:\n${logsForError()}`,
+		);
 	}
 
 	// An unclean stop of the image's own postmaster.
