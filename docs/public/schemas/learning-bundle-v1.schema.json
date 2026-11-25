@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
 	"title": "Hephaestus learning bundle, format version 1",
-	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text about the person's own learning that identifies no other person, directly or indirectly, and in a HEPHAESTUS record only the exact text that the person confirmed. A writer whose bundle would exceed the size limit fails the download with that reason and serves no part of it. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof. Revisions and tombstones compare only within one instanceId and portableId; origin is a hint that two items are copies of one, never a reason to change or remove an item of another issuer.",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after the 1.0.0 release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, an origin whose instanceId is the bundle's own, an origin that occurs more than once, a goalId that is not the portableId of a GOAL record in the bundle, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text about the person's own learning that identifies no other person, directly or indirectly, and in a CONFIRMED record only the exact text that the person confirmed. A writer whose bundle would exceed a limit of this format fails the download with that reason and serves no part of it. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof. Revisions and tombstones compare only within one instanceId and portableId; origin is a hint that two items are copies of one, never an order between them and never a reason to change or remove an item of another issuer without the person's choice.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -64,20 +64,20 @@
 			"description": "An RFC 3339 time in UTC.",
 			"type": "string",
 			"format": "date-time",
-			"pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$"
+			"pattern": "^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$"
 		},
 		"portableId": {
 			"description": "Stable across downloads from one instance. It never changes for the life of the record or the growth point.",
 			"$ref": "#/$defs/uuid"
 		},
 		"revision": {
-			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. A reader keeps the highest revision of one portableId from one instanceId. On equal revisions, a tombstone wins over the item.",
+			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. An item and its tombstones share this counter, so a restoration has a higher revision than the tombstone before it. A reader keeps the highest revision of one portableId from one instanceId.",
 			"type": "integer",
 			"minimum": 1,
 			"maximum": 9007199254740991
 		},
 		"origin": {
-			"description": "Where an imported item first came from. An instance that imported the item copies it unchanged into each later bundle, so an import recognizes the item again through any number of instances.",
+			"description": "Where an imported item first came from. An instance that imported the item copies it unchanged into each later bundle and into the tombstone of the item, so an import recognizes the item again through any number of instances.",
 			"type": "object",
 			"additionalProperties": false,
 			"required": ["instanceId", "portableId"],
@@ -124,14 +124,14 @@
 					"enum": ["ACHIEVED", "DROPPED", "REPLACED", "ARCHIVED"]
 				},
 				"authorKind": {
-					"description": "PERSON: the person wrote the text. HEPHAESTUS: Hephaestus wrote the text and the person confirmed it word for word. A record that Hephaestus noted and the person did not keep never appears.",
-					"enum": ["PERSON", "HEPHAESTUS"]
+					"description": "WRITTEN: the person wrote the words of this revision. CONFIRMED: Hephaestus wrote them and the person confirmed them word for word, also when the person kept a noted record. A noted record that the person did not keep never appears.",
+					"enum": ["WRITTEN", "CONFIRMED"]
 				},
 				"text": {
 					"type": "string",
 					"minLength": 1,
 					"maxLength": 8000,
-					"pattern": "^[^\\u0000]*$"
+					"pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F\\u202A-\\u202E\\u2066-\\u2069]*$"
 				},
 				"practiceKeys": {
 					"description": "The portable practices that the record names. Links to a practice of one workspace are left out.",
@@ -140,8 +140,15 @@
 					"uniqueItems": true,
 					"items": { "$ref": "#/$defs/practiceKey" }
 				},
+				"goalIds": {
+					"description": "The goals in this bundle that the person linked the record to.",
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": { "$ref": "#/$defs/uuid" }
+				},
 				"helpPreference": {
-					"description": "For a goal only: the help that the person chose for this goal.",
+					"description": "For a goal only: the help that the person chose for this goal. It is the person's own setting; a reader may keep it without applying it.",
 					"enum": ["EXPLAIN", "HINT", "ASK_FIRST", "STEPPED_BACK"]
 				},
 				"createdAt": { "$ref": "#/$defs/timestamp" },
@@ -180,31 +187,32 @@
 				"occurredWeek": {
 					"description": "The ISO 8601 week of the outcome.",
 					"type": "string",
-					"pattern": "^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$"
+					"pattern": "^[1-9][0-9]{3}-W(0[1-9]|[1-4][0-9]|5[0-3])$"
 				}
 			},
 			"if": { "properties": { "madeBy": { "const": "IMPORT" } } },
-			"then": { "required": ["origin"] }
+			"then": { "required": ["origin"] },
+			"else": { "not": { "required": ["origin"] } }
 		},
 		"tombstone": {
 			"description": "A record or growth point that an earlier bundle could carry and this one does not. It keeps no content.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["kind", "reason", "portableId", "revision", "at"],
+			"required": ["itemType", "reason", "portableId", "revision"],
 			"properties": {
-				"kind": { "const": "PORTABLE_RECORD" },
+				"itemType": { "enum": ["RECORD", "GROWTH_POINT"] },
 				"reason": {
-					"description": "DELETED: the person deleted it. WITHDRAWN: it still exists but may no longer leave the instance, for example after a recall or a narrower export policy. A reader removes the item in both cases, and only the person's deletion is reported as a deletion.",
+					"description": "DELETED: the person deleted it. WITHDRAWN: it still exists but may no longer leave the instance, for example after a recall or a narrower export policy. A reader that applies tombstones removes the item in both cases, and reports only the person's deletion as a deletion.",
 					"enum": ["DELETED", "WITHDRAWN"]
 				},
 				"portableId": { "$ref": "#/$defs/portableId" },
+				"origin": {
+					"description": "Present exactly when the removed item had one.",
+					"$ref": "#/$defs/origin"
+				},
 				"revision": {
 					"description": "Higher than every revision of the item that a bundle could carry before it was deleted or withdrawn.",
 					"$ref": "#/$defs/revision"
-				},
-				"at": {
-					"description": "When it was deleted or withdrawn.",
-					"$ref": "#/$defs/timestamp"
 				}
 			}
 		}

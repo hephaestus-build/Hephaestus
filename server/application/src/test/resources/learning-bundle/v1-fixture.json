@@ -10,9 +10,14 @@
 			"revision": 3,
 			"kind": "LESSON",
 			"state": "ACTIVE",
-			"authorKind": "PERSON",
+			"authorKind": "WRITTEN",
 			"text": "I split a large change into commits that each build on their own.",
-			"practiceKeys": ["software-engineering/atomic-commits"],
+			"practiceKeys": [
+				"software-engineering/atomic-commits"
+			],
+			"goalIds": [
+				"c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02"
+			],
 			"createdAt": "2026-09-02T08:15:00Z",
 			"revisedAt": "2026-11-20T16:42:10.123Z"
 		},
@@ -26,7 +31,7 @@
 			"kind": "GOAL",
 			"state": "CLOSED",
 			"closeReason": "ACHIEVED",
-			"authorKind": "HEPHAESTUS",
+			"authorKind": "CONFIRMED",
 			"text": "Write a test that fails before each bug fix.",
 			"practiceKeys": [],
 			"helpPreference": "HINT",
@@ -66,18 +71,20 @@
 	],
 	"tombstones": [
 		{
-			"kind": "PORTABLE_RECORD",
+			"itemType": "RECORD",
 			"reason": "DELETED",
 			"portableId": "f6d8b0c2-5e7a-4d9f-9b3c-4e6a8c0d2f05",
-			"revision": 2,
-			"at": "2026-11-18T09:05:00Z"
+			"revision": 2
 		},
 		{
-			"kind": "PORTABLE_RECORD",
+			"itemType": "GROWTH_POINT",
 			"reason": "WITHDRAWN",
 			"portableId": "08f0d2e4-7a9c-4b1d-9e5f-6a8c0e2f4b07",
-			"revision": 1,
-			"at": "2026-11-19T12:00:00Z"
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "3f4e5d6c-7b8a-4f9e-9d0c-2b3a4f5e6d7c"
+			},
+			"revision": 4
 		}
 	]
 }

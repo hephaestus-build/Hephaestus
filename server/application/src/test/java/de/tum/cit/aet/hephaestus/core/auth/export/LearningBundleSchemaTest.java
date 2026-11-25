@@ -110,6 +110,49 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         "pattern",
                         "/records/0/text"),
                 refused(
+                        "a year before 1000",
+                        b -> b.put("generatedAt", "0000-01-01T00:00:00Z"),
+                        "pattern",
+                        "/generatedAt"),
+                refused(
+                        "an author kind that the format does not know",
+                        b -> record(b, 0).put("authorKind", "HEPHAESTUS"),
+                        "enum",
+                        "/records/0/authorKind"),
+                refused(
+                        "a bidirectional override in a record text",
+                        b -> record(b, 0).put("text", "before\u202Eafter"),
+                        "pattern",
+                        "/records/0/text"),
+                refused(
+                        "a record text past its length",
+                        b -> record(b, 0).put("text", "a".repeat(8001)),
+                        "maxLength",
+                        "/records/0/text"),
+                refused(
+                        "one practice named twice",
+                        b -> record(b, 0)
+                                .putArray("practiceKeys")
+                                .add("software-engineering/atomic-commits")
+                                .add("software-engineering/atomic-commits"),
+                        "uniqueItems",
+                        "/records/0/practiceKeys"),
+                refused(
+                        "an origin on a point that was not imported",
+                        b -> growthPoint(b, 0).set("origin", growthPoint(b, 2).get("origin")),
+                        "not",
+                        "/growthPoints/0"),
+                refused(
+                        "a week that no year has",
+                        b -> growthPoint(b, 0).put("occurredWeek", "2026-W54"),
+                        "pattern",
+                        "/growthPoints/0/occurredWeek"),
+                refused(
+                        "a tombstone reason that the format does not know",
+                        b -> tombstone(b).put("reason", "EXPIRED"),
+                        "enum",
+                        "/tombstones/0/reason"),
+                refused(
                         "a practice of one workspace",
                         b -> growthPoint(b, 0).put("practiceKey", "local/42"),
                         "not",
