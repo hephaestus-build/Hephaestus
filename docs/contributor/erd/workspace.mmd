@@ -53,6 +53,9 @@ erDiagram
         TIMESTAMPTZ pull_request_recent_window_start
         TIMESTAMPTZ readers_synced_at
         VARCHAR(16) visibility_class "NOT NULL"
+        VARCHAR(32) proof_reason "NOT NULL"
+        VARCHAR(16) proof_state "NOT NULL"
+        BIGINT proof_generation "NOT NULL"
     }
 
     ReviewScopeRepository {

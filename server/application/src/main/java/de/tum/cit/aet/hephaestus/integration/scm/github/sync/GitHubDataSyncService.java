@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
@@ -223,14 +224,17 @@ public class GitHubDataSyncService {
         Repository repository = repositoryRepository
                 .findByNativeIdAndProviderId(syncTarget.nativeId(), providerId)
                 .orElse(null);
-        if (repository != null && !Objects.equals(nameWithOwner, repository.getNameWithOwner())) {
+        String storedNameWithOwner = repository == null ? null : repository.getNameWithOwner();
+        if (repository != null && !Objects.equals(nameWithOwner, storedNameWithOwner)) {
             syncTargetProvider.reconcileSyncTargetIdentity(
-                    syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
+                    syncTarget.id(), repository.getNativeId(), storedNameWithOwner);
         }
         if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
             return false;
         }
         Instant metadataRequestedAt = Instant.now();
+        ReadersRead readersRead = syncTargetProvider.beginReadersProof(
+                syncTarget.id(), syncTarget.nativeId(), providerId, metadataRequestedAt);
         boolean repositoryCreatedDuringSync = false;
 
         // PAT workspaces start with only a RepositoryToMonitor entry — fetch and create the
@@ -298,6 +302,12 @@ public class GitHubDataSyncService {
                     syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
             syncTargetProvider.updateSyncTimestamp(
                     syncTarget.id(), SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
+            // The repository holds what this read stored; the shared row may already hold another workspace's read.
+            if (repository.isPublicOnProvider()) {
+                syncTargetProvider.recordRepositoryPublic(readersRead);
+            } else {
+                syncTargetProvider.recordRepositoryNotPublic(readersRead);
+            }
             syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
 
             // Backfill commits from local git clone. Uses local git, not the GitHub API, so

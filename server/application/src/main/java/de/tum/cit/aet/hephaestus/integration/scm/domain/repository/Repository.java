@@ -136,6 +136,11 @@ public class Repository extends BaseGitServiceEntity {
     @ToString.Exclude
     private Set<RepositoryCollaborator> collaborators = new HashSet<>();
 
+    /** Whether the provider shows this repository to anyone: an internal repository is seen by some people only. */
+    public boolean isPublicOnProvider() {
+        return visibility == Visibility.PUBLIC && !isPrivate;
+    }
+
     public enum Visibility {
         PUBLIC,
         PRIVATE,

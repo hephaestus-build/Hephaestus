@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.workspace.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -17,12 +22,17 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link WorkspaceSyncTargetProvider#reconcileSyncTargetIdentity}, the correctness
@@ -56,6 +66,7 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
     private WorkspaceSyncTargetProvider provider;
 
     @BeforeEach
+    @SuppressWarnings("DirectInvocationOnMock") // The locking query answers from the repository's own stubs.
     void setUp() {
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
@@ -68,6 +79,23 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry(),
                 mock(PrivacyJournal.class));
+        // The provider locks a monitor through the entity manager; it answers with what the repository stub holds.
+        EntityManager entityManager = mock(EntityManager.class);
+        @SuppressWarnings("unchecked")
+        TypedQuery<RepositoryToMonitor> locking = mock(TypedQuery.class, RETURNS_SELF);
+        AtomicReference<Long> lockedId = new AtomicReference<>();
+        lenient()
+                .when(entityManager.createQuery(anyString(), eq(RepositoryToMonitor.class)))
+                .thenReturn(locking);
+        lenient().when(locking.setParameter(eq("id"), any())).thenAnswer(invocation -> {
+            lockedId.set(invocation.getArgument(1));
+            return locking;
+        });
+        lenient()
+                .when(locking.getResultList())
+                .thenAnswer(invocation -> repositoryToMonitorRepository.findById(lockedId.get()).stream()
+                        .toList());
+        ReflectionTestUtils.setField(provider, "entityManager", entityManager);
     }
 
     private RepositoryToMonitor monitor(Long nativeId, String nameWithOwner) {
@@ -87,6 +115,22 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
 
         assertThat(rtm.getNameWithOwner()).isEqualTo(NEW_NAME);
         verify(repositoryToMonitorRepository).saveAndFlush(rtm);
+    }
+
+    /** The monitor held another provider instance's id and now takes this repository's: the old proof is not its. */
+    @Test
+    void shouldForgetTheReadersProofWhenTheMonitorTakesAnotherRepositorysId() {
+        RepositoryToMonitor rtm = monitor(111L, OLD_NAME);
+        ReflectionTestUtils.setField(rtm, "id", SYNC_TARGET_ID);
+        rtm.getReaders().confirmedPublic(rtm.getReaders().getProofGeneration(), Instant.now());
+        when(repositoryToMonitorRepository.findById(SYNC_TARGET_ID)).thenReturn(Optional.of(rtm));
+        when(repositoryToMonitorRepository.monitorHoldsAnotherInstancesId(SYNC_TARGET_ID, NATIVE_ID))
+                .thenReturn(true);
+
+        provider.reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, OLD_NAME);
+
+        assertThat(rtm.getNativeId()).isEqualTo(NATIVE_ID);
+        assertThat(rtm.getReaders().getVisibilityClass()).isEqualTo(VisibilityClass.UNPROVEN);
     }
 
     @Test

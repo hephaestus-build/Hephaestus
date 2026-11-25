@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
+import de.tum.cit.aet.hephaestus.integration.core.framework.ResourceReaders;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,6 +13,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -109,14 +111,9 @@ public class SlackMonitoredChannel {
     private @Nullable Instant historyCheckedAt;
 
     /** Who on the provider can see this resource, as far as Hephaestus has proven it. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "visibility_class", nullable = false, length = 16)
-    @ColumnDefault("'UNPROVEN'")
-    private VisibilityClass visibilityClass = VisibilityClass.UNPROVEN;
-
-    /** When Hephaestus last proved this resource's readers on the provider. */
-    @Column(name = "readers_synced_at")
-    private @Nullable Instant readersSyncedAt;
+    @Embedded
+    @Setter(AccessLevel.NONE)
+    private ResourceReaders readers = new ResourceReaders();
 
     @Column(name = "last_sync_error", length = 2048)
     private @Nullable String lastSyncError;

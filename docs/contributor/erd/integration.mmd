@@ -369,6 +369,9 @@ erDiagram
         BIGINT version "NOT NULL"
         TIMESTAMPTZ readers_synced_at
         VARCHAR(16) visibility_class "NOT NULL"
+        VARCHAR(32) proof_reason "NOT NULL"
+        VARCHAR(16) proof_state "NOT NULL"
+        BIGINT proof_generation "NOT NULL"
     }
 
     OutlineDocument {
@@ -602,6 +605,9 @@ erDiagram
         TIMESTAMPTZ ingest_after
         TIMESTAMPTZ readers_synced_at
         VARCHAR(16) visibility_class "NOT NULL"
+        VARCHAR(32) proof_reason "NOT NULL"
+        VARCHAR(16) proof_state "NOT NULL"
+        BIGINT proof_generation "NOT NULL"
     }
 
     SlackParticipantConsent {

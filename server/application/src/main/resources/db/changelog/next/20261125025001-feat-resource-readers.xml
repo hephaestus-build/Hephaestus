@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795506797220-1" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column defaultValue="AWAITING_READERS" name="proof_reason" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-2" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column defaultValue="AWAITING_READERS" name="proof_reason" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-3" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column defaultValue="AWAITING_READERS" name="proof_reason" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-4" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column defaultValue="PENDING" name="proof_state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-5" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column defaultValue="PENDING" name="proof_state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-6" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column defaultValue="PENDING" name="proof_state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-12" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column defaultValueNumeric="0" name="proof_generation" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-13" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column defaultValueNumeric="0" name="proof_generation" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-14" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column defaultValueNumeric="0" name="proof_generation" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795506797220-11" author="hephaestus">
+        <comment>Cutover: every monitored repository waits for a new proof. The earlier cutover derived a class from the shared mirror row, which another workspace's read may have written, and later answers did not update it. The next sync proves each public GitHub repository from this workspace's own read.</comment>
+        <sql>UPDATE repository_to_monitor SET visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS', readers_synced_at = NULL</sql>
+        <rollback>
+            <comment>Fail closed: the earlier layer reads no class, and every resource waits for a new proof.</comment>
+            <sql>UPDATE repository_to_monitor SET visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS', readers_synced_at = NULL</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795506797220-7" author="hephaestus">
+        <comment>A monitored resource stores only a class, proof state and proof reason that belong together: only a public confirmation makes it visible to the whole workspace, and only a listing of readers restricts it.</comment>
+        <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+        <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+        <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+        <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_proof_state CHECK (proof_state IN ('PROVEN', 'PENDING', 'FAILED'))</sql>
+        <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+        <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_proof_state CHECK (proof_state IN ('PROVEN', 'PENDING', 'FAILED'))</sql>
+        <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+        <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_proof_state CHECK (proof_state IN ('PROVEN', 'PENDING', 'FAILED'))</sql>
+        <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+        <rollback>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_proof_reason</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_proof_state</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_proof_reason</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_proof_state</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_proof_reason</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_proof_state</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_readers_proof</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_readers_proof</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_readers_proof</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795506797220-15" author="hephaestus">
+        <comment>Whether a repository is public is a fact about the repository, not about one workspace. Each write that stores the shared mirror row as not public, from any path and whatever the row held before, and each removal of the row, narrows every monitor of that repository in the same transaction: a public proof falls back to waiting, and every monitor's generation moves on, so a public answer from a read that began earlier no longer applies. Another monitor's failure reason stays.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    UPDATE public.repository_to_monitor
+    SET proof_generation = proof_generation + 1,
+        visibility_class = CASE WHEN visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE visibility_class END,
+        proof_state = CASE WHEN visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE proof_state END,
+        proof_reason = CASE WHEN visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE proof_reason END
+    WHERE native_id = p_native_id;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+CREATE FUNCTION public.narrow_monitors_of_repository() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.narrow_repository_monitors(CASE WHEN TG_OP = 'DELETE' THEN OLD.native_id ELSE NEW.native_id END);
+    RETURN NULL;
+END
+$$;
+CREATE TRIGGER repository_not_public AFTER INSERT OR UPDATE ON public.repository
+    FOR EACH ROW
+    WHEN (NOT (NEW.visibility IS NOT DISTINCT FROM 'PUBLIC' AND NOT NEW.is_private))
+    EXECUTE FUNCTION public.narrow_monitors_of_repository();
+CREATE TRIGGER repository_gone AFTER DELETE ON public.repository
+    FOR EACH ROW EXECUTE FUNCTION public.narrow_monitors_of_repository();
+        ]]></sql>
+        <rollback>
+            <sql>DROP TRIGGER repository_gone ON public.repository</sql>
+            <sql>DROP TRIGGER repository_not_public ON public.repository</sql>
+            <sql>DROP FUNCTION public.narrow_monitors_of_repository()</sql>
+            <sql>DROP FUNCTION public.narrow_repository_monitors(bigint)</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
