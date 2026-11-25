@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnit;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.domain.JavaFieldAccess;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
@@ -13,13 +14,17 @@ import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import jakarta.persistence.Table;
+import jakarta.persistence.criteria.CriteriaDelete;
+import jakarta.persistence.criteria.CriteriaUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.repository.Repository;
 
@@ -43,8 +48,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     + "(?:\"?public\"?\\s*\\.\\s*)?\"?(?:account_export|AccountExport)\"?(?![\\w$])",
             Pattern.CASE_INSENSITIVE);
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
-    private static final Path ERASURE_REPOSITORY =
-            PRODUCTION_SOURCES.resolve("de/tum/cit/aet/hephaestus/core/auth/AccountErasureRepository.java");
+    private static final String ERASURE_REPOSITORY = "de.tum.cit.aet.hephaestus.core.auth.AccountErasureRepository";
 
     @Test
     void shouldEnforceAdmissionForEveryEnrolledAccountOwnedStore() {
@@ -66,16 +70,11 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
     void shouldKeepExportWritesBehindLifecycleAdmission() {
         assertThat(classes.stream()
                         .filter(type -> type.isAssignableTo(Repository.class))
-                        .filter(type -> type.getDirectDependenciesFromSelf().stream()
-                                .anyMatch(dependency ->
-                                        dependency.getTargetClass().isEquivalentTo(AccountExport.class))))
+                        .filter(AccountOwnedWriteAdmissionArchitectureTest::referencesExport))
                 .as("Use the guarded export writer instead of adding another export repository")
                 .containsExactly(classes.get(AccountExportRepository.class));
 
-        assertThat(classes.stream()
-                        .flatMap(type -> type.getCodeUnitAccessesFromSelf().stream())
-                        .filter(access -> !allowedExportAccess(access))
-                        .map(JavaCodeUnitAccess::getDescription))
+        assertThat(unadmittedExportAccesses(classes.stream()))
                 .as("Use AccountExportWriter for persistent export writes")
                 .isEmpty();
 
@@ -92,10 +91,28 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         && call.getName().equals("lockStatusForShare"));
     }
 
+    private static boolean referencesExport(JavaClass type) {
+        return type.getDirectDependenciesFromSelf().stream()
+                .anyMatch(dependency -> dependency.getTargetClass().isEquivalentTo(AccountExport.class));
+    }
+
+    private static Stream<String> unadmittedExportAccesses(Stream<JavaClass> types) {
+        return types.flatMap(type -> type.getCodeUnitAccessesFromSelf().stream())
+                .filter(access -> !allowedExportAccess(access))
+                .map(JavaCodeUnitAccess::getDescription);
+    }
+
     private static boolean allowedExportAccess(JavaCodeUnitAccess<?> access) {
         boolean repository = access.getTargetOwner().isAssignableTo(AccountExportRepository.class);
         boolean entity = access.getTargetOwner().isAssignableTo(AccountExport.class);
-        if (!repository && !entity) {
+        var target = access.getTarget();
+        // A class that names the export entity may build or execute a bulk mutation only at admission.
+        boolean criteria = (isBulkCriteria(access.getTargetOwner())
+                        || isBulkCriteria(target.getRawReturnType())
+                        || target.getRawParameterTypes().stream()
+                                .anyMatch(AccountOwnedWriteAdmissionArchitectureTest::isBulkCriteria))
+                && referencesExport(access.getOriginOwner());
+        if (!repository && !entity && !criteria) {
             return true;
         }
         var writer = classes.get(AccountExportWriter.class);
@@ -105,6 +122,9 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         boolean fail = origin.equals(writer.getMethod("fail", AccountExport.class, String.class));
         String operation = access.getName();
 
+        if (criteria) {
+            return create || finish;
+        }
         if (repository) {
             return switch (operation) {
                 case "saveAndFlush" -> create;
@@ -124,22 +144,66 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         };
     }
 
+    private static boolean isBulkCriteria(JavaClass type) {
+        return type.isAssignableTo(CriteriaUpdate.class) || type.isAssignableTo(CriteriaDelete.class);
+    }
+
+    @Test
+    void shouldRejectExportCriteriaMutations() {
+        var fixture = classesWithTests.get(AccountOwnedWriteAdmissionFixtures.CriteriaWrites.class);
+        assertThat(unadmittedExportAccesses(Stream.of(fixture)))
+                .anySatisfy(detail -> assertThat(detail).contains("rewritePayload", "createCriteriaUpdate"))
+                .anySatisfy(detail -> assertThat(detail).contains("rewritePayload", "createQuery"))
+                .anySatisfy(detail -> assertThat(detail).contains("deleteExports", "createCriteriaDelete"))
+                .anySatisfy(detail -> assertThat(detail).contains("deleteExports", "createQuery"))
+                .noneSatisfy(detail -> assertThat(detail).contains("readExports"));
+    }
+
     @Test
     void shouldReserveDirectExportDmlForErasure() throws IOException {
+        var erasure = classes.get(ERASURE_REPOSITORY).getMethod("deleteExports", Long.class);
+        assertThat(exportDml(SourceSql.annotationSql(erasure, false)))
+                .as("Account erasure may delete exports after locking their account")
+                .containsExactly("DELETE FROM account_export WHERE account_id = :accountId");
+        assertThat(exportQueryViolations(classes.stream()
+                        .flatMap(type -> type.getMethods().stream())
+                        .filter(method -> !method.equals(erasure))))
+                .as("Use AccountExportWriter for modifying queries on exports")
+                .isEmpty();
+
         try (var files = Files.walk(PRODUCTION_SOURCES)) {
             for (Path file :
                     files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                var writes = SourceSql.statements(Files.readString(file)).stream()
-                        .filter(sql -> EXPORT_DML.matcher(sql).find())
-                        .toList();
-                if (file.equals(ERASURE_REPOSITORY)) {
-                    assertThat(writes)
-                            .as("Account erasure may delete exports after locking their account")
-                            .containsExactly("DELETE FROM account_export WHERE account_id = :accountId");
-                } else {
-                    assertThat(writes).as("Direct export DML in %s", file).isEmpty();
-                }
+                var inSource = SourceSql.statements(SourceSql.withoutQueryAnnotations(Files.readString(file)));
+                assertThat(exportDml(inSource))
+                        .as("Direct export DML in %s", file)
+                        .isEmpty();
             }
         }
+    }
+
+    @Test
+    void shouldRejectCompiledExportQueriesAssembledFromConstants() throws IOException {
+        var fixture = classesWithTests.get(AccountOwnedWriteAdmissionFixtures.ConstantQueries.class);
+        var source = Path.of("src/test/java")
+                .resolve(AccountOwnedWriteAdmissionFixtures.class.getName().replace('.', '/') + ".java");
+        assertThat(exportDml(SourceSql.statements(Files.readString(source))))
+                .as("The old source-only scan misses all three statements")
+                .isEmpty();
+        String method = fixture.getName() + ".";
+        assertThat(exportQueryViolations(fixture.getMethods().stream()))
+                .containsExactlyInAnyOrder(
+                        method + "nativeUpdate() runs UPDATE account_export SET payload = NULL",
+                        method + "nativeDelete() runs DELETE FROM account_export",
+                        method + "jpqlUpdate(java.lang.String) runs UPDATE AccountExport e SET e.status = :status");
+    }
+
+    private static Stream<String> exportQueryViolations(Stream<JavaMethod> methods) {
+        return methods.flatMap(method -> exportDml(SourceSql.annotationSql(method, false)).stream()
+                .map(sql -> method.getFullName() + " runs " + sql));
+    }
+
+    private static List<String> exportDml(List<String> statements) {
+        return statements.stream().filter(sql -> EXPORT_DML.matcher(sql).find()).toList();
     }
 }

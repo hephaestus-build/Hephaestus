@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
-import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
@@ -29,7 +28,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.jdbc.core.JdbcOperations;
@@ -223,21 +221,9 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     }
 
     private static List<String> annotationSql(JavaClass type) {
-        var sql = new ArrayList<String>();
-        for (JavaMethod method : type.getMethods()) {
-            if (method.isAnnotatedWith(NativeQuery.class)) {
-                NativeQuery query = method.getAnnotationOfType(NativeQuery.class);
-                sql.add(query.value());
-                if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
-            }
-            if (method.isAnnotatedWith(Query.class)
-                    && method.getAnnotationOfType(Query.class).nativeQuery()) {
-                Query query = method.getAnnotationOfType(Query.class);
-                sql.add(query.value());
-                if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
-            }
-        }
-        return sql.stream().map(SourceSql::normalized).toList();
+        return type.getMethods().stream()
+                .flatMap(method -> SourceSql.annotationSql(method, true).stream())
+                .toList();
     }
 
     @SuppressWarnings({"unused", "UnusedNestedClass", "UnusedMethod"}) // Read by ArchUnit only.
