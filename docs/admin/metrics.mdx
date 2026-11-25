@@ -381,7 +381,7 @@ A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surfa
 
 ## Privacy-job metrics
 
-Account erasure, export generation, export expiry and LLM usage retention each report one terminal
+Account erasure, export generation, export expiry, conversation retention and LLM usage retention each report one terminal
 outcome per run, published by the server role.
 
 | Prometheus name               | Type    | Labels           | Meaning                                      |
@@ -389,7 +389,7 @@ outcome per run, published by the server role.
 | `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
 | `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
-`job` is one of `account_erasure`, `export_generation`, `export_retention`, or `llm_usage_retention`.
+`job` is one of `account_erasure`, `conversation_retention`, `export_generation`, `export_retention`, or `llm_usage_retention`.
 A scrape sets its own `job`, so the store keeps this label as `exported_job`.
 `outcome` is `success`, `incomplete`, or `failure`.
 An empty backlog is a `success`.
@@ -397,6 +397,19 @@ An empty backlog is a `success`.
 `HephaestusPrivacyJobNotRunning` reports an hourly sweep that ended no run.
 `HephaestusPrivacyJobFailing` reports a job that failed or left work at least twice in 26 hours.
 `incomplete` means the run ended without error but exhausted its time budget while eligible work remained.
+For `conversation_retention`, `incomplete` means instead that the erasure of one person's entries failed.
+A `conversation_retention` run without a failed erasure that spends its budget is a `success`, because the next run continues 15 minutes later.
+The deadline margin below shows a sweep that falls behind.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `conversation_retention_deadline_margin_seconds` | Gauge | None | Seconds until the oldest due conversation entry reaches its retention limit, by the database clock. Each server replica reads it every minute. `+Inf` when no entry is due. A failed read keeps the last value |
+| `conversation_retention_sampler_failures_total` | Counter | None | Reads of the margin that failed |
+| `conversation_retention_margin_read_timestamp_seconds` | Gauge | None | When the replica last read the margin, in seconds since the epoch, or its start until the first read. An empty read counts |
+
+`HephaestusConversationRetentionBehind` reports a margin under seven days.
+`HephaestusConversationRetentionUnsampled` reports reads of the margin that keep failing or stop.
+For `conversation_retention`, `privacy_job_affected_total` counts the due entries that the run handed to committed transactions, including entries that another run erased first.
 
 The LLM usage retention sweep deletes in batches for at most five minutes.
 It reports `incomplete` when expired rows remain.

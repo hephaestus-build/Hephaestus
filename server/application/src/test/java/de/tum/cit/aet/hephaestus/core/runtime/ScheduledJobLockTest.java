@@ -48,6 +48,7 @@ class ScheduledJobLockTest {
             Map.entry("FeedbackDeliveryFreshness#sample", "LOCAL"),
             Map.entry("AgentRunReaper#reap", "ROW"),
             Map.entry("ConversationTurnQueueSampler#sample", "LOCAL"),
+            Map.entry("ConversationRetentionSweeper#sampleDeadlineMargin", "LOCAL"),
             Map.entry("ConversationLiveHub#heartbeat", "LOCAL"),
             Map.entry("ContributorService#evictContributorsCache", "LOCAL"),
             Map.entry("ReleaseCheckService#poll", "LOCAL"),

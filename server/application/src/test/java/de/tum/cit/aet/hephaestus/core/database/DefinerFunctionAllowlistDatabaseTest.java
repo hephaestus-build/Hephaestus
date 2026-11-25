@@ -34,8 +34,8 @@ class DefinerFunctionAllowlistDatabaseTest {
     /** Every definer function the application role may call, each a narrow job that crosses a boundary on purpose. */
     private static final Set<String> ALLOWED = Set.of(
             "public.maintain_auth_event_partitions()",
-            "public.mentoring_due_work(work_kind text, due_before timestamp with time zone, after_due timestamp with time zone,"
-                    + " after_id uuid, max_rows integer)",
+            "public.mentoring_due_work(work_kind text, max_age_seconds bigint, after_due timestamp with time zone, after_id uuid,"
+                    + " skip_workspace_ids bigint[], skip_account_ids bigint[], max_rows integer)",
             "public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)");
 
     /** A fresh install: the roles first, then the owner migrates the empty database. */

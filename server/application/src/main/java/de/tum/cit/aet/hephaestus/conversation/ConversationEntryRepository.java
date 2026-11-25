@@ -462,7 +462,10 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         Instant getEditedAt();
     }
 
-    /** An entry past its retention: its key, its workspace, its owner and when it was written. */
+    /**
+     * An entry past its retention: its key, its workspace, its owner, when it was written, and the database clock when
+     * it was read.
+     */
     interface DueEntry {
         UUID getId();
 
@@ -471,22 +474,32 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         long getAccountId();
 
         Instant getDueAt();
+
+        Instant getReadAt();
     }
 
     /**
-     * A page of the entries of every person written before the cutoff and not erased yet, oldest first, after the entry
-     * {@code (afterDue, afterId)}. The owner function {@code mentoring_due_work} finds them whoever owns them, and
-     * returns no content.
+     * A page of the entries of every person older than {@code maxAgeSeconds} at the start of the database's current
+     * retention week and not erased yet, oldest first, after the entry {@code (afterDue, afterId)}, or from the oldest
+     * when both are null. The owners
+     * {@code (skipWorkspaceIds[i], skipAccountIds[i])} are passed over. The owner function {@code mentoring_due_work}
+     * finds them whoever owns them, and returns no content.
      */
     @WorkspaceAgnostic("The retention sweep finds the due entries of every workspace, then erases each as its owner")
     @Query(value = """
-            SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt"
-            FROM public.mentoring_due_work('ENTRY_RETENTION', :cutoff, :afterDue, :afterId, :limit)
+            SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt", now() AS "readAt"
+            FROM public.mentoring_due_work('ENTRY_RETENTION', CAST(:maxAgeSeconds AS bigint),
+                                           CAST(:afterDue AS timestamptz), CAST(:afterId AS uuid),
+                                           CAST(:skipWorkspaceIds AS bigint[]), CAST(:skipAccountIds AS bigint[]),
+                                           :limit)
+            ORDER BY due_at, id
             """, nativeQuery = true)
     List<DueEntry> findDueForRetention(
-            @Param("cutoff") Instant cutoff,
-            @Param("afterDue") Instant afterDue,
-            @Param("afterId") UUID afterId,
+            @Param("maxAgeSeconds") long maxAgeSeconds,
+            @Param("afterDue") @Nullable Instant afterDue,
+            @Param("afterId") @Nullable UUID afterId,
+            @Param("skipWorkspaceIds") Long[] skipWorkspaceIds,
+            @Param("skipAccountIds") Long[] skipAccountIds,
             @Param("limit") int limit);
 
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
