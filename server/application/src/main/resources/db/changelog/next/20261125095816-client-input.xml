@@ -217,7 +217,7 @@ END
 $$;
         ]]></sql>
         <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
-                  changeSetPath="db/changelog/next/20261125071529-fix-personal-space-audit-erasure.xml"/>
+                  changeSetPath="db/changelog/next/20261125090220-fix-personal-space-audit-erasure.xml"/>
     </changeSet>
     <changeSet id="1795480139787-3" author="hephaestus">
         <comment>A request id is unique per owner, so another person's request id does not collide with a new one.</comment>
