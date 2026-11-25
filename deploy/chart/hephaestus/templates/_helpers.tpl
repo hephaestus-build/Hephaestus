@@ -1160,8 +1160,9 @@ switch.
 {{- define "hephaestus.alertRuleGroups" -}}
 {{- $groups := list -}}
 {{- $backups := include "hephaestus.backupsRead" . -}}
+{{- $exporter := .Values.postgresql.metrics.enabled -}}
 {{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups -}}
-{{- if or (ne .name "hephaestus-backups") (eq $backups "true") -}}
+{{- if and (or (ne .name "hephaestus-backups") (eq $backups "true")) (or (ne .name "hephaestus-postgresql-exporter") $exporter) -}}
 {{- $groups = append $groups . -}}
 {{- end -}}
 {{- end -}}

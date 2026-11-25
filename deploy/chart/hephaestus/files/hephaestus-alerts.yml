@@ -977,6 +977,19 @@ groups:
         annotations:
           summary: Feedback on the work has waited more than two hours for its first posted copy
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+  # The exporter target itself. When its Pod cannot be created, discovery drops the target and no up series
+  # remains, so the rules below stay silent. The chart renders this group only with postgresql.metrics.enabled,
+  # where the target must exist; load it yourself only where you scrape the exporter as job="postgresql".
+  - name: hephaestus-postgresql-exporter
+    rules:
+      - alert: HephaestusPostgresExporterMissing
+        expr: absent(up{job="postgresql"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The PostgreSQL exporter has had no scrape target for 5 minutes, so nothing watches the database
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # postgres_exporter of postgresql.metrics (docs/admin/observability.mdx, Database metrics). Without the
   # exporter these series do not exist, and the rules stay silent.
   - name: hephaestus-postgresql

@@ -23,8 +23,21 @@ const password = randomBytes(16).toString("hex");
 // The chart's user. The entrypoint then initializes the volume directly, without gosu.
 const user = "999:999";
 
+// Every Docker call ends by its deadline, so the waits below keep theirs and the cleanup cannot hang. A call
+// that runs out returns a null status, which each caller treats as a failed call.
+const bounded = (milliseconds: number) => ({
+	timeout: milliseconds,
+	killSignal: "SIGKILL" as const,
+});
+const quick = bounded(15_000);
+
 function docker(...args: string[]): string {
-	const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
+	// Building the image installs packages; every other call is a container or volume operation.
+	const result = spawnSync("docker", args, {
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+		...bounded(args[0] === "build" ? 900_000 : 120_000),
+	});
 	if (result.status !== 0) {
 		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
 	}
@@ -34,6 +47,7 @@ function docker(...args: string[]): string {
 function ready(): boolean {
 	const probe = spawnSync("docker", ["exec", container, "pg_isready", "-q", "-h", "127.0.0.1"], {
 		stdio: "ignore",
+		...quick,
 	});
 	return probe.status === 0;
 }
@@ -53,6 +67,7 @@ function procStatus(pid: string): string {
 	const result = spawnSync("docker", ["exec", container, "cat", `/proc/${pid}/status`], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
+		...quick,
 	});
 	return result.status === 0 ? result.stdout : "";
 }
@@ -71,6 +86,7 @@ function logs(): string {
 	const result = spawnSync("docker", ["logs", container], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
+		...quick,
 	});
 	return `${result.stdout}${result.stderr}`;
 }
@@ -158,9 +174,9 @@ try {
 	await waitReady("the restart after an unclean stop");
 	console.log("PostgreSQL init drill passed");
 } finally {
-	spawnSync("docker", ["rm", "-f", container], { stdio: "ignore" });
-	spawnSync("docker", ["volume", "rm", "-f", volume], { stdio: "ignore" });
+	spawnSync("docker", ["rm", "-f", container], { stdio: "ignore", ...bounded(60_000) });
+	spawnSync("docker", ["volume", "rm", "-f", volume], { stdio: "ignore", ...quick });
 	if (targetImage === undefined) {
-		spawnSync("docker", ["rmi", "-f", image], { stdio: "ignore" });
+		spawnSync("docker", ["rmi", "-f", image], { stdio: "ignore", ...bounded(60_000) });
 	}
 }
