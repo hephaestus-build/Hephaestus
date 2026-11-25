@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationMessageDispatcher;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -11,7 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,7 +29,6 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -41,13 +41,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Inbound webhook pipeline: verify → derive → store.
+ * Inbound webhook pipeline: verify → derive → check for a handler → store.
  *
  * <p>Verification can short-circuit with {@code RespondImmediately} (Slack
  * {@code url_verification}); on {@code Verified} the
  * pipeline derives the subject and delivery key via the per-kind {@link SubjectKeyDeriver}
- * and stores the delivery in the provider event inbox through {@link ProviderEventReceiver}. It answers 202 only
- * after the delivery is stored, and 503 when PostgreSQL cannot store it, so the provider retries.
+ * and checks whether a handler reads it. For a delivery with a handler, it answers 202 after
+ * {@link ProviderEventReceiver} returns, and 503 when PostgreSQL cannot store it. A delivery with no handler
+ * gets 202 without an inbox write.
  *
  * <p>Error responses carry only a coarse category ({@code "invalid"} / {@code "missing-signature"} /
  * {@code "stale-timestamp"}). The verifier's {@code Invalid.reason} — which distinguishes a missing secret from a
@@ -55,6 +56,7 @@ import tools.jackson.databind.ObjectMapper;
  * side channel into the signing scheme.
  */
 @Component
+@ConditionalOnServerRole
 public class WebhookIngestPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookIngestPipeline.class);
@@ -67,6 +69,7 @@ public class WebhookIngestPipeline {
     private final Map<IntegrationKind, WebhookPublishGate> publishGatesByKind;
 
     private final ProviderEventReceiver receiver;
+    private final IntegrationMessageDispatcher dispatcher;
 
     private final ObjectMapper objectMapper;
     private final WebhookInFlightBudget budget;
@@ -76,31 +79,7 @@ public class WebhookIngestPipeline {
             List<WebhookSignatureVerifier> verifiers,
             List<SubjectKeyDeriver> derivers,
             ProviderEventReceiver receiver,
-            ObjectMapper objectMapper) {
-        this(verifiers, derivers, receiver, objectMapper, List.of());
-    }
-
-    public WebhookIngestPipeline(
-            List<WebhookSignatureVerifier> verifiers,
-            List<SubjectKeyDeriver> derivers,
-            ProviderEventReceiver receiver,
-            ObjectMapper objectMapper,
-            List<WebhookPublishGate> publishGates) {
-        this(
-                verifiers,
-                derivers,
-                receiver,
-                objectMapper,
-                publishGates,
-                WebhookInFlightBudget.forHeap(Runtime.getRuntime().maxMemory()),
-                new SimpleMeterRegistry());
-    }
-
-    @Autowired
-    public WebhookIngestPipeline(
-            List<WebhookSignatureVerifier> verifiers,
-            List<SubjectKeyDeriver> derivers,
-            ProviderEventReceiver receiver,
+            IntegrationMessageDispatcher dispatcher,
             ObjectMapper objectMapper,
             List<WebhookPublishGate> publishGates,
             WebhookInFlightBudget budget,
@@ -120,6 +99,7 @@ public class WebhookIngestPipeline {
                     throw new IllegalStateException("Duplicate WebhookPublishGate for kind=" + a.kind());
                 }));
         this.receiver = receiver;
+        this.dispatcher = dispatcher;
         this.objectMapper = objectMapper;
     }
 
@@ -227,25 +207,6 @@ public class WebhookIngestPipeline {
             return problem(HttpStatus.BAD_REQUEST, "invalid-json");
         }
 
-        WebhookPublishGate gate = publishGatesByKind.get(kind);
-        if (gate != null) {
-            WebhookPublishGate.Decision decision;
-            try {
-                decision = gate.evaluate(payload, headers);
-            } catch (DataAccessException e) {
-                // The gate cannot read what it decides on: nothing is stored, and the provider retries.
-                log.warn(
-                        "Publish gate for kind={} unavailable: cause={}",
-                        kind,
-                        e.getClass().getName());
-                return problem(HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
-            }
-            if (!decision.publish()) {
-                log.info("Dropped {} webhook before it was stored: {}", kind, sanitizeForLog(decision.reason()));
-                return ResponseEntity.accepted().body(Map.of("status", "dropped"));
-            }
-        }
-
         String subject;
         String dedupId;
         try {
@@ -268,6 +229,38 @@ public class WebhookIngestPipeline {
             return problem(HttpStatus.BAD_REQUEST, "invalid-event-route");
         }
 
+        String provider = kind.name().toLowerCase(Locale.ROOT);
+        if (dispatcher.dispatch(subject).isEmpty()) {
+            meterRegistry
+                    .counter(
+                            IntegrationCoreMetrics.WEBHOOK_UNHANDLED,
+                            "provider",
+                            provider,
+                            "event_type",
+                            dispatcher.unhandledEventLabel(kind, subject))
+                    .increment();
+            return ResponseEntity.accepted().body(Map.of("status", "dropped"));
+        }
+
+        WebhookPublishGate gate = publishGatesByKind.get(kind);
+        if (gate != null) {
+            WebhookPublishGate.Decision decision;
+            try {
+                decision = gate.evaluate(payload, headers);
+            } catch (DataAccessException e) {
+                // The gate cannot read what it decides on: nothing is stored, and the provider retries.
+                log.warn(
+                        "Publish gate for kind={} unavailable: cause={}",
+                        kind,
+                        e.getClass().getName());
+                return problem(HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
+            }
+            if (!decision.publish()) {
+                log.info("Dropped {} webhook before it was stored: {}", kind, sanitizeForLog(decision.reason()));
+                return ResponseEntity.accepted().body(Map.of("status", "dropped"));
+            }
+        }
+
         Map<String, String> storedHeaders = new LinkedHashMap<>();
         if (kind == IntegrationKind.GITHUB) {
             JsonNode installation = payload.path("installation").path("id");
@@ -283,7 +276,6 @@ public class WebhookIngestPipeline {
             storedHeaders.putAll(route.headers());
         }
 
-        String provider = kind.name().toLowerCase(Locale.ROOT);
         int stored;
         try {
             stored = receiver.receive(kind, subject, dedupId, storedHeaders, body);

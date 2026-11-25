@@ -5,7 +5,7 @@ page_type: reference
 ---
 
 This page lists what the webhook receiver of the server stores, its answers, its meters and alerts, and the retention of the provider event inbox.
-The inbox is a PostgreSQL table that holds each verified delivery until a server handles it.
+The inbox is a PostgreSQL table that holds verified deliveries for a handler.
 [Ingest durability](/contributor/ingest-durability#the-database-inbox) explains the design.
 
 ## What the receiver stores
@@ -32,6 +32,7 @@ A workspace handles the events of one resource, such as a repository or a Slack 
 | Answer | Cause | Log record |
 | --- | --- | --- |
 | `202` | The inbox stored the delivery. A duplicate, or a delivery that no active connection admits, adds no event. | `Stored <kind> webhook`, or `Webhook admission refused` with the reason |
+| `202` with `status: dropped` | No handler reads the event, or the Slack channel has no consent to ingest messages. The inbox adds no event. | For an unhandled event, `webhook.unhandled` increases. |
 | `503` with the detail `store-failed` | PostgreSQL did not store the delivery in time. | `event.name=webhook.publish.failed`. The message names the exception class. |
 | `503` with the detail `gate-unavailable` | The publish gate of the provider could not read the database. | `Publish gate for kind=<kind> unavailable` |
 | `503` with the detail `busy` and `Retry-After: 30` | Large deliveries fill the memory that the receiver holds for them. See [Payload size](#payload-size). | None. `webhook.rejected` counts `reason=busy`. |
@@ -105,6 +106,8 @@ The server exports these meters on its private management listener.
 | `integration.consumer.poison` | counter | Events that became dead letters, by `kind`. | `HephaestusConsumerPoison` |
 | `integration.message.dropped` | counter | Attempts that the write fence stopped, by `kind` and `reason`: `erased-during-processing` or `lease-lost`. | None |
 | `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. | `HephaestusInboxRetentionFailing` |
+| `webhook.unhandled` | counter | Verified deliveries skipped because no handler reads them, by `provider` and `event_type`. Unknown event names count as `other`. | None |
+| `github.app.subscription.drift` | gauge | Count of the App's extra or missing event subscriptions, by `change`. Shows NaN until the first successful check and keeps the last result if a check fails. | `HephaestusGitHubAppSubscriptionDrift` |
 | `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). | `HephaestusWebhookRedeliveryNotRunning` (`refused`, `unavailable`), `HephaestusWebhookRedeliveryTruncated` (`truncated`), `HephaestusWebhookRedeliveriesRequested` (`requested`) |
 | `github.webhook.unrecovered` | gauge | GitHub events that failed all six attempts, the last one in the past two hours. | `HephaestusWebhookEventsUnrecovered` |
 

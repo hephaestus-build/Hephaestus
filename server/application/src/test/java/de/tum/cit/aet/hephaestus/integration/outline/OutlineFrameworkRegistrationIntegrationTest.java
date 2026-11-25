@@ -113,8 +113,8 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("inactiveConnections")
-    void shouldStoreOnlyAuthenticatedHandledDeliveriesOnAnActiveConnection(
-            IntegrationKind kind, IntegrationState state) throws Exception {
+    void shouldStoreOnlyAuthenticatedHandledDeliveriesOnAnActiveConnection(IntegrationKind kind, IntegrationState state)
+            throws Exception {
         var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("admission-" + UUID.randomUUID()));
         workspace.setAccountLogin("gate-" + workspace.getId());
         workspace = workspaces.save(workspace);
@@ -323,8 +323,13 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertUnhandledDeliveries(
-            IntegrationKind kind, long workspaceId, String path, Map<String, String> headers, String body,
-            String outlineSecret) throws Exception {
+            IntegrationKind kind,
+            long workspaceId,
+            String path,
+            Map<String, String> headers,
+            String body,
+            String outlineSecret)
+            throws Exception {
         var changedHeaders = new LinkedHashMap<>(headers);
         String changedBody = switch (kind) {
             case GITHUB -> {
@@ -340,7 +345,8 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                 String time = Long.toString(Instant.now().getEpochSecond());
                 changedHeaders.put("X-Slack-Request-Timestamp", time);
                 changedHeaders.put(
-                        "X-Slack-Signature", "v0=" + hmac("test-slack-signing-secret-not-real", "v0:" + time + ":", changed));
+                        "X-Slack-Signature",
+                        "v0=" + hmac("test-slack-signing-secret-not-real", "v0:" + time + ":", changed));
                 yield changed;
             }
             case OUTLINE -> {
@@ -367,8 +373,8 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
     private void assertIgnoredDelivery(
             long workspaceId, String path, Map<String, String> headers, String body, String provider, String event) {
         var ignored = meters.counter("webhook.unhandled", "provider", provider, "event_type", event);
-        var published = meters.counter(
-                IntegrationCoreMetrics.WEBHOOK_PUBLISH, "stream", provider, "outcome", "success");
+        var published =
+                meters.counter(IntegrationCoreMetrics.WEBHOOK_PUBLISH, "stream", provider, "outcome", "success");
         double ignoredBefore = ignored.count();
         double publishedBefore = published.count();
 

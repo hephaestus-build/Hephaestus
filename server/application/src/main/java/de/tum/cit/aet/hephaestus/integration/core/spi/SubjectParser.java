@@ -12,4 +12,9 @@ public interface SubjectParser {
     IntegrationKind kind();
 
     EventTypeKey parse(String fullSubject);
+
+    /** A bounded metric label for the trailing event token of a subject with no handler. */
+    default String unhandledEventLabel(String eventToken) {
+        return "other";
+    }
 }

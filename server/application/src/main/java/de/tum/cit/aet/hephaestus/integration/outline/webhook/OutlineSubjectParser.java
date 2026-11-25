@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Input shape: {@code outline.<subscriptionId>.<event>} produced by
  * {@link OutlineSubjectKeyDeriver}. The subscription id is passthrough (handlers resolve the
- * workspace from the body). One handler routes every Outline event off the body's event name, so the
- * parser collapses the flat event space onto the single logical key
+ * workspace from the body). One handler routes document and collection events off the body's event name, so the
+ * parser collapses those events onto the single logical key
  * {@code EventTypeKey(OUTLINE, }{@value OutlineWebhookMessageHandler#EVENT_TYPE}{@code )} — analogous
  * to GitHub's parser folding domain tiers — after asserting the subject is well-formed. The specific
  * event still rides the subject/dedup key for observability.
@@ -41,8 +41,8 @@ public class OutlineSubjectParser implements SubjectParser {
         }
         // The deriver replaces '.' in the event with '~'.
         String event = parts[2];
-        if (event.isBlank()) {
-            throw new IllegalArgumentException("Outline subject event component is blank: " + fullSubject);
+        if (!OutlineWebhookEvents.hasHandler(event.replace('~', '.'))) {
+            throw new IllegalArgumentException("Outline subject has no document or collection event");
         }
         return new EventTypeKey(IntegrationKind.OUTLINE, OutlineWebhookMessageHandler.EVENT_TYPE);
     }

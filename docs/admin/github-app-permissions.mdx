@@ -79,9 +79,11 @@ Then only `check_suite` and `status` deliveries record it.
 
 ## Event subscriptions
 
-The receiver stores each delivery in the provider event inbox before it checks for a handler.
-Thus, an event that no handler reads costs storage until [the inbox deletes it](./webhook-ingestion-operations#how-long-the-inbox-keeps-an-event).
-The App subscribes to these events only.
+Subscribe the App to these events only.
+The receiver acknowledges signed deliveries that no handler reads without storing them.
+These deliveries still fill the App's delivery list, so the redelivery job can miss older failures.
+The server checks the App settings at startup and once a day.
+If the settings differ from the manifest, follow [the alert runbook](./production-operations-runbook#provider-events-and-webhooks).
 GitHub's [event reference](https://docs.github.com/en/webhooks/webhook-events-and-payloads) gives the permission that each event needs.
 
 | Event | What Hephaestus does with it |

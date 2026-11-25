@@ -101,6 +101,11 @@ public class IntegrationMessageDispatcher {
         return registry.resolve(key).filter(IntegrationMessageHandler::isEnabled);
     }
 
+    public String unhandledEventLabel(IntegrationKind kind, String subject) {
+        SubjectParser parser = parsersByKind.get(kind);
+        return parser == null ? "other" : parser.unhandledEventLabel(subject.substring(subject.lastIndexOf('.') + 1));
+    }
+
     /** Number of {@link SubjectParser} bindings — one per registered kind. */
     public int parserCount() {
         return parsersByKind.size();
