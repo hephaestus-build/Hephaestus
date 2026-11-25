@@ -16,7 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record FeedbackRetentionProperties(
         @DefaultValue("P400D") Duration feedbackRetention) {
     public FeedbackRetentionProperties {
-        // The weekly conversation sweep erases two weeks early, so a shorter retention could not be kept.
+        // The conversation sweep erases up to two weeks early, so a shorter retention could not be kept.
         if (feedbackRetention.compareTo(Duration.ofDays(15)) < 0) {
             throw new IllegalArgumentException("hephaestus.feedback-retention must be at least 15 days");
         }

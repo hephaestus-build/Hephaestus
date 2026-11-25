@@ -701,15 +701,43 @@ groups:
         annotations:
           summary: A privacy job failed or left eligible work at least twice in 26 hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # Both sweeps run each hour, and an empty backlog also counts as a run.
+      # These sweeps run at least each hour, and an empty backlog also counts as a run.
       - alert: HephaestusPrivacyJobNotRunning
         expr: >-
-          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|export_retention"}[4h])) == 0
+          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|conversation_retention|export_retention"}[4h])) == 0
         for: 90m
         labels:
           severity: warning
         annotations:
           summary: An hourly privacy sweep ended no run in four hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # An entry becomes due with seven to fourteen days left before its limit, and a run erases it within hours. A failed
+      # read keeps a replica's last margin; only a margin read in the last 15 minutes counts, so gaps in the reads do not
+      # restart the hour, a fresh drained read ends it, and a replica that stopped reading drops out. The last scrape of
+      # 5 minutes rides over a missed scrape. Both gauges come from one scrape, so they match on every label: a new pod at
+      # a reused address cannot lend its fresh read to an old margin. Unsampled starts where this cutoff ends (>= 900).
+      - alert: HephaestusConversationRetentionBehind
+        expr: >-
+          min(
+            last_over_time(conversation_retention_deadline_margin_seconds{job="hephaestus"}[5m])
+            and (time() - last_over_time(conversation_retention_margin_read_timestamp_seconds{job="hephaestus"}[5m]) < 900)
+          ) < 7 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: The oldest due conversation entry has less than seven days left before its retention limit
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The alert above leaves out a replica whose margin is older than 15 minutes; a read that hangs counts no failure,
+      # so the time of the last good read is checked too. Each replica reads every minute.
+      - alert: HephaestusConversationRetentionUnsampled
+        expr: >-
+          sum(increase(conversation_retention_sampler_failures_total{job="hephaestus"}[15m])) > 5
+          or max(time() - last_over_time(conversation_retention_margin_read_timestamp_seconds{job="hephaestus"}[5m])) >= 900
+        labels:
+          severity: warning
+        annotations:
+          summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # The bundled PostgreSQL's backups. The server reports their age only when the chart gives it the backup CronJobs,

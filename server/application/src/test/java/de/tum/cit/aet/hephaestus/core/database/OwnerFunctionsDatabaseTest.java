@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
@@ -100,6 +101,12 @@ class OwnerFunctionsDatabaseTest {
 
     private static final TestDatabase SEEDED = seed();
 
+    private static final String REFUSAL = "needs a positive age, a limit, a whole cursor or none, and whole owners";
+
+    /** The start of the database's current retention week: 03:45 UTC on the last Sunday. */
+    private static final String RETENTION_WEEK =
+            "date_bin(interval '7 days', clock_timestamp(), timestamptz '2000-01-02 03:45:00+00')";
+
     private static TestDatabase seed() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_owner_functions");
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_owner_functions");
@@ -124,7 +131,7 @@ class OwnerFunctionsDatabaseTest {
                     .as("entries the application role reads itself")
                     .isZero();
             String page = "SELECT * FROM public.mentoring_due_work("
-                    + "'ENTRY_RETENTION', now() - interval '30 days', ?::timestamptz, ?::uuid, 1)";
+                    + "'ENTRY_RETENTION', 2592000, ?::timestamptz, ?::uuid, '{}', '{}', 1)";
             List<Map<String, @Nullable Object>> rows = new ArrayList<>();
             @Nullable Object[] cursor = {null, null};
             for (int i = 0; i < 10; i++) {
@@ -161,6 +168,60 @@ class OwnerFunctionsDatabaseTest {
                                     Timestamp.class,
                                     ADA_OLD));
         }
+    }
+
+    @Test
+    void shouldPassOverTheNamedOwnersAndKeepTheSameAccountInAnotherWorkspace() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            assertThat(jdbc(connection)
+                            .queryForList(
+                                    "SELECT id FROM public.mentoring_due_work("
+                                            + "'ENTRY_RETENTION', 2592000, NULL, NULL, '{1, 2}', '{11, 12}', 10)",
+                                    UUID.class))
+                    .as("Ada in the first workspace and Bo in the second are passed over, Bo in the first is not")
+                    .containsExactly(BO_OLD);
+        }
+    }
+
+    /**
+     * The database clock decides which entries are due, by the week: an entry written just before the start of the
+     * current retention week less the age is due, one written just after it is not, whatever the application's clock
+     * says.
+     */
+    @Test
+    void shouldNameAnEntryDueByTheDatabaseClockFromTheStartOfTheRetentionWeek() throws SQLException {
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_week", SEEDED);
+        UUID justDue = UUID.fromString("00000000-0000-0000-0000-0000000e0011");
+        UUID justKept = UUID.fromString("00000000-0000-0000-0000-0000000e0012");
+        String week;
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            JdbcTemplate owner = jdbc(connection);
+            week = Objects.requireNonNull(
+                    owner.queryForObject("SELECT CAST(" + RETENTION_WEEK + " AS text)", String.class));
+            owner.update("""
+                    INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text,
+                                                    workspace_id, account_id)
+                    VALUES (?, '00000000-0000-0000-0000-00000000a001', CAST(? AS timestamptz) - interval '2592001 seconds',
+                            'USER', 3, 'APP', 'Ada, just due', 1, 11),
+                           (?, '00000000-0000-0000-0000-00000000a001', CAST(? AS timestamptz) - interval '2591999 seconds',
+                            'USER', 4, 'APP', 'Ada, just kept', 1, 11)
+                    """, justDue, week, justKept, week);
+        }
+
+        List<@Nullable UUID> due;
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            due = jdbc(connection)
+                    .queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 10)",
+                            UUID.class);
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            // A new retention week between the insert and the call moves the cutoff by seven days.
+            assumeTrue(week.equals(
+                    jdbc(connection).queryForObject("SELECT CAST(" + RETENTION_WEEK + " AS text)", String.class)));
+        }
+        assertThat(due).contains(justDue).doesNotContain(justKept);
     }
 
     @Test
@@ -322,6 +383,32 @@ class OwnerFunctionsDatabaseTest {
         }
     }
 
+    /**
+     * A short write on an account, such as a changed display name, holds its row. A sweep page passes that account over
+     * for this pass; the deadline margin still sees its due entry, or one write would read as a drained backlog.
+     */
+    @Test
+    void shouldStillNameTheDueEntryOfAnAccountThatAWriteHoldsForTheDeadlineMargin() throws SQLException {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_held", SEEDED);
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var owner = jdbc(ownerConnection);
+            var app = jdbc(appConnection);
+            ownerConnection.setAutoCommit(false);
+            owner.update("UPDATE account SET display_name = 'Ada Lovelace' WHERE id = 11");
+
+            String page = "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, '{}', '{}', 10)";
+            assertThat(app.queryForList(page, UUID.class, DueWorkKind.ENTRY_RETENTION.name()))
+                    .as("a sweep page passes over the held account")
+                    .doesNotContain(ADA_OLD)
+                    .contains(BO_OLD);
+            assertThat(app.queryForList(page, UUID.class, DueWorkKind.ENTRY_RETENTION_DEADLINE.name()))
+                    .as("the deadline margin reads it")
+                    .containsExactly(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+            ownerConnection.rollback();
+        }
+    }
+
     @Test
     void shouldKeepMaintenanceAwayFromAnAccountDuringAndAfterErasure() throws SQLException {
         var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_erasure", SEEDED);
@@ -383,16 +470,16 @@ class OwnerFunctionsDatabaseTest {
 
     private static List<@Nullable UUID> dueEntries(JdbcTemplate app) {
         return app.queryForList(
-                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now() - interval '30 days', NULL, NULL, 10)",
+                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 10)",
                 UUID.class);
     }
 
     private static List<@Nullable UUID> dueEntriesAfter(JdbcTemplate app, UUID cursor) {
         return app.queryForList("""
                 SELECT id FROM public.mentoring_due_work(
-                    'ENTRY_RETENTION', now() - interval '30 days',
-                    (SELECT due_at FROM public.mentoring_due_work('ENTRY_RETENTION', now() - interval '30 days', NULL, NULL, 1)),
-                    ?::uuid, 10)
+                    'ENTRY_RETENTION', 2592000,
+                    (SELECT due_at FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 1)),
+                    ?::uuid, '{}', '{}', 10)
                 """, UUID.class, cursor);
     }
 
@@ -411,7 +498,7 @@ class OwnerFunctionsDatabaseTest {
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
             JdbcTemplate app = jdbc(connection);
             assertThatThrownBy(() -> app.queryForList(
-                            "SELECT id FROM public.mentoring_due_work('SOMETHING_ELSE', now(), NULL, NULL, 1)",
+                            "SELECT id FROM public.mentoring_due_work('SOMETHING_ELSE', 86400, NULL, NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
@@ -422,17 +509,51 @@ class OwnerFunctionsDatabaseTest {
                     .rootCause()
                     .hasMessageContaining("unknown rule SOMETHING_ELSE");
             assertThatThrownBy(() -> app.queryForList(
-                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), NULL, NULL, NULL)",
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{}', '{}', NULL)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
-                    .hasMessageContaining("needs a cutoff, a limit and a whole cursor or none");
+                    .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
-                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), now(), NULL, 1)",
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, now(), NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
-                    .hasMessageContaining("needs a cutoff, a limit and a whole cursor or none");
+                    .hasMessageContaining(REFUSAL);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 0, NULL, NULL, '{}', '{}', 1)",
+                            UUID.class))
+                    .as("an age of nothing would make every entry due")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining(REFUSAL);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{1}', '{}', 1)",
+                            UUID.class))
+                    .as("an owner is a workspace and an account")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining(REFUSAL);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{1}', '{NULL}', 1)",
+                            UUID.class))
+                    .as("an owner without an account")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining(REFUSAL);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, NULL, 1)",
+                            UUID.class))
+                    .as("no list of owners")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining(REFUSAL);
         }
     }
 
@@ -441,12 +562,12 @@ class OwnerFunctionsDatabaseTest {
     @EnumSource(DueWorkKind.class)
     void shouldAnswerEveryRegisteredKindThroughItsOwnBranch(DueWorkKind kind) throws SQLException {
         List<UUID> expected = switch (kind) {
-            case ENTRY_RETENTION -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+            case ENTRY_RETENTION, ENTRY_RETENTION_DEADLINE -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
         };
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
             assertThat(jdbc(connection)
                             .queryForList(
-                                    "SELECT id FROM public.mentoring_due_work(?, now() - interval '30 days', NULL, NULL, 10)",
+                                    "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, '{}', '{}', 10)",
                                     UUID.class,
                                     kind.name()))
                     .containsExactlyElementsOf(expected);
@@ -656,7 +777,8 @@ class OwnerFunctionsDatabaseTest {
                     + " NULL; END $$");
             stranger.execute("SET ROLE owner_function_stranger");
             assertThatThrownBy(() -> stranger.queryForList(
-                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), NULL, NULL, 1)",
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()

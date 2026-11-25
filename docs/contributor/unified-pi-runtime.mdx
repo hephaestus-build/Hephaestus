@@ -337,12 +337,19 @@ It uses the same sandbox runner, admission and epoch fence as a requested answer
 The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.
 
-`ConversationRetentionSweeper` and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `ConversationRedaction`, up to two weeks before their limit, so a missed run keeps the limit.
+`ConversationRetentionSweeper` (server role, every 15 minutes) and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `ConversationRedaction`.
+They erase an entry up to two weeks before its limit, so a short outage keeps the limit.
 The first erases every entry that reaches `hephaestus.feedback-retention`, the window that feedback and results share.
 The second erases each tool result of `COPIES_PERSON_DATA` that reaches the Slack retention, because no record says which source it copied.
 An erased entry erases each summary that covers it, and coverage starts at the first entry of a conversation.
 Thus a long conversation loses its summary after each run and pays for one compaction on its next turn.
-The runs are weekly so that this cost comes about once a week.
+
+Entries become due once a week, so that this cost comes about once a week.
+`mentoring_due_work` decides by the database clock which entries are due: those older than the retention less two weeks at 03:45 UTC on the last Sunday.
+Each run of `ConversationRetentionSweeper` reads a bounded number of pages and starts no new work after 10 minutes.
+An erased entry is no longer due, so a crash or another replica starts again at the oldest entry still due.
+A person whose erasure fails is passed over for the rest of the run.
+The replica then tries that person after everyone else, until a run gets back to them.
 
 The weekly digest links each piece of conversation feedback that became `DELIVERED` in its week to the message in `feedback_copy.conversation_entry_id`.
 The digest creates no copy and changes no delivery.
