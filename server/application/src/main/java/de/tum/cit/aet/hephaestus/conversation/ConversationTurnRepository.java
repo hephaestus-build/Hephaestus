@@ -21,7 +21,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
 
     Optional<ConversationTurn> findByIdAndWorkspaceId(UUID id, Long workspaceId);
 
-    Optional<ConversationTurn> findByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
+    Optional<ConversationTurn> findByWorkspaceIdAndAccountIdAndRequestId(
+            Long workspaceId, Long accountId, String requestId);
 
     List<ConversationTurn> findByWorkspaceIdAndConversationIdAndStatus(
             Long workspaceId, UUID conversationId, ConversationTurn.Status status);

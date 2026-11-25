@@ -40,7 +40,9 @@ import tools.jackson.databind.JsonNode;
 @Table(
         name = "conversation_turn",
         uniqueConstraints = {
-            @UniqueConstraint(name = "uk_conversation_turn_request", columnNames = "request_id"),
+            @UniqueConstraint(
+                    name = "uk_conversation_turn_request",
+                    columnNames = {"workspace_id", "account_id", "request_id"}),
             @UniqueConstraint(
                     name = "uk_conversation_turn_tenant",
                     columnNames = {"id", "workspace_id"}),

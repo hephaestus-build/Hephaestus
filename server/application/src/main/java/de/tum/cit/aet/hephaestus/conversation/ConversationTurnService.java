@@ -141,7 +141,7 @@ public class ConversationTurnService {
                 .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
         ConversationService.holdWrite(writeFence, owner);
         Conversation conversation = entryService.lock(workspaceId, conversationId);
-        Optional<ConversationTurn> earlier = turns.findByWorkspaceIdAndRequestId(workspaceId, requestId);
+        Optional<ConversationTurn> earlier = turns.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId);
         if (earlier.isPresent()) {
             ConversationTurn turn = earlier.get();
             if (!turn.getConversationId().equals(conversationId)) {
@@ -149,7 +149,7 @@ public class ConversationTurnService {
             }
             return new Submission(turn, entries.findStimulus(turn.getWorkspaceId(), turn.getId()), false);
         }
-        if (entries.findByWorkspaceIdAndRequestId(workspaceId, requestId).isPresent()) {
+        if (entries.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId).isPresent()) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.REQUEST_ID_REUSED);
         }
         if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {
@@ -173,15 +173,15 @@ public class ConversationTurnService {
     /** A digest is a system stimulus on the same conversation ledger, with no invented user question. */
     @Transactional
     public boolean submitDigest(long workspaceId, UUID conversationId, DigestRequest request) {
-        ConversationService.holdWrite(
-                writeFence,
-                conversations
-                        .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
-                        .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString())));
+        long owner = conversations
+                .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
+        ConversationService.holdWrite(writeFence, owner);
         Conversation conversation = entryService.lock(workspaceId, conversationId);
-        if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
+        if (turns.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, request.requestId())
                         .isPresent()
-                || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
+                || entries.existsByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, request.requestId()))
+            return false;
         UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startWithin());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));

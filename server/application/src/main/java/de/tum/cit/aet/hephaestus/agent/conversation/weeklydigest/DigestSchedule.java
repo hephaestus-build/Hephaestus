@@ -107,7 +107,7 @@ public class DigestSchedule {
 
     private boolean enqueue(long workspaceId, long accountId, WeeklyDigestWindow window, Duration startWithin) {
         String requestId = requestId(workspaceId, accountId, window);
-        if (entries.exists(workspaceId, requestId)
+        if (entries.exists(workspaceId, accountId, requestId)
                 || !availability.available(workspaceId, accountId)
                 || !facts.anythingIn(workspaceId, accountId, window)) return false;
         return Boolean.TRUE.equals(transactions.execute(status -> {

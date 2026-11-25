@@ -949,7 +949,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     private Optional<ConversationEntry> digestEntry() {
-        return entryRepository.findByWorkspaceIdAndRequestId(workspaceId, requestId());
+        return entryRepository.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, accountId, requestId());
     }
 
     private WeeklyDigestDTO digestOnTheTimeline() {

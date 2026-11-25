@@ -111,7 +111,8 @@ public class ConversationEntryService {
     public Appended appendOnce(long workspaceId, UUID conversationId, ConversationEntryDraft draft) {
         String requestId = Objects.requireNonNull(draft.requestId(), "An idempotent append needs a request id");
         Conversation conversation = lock(workspaceId, conversationId);
-        Optional<ConversationEntry> earlier = entries.findByWorkspaceIdAndRequestId(workspaceId, requestId);
+        Optional<ConversationEntry> earlier =
+                entries.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, conversation.getAccountId(), requestId);
         if (earlier.isPresent()) {
             ConversationEntry entry = earlier.get();
             if (!entry.getConversationId().equals(conversationId) || entry.getKind() != draft.kind()) {
@@ -125,8 +126,8 @@ public class ConversationEntryService {
     }
 
     @Transactional(readOnly = true)
-    public boolean exists(long workspaceId, String requestId) {
-        return entries.existsByWorkspaceIdAndRequestId(workspaceId, requestId);
+    public boolean exists(long workspaceId, long accountId, String requestId) {
+        return entries.existsByWorkspaceIdAndAccountIdAndRequestId(workspaceId, accountId, requestId);
     }
 
     @Transactional(readOnly = true)

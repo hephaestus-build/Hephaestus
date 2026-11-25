@@ -210,7 +210,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 mapper.createObjectNode(),
                                 Duration.ofHours(1))))
                 .isTrue();
-        return turnRows.findByWorkspaceIdAndRequestId(workspace.getId(), request)
+        return turnRows.findByWorkspaceIdAndAccountIdAndRequestId(workspace.getId(), conversation.getAccountId(), request)
                 .orElseThrow();
     }
 

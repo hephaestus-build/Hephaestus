@@ -219,4 +219,23 @@ $$;
         <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
                   changeSetPath="db/changelog/next/20261125071529-fix-personal-space-audit-erasure.xml"/>
     </changeSet>
+    <changeSet id="1795480139787-3" author="hephaestus">
+        <comment>A request id is unique per owner, so another person's request id does not collide with a new one.</comment>
+        <sql splitStatements="false"><![CDATA[
+-- PostgreSQL checks a unique key against every row, before row-level security and the owner foreign key.
+ALTER TABLE public.conversation_turn DROP CONSTRAINT uk_conversation_turn_request;
+ALTER TABLE public.conversation_turn
+    ADD CONSTRAINT uk_conversation_turn_request UNIQUE (workspace_id, account_id, request_id);
+DROP INDEX public.ux_conversation_entry_request;
+CREATE UNIQUE INDEX ux_conversation_entry_request
+    ON public.conversation_entry (workspace_id, account_id, request_id) WHERE request_id IS NOT NULL;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DROP INDEX public.ux_conversation_entry_request;
+CREATE UNIQUE INDEX ux_conversation_entry_request
+    ON public.conversation_entry (request_id) WHERE request_id IS NOT NULL;
+ALTER TABLE public.conversation_turn DROP CONSTRAINT uk_conversation_turn_request;
+ALTER TABLE public.conversation_turn ADD CONSTRAINT uk_conversation_turn_request UNIQUE (request_id);
+        ]]></sql></rollback>
+    </changeSet>
 </databaseChangeLog>

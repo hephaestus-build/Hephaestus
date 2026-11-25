@@ -231,7 +231,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             @Param("conversationId") UUID conversationId,
             @Param("afterSeq") long afterSeq);
 
-    Optional<ConversationEntry> findByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
+    Optional<ConversationEntry> findByWorkspaceIdAndAccountIdAndRequestId(
+            Long workspaceId, Long accountId, String requestId);
 
     Optional<ConversationEntry> findByWorkspaceIdAndTurnIdAndKind(
             Long workspaceId, UUID turnId, ConversationEntry.Kind kind);
@@ -258,7 +259,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                 .orElseThrow(() -> new IllegalStateException("Conversation turn " + turnId + " has no stimulus"));
     }
 
-    boolean existsByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
+    boolean existsByWorkspaceIdAndAccountIdAndRequestId(Long workspaceId, Long accountId, String requestId);
 
     Optional<ConversationEntry> findByWorkspaceIdAndConversationIdAndSlackTs(
             Long workspaceId, UUID conversationId, String slackTs);
