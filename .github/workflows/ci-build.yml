@@ -50,7 +50,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/postgres-image
         with:
@@ -76,6 +75,9 @@ jobs:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
           API_BASE_SHA: ${{ inputs.base_sha }}
         run: |
+          if ! git cat-file -e "${API_BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$API_BASE_SHA"
+          fi
           vp run generate:api
           node scripts/check-api-operation-classification.ts "$API_BASE_SHA"
           if ! node scripts/assert-generated-clean.ts server/openapi.yaml webapp/src/api extension/src/api; then

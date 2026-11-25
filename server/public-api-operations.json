@@ -8,7 +8,10 @@
 	},
 	{
 		"operation": "GET /admin/integration/dead-letters",
-		"access": "reserved"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "GET /admin/llm/call-pools",
@@ -129,7 +132,10 @@
 	},
 	{
 		"operation": "GET /workspaces/{workspaceSlug}/integrations/dead-letters",
-		"access": "reserved"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "GET /workspaces/{workspaceSlug}/practices/feedback/on-work",
@@ -207,7 +213,10 @@
 	},
 	{
 		"operation": "POST /admin/integration/dead-letters/{id}/replays",
-		"access": "reserved"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "POST /admin/release/checks",
@@ -309,7 +318,10 @@
 	},
 	{
 		"operation": "POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",
-		"access": "reserved"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "POST /workspaces/{workspaceSlug}/practice-repository/sync",

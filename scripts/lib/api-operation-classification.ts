@@ -14,7 +14,7 @@ export const HTTP_METHODS = new Set([
 	"trace",
 ]);
 
-const CALLERS = new Set([
+export const API_OPERATION_CALLERS = new Set([
 	"webapp",
 	"extension",
 	"slack-adapter",
@@ -46,10 +46,10 @@ export function apiOperationClassifications(
 				if (
 					callers.length === 0 ||
 					new Set(callers).size !== callers.length ||
-					callers.some((caller) => !CALLERS.has(caller))
+					callers.some((caller) => !API_OPERATION_CALLERS.has(caller))
 				) {
 					throw new Error(
-						`${operation} needs a distinct, named 1.0 caller from ${[...CALLERS].join(", ")}`,
+						`${operation} needs a distinct, named 1.0 caller from ${[...API_OPERATION_CALLERS].join(", ")}`,
 					);
 				}
 				classes.set(operation, { access, callers });

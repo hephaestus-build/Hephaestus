@@ -4,6 +4,7 @@ import process from "node:process";
 import { parse } from "yaml";
 
 import {
+	API_OPERATION_CALLERS,
 	API_OPERATION_REGISTRY,
 	apiOperationClassifications,
 	apiOperations,
@@ -28,5 +29,8 @@ const problems = operationClassificationProblems(
 	classes,
 );
 if (problems.length > 0) {
-	throw new Error(`Update ${API_OPERATION_REGISTRY}:\n${problems.join("\n")}`);
+	throw new Error(
+		`Update ${API_OPERATION_REGISTRY}:\n${problems.join("\n")}\n` +
+			`Set access to public, internal, or reserved. For public operations, name at least one caller from ${[...API_OPERATION_CALLERS].join(", ")}.`,
+	);
 }

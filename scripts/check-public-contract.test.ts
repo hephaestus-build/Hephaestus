@@ -503,6 +503,23 @@ function normalizeApiResource(resource: string) {
 		.replaceAll(/\{[^/]+?\}|<[^/]+?>/gu, "{}");
 }
 
+function* curlApiRequests(source: string): Generator<{ method: string; resource: string }> {
+	const joinedLines = source.replaceAll(/\\\r?\n[\t ]*/gu, " ");
+	for (const [command] of joinedLines.matchAll(/^[\t ]*curl[\t ]+[^\r\n]+/gmu)) {
+		const method = /\s(?:--request|-X)\s+(?<method>[A-Z]+)(?=\s|$)/u.exec(command)?.groups?.method;
+		const hasData = /\s(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|-d)(?=\s|=)/u.test(
+			command,
+		);
+		for (const match of command.matchAll(
+			/["']https?:\/\/(?:<[^>\r\n]+>|[^/"'\s]+)(?<resource>\/api\/[^"'\r\n]+)["']/gu,
+		)) {
+			const resource = match.groups?.resource;
+			assert.ok(resource !== undefined);
+			yield { method: method ?? (hasData ? "POST" : "GET"), resource };
+		}
+	}
+}
+
 void test("the public operation list covers existing documented methods and extension SDK imports", () => {
 	const classes = apiOperationClassifications(
 		parseJson(readRepositoryFile(API_OPERATION_REGISTRY)),
@@ -572,6 +589,16 @@ void test("the public operation list covers existing documented methods and exte
 		exclude: ["docs/admin/_configuration-reference/**"],
 	})) {
 		const text = readFileSync(path.join(root, file), "utf8").replaceAll("`", "");
+		const assertPublic = (method: string, resource: string): void => {
+			const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
+			if (operation !== undefined) {
+				assert.equal(
+					classes.get(operation)?.access,
+					"public",
+					`${file} documents ${operation} outside the public promise`,
+				);
+			}
+		};
 		for (const match of text.matchAll(
 			/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?<resource>\/[^\s]+)/gu,
 		)) {
@@ -582,14 +609,11 @@ void test("the public operation list covers existing documented methods and exte
 			assert.notEqual(verbs, "");
 			assert.notEqual(resource, "");
 			for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
-				const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
-				if (operation !== undefined) {
-					assert.ok(
-						promised.includes(operation),
-						`${file} documents ${operation} outside the public promise`,
-					);
-				}
+				assertPublic(method, resource);
 			}
+		}
+		for (const { method, resource } of curlApiRequests(text)) {
+			assertPublic(method, resource);
 		}
 	}
 });
