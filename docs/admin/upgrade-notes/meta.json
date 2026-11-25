@@ -4,6 +4,6 @@
 		"person-row-level-security",
 		"privacy-journal",
 		"authorization-recheck",
-		"08-idempotent-creates"
+		"idempotent-creates"
 	]
 }

@@ -9,6 +9,8 @@ Keep `requestId` in the request body until the upgrade finishes.
 Let pending sends finish on the old server before you start the upgrade.
 
 After the upgrade, remove `requestId` from the request body.
+The turn and entry responses no longer carry `requestId`.
+A client that matched its messages on `requestId` matches them on the question or turn ID instead.
 Reload any open Ask Hephaestus tabs before you send a message.
 
 After a lost response, repeat the same key and body within 72 hours.
