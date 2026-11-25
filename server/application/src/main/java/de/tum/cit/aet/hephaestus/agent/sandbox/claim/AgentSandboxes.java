@@ -179,6 +179,17 @@ public class AgentSandboxes {
                 }
                 throw e;
             }
+            // An erasure or a revocation can take the row back while the claim is created, and its release then finds
+            // no claim to delete. The token of such a claim names no sandbox, so the claim can read nothing; it goes
+            // now, or at the reaper's next tick if this delete fails.
+            boolean live = Objects.requireNonNull(
+                            transactions.execute(status -> sandboxes.findLive(workspaceId, subjectKey)))
+                    .filter(current -> current.getId().equals(row.getId()))
+                    .isPresent();
+            if (!live) {
+                claims.delete(row.getClaimName());
+                throw new IllegalStateException("The sandbox was taken back as its claim was created");
+            }
             SandboxEvents.event(log.atInfo(), "agent.sandbox.requested", row).log("Sandbox requested");
         }
         return live(row);
