@@ -353,7 +353,8 @@ An entry is due when it is older than its limit less two weeks at 03:45 UTC on t
 `mentoring_due_work` names the due entries of both rules.
 The `entries` kinds read every workspace at one age.
 The `copies` kinds read one workspace at its own age, through a partial index on the copies of each workspace.
-The sweep merges the pages of the workspaces oldest first, in the `uuid` order of PostgreSQL.
+The sweep merges the pages of the workspaces by when each copy reaches its limit, then in the `uuid` order of PostgreSQL.
+A workspace whose copies cannot be read is passed over for the rest of the run, and the run is `incomplete`.
 Both read only accounts outside erasure, and a sweep page skips an account that another transaction holds.
 
 Each run of `ConversationRetentionSweeper` reads a bounded number of pages and starts no new work after 10 minutes.

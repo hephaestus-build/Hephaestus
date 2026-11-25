@@ -87,6 +87,9 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
     /** The people whose erasure fails, as (workspace, account). */
     private final Set<List<Long>> failing = new HashSet<>();
 
+    /** The workspaces whose due copies cannot be read. */
+    private final Set<Long> unreadable = new HashSet<>();
+
     /** How many entries redaction erased, by account. */
     private final Map<Long, Integer> erased = new HashMap<>();
 
@@ -389,24 +392,58 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         UUID low = UUID.fromString("00000000-0000-0000-0000-000000000001");
         due.add(new Due(high, 1, 11, WRITTEN, READ_AT));
         due.add(new Due(low, 2, 12, WRITTEN, READ_AT));
-        ConversationRetentionSweeper onePage = new ConversationRetentionSweeper(
-                entries,
-                redaction,
-                accounts,
-                ownerScope,
-                transactions,
-                new FeedbackRetentionProperties(Duration.ofDays(400)),
-                () -> copyingSources,
-                new PrivacyJobMetrics(new SimpleMeterRegistry()),
-                new SimpleMeterRegistry(),
-                clock,
-                1,
-                1);
+        ConversationRetentionSweeper onePage = onePageSweeper();
 
         onePage.sweepCopiesNow();
 
         assertThat(erased).as("the copy that PostgreSQL orders first").containsOnlyKeys(12L);
         onePage.sweepCopiesNow();
+        assertThat(erased).containsOnlyKeys(11L, 12L);
+    }
+
+    /**
+     * Copies merge by when they reach their workspace's limit, not by when they were written: a younger copy with a
+     * shorter limit has less time left and comes first.
+     */
+    @Test
+    void shouldEraseFirstTheCopyWithTheLeastTimeLeftWhateverItsWorkspacesLimit() {
+        copyingSources.add(() -> Map.of(1L, Duration.ofDays(60), 2L, Duration.ofDays(20)));
+        due.add(new Due(UUID.randomUUID(), 1, 11, WRITTEN, READ_AT));
+        due.add(new Due(UUID.randomUUID(), 2, 12, WRITTEN.plus(Duration.ofDays(10)), READ_AT));
+        ConversationRetentionSweeper onePage = onePageSweeper();
+
+        onePage.sweepCopiesNow();
+
+        assertThat(erased)
+                .as("the copy with 30 days to its limit before the one with 60")
+                .containsOnlyKeys(12L);
+        onePage.sweepCopiesNow();
+        assertThat(erased).containsOnlyKeys(11L, 12L);
+    }
+
+    /** A workspace whose copies cannot be read, for example past a statement timeout, holds back no other workspace. */
+    @Test
+    void shouldPassOverAWorkspaceWhoseCopiesCannotBeReadAndEraseTheOthers() {
+        copyingSources.add(() -> Map.of(1L, Duration.ofDays(30), 2L, Duration.ofDays(30)));
+        due.add(new Due(UUID.randomUUID(), 1, 11, WRITTEN, READ_AT));
+        due.add(new Due(UUID.randomUUID(), 2, 12, WRITTEN.plusSeconds(60), READ_AT));
+        unreadable.add(1L);
+
+        ConversationRetentionSweeper.Run run = sweeper.sweepCopiesNow();
+
+        assertThat(erased).containsOnlyKeys(12L);
+        assertThat(run.failedWorkspaces()).isEqualTo(1);
+        assertThat(meters.get("privacy.job.completed")
+                        .tag("job", "conversation_copy_retention")
+                        .tag("outcome", "incomplete")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+
+        unreadable.clear();
+        assertThat(sweeper.sweepCopiesNow().failedWorkspaces())
+                .as("the next run reads it again")
+                .isZero();
         assertThat(erased).containsOnlyKeys(11L, 12L);
     }
 
@@ -499,6 +536,23 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 .isEqualTo(Double.POSITIVE_INFINITY);
     }
 
+    /** A sweeper that reads one page of one entry a run. */
+    private ConversationRetentionSweeper onePageSweeper() {
+        return new ConversationRetentionSweeper(
+                entries,
+                redaction,
+                accounts,
+                ownerScope,
+                transactions,
+                new FeedbackRetentionProperties(Duration.ofDays(400)),
+                () -> copyingSources,
+                new PrivacyJobMetrics(new SimpleMeterRegistry()),
+                new SimpleMeterRegistry(),
+                clock,
+                1,
+                1);
+    }
+
     /** PostgreSQL's order of {@code uuid}: its bytes, unsigned. */
     private static int postgresOrder(UUID a, @Nullable UUID b) {
         UUID other = Objects.requireNonNull(b);
@@ -555,6 +609,9 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 .thenAnswer(call -> {
                     DueWorkKind kind = call.getArgument(1);
                     if (kind == DueWorkKind.COPY_RETENTION || kind == DueWorkKind.COPY_RETENTION_DEADLINE) {
+                        if (unreadable.contains(call.<Long>getArgument(2))) {
+                            throw new IllegalStateException("statement timeout");
+                        }
                         return copies(call.getArgument(2), call.getArgument(3), call.getArgument(4));
                     }
                     pagesRead++;

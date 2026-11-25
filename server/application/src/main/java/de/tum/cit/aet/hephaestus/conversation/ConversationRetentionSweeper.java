@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,8 +62,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * due with seven to fourteen days left before its limit. An erased entry also erases every summary over it, so a long
  * conversation is summarized again about once a week: more often only while a backlog drains over several runs.
  *
- * <p>Each run of a rule reads at most {@link #MAX_PAGES} pages of {@link #BATCH} due entries, oldest first across
- * workspaces, and erases each person's entries of a page in a transaction bound to that person, the owner the due row
+ * <p>Each run of a rule reads at most {@link #MAX_PAGES} pages of {@link #BATCH} due entries, across workspaces in the
+ * order in which they reach their limit, and erases each person's entries of a page in a transaction bound to that person, the owner the due row
  * names. It starts no new work after {@link #RUN_BUDGET}; the person's transaction it started last still finishes.
  * Progress is the erasure itself: an erased entry is no longer due, so the next run, a crash or another replica starts
  * again at the oldest entry still due, and a run that finds an entry already erased changes nothing. A person whose
@@ -102,7 +103,10 @@ public class ConversationRetentionSweeper {
     /** How long the margin reuses a read of the copying sources' retentions: one run's interval. */
     static final Duration COPY_LIMITS_FOR = Duration.ofMinutes(15);
 
-    /** PostgreSQL orders {@code uuid} by its bytes, unsigned; the copies of several workspaces merge in that order. */
+    /**
+     * By due time, then as PostgreSQL orders {@code uuid}: by its bytes, unsigned. The copies of several workspaces merge
+     * in that order, so a cursor skips none.
+     */
     private static final Comparator<DueEntry> OLDEST_FIRST = Comparator.comparing(DueEntry::getDueAt)
             .thenComparing(DueEntry::getId, (a, b) -> {
                 int high = Long.compareUnsigned(a.getMostSignificantBits(), b.getMostSignificantBits());
@@ -230,15 +234,17 @@ public class ConversationRetentionSweeper {
     }
 
     /**
-     * One bounded run of a rule. {@link Outcome#INCOMPLETE} means a person's erasure failed: due work that this run
-     * could not do. A run that spends its budget leaves the rest to the next run, which is the design, so it is a
+     * One bounded run of a rule. {@link Outcome#INCOMPLETE} means a person's erasure failed, or a workspace's due
+     * entries could not be read: due work that this run could not do. A run that spends its budget leaves the rest to the next run, which is the design, so it is a
      * success; the deadline margin shows a sweep that falls behind.
      */
     private Run run(Rule rule) {
         Progress progress = new Progress();
         try {
             Run run = (rule == Rule.ENTRIES ? entriesSweep : copiesSweep).run(progress);
-            metrics.record(rule.job, run.failedOwners() > 0 ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            metrics.record(
+                    rule.job,
+                    run.failedOwners() > 0 || run.failedWorkspaces() > 0 ? Outcome.INCOMPLETE : Outcome.SUCCESS);
             return run;
         } catch (RuntimeException e) {
             metrics.record(rule.job, Outcome.FAILURE);
@@ -254,12 +260,20 @@ public class ConversationRetentionSweeper {
         return age.compareTo(MIN_AGE) < 0 ? MIN_AGE : age;
     }
 
-    /** The due entries of a rule: a page oldest first, and the oldest due entry with its limit for the margin. */
+    /**
+     * The due entries of a rule: a page in the order of their limits, and the oldest due entry with its limit for the
+     * margin. One source serves one run.
+     */
     private interface DueSource {
         List<DueEntry> page(DuePage page, int limit);
 
         /** Seconds until the oldest due entry reaches its limit, by the database clock; +Inf when none is due. */
         double margin();
+
+        /** The workspaces whose due entries this source could not read, and passed over for the rest of the run. */
+        default int failedWorkspaces() {
+            return 0;
+        }
     }
 
     /** Every entry, through the owner function. */
@@ -282,19 +296,55 @@ public class ConversationRetentionSweeper {
     }
 
     /**
-     * The copying tool results of each workspace with a copying source, merged oldest first across workspaces. The owner
-     * function names each workspace's due copies at that workspace's shortest retention.
+     * The copying tool results of each workspace with a copying source. The owner function names each workspace's due
+     * copies at that workspace's shortest retention; the page merges them by when they reach that retention, so the
+     * copies with the least time left come first whatever their workspace's limit. A page's {@code dueAt} is that
+     * time, and the cursor of each workspace is that time less the workspace's limit. A workspace whose copies cannot
+     * be read is passed over for the rest of the run, so it does not hold back the others.
      */
     private DueSource copiesSource(boolean fresh) {
         Map<Long, Duration> limits = copyLimits(fresh);
+        Set<Long> failed = new HashSet<>();
         return new DueSource() {
             @Override
             public List<DueEntry> page(DuePage page, int size) {
                 List<DueEntry> due = new ArrayList<>();
-                limits.forEach((workspaceId, limit) -> due.addAll(entries.findDueForRetention(
-                        dueAge(limit).toSeconds(), DueWorkKind.COPY_RETENTION, workspaceId, page, size)));
+                limits.forEach((workspaceId, limit) -> {
+                    if (failed.contains(workspaceId)) {
+                        return;
+                    }
+                    @Nullable Instant afterDue = page.afterDue();
+                    DuePage inWorkspace =
+                            afterDue == null ? page : new DuePage(afterDue.minus(limit), page.afterId(), page.skip());
+                    try {
+                        entries.findDueForRetention(
+                                        dueAge(limit).toSeconds(),
+                                        DueWorkKind.COPY_RETENTION,
+                                        workspaceId,
+                                        inWorkspace,
+                                        size)
+                                .forEach(copy -> due.add(new Expiring(
+                                        copy.getId(),
+                                        copy.getWorkspaceId(),
+                                        copy.getAccountId(),
+                                        copy.getDueAt().plus(limit),
+                                        copy.getReadAt())));
+                    } catch (RuntimeException e) {
+                        failed.add(workspaceId);
+                        log.warn(
+                                "conversation.retention: reading the due copies of workspaceId={} failed, passed over"
+                                        + " for the rest of the run: {}",
+                                workspaceId,
+                                e.toString());
+                    }
+                });
                 due.sort(OLDEST_FIRST);
                 return due.size() > size ? List.copyOf(due.subList(0, size)) : due;
+            }
+
+            @Override
+            public int failedWorkspaces() {
+                return failed.size();
             }
 
             @Override
@@ -336,6 +386,10 @@ public class ConversationRetentionSweeper {
     }
 
     private record CopyLimits(Map<Long, Duration> limits, Instant readAt) {}
+
+    /** A due copy whose {@code dueAt} is when it reaches its limit. */
+    private record Expiring(UUID getId, long getWorkspaceId, long getAccountId, Instant getDueAt, Instant getReadAt)
+            implements DueEntry {}
 
     /**
      * Erases one person's due entries in a transaction bound to that person. A person who entered erasure after the page
@@ -430,10 +484,10 @@ public class ConversationRetentionSweeper {
                     drained = pass(source, Set.of(), failed, deadline, progress);
                     retried = drained;
                 }
-                Run run = new Run(progress.erased, failed.size(), drained);
-                if (progress.erased > 0 || !drained || !failed.isEmpty()) {
+                Run run = new Run(progress.erased, failed.size(), source.failedWorkspaces(), drained);
+                if (progress.erased > 0 || !drained || !failed.isEmpty() || run.failedWorkspaces() > 0) {
                     log.info(
-                            "conversation.retention: handed {} due {} to erasure in committed transactions; {}",
+                            "conversation.retention: handed {} due {} to erasure in committed transactions; {}{}",
                             progress.erased,
                             rule.tag,
                             !drained
@@ -441,7 +495,11 @@ public class ConversationRetentionSweeper {
                                     : failed.isEmpty()
                                             ? "no due entry left"
                                             : "no due entry left but those of " + failed.size()
-                                                    + " people whose erasure failed");
+                                                    + " people whose erasure failed",
+                            run.failedWorkspaces() == 0
+                                    ? ""
+                                    : "; the due entries of " + run.failedWorkspaces()
+                                            + " workspaces could not be read");
                 }
                 return run;
             } finally {
@@ -527,10 +585,11 @@ public class ConversationRetentionSweeper {
      * @param erased due entries handed to erasure in committed transactions; an entry that another run erased first
      *     counts too
      * @param failedOwners the people whose erasure failed in this run
+     * @param failedWorkspaces the workspaces whose due entries this run could not read
      * @param drained whether the run found no due entry left but those of the failed people; {@code false} when it
      *     spent its page or time budget
      */
-    public record Run(long erased, int failedOwners, boolean drained) {}
+    public record Run(long erased, int failedOwners, int failedWorkspaces, boolean drained) {}
 
     /** The entries a run committed so far, kept when a later page fails, and the pages it read. */
     private static final class Progress {
