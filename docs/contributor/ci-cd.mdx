@@ -1088,15 +1088,15 @@ A PR that is not a draft also runs the PostgreSQL drills when it changes what th
 The `postgres-drill` path filter lists these files:
 
 - `docker/postgres/**` and `deploy/postgresql/**`
-- `deploy/chart/hephaestus/files/restore-clone-lockdown.sql`
-- the two drill scripts and their own libraries
+- the chart's role setup and restore lockdown under `deploy/chart/hephaestus/files/`
+- the two drill scripts and every library they import
 - the `postgres-image` action
 
 The chart's templates and values do not reach the drills. The cluster legs test them.
 
 Before this filter, the drills first ran on such a change in the merge group.
-In the 7 days to 2026-11-25, 4 of 265 new PRs changed these files.
-Two of them ran the drills anyway for a migration change.
+In the 7 days to 2026-11-25, 5 of 266 new PRs changed these files.
+Three of them ran the drills anyway for a migration change.
 The drills take a median of 4 runner minutes.
 
 ### Release checks on the change

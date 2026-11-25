@@ -648,17 +648,23 @@ jobs:
               - 'server/application/src/main/resources/agent/pi-text.ts'
             postgres-image:
               - 'docker/postgres/**'
-            # What the PostgreSQL drills read: the image, the pgBackRest configuration, the restore
-            # lockdown, and the drills with their own libraries. The chart's templates do not reach them;
-            # the cluster legs test those.
+            # What the PostgreSQL drills read: the image, the pgBackRest configuration, the chart's role
+            # setup and restore lockdown, and the drills with every library they import. The chart's
+            # templates do not reach them; the cluster legs test those.
             postgres-drill:
               - 'docker/postgres/**'
               - 'deploy/postgresql/**'
+              - 'deploy/chart/hephaestus/files/database-quiet.sql'
+              - 'deploy/chart/hephaestus/files/database-roles.sh'
+              - 'deploy/chart/hephaestus/files/database-roles.sql'
               - 'deploy/chart/hephaestus/files/restore-clone-lockdown.sql'
+              - 'deploy/chart/hephaestus/files/scram-sha-256.pl'
               - 'scripts/postgres-backup-restore-test.ts'
               - 'scripts/postgres-pitr-test.ts'
               - 'scripts/lib/database-migration.ts'
               - 'scripts/lib/database-roles.ts'
+              - 'scripts/lib/env.ts'
+              - 'scripts/lib/process.ts'
               - 'scripts/lib/restore-probe.ts'
               - '.github/actions/postgres-image/**'
             # The drill, the changelog and the fixtures it reads.
@@ -1186,9 +1192,9 @@ jobs:
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
-  # Package once; artifact checks and the image independently consume the same JAR. A run that
-  # publishes every image packages even when its diff holds no code, such as a bot's pin bump in
-  # ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
+  # Package once; artifact checks, the image and the PostgreSQL drills independently consume the
+  # same JAR. A run that publishes every image packages even when its diff holds no code, such as a
+  # bot's pin bump in ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
   server-package:
     name: Server package
     needs: [detect-changes, Security]
@@ -1205,7 +1211,7 @@ jobs:
         needs.detect-changes.outputs.test-config == 'true' ||
         needs.detect-changes.outputs.queue-upgrade == 'true'
       ) && (
-        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.postgres-drill == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}

@@ -162,6 +162,15 @@ void describe("ci-contract: server", () => {
 				false,
 			],
 			[["scripts/lib/restore-probe.ts"], "pull_request", "false", "false", false, false, false],
+			[
+				["deploy/chart/hephaestus/files/database-roles.sql"],
+				"pull_request",
+				"false",
+				"false",
+				false,
+				false,
+				false,
+			],
 			// A chart template does not reach the drills; the cluster legs test it.
 			[
 				["deploy/chart/hephaestus/templates/postgresql.yaml"],
@@ -273,6 +282,35 @@ void describe("ci-contract: server", () => {
 						(name === "server-database" ? database || server : database || readsDrillInputs),
 					`${name}: ${label}`,
 				);
+			}
+			// The drills run only inside the Build caller, which needs the server package.
+			if (readsDrillInputs) {
+				const declared = caller.getIn(["jobs", "detect-changes", "outputs"]);
+				assert.ok(isMap(declared));
+				const outputs: Record<string, string> = {
+					...selected,
+					should_skip: "false",
+					"queue-images-complete": "false",
+				};
+				for (const name of [
+					"server-tests",
+					"queue-tier",
+					"light-tier",
+					"head-images",
+					"images",
+					"any-code",
+					"all-images",
+					"unfiltered",
+				]) {
+					outputs[name] = evaluateTierOutput(String(declared.get(name)), event, run);
+				}
+				const results: Record<string, Completion> = {
+					"detect-changes": { result: "success", outputs },
+					Security: { result: "success" },
+				};
+				assert.ok(jobRuns(caller, "server-package", event, results), `server package: ${label}`);
+				results["server-package"] = { result: "success" };
+				assert.ok(jobRuns(caller, "Build", event, results), `Build: ${label}`);
 			}
 			// A draft waits for its ready run, which runs the drills.
 			assert.equal(
@@ -756,11 +794,17 @@ void describe("ci-contract: server", () => {
 			"docker/postgres/Dockerfile",
 			"docker/postgres/initdb/10-roles.sh",
 			"deploy/postgresql/pgbackrest.conf",
+			"deploy/chart/hephaestus/files/database-quiet.sql",
+			"deploy/chart/hephaestus/files/database-roles.sh",
+			"deploy/chart/hephaestus/files/database-roles.sql",
 			"deploy/chart/hephaestus/files/restore-clone-lockdown.sql",
+			"deploy/chart/hephaestus/files/scram-sha-256.pl",
 			"scripts/postgres-backup-restore-test.ts",
 			"scripts/postgres-pitr-test.ts",
 			"scripts/lib/database-migration.ts",
 			"scripts/lib/database-roles.ts",
+			"scripts/lib/env.ts",
+			"scripts/lib/process.ts",
 			"scripts/lib/restore-probe.ts",
 			".github/actions/postgres-image/action.yml",
 		]) {
