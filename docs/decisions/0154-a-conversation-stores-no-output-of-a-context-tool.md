@@ -85,7 +85,8 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
    - Hephaestus's own words keep the conversation retention. They are an answer, its thinking blocks, a tool call's arguments, and the command that a note repeats.
      They can repeat a source (cascade table, `DERIVED_ANSWER`, #4979).
    - The person erasure keeps its step for copying tool results (`ConversationToolResultCopyPersonDataStore`) unchanged.
-     It selects the notes, and from them the answers and digests after them and the summaries that cover those.
+     It selects the notes, and from them the answers and digests of their turn and after them.
+     It searches the note's conversation and its threads, and also takes the summaries that cover those answers.
      Its receipt also fences running turns, and its preparation removes the sandbox copies.
    - An entry written in a Slack channel belongs to the channel. A Slack disconnect or a channel erasure redacts it with the summaries that cover it (ADR 0128 decision 7).
    - A `search_conversation` result quotes the developer's own entries and goes with them.
