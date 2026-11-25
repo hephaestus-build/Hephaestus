@@ -174,6 +174,49 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
         }
     }
 
+    @Test
+    void shouldLeaveAnExhaustedBatchOutOfTheSelectionSoTheNextPublicationIsDelivered() {
+        String key = "after-exhausted-" + UUID.randomUUID();
+        UUID next = failedPublication(key);
+        List<UUID> exhausted = new ArrayList<>();
+        try {
+            jdbc.update(
+                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
+                    next);
+            for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
+                UUID id = copy(
+                        next,
+                        new ProbeEvent("exhausted-" + UUID.randomUUID(), false),
+                        Instant.now().minus(Duration.ofHours(2)).plusSeconds(i),
+                        "FAILED");
+                jdbc.update(
+                        "UPDATE event_publication SET completion_attempts = ? WHERE id = ?",
+                        NotificationRedeliveryJob.MAX_ATTEMPTS,
+                        id);
+                exhausted.add(id);
+            }
+            probe.failing(false);
+
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+
+            assertThat(probe.delivered()).containsOnlyOnce(key);
+            assertThat(publications(key)).isEmpty();
+            for (UUID id : exhausted) {
+                assertThat(jdbc.queryForMap(
+                                "SELECT status, completion_attempts, last_resubmission_date FROM event_publication"
+                                        + " WHERE id = ?",
+                                id))
+                        .as("an exhausted publication stays as the record of its failure, never resubmitted")
+                        .containsEntry("status", "FAILED")
+                        .containsEntry("completion_attempts", NotificationRedeliveryJob.MAX_ATTEMPTS)
+                        .containsEntry("last_resubmission_date", null);
+            }
+        } finally {
+            for (UUID id : exhausted) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
+        }
+    }
+
     /** Publishes a probe while the probe fails, and returns its failed publication. */
     private UUID failedPublication(String key) {
         probe.failing(true);

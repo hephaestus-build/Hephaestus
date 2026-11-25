@@ -138,6 +138,28 @@ tests:
               summary: Durable server work has stayed incomplete for more than an hour and keeps retrying
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: an exhausted publication fires at once and clears when an operator replays it
+    interval: 1m
+    input_series:
+      - series: 'event_publications_exhausted{job="hephaestus",instance="server:9090",listener="ItemEventReviewListener.on"}'
+        values: "0 1x10 _x10"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusEventPublicationsExhausted
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: HephaestusEventPublicationsExhausted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              listener: ItemEventReviewListener.on
+            exp_annotations:
+              summary: Durable server work failed every attempt and is retried no more
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 20m
+        alertname: HephaestusEventPublicationsExhausted
+        exp_alerts: []
+
   - name: a stopped product feedback filing fires, successful filings do not
     interval: 1m
     input_series:

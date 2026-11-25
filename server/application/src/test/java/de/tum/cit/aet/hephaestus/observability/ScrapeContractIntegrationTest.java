@@ -92,6 +92,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("llm_budget_exhausted_total", "the first exhausted budget creates it, with its cap"),
             Map.entry("conversation_turn_completed_total", "the first ended turn creates it, with its outcome"),
             Map.entry("event_publications_overdue", "the first overdue publication creates it, with its listener"),
+            Map.entry("event_publications_exhausted", "the first exhausted publication creates it, with its listener"),
             Map.entry("integration_consumer_retry_total", "the first retry creates it, with its kind"),
             Map.entry("integration_consumer_poison_total", "the first dead letter creates it"),
             Map.entry("integration_message_lag_seconds_bucket", "the first event creates it, with its kind"),

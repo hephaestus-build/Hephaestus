@@ -49,12 +49,45 @@ class OverduePublicationMeterIntegrationTest extends BaseIntegrationTest {
         assertThat(gauge.value()).isEqualTo(2.0);
     }
 
+    @Test
+    void shouldCountAnExhaustedPublicationApartFromTheOverdueOnes() {
+        String type = "ExhaustedProbe" + UUID.randomUUID().toString().replace("-", "");
+        String listenerId = "de.example." + type + ".on(de.example.ProbeEvent)";
+        Instant twoHoursAgo = Instant.now().minus(Duration.ofHours(2));
+        try {
+            publication(listenerId, twoHoursAgo, "FAILED", NotificationRedeliveryJob.MAX_ATTEMPTS);
+            publication(listenerId, twoHoursAgo, "FAILED", NotificationRedeliveryJob.MAX_ATTEMPTS - 1);
+
+            meter.measure();
+        } finally {
+            jdbc.update("DELETE FROM event_publication WHERE listener_id = ?", listenerId);
+        }
+
+        assertThat(meterRegistry
+                        .get(NotificationMetrics.EVENT_PUBLICATIONS_EXHAUSTED)
+                        .tag("listener", type + ".on")
+                        .gauge()
+                        .value())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .get(NotificationMetrics.EVENT_PUBLICATIONS_OVERDUE)
+                        .tag("listener", type + ".on")
+                        .gauge()
+                        .value())
+                .as("the publication with attempts left still retries")
+                .isEqualTo(1.0);
+    }
+
     private void publication(String listenerId, Instant publishedAt, String status) {
+        publication(listenerId, publishedAt, status, 1);
+    }
+
+    private void publication(String listenerId, Instant publishedAt, String status, int attempts) {
         jdbc.update(
                 """
             INSERT INTO event_publication
                 (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
-            VALUES (?, ?, ?, ?, ?, ?, 1)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
                 UUID.randomUUID(),
                 listenerId,
@@ -62,6 +95,7 @@ class OverduePublicationMeterIntegrationTest extends BaseIntegrationTest {
                 BotCommandReceivedEvent.class.getName(),
                 "{}",
                 Timestamp.from(publishedAt),
-                status);
+                status,
+                attempts);
     }
 }
