@@ -18,6 +18,7 @@ import { readCutoverSeeds } from "./lib/cutover-seeds.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
+import { waitForFinalServer } from "./lib/postgres-container.ts";
 import { BASELINE_RELEASE } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
@@ -952,17 +953,7 @@ try {
 		postgresImage,
 	);
 
-	for (let attempt = 0; attempt < 60; attempt += 1) {
-		try {
-			docker("exec", postgres, "pg_isready", "--username=root", "--dbname=hephaestus");
-			break;
-		} catch {
-			if (attempt === 59) {
-				throw new Error("PostgreSQL did not become ready");
-			}
-			await sleep(1000);
-		}
-	}
+	await waitForFinalServer(postgres);
 
 	migrateRelease(previousImage);
 	let port = startApplication(application, previousImage);

@@ -133,7 +133,7 @@ jobs:
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
-          until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
+          node scripts/wait-for-postgres.ts postgres-db
           node scripts/setup-database-roles.ts postgres-db hephaestus
 
           ISSUES_FOUND=()
@@ -218,7 +218,7 @@ jobs:
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
-          until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
+          node scripts/wait-for-postgres.ts postgres-db
           node scripts/setup-database-roles.ts postgres-db hephaestus
 
           export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/hephaestus"
@@ -282,6 +282,8 @@ jobs:
       - uses: ./.github/actions/postgres-image
         with:
           phase: wait
+      - name: Check the PostgreSQL wait against the init server
+        run: node scripts/postgres-wait-test.ts --target-image hephaestus-postgres:ci
       - name: Run the PostgreSQL backup-restore drill
         id: backup_restore
         env:
