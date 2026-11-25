@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,9 +33,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * The guards run in the integration tier. The sweep runs with HEPHAESTUS_API_READ_COST=true and
- * :application:integrationTest --tests '*SignedInApiReadCostIntegrationTest'. The test report's stdout contains one row
- * per route and fixture size.
+ * Run with HEPHAESTUS_API_READ_COST=true and :application:integrationTest --tests
+ * '*SignedInApiReadCostIntegrationTest'. The test report's stdout contains one row per route and fixture size.
  */
 @Import({
     SignedInApiReadCostData.class,
@@ -44,7 +44,25 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     StubInstallationRepositoryEnumerator.class
 })
 @TestPropertySource(properties = "hephaestus.llm.display-currency=")
+@EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
 class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
+    /**
+     * The routes that answer this fixture with another status than 200 by design: it connects no Outline, Slack or
+     * GitLab account, sets no practice repository, has no exportable scan or public onboarding, and opens no user view.
+     * Every other route must answer 200, so a route that fails at both sizes cannot drop out of both measurements.
+     */
+    private static final Map<String, Integer> NOT_OK = Map.of(
+            "exportScanSarif", 409,
+            "getGitLabRepositorySelection", 409,
+            "getOutlineTokenStatus", 404,
+            "getPracticeRepository", 204,
+            "getPublicActivityOnboarding", 404,
+            "getSlackScopes", 412,
+            "getUserViewUser", 403,
+            "listOutlineCollectionCandidates", 404,
+            "listOutlineCollections", 404,
+            "listUserViewUsers", 403);
+
     @Autowired
     private WebTestClient defaultHttp;
 
@@ -54,25 +72,14 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private SignedInApiReadCostData data;
 
-    /** The workspace pages read every member's results, so a large workspace looks up a long list of reviews. */
     @Test
-    void shouldServeTheWorkspacePracticePagesInALargeWorkspace() {
-        var http = http();
-        var large = data.seed(400, 40);
-        for (var route : List.of(
-                new Route("getPracticeWorkspaceOverview", "/workspaces/{workspaceSlug}/practices/workspace-overview"),
-                new Route("getPracticeWorkspaceTiles", "/workspaces/{workspaceSlug}/practices/tiles?window=DAYS_30"))) {
-            assertThat(sample(http, route, large).status())
-                    .as(route.operation())
-                    .isEqualTo(200);
-        }
-    }
-
-    @Test
-    @EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
     void shouldMeasureSignedInGetRoutesAtBothWorkspaceSizes() throws IOException {
         var routes = routes();
-        var http = http();
+        var http = defaultHttp
+                .mutate()
+                .responseTimeout(Duration.ofMinutes(2))
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+                .build();
         var small = data.seed(12, 6);
         var smallCosts = measure(http, "small", routes, small);
         // Separate workspaces keep first-read side effects and warm state from passing between fixture sizes.
@@ -82,23 +89,19 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
         assertThat(largeCosts).isNotEmpty();
     }
 
-    private WebTestClient http() {
-        return defaultHttp
-                .mutate()
-                .responseTimeout(Duration.ofMinutes(2))
-                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
-                .build();
-    }
-
     private Map<Route, Long> measure(
             WebTestClient http, String scale, List<Route> routes, SignedInApiReadCostData.Fixture fixture) {
         Map<Route, Long> costs = new HashMap<>();
+        Map<String, Integer> statuses = new TreeMap<>();
+        Map<String, Integer> expected = new TreeMap<>();
         for (var route : routes) {
             if (!fixture.supports(route.path())) {
                 System.out.printf("READ_COST_UNAVAILABLE\t%s\t%s%n", scale, route.operation());
                 continue;
             }
             var first = sample(http, route, fixture);
+            statuses.put(route.operation(), first.status());
+            expected.put(route.operation(), NOT_OK.getOrDefault(route.operation(), 200));
             if (first.status() < 200 || first.status() >= 300) {
                 System.out.printf(
                         "READ_COST_STATUS\t%s\t%s\t%d\t%d%n",
@@ -134,6 +137,9 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
                                 .orElseThrow());
             }
         }
+        assertThat(statuses)
+                .as("first status of each route at the %s size", scale)
+                .isEqualTo(expected);
         for (String bootstrap :
                 List.of("getCurrentUser", "listWorkspaces", "getMemberOnboarding", "getOwnMembership")) {
             assertThat(costs.entrySet())
