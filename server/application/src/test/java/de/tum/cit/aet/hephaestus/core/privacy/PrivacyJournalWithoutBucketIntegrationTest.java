@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /** With no journal bucket configured, the journal stays in the database and no reply waits for a copy. */
@@ -22,6 +26,10 @@ class PrivacyJournalWithoutBucketIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private ObjectProvider<PrivacyJournalObjectStore> bucket;
+
+    // The reply calls confirm for each fact that must ship. Without a bucket, no fact must, so no reply waits.
+    @MockitoSpyBean
+    private PrivacyJournalShipping shipping;
 
     @Autowired
     private WebTestClient client;
@@ -62,6 +70,7 @@ class PrivacyJournalWithoutBucketIntegrationTest extends AbstractWorkspaceIntegr
                 .expectStatus()
                 .isNoContent()
                 .expectBody(Void.class);
+        verify(shipping, never()).confirm(any());
 
         // The fact is recorded for a later restore, but it needs no copy and nothing ships it.
         assertThat(jdbc.queryForList("""

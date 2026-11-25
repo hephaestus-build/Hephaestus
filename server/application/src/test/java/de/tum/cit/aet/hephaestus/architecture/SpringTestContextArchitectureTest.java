@@ -53,6 +53,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
             assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
+            assignment("core.privacy.PrivacyJournalWithoutBucketIntegrationTest", "privacy-journal-local"),
             assignment("core.privacy.S3PrivacyJournalStoreIntegrationTest", "privacy-journal-bucket"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -152,6 +153,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "privacy-journal-bucket",
                     "switches the journal bucket between a real MinIO endpoint and an outage"
                             + " while using the real database and erasure service"),
+            Map.entry(
+                    "privacy-journal-local",
+                    "no journal bucket, with the shipping service spied to prove that no reply waits for a copy"),
             Map.entry(
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
