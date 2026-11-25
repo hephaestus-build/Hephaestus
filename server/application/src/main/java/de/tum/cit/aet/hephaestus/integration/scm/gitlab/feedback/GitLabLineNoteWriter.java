@@ -121,7 +121,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     request.field("project.mergeRequest.sourceProject.fullPath").getValue();
             if (diffHead == null || branch == null || source == null) return LiveHead.UNKNOWN;
             if (!diffHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
-            var ref = graphQl(workspace, "GetFeedbackBranchHead", Map.of("fullPath", source, "ref", branch));
+            // The full branch ref: a tag of the same name could still point at the reviewed commit.
+            var ref = graphQl(
+                    workspace, "GetFeedbackBranchHead", Map.of("fullPath", source, "ref", "refs/heads/" + branch));
             String branchHead = ref == null
                     ? null
                     : ref.field("project.repository.commit.sha").getValue();

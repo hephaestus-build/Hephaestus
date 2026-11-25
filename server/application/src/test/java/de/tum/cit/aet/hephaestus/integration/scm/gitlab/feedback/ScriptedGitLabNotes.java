@@ -319,7 +319,11 @@ public final class ScriptedGitLabNotes {
                                 "group/project"));
             }
             case "GetFeedbackBranchHead" -> {
-                int iid = Integer.parseInt(request.text("ref").substring("source-".length()));
+                String ref = request.text("ref");
+                // GitLab resolves a bare name to a tag as readily as to a branch; only the full ref names the branch.
+                if (!ref.startsWith("refs/heads/source-"))
+                    yield Mono.error(new IllegalStateException("A branch is read by its full ref"));
+                int iid = Integer.parseInt(ref.substring("refs/heads/source-".length()));
                 String head = branches.getOrDefault(iid, heads.get(iid));
                 yield head == null
                         ? Mono.error(new IllegalStateException("GitLab did not answer"))
