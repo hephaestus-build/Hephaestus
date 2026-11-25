@@ -1,26 +1,13 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
-	apply,
-	applyAction,
-	armRecovery,
-	confirm,
 	conflictingSnapshot,
 	liveDrift,
-	recoveryCommand,
-	recoveryFilter,
 	renderPolicyMetrics,
-	requireFreshSshConnection,
-	restoreUfw,
 	rulesFor,
 	savedDrift,
 	settingsDrift,
-	sshStartedAt,
-	ufwArgs,
 } from "./host-firewall.ts";
 
 const base = {
@@ -28,33 +15,28 @@ const base = {
 	monitoringAddresses: ["198.51.100.4", "2001:db8:2::4"],
 };
 
-const shared = [
-	"allow from 192.0.2.0/24 to any port 22 proto tcp",
-	"allow from 2001:db8:1::/64 to any port 22 proto tcp",
-	"allow from 198.51.100.4/32 to any port 9100 proto tcp",
-	"allow from 2001:db8:2::4/128 to any port 9100 proto tcp",
-	"allow 80/tcp",
-	"allow 443/tcp",
+const shared: ReturnType<typeof rulesFor> = [
+	{ family: 4, source: "192.0.2.0/24", port: 22, protocol: "tcp" },
+	{ family: 6, source: "2001:db8:1::/64", port: 22, protocol: "tcp" },
+	{ family: 4, source: "198.51.100.4/32", port: 9100, protocol: "tcp" },
+	{ family: 6, source: "2001:db8:2::4/128", port: 9100, protocol: "tcp" },
+	{ port: 80, protocol: "tcp" },
+	{ port: 443, protocol: "tcp" },
 ];
 
-void test("k3s hosts allow only web, restricted services, and the k3s networks", () => {
-	assert.deepEqual(
-		rulesFor({ ...base, k3s: true, http3: false }).map((rule) => ufwArgs(rule).join(" ")),
-		[
-			...shared,
-			"allow in on cni0",
-			"allow in on flannel.1",
-			"allow from 10.42.0.0/16",
-			"allow from 10.43.0.0/16",
-		],
-	);
+void test("k3s hosts allow cluster traffic only on the two k3s interfaces", () => {
+	assert.deepEqual(rulesFor({ ...base, k3s: true, http3: false }), [
+		...shared,
+		{ device: "cni0" },
+		{ device: "flannel.1" },
+	]);
 });
 
 void test("a host proxy adds only 443/udp", () => {
-	assert.deepEqual(
-		rulesFor({ ...base, k3s: false, http3: true }).map((rule) => ufwArgs(rule).join(" ")),
-		[...shared, "allow 443/udp"],
-	);
+	assert.deepEqual(rulesFor({ ...base, k3s: false, http3: true }), [
+		...shared,
+		{ port: 443, protocol: "udp" },
+	]);
 });
 
 void test("rejects malformed addresses, default routes and missing VPN networks", () => {
@@ -85,403 +67,6 @@ void test("an address family with no VPN or monitoring source gets only the web 
 		],
 	);
 });
-
-const matches = () => true;
-
-void test("apply keeps the original recovery deadline on retry and refuses outstanding recovery", () => {
-	assert.equal(applyAction(false, false, "inactive", matches), "unchanged");
-	assert.equal(
-		applyAction(false, false, "inactive", () => false),
-		"arm",
-	);
-	assert.equal(applyAction(true, false, "inactive", matches), "retry");
-	assert.throws(() => applyAction(true, true, "inactive", matches), /awaiting confirmation/u);
-	for (const service of ["active", "activating"]) {
-		assert.throws(() => applyAction(false, false, service, matches), /awaiting confirmation/u);
-	}
-});
-
-function procStat(pid: number, name: string, parent: number, ticks: number) {
-	// Start time is field 22. Populate the preceding fields so an off-by-one reads a different value.
-	return `${pid} (${name}) S ${parent} ${Array.from({ length: 17 }, (_, index) => index).join(" ")} ${ticks} 0\n`;
-}
-
-void test("confirmation uses the TCP connection age, including for multiplexed SSH", () => {
-	for (const session of ["sshd", "sshd-session"]) {
-		const ancestry = new Map([
-			[51, procStat(51, "sudo", 50, 12_000)],
-			[50, procStat(50, "shell (new)", 40, 11_500)],
-			[40, procStat(40, session, 20, 10_100)],
-			[20, procStat(20, session, 10, 10_000)],
-			[10, procStat(10, "sshd", 1, 500)],
-		]);
-		const startedAt = () => sshStartedAt(51, 100, (pid) => ancestry.get(pid) ?? "");
-		assert.equal(startedAt(), 100);
-		assert.throws(() => requireFreshSshConnection(110, startedAt), /new SSH connection/u);
-		assert.throws(() => requireFreshSshConnection(100, startedAt), /new SSH connection/u);
-		assert.doesNotThrow(() => requireFreshSshConnection(99.99, startedAt));
-	}
-});
-
-void test("a detached terminal cannot confirm a firewall change", () => {
-	assert.throws(
-		() => sshStartedAt(50, 100, (pid) => procStat(pid, "tmux: server", 1, 11_500)),
-		/Cannot verify the age/u,
-	);
-});
-
-void test("the recovery unit runs the saved script under the same lock as apply", () => {
-	assert.deepEqual(recoveryCommand("/run/firewall-test-recovery"), [
-		"/usr/bin/flock",
-		"/run/hephaestus-host-firewall.lock",
-		process.execPath,
-		path.join("/run/firewall-test-recovery", "host-firewall.ts"),
-		"--restore-ufw",
-	]);
-});
-
-void test("emergency recovery puts the VPN-only guard before existing accepts", () => {
-	const ipv4 = recoveryFilter(
-		4,
-		[
-			{ family: 4, source: "192.0.2.0/24", port: 22, protocol: "tcp" },
-			{ family: 6, source: "2001:db8:1::/64", port: 22, protocol: "tcp" },
-		],
-		"-A INPUT -p tcp --dport 6443 -j ACCEPT\n-A INPUT -j HEPHAESTUS-RECOVERY",
-	);
-	assert.match(ipv4, /^-P INPUT DROP$/mu);
-	assert.match(ipv4, /^-P FORWARD DROP$/mu);
-	assert.match(ipv4, /^-D INPUT -j HEPHAESTUS-RECOVERY$/mu);
-	assert.match(ipv4, /^-I INPUT 1 -j HEPHAESTUS-RECOVERY$/mu);
-	assert.match(
-		ipv4,
-		/^-A HEPHAESTUS-RECOVERY -s 192\.0\.2\.0\/24 -p tcp -m tcp --dport 22 -j ACCEPT$/mu,
-	);
-	assert.match(ipv4, /^-A HEPHAESTUS-RECOVERY -j DROP$/mu);
-	assert.match(ipv4, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/u);
-	assert.doesNotMatch(ipv4, /6443|2001:db8|--dport (?:80|443)|-i (?:cni0|flannel\.1)/u);
-	const ipv6 = recoveryFilter(
-		6,
-		[{ family: 6, source: "2001:db8:1::/64", port: 22, protocol: "tcp" }],
-		"",
-	);
-	assert.match(ipv6, /^-A HEPHAESTUS-RECOVERY -p ipv6-icmp --icmpv6-type 135 -j ACCEPT$/mu);
-	assert.match(
-		ipv6,
-		/^-A HEPHAESTUS-RECOVERY -s 2001:db8:1::\/64 -p tcp -m tcp --dport 22 -j ACCEPT$/mu,
-	);
-});
-
-void test("the rebuild guard admits declared traffic and leaves k3s forwarding to its network policies", () => {
-	const rules = rulesFor({ ...base, k3s: true, http3: false });
-	for (const family of [4, 6] as const) {
-		const guard = recoveryFilter(family, rules, "");
-		const loopbackDrop = guard.indexOf(
-			`-A HEPHAESTUS-RECOVERY -d ${family === 4 ? "127.0.0.0/8" : "::1/128"} -j DROP`,
-		);
-		assert.ok(loopbackDrop > guard.indexOf("-A HEPHAESTUS-RECOVERY -i lo -j ACCEPT"));
-		assert.ok(loopbackDrop < guard.indexOf("-A HEPHAESTUS-RECOVERY -i cni0 -j ACCEPT"));
-		assert.match(
-			guard,
-			/^-A HEPHAESTUS-RECOVERY -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT$/mu,
-		);
-		assert.match(guard, /^-A HEPHAESTUS-RECOVERY -p tcp -m tcp --dport 80 -j ACCEPT$/mu);
-		assert.match(guard, /^-A HEPHAESTUS-RECOVERY -p tcp -m tcp --dport 443 -j ACCEPT$/mu);
-		assert.match(guard, /^-A HEPHAESTUS-RECOVERY -i cni0 -j ACCEPT$/mu);
-		assert.match(guard, /^-A HEPHAESTUS-RECOVERY-FORWARD -i flannel\.1 -j RETURN$/mu);
-		assert.match(
-			guard,
-			/^-A HEPHAESTUS-RECOVERY-FORWARD -p tcp -m conntrack --ctstate DNAT --ctdir ORIGINAL --ctorigdstport 443 -j RETURN$/mu,
-		);
-		assert.match(guard, /^-A HEPHAESTUS-RECOVERY-FORWARD -j DROP$/mu);
-		assert.doesNotMatch(guard, /6443|(?:-p udp ).*443/u);
-	}
-	assert.match(recoveryFilter(4, rules, ""), /-s 10\.42\.0\.0\/16 -j ACCEPT/u);
-});
-
-function wanted(rules: ReturnType<typeof rulesFor>) {
-	return rules.map((rule) => ufwArgs(rule).join(" "));
-}
-
-function guardRules(input: string) {
-	return input.split("\n").filter((line) => line.startsWith("-A HEPHAESTUS-RECOVERY"));
-}
-
-function assertEmergencyGuards(guards: Map<string, string>, includesConfirmedVpn: boolean) {
-	assert.equal(guards.size, 2);
-	const ipv4 = guards.get("/usr/sbin/iptables") ?? "";
-	const ipv6 = guards.get("/usr/sbin/ip6tables") ?? "";
-	assert.match(ipv4, /192\.0\.2\.0\/24 .*--dport 22 -j ACCEPT/u);
-	assert.match(ipv6, /2001:db8:1::\/64 .*--dport 22 -j ACCEPT/u);
-	if (includesConfirmedVpn) {
-		assert.match(ipv4, /198\.51\.100\.128\/25 .*--dport 22 -j ACCEPT/u);
-	}
-	for (const filter of [ipv4, ipv6]) {
-		assert.match(filter, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/u);
-		assert.doesNotMatch(filter, /--dport (?:80|443) /u);
-	}
-}
-
-function readTestChange(file: string) {
-	const data: unknown = JSON.parse(readFileSync(file, "utf8"));
-	assert.ok(
-		typeof data === "object" && data !== null && "id" in data && typeof data.id === "string",
-	);
-	return {
-		id: data.id,
-		started: "started" in data ? data.started : undefined,
-		changedAt: "changedAt" in data ? data.changedAt : undefined,
-		policy: "policy" in data ? data.policy : undefined,
-	};
-}
-
-for (const scenario of [
-	"restore",
-	"first apply",
-	"verification fails",
-	"service unloaded",
-	"stop fails",
-	"schedule rejected",
-	"partial apply",
-	"timer expires",
-	"late confirm",
-	"baseline matches",
-	"backup collision",
-	"unreadable pending",
-] as const) {
-	void test(`recovery handles ${scenario}`, (t) => {
-		const directory = mkdtempSync(path.join(tmpdir(), "host-firewall-recovery-"));
-		t.after(() => rmSync(directory, { recursive: true, force: true }));
-		const configured = { ...base, k3s: false, http3: false };
-		const previous = {
-			...configured,
-			http3: true,
-			sshVpnCidrs: ["198.51.100.128/25", base.sshVpnCidrs[1]],
-		};
-		const change = { id: "new", policy: configured };
-		const policies: string[][] = [];
-		const guards = new Map<string, string>();
-		const calls: string[] = [];
-		let shouldReject = scenario === "schedule rejected";
-		let shouldFail = scenario === "partial apply";
-		let collision = scenario === "backup collision";
-		let waiting = false;
-		let armed = 0;
-		let sshAge = 90;
-		const driftProblem = { reason: "live_rules" as const, message: "The re-applied rules differ." };
-		const reset = () => {
-			assert.equal(guards.size, 2);
-			assert.equal(readTestChange(runtime.pending).started, true);
-			if (collision) {
-				collision = false;
-				throw new Error("ERROR: '/etc/ufw/user.rules.20261124_153002' already exists. Aborting");
-			}
-			policies.push([]);
-			calls.push("reset");
-		};
-		const stop = (unit: string | undefined) => {
-			assert.equal(readTestChange(runtime.confirmed).id, readTestChange(runtime.pending).id);
-			calls.push("stop");
-			if (
-				unit?.endsWith(".service") === true &&
-				["stop fails", "service unloaded"].includes(scenario)
-			) {
-				throw new Error("could not stop service");
-			}
-		};
-		const runtime = {
-			directory: path.join(directory, "recovery"),
-			pending: path.join(directory, "pending.json"),
-			confirmed: path.join(directory, "confirmed.json"),
-			defaultsPath: path.join(directory, "defaults"),
-			snapshotDrift: () => null,
-			uptime: () => 100,
-			sshConnection: () => sshAge,
-			unitState(_unit: string, property: string) {
-				if (property === "SubState") {
-					return waiting ? "waiting" : "dead";
-				}
-				if (property === "LoadState") {
-					return scenario === "service unloaded" ? "not-found" : "loaded";
-				}
-				return "inactive";
-			},
-			execute(command: string, args: string[], input?: string) {
-				if (command === "/usr/bin/systemd-run") {
-					assert.deepEqual(args.slice(-5), recoveryCommand(runtime.directory));
-					if (shouldReject) {
-						throw new Error("schedule rejected");
-					}
-					armed += 1;
-					waiting = true;
-				} else if (command.endsWith("-restore")) {
-					assert.ok(typeof input === "string" && input.includes("-P INPUT DROP"));
-					guards.set(command.slice(0, -"-restore".length), input);
-				} else if (args.includes("-S")) {
-					return guards.has(command)
-						? "-P INPUT DROP\n-P FORWARD DROP\n-A INPUT -j HEPHAESTUS-RECOVERY\n-A FORWARD -j HEPHAESTUS-RECOVERY-FORWARD"
-						: "";
-				} else if (args.includes("-X")) {
-					if (args.at(-1) === "HEPHAESTUS-RECOVERY-FORWARD") {
-						guards.delete(command);
-					}
-				} else if (command === "/usr/sbin/ufw" && args.includes("reset")) {
-					reset();
-				} else if (command === "/usr/bin/sleep") {
-					assert.deepEqual(args, ["1"]);
-					calls.push("wait for backup filename");
-				} else if (command === "/usr/sbin/ufw" && args[0] === "allow") {
-					if (shouldFail && args[1] === "443/tcp") {
-						shouldFail = false;
-						throw new Error("injected partial apply failure");
-					}
-					policies.at(-1)?.push(args.join(" "));
-				} else if (args.includes("stop")) {
-					stop(args.at(-1));
-				}
-				return "";
-			},
-			drift(rules: ReturnType<typeof rulesFor>, guarded?: boolean) {
-				if (guarded !== true) {
-					if (policies.length > 0) {
-						assert.equal(guards.size, 0);
-						calls.push("verify live");
-					}
-					const matchesRules =
-						scenario === "baseline matches" ||
-						JSON.stringify(policies.at(-1)) === JSON.stringify(wanted(rules));
-					return matchesRules ? [] : [driftProblem];
-				}
-				assert.equal(guards.size, 2);
-				assert.deepEqual(
-					guardRules(guards.get("/usr/sbin/iptables") ?? ""),
-					guardRules(recoveryFilter(4, rules, "")),
-				);
-				assert.deepEqual(
-					guardRules(guards.get("/usr/sbin/ip6tables") ?? ""),
-					guardRules(recoveryFilter(6, rules, "")),
-				);
-				assert.deepEqual(policies.at(-1), wanted(rules));
-				calls.push("verify");
-				if (scenario === "timer expires") {
-					waiting = false;
-				}
-				return scenario === "verification fails" && rules.some((rule) => rule.port === 443)
-					? [driftProblem]
-					: [];
-			},
-		};
-		writeFileSync(runtime.defaultsPath, "IPV6=yes\nMANAGE_BUILTINS=no\n");
-		if (scenario !== "first apply" && scenario !== "baseline matches") {
-			writeFileSync(runtime.confirmed, JSON.stringify({ id: "old", policy: previous }));
-		}
-		const desired = rulesFor(configured);
-		if (scenario === "baseline matches") {
-			apply(configured, desired, runtime);
-			assert.deepEqual(readTestChange(runtime.confirmed).policy, configured);
-			assert.equal(armed, 0);
-			return;
-		}
-		if (scenario === "timer expires") {
-			assert.throws(() => apply(configured, desired, runtime), /timer has expired/u);
-			const state = readTestChange(runtime.pending);
-			assert.equal(state.started, true);
-			assert.equal(state.changedAt, undefined);
-			assert.throws(() => confirm(desired, runtime), /no matching firewall change/u);
-			restoreUfw(runtime);
-			assert.deepEqual(policies.at(-1), wanted(rulesFor(previous)));
-			return;
-		}
-		if (
-			[
-				"partial apply",
-				"stop fails",
-				"service unloaded",
-				"schedule rejected",
-				"late confirm",
-			].includes(scenario)
-		) {
-			let retryId: string | undefined;
-			if (scenario === "schedule rejected") {
-				assert.throws(() => apply(configured, desired, runtime), /schedule rejected/u);
-				restoreUfw(runtime);
-				assert.deepEqual(calls, []);
-				shouldReject = false;
-			}
-			if (scenario === "partial apply") {
-				assert.throws(() => apply(configured, desired, runtime), /injected partial apply failure/u);
-				const interrupted = readTestChange(runtime.pending);
-				assert.equal(interrupted.started, true);
-				assert.equal(interrupted.changedAt, undefined);
-				retryId = interrupted.id;
-				assertEmergencyGuards(guards, true);
-			}
-			apply(configured, desired, runtime);
-			assert.equal(armed, 1);
-			const applied = readTestChange(runtime.pending);
-			assert.equal(applied.changedAt, 100);
-			if (retryId !== undefined) {
-				assert.equal(applied.id, retryId);
-			}
-			assert.throws(() => confirm(desired, runtime), /new SSH connection/u);
-			sshAge = 110;
-			if (scenario === "late confirm") {
-				waiting = false;
-				assert.throws(() => confirm(desired, runtime), /after the recovery timer expires/u);
-				assert.equal(readTestChange(runtime.confirmed).id, "old");
-				restoreUfw(runtime);
-				assert.deepEqual(policies.at(-1), wanted(rulesFor(previous)));
-				return;
-			}
-			confirm(desired, runtime);
-			assert.equal(existsSync(runtime.pending), scenario === "stop fails");
-			if (scenario === "partial apply" || scenario === "schedule rejected") {
-				assert.deepEqual(policies.at(-1), wanted(desired));
-			}
-			restoreUfw(runtime);
-			assert.ok(!existsSync(runtime.pending));
-			return;
-		}
-		armRecovery(change, runtime);
-		writeFileSync(runtime.pending, JSON.stringify({ ...change, started: true }));
-		if (scenario === "unreadable pending") {
-			writeFileSync(runtime.pending, "Unreadable declaration");
-			assert.throws(() => restoreUfw(runtime), /emergency guards are active/u);
-			assert.equal(guards.size, 2);
-			assert.match(
-				guards.get("/usr/sbin/iptables") ?? "",
-				/198\.51\.100\.128\/25 .*--dport 22 -j ACCEPT/u,
-			);
-			return;
-		}
-		if (scenario === "first apply" || scenario === "verification fails") {
-			assert.throws(() => restoreUfw(runtime), /applied a VPN-only emergency policy/u);
-			assert.deepEqual(calls, [
-				...(scenario === "verification fails" ? ["reset", "verify"] : []),
-				"reset",
-				"verify",
-			]);
-			assert.deepEqual(policies.at(-1), [
-				...shared.slice(0, 2),
-				...(scenario === "verification fails"
-					? ["allow from 198.51.100.128/25 to any port 22 proto tcp"]
-					: []),
-			]);
-			assertEmergencyGuards(guards, scenario === "verification fails");
-		} else {
-			restoreUfw(runtime);
-			assert.deepEqual(calls, [
-				...(scenario === "backup collision" ? ["wait for backup filename"] : []),
-				"reset",
-				"verify",
-				"verify live",
-			]);
-			assert.deepEqual(policies[0], wanted(rulesFor(previous)));
-			assert.equal(guards.size, 0);
-			assert.ok(!existsSync(runtime.pending));
-		}
-	});
-}
 
 const k3sV4 = [
 	"-P INPUT DROP",
@@ -515,8 +100,6 @@ const k3sV4 = [
 	"-A ufw-user-input -p tcp -m tcp --dport 443 -j ACCEPT",
 	"-A ufw-user-input -i cni0 -j ACCEPT",
 	"-A ufw-user-input -i flannel.1 -j ACCEPT",
-	"-A ufw-user-input -s 10.42.0.0/16 -j ACCEPT",
-	"-A ufw-user-input -s 10.43.0.0/16 -j ACCEPT",
 ];
 const k3sV6 = [
 	"-P INPUT DROP",
@@ -610,22 +193,35 @@ void test("the check reports disabled IPv6 even when the other UFW settings matc
 	assert.deepEqual(settingsDrift(`IPV6=yes\n${expected}`, "ENABLED=yes", "enabled"), []);
 });
 
+const savedK3sV4 = [
+	"-A ufw-user-input -p tcp --dport 22 -s 192.0.2.0/24 -j ACCEPT",
+	"-A ufw-user-input -p tcp --dport 9100 -s 198.51.100.4 -j ACCEPT",
+	"-A ufw-user-input -p tcp --dport 80 -j ACCEPT",
+	"-A ufw-user-input -p tcp --dport 443 -j ACCEPT",
+	"-A ufw-user-input -i cni0 -j ACCEPT",
+	"-A ufw-user-input -i flannel.1 -j ACCEPT",
+];
+
 void test("recognizes both live k3s rule sets and checks saved filter rules per family", () => {
 	const rules = rulesFor({ ...base, k3s: true, http3: false });
-	const saved = [
-		"-A ufw-user-input -p tcp --dport 22 -s 192.0.2.0/24 -j ACCEPT",
-		"-A ufw-user-input -p tcp --dport 9100 -s 198.51.100.4 -j ACCEPT",
-		"-A ufw-user-input -p tcp --dport 80 -j ACCEPT",
-		"-A ufw-user-input -p tcp --dport 443 -j ACCEPT",
-		"-A ufw-user-input -i cni0 -j ACCEPT",
-		"-A ufw-user-input -i flannel.1 -j ACCEPT",
-		"-A ufw-user-input -s 10.42.0.0/16 -j ACCEPT",
-		"-A ufw-user-input -s 10.43.0.0/16 -j ACCEPT",
-	];
-	assert.equal(savedDrift(["# UFW metadata", ...saved.toReversed()].join("\n"), 4, rules), false);
-	assert.equal(savedDrift(saved.slice(1).join("\n"), 4, rules), true);
+	assert.equal(
+		savedDrift(["# UFW metadata", ...savedK3sV4.toReversed()].join("\n"), 4, rules),
+		false,
+	);
+	assert.equal(savedDrift(savedK3sV4.slice(1).join("\n"), 4, rules), true);
 	assert.deepEqual(liveDrift(k3sV4, 4, rules), []);
 	assert.deepEqual(liveDrift(k3sV6, 6, rules), []);
+});
+
+void test("reports unrestricted Pod and Service source rules as drift", () => {
+	const rules = rulesFor({ ...base, k3s: true, http3: false });
+	for (const network of ["10.42.0.0/16", "10.43.0.0/16"]) {
+		const unscoped = `-A ufw-user-input -s ${network} -j ACCEPT`;
+		assert.deepEqual(liveDrift([...k3sV4, unscoped], 4, rules), [
+			"IPv4 live UFW input rules differ.",
+		]);
+		assert.equal(savedDrift([...savedK3sV4, unscoped].join("\n"), 4, rules), true);
+	}
 });
 
 void test("reports denies before required input rules and allows stock invalid-packet drops", () => {
