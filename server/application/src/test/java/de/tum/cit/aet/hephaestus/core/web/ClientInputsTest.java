@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
+import de.tum.cit.aet.hephaestus.core.database.ClientInputRepository;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.web.ClientInputs.FingerprintInput;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,7 +17,6 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
@@ -24,7 +25,7 @@ class ClientInputsTest {
     void shouldEnforceTheRetryWindowAndClockSkew() {
         Instant now = Instant.parse("2026-11-24T00:00:00Z");
         var inputs = new ClientInputs(
-                mock(JdbcClient.class),
+                mock(ClientInputRepository.class),
                 mock(OwnerScope.class),
                 mock(PrivacyJobMetrics.class),
                 JsonMapper.shared(),
@@ -47,15 +48,15 @@ class ClientInputsTest {
     @Test
     void shouldIncludeAttachmentHashesInTheFingerprint() {
         var inputs = new ClientInputs(
-                mock(JdbcClient.class),
+                mock(ClientInputRepository.class),
                 mock(OwnerScope.class),
                 mock(PrivacyJobMetrics.class),
                 JsonMapper.shared(),
                 Clock.systemUTC());
-        var first = inputs.fingerprint("submit", "A message", List.of("a".repeat(64)));
-        assertThat(inputs.fingerprint("submit", "A message", List.of("a".repeat(64))))
-                .isEqualTo(first);
-        assertThat(inputs.fingerprint("submit", "A message", List.of("b".repeat(64))))
+        var request = new FingerprintInput("submit", "A message", List.of("a".repeat(64)));
+        var first = inputs.fingerprint(request);
+        assertThat(inputs.fingerprint(request)).isEqualTo(first);
+        assertThat(inputs.fingerprint(new FingerprintInput("submit", "A message", List.of("b".repeat(64)))))
                 .isNotEqualTo(first);
     }
 }

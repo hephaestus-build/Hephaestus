@@ -73,8 +73,9 @@ public class ConversationQuestionController {
             @Valid @RequestBody ConversationTurnRequestDTO request) {
         long workspaceId = workspace.id();
         var person = PersonAct.fromPrincipal();
+        var fingerprint = new ClientInputs.FingerprintInput("submitConversationTurn", request, List.of());
         return scope.write(account -> {
-            var result = inputs.create(workspaceId, person, key, "submitConversationTurn", request, List.of(), () -> {
+            var result = inputs.create(workspaceId, person, key, fingerprint, () -> {
                 var submission = questions.ask(workspaceId, account, request, TimeOrderedIds.next());
                 return new ClientInputs.Result(
                         submission.turn().getId(), submission.question().getId());
