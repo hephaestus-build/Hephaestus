@@ -1,6 +1,6 @@
 apiVersion: v2
 name: hephaestus
-description: Hephaestus helps software teams put good engineering practices into their everyday work. Server and sandboxes on Kubernetes, from one signed release lock.
+description: The open-source AI mentor for software engineering practices. Server and sandboxes on Kubernetes, from one signed release lock.
 type: application
 # Source checkouts carry no release version. Release packaging sets the chart version from the tag,
 # and writes the image references and the release identity into the packaged values.yaml
