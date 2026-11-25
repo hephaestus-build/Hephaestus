@@ -39,7 +39,12 @@ public enum CascadeDependent {
     BACKUP(Home.OUTSIDE),
 
     /** A ready account export: the bundle of the account's conversation messages that waits for its download. */
-    EXPORT(Home.STORE);
+    EXPORT(Home.STORE),
+
+    /**
+     * A practice result about a source's work, with the feedback based on it and the scan-report members that name it.
+     */
+    PRACTICE_RESULT(Home.STORE);
 
     /** Where the dependent lives. */
     public enum Home {

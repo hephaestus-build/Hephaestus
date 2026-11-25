@@ -275,7 +275,9 @@ A record that depends on the source must follow the cause.
 
 - A cell names the action that holds for every dependent of its kind. Its reason names a stronger action that holds for some.
 - A cell that keeps the dependent states why. A gap names the issue that owns it.
-- Each store and each outside copy of the [personal-data map](/admin/dsms/personal-data-map) names the dependent kinds that it holds, or none.
+- Each store of the [personal-data map](/admin/dsms/personal-data-map) names the dependent kinds that it holds, or none.
+- Each row of the map's main table decides by its name. It is a store row, or it names the dependent kinds of its own copies.
+  So a remote copy of a known store must decide too.
 
 To add a kind of dependent record:
 
@@ -288,9 +290,10 @@ To add a cause:
 1. Add its constant to `CascadeCause`.
 2. Add one cell for each dependent kind.
 
-To add a store or an outside copy to the personal-data map:
+To add a store or a row to the personal-data map:
 
-1. Name the dependent kinds that it holds in `CascadeTableTest`, or list it as holding none.
+1. Name the dependent kinds of a new store in `CascadeTableTest`, or list it as holding none.
+2. List a new row of the main table as a store row. If it holds copies of its own, name their dependent kinds.
 
 A cell that changes the dependent needs a proof. A cell that keeps the dependent needs a reason.
 The test fails until the table is complete.

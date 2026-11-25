@@ -14,6 +14,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -97,6 +98,7 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String SANDBOX_ERASURE = "core.privacy.ConversationSandboxErasureIntegrationTest#";
     private static final String SLACK = "integration.slack.conversation.SlackConversationProjectorIntegrationTest#";
     private static final String SANDBOX_RUNS = "agent.conversation.host.TurnSandboxRunKindIntegrationTest#";
+    private static final String DERIVED_RESULTS = "practices.adapter.ProviderDerivedErasureIntegrationTest#";
 
     private static final String DELETE_PROOF =
             ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt";
@@ -114,6 +116,8 @@ class CascadeTableTest extends BaseUnitTest {
             SANDBOX_RUNS + "shouldRevokeTheWorkspacesConversationSandboxInTheAccessChangeTransaction";
     private static final String NARROWING_PROOF =
             CONTEXT + "shouldTellTheWorkersOfTheWorkspaceWhenWhatItsTurnsMayReadChanges";
+    private static final String AI_CHOICE_PROOF =
+            SANDBOX_RUNS + "shouldRevokeTheSandboxAndRefuseTheRunningAttemptWhenTheDeveloperChangesTheirAiChoice";
     private static final String WIRED_REVOCATION_PROOF =
             SANDBOX_RUNS + "shouldRevokeTheSandboxAndRefuseTheRunningAttemptWhenAnAccessChangeIsAnnounced";
 
@@ -141,8 +145,11 @@ class CascadeTableTest extends BaseUnitTest {
 
     /** The source erasure that reaches no sandbox. */
     private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended Slack or Outline"
-            + " connection, and an Outline collection deleted upstream, publish no context change, so they reach no"
-            + " sandbox. An SCM disconnect erases its mirror, which announces the change.";
+            + " connection, an Outline collection deleted upstream, and the withdrawal of a stopped repository's"
+            + " retained work publish no context change, so they reach no sandbox. The withdrawal publishes"
+            + " RepositoryWithdrawnFromWorkspaceEvent, which ConversationContextChanges does not consume, and with no"
+            + " monitor left no monitoring change follows. An SCM disconnect erases its mirror, which announces the"
+            + " change.";
 
     /** A partial answer is Hephaestus's own words, which a revoked turn keeps until it ends. */
     private static final String PARTIAL_REVOKED = "A partial answer holds Hephaestus's own words, as an answer does."
@@ -237,7 +244,7 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.NARROWING,
                     CascadeDependent.ANSWERING_TURN,
                     Action.DISCARD,
-                    List.of(NARROWING_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
+                    List.of(NARROWING_PROOF, AI_CHOICE_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
                     "The sandbox revocation is the fence: the attempt's next write is refused."),
             // PARTIAL_ANSWER
             new Cell(
@@ -356,7 +363,7 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.NARROWING,
                     CascadeDependent.SANDBOX,
                     Action.REVOKE,
-                    List.of(NARROWING_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
+                    List.of(NARROWING_PROOF, AI_CHOICE_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
                     ""),
             // MODEL_PROVIDER_COPY
             new Cell(CascadeCause.REMOVAL, CascadeDependent.MODEL_PROVIDER_COPY, Action.KEEP, List.of(), PROVIDER),
@@ -406,11 +413,54 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeDependent.EXPORT,
                     Action.KEEP,
                     List.of(),
-                    EXPORT + " A narrowing changes no message."));
+                    EXPORT + " A narrowing changes no message."),
+            // PRACTICE_RESULT
+            new Cell(
+                    CascadeCause.REMOVAL,
+                    CascadeDependent.PRACTICE_RESULT,
+                    Action.KEEP,
+                    List.of(),
+                    "A practice result is about a provider item's work, such as a Slack thread, not about a"
+                            + " conversation entry. Removing an entry changes no result."),
+            new Cell(
+                    CascadeCause.SOURCE_ERASURE,
+                    CascadeDependent.PRACTICE_RESULT,
+                    Action.KEEP,
+                    List.of(
+                            "integration.slack.events.SlackIngestServiceTest#"
+                                    + "eraseChannel_revokesConsentErasesDerivedFeedbackAndDeletesStoredContentPromptly",
+                            DERIVED_RESULTS + "shouldEraseOnlyTheRowsOfTheErasedThreadsWhenASlackChannelIsErased",
+                            DERIVED_RESULTS + "shouldEraseOnlyTheThreadRowsWhenSlackIsDisconnected",
+                            DERIVED_RESULTS + "shouldEraseOnlyTheDocumentRowsWhenOutlineDisconnects",
+                            DERIVED_RESULTS + "shouldEraseOnlyThePullRequestRowsWhenTheScmMirrorIsErased"),
+                    "A Slack channel erasure, a Slack disconnect, an Outline disconnect and an SCM mirror erasure"
+                            + " delete the results about their work, with the feedback based on them and the"
+                            + " scan-report members that name them (DerivedResultEraser). An Outline collection removal"
+                            + " and a repository removal keep the results about the removed work, which follow the"
+                            + " feedback retention (personal-data map, practice proof)."),
+            new Cell(
+                    CascadeCause.ERASURE,
+                    CascadeDependent.PRACTICE_RESULT,
+                    Action.ERASE,
+                    List.of(
+                            "core.privacy.AccountErasureIntegrationTest"
+                                    + "#shouldEraseNotMetResultsAndTheirProblemsWithoutTouchingAnotherPersonsResult",
+                            "practices.scan.ScanReportIntegrationTest"
+                                    + "#erasureRemovesProofReferencesAndKeepsLabelledCloseCounts"),
+                    "The person's own results go, with their problems, their feedback and the scan-report"
+                            + " references to them. Another person's result loses the proof that names the person."),
+            new Cell(
+                    CascadeCause.NARROWING,
+                    CascadeDependent.PRACTICE_RESULT,
+                    Action.KEEP,
+                    List.of(),
+                    "A narrowing keeps the source, so the results about its work stay: a stopped repository keeps"
+                            + " its indexed work, and a paused channel consent or an AI-choice change removes no"
+                            + " result."));
 
     /**
-     * The rows of the person-data map's main table that name no store of its inventory, such as a copy outside
-     * PostgreSQL, keyed by the row's name, with the dependent kinds each holds.
+     * The rows of the person-data map's main table that hold copies of their own, such as a copy outside PostgreSQL,
+     * keyed by the row's name, with the dependent kinds each holds.
      */
     static final Map<String, Set<CascadeDependent>> OUTSIDE_ROWS = Map.ofEntries(
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
@@ -436,6 +486,42 @@ class CascadeTableTest extends BaseUnitTest {
             Map.entry("Conversation sandboxes", EnumSet.of(CascadeDependent.SANDBOX)));
 
     /**
+     * The rows of the person-data map's main table whose copies are the stores that they name, keyed by the row's name.
+     * Every row of the main table is here or in {@link #OUTSIDE_ROWS}, so a new row decides, also when it names a known
+     * store.
+     */
+    static final Set<String> STORE_ROWS = Set.of(
+            "PostgreSQL GitHub App installations",
+            "PostgreSQL MCP client grants",
+            "PostgreSQL Outline mirror",
+            "PostgreSQL SCM mirror",
+            "PostgreSQL Slack mirror",
+            "PostgreSQL `llm_usage_event`",
+            "PostgreSQL account passkeys",
+            "PostgreSQL account, identity and authentication rows",
+            "PostgreSQL commit link corrections",
+            "PostgreSQL contributor profiles",
+            "PostgreSQL conversations",
+            "PostgreSQL durable work",
+            "PostgreSQL installed-client sessions",
+            "PostgreSQL instance-administration records",
+            "PostgreSQL notification subscriptions",
+            "PostgreSQL operation history",
+            "PostgreSQL outbox",
+            "PostgreSQL practice proof",
+            "PostgreSQL practice versions",
+            "PostgreSQL product feedback",
+            "PostgreSQL product feedback choices",
+            "PostgreSQL product feedback destinations",
+            "PostgreSQL product feedback filing",
+            "PostgreSQL product reviews",
+            "PostgreSQL provider event inbox",
+            "PostgreSQL recovery facts",
+            "PostgreSQL runtime",
+            "PostgreSQL sign-in rate limits",
+            "PostgreSQL transient composition");
+
+    /**
      * The dependent kinds that each store of the person-data map holds. A store that holds none is in
      * {@link #NO_DEPENDENT}.
      */
@@ -451,7 +537,13 @@ class CascadeTableTest extends BaseUnitTest {
             "agent_action",
             EnumSet.of(CascadeDependent.SLACK_POST),
             "account_export",
-            EnumSet.of(CascadeDependent.EXPORT));
+            EnumSet.of(CascadeDependent.EXPORT),
+            "result",
+            EnumSet.of(CascadeDependent.PRACTICE_RESULT),
+            "feedback",
+            EnumSet.of(CascadeDependent.PRACTICE_RESULT),
+            "review_item",
+            EnumSet.of(CascadeDependent.PRACTICE_RESULT));
 
     /**
      * The stores of the person-data map that hold no words of a conversation entry. A provider's own record of a Slack
@@ -480,7 +572,6 @@ class CascadeTableTest extends BaseUnitTest {
             "consent_decision",
             "conversation",
             "event_publication",
-            "feedback",
             "feedback_basis",
             "feedback_copy",
             "feedback_decision",
@@ -547,7 +638,6 @@ class CascadeTableTest extends BaseUnitTest {
             "repository_collaborator",
             "research_disclosure",
             "research_disclosure_subject",
-            "result",
             "result_mark",
             "result_mark_created_actor",
             "result_mark_removed_actor",
@@ -555,7 +645,6 @@ class CascadeTableTest extends BaseUnitTest {
             "review_attempt_input",
             "review_batch",
             "review_composition_basis",
-            "review_item",
             "review_job",
             "review_schedule",
             "slack_channel_consent_event",
@@ -646,22 +735,36 @@ class CascadeTableTest extends BaseUnitTest {
                         .toList());
     }
 
-    /** A row of the map's main table that names no catalogued store, such as a provider's copy, decides too. */
+    /**
+     * Each row of the map's main table decides by its name, whether or not it names a store. A provider's copy, or a
+     * remote copy of a store, cannot pass under a store that another row already decided for.
+     */
     @Test
-    void shouldDecideForEveryOutsideRowOfThePersonDataMapWhichDependentKindsItHolds() throws IOException {
+    void shouldDecideForEveryRowOfThePersonDataMapWhichDependentKindsItHolds() throws IOException {
         Set<String> stores = mapStores();
         String map = Files.readString(MAP);
         String table = map.substring(map.indexOf(MAIN_TABLE));
-        Set<String> outside = table.lines()
+        Map<String, String> rows = table.lines()
                 .skip(2)
                 .takeWhile(line -> line.startsWith("|"))
                 .map(line -> line.split("\\|", -1)[1].strip())
-                .filter(name -> CODE_SPAN.matcher(name).results().noneMatch(span -> stores.contains(span.group(1))))
-                .map(name -> name.contains(" — ") ? name.substring(0, name.indexOf(" — ")) : name)
-                .collect(Collectors.toCollection(TreeSet::new));
-        assertThat(new TreeSet<>(OUTSIDE_ROWS.keySet()))
-                .as("every row of the main table that names no store says which dependent kinds it holds")
-                .containsExactlyElementsOf(outside);
+                .collect(Collectors.toMap(
+                        name -> name.contains(" — ") ? name.substring(0, name.indexOf(" — ")) : name,
+                        name -> name,
+                        (first, second) -> {
+                            throw new AssertionError("two rows of the main table share the name " + first);
+                        },
+                        TreeMap::new));
+        assertThat(STORE_ROWS)
+                .as("a row is a store row or holds its own copies, not both")
+                .doesNotContainAnyElementsOf(OUTSIDE_ROWS.keySet());
+        assertThat(new TreeSet<>(Stream.concat(STORE_ROWS.stream(), OUTSIDE_ROWS.keySet().stream())
+                        .collect(Collectors.toSet())))
+                .as("every row of the main table, and no other, says which dependent kinds it holds")
+                .containsExactlyElementsOf(rows.keySet());
+        STORE_ROWS.forEach(row -> assertThat(CODE_SPAN.matcher(rows.get(row)).results())
+                .as("the store row %s names a store of the inventory", row)
+                .anySatisfy(span -> assertThat(stores).contains(span.group(1))));
         Set<CascadeDependent> held = OUTSIDE_ROWS.values().stream()
                 .flatMap(Set::stream)
                 .collect(Collectors.toCollection(() -> EnumSet.noneOf(CascadeDependent.class)));
