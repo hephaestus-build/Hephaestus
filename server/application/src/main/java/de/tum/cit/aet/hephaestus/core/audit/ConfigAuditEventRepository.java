@@ -87,6 +87,11 @@ public interface ConfigAuditEventRepository extends JpaRepository<ConfigAuditEve
             nativeQuery = true)
     long countForAdmin(@Param("workspaceId") @Nullable Long workspaceId, @Param("f") ConfigAuditFilter filter);
 
+    /** The trail of one workspace. The append-only trigger permits it only for a suspended personal space. */
+    @Modifying
+    @Query(value = "DELETE FROM config_audit_event WHERE workspace_id = :workspaceId", nativeQuery = true)
+    int deleteByWorkspaceId(@Param("workspaceId") long workspaceId);
+
     /**
      * Retention sweep.
      *
@@ -98,11 +103,6 @@ public interface ConfigAuditEventRepository extends JpaRepository<ConfigAuditEve
      * RAISE aborts the whole statement, and <em>no</em> rows age out that night — retention failing
      * silently, in the direction that over-retains personal data.
      */
-    /** The trail of one workspace. The append-only trigger permits it only for a suspended personal space. */
-    @Modifying
-    @Query(value = "DELETE FROM config_audit_event WHERE workspace_id = :workspaceId", nativeQuery = true)
-    int deleteByWorkspaceId(@Param("workspaceId") long workspaceId);
-
     @WorkspaceAgnostic("Retention ages out rows across every workspace; there is no single tenant to scope it to")
     @Modifying
     @Query(

@@ -45,9 +45,7 @@ public class WorkspaceLifecycleService {
 
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
 
-    private final WorkspaceSlugReservationRepository slugReservations;
-
-    private final WorkspaceNamespaceReservation namespaceReservation;
+    private final WorkspaceSlugService slugs;
 
     private final List<WorkspacePurgeGuard> purgeGuards;
     private final List<WorkspacePurgeContributor> purgeContributors;
@@ -65,8 +63,7 @@ public class WorkspaceLifecycleService {
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
-            WorkspaceSlugReservationRepository slugReservations,
-            WorkspaceNamespaceReservation namespaceReservation,
+            WorkspaceSlugService slugs,
             List<WorkspacePurgeGuard> purgeGuards,
             List<WorkspacePurgeContributor> purgeContributors,
             List<WorkspaceResumeGuard> resumeGuards,
@@ -81,8 +78,7 @@ public class WorkspaceLifecycleService {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
-        this.slugReservations = slugReservations;
-        this.namespaceReservation = namespaceReservation;
+        this.slugs = slugs;
         this.purgeGuards = purgeGuards;
         this.purgeContributors = purgeContributors;
         this.resumeGuards = resumeGuards;
@@ -256,8 +252,7 @@ public class WorkspaceLifecycleService {
         // Its trail would hold the space's row: config_audit_event's workspace key has no delete action.
         configAudit.erasePersonalSpaceTrail(space.getId());
         workspaceRepository.deletePersonalSpace(space.getId());
-        slugReservations.release(space.getSlug());
-        slugReservations.reserve(namespaceReservation.slugToken(space.getSlug()));
+        slugs.retire(space.getSlug());
     }
 
     /**
