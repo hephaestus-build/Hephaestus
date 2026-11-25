@@ -80,9 +80,17 @@ public class WorkspaceSlugService {
     public boolean isAvailable(String slug) {
         return WorkspaceSlugValidator.isAssignable(slug)
                 && !workspaceRepository.existsByWorkspaceSlug(slug)
-                && !reservations.existsById(slug)
-                && !reservations.existsById(erasedNamespaces.slugToken(slug))
+                && !isReserved(slug)
                 && !workspaceSlugHistoryRepository.existsByOldSlug(slug);
+    }
+
+    /**
+     * Whether a slug of either kind is reserved: as itself, or as the keyed token that an erased namespace or an ended
+     * personal space keeps instead. The database cannot check the token, whose key it never holds, so every creator
+     * of a slug asks this.
+     */
+    public boolean isReserved(String slug) {
+        return reservations.existsById(slug) || reservations.existsById(erasedNamespaces.slugToken(slug));
     }
 
     /** The slug that a name normalizes to, before a suffix that avoids a collision. */

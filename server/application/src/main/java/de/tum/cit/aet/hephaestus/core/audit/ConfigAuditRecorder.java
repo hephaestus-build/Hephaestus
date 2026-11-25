@@ -54,6 +54,12 @@ class ConfigAuditRecorder implements ConfigAuditPort {
                 ConfigAuditSnapshotMapper.toJson(after)));
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void erasePersonalSpaceTrail(long workspaceId) {
+        repository.deleteByWorkspaceId(workspaceId);
+    }
+
     /**
      * Fail fast unless a real, writable transaction is in progress.
      *

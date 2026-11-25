@@ -261,6 +261,32 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxesOf(subject)).isOne();
     }
 
+    /**
+     * A workspace suspended after the pass read its runs, as an erasure suspends a personal space, gets no sandbox. The
+     * pass skips its run and goes on to the next workspace's, and counts no failure.
+     */
+    @Test
+    void shouldSkipARunWhoseWorkspaceWasSuspendedAfterThePassReadItAndServeTheNext() {
+        long suspended = workspace;
+        long active = workspaces
+                .save(TestEntities.activeWorkspace("dispatch-" + UUID.randomUUID()))
+                .getId();
+        String skipped = queue(suspended);
+        String served = queue(active);
+        // The pass asks for admission after it read the page and right before it requests the sandbox.
+        RunAdmission suspendOnRead = kinds -> due -> {
+            if (due.run().workspaceId() == suspended)
+                jdbc.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", suspended);
+            return true;
+        };
+
+        dispatcher(5, suspendOnRead).dispatch();
+
+        assertThat(sandboxesOf(skipped)).isZero();
+        assertThat(sandboxesOf(served)).isOne();
+        assertThat(meters.counter("agent.sandbox.dispatch.failure").count()).isZero();
+    }
+
     @Test
     void shouldCountAFailedPassAndRequestTheSandboxAtTheNextOne() {
         String subject = queue();

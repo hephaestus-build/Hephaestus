@@ -129,8 +129,10 @@ public class AgentSandboxReaper {
     }
 
     /**
-     * A claim that no row names: its row was deleted with its workspace. A claim is created only after its row
-     * commits, so a claim that is being created always has its row. The rows are read after {@code names} was listed.
+     * A claim that no row names: its row was deleted with its workspace, or an erasure took the row back while the
+     * claim was being created ({@link AgentSandboxes#ensure}). Such a claim's token names no sandbox. A claim is
+     * created only after its row commits. The rows are read after {@code names} was listed, so a claim whose row is
+     * still being committed is not taken for an orphan.
      */
     private void deleteOrphans(List<String> names) {
         if (names.isEmpty()) return;
