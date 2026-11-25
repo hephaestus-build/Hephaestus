@@ -1082,6 +1082,23 @@ A migration with a Java, build or configuration change keeps Unit and Architectu
 
 The migration-specific integration classes are in the numbered shards, which every server pull request runs.
 
+#### What the drills read
+
+A PR that is not a draft also runs the PostgreSQL drills when it changes what they read.
+The `postgres-drill` path filter lists these files:
+
+- `docker/postgres/**` and `deploy/postgresql/**`
+- the chart's role setup and restore lockdown under `deploy/chart/hephaestus/files/`
+- the two drill scripts and every library they import
+- the `postgres-image` action
+
+The chart's templates and values do not reach the drills. The cluster legs test them.
+
+Before this filter, the drills first ran on such a change in the merge group.
+In the 7 days to 2026-11-25, 5 of 266 new PRs changed these files.
+Three of them ran the drills anyway for a migration change.
+The drills take a median of 4 runner minutes.
+
 ### Release checks on the change
 
 Three checks guard what a release ships: the chart upgrade, the release evidence and the sandbox qualification.

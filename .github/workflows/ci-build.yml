@@ -21,6 +21,10 @@ on:
         description: "Whether the diff changes migrations, which also select database tests and drills on a PR"
         required: true
         type: string
+      drill_inputs_changed:
+        description: "Whether a pull request that is not a draft changes what the PostgreSQL drills read"
+        required: true
+        type: string
       queue_tier:
         description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
         required: true
@@ -256,7 +260,7 @@ jobs:
 
   postgres-drill:
     name: PostgreSQL drills
-    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
+    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true' || inputs.drill_inputs_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
