@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -101,6 +102,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.LongStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -938,7 +940,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var pool = new LlmCallPool();
         pool.setSlug("queued-claim-" + UUID.randomUUID());
         pool.setDisplayName("Queued claims");
-        pool.setMaxConcurrentCalls(2);
+        // Eight calls, two of them the interactive reserve: measurements may hold six, one per practice session.
+        pool.setMaxConcurrentCalls(8);
         pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
         var selectedModel = Objects.requireNonNull(selected.getInstanceModel());
         jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", pool.getId(), selectedModel.getId());
@@ -973,6 +976,26 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         running.setStartedAt(started);
         running.setCallPoolId(pool.poolId());
         return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, running));
+    }
+
+    /** A running measurement of {@code practices} practices, which the pool admitted {@code started}. */
+    private ReviewJob runningMeasurement(PoolScenario pool, ReviewJob like, Instant started, int practices) {
+        var running = runningMeasurement(pool, like, started);
+        withPractices(running, practices);
+        return running;
+    }
+
+    private void withPractices(ReviewJob job, int practices) {
+        var input = new ReviewJobInput(
+                1,
+                LongStream.rangeClosed(1, practices)
+                        .mapToObj(practice -> new ReviewAssignmentId(job.getReviewId(), practice, 1))
+                        .toList());
+        transactions.executeWithoutResult(status -> {
+            var stored = jobs.findById(job.getId()).orElseThrow();
+            stored.setInput(input);
+            jobs.saveAndFlush(stored);
+        });
     }
 
     /** A batch call of {@code job} that waits for the pool since {@code waited} ago. */
@@ -1036,6 +1059,84 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)));
 
         assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldHoldAReviewWhosePracticeSessionsDoNotFitThePoolBesideTheRunningMeasurement() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        // Six practice sessions fill the six calls that measurements may hold, though no call waits yet.
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)), 6);
+
+        assertThat(claimLeased(job, pool.claims())).isEmpty();
+        assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+    }
+
+    @Test
+    void shouldHoldInTheDispatchPassAReviewWhosePracticesDoNotFitBesideTheRunningMeasurement() {
+        var pool = poolScenario();
+        var narrow = queued(pool.selected());
+        var wide = queued(pool.selected());
+        withPractices(wide, 6);
+        runningMeasurement(pool, narrow, Instant.now().minus(Duration.ofMinutes(2)), 1);
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+
+        assertThat(new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
+                        .pass(reviews)
+                        .admits(due(wide)))
+                .as("one running session and six more exceed the six calls of measurements")
+                .isFalse();
+        assertThat(new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
+                        .pass(reviews)
+                        .admits(due(narrow)))
+                .as("one running session and one more fit")
+                .isTrue();
+    }
+
+    @Test
+    void shouldCountTheRoomOfThePoolsLearnedLimitWhenItFellBelowTheConfiguredOne() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)), 2);
+        // The provider made the pool learn 3 calls: one is the interactive reserve, so measurements hold two.
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=3 WHERE id=?", pool.poolId());
+
+        assertThat(claimLeased(job, pool.claims()))
+                .as("two running sessions fill the learned room, though the configured eight calls had room")
+                .isEmpty();
+
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
+        jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldLetNoNarrowerReviewPassAWideReviewThatThePoolHolds() {
+        var pool = poolScenario();
+        var wide = queued(pool.selected());
+        withPractices(wide, 6);
+        var narrow = queued(pool.selected());
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+        var admission = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry());
+        var running = runningMeasurement(pool, narrow, Instant.now().minus(Duration.ofMinutes(2)), 1);
+
+        var pass = admission.pass(reviews);
+        assertThat(pass.admits(due(wide)))
+                .as("one running session and six more exceed the room")
+                .isFalse();
+        assertThat(pass.admits(due(narrow)))
+                .as("a narrower review behind it waits too, so the wide one keeps its place")
+                .isFalse();
+
+        // The running review ends: an idle pool takes the wide review, however wide it is.
+        transactions.executeWithoutResult(status -> {
+            jdbc.update(
+                    "UPDATE agent_run SET state='ENDED', ended_at=now(), leased_until=NULL, stop_reason='COMPLETED'"
+                            + " WHERE id=?",
+                    running.getRunId());
+            jdbc.update("UPDATE review_job SET status='COMPLETED', completed_at=now() WHERE id=?", running.getId());
+        });
+        assertThat(admission.pass(reviews).admits(due(wide))).isTrue();
     }
 
     @Test

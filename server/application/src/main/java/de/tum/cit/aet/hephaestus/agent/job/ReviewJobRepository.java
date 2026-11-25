@@ -141,20 +141,45 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
 
-    /** How many measurements a model pool admitted that still run, in every workspace that shares it, and the newest start. */
+    /**
+     * The practices of a job: each one is a session of the measurement with one model call in flight. A historical job
+     * with no recorded assignments counts as one.
+     */
+    String PRACTICES = """
+        CASE WHEN jsonb_typeof(j.input->'assignments')='array'
+             THEN GREATEST(1, jsonb_array_length(j.input->'assignments')) ELSE 1 END""";
+
+    /**
+     * How many measurements a model pool admitted that still run, in every workspace that shares it, their practices,
+     * the newest start, and the pool's limits.
+     */
     interface PoolLoad {
         long getRunning();
 
+        long getPractices();
+
         @Nullable
         Instant getNewestStart();
+
+        /** Null only for a pool that is gone. */
+        @Nullable
+        Integer getLearnedLimit();
+
+        @Nullable
+        Integer getMaxConcurrentCalls();
     }
 
     @WorkspaceAgnostic("A model pool is shared by the workspaces whose models it serves; the load names no workspace")
-    @Query(value = """
-        SELECT count(*) AS running, max(j.started_at) AS "newestStart" FROM review_job j
+    @Query(
+            value = "SELECT count(*) AS running, COALESCE(sum(" + PRACTICES + "), 0) AS practices," + """
+         max(j.started_at) AS "newestStart",
+          (SELECT p.learned_limit FROM llm_call_pool p WHERE p.id=:poolId) AS "learnedLimit",
+          (SELECT p.max_concurrent_calls FROM llm_call_pool p WHERE p.id=:poolId) AS "maxConcurrentCalls"
+        FROM review_job j
         JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
         WHERE j.call_pool_id=:poolId AND j.status='RUNNING' AND r.kind='REVIEW' AND r.state='LEASED'
-        """, nativeQuery = true)
+        """,
+            nativeQuery = true)
     PoolLoad poolLoad(@Param("poolId") long poolId);
 
     /**
@@ -178,10 +203,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
         @Nullable
         Long getWorkspaceId();
+
+        int getPractices();
     }
 
-    String QUEUED_MODEL = """
-        SELECT j.run_id AS "runId", (j.config_snapshot->>'schemaVersion')::int AS "schemaVersion",
+    String QUEUED_MODEL = "SELECT " + PRACTICES + " AS practices," + """
+               j.run_id AS "runId", (j.config_snapshot->>'schemaVersion')::int AS "schemaVersion",
                j.config_snapshot->'model'->>'connectionScope' AS "connectionScope",
                (j.config_snapshot->'model'->>'connectionId')::bigint AS "connectionId",
                (j.config_snapshot->'model'->>'modelId')::bigint AS "modelId",

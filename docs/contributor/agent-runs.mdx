@@ -328,7 +328,10 @@ The parent review and its job start in one transaction after those checks pass.
 A model pool takes another measuring review only when it can serve it:
 
 - A pool with no running measurement always takes one, so a review can always start.
-- Otherwise it takes the next one only while no measuring call of the pool has waited longer than `hephaestus.agent.capacity.permit-aging`, and only once its newest measurement has run that long.
+- Otherwise it takes the next one only while the practices of its running measurements and of the next one fit the calls that measurements may hold: the pool's limit less its interactive reserve.
+  Each practice is a session with one model call in flight, so a review of six practices takes six of those calls, not one.
+  Reviews admitted past that room slow down together, and each one reaches its work deadline with no practice finished.
+- It also takes the next one only while no measuring call of the pool has waited longer than `hephaestus.agent.capacity.permit-aging`, and only once its newest measurement has run that long.
   Thus, a pool that has just admitted a review shows its load before it admits another.
 
 The sandbox dispatch applies this rule as it walks the due runs in the claim order, and it admits at most one review for each pool in a pass.
