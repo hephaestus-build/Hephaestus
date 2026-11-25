@@ -77,6 +77,19 @@ class ClientInputsTest {
     }
 
     @Test
+    void shouldReportSuccessWhenTheBatchAfterTheBudgetDrainsTheRest() {
+        var receipts = mock(ClientInputRepository.class);
+        var metrics = mock(PrivacyJobMetrics.class);
+        when(receipts.prune()).thenReturn(1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 300);
+
+        inputs(receipts, metrics).prune();
+
+        verify(receipts, times(13)).prune();
+        verify(metrics).record(Job.CLIENT_INPUT_RETENTION, Outcome.SUCCESS);
+        verify(metrics).recordAffected(Job.CLIENT_INPUT_RETENTION, 12300);
+    }
+
+    @Test
     void shouldReportWorkLeftBehindWhenReceiptsRemainAfterTheBudget() {
         var receipts = mock(ClientInputRepository.class);
         var metrics = mock(PrivacyJobMetrics.class);

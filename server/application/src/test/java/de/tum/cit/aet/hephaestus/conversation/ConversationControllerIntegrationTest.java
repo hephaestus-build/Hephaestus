@@ -330,7 +330,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                     .isEqualTo(409)
                     .expectBody()
                     .jsonPath("$.type")
-                    .isEqualTo(ProblemType.IDEMPOTENCY_KEY_IN_FLIGHT.uri().toString());
+                    .isEqualTo(ProblemType.IDEMPOTENCY_KEY_IN_FLIGHT.uri().toString())
+                    .jsonPath("$.label.code")
+                    .isEqualTo("problem.idempotency-key-in-flight");
         });
         ask(key, "A message", null).expectStatus().isOk();
         get("/entries").jsonPath("$.content.length()").isEqualTo(1);

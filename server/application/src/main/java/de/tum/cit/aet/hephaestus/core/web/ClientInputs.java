@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.database.ClientInputRepository;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
-import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.exception.MentoringProblems;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -34,8 +34,8 @@ import tools.jackson.databind.ObjectMapper;
 public class ClientInputs {
     public static final String HEADER = "Idempotency-Key";
     private static final int PRUNE_BATCH_SIZE = 1000;
-    // A burst drains in one run instead of reporting each full batch as work left behind. One more call after a full
-    // last batch shows whether receipts remain, so an exactly drained backlog is no work left behind.
+    // A burst drains in one run instead of reporting each full batch as work left behind. After a full last batch, one
+    // more batch runs: only when it is full too are receipts left behind. A run removes up to 13 batches.
     private static final int PRUNE_BATCHES_PER_RUN = 12;
 
     private static final Duration KEY_AGE = Duration.ofDays(3);
@@ -58,12 +58,7 @@ public class ClientInputs {
         long account = owners.fromPrincipal(person);
         byte[] fingerprint = fingerprint(input);
         if (!receipts.tryLock(workspace, account, key)) {
-            var status = HttpStatus.CONFLICT;
-            throw new ErrorResponseException(
-                    status,
-                    ProblemType.IDEMPOTENCY_KEY_IN_FLIGHT.problem(
-                            status, "Still sending", "Wait a moment, then try again."),
-                    null);
+            throw new ErrorResponseException(HttpStatus.CONFLICT, MentoringProblems.idempotencyKeyInFlight(), null);
         }
         var stored = receipts.find(workspace, account, key, fingerprint);
         if (stored.isPresent()) {
@@ -92,7 +87,7 @@ public class ClientInputs {
             }
             int left = batch == PRUNE_BATCH_SIZE ? receipts.prune() : 0;
             removed += left;
-            metrics.record(Job.CLIENT_INPUT_RETENTION, left > 0 ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            metrics.record(Job.CLIENT_INPUT_RETENTION, left == PRUNE_BATCH_SIZE ? Outcome.INCOMPLETE : Outcome.SUCCESS);
             metrics.recordAffected(Job.CLIENT_INPUT_RETENTION, removed);
         } catch (RuntimeException exception) {
             metrics.recordAffected(Job.CLIENT_INPUT_RETENTION, removed);

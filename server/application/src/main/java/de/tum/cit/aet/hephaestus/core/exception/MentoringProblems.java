@@ -24,6 +24,10 @@ public final class MentoringProblems {
         return problem(ProblemType.NO_MODEL, HttpStatus.CONFLICT, Map.of());
     }
 
+    public static ProblemDetail idempotencyKeyInFlight() {
+        return problem(ProblemType.IDEMPOTENCY_KEY_IN_FLIGHT, HttpStatus.CONFLICT, Map.of());
+    }
+
     public static ProblemDetail checkInInvalid(String field) {
         return problem(ProblemType.CHECK_IN_INVALID, HttpStatus.UNPROCESSABLE_CONTENT, Map.of("field", field));
     }
