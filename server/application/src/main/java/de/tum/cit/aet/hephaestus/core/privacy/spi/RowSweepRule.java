@@ -22,7 +22,10 @@ public enum RowSweepRule {
      * KR-08: moves an unclaimed account's conversations to the account that claimed it. Reads {@code account},
      * {@code agent_run}; changes {@code conversation_entry}, {@code conversation_turn}, {@code conversation}.
      */
-    ACCOUNT_ABSORB(true);
+    ACCOUNT_ABSORB(true),
+
+    /** CV-05: deletes create receipts older than eight days, at most 1000 a call. Changes {@code client_input}. */
+    CLIENT_INPUT_EXPIRY(false);
 
     private final boolean requiresLifecycleAdmission;
 

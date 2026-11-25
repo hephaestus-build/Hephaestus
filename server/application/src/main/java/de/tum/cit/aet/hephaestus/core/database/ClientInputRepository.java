@@ -55,7 +55,8 @@ public class ClientInputRepository {
     }
 
     public int prune() {
-        return jdbc.sql("SELECT public.prune_client_inputs()")
+        return jdbc.sql("SELECT public.person_row_sweep('CLIENT_INPUT_EXPIRY', CAST(NULL AS bigint),"
+                        + " CAST(NULL AS bigint), pg_catalog.now())")
                 .query(Integer.class)
                 .single();
     }

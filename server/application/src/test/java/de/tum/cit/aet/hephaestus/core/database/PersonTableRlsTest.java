@@ -130,7 +130,10 @@ class PersonTableRlsTest extends BaseIntegrationTest {
         insertReceipt(owner, workspace, first, retained, 4);
         insertReceipt(owner, workspace, second, fresh, 0);
 
-        assertThat(jdbc.queryForObject("SELECT public.prune_client_inputs()", Integer.class))
+        assertThat(jdbc.queryForObject(
+                        "SELECT public.person_row_sweep('CLIENT_INPUT_EXPIRY', CAST(NULL AS bigint), CAST(NULL AS bigint),"
+                                + " now())",
+                        Integer.class))
                 .isPositive();
         assertThat(owner.queryForList(
                         "SELECT idem_key FROM client_input WHERE workspace_id = ?", UUID.class, workspace))

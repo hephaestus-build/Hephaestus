@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795480139787-1" author="hephaestus">
+        <comment>Keep the create fingerprint and result ids after a retry or after the result is erased.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE client_input (
+    -- A plain id: core sits below the workspace module. The owner policy refuses a purged workspace, and rows expire.
+    workspace_id bigint NOT NULL,
+    account_id bigint NOT NULL CONSTRAINT sfk_client_input_account REFERENCES account(id) ON DELETE CASCADE,
+    idem_key uuid NOT NULL,
+    fingerprint bytea NOT NULL CHECK (octet_length(fingerprint) = 32),
+    result_id uuid NOT NULL,
+    related_id uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, account_id, idem_key)
+);
+CREATE INDEX idx_client_input_account ON client_input(account_id);
+CREATE INDEX idx_client_input_created ON client_input(created_at);
+ALTER TABLE public.client_input ENABLE ROW LEVEL SECURITY;
+CREATE POLICY client_input_owner ON public.client_input TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account() AND EXISTS (
+        SELECT FROM public.workspace
+        WHERE id = client_input.workspace_id AND status <> 'PURGED'
+        FOR SHARE
+    ));
+
+CREATE FUNCTION public.purge_workspace_client_inputs() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    BEGIN
+        DELETE FROM public.client_input WHERE workspace_id = NEW.id;
+        RETURN NEW;
+    END
+    $$;
+ALTER FUNCTION public.purge_workspace_client_inputs() OWNER TO hephaestus_owner;
+REVOKE ALL ON FUNCTION public.purge_workspace_client_inputs() FROM PUBLIC, hephaestus_app;
+CREATE TRIGGER workspace_client_input_purge AFTER UPDATE OF status ON public.workspace
+    FOR EACH ROW WHEN (OLD.status <> 'PURGED' AND NEW.status = 'PURGED')
+    EXECUTE FUNCTION public.purge_workspace_client_inputs();
+        ]]></sql>
+        <rollback>
+            <sql>DROP TRIGGER workspace_client_input_purge ON public.workspace</sql>
+            <sql>DROP FUNCTION public.purge_workspace_client_inputs()</sql>
+            <dropTable tableName="client_input"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795480139787-2" author="hephaestus">
+        <comment>The owner function deletes expired create receipts of every owner, so no other function crosses owners for them.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
+    RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    changed integer := 0;
+    counted integer;
+    clash record;
+    absorbed record;
+BEGIN
+    IF rule = 'WORKSPACE_PURGE' THEN
+        -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
+        IF subject_id IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation_turn WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPIRED_EXPORTS' THEN
+        -- cutoff is now: a ready export past its expiry loses its payload. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        UPDATE public.account_export SET status = 'EXPIRED', payload = NULL
+        WHERE status = 'READY' AND expires_at < LEAST(cutoff, clock_timestamp());
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSIF rule = 'ACCOUNT_ABSORB' THEN
+        -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
+        -- conversation in a workspace, the absorbed main's entries follow the claiming main's entries, its turns and
+        -- threads move, and it is deleted. Every other conversation of the absorbed account changes owner.
+        IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
+            RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
+        -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
+        PERFORM FROM public.account a WHERE a.id IN (subject_id, other_id) ORDER BY a.id FOR UPDATE;
+        IF NOT EXISTS (SELECT FROM public.account a WHERE a.id = subject_id AND a.status = 'UNCLAIMED')
+           OR NOT EXISTS (SELECT FROM public.account a WHERE a.id = other_id AND a.status IN ('ACTIVE', 'BLOCKED')) THEN
+            RAISE EXCEPTION 'person_row_sweep: only an unclaimed account is absorbed, by an active or blocked account'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        FOR clash IN
+            SELECT a.workspace_id, a.id AS absorbed_id, k.id AS kept_id FROM public.conversation a
+            JOIN public.conversation k ON k.workspace_id = a.workspace_id
+                AND k.account_id = other_id AND k.parent_conversation_id IS NULL
+            WHERE a.account_id = subject_id AND a.parent_conversation_id IS NULL
+            ORDER BY a.id
+            FOR UPDATE OF a, k
+        LOOP
+            -- The caller prepares each clash first: it returns a running turn of the absorbed main to the queue, moves
+            -- the absorbed main's queued runs to the claiming main, and erases the absorbed main's summaries, which
+            -- summarize a conversation that no longer exists alone.
+            IF EXISTS (SELECT FROM public.conversation_turn t
+                       WHERE t.conversation_id = clash.absorbed_id AND t.status = 'RUNNING')
+               OR EXISTS (SELECT FROM public.agent_run r
+                          WHERE r.workspace_id = clash.workspace_id AND r.state = 'QUEUED'
+                            AND r.concurrency_key = 'conversation:' || clash.absorbed_id)
+               OR EXISTS (SELECT FROM public.conversation_entry e
+                          WHERE e.conversation_id = clash.absorbed_id AND e.kind = 'SUMMARY' AND e.redacted_at IS NULL) THEN
+                RAISE EXCEPTION 'person_row_sweep: the absorbed conversation % is not prepared', clash.absorbed_id
+                    USING ERRCODE = 'object_not_in_prerequisite_state';
+            END IF;
+            UPDATE public.conversation_entry e SET conversation_id = clash.kept_id, account_id = other_id,
+                seq = top.seq + moved.position
+            FROM (SELECT x.id, row_number() OVER (ORDER BY x.seq) AS position
+                  FROM public.conversation_entry x WHERE x.conversation_id = clash.absorbed_id) moved,
+                 (SELECT COALESCE(max(y.seq), 0) AS seq FROM public.conversation_entry y
+                  WHERE y.conversation_id = clash.kept_id) top
+            WHERE e.id = moved.id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation_turn SET conversation_id = clash.kept_id, account_id = other_id
+            WHERE conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation SET parent_conversation_id = clash.kept_id
+            WHERE parent_conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            SELECT c.slack_team_id, c.slack_user_id, c.slack_channel_id, c.last_activity_at, c.last_read_at
+            INTO absorbed FROM public.conversation c WHERE c.id = clash.absorbed_id;
+            DELETE FROM public.conversation WHERE id = clash.absorbed_id;
+            -- The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
+            UPDATE public.conversation SET
+                slack_user_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_user_id ELSE slack_user_id END,
+                slack_channel_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_channel_id ELSE slack_channel_id END,
+                slack_team_id = COALESCE(slack_team_id, absorbed.slack_team_id),
+                last_activity_at = GREATEST(last_activity_at, absorbed.last_activity_at),
+                last_read_at = GREATEST(last_read_at, absorbed.last_read_at)
+            WHERE id = clash.kept_id;
+        END LOOP;
+        UPDATE public.conversation SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'CLIENT_INPUT_EXPIRY' THEN
+        -- cutoff is now: create receipts older than eight days go, at most 1000 a call. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: CLIENT_INPUT_EXPIRY needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        DELETE FROM public.client_input WHERE ctid IN (
+            SELECT ctid FROM public.client_input
+            WHERE created_at < LEAST(cutoff, clock_timestamp()) - interval '8 days'
+            ORDER BY created_at LIMIT 1000
+        );
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSE
+        RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN changed;
+END
+$$
+        ]]></sql>
+        <rollback changeSetId="1795521600000-2" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261124152116-conversation-row-owner.xml"/>
+    </changeSet>
+</databaseChangeLog>

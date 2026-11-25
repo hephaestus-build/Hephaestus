@@ -865,20 +865,20 @@ class OwnerFunctionsDatabaseTest {
     }
 
     /**
-     * Every registered rule reaches its own branch. A purge requires admission, an expiry before any export changes
-     * no row, and an account cannot be absorbed into itself.
+     * Every registered rule reaches its own branch. A purge requires admission, an expiry before any export or create
+     * receipt changes no row, and an account cannot be absorbed into itself.
      */
     @ParameterizedTest
     @EnumSource(RowSweepRule.class)
     void shouldAnswerEveryRegisteredRuleThroughItsOwnBranch(RowSweepRule rule) throws SQLException {
         var arguments = switch (rule) {
             case WORKSPACE_PURGE -> new @Nullable Object[] {rule.name(), -1L, null, null};
-            case EXPIRED_EXPORTS -> new @Nullable Object[] {rule.name(), null, null, "-infinity"};
+            case EXPIRED_EXPORTS, CLIENT_INPUT_EXPIRY -> new @Nullable Object[] {rule.name(), null, null, "-infinity"};
             case ACCOUNT_ABSORB -> new @Nullable Object[] {rule.name(), 11L, 11L, null};
         };
         var refusal = switch (rule) {
             case WORKSPACE_PURGE -> Optional.of("lifecycle admission required");
-            case EXPIRED_EXPORTS -> Optional.<String>empty();
+            case EXPIRED_EXPORTS, CLIENT_INPUT_EXPIRY -> Optional.<String>empty();
             case ACCOUNT_ABSORB -> Optional.of("ACCOUNT_ABSORB needs two different accounts");
         };
         String call = "SELECT public.person_row_sweep(?, ?::bigint, ?::bigint, ?::timestamptz)";
