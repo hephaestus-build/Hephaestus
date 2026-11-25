@@ -1054,6 +1054,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
             when(permit.revoked()).thenReturn(Mono.never());
             // Both checks before the ledger pass; the review subject turns AI off while the ledger waits.
             when(requestPolicy.allows(any())).thenReturn(true, true, false);
+            // A call that went out anyway gets an answer, so the test fails instead of waiting.
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"sent\"}}]}\n\n")
+                    .build());
 
             var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
 
