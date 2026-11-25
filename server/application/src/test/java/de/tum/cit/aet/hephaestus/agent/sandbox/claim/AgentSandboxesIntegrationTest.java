@@ -249,6 +249,26 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(activeAfter).isFalse();
     }
 
+    /**
+     * An erasure that takes a sandbox back while its claim is being created finds no claim to delete. The request then
+     * finds its row gone and deletes the claim it created.
+     */
+    @Test
+    void shouldDeleteAClaimWhoseSandboxWasTakenBackWhileTheClaimWasCreated() {
+        String subject = "conversation:" + UUID.randomUUID();
+        claims.beforeCreate = () -> sandboxes.release(workspace, subject);
+
+        assertThatThrownBy(() -> ensure(subject, AgentSandboxKind.CONVERSATION))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("taken back as its claim was created");
+
+        assertThat(claims.creates).hasSize(1);
+        assertThat(claims.created).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE workspace_id = ?", Long.class, workspace))
+                .isZero();
+    }
+
     private void awaitWorkspaceLockWaiter(Future<?> watched, String statement) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < deadline) {

@@ -18,8 +18,12 @@ final class FakeSandboxClaims implements SandboxClaims {
 
     volatile boolean failPodReads;
 
+    /** Runs as a create starts, before the claim exists. */
+    volatile Runnable beforeCreate = () -> {};
+
     @Override
     public void create(Claim claim) {
+        beforeCreate.run();
         if (failCreates) throw new IllegalStateException("the API refused the claim");
         creates.add(claim.name());
         created.put(claim.name(), claim);

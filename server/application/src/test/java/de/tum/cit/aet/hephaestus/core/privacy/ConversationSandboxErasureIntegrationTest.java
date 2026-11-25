@@ -30,13 +30,13 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.PersonalSpaceFixtures;
-import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspacePersonDataCatalog;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -249,7 +249,8 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 otherWorkspace.getId(), "conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
         Path copiedPerson = claims.copy(copy.claimName());
         Path otherCopy = claims.copy(other.claimName());
-        var service = service(SandboxOwnerFixtures.revocations(beans, owner), personalSpaceStore());
+        // Every store of the server, so the account step's own teardown of the space runs too.
+        var service = productionService(SandboxOwnerFixtures.revocations(beans, owner));
         var request = Objects.requireNonNull(
                         transactions.execute(status -> service.preview(administratorId, personId, List.of())))
                 .request();
@@ -265,12 +266,16 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(jdbc.queryForObject("SELECT status FROM workspace WHERE id=?", String.class, spaceId))
                 .as("the space is closed to requests and run claims, and kept")
                 .isEqualTo("SUSPENDED");
+        assertThat(jdbc.queryForObject("SELECT status FROM account WHERE id=?", String.class, personId))
+                .isEqualTo("DELETING");
         claims.failDelete = false;
         transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
 
         service.run(request.getId());
 
         assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject("SELECT status FROM account WHERE id=?", String.class, personId))
+                .isEqualTo("DELETED");
         assertThat(copiedPerson).doesNotExist();
         assertThat(claims.names()).doesNotContain(copy.claimName());
         for (String table : List.of("workspace", "agent_sandbox", "conversation", "agent_run"))
@@ -346,15 +351,27 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .isFalse();
     }
 
-    private PersonDataContributor personalSpaceStore() {
-        return beans.getBean(WorkspacePersonDataCatalog.class).contributors().stream()
-                .filter(contributor -> contributor.store().equals("workspace"))
-                .findFirst()
-                .orElseThrow();
+    /** The server's person-data service, with the conversation stores on the given physical copy owner. */
+    private PersonDataService productionService(ConversationSandboxCopies copies) {
+        var catalogs = new ArrayList<PersonDataCatalog>(
+                beans.getBeansOfType(PersonDataCatalog.class).values());
+        catalogs.removeIf(ConversationPersonDataCatalog.class::isInstance);
+        catalogs.add(conversationCatalog(copies));
+        return new PersonDataService(
+                beans.getBean(PersonDataScopeResolver.class),
+                new PersonDataRegistry(catalogs),
+                beans.getBean(PersonDataRequestRepository.class),
+                beans.getBean(PersonDataErasureHold.class),
+                beans.getBean(IssuedJwtRepository.class),
+                beans.getBean(PlatformTransactionManager.class),
+                mapper,
+                jdbc,
+                beans.getBean(MeterRegistry.class),
+                beans.getBean(PrivacyJournal.class));
     }
 
-    private PersonDataService service(ConversationSandboxCopies copies, PersonDataContributor... others) {
-        var catalog = new ConversationPersonDataCatalog(
+    private ConversationPersonDataCatalog conversationCatalog(ConversationSandboxCopies copies) {
+        return new ConversationPersonDataCatalog(
                 beans.getBean(NamedParameterJdbcTemplate.class),
                 mapper,
                 beans.getBean(ConversationRedaction.class),
@@ -364,6 +381,10 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 beans.getBean(ConversationContextChanges.class),
                 copies,
                 beans.getBean(WorkspaceMemberships.class));
+    }
+
+    private PersonDataService service(ConversationSandboxCopies copies) {
+        var catalog = conversationCatalog(copies);
         var store = catalog.contributors().stream()
                 .filter(contributor -> contributor.store().equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .findFirst()
@@ -371,10 +392,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         return new PersonDataService(
                 new PersonDataScopeResolver(
                         beans.getBean(PersonIdentityResolver.class), List.of(), new OwnerScope(jdbc)),
-                new PersonDataRegistry(
-                        others.length == 0
-                                ? List.of(new ToolCopyStore(List.of(store)))
-                                : List.of(new ToolCopyStore(List.of(store)), new SpaceStore(List.of(others)))),
+                new PersonDataRegistry(List.of(new ToolCopyStore(List.of(store)))),
                 beans.getBean(PersonDataRequestRepository.class),
                 new PersonDataErasureHold(
                         beans.getBean(IdentityRestrictionService.class),
@@ -390,9 +408,6 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
 
     @PersonDataStores(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)
     private record ToolCopyStore(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
-
-    @PersonDataStores("workspace")
-    private record SpaceStore(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
 
     private static final class PhysicalClaims implements SandboxClaims {
         private final Path root;
