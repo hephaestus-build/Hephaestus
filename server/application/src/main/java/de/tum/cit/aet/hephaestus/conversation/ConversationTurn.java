@@ -84,6 +84,12 @@ public class ConversationTurn implements Persistable<UUID> {
     /** The cause of a turn whose context was erased while it ran. */
     static final String CONTEXT_CHANGED_CAUSE = "context_changed";
 
+    /**
+     * The cause of a turn that stopped because the developer deleted its question while it had not ended. A turn that the
+     * developer stopped records no cause, so an operator can tell the two apart.
+     */
+    static final String QUESTION_REMOVED_CAUSE = "question_removed";
+
     /** How the cause of a failure that a turn's sandbox reported starts; its reason and detail follow. */
     public static final String SANDBOX_REPORTED_CAUSE = "its conversation sandbox reported ";
 
@@ -292,6 +298,20 @@ public class ConversationTurn implements Persistable<UUID> {
             return false;
         }
         stop(now);
+        return true;
+    }
+
+    /**
+     * Stops a turn that has not ended, and records why for the operator. Clients read a cause only on a {@code FAILED}
+     * turn, so a stopped turn shows as stopped.
+     *
+     * @return whether the turn was active and is now {@code STOPPED}
+     */
+    boolean stopIfActive(Instant now, String cause) {
+        if (!stopIfActive(now)) {
+            return false;
+        }
+        this.failureCause = cause;
         return true;
     }
 

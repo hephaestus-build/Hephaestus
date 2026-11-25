@@ -372,6 +372,12 @@ An execution that made no model call adds no usage row.
 ## Turn stop reasons
 
 **Context erased** (`CONTEXT_ERASED`) is the stop reason of a turn whose readable context was erased during the attempt.
+A failed turn stores the cause `context_changed`, and a client reads it as `CONTEXT_ERASED`.
+A Slack erasure that stops a Slack turn stores `context_changed` too.
+
+**Question removed** (`question_removed`) is the stored cause of a turn that stopped because the developer deleted its question while it had not ended.
+The turn stays `STOPPED`, and a client reads no failure reason for it.
+A turn that the developer stopped stores no cause, so an operator can tell the two apart.
 See [conversation runtime](./unified-pi-runtime.mdx#context-of-a-turn).
 
 ## Mentoring terms (planned)

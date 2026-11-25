@@ -585,6 +585,8 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(question.getPayload()).isNull();
         assertThat(storedFor(running)).extracting(ConversationEntry::getId).containsExactly(question.getId());
         assertThat(stored(running).getStatus()).isEqualTo(ConversationTurn.Status.STOPPED);
+        // An operator tells this stop from the developer's own: the removal records its cause.
+        assertThat(stored(running).getFailureCause()).isEqualTo(ConversationTurn.QUESTION_REMOVED_CAUSE);
         assertThat(turns.isHeld(stored(running))).isFalse();
     }
 

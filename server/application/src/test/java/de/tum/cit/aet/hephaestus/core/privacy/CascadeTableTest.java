@@ -187,7 +187,7 @@ class CascadeTableTest extends BaseUnitTest {
                             LEDGER
                                     + "shouldEraseWhatAnEndingTurnStoresWhenTheDeveloperDeletesTheQuotedMessageMeanwhile",
                             ENTRIES
-                                    + "shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst"),
+                                    + "shouldStoreNoSearchResultOfARunningTurnWhenTheDeveloperDeletedTheQuotedMessageFirst"),
                     ""),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
@@ -306,11 +306,23 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.WITHDRAW,
                     List.of(
                             WITHDRAW_PROOF,
+                            SLACK + "shouldWithdrawTheReplyWhenItsQuestionIsRemovedAfterTheAdapterReadIt",
+                            SLACK + "shouldWithdrawTheReplyWhenAnEarlierMessageIsRemovedAfterTheTurnEnded",
+                            SLACK + "shouldHoldARemovalUntilTheAdmittedWriteBegan",
+                            "integration.slack.messaging.SlackMessageServiceTest"
+                                    + "#shouldSendNoAdmittedPostWhenItsAdmissionRefusesAfterTheCredentialIsResolved",
+                            "integration.slack.messaging.SlackMessageServiceTest"
+                                    + "#shouldNotWaitOutAThrottledAdmittedPostSoItsCallerAdmitsItAgain",
+                            "integration.slack.messaging.SlackMessageServiceTest"
+                                    + "#shouldSendNoAdmittedPostWhenItsHistoryIsRemovedWhileTheSdkLooksUpTheTeam",
+                            "integration.slack.messaging.SlackMessageServiceTest"
+                                    + "#shouldNotSendAnAdmittedPostAgainWhenTheHttpClientWouldFollowUpA503",
                             SLACK + "shouldFailUnsentFeedbackEvenWhenItsQuestionOrSlackDestinationIsGone",
                             SLACK + "shouldRemoveAnUnknownOutcomeWhenRedactionCommitsDuringItsSettlement"),
-                    "A post that ended with an unknown outcome goes in a transaction of its own, after the cause"
-                            + " commits. Gap, owned by #5147: a lane that read the question before the cause commits can"
-                            + " still write."),
+                    "The gateway admits a reply at its raw HTTP write, after the SDK's own calls, and sends it once: the admission rechecks the"
+                            + " history under the lock that a removal holds, and a 429 goes back to the outbox to be admitted"
+                            + " again. So a lane that read the reply before the removal commits sends nothing. A post that"
+                            + " ended with an unknown outcome goes in a transaction of its own, after the cause commits."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.SLACK_POST,

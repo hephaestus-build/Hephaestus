@@ -111,16 +111,23 @@ class SlackPostAdapter implements ActionAdapter {
                 + (answered && turn.firstAnswer()
                         ? " " + SlackConversationPosts.escape(SlackConversationPosts.aiLabel(workspaceName))
                         : "");
+        UUID marker = payload.entryId();
+        // The reply was read above; a removal may commit before its write. The gateway admits it right before its one
+        // provider request.
         return post(
                 attempt,
-                payload.entryId(),
                 new Post(
                         turn.channelId(),
                         turn.threadTs(),
                         blocks,
                         fallback,
                         SlackTs.ofInstant(turn.question().getCreatedAt()),
-                        null));
+                        null),
+                SlackConversationPosts.metadata(marker),
+                message -> SlackConversationPosts.isPostOf(message, marker),
+                false,
+                1,
+                new ReplyFence(turn, attempt));
     }
 
     /** A write that may have reached Slack is only read back, never posted a second time. */
@@ -131,7 +138,8 @@ class SlackPostAdapter implements ActionAdapter {
                 SlackConversationPosts.metadata(marker),
                 message -> SlackConversationPosts.isPostOf(message, marker),
                 false,
-                1);
+                1,
+                null);
     }
 
     ActionResult postNotice(ActionAttempt attempt, Post post) {
@@ -145,7 +153,35 @@ class SlackPostAdapter implements ActionAdapter {
                 SlackConversationPosts.noticeMetadata(marker),
                 message -> SlackConversationPosts.isNoticeOf(message, marker),
                 readBeforeWrite,
-                readbackPages);
+                readbackPages,
+                null);
+    }
+
+    /**
+     * The admission of a reply at the gateway's send boundary ({@link ConversationSlackMessages#admitReply}): after the
+     * credential is resolved, right before the provider request. The single Slack send fence; a further condition of a
+     * reply joins the admission there.
+     */
+    private final class ReplyFence {
+        private final SlackTurn turn;
+        private final ActionAttempt attempt;
+        private ConversationSlackMessages.ReplyAdmission decided = ConversationSlackMessages.ReplyAdmission.ABANDONED;
+
+        ReplyFence(SlackTurn turn, ActionAttempt attempt) {
+            this.turn = turn;
+            this.attempt = attempt;
+        }
+
+        boolean admit() {
+            decided = messages.admitReply(turn, attempt.fence()::beginWrite);
+            return decided == ConversationSlackMessages.ReplyAdmission.STARTED;
+        }
+
+        ActionResult refused() {
+            return decided == ConversationSlackMessages.ReplyAdmission.WITHDRAWN
+                    ? unavailable(attempt, ActionStopReason.WITHDRAWN)
+                    : new ActionResult.Abandoned();
+        }
     }
 
     private ActionResult post(
@@ -154,7 +190,8 @@ class SlackPostAdapter implements ActionAdapter {
             Message.Metadata metadata,
             Predicate<Message> matches,
             boolean readBeforeWrite,
-            int readbackPages) {
+            int readbackPages,
+            @Nullable ReplyFence reply) {
         var client = slack.getIfAvailable();
         long workspace = Objects.requireNonNull(attempt.workspaceId());
         if (client == null || !client.isConnected(workspace))
@@ -168,12 +205,20 @@ class SlackPostAdapter implements ActionAdapter {
             var found = readback(client, workspace, post, matches, readbackPages);
             if (found != null) return found;
         }
-        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+        // A notice starts its write under the action's lease; a reply's write starts at the gateway's admission.
+        if (reply == null && !attempt.fence().beginWrite()) return new ActionResult.Abandoned();
         try {
-            var posted = client.postMessage(
-                    workspace, post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata);
+            var posted = reply == null
+                    ? client.postMessage(
+                            workspace, post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata)
+                    : client.postAdmitted(
+                            workspace,
+                            new SlackMessageService.Outgoing(
+                                    post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata),
+                            reply::admit);
             return done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
         } catch (SlackSendException failed) {
+            if (reply != null && "not_admitted".equals(failed.slackError())) return reply.refused();
             if ("silent_mode_engaged".equals(failed.slackError()))
                 return new ActionResult.Cancelled(ActionStopReason.SILENCED);
             // A 429 proves no post was accepted; transport and invalid receipts prove no absence.
@@ -189,11 +234,8 @@ class SlackPostAdapter implements ActionAdapter {
     private @Nullable ActionResult readback(
             SlackMessageService client, long workspace, Post post, Predicate<Message> matches, int readbackPages) {
         try {
-            var found = readbackPages == 1
-                    ? client.readWorkspaceMessages(
-                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches)
-                    : client.readWorkspaceMessages(
-                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches, readbackPages);
+            var found = client.readWorkspaceMessages(
+                    workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches, readbackPages);
             if (!found.ts().isEmpty())
                 return done(new Receipt(post.channelId(), found.ts().getFirst(), post.recipient()));
             return found.more() ? new ActionResult.Reread(ConversationSlackReplies.REREAD) : null;

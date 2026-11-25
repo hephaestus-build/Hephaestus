@@ -18,9 +18,12 @@ class SlackWriteBoundaryArchTest extends HephaestusArchitectureTest {
         noClasses()
                 .that()
                 .areNotAssignableTo(ActionAdapter.class)
+                // The gateway's own overload delegates inside it; that is not a durable write path.
+                .and()
+                .areNotAssignableTo(SlackMessageService.class)
                 .should()
                 .callMethodWhere(target(owner(assignableTo(SlackMessageService.class)))
-                        .and(target(name("postMessage").or(name("joinPublicChannel")))))
+                        .and(target(name("postMessage").or(name("postAdmitted")).or(name("joinPublicChannel")))))
                 .because("durable Slack effects need the outbox's idempotency, fence and retry state")
                 .check(classes);
     }

@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,13 +74,16 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     private static final int QUEUE_CAPACITY = 256;
 
+    /** How long a stream's writer waits for Spring to install the response handler before it closes the stream. */
+    static final Duration INSTALL_WAIT = Duration.ofSeconds(10);
+
     private final ConversationLedgerNotifications notifications;
     private final ConversationTimeline timeline;
     private final AccountMembershipQuery memberships;
     private final OwnerScope owners;
     private final TransactionOperations transactions;
     private final ObjectMapper mapper;
-    private final Supplier<SseEmitter> emitters;
+    private final Supplier<ConversationEventEmitter> emitters;
     private final int queueCapacity;
 
     /** Each stream under its account, which owns the conversation. */
@@ -111,7 +116,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 readOnly(transactionManager),
                 mapper,
                 meters,
-                () -> new SseEmitter(TIMEOUT_MS),
+                () -> new ConversationEventEmitter(TIMEOUT_MS),
                 QUEUE_CAPACITY);
     }
 
@@ -123,7 +128,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
             TransactionOperations transactions,
             ObjectMapper mapper,
             MeterRegistry meters,
-            Supplier<SseEmitter> emitters,
+            Supplier<ConversationEventEmitter> emitters,
             int queueCapacity) {
         this.notifications = notifications;
         this.timeline = timeline;
@@ -155,6 +160,9 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     /** One server-sent event, already written. */
     private record Event(Set<ResponseBodyEmitter.DataWithMediaType> data) {}
 
+    /** An event in a stream's queue, with the stream's context count when its data was read. */
+    private record Queued(Event event, long context) {}
+
     /**
      * Opens a stream of the account's conversation in a workspace.
      *
@@ -165,7 +173,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         if (listening.compareAndSet(false, true)) {
             notifications.subscribe(this);
         }
-        SseEmitter emitter = emitters.get();
+        ConversationEventEmitter emitter = emitters.get();
         Stream stream = new Stream(workspaceId, accountId, emitter);
         emitter.onCompletion(() -> remove(stream));
         emitter.onTimeout(() -> close(stream));
@@ -193,9 +201,10 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     public void turnChanged(ConversationLedgerEvents.TurnChanged change) {
         long workspaceId = change.workspaceId();
         long accountId = change.accountId();
-        if (watches(workspaceId, accountId)) {
+        Map<Stream, Long> contexts = contexts(workspaceId, accountId);
+        if (!contexts.isEmpty()) {
             read(() -> owned(accountId, () -> timeline.liveTurn(workspaceId, accountId, change.turnId()))
-                    .ifPresent(turn -> fanOut(workspaceId, accountId, TURN, turn)));
+                    .ifPresent(turn -> fanOut(workspaceId, accountId, TURN, turn, contexts)));
         }
     }
 
@@ -203,28 +212,39 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     public void entryChanged(ConversationLedgerEvents.EntryChanged change) {
         long workspaceId = change.workspaceId();
         long accountId = change.accountId();
-        if (watches(workspaceId, accountId)) {
+        Map<Stream, Long> contexts = contexts(workspaceId, accountId);
+        if (!contexts.isEmpty()) {
             change.entryIds()
                     .forEach(entryId ->
                             read(() -> owned(accountId, () -> timeline.liveEntry(workspaceId, accountId, entryId))
-                                    .ifPresent(entry -> fanOut(workspaceId, accountId, ENTRY, entry))));
+                                    .ifPresent(entry -> fanOut(workspaceId, accountId, ENTRY, entry, contexts))));
         }
     }
 
     /** Another device of the developer moved the read marker. */
     @Override
     public void readChanged(ConversationLedgerEvents.ReadChanged change) {
-        if (watches(change.workspaceId(), change.accountId())) {
+        Map<Stream, Long> contexts = contexts(change.workspaceId(), change.accountId());
+        if (!contexts.isEmpty()) {
             read(() -> fanOut(
-                    change.workspaceId(), change.accountId(), READ, new ConversationReadDTO(change.lastReadAt())));
+                    change.workspaceId(),
+                    change.accountId(),
+                    READ,
+                    new ConversationReadDTO(change.lastReadAt()),
+                    contexts));
         }
     }
 
+    /**
+     * What the developer's turns may read changed, or part of their history was removed. Each affected stream drops what
+     * it queued and everything read before now, then starts over from a snapshot. The count moves here, on the
+     * notification thread, not when the reader reaches the snapshot: a read that started earlier is withheld too.
+     */
     @Override
     public void contextChanged(ConversationLedgerEvents.ContextChanged change) {
         streams.forEach((developer, open) -> {
             if (change.affects(developer.workspaceId(), developer.accountId())) {
-                open.forEach(stream -> read(() -> snapshot(stream)));
+                open.forEach(this::startOver);
             }
         });
     }
@@ -232,7 +252,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     /** Changes made while the notification connection was down were missed: every stream starts over. */
     @Override
     public void resync() {
-        allStreams().forEach(stream -> read(() -> snapshot(stream)));
+        allStreams().forEach(this::startOver);
     }
 
     /** Keeps quiet streams open through proxies' idle timeouts, and closes those whose account left the workspace. */
@@ -242,15 +262,10 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         Event ping = new Event(SseEmitter.event().comment("ping").build());
         allStreams()
                 .forEach(stream -> read(() -> {
-                    if (admitted(stream)) {
-                        send(stream, ping);
+                    if (admitted(stream, memberships.isActiveVisibleMember(stream.workspaceId, stream.accountId))) {
+                        send(stream, ping, stream.context());
                     }
                 }));
-    }
-
-    /** Whether the developer has a stream open on this replica: only then is their change read. */
-    private boolean watches(long workspaceId, long accountId) {
-        return streams.containsKey(new Developer(workspaceId, accountId));
     }
 
     /** A read of the developer's own rows, in a transaction whose owner is the developer. */
@@ -259,6 +274,18 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
             owners.ofJob(accountId);
             return read.get();
         }));
+    }
+
+    /**
+     * Each open stream of the developer, with its context count when the change was heard; empty when the developer has
+     * no stream open here, and then their change is not read. The read follows on the reader thread; a context change
+     * heard in between withholds what it reads, and its snapshot covers the change.
+     */
+    private Map<Stream, Long> contexts(long workspaceId, long accountId) {
+        Map<Stream, Long> contexts = new HashMap<>();
+        Optional.ofNullable(streams.get(new Developer(workspaceId, accountId)))
+                .ifPresent(open -> open.forEach(stream -> contexts.put(stream, stream.context())));
+        return contexts;
     }
 
     private List<Stream> allStreams() {
@@ -280,21 +307,23 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     }
 
     private void snapshot(Stream stream) {
-        synchronized (stream.queue) {
-            stream.queue.clear();
-        }
-        if (!stream.closed.get() && admitted(stream)) {
+        long context = stream.context();
+        if (!stream.closed.get()
+                && admitted(stream, memberships.isActiveVisibleMember(stream.workspaceId, stream.accountId))) {
             send(
                     stream,
                     event(
                             SNAPSHOT,
-                            owned(
-                                    stream.accountId,
-                                    () -> timeline.conversation(stream.workspaceId, stream.accountId))));
+                            owned(stream.accountId, () -> timeline.conversation(stream.workspaceId, stream.accountId))),
+                    context);
         }
     }
 
-    private void fanOut(long workspaceId, long accountId, String name, Object value) {
+    /**
+     * Sends a change to the streams that were open when it was heard. A stream opened later starts with a snapshot of its
+     * own.
+     */
+    private void fanOut(long workspaceId, long accountId, String name, Object value, Map<Stream, Long> contexts) {
         Set<Stream> watching = streams.get(new Developer(workspaceId, accountId));
         if (watching == null || watching.isEmpty()) {
             return;
@@ -303,21 +332,18 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         // One membership read for this delivery, never reused for a later one.
         boolean member = memberships.isActiveVisibleMember(workspaceId, accountId);
         List.copyOf(watching).forEach(stream -> {
-            if (admitted(stream, member)) {
-                send(stream, event);
+            Long context = contexts.get(stream);
+            if (context != null && admitted(stream, member)) {
+                send(stream, event, context);
             }
         });
     }
 
     /**
-     * Whether the stream's account is still an active member of its workspace, read now. Closes the stream when it is
-     * not. Every delivery reads it again: a removed member receives nothing after the removal commits. Runs on the
-     * reader thread.
+     * Whether the stream's account is still an active member of its workspace, as {@code member} read it. Closes the
+     * stream when it is not. Every delivery reads it again: a removed member receives nothing after the removal
+     * commits. Runs on the reader thread.
      */
-    private boolean admitted(Stream stream) {
-        return admitted(stream, memberships.isActiveVisibleMember(stream.workspaceId, stream.accountId));
-    }
-
     private boolean admitted(Stream stream, boolean member) {
         if (!member) {
             close(stream);
@@ -333,10 +359,11 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 .build());
     }
 
-    private void send(Stream stream, Event event) {
+    /** Queues an event whose data was read at the stream's context count {@code context}; an older one is dropped. */
+    private void send(Stream stream, Event event, long context) {
         boolean drain;
         synchronized (stream.queue) {
-            if (stream.closed.get()) {
+            if (stream.closed.get() || context != stream.context) {
                 return;
             }
             if (stream.queue.size() >= queueCapacity) {
@@ -344,7 +371,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 read(() -> snapshot(stream));
                 return;
             }
-            stream.queue.addLast(event);
+            stream.queue.addLast(new Queued(event, context));
             drain = !stream.draining;
             stream.draining = true;
         }
@@ -357,34 +384,73 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         }
     }
 
+    /**
+     * Writes the stream's queue, on this stream's own writer thread. It first waits until Spring installed the response
+     * handler, so no event waits in Spring's own buffer. Then it holds the stream's write lock from taking an event and
+     * checking its context count to the end of its transport write. A context change that finds the lock free starts the
+     * stream over; one that finds a write in progress closes the stream instead. So no event read before a context change
+     * starts its write after it, and no listener waits on a stream.
+     */
     private void drain(Stream stream) {
-        while (true) {
-            Event event;
-            synchronized (stream.queue) {
-                event = stream.queue.pollFirst();
-                if (event == null) {
-                    stream.draining = false;
-                    return;
-                }
-            }
-            try {
-                stream.emitter.send(event.data());
-            } catch (IOException | RuntimeException gone) {
-                log.debug(
-                        "Hephaestus live stream closed while sending: {}",
-                        gone.getClass().getSimpleName());
+        if (!stream.installed) {
+            if (!stream.emitter.awaitInstalled(INSTALL_WAIT)) {
                 close(stream);
                 return;
+            }
+            stream.installed = true;
+        }
+        while (true) {
+            stream.writing.lock();
+            try {
+                Event event;
+                synchronized (stream.queue) {
+                    Queued next;
+                    do {
+                        next = stream.queue.pollFirst();
+                    } while (next != null && next.context() != stream.context);
+                    if (next == null) {
+                        stream.draining = false;
+                        return;
+                    }
+                    event = next.event();
+                }
+                try {
+                    stream.emitter.send(event.data());
+                } catch (IOException | RuntimeException gone) {
+                    log.debug(
+                            "Hephaestus live stream closed while sending: {}",
+                            gone.getClass().getSimpleName());
+                    close(stream);
+                    return;
+                }
+            } finally {
+                stream.writing.unlock();
             }
         }
     }
 
+    /**
+     * Starts the stream over from a snapshot. A stream with a write in progress is closed instead, without waiting on
+     * it: its client opens a new one, which starts with a snapshot.
+     */
+    private void startOver(Stream stream) {
+        if (stream.startOver()) {
+            read(() -> snapshot(stream));
+        } else {
+            close(stream);
+        }
+    }
+
+    /**
+     * Closes the stream: it sends nothing more from now on. Spring's completion waits for a write in progress on the same
+     * emitter, so it runs on a writer thread, never on the caller's.
+     */
     private void close(Stream stream) {
         remove(stream);
         try {
-            stream.emitter.complete();
-        } catch (RuntimeException alreadyComplete) {
-            // The client went away or the container timed the request out.
+            writers.execute(stream::complete);
+        } catch (RejectedExecutionException shuttingDown) {
+            stream.complete();
         }
     }
 
@@ -440,7 +506,11 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         synchronized (streams) {
             closing = true;
         }
-        new ArrayList<>(allStreams()).forEach(this::close);
+        // Completed here, not on a writer: an open stream would hold the web server's graceful shutdown.
+        new ArrayList<>(allStreams()).forEach(stream -> {
+            remove(stream);
+            stream.complete();
+        });
     }
 
     @PreDestroy
@@ -462,17 +532,67 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
         final long workspaceId;
         final long accountId;
-        final SseEmitter emitter;
-        final Deque<Event> queue = new ArrayDeque<>();
+        final ConversationEventEmitter emitter;
+        final Deque<Queued> queue = new ArrayDeque<>();
+
+        /**
+         * Held by the writer from taking an event to the end of its transport write. A context change only tries it, and
+         * never waits on it.
+         */
+        final ReentrantLock writing = new ReentrantLock();
+
+        /** Set by the writer once Spring installed the response handler. */
+        volatile boolean installed;
+
         final AtomicBoolean closed = new AtomicBoolean();
 
         /** Guarded by {@link #queue}: a writer is sending this stream's queue. */
         boolean draining;
 
-        Stream(long workspaceId, long accountId, SseEmitter emitter) {
+        /**
+         * Guarded by {@link #queue}: how often the stream started over after a context change. An event read at an older
+         * count is never sent.
+         */
+        long context;
+
+        Stream(long workspaceId, long accountId, ConversationEventEmitter emitter) {
             this.workspaceId = workspaceId;
             this.accountId = accountId;
             this.emitter = emitter;
+        }
+
+        long context() {
+            synchronized (queue) {
+                return context;
+            }
+        }
+
+        /**
+         * Drops what the stream queued, and every event read at the count before now. It does not wait for a write in
+         * progress.
+         *
+         * @return {@code false} when a write was in progress: that write began before the change, so the caller closes
+         *     the stream; the count moved anyway
+         */
+        boolean startOver() {
+            boolean fenced = writing.tryLock();
+            try {
+                synchronized (queue) {
+                    context++;
+                    queue.clear();
+                }
+            } finally {
+                if (fenced) writing.unlock();
+            }
+            return fenced;
+        }
+
+        void complete() {
+            try {
+                emitter.complete();
+            } catch (RuntimeException alreadyComplete) {
+                // The client went away or the container timed the request out.
+            }
         }
     }
 }

@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,17 @@ public class ConversationSlackMessages {
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
     private final ConversationEntryViews views;
+    private final ConversationContextChanges contextChanges;
+
+    /** What {@link #admitReply} decided for a reply that was read. */
+    public enum ReplyAdmission {
+        /** The write began: the provider call may go. */
+        STARTED,
+        /** The history the reply was read from changed: nothing is posted. */
+        WITHDRAWN,
+        /** The action's lease is gone: another attempt owns it. */
+        ABANDONED
+    }
 
     /**
      * A turn asked in Slack, with where its reply goes.
@@ -119,6 +132,52 @@ public class ConversationSlackMessages {
         return entries.findByIdAndWorkspaceId(questionId, workspaceId)
                 .map(ConversationEntry::getTurnId)
                 .flatMap(turn -> turns.findByIdAndWorkspaceId(turn, workspaceId));
+    }
+
+    /**
+     * Admits the write of a Slack reply that was {@code read} before. It holds the account's history lock, shared, which
+     * a removal holds exclusively ({@link ConversationContextChanges#lockHistoryForRemoval}). Under the lock it checks
+     * three things: the turn still ends as it was read, its question stands, and no entry of the account's conversations
+     * lost its words since the turn started. Only then does {@code beginWrite} commit. So a removal commits either before
+     * this check, and the reply is withdrawn, or after the write began.
+     */
+    @Transactional
+    public ReplyAdmission admitReply(SlackTurn read, BooleanSupplier beginWrite) {
+        ConversationTurn turn = read.turn();
+        long workspaceId = turn.getWorkspaceId();
+        contextChanges.shareHistory(workspaceId, read.accountId());
+        Instant since = turn.getStartedAt() == null ? turn.getCreatedAt() : turn.getStartedAt();
+        boolean unchanged = turns.findByIdAndWorkspaceId(turn.getId(), workspaceId)
+                        .filter(now -> now.getStatus() == turn.getStatus())
+                        .isPresent()
+                && !entries.findStimulus(workspaceId, turn.getId()).isRedacted()
+                && !readableMessageRemovedSince(workspaceId, turn, read.question(), since);
+        if (!unchanged) return ReplyAdmission.WITHDRAWN;
+        return beginWrite.getAsBoolean() ? ReplyAdmission.STARTED : ReplyAdmission.ABANDONED;
+    }
+
+    /** Whether a message that the turn could read was removed since {@code since} (its question has its own check). */
+    private boolean readableMessageRemovedSince(
+            long workspaceId, ConversationTurn turn, ConversationEntry question, Instant since) {
+        Conversation conversation = conversations
+                .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
+                .orElseThrow();
+        // A main conversation has no parent: its own condition covers it, and the thread condition matches nothing.
+        UUID mainId = conversation.isThread() ? conversation.rootId() : conversation.getId();
+        long parentSeq = -1;
+        UUID parentEntryId = conversation.getParentEntryId();
+        if (conversation.isThread() && parentEntryId != null) {
+            parentSeq = entries.findByIdAndWorkspaceId(parentEntryId, workspaceId)
+                    .map(ConversationEntry::getSeq)
+                    .orElse(-1L);
+        }
+        return entries.existsReadableMessageRedactedSince(
+                workspaceId,
+                Objects.requireNonNull(conversation.getId()),
+                question.getSeq(),
+                Objects.requireNonNull(mainId),
+                parentSeq,
+                since);
     }
 
     /** Binds an admitted ledger message to the Slack message that confirmed it. */

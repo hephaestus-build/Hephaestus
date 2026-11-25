@@ -120,7 +120,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
         when(client.isConnected(WORKSPACE)).thenReturn(true);
         when(client.postMessage(eq(WORKSPACE), eq(CHANNEL), any(), anyList(), any(), any()))
                 .thenThrow(new SlackSendException(WORKSPACE, CHANNEL, "transport_failure"));
-        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any()))
+        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any(), eq(1)))
                 .thenAnswer(invocation -> {
                     Predicate<Message> match = invocation.getArgument(4);
                     var answer = message(SlackConversationPosts.metadata(ACTION));
@@ -138,7 +138,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
     @Test
     void shouldKeepAnIncompleteReadbackUncertain() {
         when(client.isConnected(WORKSPACE)).thenReturn(true);
-        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any()))
+        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any(), eq(1)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
 
         assertThat(adapter.execute(attempt(true, true))).isInstanceOf(ActionResult.Reread.class);
@@ -148,7 +148,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
     @Test
     void shouldNotPostAgainWhenCompleteReadbackFindsNoNotice() {
         when(client.isConnected(WORKSPACE)).thenReturn(true);
-        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any()))
+        when(client.readWorkspaceMessages(eq(WORKSPACE), eq(CHANNEL), any(), eq("100.1"), any(), eq(1)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
 
         assertThat(adapter.execute(attempt(true, true))).isEqualTo(new ActionResult.Failed(ActionStopReason.REJECTED));

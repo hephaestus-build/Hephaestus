@@ -115,7 +115,7 @@ public class SlackMessageService implements AutoCloseable {
             SlackMetrics metrics,
             SlackProperties properties) {
         this(
-                Slack.getInstance(nativeConfig(properties)),
+                SlackSendFence.client(nativeConfig(properties)),
                 credentialProvider,
                 rateLimitTracker,
                 egressGuard,
@@ -181,23 +181,46 @@ public class SlackMessageService implements AutoCloseable {
             List<LayoutBlock> blocks,
             String text,
             Message.@Nullable Metadata metadata) {
+        return postAdmitted(workspaceId, new Outgoing(channelId, threadTs, blocks, text, metadata), null);
+    }
+
+    /** A message to post: where it goes, what it shows, and the metadata that finds it again. */
+    public record Outgoing(
+            String channelId,
+            @Nullable String threadTs,
+            List<LayoutBlock> blocks,
+            String text,
+            Message.@Nullable Metadata metadata) {}
+
+    /**
+     * Posts a message that its caller admits at the send boundary. {@code admitAtSend} runs after the credential is
+     * resolved, right before the one provider request. When it refuses, nothing is sent and the post fails
+     * {@code not_admitted}. A 429 is not waited out here: it fails {@code ratelimited}, so the caller tries again later
+     * and admits again then. Without {@code admitAtSend}, a 429 is waited out within the interactive budget.
+     */
+    public Posted postAdmitted(long workspaceId, Outgoing post, @Nullable BooleanSupplier admitAtSend) {
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
-                .channel(channelId)
-                .blocks(blocks)
-                .text(text)
+                .channel(post.channelId())
+                .blocks(post.blocks())
+                .text(post.text())
                 .unfurlLinks(false)
                 .unfurlMedia(false)
-                .metadata(metadata);
-        if (threadTs != null && !threadTs.isBlank()) {
-            request.threadTs(threadTs);
+                .metadata(post.metadata());
+        if (post.threadTs() != null && !post.threadTs().isBlank()) {
+            request.threadTs(post.threadTs());
         }
         ChatPostMessageRequest built = request.build();
-        ChatPostMessageResponse response =
-                callWrite(workspaceId, null, channelId, () -> true, methods -> methods.chatPostMessage(built));
+        ChatPostMessageResponse response = callWrite(
+                workspaceId,
+                null,
+                post.channelId(),
+                () -> true,
+                methods -> methods.chatPostMessage(built),
+                admitAtSend);
         String postedTo = response.getChannel();
         String ts = response.getTs();
-        if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channelId, "invalid_receipt");
-        return new Posted(postedTo == null || postedTo.isBlank() ? channelId : postedTo, ts);
+        if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, post.channelId(), "invalid_receipt");
+        return new Posted(postedTo == null || postedTo.isBlank() ? post.channelId() : postedTo, ts);
     }
 
     /**
@@ -233,7 +256,7 @@ public class SlackMessageService implements AutoCloseable {
                 .blocks(message.blocks())
                 .text(message.fallback())
                 .build();
-        callWrite(workspaceId, teamId, channelId, eligible, methods -> methods.chatPostEphemeral(request));
+        callWrite(workspaceId, teamId, channelId, eligible, methods -> methods.chatPostEphemeral(request), null);
     }
 
     public record EphemeralMessage(List<LayoutBlock> blocks, String fallback) {}
@@ -302,10 +325,17 @@ public class SlackMessageService implements AutoCloseable {
      * One Slack write; every write of this gateway goes through it. Silent Mode refuses it before a token is read, and
      * again before each attempt, so Silent Mode engaged during a throttle wait refuses the next attempt. A 429 is
      * retried after its {@code Retry-After} within the interactive budget; one that outlives the budget is
-     * {@code ratelimited} and carries its wait. A failed transport is {@code transport_failure}.
+     * {@code ratelimited} and carries its wait. A failed transport is {@code transport_failure}. A write that its caller
+     * admits at the send boundary is tried once, right after {@code admitAtSend} accepts it; a refusal is
+     * {@code not_admitted}.
      */
     private <T extends SlackApiTextResponse> T callWrite(
-            long workspaceId, @Nullable String teamId, String channel, BooleanSupplier eligible, WriteCall<T> call) {
+            long workspaceId,
+            @Nullable String teamId,
+            String channel,
+            BooleanSupplier eligible,
+            WriteCall<T> call,
+            @Nullable BooleanSupplier admitAtSend) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
         }
@@ -317,14 +347,27 @@ public class SlackMessageService implements AutoCloseable {
         String token = credential.orElseThrow(
                 () -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
-            T response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
+            SlackCall<T> attempt = () -> {
                 try {
                     egressGuard.requireDeliveryAllowed("slack.write");
                     return call.call(slack.methods(token));
                 } catch (OutboundEgressSuppressedException e) {
                     throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
                 }
-            });
+            };
+            T response;
+            if (admitAtSend == null) {
+                response =
+                        callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), attempt);
+            } else {
+                // An admitted post is admitted at its raw write, after the SDK's own calls, and sent once.
+                SlackSendFence.ADMISSION.set(new SlackSendFence.Admission(admitAtSend));
+                try {
+                    response = attempt.call();
+                } finally {
+                    SlackSendFence.ADMISSION.remove();
+                }
+            }
             if (!response.isOk()) {
                 String error = response.getError();
                 throw new SlackSendException(workspaceId, channel, error == null ? "unknown" : error);
@@ -336,9 +379,14 @@ public class SlackMessageService implements AutoCloseable {
                     ? SlackSendException.NOT_RATE_LIMITED
                     : SlackBackoff.retryAfterMillis(refused.code(), refused.header("Retry-After"));
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
+                // The interactive budget reports each 429 it waits on; an admitted post waits on none, so report it
+                // here.
+                if (admitAtSend != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
+        } catch (SlackSendFence.NotAdmitted e) {
+            throw new SlackSendException(workspaceId, channel, "not_admitted", e);
         } catch (IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }
@@ -362,16 +410,11 @@ public class SlackMessageService implements AutoCloseable {
 
     /**
      * The messages posted at or after {@code oldest} that {@code match} accepts, read with their metadata: from the top
-     * level of the channel, or from the replies of {@code threadTs}. Reads one page.
+     * level of the channel, or from the replies of {@code threadTs}. Reads at most {@code maxPages} pages; an
+     * unfinished search never proves absence.
      *
      * @throws SlackSendException when Slack could not be read, so the caller cannot conclude the message is absent
      */
-    public Matches readWorkspaceMessages(
-            long workspaceId, String channel, @Nullable String threadTs, String oldest, Predicate<Message> match) {
-        return readWorkspaceMessages(workspaceId, channel, threadTs, oldest, match, 1);
-    }
-
-    /** Reads a bounded sequence of pages; an unfinished search never proves absence. */
     public Matches readWorkspaceMessages(
             long workspaceId,
             String channel,
@@ -465,7 +508,8 @@ public class SlackMessageService implements AutoCloseable {
                     slackUserId,
                     eligible,
                     methods -> methods.viewsPublish(
-                            req -> req.userId(slackUserId).view(view).hash(homeViewHash)));
+                            req -> req.userId(slackUserId).view(view).hash(homeViewHash)),
+                    null);
         } catch (SlackSendException e) {
             if (!"silent_mode_engaged".equals(e.slackError())) {
                 throw e;
@@ -817,7 +861,8 @@ public class SlackMessageService implements AutoCloseable {
                 null,
                 channelId,
                 () -> true,
-                methods -> methods.conversationsJoin(req -> req.channel(channelId)));
+                methods -> methods.conversationsJoin(req -> req.channel(channelId)),
+                null);
     }
 
     private static SlackConversationInfo toConversationInfo(Conversation conversation) {

@@ -39,8 +39,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.IntFunction;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -678,22 +678,20 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 });
         // Message retention removes through removeDue, copy retention through redact: the ids are one argument of each.
         IntFunction<Answer<Void>> erase = idsAt -> call -> {
-                        Collection<UUID> ids = call.getArgument(idsAt);
-                        List<DueEntry> batch = due.stream()
-                                .filter(entry -> ids.contains(entry.getId()))
-                                .toList();
-                        if (batch.stream()
-                                .anyMatch(
-                                        entry -> failing.contains(List.of(entry.getWorkspaceId(), entry.getAccountId())))) {
-                            failedAttempts++;
-                            now = now.plus(perFailure);
-                            throw new IllegalStateException("lock timeout");
-                        }
-                        batch.forEach(entry -> erased.merge(entry.getAccountId(), 1, Integer::sum));
-                        now = now.plus(perRedaction);
-                        due.removeAll(batch);
-                        return null;
-                    };
+            Collection<UUID> ids = call.getArgument(idsAt);
+            List<DueEntry> batch =
+                    due.stream().filter(entry -> ids.contains(entry.getId())).toList();
+            if (batch.stream()
+                    .anyMatch(entry -> failing.contains(List.of(entry.getWorkspaceId(), entry.getAccountId())))) {
+                failedAttempts++;
+                now = now.plus(perFailure);
+                throw new IllegalStateException("lock timeout");
+            }
+            batch.forEach(entry -> erased.merge(entry.getAccountId(), 1, Integer::sum));
+            now = now.plus(perRedaction);
+            due.removeAll(batch);
+            return null;
+        };
         lenient().doAnswer(erase.apply(2)).when(redaction).removeDue(anyLong(), anyLong(), any());
         lenient().doAnswer(erase.apply(0)).when(redaction).redact(any());
     }

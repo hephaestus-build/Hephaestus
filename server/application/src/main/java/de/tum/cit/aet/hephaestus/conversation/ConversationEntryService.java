@@ -222,7 +222,7 @@ public class ConversationEntryService {
         }
         UUID turnId = entry.getTurnId();
         if (turnId != null) {
-            turns.lockById(turnId).ifPresent(this::stop);
+            turns.lockById(turnId).ifPresent(turn -> stop(turn, ConversationTurn.QUESTION_REMOVED_CAUSE));
         }
         redaction.remove(workspaceId, accountId, List.of(entryId));
         journal.record(PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
@@ -245,7 +245,7 @@ public class ConversationEntryService {
     public void redactSlackEntries(long workspaceId) {
         for (ConversationTurn turn :
                 turns.findActiveByWorkspaceIdAndSurface(workspaceId, ConversationTurn.Surface.SLACK)) {
-            turns.lockById(turn.getId()).ifPresent(this::stop);
+            turns.lockById(turn.getId()).ifPresent(locked -> stop(locked, ConversationTurn.CONTEXT_CHANGED_CAUSE));
         }
         redaction.redact(
                 entries.findUnredactedIdsByWorkspaceIdAndSurface(workspaceId, ConversationEntry.Surface.SLACK));
@@ -419,9 +419,9 @@ public class ConversationEntryService {
     }
 
     /** Stops a turn the caller locked, unless it ended, and its run with it ({@link TurnRuns#stopped}). */
-    private void stop(ConversationTurn turn) {
+    private void stop(ConversationTurn turn, String cause) {
         boolean running = turn.getStatus() == ConversationTurn.Status.RUNNING;
-        if (turn.stopIfActive(clock.instant())) {
+        if (turn.stopIfActive(clock.instant(), cause)) {
             runs.stopped(turn.getWorkspaceId(), turn.getRunId(), running);
             turnChanged(turn, false);
         }

@@ -38,9 +38,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +53,6 @@ import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 class ConversationLiveHubTest extends BaseUnitTest {
@@ -66,6 +67,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
     private final OwnerScope owners = mock(OwnerScope.class);
     private final AtomicBoolean member = new AtomicBoolean(true);
     private final RecordingEmitter emitter = new RecordingEmitter();
+    private final RecordingEmitter second = new RecordingEmitter();
+    private final AtomicInteger opened = new AtomicInteger();
     private final ConversationLiveHub hub = new ConversationLiveHub(
             mock(ConversationLedgerNotifications.class),
             timeline,
@@ -74,7 +77,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
             TransactionOperations.withoutTransaction(),
             new ObjectMapper(),
             new SimpleMeterRegistry(),
-            () -> emitter,
+            () -> opened.getAndIncrement() == 0 ? emitter : second,
             1);
 
     /** Stubs are set before the hub's reader thread runs: Mockito stubbing is not safe while another thread calls the mock. */
@@ -135,7 +138,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReplaceQueuedEventsWithASnapshotWhenTheReadersContextChanges() throws InterruptedException {
+    void shouldReplaceQueuedEventsWithASnapshotWhenTheReadersContextChanges() throws Exception {
         emitter.holdSends();
         hub.subscribe(WORKSPACE, ACCOUNT);
         assertThat(emitter.awaitHeld()).isTrue();
@@ -143,12 +146,84 @@ class ConversationLiveHubTest extends BaseUnitTest {
         UUID queued = UUID.randomUUID();
         hub.entryChanged(
                 new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(queued)));
+        // A write is in progress: the change does not wait on it, and closes the stream; its client starts over.
         hub.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT));
-        verify(timeline, timeout(WAIT.toMillis()).times(2)).conversation(anyLong(), anyLong());
         emitter.release();
 
-        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "snapshot"));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.completed).isTrue());
+        assertThat(emitter.names()).containsExactly("snapshot");
         assertThat(emitter.frames()).noneMatch(frame -> frame.contains(queued.toString()));
+    }
+
+    /**
+     * A change read before the context changed reaches the stream after the change was heard: the hub withholds it and
+     * sends the new snapshot instead.
+     */
+    @Test
+    void shouldWithholdAnEntryReadBeforeTheContextChangedWhenItsReadEndsAfter() throws InterruptedException {
+        UUID stale = UUID.randomUUID();
+        CountDownLatch reading = new CountDownLatch(1);
+        CountDownLatch changed = new CountDownLatch(1);
+        when(timeline.liveEntry(anyLong(), anyLong(), eq(stale))).thenAnswer(call -> {
+            reading.countDown();
+            assertThat(changed.await(WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            return Optional.of(entry(stale));
+        });
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
+
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(stale)));
+        assertThat(reading.await(WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+        hub.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT));
+        changed.countDown();
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "snapshot"));
+        assertThat(emitter.frames()).noneMatch(frame -> frame.contains(stale.toString()));
+    }
+
+    /**
+     * One stream's write stalls when the context changes. The change does not wait on it: it closes that stream off its
+     * own thread and starts the other stream over at once.
+     */
+    @Test
+    void shouldStartAnotherStreamOverAtOnceWhenOneStreamsWriteStalls() throws Exception {
+        UUID writing = UUID.randomUUID();
+        emitter.holdSendOf(writing.toString());
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        await().atMost(WAIT).untilAsserted(() -> assertThat(second.names()).containsExactly("snapshot"));
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(writing)));
+        assertThat(emitter.awaitHeld()).isTrue();
+
+        CompletableFuture<Void> change = CompletableFuture.runAsync(
+                () -> hub.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT)));
+
+        change.get(1, TimeUnit.SECONDS);
+        await().atMost(WAIT)
+                .untilAsserted(() -> assertThat(second.names()).containsExactly("snapshot", "entry", "snapshot"));
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.completed).isTrue());
+        emitter.release();
+    }
+
+    /**
+     * Spring has not installed the response handler yet, so a send would wait in its own buffer. The context changes
+     * meanwhile: only the snapshot read after the change is sent, once the handler is installed.
+     */
+    @Test
+    void shouldSendNoSnapshotReadBeforeAContextChangeWhileTheHandlerIsNotInstalled() {
+        emitter.installed = false;
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        verify(timeline, timeout(WAIT.toMillis()).times(1)).conversation(anyLong(), anyLong());
+
+        hub.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT));
+        verify(timeline, timeout(WAIT.toMillis()).times(2)).conversation(anyLong(), anyLong());
+        emitter.installed = true;
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
+        assertThat(emitter.completed).isFalse();
     }
 
     @Test
@@ -283,12 +358,25 @@ class ConversationLiveHubTest extends BaseUnitTest {
     }
 
     /** Records what the hub writes; it can hold the writer inside its first send. */
-    private static final class RecordingEmitter extends SseEmitter {
+    private static final class RecordingEmitter extends ConversationEventEmitter {
+
+        /** Whether Spring installed the response handler; a test can hold it back. */
+        volatile boolean installed = true;
+
+        RecordingEmitter() {
+            super(WAIT.toMillis() * 6);
+        }
+
+        @Override
+        boolean installed() {
+            return installed;
+        }
 
         private final List<String> frames = new ArrayList<>();
         private final CountDownLatch held = new CountDownLatch(1);
         private final CountDownLatch released = new CountDownLatch(1);
         private volatile boolean holding;
+        private volatile @Nullable String holdMarker;
         private volatile @Nullable IOException sendFailure;
 
         void failSends(IOException failure) {
@@ -297,6 +385,11 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
         void holdSends() {
             holding = true;
+        }
+
+        /** Holds the writer inside the transport write of the first frame that names {@code marker}. */
+        void holdSendOf(String marker) {
+            holdMarker = marker;
         }
 
         boolean awaitHeld() throws InterruptedException {
@@ -313,7 +406,10 @@ class ConversationLiveHubTest extends BaseUnitTest {
             if (failure != null) {
                 throw failure;
             }
-            if (holding) {
+            StringBuilder sent = new StringBuilder();
+            data.forEach(part -> sent.append(part.getData()));
+            String marker = holdMarker;
+            if (holding || (marker != null && sent.toString().contains(marker))) {
                 held.countDown();
                 try {
                     released.await(WAIT.toSeconds(), TimeUnit.SECONDS);
@@ -322,10 +418,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
                     throw new IOException(e);
                 }
             }
-            StringBuilder wire = new StringBuilder();
-            data.forEach(part -> wire.append(part.getData()));
             synchronized (frames) {
-                frames.addAll(List.of(wire.toString().split("\n")));
+                frames.addAll(List.of(sent.toString().split("\n")));
             }
         }
 

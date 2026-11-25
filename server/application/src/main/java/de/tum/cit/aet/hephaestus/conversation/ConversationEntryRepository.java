@@ -667,6 +667,28 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             "SELECT e.id FROM ConversationEntry e WHERE e.workspaceId=:workspaceId AND e.id IN (:ids) AND e.redactedAt IS NULL")
     List<UUID> findUnredactedIds(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * Whether a message that a turn could read lost its words at or after {@code since}: one before its question in its
+     * conversation, or, for a thread, one up to the thread's parent entry in its main conversation. Each is a row by its
+     * position, never a whole channel or thread. A tool result is not a message: its copy ages out on its own.
+     */
+    @Query("""
+        SELECT COUNT(e) > 0 FROM ConversationEntry e
+        WHERE e.workspaceId = :workspaceId AND e.redactedAt >= :since
+          AND e.kind IN (de.tum.cit.aet.hephaestus.conversation.ConversationEntry.Kind.USER,
+                         de.tum.cit.aet.hephaestus.conversation.ConversationEntry.Kind.ANSWER,
+                         de.tum.cit.aet.hephaestus.conversation.ConversationEntry.Kind.DIGEST)
+          AND ((e.conversationId = :conversationId AND e.seq < :questionSeq)
+               OR (e.conversationId = :mainId AND e.seq <= :parentSeq))
+        """)
+    boolean existsReadableMessageRedactedSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("questionSeq") long questionSeq,
+            @Param("mainId") UUID mainId,
+            @Param("parentSeq") long parentSeq,
+            @Param("since") Instant since);
+
     /** Whether a confirmed Slack answer preceded this question in the conversation. */
     @Query("""
         SELECT COUNT(e) > 0 FROM ConversationEntry e

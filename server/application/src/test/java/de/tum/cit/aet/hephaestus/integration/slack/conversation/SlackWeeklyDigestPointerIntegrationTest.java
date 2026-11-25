@@ -314,7 +314,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, SLACK_USER, DM);
         ConversationEntry digest = digest();
         taken(digest);
-        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
+        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any(), eq(1)))
                 .thenReturn(new SlackMessageService.Matches(List.of("300.5"), false));
         settle(digest);
 
@@ -344,7 +344,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         settle(digest);
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any());
+        verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any(), eq(1));
         assertThat(noteDelivery(digest)).isEqualTo(ConversationEntry.SlackDelivery.UNCERTAIN);
     }
 
@@ -353,7 +353,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, SLACK_USER, DM);
         ConversationEntry digest = digest();
         taken(digest);
-        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
+        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any(), eq(1)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
 
         settle(digest);
@@ -368,7 +368,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         ConversationEntry digest = digest();
         taken(digest);
         // The developer wrote more messages after the note than one page holds.
-        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any()))
+        when(slack.readWorkspaceMessages(eq(workspace.getId()), eq(DM), isNull(), anyString(), any(), eq(1)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
 
         settle(digest);

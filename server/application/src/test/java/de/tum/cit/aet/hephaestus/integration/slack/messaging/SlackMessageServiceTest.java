@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
@@ -51,6 +53,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     /** Read by the guard on the test's thread, and set by a local Slack server's thread in one test. */
     private volatile boolean silentModeEngaged;
+
+    /** The throttles that the local gateways report. */
+    private final SlackRateLimitTracker throttles = new SlackRateLimitTracker(new SimpleMeterRegistry());
 
     /** The time of the local gateways' throttle budgets, so no throttle wait takes real time. */
     private VirtualSlackTime time;
@@ -330,6 +335,178 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
+    /**
+     * A removal that commits while the gateway resolves the credential: the admission at the send boundary sees it, so
+     * Slack receives no post.
+     */
+    @Test
+    void shouldSendNoAdmittedPostWhenItsAdmissionRefusesAfterTheCredentialIsResolved() throws Exception {
+        List<String> paths = new CopyOnWriteArrayList<>();
+        AtomicBoolean removed = new AtomicBoolean();
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    paths.add(request.getUrl().encodedPath());
+                    return request.getUrl().encodedPath().equals("/api/auth.test")
+                            ? json("{\"ok\":true,\"team_id\":\"T1\"}")
+                            : json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
+            slackApi.start();
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            // The removal commits while the credential is resolved: the admission runs after that lookup and sees it.
+            BooleanSupplier admission = () -> {
+                removed.set(mockingDetails(credentialProvider).getInvocations().stream()
+                        .anyMatch(call -> call.getMethod().getName().equals("resolve")));
+                return !removed.get();
+            };
+            try {
+                assertThatThrownBy(() -> local.postAdmitted(7L, outgoing(), admission))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.slackError()).isEqualTo("not_admitted"));
+            } finally {
+                local.close();
+            }
+
+            assertThat(removed).isTrue();
+            assertThat(paths).doesNotContain("/api/chat.postMessage");
+        }
+    }
+
+    private static SlackMessageService.Outgoing outgoing() {
+        return new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null);
+    }
+
+    /**
+     * An admitted post is sent once: a 429 is not waited out inside the gateway, so its caller tries again later and
+     * admits again. A removal during the wait is then seen, and Slack receives nothing more.
+     */
+    @Test
+    void shouldNotWaitOutAThrottledAdmittedPostSoItsCallerAdmitsItAgain() throws Exception {
+        List<String> paths = new CopyOnWriteArrayList<>();
+        AtomicInteger admissions = new AtomicInteger();
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    paths.add(request.getUrl().encodedPath());
+                    return request.getUrl().encodedPath().equals("/api/auth.test")
+                            ? json("{\"ok\":true,\"team_id\":\"T1\"}")
+                            : throttled();
+                }
+            });
+            slackApi.start();
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.postAdmitted(7L, outgoing(), () -> {
+                            admissions.incrementAndGet();
+                            return true;
+                        }))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.isRateLimited()).isTrue());
+                // The history was removed while the caller waited: its next attempt is refused before Slack.
+                assertThatThrownBy(() -> local.postAdmitted(7L, outgoing(), () -> {
+                            admissions.incrementAndGet();
+                            return false;
+                        }))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.slackError()).isEqualTo("not_admitted"));
+            } finally {
+                local.close();
+            }
+
+            assertThat(time.waits()).isEmpty();
+            assertThat(admissions).hasValue(2);
+            assertThat(paths.stream().filter("/api/chat.postMessage"::equals)).hasSize(1);
+            // The 429 is reported, although the gateway did not wait on it.
+            assertThat(throttles.snapshot(7L)).isNotNull();
+        }
+    }
+
+    /**
+     * A token that the SDK has not seen: it asks {@code auth.test} for the team first. A removal that commits during
+     * that call is seen by the admission at the raw write, so Slack receives no post.
+     */
+    @Test
+    void shouldSendNoAdmittedPostWhenItsHistoryIsRemovedWhileTheSdkLooksUpTheTeam() throws Exception {
+        List<String> paths = new CopyOnWriteArrayList<>();
+        AtomicBoolean removed = new AtomicBoolean();
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    paths.add(request.getUrl().encodedPath());
+                    if (request.getUrl().encodedPath().equals("/api/auth.test")) {
+                        removed.set(true);
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    }
+                    return json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
+            slackApi.start();
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.postAdmitted(7L, outgoing(), () -> !removed.get()))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.slackError()).isEqualTo("not_admitted"));
+            } finally {
+                local.close();
+            }
+
+            assertThat(paths).contains("/api/auth.test").doesNotContain("/api/chat.postMessage");
+        }
+    }
+
+    /**
+     * The HTTP client follows a 503 with {@code Retry-After: 0} by sending the request again. An admitted post is sent
+     * once: the follow-up is refused, and the caller admits the post again on its next attempt.
+     */
+    @Test
+    void shouldNotSendAnAdmittedPostAgainWhenTheHttpClientWouldFollowUpA503() throws Exception {
+        List<String> paths = new CopyOnWriteArrayList<>();
+        AtomicInteger admissions = new AtomicInteger();
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    paths.add(request.getUrl().encodedPath());
+                    if (request.getUrl().encodedPath().equals("/api/auth.test")) {
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    }
+                    return paths.stream()
+                                            .filter("/api/chat.postMessage"::equals)
+                                            .count()
+                                    == 1
+                            ? new MockResponse.Builder()
+                                    .code(503)
+                                    .addHeader("Retry-After", "0")
+                                    .body("unavailable")
+                                    .build()
+                            : json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
+            slackApi.start();
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.postAdmitted(7L, outgoing(), () -> {
+                            admissions.incrementAndGet();
+                            return true;
+                        }))
+                        .isInstanceOf(SlackSendException.class);
+            } finally {
+                local.close();
+            }
+
+            assertThat(admissions).hasValue(1);
+            assertThat(paths.stream().filter("/api/chat.postMessage"::equals)).hasSize(1);
+        }
+    }
+
     private static MockResponse throttled() {
         return new MockResponse.Builder()
                 .code(429)
@@ -382,9 +559,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
         when(credentialProvider.resolve(any(IntegrationRef.class)))
                 .thenReturn(Optional.of(new BearerToken("xoxb-" + UUID.randomUUID(), null)));
         return new SlackMessageService(
-                Slack.getInstance(config),
+                SlackSendFence.client(config),
                 credentialProvider,
-                new SlackRateLimitTracker(new SimpleMeterRegistry()),
+                throttles,
                 new OutboundEgressGuard(() -> silentModeEngaged),
                 new SlackMetrics(new SimpleMeterRegistry()),
                 time);
