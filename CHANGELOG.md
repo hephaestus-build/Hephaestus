@@ -1,5 +1,88 @@
 # Changelog
 
+## 1.0.0-rc.16
+
+### Minor Changes
+
+- PostgreSQL restricts each data export to the account that requested it.
+
+  **Operators:** Stop every role before this upgrade. Follow **Stop every role before enabling person row-level security** in the upgrade guide.
+
+- When someone leaves a workspace or loses a role, an answer or a review that is running there also stops before its next model call. No more of the work goes to the model under the old access. `llm_proxy_refused_total` counts these calls with `refusal="authority_changed"`, and `authority_refused_total` with `boundary="model_dispatch"`.
+- When someone leaves a workspace or loses a role, an answer or a review that is running there stops before it reads anything more, and says that access changed. Work that started under the old access no longer goes on under it.
+
+  **Operators:** Stop every role before this upgrade. Follow **Stop every role before the authorization recheck** in the upgrade guide.
+
+- The upgrade records on each existing conversation message and turn the account that owns its conversation.
+
+  **Operators:** Stop every role before this upgrade. Follow **Stop every role before conversation rows record their account** in the upgrade guide.
+
+- The feedback review shows every piece of feedback for a developer's conversation as **In conversation**. To locate it, the review no longer reads the developer's conversation, so the location label no longer says whether the feedback was raised in the app or in Slack, or whether it was raised yet. The delivery state stays. The counts of where feedback goes, and the **Where** filter, now have one conversation row instead of three.
+
+  API clients: the `location` filter of `GET /workspaces/{workspaceSlug}/practices/reviews/feedback`, `…/feedback/locations` and `…/feedback/reasons` accepts `CONVERSATION` in place of `APP`, `SLACK` and `NEXT_CONVERSATION`. The `location` of a review feedback response uses the same single value.
+
+- Host firewall alerts report policy drift and a stopped policy check when you install the firewall status timer and scrape the host with node_exporter.
+  Mark enrolled scrape targets to also receive an alert when an available exporter omits the policy metrics.
+
+  The firewall policy check reports drift when an enabled netfilter-persistent service has a saved IPv4 or IPv6 rules snapshot.
+  It also checks that the public IPv4 interface uses strict reverse-path filtering.
+
+- Apply a declared UFW policy from the admin VPN with a ten-minute confirmation window.
+  The script refuses changes when conflicting rules would survive a UFW reset.
+  Install the boot recovery service so an interrupted change keeps the emergency firewall active across a reboot.
+  Save strict reverse-path filtering for the IPv4 default-route interface before you apply the policy.
+- API clients can read codes for conversation refusals and progress. Clients can use the accompanying text when they do not know a code.
+
+  Generated API clients read the integration family as a string. Existing family codes stay the same.
+
+- The practice review API uses `person` for the person a review concerns. Update clients to send `personId` and read `person` in review responses. Practice groups and workspace practice counts also use the new names. Person-data exports use `person_account_id` for the renamed account fields.
+
+  **Operators:** Stop every role for the 1.0 upgrade. Update clients that use the practice review, practice group, or workspace practice overview API.
+
+- Ship privacy facts to an optional S3-compatible journal bucket before confirming the change. The journal uses the PostgreSQL backup bucket by default when chart backups are on. Set a separate journal credential and grant access only to the journal prefix. An erasure puts the person's data on hold until the journal copy is confirmed.
+
+  **Operators:** If you use the journal bucket, create its credential Secret and use the stopped upgrade procedure.
+
+- The instance database records privacy facts for erasure recovery, including when someone withdraws Slack channel-message consent. The backup job reports its oldest recovery point. When the report is missing or stale, the journal keeps every fact until a new report arrives.
+
+  **Operators:** If the chart manages your backups, rerun the release key setup with backups enabled to add the backup reporter password. See [privacy journal retention](https://docs.hephaestus.build/admin/upgrade-notes/privacy-journal).
+
+- Operators can publish Hephaestus in numbers: the totals of their instance for each closed half-year, at `GET /api/public/usage`, with no sign-in. It shows workspaces, developers whose work was reviewed, reviewed work, practice reviews, and practice feedback delivered. Each figure is rounded down, and a half-year shows figures only if at least 5 workspaces and 5 developers took part. It is off by default. Set `config.publicUsage.enabled`, or turn it on with `PUT /api/admin/settings/public-usage`. The first release covers every closed half-year since the first practice review. An instance admin can withdraw a released half-year or one of its figures for good. The reads have their own rate limit, 60 each minute by default (`HEPHAESTUS_RATE_LIMIT_PUBLIC_USAGE_CAPACITY`, `HEPHAESTUS_RATE_LIMIT_PUBLIC_USAGE_PERIOD`).
+- Product feedback drafts use the sandbox runtime. If the runtime is off or the model times out, the report goes on without a draft.
+
+  **Operators:** Stop all server roles for this upgrade. The migration moves pending report drafts to the sandbox queue.
+
+### Patch Changes
+
+- Screen readers announce completed paragraphs as Hephaestus writes. Ask Hephaestus shows a neutral expression. Its antenna shows when Hephaestus is working, including with reduced motion.
+- Deleting an account stops new data exports and removes all of its saved export bundles.
+- Conversation maintenance skips accounts during and after erasure. A workspace purge or a verified account claim approves any move or deletion across accounts. The database migration installs the approval key. The server waits for it at startup.
+- The agent image no longer installs the `tree` command, which no part of Hephaestus used. Agents list directories with their own file tools and Git, as before.
+- Hephaestus uses only observations it can still read when it answers about your work. If it cannot capture the work, it can say that it could not check it.
+- The public API contract covers setting and unsetting the practice repository, MCP sign-in discovery, and the public keys that verify provenance records.
+- An isolated evaluation server can set its clock, wait for queued work to settle and send identifiers and request digests to a collector. The evaluation controls are off by default.
+- Conversation tool results that can copy Slack messages are now erased by the same job as conversation entries, every 15 minutes, so a large backlog usually goes within hours instead of over several weeks. The database clock decides which results are due, and a person whose erasure fails no longer holds back the rest of the workspace. The `rule` label of the conversation retention metrics and alerts tells `entries` from `copies`, and the `privacy_job_completed_total` metric reports the new job as `conversation_copy_retention`.
+- Only you can read and change your Hephaestus conversation. Your conversation stays private when an instance admin opens a read-only view of your workspace pages.
+- Conversation retention now usually erases a large backlog within hours instead of over several weeks. The job runs every 15 minutes and erases up to 20,000 due entries in each run. The database clock decides which entries are due. If the erasure of one person's entries fails, the other people in the workspace still have theirs erased. The `privacy_job_completed_total` metric reports the job as `conversation_retention`. The new `conversation_retention_deadline_margin_seconds` metric and the `HephaestusConversationRetentionBehind` alert show when the oldest due entry has less than seven days left before its limit. `HephaestusConversationRetentionUnsampled` shows when reads of that metric keep failing or stop.
+- The hourly cleanup of expired data exports now clears their data in small batches and retries a busy export on its next run. One busy export no longer keeps the expired data of every other account.
+- Hephaestus can show your feedback in a conversation again. Before, its reply stalled until it timed out. Feedback in your conversation is shown and recorded only for you.
+- Mentoring telemetry uses declared fields and omits personal content and identifiers. Keep collected mentoring logs and traces for no more than 14 days.
+- The bundled PostgreSQL no longer restarts every connection when a health probe times out. Before, a probe that took longer than one second left a process behind. PostgreSQL took it for a crashed backend, so it ended all sessions and recovered again, in a loop. The PostgreSQL image now starts under a small init process that cleans up such processes. Each probe now waits up to 10 seconds.
+
+  Two new alerts watch the database. `HephaestusPostgresDown` fires when PostgreSQL or its exporter does not answer for 5 minutes. `HephaestusPostgresExporterMissing` fires when the chart's exporter has had no scrape target for 5 minutes.
+
+- The list of your reviews on your practice profile opens much faster. It now checks whether the work behind a result is still current only for the reviews on the page you see, not for your whole history.
+- The database removes temporary table creation from the Hephaestus roles. Invariant checks now name their table schemas so that a session cannot redirect them to temporary tables.
+- Report drafts can retry when the model provider stops responding. While a draft waits to retry, another report can use its sandbox slot. The draft metrics identify when a daily limit prevents a draft.
+- Hephaestus now records, for each monitored GitHub repository, whether GitHub showed it public to the workspace's own credential in its last sync. A repository stops counting as public for every workspace once GitHub reports it private, any workspace's sync sees it as not public, or it is deleted. Private, internal and GitLab repositories wait until a later release checks who can see them. Nothing changes yet in what Hephaestus reads. The new metric `monitored_repository_readers` counts monitored repositories by visibility class and proof state. You do not need to change your configuration.
+- Monitored repositories, Outline collections and Slack channels now carry a visibility class. A repository starts visible to the whole workspace if it is available and its provider confirmed it public in the last 48 hours. Every other resource starts unproven until a later release checks who can see it. Nothing changes yet in what Hephaestus reads.
+- The server stops at startup if its PostgreSQL login can bypass row security. Check that the server uses the application role from the database role setup.
+- Before Hephaestus posts feedback on a pull request or merge request, it now checks the current head on GitHub or GitLab, even when it has not yet processed the push event. If the head moved past the reviewed version, the feedback is withheld because the work changed. If GitHub or GitLab cannot answer, nothing is posted and Hephaestus tries again later.
+- Hephaestus checks that you are a current, full member of the connected Slack team before it accepts a direct message.
+- Feedback that is stopped at the last check before it is published on a pull request or merge request is now shown as withheld, with the reason it was stopped (for example, a new push or a result marked incorrect). Before this fix, it was shown as a delivery failure with no reason. The unpublished draft review or draft notes are also removed from GitHub or GitLab, so they no longer block feedback for later reviews on the same work.
+- The server refuses SQL statements when the workspace isolation check cannot analyze them.
+- This release applies security updates to practice guidance rendering and the practice script runtime.
+
 ## 1.0.0-rc.15
 
 ### Minor Changes
