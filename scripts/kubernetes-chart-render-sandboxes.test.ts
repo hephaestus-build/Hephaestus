@@ -234,6 +234,12 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 				"/pods:get",
 			],
 		],
+		[
+			// The release namespace: the server reads its own Pod and that Pod's ReplicaSet for the Deployment
+			// revision of its rollout, by name, for release history. It lists and watches nothing.
+			undefined,
+			["/pods:get", "apps/replicasets:get"],
+		],
 	]);
 	const roles = resources.filter((resource) => kindOf(resource) === "Role");
 	const bindings = resources.filter((resource) => kindOf(resource) === "RoleBinding");

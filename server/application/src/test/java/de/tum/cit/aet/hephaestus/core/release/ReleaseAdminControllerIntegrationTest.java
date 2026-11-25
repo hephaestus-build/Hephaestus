@@ -8,7 +8,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.core.env.Environment;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("integration")
 class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -22,7 +25,16 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
     private WebTestClient client;
 
     @Autowired
-    private ReleaseHistory history;
+    private RunningRelease running;
+
+    @Autowired
+    private ReleaseActivationRepository repository;
+
+    @Autowired
+    private TransactionTemplate transaction;
+
+    @Autowired
+    private Environment environment;
 
     @Test
     void shouldRejectAnonymousRequests() {
@@ -93,8 +105,17 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithAdminUser
-    void shouldReportWhereTheReleaseRunsAndSinceWhen() {
-        history.recordStart();
+    void shouldReportWhereTheReleaseRunsAndRecordItsStartOutsideKubernetes() {
+        // The test context, like a JAR started outside Kubernetes, sets no HEPHAESTUS_RELEASE_POD: it records its
+        // start. A process of its own records here, because the context recorded at its start, before an earlier test
+        // cleaned the tables.
+        new ReleaseHistory(
+                        running,
+                        repository,
+                        transaction,
+                        environment,
+                        new StaticListableBeanFactory().getBeanProvider(RolloutReader.class))
+                .onApplicationReady();
         client.get()
                 .uri("/admin/release")
                 .headers(TestAuthUtils.withCurrentUser())
@@ -104,11 +125,9 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectBody()
                 .jsonPath("$.running.environment")
                 .isEqualTo("local")
-                .jsonPath("$.runningSince")
-                .exists()
-                .jsonPath("$.history[0].version")
-                .isEqualTo("0.0.0-development")
-                .jsonPath("$.history[0].environment")
-                .isEqualTo("local");
+                .jsonPath("$.history")
+                .isNotEmpty()
+                .jsonPath("$.history[0].revision")
+                .doesNotExist();
     }
 }

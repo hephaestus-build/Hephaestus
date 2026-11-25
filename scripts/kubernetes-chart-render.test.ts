@@ -779,6 +779,38 @@ await test("the migration knows the configured GitLab, which a connection withou
 	);
 });
 
+await test("the server reads its rollout's revision with get on Pods and ReplicaSets, and only with the API endpoint", () => {
+	const resources = rendered(layersFor("small"));
+	const server = workload(resources, "server");
+	assert.equal(
+		get(env(server, "HEPHAESTUS_RELEASE_POD"), "valueFrom", "fieldRef", "fieldPath"),
+		"metadata.name",
+	);
+	const role = resources.find(
+		(resource) => kindOf(resource) === "Role" && nameOf(resource).endsWith("-rollout-reader"),
+	);
+	assert.deepEqual(get(role, "rules"), [
+		{ apiGroups: [""], resources: ["pods"], verbs: ["get"] },
+		{ apiGroups: ["apps"], resources: ["replicasets"], verbs: ["get"] },
+	]);
+	const binding = resources.find(
+		(resource) =>
+			kindOf(resource) === "RoleBinding" && nameOf(resource).endsWith("-rollout-reader"),
+	);
+	assert.deepEqual(
+		list(get(binding, "subjects")).map((subject) => get(subject, "name")),
+		[nameOf(server)],
+	);
+
+	// Without sandboxes, backups or a stated API endpoint, the server has no token and records each start.
+	const without = rendered(layersFor("dev"));
+	assert.equal(env(workload(without, "server"), "HEPHAESTUS_RELEASE_POD"), undefined);
+	assert.equal(
+		without.some((resource) => nameOf(resource).endsWith("-rollout-reader")),
+		false,
+	);
+});
+
 await test("a Git provider on a private network reaches the server", () => {
 	const endpoint = { cidr: "10.30.0.0/16", ports: [443] };
 	const resources = rendered([
@@ -1098,12 +1130,13 @@ for (const name of profiles) {
 			assert.equal(envValue(role, "APP_VERSION"), "1.2.3");
 		}
 		// One migration owner, the revision's Job; no cluster-wide authority. Only the server holds a
-		// Role, in the sandbox namespace; its own test checks that authority.
+		// Role: in the sandbox namespace, and to read its own rollout. Their own tests check that authority.
 		for (const resource of resources.filter(
 			(candidate) =>
 				!(kindOf(candidate) === "Job" && componentOf(candidate) === "migration") &&
 				!sandboxOwned(candidate) &&
-				!controllerOwned(candidate),
+				!controllerOwned(candidate) &&
+				!nameOf(candidate).endsWith("-rollout-reader"),
 		)) {
 			assert.ok(
 				![

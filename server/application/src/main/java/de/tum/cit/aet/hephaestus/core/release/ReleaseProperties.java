@@ -17,6 +17,9 @@ import org.springframework.validation.annotation.Validated;
  * @param checkEnabled whether the server role may ask GitHub for the newest published release
  * @param environment  The name of this deployment, such as {@code production}. The webapp, log lines and traces use
  *                     the same name.
+ * @param pod          The name of this server's Pod, from the Kubernetes downward API. The server reads the Deployment
+ *                     revision of its rollout through it. Empty outside Kubernetes, and then each server start is one
+ *                     entry of the release history.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.release")
@@ -39,4 +42,10 @@ public record ReleaseProperties(
                 message =
                         "DEPLOYMENT_ENVIRONMENT must be lowercase letters, digits, '.', '_' or '-', at most 64 characters")
         @DefaultValue("local")
-        String environment) {}
+        String environment,
+
+        @Pattern(
+                regexp = "|[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?",
+                message = "HEPHAESTUS_RELEASE_POD must be empty or a Pod name")
+        @DefaultValue("")
+        String pod) {}

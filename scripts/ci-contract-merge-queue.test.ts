@@ -2181,6 +2181,7 @@ void test("the queue runs roll, while nightly and dispatch add eviction", async 
 							inputs: {
 								"backup-drill": true,
 								"eviction-drill": eviction,
+								"history-drill": true,
 							},
 							github: { event_name: event },
 						}) === "true"
@@ -2202,6 +2203,10 @@ void test("the queue runs roll, while nightly and dispatch add eviction", async 
 					key === "k3d",
 				);
 				assert.equal(selected("Back up, then restore to a point in time"), key === "k3d");
+				assert.equal(
+					selected("Record release history through a restart and two rollbacks"),
+					key === "k3d",
+				);
 			}
 		}
 	}
@@ -2304,6 +2309,85 @@ void test("replacement-storage recovery runs nightly and on relevant pull reques
 	);
 	assert.equal(
 		kubernetes.getIn(["on", "workflow_call", "inputs", "backup-drill", "default"]),
+		false,
+	);
+});
+
+void test("the release history drill runs nightly and on relevant pull requests, never in the merge queue", async () => {
+	const source = await readFile(".github/workflows/cicd.yml", "utf8");
+	const cicd = parseDocument(source);
+	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const historyPatterns: unknown = parseDocument(pathFilter(source, "release-history")).get(
+		"release-history",
+	);
+	assert.ok(isSeq(historyPatterns));
+	const patterns = asArray(historyPatterns.toJSON(), "release history paths").map((entry) =>
+		asString(entry, "path"),
+	);
+	const kubernetesPatterns: unknown = parseDocument(pathFilter(source, "kubernetes")).get(
+		"kubernetes",
+	);
+	assert.ok(isSeq(kubernetesPatterns));
+	const selector = asString(
+		cicd.getIn(["jobs", "detect-changes", "outputs", "release-history"]),
+		"release history selector",
+	);
+	const input = cicd.getIn(["jobs", "Kubernetes", "with", "history-drill"]);
+	const drill = namedStep(
+		kubernetes,
+		["jobs", "k3d"],
+		"Record release history through a restart and two rollbacks",
+	);
+	for (const [file, relevant] of [
+		["deploy/chart/hephaestus/templates/server.yaml", true],
+		["scripts/release-history-drill.ts", true],
+		["deploy/chart/hephaestus/templates/networkpolicy.yaml", false],
+		["webapp/src/routes/index.tsx", false],
+	] as const) {
+		const changed = String(patterns.some((pattern) => minimatch(file, pattern)));
+		assert.equal(changed, String(relevant), file);
+		if (relevant) {
+			// The drill runs on the Kubernetes legs, so each of its inputs must also start them.
+			assert.ok(
+				asArray(kubernetesPatterns.toJSON(), "Kubernetes paths").some((pattern) =>
+					minimatch(file, asString(pattern, "path")),
+				),
+				file,
+			);
+		}
+		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+			const selected = evaluateTierOutput(selector, event, {
+				filter: { "release-history": changed },
+			});
+			const enabled = expandExpressions(input, {
+				needs: { "detect-changes": { outputs: { "release-history": selected } } },
+			});
+			assert.equal(enabled, String(relevant && event === "pull_request"), `${event}: ${file}`);
+			assert.equal(
+				evaluateLeg(drill.get("if"), event === "merge_group", {
+					minor: "1.37",
+					arch: "amd64",
+					"history-drill": enabled === "true",
+				}),
+				enabled,
+			);
+		}
+	}
+	const enabled = nightly.getIn(["jobs", "Kubernetes", "with", "history-drill"]);
+	assert.equal(enabled, true);
+	assert.deepEqual(
+		clusterMatrix(true, true)
+			.include.filter((leg) => leg.leg === "k3d")
+			.filter(
+				(leg) =>
+					evaluateLeg(drill.get("if"), true, { ...leg, "history-drill": enabled }) === "true",
+			)
+			.map((leg) => `${leg.minor} ${leg.arch}`),
+		["1.37 amd64"],
+	);
+	assert.equal(
+		kubernetes.getIn(["on", "workflow_call", "inputs", "history-drill", "default"]),
 		false,
 	);
 });

@@ -330,6 +330,7 @@ hephaestus:
         image: ${HEPHAESTUS_IMAGE_SERVER:}
         check-enabled: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:true}
         environment: ${DEPLOYMENT_ENVIRONMENT:local}
+        pod: ${HEPHAESTUS_RELEASE_POD:}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
         # How long a role waits at start for the migrate run mode, and how long a migration waits while

@@ -36,6 +36,10 @@ on:
         description: Qualify replacement-storage recovery on the latest amd64 leg
         type: boolean
         default: false
+      history-drill:
+        description: Roll the server back twice on the latest amd64 leg and check the release history
+        type: boolean
+        default: false
       ref:
         description: The commit whose chart and scripts to check out; empty checks out the caller's commit
         type: string
@@ -199,6 +203,10 @@ jobs:
         background: true
         if: ${{ env.DRILLS == 'true' && inputs.eviction-drill && github.event_name != 'merge_group' && github.event_name != 'pull_request' }}
         run: node scripts/kubernetes-memory-drill.ts release-images.tsv
+      # Last: after `kubectl rollout undo`, a Helm change to the server conflicts (ci-cd.mdx § Release history drill).
+      - name: Record release history through a restart and two rollbacks
+        if: ${{ inputs.history-drill && env.KUBERNETES_MINOR == '1.37' && env.KUBERNETES_ARCH == 'amd64' && env.DRILLS != 'true' }}
+        run: node scripts/release-history-drill.ts
       - wait-all: true
       - name: Record the cluster state
         if: ${{ failure() }}

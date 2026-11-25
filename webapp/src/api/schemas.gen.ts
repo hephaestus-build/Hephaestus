@@ -11725,7 +11725,8 @@ export const ReleaseResearchDatasetSchema = {
 
 export const ReleaseStartSchema = {
 	type: "object",
-	description: "A release the server role started on this instance.",
+	description:
+		"A rollout of the server Deployment, as its Deployment revision numbers it, or one server start where the server\n could not read its rollout.",
 	properties: {
 		channel: {
 			$ref: "#/components/schemas/ReleaseChannel",
@@ -11736,19 +11737,30 @@ export const ReleaseStartSchema = {
 		environment: {
 			type: "string",
 		},
+		id: {
+			type: "integer",
+			format: "int64",
+			description: "the entry's row, which identifies it among entries with the same time",
+		},
 		image: {
 			type: "string",
+		},
+		revision: {
+			type: "integer",
+			format: "int64",
+			description: "the Deployment revision of the rollout; absent for a server start",
 		},
 		startedAt: {
 			type: "string",
 			format: "date-time",
-			description: "when the server role first started this release; a restart does not change it",
+			description:
+				"when the first server of the rollout recorded it, by the database clock; a restart does not\n                  change it",
 		},
 		version: {
 			type: "string",
 		},
 	},
-	required: ["channel", "environment", "startedAt", "version"],
+	required: ["channel", "environment", "id", "startedAt", "version"],
 } as const;
 
 export const ReleaseStatusSchema = {
@@ -11763,7 +11775,7 @@ export const ReleaseStatusSchema = {
 		},
 		history: {
 			type: "array",
-			description: "the releases this instance ran, newest first",
+			description: "the rollouts of this deployment environment, newest first",
 			items: {
 				$ref: "#/components/schemas/ReleaseStart",
 			},
@@ -11799,8 +11811,7 @@ export const ReleaseStatusSchema = {
 		runningSince: {
 			type: "string",
 			format: "date-time",
-			description:
-				"when this instance started the running release, absent unless the newest start is it",
+			description: "when the newest rollout became active, absent unless this server runs it",
 		},
 		status: {
 			$ref: "#/components/schemas/ReleaseCheckStatus",

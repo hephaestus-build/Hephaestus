@@ -1218,8 +1218,17 @@ await test("with backups on, the server may get exactly the two backup CronJobs,
 	);
 });
 
-await test("the server has the Kubernetes API only for the sandboxes or the backups, and no backup access without backups", () => {
-	// Without sandboxes and without backups: no token, no API egress, no Role, no backup schedules.
+/** Rules as comparable text, in a fixed order. */
+const sorted = (rules: unknown[]) =>
+	rules.map((rule) => JSON.stringify(rule)).toSorted(byCodePoint);
+
+await test("the server has the Kubernetes API only for the sandboxes, the backups or its rollout, and no backup access without backups", () => {
+	const rollout = [
+		{ apiGroups: [""], resources: ["pods"], verbs: ["get"] },
+		{ apiGroups: ["apps"], resources: ["replicasets"], verbs: ["get"] },
+	];
+	// Without sandboxes, backups or a stated API endpoint: no token, no API egress, no Role, no backup schedules.
+	// Release history then records each server start, so it needs no API (docs/admin/instance-admin.mdx).
 	const neither = serverApiAccess(rendered(layersFor("dev")));
 	assert.deepEqual(neither, {
 		token: false,
@@ -1228,20 +1237,32 @@ await test("the server has the Kubernetes API only for the sandboxes or the back
 		namespace: undefined,
 		rules: [],
 	});
-	// Backups alone: the token, the egress and the backup reader only.
+	// The API endpoint alone: the token, the egress and the rollout reader only.
+	const endpointOnly = serverApiAccess(
+		rendered([...layersFor("dev"), { networkPolicy: { kubernetesApi } }]),
+	);
+	assert.equal(endpointOnly.token, true);
+	assert.equal(endpointOnly.apiEgress, true);
+	assert.equal(endpointOnly.cronJobs, undefined);
+	assert.deepEqual(sorted(endpointOnly.rules), sorted(rollout));
+	// Backups: the backup reader, and the rollout reader that every server with the API holds.
 	const backupsOnly = serverApiAccess(
 		rendered([...layersFor("dev"), backupsOn, { networkPolicy: { kubernetesApi } }]),
 	);
 	assert.equal(backupsOnly.token, true);
 	assert.equal(backupsOnly.apiEgress, true);
 	assert.deepEqual(
-		backupsOnly.rules.map((rule) => get(rule, "resources")),
-		[["cronjobs"]],
+		backupsOnly.rules.map((rule) => JSON.stringify(get(rule, "resources"))).toSorted(byCodePoint),
+		['["cronjobs"]', '["pods"]', '["replicasets"]'],
 	);
-	// Sandboxes alone: their own Role, and no backup reader or backup schedules.
+	// Sandboxes alone: their own Role and the rollout reader, and no backup reader or backup schedules.
 	const sandboxesOnly = serverApiAccess(rendered(layersFor("small")));
 	assert.equal(sandboxesOnly.token, true);
+	assert.equal(sandboxesOnly.apiEgress, true);
 	assert.equal(sandboxesOnly.cronJobs, undefined);
+	for (const rule of sorted(rollout)) {
+		assert.ok(sorted(sandboxesOnly.rules).includes(rule), rule);
+	}
 	assert.ok(!sandboxesOnly.rules.some((rule) => list(get(rule, "resources")).includes("cronjobs")));
 	// Backups need the API endpoint that the network plugin sees.
 	const unstated = render([...layersFor("dev"), backupsOn]);

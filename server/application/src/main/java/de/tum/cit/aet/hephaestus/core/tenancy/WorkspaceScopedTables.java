@@ -97,8 +97,9 @@ public class WorkspaceScopedTables {
             // Singleton instance-wide operator settings (silent-mode brake); no tenant
             // dimension exists
             "instance_settings",
-            // The releases this instance started; no tenant dimension exists
+            // The releases this instance started and its rollouts; no tenant dimension exists
             "release_start",
+            "release_activation",
             // Hephaestus in numbers (ADR 0153): instance totals after the disclosure rules, never a raw or
             // per-workspace count
             "usage_release",

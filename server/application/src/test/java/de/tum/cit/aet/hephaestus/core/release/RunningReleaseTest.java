@@ -42,7 +42,7 @@ class RunningReleaseTest {
     void shouldOmitIdentityAndListOnlyEnabledRolesAndContributeToActuatorInfo() {
         var environment = new MockEnvironment();
         var running =
-                new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true, "local"), environment);
+                new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true, "local", ""), environment);
         assertThat(running.get().commit()).isNull();
         assertThat(running.get().image()).isNull();
         assertThat(running.get().roles()).containsExactly(RuntimeRole.SERVER);

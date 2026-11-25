@@ -53,6 +53,7 @@ jobs:
       eviction-drill: true
       arm64: true
       backup-drill: true
+      history-drill: true
 
   # A self-hoster's release change: the latest published release's chart upgraded to the newest main build.
   chart-upgrade:

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795634696789-1" author="hephaestus">
+        <createTable tableName="release_activation">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="release_activationPK"/>
+            </column>
+            <column name="activated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="channel" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="commit_sha" type="VARCHAR(40)"/>
+            <column name="deployment_uid" type="VARCHAR(36)"/>
+            <column name="environment" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image" type="VARCHAR(512)"/>
+            <column name="revision" type="BIGINT"/>
+            <column name="version" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795634696789-2" author="hephaestus">
+        <addUniqueConstraint columnNames="environment, deployment_uid, revision" constraintName="uk_release_activation_rollout" tableName="release_activation"/>
+    </changeSet>
+    <changeSet id="1795634696789-3" author="hephaestus">
+        <createIndex indexName="ix_release_activation_environment" tableName="release_activation">
+            <column name="environment"/>
+            <column name="activated_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795634696789-4" author="hephaestus">
+        <sql>ALTER TABLE release_activation ADD CONSTRAINT ck_release_activation_channel CHECK (channel IN ('RELEASE', 'COMMIT', 'DEVELOPMENT'))</sql>
+        <rollback><sql>ALTER TABLE release_activation DROP CONSTRAINT ck_release_activation_channel</sql></rollback>
+    </changeSet>
+    <changeSet id="1795634696789-5" author="hephaestus">
+        <comment>A rollout has both its Deployment and its revision; a server start outside Kubernetes has neither.</comment>
+        <sql>ALTER TABLE release_activation ADD CONSTRAINT ck_release_activation_rollout CHECK ((deployment_uid IS NULL) = (revision IS NULL))</sql>
+        <rollback><sql>ALTER TABLE release_activation DROP CONSTRAINT ck_release_activation_rollout</sql></rollback>
+    </changeSet>
+</databaseChangeLog>
