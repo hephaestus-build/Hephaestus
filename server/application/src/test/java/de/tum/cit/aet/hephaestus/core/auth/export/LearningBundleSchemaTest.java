@@ -189,6 +189,11 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         "pattern",
                         "/records/0/text"),
                 refused(
+                        "a C1 control character in a record text",
+                        b -> record(b, 0).put("text", "before\u009Bafter"),
+                        "pattern",
+                        "/records/0/text"),
+                refused(
                         "a bidirectional isolate in a record text",
                         b -> record(b, 0).put("text", "before\u2066after"),
                         "pattern",
