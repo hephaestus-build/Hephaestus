@@ -224,6 +224,8 @@
 		// `no-restricted-imports`: the override for test files below sets that rule again and would
 		// drop this entry there, and it does not read `require()`.
 		"hephaestus/no-ichnaea-statistics": "error",
+		// A browser test waits for what proves the page is ready (`webapp/e2e/screenshots/settled.ts`).
+		"hephaestus/no-networkidle": "error",
 
 		// -- Types -----------------------------------------------------------------------------------
 		// An object shape is an `interface`; a `type` alias is for a union or a computed type.

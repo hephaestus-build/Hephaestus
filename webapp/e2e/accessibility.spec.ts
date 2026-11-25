@@ -5,6 +5,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test as base } from "./fixtures";
 import { asFirstVisit, asReturningReader } from "./screenshots/first-visit.ts";
+import { settled } from "./screenshots/settled.ts";
 
 /**
  * The integrated half of the accessibility evaluation in
@@ -123,13 +124,13 @@ async function open(page: Page, path: string) {
 }
 
 /**
- * The router sets a page's own title once its route has loaded. `networkidle` alone can come first:
- * a page whose scripts failed to load goes quiet at once and stays blank. The test's own timeout
- * bounds the wait, so a busy server only slows it down.
+ * The router sets a page's own title once its route has loaded; a page whose scripts failed to load
+ * never gets one. Then the page shows its data. The test's own timeout bounds the waits, so a busy
+ * server only slows them down.
  */
 async function loaded(page: Page) {
 	await expect(page, "the page loads its route").toHaveTitle(PAGE_TITLE, { timeout: 0 });
-	await page.waitForLoadState("networkidle");
+	await settled(page);
 }
 
 /** What a reader whose system is set to dark gets: the theme follows the system. */

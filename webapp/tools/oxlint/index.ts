@@ -6,6 +6,7 @@ import { newTabLinkSaysSo } from "./rules/new-tab-link-says-so.ts";
 import { noContextProvider } from "./rules/no-context-provider.ts";
 import { noIchnaeaStatistics } from "./rules/no-ichnaea-statistics.ts";
 import { noManualQueryKey } from "./rules/no-manual-query-key.ts";
+import { noNetworkidle } from "./rules/no-networkidle.ts";
 import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
 import { noRawDocsUrl } from "./rules/no-raw-docs-url.ts";
@@ -31,6 +32,7 @@ export default definePlugin({
 		"no-context-provider": noContextProvider,
 		"no-ichnaea-statistics": noIchnaeaStatistics,
 		"no-manual-query-key": noManualQueryKey,
+		"no-networkidle": noNetworkidle,
 		"no-unsafe-definition-lookup": noUnsafeDefinitionLookup,
 		"no-non-ascii-filename": noNonAsciiFilename,
 		"no-nondeterministic-render": noNondeterministicRender,
