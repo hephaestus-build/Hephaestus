@@ -97,8 +97,7 @@ void test("ICMP prohibition is a reply even when Nmap reports the port as filter
 	);
 });
 
-void test("a complete silent scan passes only for a host marked down", () => {
-	assert.throws(() => assessScan(report([], "open|filtered"), online));
+void test("a complete silent scan contains no responding ports", () => {
 	assert.deepEqual(assessScan(report([], "open|filtered"), down), {
 		status: "unreachable",
 		hiddenReplies: false,
@@ -140,8 +139,14 @@ mock.module(${JSON.stringify(new URL("lib/process.ts", import.meta.url).href)}, 
     output(executable, args) {
       assert.equal(executable, "/usr/local/libexec/hephaestus-probe-nmap");
       const family = args.includes("-6") ? "ipv6" : "ipv4";
-      return readFileSync(new URL("public-port-probe-routing-" + family + ".xml",
+      const mode = process.env.PROBE_TEST_SCAN;
+      if (mode === "cannot-start" || (mode === "ipv6-unavailable" && family === "ipv6")) {
+        throw new Error("Nmap could not start.");
+      }
+      const capture = readFileSync(new URL("public-port-probe-routing-" + family + ".xml",
         ${JSON.stringify(new URL("fixtures/", import.meta.url).href)}), "utf8");
+      if (mode === "incomplete") return capture.replace('exit="success"', 'exit="error"');
+      return mode === "silent" ? capture.replaceAll("host-unreach", "no-response") : capture;
     },
   },
 });
@@ -203,6 +208,35 @@ exec "$PROBE_TEST_NODE" --experimental-test-module-mocks --import "$PROBE_TEST_P
 		...routeLines,
 		"The external probe reported a failed check.",
 	]);
+	const invalidConfig = path.join(directory, "invalid.json");
+	writeFileSync(invalidConfig, "invalid JSON");
+	for (const overrides of [
+		{ PROBE_TEST_CONFIG: path.join(directory, "missing.json") },
+		{ PROBE_TEST_CONFIG: invalidConfig },
+		{ PROBE_TEST_SCAN: "cannot-start" },
+		{ PROBE_TEST_SCAN: "incomplete" },
+	]) {
+		const unavailable = runWorkflow(overrides);
+		assert.equal(unavailable.status, 2, unavailable.stderr);
+		assert.equal(unavailable.stdout.trim(), "Public port probe unavailable.");
+	}
+	const failedWithMissingFamily = runWorkflow({ PROBE_TEST_SCAN: "ipv6-unavailable" });
+	assert.equal(failedWithMissingFamily.status, 1);
+	assert.deepEqual(failedWithMissingFamily.stdout.trim().split("\n"), [
+		routeLines[0],
+		"The external probe reported a failed check.",
+	]);
+	const silent = runWorkflow({ PROBE_TEST_SCAN: "silent" });
+	assert.equal(silent.status, 0, silent.stderr);
+	assert.match(silent.stdout, /unreachable \(expected while down\)/u);
+	const onlineConfig = path.join(directory, "online.json");
+	writeFileSync(
+		onlineConfig,
+		JSON.stringify([{ ipv4: "192.0.2.3", ipv6: "2001:db8::3", ...online }]),
+	);
+	const silentOnline = runWorkflow({ PROBE_TEST_SCAN: "silent", PROBE_TEST_CONFIG: onlineConfig });
+	assert.equal(silentOnline.status, 1);
+	assert.equal(silentOnline.stdout.trim(), "The external probe reported a failed check.");
 	writeFileSync(
 		ssh,
 		`#!/bin/sh
@@ -210,10 +244,16 @@ printf '%s\\n' "$PROBE_TEST_SSH_STDOUT"
 exit "$PROBE_TEST_SSH_STATUS"
 `,
 	);
+	const success = "Public port verification passed for 1 hosts on IPv4 and IPv6.";
 	for (const [status, stdout] of [
 		["255", cli.stdout],
+		["255", success],
 		["1", ""],
 		["0", ""],
+		["0", `${success}\n${success}`],
+		["1", `${cli.stdout}${cli.stdout}`],
+		["0", `${success}\n${cli.stdout}`],
+		["1", `${success}\n${cli.stdout}`],
 	] as const) {
 		const unavailable = runWorkflow({
 			PROBE_TEST_SSH_STATUS: status,
@@ -224,10 +264,25 @@ exit "$PROBE_TEST_SSH_STATUS"
 	}
 	const passed = runWorkflow({
 		PROBE_TEST_SSH_STATUS: "0",
-		PROBE_TEST_SSH_STDOUT: "Public port verification passed for 1 hosts on IPv4 and IPv6.",
+		PROBE_TEST_SSH_STDOUT: success,
 	});
 	assert.equal(passed.status, 0, passed.stderr);
 	assert.match(passed.stdout, /^Public port verification passed/u);
+	const unconfigured = runWorkflow({ PROBE_KEY: "" });
+	assert.equal(unconfigured.status, 2, unconfigured.stderr);
+	assert.equal(
+		unconfigured.stdout.trim(),
+		"Public port probe unavailable. The connection is not configured.",
+	);
+	writeFileSync(
+		ssh,
+		`#!/bin/sh
+printf 'Public port verifi\\000cation passed for 1 hosts on IPv4 and IPv6.\\n'
+`,
+	);
+	const binary = runWorkflow();
+	assert.equal(binary.status, 2, binary.stderr);
+	assert.equal(binary.stdout.trim(), "Public port probe unavailable.");
 });
 
 void test("a routing failure keeps its state and still reports responses on other ports", () => {

@@ -6,6 +6,9 @@ import { output } from "./lib/process.ts";
 const publicPorts = new Set(["80/tcp", "443/tcp"]);
 const respondingStates = new Set(["open", "closed", "unfiltered"]);
 const routingFailureReasons = new Set(["net-unreach", "host-unreach", "no-route"]);
+const failedReceipt =
+	"Public port verification failed. Run the check on the probe host for details.";
+const unavailableReceipt = "Public port probe unavailable.";
 
 function responseReason(attributes: string) {
 	return /(?:^|\s)reason="(?<reason>[^"]+)"/u.exec(attributes)?.groups?.reason;
@@ -67,7 +70,7 @@ export function probeTargets(config: unknown): Target[] {
 	});
 }
 
-export function assessScan(report: string, { expectedOnline, http3 }: Omit<Target, "addresses">) {
+export function assessScan(report: string, { http3 }: Pick<Target, "http3">) {
 	// A host timeout can leave Nmap's exit code at zero. Require both full scan ranges,
 	// one completed host, and an accounting of every TCP and UDP port before accepting it.
 	const ranges = Array.from(
@@ -118,9 +121,6 @@ export function assessScan(report: string, { expectedOnline, http3 }: Omit<Targe
 		elided.some(({ state, reasons }) => reasons.some((reason) => routingFailed(state, reason)));
 	const responseStatus = responding.length > 0 || hiddenReplies ? "reachable" : "unreachable";
 	const status = routingFailure ? "routing-failure" : responseStatus;
-	if (status === "unreachable" && expectedOnline) {
-		throw new Error("The address did not answer on either protocol.");
-	}
 	return {
 		status,
 		hiddenReplies,
@@ -171,40 +171,50 @@ async function main() {
 	// Check every address even when one probe fails. Limit concurrent scans to one per host.
 	const outcomes = await Promise.all(
 		hosts.map(async (target, index) => {
-			let passed = true;
+			let failed = false;
+			let unavailable = false;
 			for (const address of target.addresses) {
 				const family = isIP(address);
 				try {
 					const result = await probe(address, target);
 					if (result.status === "routing-failure") {
 						console.log(`Host ${index + 1}, IPv${family}: routing failure.`);
-						passed = false;
+						failed = true;
 					}
 					if (result.hiddenReplies || result.unexpected.length > 0) {
 						console.error(
 							`Host ${index + 1}, IPv${family}, unexpected responding ports: ${result.hiddenReplies ? "grouped replies" : result.unexpected.join(", ")}`,
 						);
-						passed = false;
+						failed = true;
 					} else if (result.status === "unreachable") {
-						console.log(`Host ${index + 1}, IPv${family}: unreachable (expected while down).`);
+						if (target.expectedOnline) {
+							console.error(`Host ${index + 1}, IPv${family}: the address did not answer.`);
+							failed = true;
+						} else {
+							console.log(`Host ${index + 1}, IPv${family}: unreachable (expected while down).`);
+						}
 					}
 				} catch (error) {
 					console.error(
 						`Host ${index + 1}, IPv${family}, no complete probe result.`,
 						error instanceof Error ? error.message : error,
 					);
-					passed = false;
+					unavailable = true;
 				}
 			}
-			return passed;
+			return { failed, unavailable };
 		}),
 	);
-	if (outcomes.some((passed) => !passed)) {
-		throw new Error(
-			"Public port verification failed. Run the check on the probe host for details.",
-		);
+	if (outcomes.some(({ failed }) => failed)) {
+		console.log(failedReceipt);
+		return 1;
+	}
+	if (outcomes.some(({ unavailable }) => unavailable)) {
+		console.log(unavailableReceipt);
+		return 2;
 	}
 	console.log(`Public port verification passed for ${hosts.length} hosts on IPv4 and IPv6.`);
+	return 0;
 }
 
 if (typeof import.meta.main !== "boolean") {
@@ -213,15 +223,15 @@ if (typeof import.meta.main !== "boolean") {
 
 if (import.meta.main) {
 	try {
-		await main();
+		process.exitCode = await main();
 	} catch (error) {
 		// Only stdout reaches the workflow log. Keep host and port details on the probe.
-		console.log("Public port verification failed. Run the check on the probe host for details.");
+		console.log(unavailableReceipt);
 		if (error instanceof SyntaxError) {
 			console.error("Invalid probe configuration JSON.");
 		} else {
 			console.error(error instanceof Error ? error.message : "Probe failed.");
 		}
-		process.exitCode = 1;
+		process.exitCode = 2;
 	}
 }

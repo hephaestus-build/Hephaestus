@@ -1719,7 +1719,7 @@ Manual runs and pull request runs do not enter the shared reporter.
 It checks all TCP and UDP ports on each public IPv4 and IPv6 address.
 It accepts responses on TCP 80 and TCP 443. It also accepts UDP 443 for hosts that serve HTTP/3.
 
-An incomplete scan fails the check.
+If an incomplete scan leaves no known failure, the probe reports itself unavailable.
 A silent address also fails unless its host has an approved outage marker.
 The probe reports a routing failure separately and fails the check even if the host has an outage marker.
 Administrative prohibitions count as port responses.
@@ -1780,6 +1780,8 @@ Set three secrets in that environment.
 
 Dispatch `Security / Public host ports` on `main` to check the connection and the result.
 If the probe is unavailable, check its SSH connection, pinned host key, and forced command.
+Check that the forced command can read the inventory and run Nmap.
+
 If the run reports a routing failure, check the route from the probe to the affected address.
 If a run fails, sign in to the probe and run the forced command as `heph-probe`.
 The command shows which address family and ports need attention.
