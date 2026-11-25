@@ -591,9 +591,7 @@ class LlmProxyService {
                     permit.released();
                     return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
                 }
-                // The authorization recheck, after every wait: the body is the text of an ended attempt, so every
-                // runner
-                // stops as it does for a lost lease.
+                // The authorization recheck, after every wait. An ended attempt's text stops every runner.
                 ProxyRefusal narrowed = routingService.dispatchRefusal(routing);
                 if (narrowed != null) {
                     permit.released();
@@ -617,6 +615,7 @@ class LlmProxyService {
                 throw failure;
             }
             UpstreamResult upstream;
+            boolean rechecking = false;
             try {
                 if (workTimeOver(routing)) {
                     permit.released();
@@ -652,10 +651,10 @@ class LlmProxyService {
                         permit.released();
                         return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
                     }
-                    // The authorization recheck, after every wait: the body is the text of an ended attempt, so every
-                    // runner
-                    // stops as it does for a lost lease.
+                    // The authorization recheck, after every wait. An ended attempt's text stops every runner.
+                    rechecking = true;
                     ProxyRefusal narrowed = routingService.dispatchRefusal(routing);
+                    rechecking = false;
                     if (narrowed != null) {
                         permit.released();
                         return refusal(HttpStatus.CONFLICT, narrowed, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
@@ -672,6 +671,11 @@ class LlmProxyService {
                             reviewStream);
                 }
             } catch (Exception e) {
+                if (rechecking) {
+                    // The retry failed before it left, so the provider's health takes no failure from it.
+                    permit.released();
+                    throw e;
+                }
                 // Only a failure before a stream's head reaches here, so nothing has been written to the client.
                 if (attempt.sourceType() == UsageSourceType.PROBE) permit.released();
                 else permit.failed(e);
