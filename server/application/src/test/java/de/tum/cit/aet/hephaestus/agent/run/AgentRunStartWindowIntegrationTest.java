@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -173,9 +174,10 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     void shouldRefuseADigestPastItsContactWindowEvenIfItsDueTimeMoved() throws SQLException {
-        var digest = enqueueDigest();
+        var cutoff = runRows.databaseClock().plusSeconds(3);
+        var digest = enqueueDigest(cutoff);
         try (var _ = lockTurnForReaper(digest)) {
-            awaitDigestCutoff(digest);
+            awaitDigestCutoff(cutoff);
             jdbc.update(
                     "UPDATE agent_run SET available_at = clock_timestamp() WHERE id = ?",
                     runOf(digest).id());
@@ -187,38 +189,32 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     void shouldEndAnExpiredDigestWhenALaterQuestionIsQueued() throws SQLException {
-        var digest = enqueueDigest();
+        var cutoff = runRows.databaseClock().plusSeconds(3);
+        var digest = enqueueDigest(cutoff);
         ConversationTurn question;
         try (var _ = lockTurnForReaper(digest)) {
             question = ask(conversation).turn();
-            awaitDigestCutoff(digest);
+            awaitDigestCutoff(cutoff);
         }
 
         assertEndsWithoutStarting(digest);
         assertStartPaths(question, AgentRunKind.TURN, true, List.of());
     }
 
-    private ConversationTurn enqueueDigest() {
+    private ConversationTurn enqueueDigest(Instant cutoff) {
         String requestId = UUID.randomUUID().toString();
         assertThat(turns.submitDigest(
                         workspace,
                         conversation.getId(),
                         new ConversationTurnService.DigestRequest(
-                                requestId,
-                                "Weekly recap",
-                                JsonNodeFactory.instance.objectNode(),
-                                Duration.ofSeconds(3))))
+                                requestId, "Weekly recap", JsonNodeFactory.instance.objectNode(), cutoff)))
                 .isTrue();
         return turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
     }
 
-    private void awaitDigestCutoff(ConversationTurn digest) {
+    private void awaitDigestCutoff(Instant cutoff) {
         await().atMost(Duration.ofSeconds(10))
-                .until(() -> Boolean.TRUE.equals(
-                        jdbc.queryForObject("""
-                SELECT created_at + make_interval(secs => start_within_seconds) <= clock_timestamp()
-                  FROM agent_run WHERE id = ?
-                """, Boolean.class, runOf(digest).id())));
+                .until(() -> !runRows.databaseClock().isBefore(cutoff));
     }
 
     /** The scheduled reaper must take this lock before it ends the turn. The run's claim stays free to proceed. */

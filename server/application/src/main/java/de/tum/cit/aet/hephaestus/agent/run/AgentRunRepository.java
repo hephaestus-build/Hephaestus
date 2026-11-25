@@ -53,19 +53,24 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
         double getWaitedSeconds();
     }
 
+    /** Share the stimulus join between ledger order and the digest cutoff. Inline it so lookups use the run key. */
+    String TURN_STIMULI = """
+            WITH turn_stimuli AS NOT MATERIALIZED (
+                SELECT t.run_id, t.workspace_id, e.seq, e.kind, e.payload
+                  FROM conversation_turn t
+                  JOIN conversation_entry e ON e.turn_id = t.id AND e.workspace_id = t.workspace_id
+                 WHERE e.kind IN ('USER', 'DIGEST')
+            )
+            """;
+
     /** Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order. */
     String SUBJECT_PREDECESSOR = """
             CASE WHEN r.kind='TURN' AND s.kind='DIGEST' THEN FALSE
                  WHEN r.kind='DIGEST' AND s.kind='TURN' THEN TRUE
                  ELSE COALESCE((SELECT earlier.seq < question.seq
-                        FROM conversation_turn earlier_turn
-                        JOIN conversation_entry earlier ON earlier.turn_id = earlier_turn.id
-                            AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind IN ('USER','DIGEST')
-                        JOIN conversation_turn current_turn ON current_turn.run_id = r.id
-                            AND current_turn.workspace_id = r.workspace_id
-                        JOIN conversation_entry question ON question.turn_id = current_turn.id
-                            AND question.workspace_id = current_turn.workspace_id AND question.kind IN ('USER','DIGEST')
-                       WHERE earlier_turn.run_id = s.id AND earlier_turn.workspace_id = s.workspace_id),
+                        FROM turn_stimuli earlier
+                        JOIN turn_stimuli question ON question.run_id = r.id AND question.workspace_id = r.workspace_id
+                       WHERE earlier.run_id = s.id AND earlier.workspace_id = s.workspace_id),
                      (s.created_at, s.id) < (r.created_at, r.id)) END
             """;
 
@@ -77,11 +82,35 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                           ))))
             """;
 
-    /** A digest keeps its original contact window if a retry makes it due again. */
+    /** Older digest stimuli record the week and zone of the Monday 21:00 cutoff. An erased stimulus cannot start. */
+    String DIGEST_START_BY = """
+            SELECT CASE WHEN pg_input_is_valid(cutoff.value, 'timestamp with time zone')
+                        THEN CAST(cutoff.value AS timestamptz)
+                        ELSE CAST('-infinity' AS timestamptz) END
+              FROM turn_stimuli e
+              CROSS JOIN LATERAL (
+                  SELECT COALESCE(e.payload ->> 'startBy',
+                      CASE WHEN pg_input_is_valid(e.payload #>> '{window,weekStart}', 'date')
+                           THEN CAST(CAST(e.payload #>> '{window,weekStart}' AS date) + 7 AS text) || ' 21:00 ' ||
+                                CASE e.payload #>> '{window,zone}'
+                                    WHEN 'Z' THEN '+00:00'
+                                    WHEN 'UT' THEN '+00:00'
+                                    ELSE regexp_replace(e.payload #>> '{window,zone}', '^(UTC|GMT|UT)(?=[+-])', '')
+                                END
+                      END) AS value
+              ) cutoff
+             WHERE e.run_id = r.id AND e.workspace_id = r.workspace_id AND e.kind = 'DIGEST'
+            """;
+
+    /** The digest cutoff stays with the stimulus when a retry makes the run due again. */
     String START_WINDOW_ELAPSED = """
-            (r.start_within_seconds IS NOT NULL
-               AND CASE WHEN r.kind = 'DIGEST' THEN r.created_at ELSE r.available_at END
-                   + make_interval(secs => r.start_within_seconds) <= clock_timestamp())
+            COALESCE(COALESCE(
+                CASE WHEN r.kind = 'DIGEST' THEN (
+            """ + DIGEST_START_BY + """
+                ) END,
+                CASE WHEN r.kind = 'DIGEST' THEN r.created_at ELSE r.available_at END
+                    + make_interval(secs => r.start_within_seconds)
+            ) <= clock_timestamp(), FALSE)
             """;
 
     String PAST_DEADLINE = "(r.deadline IS NOT NULL AND r.deadline <= clock_timestamp())";
@@ -152,14 +181,16 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      * starts their sandboxes, and each sandbox claims its own run.
      */
     @WorkspaceAgnostic("The dispatch reads the due runs of every workspace, in the claim's fair-share order")
-    @Query(value = """
+    @Query(
+            value = TURN_STIMULI + """
             SELECT r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
             """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
             """ + ORDER + """
             LIMIT :limit OFFSET :offset
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<DueRow> findDue(
             @Param("kinds") Collection<String> kinds,
             @Param("offset") int offset,
@@ -172,7 +203,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      */
     @WorkspaceAgnostic(
             "A replica holds the waiting requests of every workspace; each woken request claims its own subject")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
             """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
@@ -200,10 +231,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
+            value = TURN_STIMULI + ", picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
                 AND (:#{#excluded.isEmpty()} OR r.id NOT IN (:excluded))
-            """ + CLAIM_ORDER + ")"
+            """
+                    + CLAIM_ORDER + ")"
                     + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claim(
@@ -215,9 +247,10 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
+            value = TURN_STIMULI + ", picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
-            """ + CLAIM_ORDER + ")"
+            """
+                    + CLAIM_ORDER + ")"
                     + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claimSubject(
@@ -270,7 +303,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      * as one of a suspended workspace, never reads as a stalled queue.
      */
     @WorkspaceAgnostic("The runs of the whole instance; the gauges name no workspace")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT o.kind AS "kind", o.band AS "band", o.state AS "state", o.hold_reason AS "holdReason",
                    count(*) AS "runs",
                    count(due.id) FILTER (WHERE o.hold_reason IS NULL) AS "due",
@@ -482,12 +515,12 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             """, nativeQuery = true)
     Optional<ExpiredRow> findExpired(@Param("kind") String kind, @Param("skipped") Collection<UUID> skipped);
 
-    /** The deadline applies to every run. The reaper checks the start window of the first queued run of a subject. */
+    /** A digest's contact window applies even while another run of its subject is ahead of it. */
     String OVERDUE_QUEUED = "r.state = 'QUEUED' AND (" + PAST_DEADLINE + " OR (" + START_WINDOW_ELAPSED + " AND "
-            + FIRST_OF_SUBJECT + "))";
+            + "(r.kind = 'DIGEST' OR " + FIRST_OF_SUBJECT + ")))";
 
     @WorkspaceAgnostic("The reaper ends queued runs past their deadline or start window in every workspace")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT r.id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind, r.concurrency_key AS "concurrencyKey", r.attempt,
                    r.lease_epoch AS "leaseEpoch",
             """ + PAST_DEADLINE + """
@@ -526,7 +559,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = :reason,
                    attempt = attempt + CASE WHEN state = 'LEASED' THEN 1 ELSE 0 END, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch

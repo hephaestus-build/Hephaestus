@@ -105,6 +105,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -230,7 +231,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     private Scenario scenario;
     private long workspaceId;
     private long accountId;
-    /** The full local week before the current one, so every fact in it is in the past. */
+    /** The week before the simulated scheduler pass. Its cutoff is ahead of the database clock. */
     private WeeklyDigestWindow week;
 
     /** One piece of feedback with the result and problem it rests on. */
@@ -272,7 +273,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         identity.setProviderId(Objects.requireNonNull(github.getId()));
         identity.setProviderUserKey("weekly-digest-" + accountId);
         identityRepository.saveAndFlush(identity);
-        week = WeeklyDigestWindow.previousWeek(Instant.now(), BERLIN);
+        week = WeeklyDigestWindow.previousWeek(Instant.now().plus(Duration.ofDays(7)), BERLIN);
 
         when(subscriptions.subscribedAccountIds()).thenReturn(List.of(accountId));
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
@@ -913,27 +914,59 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(written()).isEmpty();
     }
 
-    @Test
-    void shouldRefuseToLeaseADigestWhenSchedulingSampledTheClockBeforeTheCutoffButEnqueuePassedIt() {
-        week = WeeklyDigestWindow.previousWeek(Instant.now().minus(Duration.ofDays(7)), BERLIN);
-        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+    @ParameterizedTest
+    @CsvSource({"false, true", "true, true", "true, false"})
+    void shouldUseTheScheduledCutoffWhenAClaimFollowsTheSchedulerSample(boolean legacyStimulus, boolean expired) {
+        if (expired) {
+            week = WeeklyDigestWindow.previousWeek(Instant.now().minus(Duration.ofDays(7)), BERLIN);
+            when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+        }
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         var cutoff = week.end().atZone(BERLIN).with(DigestSchedule.TOO_LATE).toInstant();
 
         transactionTemplate.executeWithoutResult(status -> {
             status.setRollbackOnly();
-            // The scheduler sampled time before closing. The database clock is already past closing.
+            // The scheduler sampled time before closing. The database clock may already be past closing.
             assertThat(schedule(Clock.fixed(cutoff.minusSeconds(30), BERLIN)).enqueueDue())
                     .isOne();
             var stimulus = digestEntry().orElseThrow();
+            assertThat(Objects.requireNonNull(stimulus.getPayload())
+                            .path("startBy")
+                            .asString())
+                    .isEqualTo(cutoff.toString());
+            if (legacyStimulus) {
+                jdbcTemplate.update(
+                        "UPDATE conversation_entry SET payload = payload - 'startBy' WHERE id = ? AND workspace_id = ?",
+                        stimulus.getId(),
+                        workspaceId);
+            }
             var turn = turnRows.findById(Objects.requireNonNull(stimulus.getTurnId()))
                     .orElseThrow();
+            var run = runs.find(new AgentRunRef(turn.getRunId(), workspaceId)).orElseThrow();
+            var lease = runs.claimSubject(
+                    workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST));
+            if (expired) {
+                assertThat(run.getCreatedAt()).isAfter(cutoff);
+                assertThat(lease).as("the cutoff comes from the scheduled week").isEmpty();
+            } else {
+                assertThat(run.getCreatedAt()).isBefore(cutoff);
+                assertThat(lease)
+                        .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(run.getId()));
+            }
+        });
+    }
+
+    @Test
+    void shouldRefuseToLeaseADigestWhenItsStimulusWasRedacted() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            redaction.redact(List.of(stimulus.getId()));
             assertThat(runs.claimSubject(
                             workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST)))
-                    .as("the cutoff comes from the scheduled week")
                     .isEmpty();
-            assertThat(runs.find(new AgentRunRef(turn.getRunId(), workspaceId)))
-                    .hasValueSatisfying(run -> assertThat(run.getLeaseEpoch()).isZero());
         });
     }
 

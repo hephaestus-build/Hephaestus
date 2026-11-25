@@ -170,7 +170,7 @@ public class AgentRunReaper {
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
                     .addKeyValue("run.stop_reason", reason.name())
-                    .log("Queued run waited past its start window; the run ended");
+                    .log("Queued run passed its time limit and ended");
         });
     }
 

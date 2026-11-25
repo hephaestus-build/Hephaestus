@@ -168,10 +168,11 @@ A repeated holder end succeeds only for the same epoch and reason.
 A run has two time limits. Dispatch, gateway wake and claim check both limits on the database clock. The lease write checks again after it picks a row.
 
 - The **start window** (`start_within_seconds`) limits how long a run can wait for room after it is due.
-  The reaper leaves a run queued while a predecessor is queued or leased.
-  Once the run is first in its subject, the reaper ends it as `NOT_STARTED` if its window has elapsed.
+  The reaper checks this window when a run is first in its subject. It checks a digest at any queue position.
+  When the window elapses, the reaper ends the run as `NOT_STARTED`.
   A question gets the same window when a requeue makes it due again.
-  A digest's window starts at enqueue and stays fixed across retries.
+  The digest stimulus stores the Monday contact cutoff in the person's time zone.
+  Enqueue latency and retries do not move this cutoff.
 - **Deadline** (`deadline`): it bounds the current claim.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
   Within a claim it only moves earlier (`AgentRuns.endBy`). A review or turn requeue clears it, so the next claim sets its own.

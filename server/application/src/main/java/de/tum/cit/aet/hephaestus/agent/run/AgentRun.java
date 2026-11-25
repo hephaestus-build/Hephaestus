@@ -102,7 +102,7 @@ public class AgentRun {
 
     /**
      * How long the run may wait for room before it ends as {@link AgentRunStopReason#NOT_STARTED}. A requeue starts
-     * the wait again for a question. A digest keeps the window it had at enqueue.
+     * the wait again for a question. A digest stores its contact cutoff with its stimulus.
      */
     @Column(name = "start_within_seconds", updatable = false)
     private @Nullable Integer startWithinSeconds;

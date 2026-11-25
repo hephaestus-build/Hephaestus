@@ -346,6 +346,7 @@ The same name is the source capture code that causes it.
 | **`TASK`** | A planned run kind for a task that a turn commits. The task can return a result to the thread. | ADR 0120 |
 | **`DIGEST`** | The run kind that writes the weekly digest in the current release. The 1.0 design uses a background turn for agreed contact. | AgentRunKind |
 | **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | agent_run.lease_epoch |
+| **Not started**                | The stop reason for a queued run whose [start window](./agent-runs.mdx#clocks) elapsed. | NOT_STARTED |
 | **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. Work that waits rises one band at a time, but never into the interactive band. | agent_run.band, llm_call_permit.band |
 | **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the driver, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | agent_sandbox |
 | **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | SandboxTokenService |

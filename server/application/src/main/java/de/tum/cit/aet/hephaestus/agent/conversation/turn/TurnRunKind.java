@@ -25,9 +25,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>A lost holder: a running turn returns to the queue for its one retry, and a stopped turn stays stopped. The
  *       lost attempt is billed; it stored nothing.
- *   <li>The run's deadline: the holder of a stopped turn, or of one past its work deadline, did not end it within
- *       {@link TurnRunsAdapter#GRACE}. The server ends it: stopped, or failed for taking too long. Only the holder has
- *       the entries, so the partial answer readers saw last settles the feedback it called.
+ *   <li>The run's deadline: a queued turn fails without starting. A stopped turn stays stopped. A running turn fails
+ *       after {@link TurnRunsAdapter#GRACE}. Only the holder has the entries, so the last partial answer settles the
+ *       feedback it called.
  *   <li>The run's start window: the turn waited longer than {@link TurnRunsAdapter#START_WAIT} for a free Hephaestus.
  *   <li>A narrowed access: a boundary refused the run (ADR 0134). A running turn fails and says that access changed; a
  *       stopped turn stays stopped.
@@ -88,22 +88,24 @@ public class TurnRunKind implements AgentRunHandler {
         ConversationTurn turn = turns.lockByRun(run.workspaceId(), run.id()).orElse(null);
         if (turn == null) return;
         switch (reason) {
-            case NOT_STARTED -> {
-                if (turn.getStatus() != ConversationTurn.Status.QUEUED) return;
-                turns.expireQueued(turn, ConversationTurnCompletion.COULD_NOT_START);
-                if (turn.getSurface() != ConversationTurn.Surface.SYSTEM) {
-                    meters.counter(AgentMetrics.CONVERSATION_TURN_COMPLETED, "outcome", "failed")
-                            .increment();
+            case NOT_STARTED, DEADLINE, AUTHORITY_CHANGED -> {
+                if (turn.getAttempt() != lastEpoch) return;
+                boolean deadline = reason == AgentRunStopReason.DEADLINE;
+                if (reason != AgentRunStopReason.AUTHORITY_CHANGED
+                        && turn.getStatus() == ConversationTurn.Status.QUEUED) {
+                    turns.expireQueued(turn, ConversationTurnCompletion.COULD_NOT_START);
+                    if (turn.getSurface() != ConversationTurn.Surface.SYSTEM) {
+                        meters.counter(AgentMetrics.CONVERSATION_TURN_COMPLETED, "outcome", "failed")
+                                .increment();
+                    }
+                    log.warn("Conversation turn {} ended before it could start", turn.getId());
+                    return;
                 }
-                log.warn("Conversation turn {} could not start before its start wait ran out", turn.getId());
-            }
-            case DEADLINE, AUTHORITY_CHANGED -> {
-                if (turn.getAttempt() != lastEpoch
+                if (reason == AgentRunStopReason.NOT_STARTED
                         || (turn.getStatus() != ConversationTurn.Status.RUNNING
                                 && turn.getStatus() != ConversationTurn.Status.STOPPED)) return;
                 // A turn the developer stopped keeps its own end; any other ends failed, with the reason.
                 boolean stopped = turn.getStatus() == ConversationTurn.Status.STOPPED;
-                boolean deadline = reason == AgentRunStopReason.DEADLINE;
                 completion.endWithoutHolder(
                         turn,
                         new ConversationTurnCompletion.Ending(
