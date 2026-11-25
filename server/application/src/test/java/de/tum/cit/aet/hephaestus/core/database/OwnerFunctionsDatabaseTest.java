@@ -383,6 +383,32 @@ class OwnerFunctionsDatabaseTest {
         }
     }
 
+    /**
+     * A short write on an account, such as a changed display name, holds its row. A sweep page passes that account over
+     * for this pass; the deadline margin still sees its due entry, or one write would read as a drained backlog.
+     */
+    @Test
+    void shouldStillNameTheDueEntryOfAnAccountThatAWriteHoldsForTheDeadlineMargin() throws SQLException {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_held", SEEDED);
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var owner = jdbc(ownerConnection);
+            var app = jdbc(appConnection);
+            ownerConnection.setAutoCommit(false);
+            owner.update("UPDATE account SET display_name = 'Ada Lovelace' WHERE id = 11");
+
+            String page = "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, '{}', '{}', 10)";
+            assertThat(app.queryForList(page, UUID.class, DueWorkKind.ENTRY_RETENTION.name()))
+                    .as("a sweep page passes over the held account")
+                    .doesNotContain(ADA_OLD)
+                    .contains(BO_OLD);
+            assertThat(app.queryForList(page, UUID.class, DueWorkKind.ENTRY_RETENTION_DEADLINE.name()))
+                    .as("the deadline margin reads it")
+                    .containsExactly(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+            ownerConnection.rollback();
+        }
+    }
+
     @Test
     void shouldKeepMaintenanceAwayFromAnAccountDuringAndAfterErasure() throws SQLException {
         var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_erasure", SEEDED);
@@ -536,7 +562,7 @@ class OwnerFunctionsDatabaseTest {
     @EnumSource(DueWorkKind.class)
     void shouldAnswerEveryRegisteredKindThroughItsOwnBranch(DueWorkKind kind) throws SQLException {
         List<UUID> expected = switch (kind) {
-            case ENTRY_RETENTION -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+            case ENTRY_RETENTION, ENTRY_RETENTION_DEADLINE -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
         };
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
             assertThat(jdbc(connection)

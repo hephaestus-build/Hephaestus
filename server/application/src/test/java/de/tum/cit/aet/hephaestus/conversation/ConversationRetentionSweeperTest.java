@@ -13,8 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.DueEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.DuePage;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -204,7 +206,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         doReturn(List.copyOf(due))
                 .doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), anyInt());
 
         assertThatThrownBy(sweeper::sweepNow).isInstanceOf(IllegalStateException.class);
 
@@ -235,7 +237,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
     void shouldRecordAFailureWhenTheDueWorkCannotBeRead() {
         doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), anyInt());
 
         assertThatThrownBy(sweeper::sweepNow).isInstanceOf(IllegalStateException.class);
         assertThat(counter("failure")).isEqualTo(1);
@@ -246,7 +248,10 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         sweeper.sweepNow();
 
         verify(entries)
-                .findDueForRetention(Duration.ofDays(386).toSeconds(), null, null, new Long[0], new Long[0], BATCH);
+                .findDueForRetention(
+                        Duration.ofDays(386).toSeconds(),
+                        new DuePage(DueWorkKind.ENTRY_RETENTION, null, null, List.of()),
+                        BATCH);
     }
 
     @Test
@@ -256,6 +261,11 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         assertThat(margin()).as("no entry is due").isEqualTo(Double.POSITIVE_INFINITY);
         assertThat(lastRead()).as("an empty read is a read").isEqualTo((double)
                 NOW.plusSeconds(30).getEpochSecond());
+        verify(entries)
+                .findDueForRetention(
+                        Duration.ofDays(386).toSeconds(),
+                        new DuePage(DueWorkKind.ENTRY_RETENTION_DEADLINE, null, null, List.of()),
+                        1);
 
         add(due(1, 11, 3, 0));
         now = NOW.plusSeconds(90);
@@ -267,7 +277,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
 
         doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), anyInt());
         now = NOW.plusSeconds(150);
         sweeper.sampleDeadlineMargin();
 
@@ -377,29 +387,24 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
     private void serve() {
         lenient().when(accounts.holdForRetention(anyLong())).thenReturn(true);
         // Lenient: a test that reads no due entry never calls redaction.
-        lenient()
-                .when(entries.findDueForRetention(anyLong(), any(), any(), any(), any(), anyInt()))
-                .thenAnswer(call -> {
-                    pagesRead++;
-                    @Nullable Instant afterDue = call.getArgument(1);
-                    @Nullable UUID afterId = call.getArgument(2);
-                    Long[] skipWorkspaces = call.getArgument(3);
-                    Long[] skipAccounts = call.getArgument(4);
-                    int limit = call.getArgument(5);
-                    Set<List<Long>> skip = new HashSet<>();
-                    for (int i = 0; i < skipWorkspaces.length; i++) {
-                        skip.add(List.of(skipWorkspaces[i], skipAccounts[i]));
-                    }
-                    return due.stream()
-                            .filter(entry -> afterDue == null
-                                    || afterId == null
-                                    || entry.getDueAt().isAfter(afterDue)
-                                    || (entry.getDueAt().equals(afterDue)
-                                            && entry.getId().compareTo(afterId) > 0))
-                            .filter(entry -> !skip.contains(List.of(entry.getWorkspaceId(), entry.getAccountId())))
-                            .limit(limit)
-                            .toList();
-                });
+        lenient().when(entries.findDueForRetention(anyLong(), any(), anyInt())).thenAnswer(call -> {
+            pagesRead++;
+            DuePage page = call.getArgument(1);
+            @Nullable Instant afterDue = page.afterDue();
+            @Nullable UUID afterId = page.afterId();
+            int limit = call.getArgument(2);
+            Set<List<Long>> skip = new HashSet<>();
+            page.skip().forEach(owner -> skip.add(List.of(owner.workspaceId(), owner.accountId())));
+            return due.stream()
+                    .filter(entry -> afterDue == null
+                            || afterId == null
+                            || entry.getDueAt().isAfter(afterDue)
+                            || (entry.getDueAt().equals(afterDue)
+                                    && entry.getId().compareTo(afterId) > 0))
+                    .filter(entry -> !skip.contains(List.of(entry.getWorkspaceId(), entry.getAccountId())))
+                    .limit(limit)
+                    .toList();
+        });
         lenient()
                 .doAnswer(call -> {
                     Collection<UUID> ids = call.getArgument(0);

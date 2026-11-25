@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -480,27 +481,51 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     /**
      * A page of the entries of every person older than {@code maxAgeSeconds} at the start of the database's current
-     * retention week and not erased yet, oldest first, after the entry {@code (afterDue, afterId)}, or from the oldest
-     * when both are null. The owners
-     * {@code (skipWorkspaceIds[i], skipAccountIds[i])} are passed over. The owner function {@code mentoring_due_work}
-     * finds them whoever owns them, and returns no content.
+     * retention week and not erased yet, oldest first, as {@link DuePage} describes. The owner function
+     * {@code mentoring_due_work} finds them whoever owns them, and returns no content.
      */
     @WorkspaceAgnostic("The retention sweep finds the due entries of every workspace, then erases each as its owner")
     @Query(value = """
             SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt", now() AS "readAt"
-            FROM public.mentoring_due_work('ENTRY_RETENTION', CAST(:maxAgeSeconds AS bigint),
-                                           CAST(:afterDue AS timestamptz), CAST(:afterId AS uuid),
-                                           CAST(:skipWorkspaceIds AS bigint[]), CAST(:skipAccountIds AS bigint[]),
-                                           :limit)
+            FROM public.mentoring_due_work(CAST(:#{#page.kind().name()} AS text), CAST(:maxAgeSeconds AS bigint),
+                                           CAST(:#{#page.afterDue()} AS timestamptz), CAST(:#{#page.afterId()} AS uuid),
+                                           CAST(:#{#page.skipWorkspaces()} AS bigint[]),
+                                           CAST(:#{#page.skipAccounts()} AS bigint[]), :limit)
             ORDER BY due_at, id
             """, nativeQuery = true)
     List<DueEntry> findDueForRetention(
-            @Param("maxAgeSeconds") long maxAgeSeconds,
-            @Param("afterDue") @Nullable Instant afterDue,
-            @Param("afterId") @Nullable UUID afterId,
-            @Param("skipWorkspaceIds") Long[] skipWorkspaceIds,
-            @Param("skipAccountIds") Long[] skipAccountIds,
-            @Param("limit") int limit);
+            @Param("maxAgeSeconds") long maxAgeSeconds, @Param("page") DuePage page, @Param("limit") int limit);
+
+    /**
+     * Which due entries a page asks for.
+     *
+     * @param kind {@link DueWorkKind#ENTRY_RETENTION} for a sweep page, which passes over the accounts that another
+     *     transaction holds, or {@link DueWorkKind#ENTRY_RETENTION_DEADLINE} for the deadline margin, which reads them
+     * @param afterDue with {@code afterId}, the last entry of the previous page; both null for the first page
+     * @param skip the people passed over, as (workspace, account)
+     */
+    record DuePage(
+            DueWorkKind kind,
+            @Nullable Instant afterDue,
+            @Nullable UUID afterId,
+            List<SkippedOwner> skip) {
+
+        /** The first page of {@code kind}, passing over nobody. */
+        static DuePage first(DueWorkKind kind) {
+            return new DuePage(kind, null, null, List.of());
+        }
+
+        public Long[] skipWorkspaces() {
+            return skip.stream().map(SkippedOwner::workspaceId).toArray(Long[]::new);
+        }
+
+        public Long[] skipAccounts() {
+            return skip.stream().map(SkippedOwner::accountId).toArray(Long[]::new);
+        }
+    }
+
+    /** A person in a workspace that a page passes over. */
+    record SkippedOwner(long workspaceId, long accountId) {}
 
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
     String COPIES_PERSON_DATA_STORE = "conversation_entry_tool_result_copy";

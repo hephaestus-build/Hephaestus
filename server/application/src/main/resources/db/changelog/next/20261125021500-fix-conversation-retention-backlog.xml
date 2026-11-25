@@ -28,16 +28,15 @@ BEGIN
         RAISE EXCEPTION 'mentoring_due_work: needs a positive age, a limit, a whole cursor or none, and whole owners'
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
+    -- A conversation entry is due when it is older than max_age_seconds at the start of the current retention week, which
+    -- starts at 03:45 UTC every Sunday, and is not erased yet, and only accounts outside erasure have due entries. due_at
+    -- is the time it was written. The cutoff moves once a week, so a week's due entries are erased together and a long
+    -- conversation is summarized again about once a week. now() is the start of the caller's transaction. Seconds, not
+    -- days: a day is not always 24 hours in the session time zone.
+    due_before := date_bin(interval '7 days', now(), timestamp with time zone '2000-01-02 03:45:00+00')
+        - make_interval(secs => max_age_seconds);
     IF work_kind = 'ENTRY_RETENTION' THEN
-        -- Only accounts outside erasure have due entries, and a pass skips the accounts that erasure holds locked.
-        -- A conversation entry is due when it is older than max_age_seconds at the start of the current retention week, which
-        -- starts at 03:45 UTC every Sunday, and is not erased yet. due_at is the time it was written. The cutoff moves
-        -- once a week, so a week's due entries are erased together and a long conversation is summarized again about
-        -- once a week.
-        -- now() is the start of the caller's transaction.
-        -- Seconds, not days: a day is not always 24 hours in the session time zone.
-        due_before := date_bin(interval '7 days', now(), timestamp with time zone '2000-01-02 03:45:00+00')
-            - make_interval(secs => max_age_seconds);
+        -- A pass skips the accounts that another transaction holds locked, such as an erasure.
         IF after_due IS NULL THEN
             RETURN QUERY
                 SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
@@ -67,6 +66,21 @@ BEGIN
                 LIMIT max_rows
                 FOR SHARE OF a SKIP LOCKED;
         END IF;
+    ELSIF work_kind = 'ENTRY_RETENTION_DEADLINE' THEN
+        -- The same rows, read without locking an account: the deadline margin must also see an account that a short
+        -- write holds, which ENTRY_RETENTION would skip.
+        RETURN QUERY
+            SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+            FROM public.conversation_entry e
+            JOIN public.account a ON a.id = e.account_id
+            WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+              AND e.redacted_at IS NULL AND e.created_at < due_before
+              AND (after_due IS NULL OR (e.created_at, e.id) > (after_due, after_id))
+              AND NOT EXISTS (
+                  SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                  WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+            ORDER BY e.created_at, e.id
+            LIMIT max_rows;
     ELSE
         RAISE EXCEPTION 'mentoring_due_work: unknown kind %', work_kind USING ERRCODE = 'invalid_parameter_value';
     END IF;

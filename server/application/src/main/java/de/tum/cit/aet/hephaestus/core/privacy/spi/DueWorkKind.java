@@ -9,8 +9,14 @@ package de.tum.cit.aet.hephaestus.core.privacy.spi;
  */
 public enum DueWorkKind {
     /**
-     * KR-08: conversation entries written before the retention cutoff and not erased yet. Reads
-     * {@code conversation_entry}, {@code conversation}.
+     * KR-08: conversation entries of accounts outside erasure, written before the retention cutoff and not erased yet. A
+     * page skips the accounts that another transaction holds locked. Reads {@code conversation_entry}, {@code account}.
      */
-    ENTRY_RETENTION
+    ENTRY_RETENTION,
+
+    /**
+     * KR-08: the same conversation entries as {@link #ENTRY_RETENTION}, read without locking an account, for the
+     * retention deadline margin. Reads {@code conversation_entry}, {@code account}.
+     */
+    ENTRY_RETENTION_DEADLINE
 }

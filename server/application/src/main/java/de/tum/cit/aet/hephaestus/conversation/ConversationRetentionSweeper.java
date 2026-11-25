@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.DueEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.DuePage;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.SkippedOwner;
 import de.tum.cit.aet.hephaestus.conversation.metrics.ConversationMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -197,8 +200,8 @@ public class ConversationRetentionSweeper {
     @Scheduled(fixedDelay = 60, initialDelay = 30, timeUnit = TimeUnit.SECONDS)
     public void sampleDeadlineMargin() {
         try {
-            List<DueEntry> oldest =
-                    entries.findDueForRetention(maxAgeSeconds(), null, null, new Long[0], new Long[0], 1);
+            List<DueEntry> oldest = entries.findDueForRetention(
+                    maxAgeSeconds(), DuePage.first(DueWorkKind.ENTRY_RETENTION_DEADLINE), 1);
             deadlineMargin.set(
                     oldest.isEmpty()
                             ? Double.POSITIVE_INFINITY
@@ -267,15 +270,11 @@ public class ConversationRetentionSweeper {
         @Nullable Instant afterDue = null;
         @Nullable UUID afterId = null;
         while (progress.pages < maxPages && clock.instant().isBefore(deadline)) {
-            List<Owner> skip = new ArrayList<>(deferred);
-            failed.stream().filter(owner -> !deferred.contains(owner)).forEach(skip::add);
+            List<SkippedOwner> skip = new ArrayList<>();
+            deferred.forEach(owner -> skip.add(owner.skipped()));
+            failed.stream().filter(owner -> !deferred.contains(owner)).forEach(owner -> skip.add(owner.skipped()));
             List<DueEntry> due = entries.findDueForRetention(
-                    maxAgeSeconds,
-                    afterDue,
-                    afterId,
-                    skip.stream().map(Owner::workspaceId).toArray(Long[]::new),
-                    skip.stream().map(Owner::accountId).toArray(Long[]::new),
-                    batch);
+                    maxAgeSeconds, new DuePage(DueWorkKind.ENTRY_RETENTION, afterDue, afterId, skip), batch);
             progress.pages++;
             if (!erase(due, failed, deadline, progress)) {
                 return false;
@@ -347,5 +346,10 @@ public class ConversationRetentionSweeper {
         private int pages;
     }
 
-    private record Owner(long workspaceId, long accountId) {}
+    private record Owner(long workspaceId, long accountId) {
+
+        SkippedOwner skipped() {
+            return new SkippedOwner(workspaceId, accountId);
+        }
+    }
 }

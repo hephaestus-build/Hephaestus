@@ -403,7 +403,7 @@ The deadline margin below shows a sweep that falls behind.
 
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
-| `conversation_retention_deadline_margin_seconds` | Gauge | None | Seconds until the oldest due conversation entry reaches its retention limit, by the database clock. Each server replica reads it every minute. `+Inf` when no entry is due. A failed read keeps the last value |
+| `conversation_retention_deadline_margin_seconds` | Gauge | None | Seconds until the oldest due conversation entry reaches its retention limit, by the database clock. Each server replica reads it every minute, including the entries of an account that a short write holds. `+Inf` when no entry is due. A failed read keeps the last value |
 | `conversation_retention_sampler_failures_total` | Counter | None | Reads of the margin that failed |
 | `conversation_retention_margin_read_timestamp_seconds` | Gauge | None | When the replica last read the margin, in seconds since the epoch, or its start until the first read. An empty read counts |
 
