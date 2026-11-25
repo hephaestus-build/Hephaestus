@@ -296,7 +296,7 @@ public class ConversationTurnService {
         turns.flush();
         runs.ended(workspaceId, runId, epoch, turn.getStatus());
         changed(turn, true);
-        return new EndedTurn(turn, accountId(turn), contextErased ? Set.of() : feedbackCalled);
+        return new EndedTurn(turn, accountId(turn), feedbackCalled);
     }
 
     /**
@@ -475,6 +475,12 @@ public class ConversationTurnService {
     @Transactional(readOnly = true)
     public Instant databaseNow() {
         return turns.databaseNow();
+    }
+
+    /** Whether the turn exists and the transaction's owner may read it. */
+    @Transactional(readOnly = true)
+    public boolean readable(long workspaceId, UUID turnId) {
+        return turns.findByIdAndWorkspaceId(turnId, workspaceId).isPresent();
     }
 
     /** The real question or proactive stimulus that started the turn. */

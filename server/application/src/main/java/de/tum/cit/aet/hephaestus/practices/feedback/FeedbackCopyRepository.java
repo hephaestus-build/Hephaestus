@@ -283,8 +283,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state=:state,stop_reason=:reason,last_error=:detail,readback=:readback,
-          conversation_entry_id=COALESCE(CAST(:entryId AS uuid),conversation_entry_id)
+        UPDATE feedback_copy SET state=:state,stop_reason=:reason,last_error=:detail,readback=:readback
         WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind='CHAT_TURN'
           AND conversation_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
           AND state IN ('WRITE_STARTED','FAILED')
@@ -294,29 +293,41 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("feedbackId") UUID feedbackId,
             @Param("copyId") UUID copyId,
             @Param("turnId") UUID turnId,
-            @Param("entryId") @Nullable UUID entryId,
             @Param("state") String state,
             @Param("reason") @Nullable String reason,
             @Param("readback") String readback,
             @Param("detail") @Nullable String detail);
 
     /**
-     * The conversation copies a Hephaestus turn claimed from {@code since} to {@code until} that have no receipt yet. A
-     * receipt sets
-     * {@code posted_at}, the state FAILED, or for an unconfirmed write its reason in {@code last_error}.
+     * The conversation copies a Hephaestus turn claimed from {@code since} to {@code until} that have no receipt yet,
+     * each with the person its feedback is for. A receipt sets {@code posted_at}, the state FAILED, or for an
+     * unconfirmed write its reason in {@code last_error}.
      */
     @Query(value = """
-        SELECT c.* FROM feedback_copy c
+        SELECT c.feedback_id AS feedbackId, c.id AS copyId, c.write_started_at AS writeStartedAt,
+          f.person_account_id AS personAccountId
+        FROM feedback_copy c JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE c.workspace_id=:workspaceId AND c.conversation_turn_id=:turnId AND c.kind='CHAT_TURN'
           AND c.posted_at IS NULL AND c.state='WRITE_STARTED' AND c.last_error IS NULL
           AND c.write_started_at>=:since AND c.write_started_at<=:until
         ORDER BY c.write_started_at, c.id
         """, nativeQuery = true)
-    List<FeedbackCopy> findUnsettledConversationClaims(
+    List<UnsettledClaim> findUnsettledConversationClaims(
             @Param("workspaceId") long workspaceId,
             @Param("turnId") UUID turnId,
             @Param("since") Instant since,
             @Param("until") Instant until);
+
+    /** One row of {@link #findUnsettledConversationClaims}. */
+    interface UnsettledClaim {
+        UUID getFeedbackId();
+
+        UUID getCopyId();
+
+        Instant getWriteStartedAt();
+
+        long getPersonAccountId();
+    }
 
     @Query(value = """
         SELECT EXISTS(SELECT 1 FROM feedback_copy newer JOIN feedback latest ON latest.id=newer.feedback_id AND latest.workspace_id=newer.workspace_id

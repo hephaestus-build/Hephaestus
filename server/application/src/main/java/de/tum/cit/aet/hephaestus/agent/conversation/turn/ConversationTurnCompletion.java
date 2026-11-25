@@ -27,11 +27,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -68,6 +70,7 @@ public class ConversationTurnCompletion {
     static final String LEASE_LOST = "Hephaestus's answer was lost while it showed the feedback.";
     static final String SILENCED = "Silent Mode kept Hephaestus's answer from Slack.";
     static final String SLACK_UNCERTAIN = "Slack did not confirm what Hephaestus's answer showed.";
+    static final String UNVERIFIABLE = "Hephaestus could not check whether its answer showed the feedback.";
     static final String SLACK_PARTLY = "Slack showed only part of what Hephaestus's answer showed of the feedback.";
 
     private @Nullable EvaluationObservations evaluation;
@@ -80,6 +83,7 @@ public class ConversationTurnCompletion {
     private final ConversationTurnService turns;
     private final DigestAdmission digests;
     private final ConversationClaims conversationClaims;
+    private final ConversationReceiptAnswers answers;
     private final LlmUsageEventRepository usage;
     private final MeterRegistry meters;
     private final Clock clock;
@@ -327,7 +331,10 @@ public class ConversationTurnCompletion {
                 turn.getWorkspaceId(),
                 turn.getId(),
                 attemptStart,
-                turns.databaseNow(),
+                // The database clock at this statement: after the turn's lock, which a claim of the attempt shares, or
+                // after the turn ended, every claim of the attempt committed before it. The transaction's start can
+                // precede a claim. Any repository reads the same clock; this one is already here.
+                usage.databaseClock(),
                 shown,
                 unconfirmed,
                 otherwise,
@@ -337,9 +344,11 @@ public class ConversationTurnCompletion {
 
     /**
      * Records a receipt for each conversation copy that the attempt claimed and that has none. A delivered copy names
-     * the message whose {@code show_feedback} call showed it. A receipt is stored once, so a repeat settles only what
-     * is left. A store that refuses a receipt for good leaves its copy claimed, which the feedback shows as
-     * unconfirmed; any other failure is thrown, so the publication registry runs this again.
+     * the message whose {@code show_feedback} call showed it. The answer is read as the person each claim is for, whom
+     * the claimed feedback stores. A claim whose answer can no longer be read or checked is recorded unconfirmed. A
+     * receipt is stored once, so a repeat settles only what is left. A store that refuses a receipt for good leaves its
+     * copy claimed, which the feedback shows as unconfirmed; any other failure is thrown, so the publication registry
+     * runs this again.
      */
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void settle(ConversationReceiptsDue due) {
@@ -350,45 +359,79 @@ public class ConversationTurnCompletion {
         if (claims.isEmpty()) {
             return;
         }
-        Map<UUID, UUID> shownIn = turns.answer(workspaceId, turnId).shownIn();
         Instant now = turns.databaseNow();
         RuntimeException retry = null;
-        for (CopyWriteFence claim : claims) {
-            ConversationCopyOutcome settled = due.outcome(claim.feedbackId(), shownIn.containsKey(claim.feedbackId()));
-            ConversationCopyReceipt receipt = new ConversationCopyReceipt(
-                    turnId,
-                    settled == ConversationCopyOutcome.DELIVERED ? shownIn.get(claim.feedbackId()) : null,
-                    settled,
-                    now,
-                    switch (settled) {
-                        case DELIVERED -> null;
-                        case UNCONFIRMED -> due.unconfirmedReason();
-                        case FAILED -> due.failedReason();
-                    });
-            try {
-                conversationClaims.recordConversationReceipt(workspaceId, claim, receipt);
-            } catch (ResponseStatusException | IllegalArgumentException refused) {
-                // The status or the class: the refusal's text can quote the feedback.
-                log.warn(
-                        "Conversation copy receipt refused: workspaceId={}, turnId={}, feedbackId={}, refusal={}",
-                        workspaceId,
-                        turnId,
-                        claim.feedbackId(),
-                        refused instanceof ResponseStatusException status
-                                ? status.getStatusCode()
-                                : refused.getClass().getSimpleName());
-            } catch (RuntimeException failure) {
-                log.warn(
-                        "Conversation copy receipt could not be stored; it is tried again: workspaceId={}, turnId={},"
-                                + " failure={}",
-                        workspaceId,
-                        turnId,
-                        failure.getClass().getSimpleName());
-                retry = failure;
+        var byPerson = claims.stream()
+                .collect(Collectors.groupingBy(
+                        ConversationClaims.Unsettled::personAccountId, LinkedHashMap::new, Collectors.toList()));
+        for (var person : byPerson.entrySet()) {
+            var shownIn = answers.shownIn(workspaceId, person.getKey(), turnId);
+            for (var unsettled : person.getValue()) {
+                CopyWriteFence claim = unsettled.fence();
+                ConversationCopyReceipt receipt =
+                        shownIn.map(shown -> receipt(due, claim, shown, now)).orElseGet(() -> unverified(turnId, now));
+                RuntimeException failure = record(workspaceId, claim, receipt);
+                if (failure != null) retry = failure;
             }
         }
         if (retry != null) {
             throw retry;
+        }
+    }
+
+    private static ConversationCopyReceipt receipt(
+            ConversationReceiptsDue due, CopyWriteFence claim, Map<UUID, UUID> shownIn, Instant now) {
+        boolean shownByAnswer = shownIn.containsKey(claim.feedbackId());
+        // The end recorded the feedback as shown, but the answer no longer shows it, for example after a redaction
+        // before this settlement: what the person saw can no longer be checked, which is not "not shown".
+        if (!shownByAnswer && due.recordedShown(claim.feedbackId())) return unverified(due.turnId(), now);
+        ConversationCopyOutcome settled = due.outcome(claim.feedbackId(), shownByAnswer);
+        return new ConversationCopyReceipt(
+                due.turnId(),
+                settled == ConversationCopyOutcome.DELIVERED ? shownIn.get(claim.feedbackId()) : null,
+                settled,
+                now,
+                switch (settled) {
+                    case DELIVERED -> null;
+                    case UNCONFIRMED -> due.unconfirmedReason();
+                    case FAILED -> due.failedReason();
+                });
+    }
+
+    private static ConversationCopyReceipt unverified(UUID turnId, Instant now) {
+        return new ConversationCopyReceipt(turnId, null, ConversationCopyOutcome.UNCONFIRMED, now, UNVERIFIABLE);
+    }
+
+    /**
+     * Records the receipt, or returns the failure to try again. A refused delivered receipt means that the answer
+     * changed since it was read, for example by a redaction, so the claim is recorded unconfirmed instead.
+     */
+    private @Nullable RuntimeException record(long workspaceId, CopyWriteFence claim, ConversationCopyReceipt receipt) {
+        try {
+            conversationClaims.recordConversationReceipt(workspaceId, claim, receipt);
+            return null;
+        } catch (ResponseStatusException | IllegalArgumentException refused) {
+            // The status or the class: the refusal's text can quote the feedback.
+            log.warn(
+                    "Conversation copy receipt refused: workspaceId={}, turnId={}, feedbackId={}, outcome={}, refusal={}",
+                    workspaceId,
+                    claim.conversationTurnId(),
+                    claim.feedbackId(),
+                    receipt.outcome(),
+                    refused instanceof ResponseStatusException status
+                            ? status.getStatusCode()
+                            : refused.getClass().getSimpleName());
+            return receipt.outcome() == ConversationCopyOutcome.DELIVERED
+                    ? record(workspaceId, claim, unverified(claim.conversationTurnId(), receipt.at()))
+                    : null;
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Conversation copy receipt could not be stored; it is tried again: workspaceId={}, turnId={},"
+                            + " failure={}",
+                    workspaceId,
+                    claim.conversationTurnId(),
+                    failure.getClass().getSimpleName());
+            return failure;
         }
     }
 

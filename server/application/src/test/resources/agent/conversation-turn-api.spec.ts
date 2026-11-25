@@ -391,6 +391,7 @@ for (const [tool, fixture, idKey] of LINKS) {
 			{ status: 200, body },
 			{ status: 422, body: { status: 422, detail: "That feedback was already shown elsewhere." } },
 			{ status: 200, body: { [idKey]: crypto.randomUUID() } },
+			{ status: 200, body: { [idKey]: id.toLowerCase() } },
 		]);
 		try {
 			const { signal } = new AbortController();
@@ -400,6 +401,11 @@ for (const [tool, fixture, idKey] of LINKS) {
 				reason: "That feedback was already shown elsewhere.",
 			});
 			assert.deepEqual(await worker.api.link(tool, id, signal), { admitted: false, reason: null });
+			assert.deepEqual(
+				await worker.api.link(tool, id.toUpperCase(), signal),
+				{ admitted: true },
+				"the worker echoes the id in its canonical case",
+			);
 			const path = `/internal/agent/runs/run-1/turn/${fixture.replace(".request.json", "")}`;
 			assert.deepEqual(
 				worker.received.map((received) => [received.method, received.path, received.body]),
@@ -407,6 +413,7 @@ for (const [tool, fixture, idKey] of LINKS) {
 					["POST", path, body],
 					["POST", path, body],
 					["POST", path, body],
+					["POST", path, { ...body, [idKey]: id.toUpperCase() }],
 				],
 			);
 		} finally {

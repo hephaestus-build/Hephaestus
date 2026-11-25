@@ -52,6 +52,8 @@ Set `security_invoker` on each view over those rows.
 
 Bind the signed-in account with `OwnerScope.fromPrincipal` in the transaction that accesses the rows.
 A worker binds the account from its stored job.
+A transaction binds one account. `OwnerScope` refuses a second account in the same transaction.
+Thus, a read for several people uses one transaction for each person, or reads no person-owned rows.
 Keep the workspace column and workspace checks on rules and endpoints that use workspace data.
 
 ## Authorization

@@ -404,7 +404,8 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         store.prepareAll(workspace.getId(), reviewId, List.of(next));
         assertThat(feedback.findById(previous.id()).orElseThrow().getState()).isEqualTo(FeedbackState.REPLACED);
         assertThat(feedback.findById(nextId).orElseThrow().getReplacesId()).isEqualTo(previous.id());
-        assertThat(store.claimConversationCopy(workspace.getId(), previous.id(), runningTurn(developerId), 1))
+        assertThat(conversationClaims.claimConversationCopy(
+                        workspace.getId(), developerId, previous.id(), runningTurn(developerId), 1))
                 .isEmpty();
         var retained = reviews.findById(reviewId)
                 .orElseThrow()

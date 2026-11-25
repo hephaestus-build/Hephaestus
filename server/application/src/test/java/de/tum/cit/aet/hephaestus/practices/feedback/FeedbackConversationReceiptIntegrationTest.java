@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
@@ -45,6 +47,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     @Autowired
     FeedbackCopyCleanupCustody custody;
 
+    @Autowired
+    OwnerScope owners;
+
     UUID conversationId, copyId, ledgerConversationId, turnId;
 
     @BeforeEach
@@ -53,7 +58,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                 FeedbackIds.conversation(workspace.getId(), reviewId, developerId, List.of(supportingResult.getId()));
         copyId = FeedbackIds.copy(conversationId, FeedbackCopyKind.CHAT_TURN, 0);
         ledgerConversationId = conversation(developerId);
-        turnId = runningTurn(ledgerConversationId);
+        turnId = runningTurn(ledgerConversationId, developerId);
         var draft = new FeedbackDraft(
                 conversationId,
                 workspace.getId(),
@@ -75,35 +80,46 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     private UUID conversation(long account) {
         UUID id = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
-                        + " VALUES (?,?,?,now(),now())",
-                id,
-                workspace.getId(),
-                account);
+        writeLedger(
+                account,
+                () -> jdbc.update(
+                        "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                                + " VALUES (?,?,?,now(),now())",
+                        id,
+                        workspace.getId(),
+                        account));
         return id;
     }
 
     /** A turn whose first attempt runs now, as a worker's claim leaves it. */
-    private UUID runningTurn(UUID conversation) {
+    private UUID runningTurn(UUID conversation, long account) {
         UUID id = UUID.randomUUID();
         UUID run = UUID.randomUUID();
-        jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
-        jdbc.update(
-                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
-                        + "attempt,run_id,started_at,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),?,'RUNNING','APP',1,?,now(),now())",
-                id,
-                workspace.getId(),
-                conversation,
-                conversation,
-                "request-" + id,
-                run);
+        writeLedger(account, () -> {
+            jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
+            jdbc.update(
+                    "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
+                            + "attempt,run_id,started_at,created_at) VALUES (?,?,?,?,?,'RUNNING','APP',1,?,now(),now())",
+                    id,
+                    workspace.getId(),
+                    conversation,
+                    account,
+                    "request-" + id,
+                    run);
+        });
         return id;
+    }
+
+    private void writeLedger(long account, Runnable operation) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            owners.ofJob(account);
+            operation.run();
+        });
     }
 
     /** The lease reaper's retry: the turn runs a second attempt, started after the first one's claims. */
     private void retry() {
-        jdbc.execute(ConversationTurnRunRows.retry(turnId));
+        writeLedger(developerId, () -> jdbc.execute(ConversationTurnRunRows.retry(turnId)));
     }
 
     /** Hephaestus's answer: its words, and the successful {@code show_feedback} call whose text showed the feedback. */
@@ -125,6 +141,11 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     /** Hephaestus's answer with its words and these calls, and the tool result of each call that has one. */
     private UUID answer(Call... calls) {
         UUID entry = UUID.randomUUID();
+        writeLedger(developerId, () -> insertAnswer(entry, calls));
+        return entry;
+    }
+
+    private void insertAnswer(UUID entry, Call... calls) {
         var content = new StringBuilder("{\"type\":\"text\",\"text\":\"Some context.\"}");
         for (Call call : calls) {
             content.append(",{\"type\":\"toolCall\",\"id\":\"%s\",\"name\":\"show_feedback\",".formatted(call.id()))
@@ -159,15 +180,15 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                             .formatted(call.id(), call.id(), !call.succeeded()),
                     turnId);
         }
-        return entry;
     }
 
     private void endTurn() {
-        jdbc.update(ConversationTurnRunRows.endDone(turnId));
+        writeLedger(developerId, () -> jdbc.update(ConversationTurnRunRows.endDone(turnId)));
     }
 
     private Optional<CopyWriteFence> claim(int attempt) {
-        return store.claimConversationCopy(workspace.getId(), conversationId, turnId, attempt);
+        return conversationClaims.claimConversationCopy(
+                workspace.getId(), developerId, conversationId, turnId, attempt);
     }
 
     private CopyWriteFence claim() {
@@ -200,7 +221,8 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(chatCopy().getBody()).isNull();
         assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(conversation().getDeliveredAt()).isNull();
-        assertThat(store.claimConversationCopy(workspace.getId() + 1, conversationId, turnId, 1))
+        assertThat(conversationClaims.claimConversationCopy(
+                        workspace.getId() + 1, developerId, conversationId, turnId, 1))
                 .isEmpty();
     }
 
@@ -208,9 +230,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     void shouldReturnTheHeldFenceToARepeatOfTheSameAttempt() {
         var fence = claim();
         assertThat(claim(1)).contains(fence);
-        assertThat(store.unsettledConversationClaims(
+        assertThat(conversationClaims.unsettledConversationClaims(
                         workspace.getId(), turnId, fence.writeStartedAt(), fence.writeStartedAt()))
-                .containsExactly(fence);
+                .as("the claim, for the person its feedback is for")
+                .containsExactly(new ConversationClaims.Unsettled(fence, developerId));
     }
 
     @Test
@@ -235,33 +258,91 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     @Test
+    void shouldRefuseMissingAndForeignReceiptEntriesInTheSameWay() {
+        var fence = claim();
+        long other = Objects.requireNonNull(
+                persistAccount("Another conversation owner").getId());
+        UUID foreignConversation = conversation(other);
+        UUID foreignTurn = runningTurn(foreignConversation, other);
+        UUID foreignEntry = UUID.randomUUID();
+        writeLedger(
+                other,
+                () -> jdbc.update("""
+                INSERT INTO conversation_entry (id,workspace_id,conversation_id,account_id,turn_id,seq,kind,surface,text,
+                    created_at)
+                VALUES (?,?,?,?,?,1,'ANSWER','APP','An answer',now())
+                """, foreignEntry, workspace.getId(), foreignConversation, other, foreignTurn));
+        UUID question = UUID.randomUUID();
+        writeLedger(
+                developerId,
+                () -> jdbc.update("""
+                INSERT INTO conversation_entry (id,workspace_id,conversation_id,account_id,turn_id,seq,kind,surface,text,
+                    created_at)
+                VALUES (?,?,?,?,?,45,'USER','APP','A question',now())
+                """, question, workspace.getId(), ledgerConversationId, developerId, turnId));
+        Instant at = fence.writeStartedAt().plusSeconds(1);
+
+        UUID ownEntry = answer();
+        endTurn();
+
+        for (UUID refused : List.of(foreignEntry, UUID.randomUUID(), question)) {
+            assertUnavailableReceipt(fence, refused, at);
+        }
+        for (UUID named : List.of(foreignEntry, ownEntry)) {
+            assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
+                            workspace.getId(), fence, receipt(ConversationCopyOutcome.FAILED, named, at, null)))
+                    .as("only a delivered receipt names an answer")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(chatCopy().getConversationEntryId()).isNull();
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+    }
+
+    private void assertUnavailableReceipt(CopyWriteFence fence, UUID entryId, Instant at) {
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
+                        workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entryId, at, null)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode().value()).isEqualTo(409);
+                    assertThat(error.getReason()).isEqualTo("The completed assistant words are unavailable.");
+                });
+    }
+
+    @Test
     void shouldRefuseATurnOfAnotherDeveloperAndKeepTheCopyUnclaimed() {
         long other = Objects.requireNonNull(
                 persistAccount("Another conversation owner").getId());
-        UUID foreign = runningTurn(conversation(other));
-        assertThat(store.claimConversationCopy(workspace.getId(), conversationId, foreign, 1))
+        UUID foreign = runningTurn(conversation(other), other);
+        assertThat(conversationClaims.claimConversationCopy(workspace.getId(), other, conversationId, foreign, 1))
+                .as("the turn's account is not the feedback's developer")
+                .isEmpty();
+        assertThat(conversationClaims.claimConversationCopy(workspace.getId(), developerId, conversationId, foreign, 1))
+                .as("the developer named for a turn of another account")
                 .isEmpty();
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.PLANNED);
         assertThat(chatCopy().getWriteStartedAt()).isNull();
         assertThat(conversation().getState()).isEqualTo(FeedbackState.READY);
     }
 
+    /**
+     * A claim takes the turn before the feedback. While the claim waits for the turn, the end that holds the turn also
+     * takes the feedback: a claim that held the feedback first would deadlock with it.
+     */
     @Test
     void shouldMakeAClaimWaitForAnEndThatHoldsTheTurnAndThenRefuseIt() throws Exception {
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        var ending = CompletableFuture.runAsync(() -> new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> {
-                    jdbc.queryForList("SELECT id FROM conversation_turn WHERE id=? FOR UPDATE", turnId);
-                    locked.countDown();
-                    try {
-                        assertThat(release.await(30, TimeUnit.SECONDS)).isTrue();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException(e);
-                    }
-                    jdbc.update(ConversationTurnRunRows.endDone(turnId));
-                }));
+        var ending = CompletableFuture.runAsync(() -> writeLedger(developerId, () -> {
+            jdbc.queryForList("SELECT id FROM conversation_turn WHERE id=? FOR UPDATE", turnId);
+            locked.countDown();
+            try {
+                assertThat(release.await(30, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            jdbc.queryForList("SELECT id FROM feedback WHERE id=? FOR UPDATE", conversationId);
+            jdbc.update(ConversationTurnRunRows.endDone(turnId));
+        }));
         assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
         var claiming = CompletableFuture.supplyAsync(() -> claim(1));
         waitForALockWait();
@@ -287,14 +368,16 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     @Test
-    void shouldKeepTheFenceCommittedWhenAnEnclosingTransactionRollsBack() {
+    void shouldLeaveTheCopyClaimableWhenTheToolCallThatClaimedItRollsBack() {
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
                     claim();
                     throw new IllegalStateException("outer rollback");
                 }))
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(chatCopy().getWriteStartedAt()).isNotNull();
-        assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.PLANNED);
+        assertThat(chatCopy().getWriteStartedAt()).isNull();
+        assertThat(conversation().getState()).isEqualTo(FeedbackState.READY);
+        assertThat(claim(1)).as("the attempt claims the copy again").isPresent();
     }
 
     @Test
@@ -304,7 +387,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         UUID entry = answer();
         endTurn();
         Instant at = fence.writeStartedAt().plusSeconds(1);
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
         assertThat(chatCopy().getBody())
                 .as("the receipt holds the words of the call, never the answer's other text")
@@ -315,10 +398,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
         assertThat(conversation().getDeliveredAt()).isEqualTo(at);
         assertThat(digests.current(workspace.getId(), conversationId)).isEqualTo(approvedContent);
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(),
                 fence,
-                receipt(ConversationCopyOutcome.FAILED, entry, at.plusSeconds(1), "Late failure"));
+                receipt(ConversationCopyOutcome.FAILED, null, at.plusSeconds(1), "Late failure"));
         assertThat(chatCopy().getPostedAt()).isEqualTo(at);
         assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
     }
@@ -331,7 +414,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         endTurn();
         Instant at = fence.writeStartedAt().plusSeconds(1);
 
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
 
         assertThat(chatCopy().getBody()).isEqualTo("Try a focused test.");
@@ -348,7 +431,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         endTurn();
         Instant at = fence.writeStartedAt().plusSeconds(1);
 
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
 
         assertThat(chatCopy().getBody()).isEqualTo("Try a focused test.");
@@ -361,7 +444,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         endTurn();
         Instant at = fence.writeStartedAt().plusSeconds(1);
 
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null)))
                 .isInstanceOf(ResponseStatusException.class);
         assertThat(chatCopy().getBody()).isNull();
@@ -373,12 +456,12 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         var fence = claim();
         UUID entry = answer();
         Instant at = fence.writeStartedAt().plusSeconds(1);
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null)))
                 .as("the turn still runs")
                 .isInstanceOf(ResponseStatusException.class);
         endTurn();
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(),
                         fence,
                         new ConversationCopyReceipt(turnId, null, ConversationCopyOutcome.DELIVERED, at, null)))
@@ -392,7 +475,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     @Test
     void shouldPreserveUncertaintyAndFailureWithoutReopeningTheConversationCopy() {
         var fence = claim();
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(),
                 fence,
                 receipt(
@@ -402,13 +485,13 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                         "No transport confirmation"));
         assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
-        assertThat(store.unsettledConversationClaims(
+        assertThat(conversationClaims.unsettledConversationClaims(
                         workspace.getId(), turnId, fence.writeStartedAt(), fence.writeStartedAt()))
                 .as("a settled claim is not settled again")
                 .isEmpty();
         assertThatThrownBy(() -> custody.requireAcknowledged(workspace.getId(), List.of(conversationId)))
                 .isInstanceOf(ResponseStatusException.class);
-        store.recordConversationReceipt(
+        conversationClaims.recordConversationReceipt(
                 workspace.getId(),
                 fence,
                 receipt(
@@ -436,12 +519,12 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                 null,
                 fence.writeStartedAt().plusSeconds(2),
                 null);
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(),
                         new CopyWriteFence(conversationId, UUID.randomUUID(), turnId, fence.writeStartedAt()),
                         receipt))
                 .isInstanceOf(RuntimeException.class);
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(),
                         new CopyWriteFence(
                                 conversationId,
@@ -450,13 +533,13 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                                 fence.writeStartedAt().plusSeconds(1)),
                         receipt))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(() -> store.recordConversationReceipt(
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
                         workspace.getId(),
                         fence,
                         new ConversationCopyReceipt(
                                 UUID.randomUUID(), null, ConversationCopyOutcome.UNCONFIRMED, receipt.at(), null)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> store.recordConversationReceipt(workspace.getId() + 1, fence, receipt))
+        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(workspace.getId() + 1, fence, receipt))
                 .isInstanceOf(RuntimeException.class);
         assertThat(chatCopy().getWriteStartedAt()).isEqualTo(fence.writeStartedAt());
         assertThat(chatCopy().getPostedAt()).isNull();

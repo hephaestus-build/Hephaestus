@@ -35,6 +35,14 @@ public record ConversationReceiptsDue(
         unconfirmed = Set.copyOf(unconfirmed);
     }
 
+    /**
+     * Whether the end recorded that its reply showed the feedback: a confirmed Slack reply names what it showed, and a
+     * completed app answer counts whole, so it showed each piece it called.
+     */
+    boolean recordedShown(UUID feedbackId) {
+        return shown == null ? unconfirmed.contains(feedbackId) : shown.contains(feedbackId);
+    }
+
     ConversationCopyOutcome outcome(UUID feedbackId, boolean shownByAnswer) {
         if (shownByAnswer && (shown == null || shown.contains(feedbackId))) return ConversationCopyOutcome.DELIVERED;
         return unconfirmed.contains(feedbackId) ? ConversationCopyOutcome.UNCONFIRMED : otherwise;

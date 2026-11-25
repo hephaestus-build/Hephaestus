@@ -220,7 +220,8 @@ public class ConversationTurnContexts {
     public boolean showFeedback(TurnAttempt turn, UUID feedbackId) {
         if (turns.require(turn.workspaceId(), turn.turnId()).getSurface() == ConversationTurn.Surface.SYSTEM)
             return false;
-        return feedback.claimConversationCopy(turn.workspaceId(), feedbackId, turn.turnId(), turn.attempt())
+        return feedback.claimConversationCopy(
+                        turn.workspaceId(), turn.accountId(), feedbackId, turn.turnId(), turn.attempt())
                 .isPresent();
     }
 

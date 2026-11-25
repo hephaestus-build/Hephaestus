@@ -22,6 +22,12 @@ public final class ConversationFeedbackRows {
      */
     public static UUID claimedBy(
             JdbcTemplate jdbc, long workspaceId, long developerAccountId, UUID turnId, String body) {
+        return claimedBy(jdbc, workspaceId, developerAccountId, turnId, body, UUID.randomUUID());
+    }
+
+    /** {@link #claimedBy(JdbcTemplate, long, long, UUID, String)} with the id the feedback gets. */
+    public static UUID claimedBy(
+            JdbcTemplate jdbc, long workspaceId, long developerAccountId, UUID turnId, String body, UUID feedback) {
         Long item = jdbc.queryForObject(
                 "INSERT INTO item(workspace_id,kind,source_id,created_at) VALUES (?,'scm.pull_request',"
                         + "(SELECT COALESCE(max(source_id),0)+1 FROM item),now()) RETURNING id",
@@ -34,7 +40,6 @@ public final class ConversationFeedbackRows {
                 review,
                 workspaceId,
                 item);
-        UUID feedback = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,stop_reason,body,"
                         + "created_at) VALUES (?,?,?,?,?,'CONVERSATION','UNCONFIRMED','DELIVERY_UNCONFIRMED',?,now())",
