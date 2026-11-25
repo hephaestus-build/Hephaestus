@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795549938000-1" author="hephaestus">
+        <comment>Export expiry clears at most 100 exports in one transaction, and skips an export or an account that another transaction holds, so one held export cannot roll back the expiry of the others.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
+    RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    changed integer := 0;
+    counted integer;
+    clash record;
+    absorbed record;
+    admitted boolean;
+    bound timestamp with time zone;
+BEGIN
+    IF rule IN ('WORKSPACE_PURGE', 'ACCOUNT_ABSORB') THEN
+        -- Hash the supplied and expected MACs before comparing their bytes.
+        SELECT EXISTS (
+            SELECT FROM lifecycle_private.sweep_key k
+            WHERE sha256(convert_to(encode(sha256(k.outer_pad || sha256(k.inner_pad || convert_to(
+                concat_ws(':', 'person_row_sweep', rule, subject_id, COALESCE(other_id::text, '-'),
+                          pg_current_xact_id(), pg_backend_pid(), extract(epoch FROM transaction_timestamp())),
+                'UTF8'))), 'hex'), 'UTF8'))
+                = sha256(convert_to(current_setting('hephaestus.sweep_admission', true), 'UTF8'))
+        ) INTO admitted;
+    END IF;
+    IF rule = 'WORKSPACE_PURGE' THEN
+        -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
+        IF subject_id IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        -- A personal space is purged only by its owner's erasure, which suspends it first.
+        PERFORM FROM public.workspace w
+        WHERE w.id = subject_id
+          AND ((w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')) OR (w.kind = 'PERSONAL' AND w.status = 'SUSPENDED'))
+        FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'person_row_sweep: workspace is unavailable for purge'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation_turn WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPIRED_EXPORTS' THEN
+        -- cutoff is now: a ready export past its expiry loses its payload. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        -- One call expires at most 100 exports, by expiry and key. Account erasure locks the account before its
+        -- exports, so a busy account is skipped, and so is an export that another transaction holds: the job commits
+        -- each call and calls again, and its next run retries what it skipped (ExportRetentionSweeper). The bound is a
+        -- variable, so the ready-expiry index can range on it.
+        bound := LEAST(cutoff, statement_timestamp());
+        WITH due AS MATERIALIZED (
+            SELECT x.id FROM public.account_export x JOIN public.account a ON a.id = x.account_id
+            WHERE x.status = 'READY' AND x.expires_at < bound AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+            ORDER BY x.expires_at, x.id
+            LIMIT 100
+            FOR UPDATE OF x SKIP LOCKED
+            FOR SHARE OF a SKIP LOCKED
+        )
+        UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
+        FROM due
+        WHERE x.id = due.id;
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSIF rule = 'ACCOUNT_ABSORB' THEN
+        -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
+        -- conversation in a workspace, the absorbed main's entries follow the claiming main's entries, its turns and
+        -- threads move, and it is deleted. Every other conversation of the absorbed account changes owner.
+        IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
+            RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
+        -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
+        PERFORM FROM public.account a WHERE a.id IN (subject_id, other_id) ORDER BY a.id FOR UPDATE;
+        IF NOT EXISTS (SELECT FROM public.account a WHERE a.id = subject_id AND a.status = 'UNCLAIMED')
+           OR NOT EXISTS (SELECT FROM public.account a WHERE a.id = other_id AND a.status IN ('ACTIVE', 'BLOCKED')) THEN
+            RAISE EXCEPTION 'person_row_sweep: only an unclaimed account is absorbed, by an active or blocked account'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        FOR clash IN
+            SELECT a.workspace_id, a.id AS absorbed_id, k.id AS kept_id FROM public.conversation a
+            JOIN public.conversation k ON k.workspace_id = a.workspace_id
+                AND k.account_id = other_id AND k.parent_conversation_id IS NULL
+            WHERE a.account_id = subject_id AND a.parent_conversation_id IS NULL
+            ORDER BY a.id
+            FOR UPDATE OF a, k
+        LOOP
+            -- The caller prepares each clash first: it returns a running turn of the absorbed main to the queue, moves
+            -- the absorbed main's queued runs to the claiming main, and erases the absorbed main's summaries, which
+            -- summarize a conversation that no longer exists alone.
+            IF EXISTS (SELECT FROM public.conversation_turn t
+                       WHERE t.conversation_id = clash.absorbed_id AND t.status = 'RUNNING')
+               OR EXISTS (SELECT FROM public.agent_run r
+                          WHERE r.workspace_id = clash.workspace_id AND r.state = 'QUEUED'
+                            AND r.concurrency_key = 'conversation:' || clash.absorbed_id)
+               OR EXISTS (SELECT FROM public.conversation_entry e
+                          WHERE e.conversation_id = clash.absorbed_id AND e.kind = 'SUMMARY' AND e.redacted_at IS NULL) THEN
+                RAISE EXCEPTION 'person_row_sweep: the absorbed conversation % is not prepared', clash.absorbed_id
+                    USING ERRCODE = 'object_not_in_prerequisite_state';
+            END IF;
+            UPDATE public.conversation_entry e SET conversation_id = clash.kept_id, account_id = other_id,
+                seq = top.seq + moved.position
+            FROM (SELECT x.id, row_number() OVER (ORDER BY x.seq) AS position
+                  FROM public.conversation_entry x WHERE x.conversation_id = clash.absorbed_id) moved,
+                 (SELECT COALESCE(max(y.seq), 0) AS seq FROM public.conversation_entry y
+                  WHERE y.conversation_id = clash.kept_id) top
+            WHERE e.id = moved.id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation_turn SET conversation_id = clash.kept_id, account_id = other_id
+            WHERE conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation SET parent_conversation_id = clash.kept_id
+            WHERE parent_conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            SELECT c.slack_team_id, c.slack_user_id, c.slack_channel_id, c.last_activity_at, c.last_read_at
+            INTO absorbed FROM public.conversation c WHERE c.id = clash.absorbed_id;
+            DELETE FROM public.conversation WHERE id = clash.absorbed_id;
+            -- The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
+            UPDATE public.conversation SET
+                slack_user_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_user_id ELSE slack_user_id END,
+                slack_channel_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_channel_id ELSE slack_channel_id END,
+                slack_team_id = COALESCE(slack_team_id, absorbed.slack_team_id),
+                last_activity_at = GREATEST(last_activity_at, absorbed.last_activity_at),
+                last_read_at = GREATEST(last_read_at, absorbed.last_read_at)
+            WHERE id = clash.kept_id;
+        END LOOP;
+        UPDATE public.conversation SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSE
+        RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN changed;
+END
+$$;
+                ]]></sql>
+        <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125090220-fix-personal-space-audit-erasure.xml"/>
+    </changeSet>
+</databaseChangeLog>
