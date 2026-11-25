@@ -120,8 +120,8 @@ Each heading is the slug at the end of a problem `type`.
 ### account-erasure-accepted
 
 The self-service erasure put the account on hold and revoked its sessions.
-A 409 response means an instance admin must finish the erasure.
-A 503 response means the recovery copy is still pending.
+It comes only with a 409 response: an instance admin must finish the erasure.
+When the recovery copy is still pending, the server answers 503 with [`journal-pending`](#journal-pending) instead.
 Send the person to the sign-in page with the corresponding notice.
 
 ### journal-pending

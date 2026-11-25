@@ -350,7 +350,8 @@ Wait with fake timers, `vi.waitFor`, `expect.poll`, Awaitility or a latch.
 
 A browser test waits for what proves the page is ready: an element, a response, or `settled(page)` from `webapp/e2e/screenshots/settled.ts`.
 `settled` waits for the app's own idle mark, `data-page-idle` on the document.
-The root route sets it while no first load, write or route load is pending.
+`installPageIdle` (`webapp/src/runtime/page-idle.ts`) sets it while no first load, write or route load is pending.
+`main.tsx` installs it outside React, so no error boundary can stop it.
 Lint refuses `networkidle`.
 A poll or a request that never ends can hold that state off for the whole test, and the timeout then names no cause.
 
