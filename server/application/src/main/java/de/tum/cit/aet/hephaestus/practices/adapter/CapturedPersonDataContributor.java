@@ -106,8 +106,8 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
     }
 
     @Override
-    public void prepareErasure(PersonDataSelection selection) {
-        store.prepareErasure(selection);
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
+        store.prepareErasure(selection, frozenScope);
     }
 
     @Override

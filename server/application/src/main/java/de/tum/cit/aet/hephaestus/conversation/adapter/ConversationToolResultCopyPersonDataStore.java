@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -108,12 +109,26 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
         return List.of();
     }
 
+    /**
+     * Also every current workspace of the frozen account, its personal space included: a resumed erasure deletes their
+     * physical copies whatever an interrupted attempt left, and a selection frozen before the personal space was
+     * selected here still reaches it.
+     */
     @Override
-    public void prepareErasure(PersonDataSelection selection) {
-        sandboxCopies.erase(selection.rows().stream()
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
+        var copies = new HashMap<>(frozenCopies(selection));
+        if (frozenScope.accountId() != null)
+            memberships
+                    .workspaceIds(frozenScope.accountId())
+                    .forEach(workspace -> copies.putIfAbsent(workspace, Set.of()));
+        sandboxCopies.erase(copies);
+    }
+
+    private Map<Long, Set<UUID>> frozenCopies(PersonDataSelection selection) {
+        return selection.rows().stream()
                 .collect(Collectors.toUnmodifiableMap(
                         row -> Long.valueOf(Objects.requireNonNull(row.columns().get("workspace_id"))),
-                        this::frozenSandboxes)));
+                        this::frozenSandboxes));
     }
 
     private Set<UUID> frozenSandboxes(PersonDataSelection.RowKey row) {

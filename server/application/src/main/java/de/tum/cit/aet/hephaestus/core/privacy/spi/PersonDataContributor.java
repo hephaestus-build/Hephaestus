@@ -26,8 +26,12 @@ public interface PersonDataContributor extends Ordered {
         return true;
     }
 
-    /** Stop admitted writers before any store is erased. Repeat calls must be safe. */
-    default void prepareErasure(PersonDataSelection selection) {}
+    /**
+     * Stop admitted writers before any store is erased. Repeat calls must be safe. The frozen scope lets a store's
+     * custody also cover what the frozen selection cannot name, such as rows that an interrupted attempt or an older
+     * selection left out.
+     */
+    default void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {}
 
     default List<ExternalDelivery> externalDeliveries(PersonDataSelection selection) {
         return List.of();

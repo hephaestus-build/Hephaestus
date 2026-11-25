@@ -108,7 +108,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                         "avatar_url=NULL",
                         0) {
                     @Override
-                    public void prepareErasure(PersonDataSelection selection) {
+                    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
                         preparationCalls.incrementAndGet();
                     }
 

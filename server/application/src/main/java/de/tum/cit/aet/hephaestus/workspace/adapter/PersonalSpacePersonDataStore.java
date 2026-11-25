@@ -58,7 +58,7 @@ final class PersonalSpacePersonDataStore implements PersonDataContributor {
 
     /** Runs before every store's erasure, the conversation copy store's sandbox deletion included. */
     @Override
-    public void prepareErasure(PersonDataSelection selection) {
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
         selection
                 .rows()
                 .forEach(row -> spaces.suspend(Long.parseLong(row.columns().get("id"))));
