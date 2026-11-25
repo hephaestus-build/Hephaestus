@@ -95,6 +95,14 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(catalog.practice(source.slug()).effective());
         assertThat(versions.definitionOf(pinned)).isEqualTo(recordedDefinition);
         assertThat(current.getFeedbackMode()).isEqualTo(FeedbackMode.OFF);
+        // An accepted edit of the criteria keeps the catalog identity and starts a new comparability class.
+        assertThat(pinned.getIdentityKey()).isEqualTo("software-engineering/" + source.slug());
+        assertThat(pinned.getComparabilityClass()).isEqualTo(digest.of(recordedDefinition));
+        assertThat(current.getCurrentVersion().getIdentityKey()).isEqualTo(pinned.getIdentityKey());
+        assertThat(current.getCurrentVersion().getComparabilityClass())
+                .isEqualTo(digest.of(offeredDefinition))
+                .isNotEqualTo(pinned.getComparabilityClass());
+        assertThat(presenter.present(workspace.getId(), current).portable()).isTrue();
         assertThat(presenter.history(current)).hasSize(2);
         assertThat(releases.list(ctx))
                 .noneMatch(release -> release.practiceSlug().equals(source.slug()));
@@ -146,6 +154,10 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
                 ctx, source.slug(), EntityTagPrecondition.parse(EntityTagPrecondition.format(declinedProposal.etag())));
         assertThat(reset.getCurrentVersion().getId()).isNotEqualTo(first.getId());
         assertThat(versions.definitionOf(reset.getCurrentVersion())).isEqualTo(changed);
+        // A reset to the catalog keeps the practice's catalog key.
+        assertThat(reset.getCurrentVersion().getIdentityKey())
+                .isEqualTo(first.getIdentityKey())
+                .isEqualTo("software-engineering/" + source.slug());
         assertThat(versions.definitionOf(first)).isEqualTo(source.effective().definition());
         assertThat(presenter.history(reset)).hasSize(2);
         assertThat(Objects.requireNonNull(reset.getGroup()).getSlug())

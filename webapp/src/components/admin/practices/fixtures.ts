@@ -96,16 +96,25 @@ export function mockPracticeOf({
 	catalogOrigin: origin = OWN_ORIGIN,
 	version,
 }: MockPracticeInput): Practice {
+	const currentVersion = practiceVersion(definition, { id: `${id}01`, ...version });
 	return {
 		id,
 		slug,
 		kind,
 		groupSlug,
 		position,
-		currentVersion: practiceVersion(definition, { id: `${id}01`, ...version }),
+		currentVersion,
 		feedbackMode,
 		catalogOrigin: origin,
 		editedIn: "HEPHAESTUS",
+		identity: {
+			key:
+				origin.catalogSlug === null
+					? `local/1/${id}`
+					: `software-engineering/${origin.catalogSlug}`,
+			comparabilityClass: currentVersion.reviewDigest,
+		},
+		portable: origin.catalogSlug !== null,
 		createdAt: new Date("2025-06-01"),
 		updatedAt: new Date("2025-06-15"),
 	};

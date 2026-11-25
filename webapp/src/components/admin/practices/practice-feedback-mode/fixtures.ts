@@ -88,6 +88,8 @@ function practiceOf(spec: PracticeSpec, slug: string, groupSlug: string | null, 
 		position,
 		catalogOrigin: CATALOG_ORIGIN,
 		editedIn: "HEPHAESTUS" as const,
+		identity: { key: `local/1/${position + 1}`, comparabilityClass: `digest-${position + 1}` },
+		portable: false,
 		createdAt: new Date("2026-01-01T00:00:00Z"),
 		updatedAt: new Date("2026-01-02T00:00:00Z"),
 		currentVersion: {

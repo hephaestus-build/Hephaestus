@@ -10,11 +10,13 @@ import { parse } from "yaml";
 
 import {
 	alertNames,
+	catalogIdentities,
 	catalogSlugs,
 	closedConstant,
 	DEEP_LINKS,
 	exportedNames,
 	findings,
+	identityBreaks,
 	metricsIn,
 	problemSlugs,
 	refusals,
@@ -395,6 +397,195 @@ void test("alert names and catalog slugs read each kind", () => {
 		[...catalogSlugs(RELEASE.get(CATALOG) ?? "")],
 		["group reviews", "practice clear-comments"],
 	);
+});
+
+const VERIFY = { domain: "software-engineering", key: "verify" };
+
+/** A catalog with the identity software-engineering/verify: on a practice of this kind, or retired. */
+const identityCatalog = (kind: string, retired = false) =>
+	catalogIdentities(
+		JSON.stringify(
+			retired
+				? {
+						groups: [{ slug: "reviews", practices: [] }],
+						retiredIdentities: [{ kind, identity: VERIFY }],
+					}
+				: {
+						groups: [{ slug: "reviews", practices: [{ slug: "verify", kind, identity: VERIFY }] }],
+					},
+		),
+	);
+
+/** A pull-request practice whose identity holds this key and these former keys. */
+const practice = (slug: string, key: string, formerly: string[] = []) => ({
+	slug,
+	kind: "scm.pull_request",
+	identity: { domain: "software-engineering", key, formerly },
+});
+const twoPractices = (first: object, second: object) =>
+	catalogIdentities(JSON.stringify({ groups: [{ slug: "reviews", practices: [first, second] }] }));
+
+void test("a released identity is never lost, never moves kind and never comes back once retired", () => {
+	const released = identityCatalog("scm.pull_request");
+	const retired = identityCatalog("scm.pull_request", true);
+	assert.deepEqual(identityBreaks(released, released), []);
+	assert.deepEqual(identityBreaks(released, retired), []);
+	assert.deepEqual(identityBreaks(released, identityCatalog("scm.issue")), [
+		"The catalog moved the identity software-engineering/verify from scm.pull_request to scm.issue; give the new kind its own key",
+	]);
+	assert.deepEqual(
+		identityBreaks(
+			released,
+			catalogIdentities(JSON.stringify({ groups: [{ slug: "reviews", practices: [] }] })),
+		),
+		[
+			"The catalog lost the identity software-engineering/verify; retire it in retiredIdentities instead",
+		],
+	);
+	// Retired in one release, then reused for another kind in the next: both steps are refused against the one before.
+	assert.deepEqual(identityBreaks(retired, identityCatalog("scm.pull_request")), [
+		"The catalog brought back the retired identity software-engineering/verify; give the practice a new key",
+	]);
+	assert.deepEqual(identityBreaks(retired, identityCatalog("scm.issue", true)), [
+		"The catalog moved the identity software-engineering/verify from scm.pull_request to scm.issue; give the new kind its own key",
+	]);
+	// A renamed key keeps the old one in formerly, so the old key is not lost.
+	const renamed = catalogIdentities(
+		JSON.stringify({
+			groups: [
+				{
+					slug: "reviews",
+					practices: [
+						{
+							slug: "verify",
+							kind: "scm.pull_request",
+							identity: {
+								domain: "software-engineering",
+								key: "check",
+								formerly: ["software-engineering/verify"],
+							},
+						},
+					],
+				},
+			],
+		}),
+	);
+	assert.deepEqual(identityBreaks(released, renamed), []);
+	// A former key that moves to another practice of the same kind, or two identities folded into one, are refused.
+	const before = twoPractices(
+		practice("check", "check", ["software-engineering/verify"]),
+		practice("test", "test"),
+	);
+	assert.deepEqual(
+		identityBreaks(
+			before,
+			twoPractices(
+				practice("check", "check"),
+				practice("test", "test", ["software-engineering/verify"]),
+			),
+		),
+		[
+			"The catalog split the keys of the identity software-engineering/check over software-engineering/check, software-engineering/test; keep them on one practice",
+			"The catalog merged the identities software-engineering/check, software-engineering/test into software-engineering/test; each keeps its own practice",
+		],
+	);
+});
+
+/** The identity software-engineering/verify on a pull-request practice, with these classes. */
+const withClasses = (classes: string[][]) =>
+	catalogIdentities(
+		JSON.stringify({
+			groups: [
+				{
+					slug: "reviews",
+					practices: [
+						{ slug: "verify", kind: "scm.pull_request", identity: { ...VERIFY, classes } },
+					],
+				},
+			],
+		}),
+	);
+
+void test("a practice that stays keeps its identity, and a rename keeps the released key", () => {
+	const before = twoPractices(practice("check", "check"), practice("test", "test"));
+	const swapped = twoPractices(practice("check", "test"), practice("test", "check"));
+	assert.deepEqual(identityBreaks(before, swapped), [
+		"The catalog gave the practice check the identity software-engineering/test instead of software-engineering/check; a practice keeps its identity",
+		"The catalog gave the practice test the identity software-engineering/check instead of software-engineering/test; a practice keeps its identity",
+	]);
+	const renamed = twoPractices(
+		practice("check", "verify", ["software-engineering/check"]),
+		practice("test", "test"),
+	);
+	assert.deepEqual(identityBreaks(before, renamed), []);
+	// A renamed slug that keeps its key keeps its identity.
+	assert.deepEqual(
+		identityBreaks(before, twoPractices(practice("checks", "check"), practice("test", "test"))),
+		[],
+	);
+	// A new key without formerly, also when the old key is retired, gets one fix: formerly.
+	const fresh = twoPractices(practice("check", "verify"), practice("test", "test"));
+	assert.deepEqual(identityBreaks(before, fresh), [
+		"The catalog lost the identity software-engineering/check; list it in formerly of the practice check",
+	]);
+	const retiredInstead = catalogIdentities(
+		JSON.stringify({
+			groups: [
+				{ slug: "reviews", practices: [practice("check", "verify"), practice("test", "test")] },
+			],
+			retiredIdentities: [
+				{ kind: "scm.pull_request", identity: { domain: "software-engineering", key: "check" } },
+			],
+		}),
+	);
+	assert.deepEqual(identityBreaks(before, retiredInstead), [
+		"The catalog gave the practice check the identity software-engineering/verify instead of software-engineering/check; a practice keeps its identity",
+	]);
+});
+
+void test("a practice that moves onto a retired key, or to another kind, takes a new key", () => {
+	const released = catalogIdentities(
+		JSON.stringify({
+			groups: [{ slug: "reviews", practices: [practice("check", "check")] }],
+			retiredIdentities: [
+				{ kind: "scm.pull_request", identity: { domain: "software-engineering", key: "old" } },
+			],
+		}),
+	);
+	const moved = catalogIdentities(
+		JSON.stringify({ groups: [{ slug: "reviews", practices: [practice("check", "old")] }] }),
+	);
+	assert.deepEqual(identityBreaks(released, moved), [
+		"The catalog lost the identity software-engineering/check; list it in formerly of the practice check",
+		"The catalog brought back the retired identity software-engineering/old; give the practice a new key",
+	]);
+	// A practice on a new kind gets its own key, and the released key retires with the old kind.
+	const otherKind = catalogIdentities(
+		JSON.stringify({
+			groups: [
+				{
+					slug: "reviews",
+					practices: [{ ...practice("check", "check-issue"), kind: "scm.issue" }],
+				},
+			],
+			retiredIdentities: [
+				{ kind: "scm.pull_request", identity: { domain: "software-engineering", key: "check" } },
+				{ kind: "scm.pull_request", identity: { domain: "software-engineering", key: "old" } },
+			],
+		}),
+	);
+	assert.deepEqual(identityBreaks(released, otherKind), []);
+});
+
+void test("a released class keeps its first digest first and keeps its digests", () => {
+	const a = `v6:${"a".repeat(64)}`;
+	const b = `v6:${"b".repeat(64)}`;
+	const c = `v6:${"c".repeat(64)}`;
+	const released = withClasses([[a, b]]);
+	assert.deepEqual(identityBreaks(released, withClasses([[a, b, c]])), []);
+	const changed = `The catalog changed the released class ${a} of software-engineering/verify; keep its first digest first and keep its digests`;
+	assert.deepEqual(identityBreaks(released, withClasses([[b, a]])), [changed]);
+	assert.deepEqual(identityBreaks(released, withClasses([[a]])), [changed]);
 });
 
 void test("exports come from declarations and lists, with aliases and types", () => {

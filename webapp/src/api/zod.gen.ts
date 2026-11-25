@@ -2506,6 +2506,14 @@ export const zPracticeGuide = z.object({
 	markdown: z.string().max(12000),
 });
 
+/**
+ * What the practice's current version judges (ADR 0130). Two versions with one key and one comparability class judge the same thing, in any workspace.
+ */
+export const zPracticeIdentity = z.object({
+	comparabilityClass: z.string(),
+	key: z.string(),
+});
+
 export const zPracticePageCleanWork = z.object({
 	item: zItemRef,
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -4643,7 +4651,9 @@ export const zPractice = z.object({
 	feedbackMode: zFeedbackModeAssignment,
 	groupSlug: z.string().nullable(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
+	identity: zPracticeIdentity.nullable(),
 	kind: z.string(),
+	portable: z.boolean(),
 	position: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

@@ -125,6 +125,211 @@ export function catalogSlugs(catalog: string): Set<string> {
 	return slugs;
 }
 
+/** The domain-qualified key of a catalog identity. */
+function identityKey(identity: unknown): string {
+	const { domain, key } = asRecord(identity, "identity");
+	return `${asString(domain, "identity domain")}/${asString(key, "identity key")}`;
+}
+
+/** What the catalog says about one identity key: the item kind it judges, and whether it is retired. */
+export interface CatalogIdentity {
+	kind: string;
+	retired: boolean;
+	/** The key of the identity that holds this key: itself, or the practice that lists it in `formerly`. */
+	owner: string;
+	/** The comparability classes of that identity: each a list of review digests, named by the first. */
+	classes: string[][];
+	/** The slug of the practice that holds the identity; a retired identity has none. */
+	slug?: string;
+}
+
+/**
+ * Each identity key of the bundled catalog (ADR 0130), with its item kind: the key of each practice, of each retired
+ * practice, and each former key, which still names the same practice.
+ */
+export function catalogIdentities(catalog: string): Map<string, CatalogIdentity> {
+	const identities = new Map<string, CatalogIdentity>();
+	const add = (identity: unknown, kind: unknown, slug: string | undefined) => {
+		const owner = identityKey(identity);
+		const { classes } = asRecord(identity, "identity");
+		const entry = {
+			kind: asString(kind, "practice kind"),
+			retired: slug === undefined,
+			owner,
+			...(slug === undefined ? {} : { slug }),
+			classes: (classes === undefined ? [] : asArray(classes, "classes")).map((digests) =>
+				asArray(digests, "class").map((digest) => asString(digest, "digest")),
+			),
+		};
+		identities.set(owner, entry);
+		const { formerly } = asRecord(identity, "identity");
+		for (const former of formerly === undefined ? [] : asArray(formerly, "formerly")) {
+			identities.set(asString(former, "former key"), entry);
+		}
+	};
+	const root = asRecord(parseJson(catalog), CATALOG);
+	for (const group of asArray(root.groups, "groups")) {
+		for (const entry of asArray(asRecord(group, "group").practices, "practices")) {
+			const practice = asRecord(entry, "practice");
+			if (practice.identity !== undefined) {
+				add(practice.identity, practice.kind, asString(practice.slug, "practice slug"));
+			}
+		}
+	}
+	const retired =
+		root.retiredIdentities === undefined
+			? []
+			: asArray(root.retiredIdentities, "retiredIdentities");
+	for (const entry of retired) {
+		const practice = asRecord(entry, "retired practice");
+		add(practice.identity, practice.kind, undefined);
+	}
+	return identities;
+}
+
+/**
+ * A released identity is never lost, never moves to another item kind, never comes back once retired, and its keys
+ * stay together: the keys that one identity holds move to one successor, and two identities never merge into one.
+ * Stored versions and growth hold the key, so a lost key strands them, and a key on another kind or under another
+ * practice would compare judgements of different work. Each rule holds across every release, so no major release
+ * waives it.
+ */
+export function identityBreaks(
+	base: Map<string, CatalogIdentity>,
+	head: Map<string, CatalogIdentity>,
+): string[] {
+	return [
+		...keyBreaks(base, head),
+		...ownerBreaks(base, head),
+		...slugBreaks(base, head),
+		...classBreaks(base, head),
+	];
+}
+
+/** Each practice of the catalog by slug, with the identity that it holds. */
+function practicesBySlug(identities: Map<string, CatalogIdentity>): Map<string, CatalogIdentity> {
+	return new Map(
+		[...identities].flatMap(([key, entry]) =>
+			entry.slug !== undefined && key === entry.owner ? [[entry.slug, entry] as const] : [],
+		),
+	);
+}
+
+/**
+ * A practice that stays in the catalog keeps its identity: its new identity is the released one, or lists the
+ * released key in `formerly`. Otherwise a new adoption of the practice gets another key than an earlier adoption.
+ * A practice that changes its item kind is a new practice and takes a new key, and `keyBreaks` reports a lost key.
+ */
+function slugBreaks(
+	base: Map<string, CatalogIdentity>,
+	head: Map<string, CatalogIdentity>,
+): string[] {
+	const now = practicesBySlug(head);
+	const breaks: string[] = [];
+	for (const [slug, released] of practicesBySlug(base)) {
+		const current = now.get(slug);
+		const holder = head.get(released.owner);
+		if (
+			current !== undefined &&
+			current.kind === released.kind &&
+			holder !== undefined &&
+			holder.owner !== current.owner
+		) {
+			breaks.push(
+				`The catalog gave the practice ${slug} the identity ${current.owner} instead of ${released.owner}; a practice keeps its identity`,
+			);
+		}
+	}
+	return breaks;
+}
+
+/** Each released key stays, keeps its item kind and does not come back once retired. */
+function keyBreaks(
+	base: Map<string, CatalogIdentity>,
+	head: Map<string, CatalogIdentity>,
+): string[] {
+	const practices = practicesBySlug(head);
+	const breaks: string[] = [];
+	for (const [key, before] of base) {
+		const after = head.get(key);
+		const stays = before.slug === undefined ? undefined : practices.get(before.slug);
+		if (after === undefined && stays?.kind === before.kind) {
+			breaks.push(
+				`The catalog lost the identity ${key}; list it in formerly of the practice ${String(stays.slug)}`,
+			);
+		} else if (after === undefined) {
+			breaks.push(`The catalog lost the identity ${key}; retire it in retiredIdentities instead`);
+		} else if (after.kind !== before.kind) {
+			breaks.push(
+				`The catalog moved the identity ${key} from ${before.kind} to ${after.kind}; give the new kind its own key`,
+			);
+		} else if (before.retired && !after.retired) {
+			breaks.push(
+				`The catalog brought back the retired identity ${key}; give the practice a new key`,
+			);
+		}
+	}
+	return breaks;
+}
+
+/** The keys of one released identity move to one successor, and two released identities never share one. */
+function ownerBreaks(
+	base: Map<string, CatalogIdentity>,
+	head: Map<string, CatalogIdentity>,
+): string[] {
+	const successors = new Map<string, Set<string>>();
+	for (const [key, before] of base) {
+		const after = head.get(key);
+		if (after !== undefined) {
+			successors.set(before.owner, (successors.get(before.owner) ?? new Set()).add(after.owner));
+		}
+	}
+	const breaks: string[] = [];
+	const predecessors = new Map<string, string[]>();
+	for (const [owner, next] of successors) {
+		if (next.size > 1) {
+			breaks.push(
+				`The catalog split the keys of the identity ${owner} over ${[...next].join(", ")}; keep them on one practice`,
+			);
+		}
+		for (const successor of next) {
+			predecessors.set(successor, [...(predecessors.get(successor) ?? []), owner]);
+		}
+	}
+	for (const [successor, owners] of predecessors) {
+		if (owners.length > 1) {
+			breaks.push(
+				`The catalog merged the identities ${owners.join(", ")} into ${successor}; each keeps its own practice`,
+			);
+		}
+	}
+	return breaks;
+}
+
+/** A stored class never changes, so a released class keeps its first digest first and keeps each of its digests. */
+function classBreaks(
+	base: Map<string, CatalogIdentity>,
+	head: Map<string, CatalogIdentity>,
+): string[] {
+	const breaks: string[] = [];
+	for (const [key, before] of base) {
+		const after = head.get(key);
+		if (key !== before.owner || after === undefined) {
+			continue;
+		}
+		for (const released of before.classes) {
+			const [first = ""] = released;
+			const kept = after.classes.find(([leader]) => leader === first);
+			if (kept === undefined || !released.every((digest) => kept.includes(digest))) {
+				breaks.push(
+					`The catalog changed the released class ${first} of ${key}; keep its first digest first and keep its digests`,
+				);
+			}
+		}
+	}
+	return breaks;
+}
+
 /** Each problem type slug that a client can branch on: the enum constants, lowercase and hyphenated. */
 export function problemSlugs(source: string): Set<string> {
 	const body = /\benum\s+ProblemType\s*\{(?<body>[^;]*)/u.exec(source)?.groups?.body ?? "";
@@ -354,7 +559,11 @@ async function main(): Promise<void> {
 		await contractFiles(async (file) => readFile(path.join(ROOT, file), "utf8"), headTemplates),
 		await readFile(path.join(ROOT, ROUTE_TREE), "utf8"),
 	);
-	const errors = await refusals(ROOT, base, problems);
+	const identityErrors = identityBreaks(
+		catalogIdentities(baseFiles.get(CATALOG) ?? ""),
+		catalogIdentities(await readFile(path.join(ROOT, CATALOG), "utf8")),
+	).map((problem) => `${problem}. No major release waives this (ADR 0130).`);
+	const errors = [...identityErrors, ...(await refusals(ROOT, base, problems))];
 	for (const error of errors) {
 		console.log(`::error title=Public contract::${error}`);
 	}

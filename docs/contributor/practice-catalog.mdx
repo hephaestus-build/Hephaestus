@@ -66,6 +66,73 @@ Known-field presence distinguishes an unknown historical role from explicit Abou
 Java and TypeScript do not maintain separate canonical digest implementations.
 Reuse also requires the exact practice version and frozen model-slot method.
 
+## Practice identity
+
+[ADR 0130](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0130-a-practice-has-a-portable-identity-and-growth-counts-independent-pieces-of-work.md) gives each practice an identity, so that two workspaces know when they judge the same thing.
+Each bundled practice declares it in `identity`, beside its kind:
+
+```json
+"identity": {
+  "domain": "software-engineering",
+  "key": "states-how-to-verify",
+  "classes": [["v6:<first digest>", "v6:<digest of a reworded version>"]],
+  "related": ["software-engineering/ships-tests-with-the-change"],
+  "formerly": ["software-engineering/verification-steps"]
+}
+```
+
+- `domain` and `key` make the identity key `<domain>/<key>`, at most 160 characters. `local` is not a domain.
+  Do not change a key. Stored versions keep the old key, so a change splits a practice's history.
+  If you must change it, list the old key in `formerly` of the same practice. Do not also retire the old key.
+- `classes` groups review digests that judge the same thing. The first digest names the class. Never reorder or remove it.
+  A digest in no group is its own class. Thus, an edit to a field in the [review digest](#review-identity) starts a new class by default.
+  An edit can leave the judgment the same, such as a fix of a spelling error.
+  Then add the new digest to the old group in the same release as the edit. A stored class never changes, so a group added later does not reach versions stored before it.
+  A released digest can be in no group. To add it to a class, put it first in a new group. The release check cannot see such a digest, because the catalog does not list it.
+  A new version of the digest function, such as `v7` after `v6`, changes every digest. For each catalog definition, that release adds the new digest to the group of the old one.
+  A digest that no declared class lists keeps no class across the bump. An example is the digest of a version that a workspace edited.
+- `related` links other catalog practices for the reader. It never adds their counts together.
+- `formerly` lists the keys that the practice had before. A version with a former key gets the classes of this practice.
+
+`classes`, `related` and `formerly` are optional.
+
+To retire a practice, remove its entry. Add its `kind` and `identity` as one item of `retiredIdentities` at the top of the catalog.
+The bundled definition then leaves the catalog, as for any entry that it no longer ships.
+An instance entry that customized it stays available under the usual rules, and a new adoption of it gets a local key.
+The retired key stays reserved, so no other practice can take it.
+Its classes still apply to the versions that workspaces keep.
+
+From 1.0 on, the removal of a bundled practice is a breaking change, so it ships in a major release.
+From 1.0.0 on, the release contract check (`scripts/check-public-contract.ts`) compares the identities with the latest stable release:
+
+- A released key stays, as a practice's key, a former key or a retired key.
+- A key keeps its item kind. A practice for a new kind gets its own key, and its old key retires with the old kind.
+- A practice that stays keeps its key, or lists the released key in `formerly`.
+- A retired key does not come back.
+- The keys of one identity stay on one practice, and two identities do not merge.
+- A released class keeps its first digest first and keeps its digests.
+
+No major release waives these rules. A retired entry keeps its kind, so the rules also hold across several stable releases.
+
+`PracticeIdentities` reads the identities.
+The server does not start, and `PracticeIdentitiesTest` fails, on a conflict:
+
+- Two entries claim one key, also a retired one.
+- A former key is a live key.
+- A related key names no practice.
+- A digest is in two classes.
+
+A practice version stores `identity_key` and `comparability_class` when it is written:
+
+- A practice adopted from the catalog gets the key of its catalog practice, if it has the same item kind.
+- Any other practice gets `local/<workspace id>/<practice id>`. That key is not portable and never leaves its workspace.
+- Each later version keeps the key of the practice's earlier versions. A catalog edit cannot move a practice to another identity.
+- The class is the declared class of the version's review digest, or the digest itself.
+
+The database refuses a change to either column after it is set.
+The upgrade runs with every role stopped, so no server of the previous release writes a version without them.
+The upgrade to this schema fills both columns from a copy of the catalog in its changelog. Thus, a later catalog cannot change what an upgrade writes.
+
 ## Changing bundled defaults
 
 Keep stable slugs. A slug identifies a practice rather than its displayed name.
