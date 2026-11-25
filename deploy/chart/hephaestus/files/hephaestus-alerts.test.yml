@@ -3592,6 +3592,8 @@ tests:
         values: "0x130"
       - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="export_retention",outcome="success"}'
         values: "0+1x130"
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="client_input_retention",outcome="success"}'
+        values: "0x130"
       - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="conversation_retention",outcome="success"}'
         values: "0x130"
     alert_rule_test:
@@ -3604,6 +3606,12 @@ tests:
           - exp_labels:
               severity: warning
               exported_job: account_erasure
+            exp_annotations:
+              summary: An hourly privacy sweep ended no run in four hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              exported_job: client_input_retention
             exp_annotations:
               summary: An hourly privacy sweep ended no run in four hours
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3869,6 +3877,15 @@ tests:
             exp_annotations:
               summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+  - name: a receipt cleanup that ends a run every five minutes does not fire
+    interval: 5m
+    input_series:
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="client_input_retention",outcome="success"}'
+        values: "0+1x90"
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: HephaestusPrivacyJobNotRunning
+        exp_alerts: []
 
   - name: privacy journal shipping lag fires only after five minutes above the threshold
     interval: 1m

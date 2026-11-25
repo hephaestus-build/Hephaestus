@@ -718,7 +718,7 @@ groups:
       # These sweeps run at least each hour, and an empty backlog also counts as a run.
       - alert: HephaestusPrivacyJobNotRunning
         expr: >-
-          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|conversation_copy_retention|conversation_retention|export_retention"}[4h])) == 0
+          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|client_input_retention|conversation_copy_retention|conversation_retention|export_retention"}[4h])) == 0
         for: 90m
         labels:
           severity: warning

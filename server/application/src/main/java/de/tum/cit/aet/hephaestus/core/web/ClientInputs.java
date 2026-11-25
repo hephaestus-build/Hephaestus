@@ -34,6 +34,10 @@ import tools.jackson.databind.ObjectMapper;
 public class ClientInputs {
     public static final String HEADER = "Idempotency-Key";
     private static final int PRUNE_BATCH_SIZE = 1000;
+    // A burst drains in one run instead of reporting each full batch as work left behind. One more call after a full
+    // last batch shows whether receipts remain, so an exactly drained backlog is no work left behind.
+    private static final int PRUNE_BATCHES_PER_RUN = 12;
+
     private static final Duration KEY_AGE = Duration.ofDays(3);
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
@@ -76,14 +80,22 @@ public class ClientInputs {
 
     @Scheduled(cron = "0 */5 * * * *")
     @SchedulerLock(name = "client-input-cleanup", lockAtMostFor = "PT5M")
-    @WorkspaceAgnostic("Expires create receipts across workspaces through the bounded retention function")
+    @WorkspaceAgnostic("Expires create receipts of every owner through the owner function person_row_sweep")
     public void prune() {
+        // Each batch commits on its own, so a failed batch keeps the batches before it.
+        long removed = 0;
         try {
-            int removed = receipts.prune();
-            metrics.record(
-                    Job.CLIENT_INPUT_RETENTION, removed == PRUNE_BATCH_SIZE ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            int batch = PRUNE_BATCH_SIZE;
+            for (int run = 0; run < PRUNE_BATCHES_PER_RUN && batch == PRUNE_BATCH_SIZE; run++) {
+                batch = receipts.prune();
+                removed += batch;
+            }
+            int left = batch == PRUNE_BATCH_SIZE ? receipts.prune() : 0;
+            removed += left;
+            metrics.record(Job.CLIENT_INPUT_RETENTION, left > 0 ? Outcome.INCOMPLETE : Outcome.SUCCESS);
             metrics.recordAffected(Job.CLIENT_INPUT_RETENTION, removed);
         } catch (RuntimeException exception) {
+            metrics.recordAffected(Job.CLIENT_INPUT_RETENTION, removed);
             metrics.record(Job.CLIENT_INPUT_RETENTION, Outcome.FAILURE);
             throw exception;
         }
