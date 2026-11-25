@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerSweeps;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -30,7 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private AccountExportService accountExportService;
+    private OwnerSweeps ownerSweeps;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -53,7 +55,7 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         Long first = persistReadyExport(past);
         Long second = persistReadyExport(past);
 
-        assertThat(accountExportService.expireRetention()).isGreaterThanOrEqualTo(2);
+        assertThat(expireBatch()).isGreaterThanOrEqualTo(2);
 
         for (long id : new long[] {first, second}) {
             assertThat(PostgreSQLTestContainer.ownerJdbc()
@@ -78,7 +80,7 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
                 lock.executeQuery().close();
             }
 
-            accountExportService.expireRetention();
+            expireBatch();
 
             assertExpired(other);
             assertThat(PostgreSQLTestContainer.ownerJdbc()
@@ -90,7 +92,7 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
             session.commit();
         }
 
-        accountExportService.expireRetention();
+        expireBatch();
 
         assertExpired(held);
     }
@@ -111,10 +113,10 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
                         "{\"pii\":true}".getBytes(UTF_8),
                         ExportRetentionSweeper.BATCH + 1);
 
-        assertThat(accountExportService.expireRetention()).isEqualTo(ExportRetentionSweeper.BATCH);
+        assertThat(expireBatch()).isEqualTo(ExportRetentionSweeper.BATCH);
         assertThat(readyAmong(ids)).isEqualTo(1);
 
-        new ExportRetentionSweeper(accountExportService, new PrivacyJobMetrics(new SimpleMeterRegistry()), clock)
+        new ExportRetentionSweeper(ownerSweeps, new PrivacyJobMetrics(new SimpleMeterRegistry()), clock)
                 .sweep();
 
         assertThat(readyAmong(ids)).isZero();
@@ -165,5 +167,9 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
                         INSERT INTO account_export(account_id, status, expires_at, payload)
                         VALUES (?, 'READY', ?, ?) RETURNING id
                         """, Long.class, accountId, Timestamp.from(expiresAt), "{\"pii\":true}".getBytes(UTF_8)));
+    }
+
+    private int expireBatch() {
+        return ownerSweeps.expire(RowSweepRule.EXPIRED_EXPORTS, Instant.now(clock));
     }
 }

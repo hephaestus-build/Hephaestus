@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -43,16 +42,4 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
      * assemblies, each persisting a BYTEA blob (DoS / storage-amplification guard).
      */
     boolean existsByAccountIdAndStatusIn(Long accountId, Collection<AccountExport.Status> statuses);
-
-    /**
-     * Expires one batch of READY exports past their retention window: flips them to EXPIRED and frees the payload in one
-     * UPDATE, without loading the BYTEA blobs into the persistence context. The owner function takes at most
-     * {@link ExportRetentionSweeper#BATCH} exports and skips one that another transaction holds. Returns the number of
-     * exports it expired.
-     */
-    @Query(
-            value =
-                    "SELECT public.person_row_sweep('EXPIRED_EXPORTS', CAST(NULL AS bigint), CAST(NULL AS bigint), :now)",
-            nativeQuery = true)
-    int expireReadyBefore(@Param("now") Instant now);
 }

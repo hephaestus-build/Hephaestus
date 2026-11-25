@@ -3,7 +3,8 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerSweeps;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
@@ -18,13 +19,12 @@ import org.springframework.stereotype.Component;
  * Hourly sweep that enforces the {@link ExportGenerationWorker#RETENTION} window: READY exports past
  * {@code expires_at} flip to EXPIRED and have their payload nulled.
  *
- * <p>Each call into {@link AccountExportService} commits one bounded batch, so an export that another transaction holds
- * is skipped, not waited for, and a failure keeps the batches before it. A run calls again while a batch is full, for
- * at most {@link #BUDGET}; what it leaves, and the exports it skipped, the next run expires.
+ * <p>Each call into {@link OwnerSweeps} commits one bounded batch, so an export that another transaction holds is
+ * skipped, not waited for, and a failure keeps the batches before it. A run calls again while a batch is full, for at
+ * most {@link #BUDGET}; what it leaves, and the exports it skipped, the next run expires.
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Pruning account-scoped, workspace-agnostic export rows")
 public class ExportRetentionSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(ExportRetentionSweeper.class);
@@ -33,20 +33,18 @@ public class ExportRetentionSweeper {
     static final int BATCH = 100;
 
     /**
-     * A run starts no batch after this. With {@link #BATCH_TIMEOUT_SECONDS} for the last batch, it normally ends inside
-     * {@code lockAtMostFor}. If a run outlives the lease, {@code SKIP LOCKED} keeps an overlapping run's rows apart.
+     * A run starts no batch after this. With {@link OwnerSweeps#BATCH_TIMEOUT_SECONDS} for the last batch, it normally
+     * ends inside {@code lockAtMostFor}. If a run outlives the lease, {@code SKIP LOCKED} keeps an overlapping run's rows
+     * apart.
      */
     static final Duration BUDGET = Duration.ofMinutes(4);
 
-    /** The longest one batch's transaction may take. */
-    static final int BATCH_TIMEOUT_SECONDS = 30;
-
-    private final AccountExportService accountExportService;
+    private final OwnerSweeps ownerSweeps;
     private final PrivacyJobMetrics metrics;
     private final Clock clock;
 
-    public ExportRetentionSweeper(AccountExportService accountExportService, PrivacyJobMetrics metrics, Clock clock) {
-        this.accountExportService = accountExportService;
+    public ExportRetentionSweeper(OwnerSweeps ownerSweeps, PrivacyJobMetrics metrics, Clock clock) {
+        this.ownerSweeps = ownerSweeps;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -59,7 +57,7 @@ public class ExportRetentionSweeper {
         try {
             int batch;
             do {
-                batch = accountExportService.expireRetention();
+                batch = ownerSweeps.expire(RowSweepRule.EXPIRED_EXPORTS, clock.instant());
                 expired += batch;
             } while (batch == BATCH && clock.instant().isBefore(deadline));
             // A full last batch means that due exports may remain for the next run.

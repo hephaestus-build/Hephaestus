@@ -140,15 +140,6 @@ public class AccountExportService {
                 .filter(payload -> payload.length > 0);
     }
 
-    /**
-     * Expires, in its own transaction, one batch of READY exports whose download window has ended. A batch statement that
-     * has not finished after {@link ExportRetentionSweeper#BATCH_TIMEOUT_SECONDS} is cancelled and rolls back.
-     */
-    @Transactional(timeout = ExportRetentionSweeper.BATCH_TIMEOUT_SECONDS)
-    public int expireRetention() {
-        return accountExportRepository.expireReadyBefore(Instant.now(clock));
-    }
-
     private ExportStatusDTO toStatus(AccountExport e) {
         return new ExportStatusDTO(
                 Objects.requireNonNull(e.getId()),
