@@ -693,7 +693,7 @@ function readReversePath(config: unknown) {
 	};
 }
 
-function drift(rules: Rule[], guarded = false, config = readConfig(fallbackConfig)): Problem[] {
+function drift(rules: Rule[], guarded: boolean, config: unknown): Problem[] {
 	return evaluateFirewall(
 		{
 			defaultSettings: readFileSync(ufwDefaults, "utf8"),
@@ -815,7 +815,7 @@ interface RecoveryRuntime {
 	bootGuard: string;
 	defaultsPath: string;
 	execute: typeof run;
-	drift: (rules: Rule[], guarded?: boolean) => Problem[];
+	drift: (rules: Rule[], guarded: boolean, config: unknown) => Problem[];
 }
 
 interface ChangeRuntime extends RecoveryRuntime {
@@ -886,6 +886,7 @@ export function bootGuardRules(vpn: Rule[]) {
 		"    ip daddr 127.0.0.0/8 drop",
 		"    ip6 daddr ::1 drop",
 		"    ct state { established, related } ct direction reply accept",
+		"    icmp type destination-unreachable icmp code 4 accept",
 		"    icmpv6 type { 2, 134, 135, 136 } accept",
 		...vpn
 			.filter((rule) => rule.source !== undefined)
@@ -968,7 +969,7 @@ export function recoveryFilter(family: Family, rules: Rule[], existing: string) 
 			? [2, 134, 135, 136].map(
 					(type) => `-A ${recoveryChain} -p ipv6-icmp --icmpv6-type ${type} -j ACCEPT`,
 				)
-			: []),
+			: [`-A ${recoveryChain} -p icmp --icmp-type 3/4 -j ACCEPT`]),
 		...inputRules.map((rule) => liveRule(rule, recoveryChain)),
 		`-A ${recoveryChain} -j DROP`,
 		// Leave admitted forwarding with k3s so its network policies still apply.
@@ -1068,10 +1069,38 @@ function recoveryVpn(candidate: Rule[], previous: Rule[]) {
 	];
 }
 
-function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, guarded = false) {
-	const problems = runtime.drift(rules, guarded);
+function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, config: unknown) {
+	const problems = runtime.drift(rules, false, config);
 	if (problems.length > 0) {
 		throw new Error(problems.map(({ message }) => message).join("\n"));
+	}
+}
+
+class HostPrerequisitesError extends Error {
+	override name = "HostPrerequisitesError";
+}
+
+interface RebuildOptions {
+	fallback?: Rule[];
+	emergency?: boolean;
+	policy: unknown;
+}
+
+function verifyRebuiltPolicy(
+	rules: Rule[],
+	runtime: RecoveryRuntime,
+	{ policy, emergency }: RebuildOptions,
+	guarded: boolean,
+) {
+	const problems = runtime.drift(rules, guarded, policy);
+	const ufwProblems = problems.filter(
+		({ reason }) => reason !== "reverse_path_filter" && reason !== "netfilter_persistent",
+	);
+	if (ufwProblems.length > 0) {
+		throw new Error(ufwProblems.map(({ message }) => message).join("\n"));
+	}
+	if (emergency !== true && problems.length > 0) {
+		throw new HostPrerequisitesError(problems.map(({ message }) => message).join("\n"));
 	}
 }
 
@@ -1094,8 +1123,7 @@ function resetUfw(execute: typeof run) {
 function rebuildPolicy(
 	rules: Rule[],
 	runtime: RecoveryRuntime,
-	fallback = vpnRules(rules),
-	emergency = false,
+	{ fallback = vpnRules(rules), emergency = false, policy }: RebuildOptions,
 ) {
 	const { execute, defaultsPath } = runtime;
 	// UFW reset disables UFW temporarily. Guard the declared traffic while rebuilding.
@@ -1112,13 +1140,13 @@ function rebuildPolicy(
 		}
 		execute(ufw, ["--force", "enable"]);
 		execute(systemctl, ["enable", "ufw.service"]);
-		verifyPolicy(rules, runtime, true);
+		verifyRebuiltPolicy(rules, runtime, { emergency, policy }, true);
 		if (emergency) {
 			installRecoveryFilters(rules, execute);
 		} else {
 			removeRecoveryFilter(execute);
 			removeBootFilter(runtime);
-			verifyPolicy(rules, runtime);
+			verifyRebuiltPolicy(rules, runtime, { policy }, false);
 		}
 	} catch (error) {
 		installRecoveryFilters(fallback, execute);
@@ -1176,14 +1204,20 @@ export function restoreUfw(runtime = hostRecovery) {
 			throw new Error("No valid firewall policy has been confirmed.");
 		}
 		if (last.id !== change.id) {
-			rebuildPolicy(previous, runtime, vpn);
+			rebuildPolicy(previous, runtime, { fallback: vpn, policy: last.policy });
 			console.log("Restored the last confirmed UFW policy.");
 		}
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : "Could not restore UFW.");
 		prepareBootGuard(runtime, vpn);
 		loadBootGuard(runtime);
-		rebuildPolicy(vpn, runtime, vpn, true);
+		if (error instanceof HostPrerequisitesError) {
+			throw new Error(
+				"Restored the last confirmed UFW policy. The emergency guard remains active until the host settings pass.",
+				{ cause: error },
+			);
+		}
+		rebuildPolicy(vpn, runtime, { emergency: true, policy: change.policy });
 		throw new Error("UFW recovery applied a VPN-only emergency policy. Use the host console.", {
 			cause: error,
 		});
@@ -1222,9 +1256,9 @@ export function applyAction(
 	return policyMatches() ? "unchanged" : "arm";
 }
 
-function applyWithBootGuard(rules: Rule[], runtime: ChangeRuntime, vpn: Rule[]) {
+function applyWithBootGuard(rules: Rule[], runtime: ChangeRuntime, options: RebuildOptions) {
 	try {
-		rebuildPolicy(rules, runtime, vpn);
+		rebuildPolicy(rules, runtime, options);
 	} catch (error) {
 		try {
 			loadBootGuard(runtime);
@@ -1268,7 +1302,7 @@ export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
 		waiting,
 		previous?.changedAt !== undefined,
 		runtime.unitState(`${rollback}.service`, "ActiveState"),
-		() => runtime.drift(rules).length === 0,
+		() => runtime.drift(rules, false, policy).length === 0,
 	);
 	const change = { id: previous?.id ?? randomUUID(), policy };
 	if (recoveryAction === "unchanged") {
@@ -1299,7 +1333,7 @@ export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
 	saveChange(runtime.pending, { ...change, started: true });
 	console.log("The recovery timer will reapply the last confirmed UFW policy at its next run:");
 	console.log(runtime.execute(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
-	applyWithBootGuard(rules, runtime, vpn);
+	applyWithBootGuard(rules, runtime, { fallback: vpn, policy });
 	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("The recovery timer has expired.");
 	}
@@ -1336,7 +1370,7 @@ export function commitPolicy(change: Change, runtime = hostRecovery) {
 	finishRecovery(runtime);
 }
 
-export function confirm(rules: Rule[], runtime = hostRecovery) {
+export function confirm(rules: Rule[], runtime = hostRecovery, policy?: unknown) {
 	const change = readChange(runtime.pending);
 	if (
 		change?.changedAt === undefined ||
@@ -1345,7 +1379,7 @@ export function confirm(rules: Rule[], runtime = hostRecovery) {
 		throw new Error("There is no matching firewall change to confirm. Run --check or --apply.");
 	}
 	requireFreshSshConnection(change.changedAt, () => runtime.sshConnection(rules));
-	verifyPolicy(rules, runtime);
+	verifyPolicy(rules, runtime, policy ?? change.policy);
 	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("Cannot confirm the firewall change after the recovery timer expires.");
 	}
@@ -1459,7 +1493,7 @@ function main() {
 	} else if (values.apply === true) {
 		apply(policy, rules);
 	} else {
-		confirm(rules);
+		confirm(rules, hostRecovery, policy);
 	}
 }
 

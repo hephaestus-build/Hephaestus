@@ -158,6 +158,7 @@ void test("emergency recovery puts the VPN-only guard before existing accepts", 
 	);
 	assert.match(ipv4, /^-A HEPHAESTUS-RECOVERY -j DROP$/mu);
 	assert.match(ipv4, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/u);
+	assert.match(ipv4, /--icmp-type 3\/4 -j ACCEPT/u);
 	assert.doesNotMatch(ipv4, /6443|2001:db8|--dport (?:80|443)|-i (?:cni0|flannel\.1)/u);
 	const ipv6 = recoveryFilter(
 		6,
@@ -233,7 +234,10 @@ function readTestChange(file: string) {
 	};
 }
 
-function testFirewallState(rules: ReturnType<typeof rulesFor>, bootGuardActive = false) {
+function testFirewallState(
+	rules: ReturnType<typeof rulesFor>,
+	bootGuardActive = false,
+): Parameters<typeof evaluateFirewall>[0] {
 	const filters = (family: 4 | 6, fixture: string[]) => {
 		const chain = family === 4 ? "ufw-user-input" : "ufw6-user-input";
 		const selected = rules.filter((rule) => rule.family === undefined || rule.family === family);
@@ -300,6 +304,9 @@ for (const scenario of [
 	"restore",
 	"first apply",
 	"verification fails",
+	"loose during restore",
+	"snapshot enabled during restore",
+	"missing config on restore",
 	"service unloaded",
 	"stop fails",
 	"schedule rejected",
@@ -322,6 +329,7 @@ for (const scenario of [
 		const previous = {
 			...configured,
 			http3: true,
+			publicInterface: "eth0",
 			sshVpnCidrs: ["198.51.100.128/25", base.sshVpnCidrs[1]],
 		};
 		const change = { id: "new", policy: configured };
@@ -448,7 +456,10 @@ for (const scenario of [
 				}
 				return "";
 			},
-			drift(rules: ReturnType<typeof rulesFor>, guarded?: boolean) {
+			drift(rules: ReturnType<typeof rulesFor>, guarded?: boolean, policy?: unknown) {
+				if (scenario === "missing config on restore") {
+					assert.deepEqual(policy, previous);
+				}
 				if (guarded !== true) {
 					if (policies.length > 0) {
 						assert.equal(guards.size, 0);
@@ -477,6 +488,12 @@ for (const scenario of [
 					waiting = false;
 				}
 				const state = testFirewallState(rules, bootFilterLoaded);
+				if (scenario === "loose during restore") {
+					state.reversePath = { all: "2", device: "1" };
+				}
+				if (scenario === "snapshot enabled during restore") {
+					state.persistenceProblem = "An enabled service restores a saved snapshot.";
+				}
 				if (scenario === "verification fails" && rules.some((rule) => rule.port === 443)) {
 					state.filters[4].live.push("-A ufw-user-input -j DROP");
 				}
@@ -484,7 +501,7 @@ for (const scenario of [
 			},
 		};
 		writeFileSync(runtime.defaultsPath, "IPV6=yes\nMANAGE_BUILTINS=no\n");
-		if (scenario !== "unreadable without VPN") {
+		if (!["unreadable without VPN", "missing config on restore"].includes(scenario)) {
 			writeFileSync(runtime.config, JSON.stringify(configured));
 		}
 		if (
@@ -602,7 +619,7 @@ for (const scenario of [
 			return;
 		}
 		writeFileSync(runtime.bootGuard, bootGuardRules(desired.filter(({ port }) => port === 22)));
-		if (scenario === "first apply" || scenario === "verification fails") {
+		if (["first apply", "verification fails"].includes(scenario)) {
 			assert.throws(() => restoreUfw(runtime), /applied a VPN-only emergency policy/u);
 			assert.deepEqual(calls, [
 				...(scenario === "verification fails" ? ["reset", "verify"] : []),
@@ -618,6 +635,16 @@ for (const scenario of [
 			assertEmergencyGuards(guards, scenario === "verification fails");
 			assert.equal(bootFilterLoaded, true);
 			assert.match(readFileSync(runtime.bootGuard, "utf8"), /tcp dport 22 accept/u);
+		} else if (["loose during restore", "snapshot enabled during restore"].includes(scenario)) {
+			assert.throws(
+				() => restoreUfw(runtime),
+				/Restored the last confirmed UFW policy\. The emergency guard remains active/u,
+			);
+			assert.deepEqual(calls, ["reset", "verify"]);
+			assert.deepEqual(policies, [wanted(rulesFor(previous))]);
+			assertEmergencyGuards(guards, true);
+			assert.equal(bootFilterLoaded, true);
+			assert.ok(existsSync(runtime.pending));
 		} else {
 			restoreUfw(runtime);
 			assert.deepEqual(calls, [
@@ -637,6 +664,8 @@ const k3sV4 = [
 	"-P INPUT DROP",
 	"-P FORWARD DROP",
 	"-P OUTPUT ACCEPT",
+	'-A INPUT -m comment --comment "kube-router input" -j KUBE-ROUTER-INPUT',
+	"-A INPUT -j KUBE-FIREWALL",
 	'-A INPUT -m comment --comment "KUBE-ROUTER rule to explicitly ACCEPT traffic that comply to network policies" -m mark --mark 0x20000/0x20000 -j ACCEPT',
 	"-A INPUT -j ufw-before-logging-input",
 	"-A INPUT -j ufw-before-input",
@@ -644,6 +673,15 @@ const k3sV4 = [
 	"-A INPUT -j ufw-after-logging-input",
 	"-A INPUT -j ufw-reject-input",
 	"-A INPUT -j ufw-track-input",
+	'-A FORWARD -m comment --comment "kube-router forwarding" -j KUBE-ROUTER-FORWARD',
+	"-A FORWARD -m conntrack --ctstate NEW -j KUBE-PROXY-FIREWALL",
+	"-A FORWARD -j KUBE-FORWARD",
+	"-A FORWARD -j KUBE-SERVICES",
+	"-A FORWARD -j KUBE-EXTERNAL-SERVICES",
+	"-A FORWARD -j FLANNEL-FWD",
+	"-A FORWARD -j DOCKER-USER",
+	"-A FORWARD -j DOCKER-FORWARD",
+	"-A FORWARD -i br-a0b1c2d3e4f5 ! -o br-a0b1c2d3e4f5 -j ACCEPT",
 	"-A FORWARD -j ufw-before-forward",
 	"-A OUTPUT -j ufw-before-output",
 	"-A ufw-before-input -j ufw-not-local",
@@ -677,6 +715,8 @@ const k3sV6 = [
 	"-A INPUT -j ufw6-after-logging-input",
 	"-A INPUT -j ufw6-reject-input",
 	"-A INPUT -j ufw6-track-input",
+	"-A FORWARD -j KUBE-FORWARD",
+	"-A FORWARD -m conntrack --ctstate NEW -j KUBE-PROXY-FIREWALL",
 	"-A FORWARD -j ufw6-before-forward",
 	"-A OUTPUT -j ufw6-before-output",
 	"-A ufw6-before-input -m rt --rt-type 0 -j DROP",

@@ -164,6 +164,10 @@ If the timer expires, it rebuilds and checks the last confirmed policy.
 If recovery fails or this is the first change, the emergency firewall drops incoming and routed traffic.
 It permits SSH from the available declared VPN networks.
 
+Recovery can restore the UFW rules while another host setting still blocks full verification.
+The emergency firewall stays active in that case.
+Correct the reported setting and retry recovery.
+
 After a reboot during an unconfirmed change, the boot service loads the emergency firewall before networking.
 Use the console or connect from the admin VPN and retry recovery:
 
