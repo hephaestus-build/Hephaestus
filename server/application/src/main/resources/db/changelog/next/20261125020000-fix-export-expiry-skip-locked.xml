@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
-    <changeSet id="1795551798205-1" author="hephaestus">
-        <comment>Export expiry clears at most 100 exports in one transaction, and skips an export that another transaction holds, so one held export cannot roll back the expiry of the others.</comment>
+    <changeSet id="1795549938000-1" author="hephaestus">
+        <comment>Export expiry clears at most 100 exports in one transaction, and skips an export or an account that another transaction holds, so one held export cannot roll back the expiry of the others.</comment>
         <sql splitStatements="false"><![CDATA[
 CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
     RETURNS integer
@@ -12,12 +12,35 @@ DECLARE
     counted integer;
     clash record;
     absorbed record;
+    admitted boolean;
     bound timestamp with time zone;
 BEGIN
+    IF rule IN ('WORKSPACE_PURGE', 'ACCOUNT_ABSORB') THEN
+        -- Hash the supplied and expected MACs before comparing their bytes.
+        SELECT EXISTS (
+            SELECT FROM lifecycle_private.sweep_key k
+            WHERE sha256(convert_to(encode(sha256(k.outer_pad || sha256(k.inner_pad || convert_to(
+                concat_ws(':', 'person_row_sweep', rule, subject_id, COALESCE(other_id::text, '-'),
+                          pg_current_xact_id(), pg_backend_pid(), extract(epoch FROM transaction_timestamp())),
+                'UTF8'))), 'hex'), 'UTF8'))
+                = sha256(convert_to(current_setting('hephaestus.sweep_admission', true), 'UTF8'))
+        ) INTO admitted;
+    END IF;
     IF rule = 'WORKSPACE_PURGE' THEN
         -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
         IF subject_id IS NULL THEN
             RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        PERFORM FROM public.workspace w
+        WHERE w.id = subject_id AND w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')
+        FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'person_row_sweep: workspace is unavailable for purge'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
         END IF;
         DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
         GET DIAGNOSTICS counted = ROW_COUNT;
@@ -33,16 +56,21 @@ BEGIN
         IF cutoff IS NULL THEN
             RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
         END IF;
-        -- One call expires at most 100 exports, by expiry and key. It skips an export that another transaction holds,
-        -- such as an erasure, instead of waiting for it. The job commits each call and calls again; its next run retries
-        -- a skipped export (ExportRetentionSweeper). The bound is a variable, so the ready-expiry index can range on it.
-        bound := LEAST(cutoff, clock_timestamp());
+        -- One call expires at most 100 exports, by expiry and key. Account erasure locks the account before its
+        -- exports, so a busy account is skipped, and so is an export that another transaction holds: the job commits
+        -- each call and calls again, and its next run retries what it skipped (ExportRetentionSweeper). The bound is a
+        -- variable, so the ready-expiry index can range on it.
+        bound := LEAST(cutoff, statement_timestamp());
+        WITH due AS MATERIALIZED (
+            SELECT x.id FROM public.account_export x JOIN public.account a ON a.id = x.account_id
+            WHERE x.status = 'READY' AND x.expires_at < bound AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+            ORDER BY x.expires_at, x.id
+            LIMIT 100
+            FOR UPDATE OF x SKIP LOCKED
+            FOR SHARE OF a SKIP LOCKED
+        )
         UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
-        FROM (SELECT d.id FROM public.account_export d
-              WHERE d.status = 'READY' AND d.expires_at < bound
-              ORDER BY d.expires_at, d.id
-              LIMIT 100
-              FOR UPDATE SKIP LOCKED) due
+        FROM due
         WHERE x.id = due.id;
         GET DIAGNOSTICS changed = ROW_COUNT;
     ELSIF rule = 'ACCOUNT_ABSORB' THEN
@@ -52,6 +80,10 @@ BEGIN
         IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
             RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
                 USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
         END IF;
         -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
         -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
@@ -119,9 +151,9 @@ BEGIN
     END IF;
     RETURN changed;
 END
-$$
+$$;
         ]]></sql>
-        <rollback changeSetId="1795521600000-2" changeSetAuthor="hephaestus"
-                  changeSetPath="db/changelog/next/20261124152116-conversation-row-owner.xml"/>
+        <rollback changeSetId="1795540920000-3" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125010758-admit-owner-sweeps.xml"/>
     </changeSet>
 </databaseChangeLog>
