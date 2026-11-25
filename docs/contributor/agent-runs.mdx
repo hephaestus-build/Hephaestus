@@ -540,6 +540,9 @@ This section gives the mechanism for runs.
 - The model proxy checks again with the boundary `MODEL_DISPATCH` just before each request leaves for the provider, after every wait for capacity or budget (`ProxyRoutingService.dispatchRefusal`).
   A refused call answers `409` with the refusal `AUTHORITY_CHANGED` and the text of an ended attempt, so each runner stops as it does for a lost lease.
   A capability probe and a report draft carry no workspace authority, and skip the check.
+  The call's ledger row opens under the run's lock, which a call can wait for while a narrowing commits.
+  So the ledger checks again there (`AgentRuns.requireCurrentUnder`): with the lock held, it holds the workspace's generation with `FOR SHARE` and compares it with the run's stamp.
+  A narrowing either committed before and refuses the call, or waits until the row is open.
 - Every send to someone other than the owner is an outbox action, so the send boundary sits in the outbox's write fence ([Outbox](./outbox.mdx#the-lease-and-the-fence)).
 - `authority_refused_total` counts each refusal by boundary and reason.
 

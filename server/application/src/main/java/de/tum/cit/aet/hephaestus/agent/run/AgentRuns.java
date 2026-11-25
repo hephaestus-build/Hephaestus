@@ -5,6 +5,9 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
@@ -22,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -643,6 +647,28 @@ public class AgentRuns {
     public void requireCurrent(AgentRunFence fence) {
         if (runs.lockCurrent(fence.runId(), fence.workspaceId(), fence.epoch()).isEmpty())
             throw new StaleRunException(fence);
+    }
+
+    /**
+     * Holds the lease as {@link #requireCurrent} does, then holds the workspace's authorization generation and checks
+     * the run's stamp against it (ADR 0134). The lease can be waited for while a narrowing commits; with both held, a
+     * narrowing either committed before and refuses here, or waits until the caller's transaction ends. Instance work
+     * carries no workspace authority.
+     *
+     * @throws StaleRunException when {@code fence} no longer holds the run
+     * @throws AuthorityRefusedException when the workspace's authority narrowed since the work was requested; the
+     *     caller ends the run once it holds nothing ({@link AgentRunAuthority#require})
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireCurrentUnder(AgentRunFence fence, AuthorityBoundary boundary) {
+        requireCurrent(fence);
+        if (fence.workspaceId() == AgentRunRef.INSTANCE_SCOPE) return;
+        AuthorizationStamp stamp =
+                find(fence.run()).map(AgentRun::getAuthorizationStamp).orElseThrow(() -> new StaleRunException(fence));
+        OptionalLong held = generations.workspaceHeld(fence.workspaceId());
+        if (held.isEmpty() || held.getAsLong() != stamp.workspace())
+            throw new AuthorityRefusedException(
+                    new AuthorityRefusal(boundary, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
     }
 
     /** Whether the claim numbered {@code epoch} holds {@code run} now; never for an epoch before the first claim. */

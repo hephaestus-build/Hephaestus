@@ -83,6 +83,9 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactions;
 
+    @Autowired
+    private AgentRuns agentRuns;
+
     private Workspace workspace;
     private long asker;
     private Conversation conversation;
@@ -196,6 +199,23 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(executor.runNow(action)).contains(new ActionResult.Done(null));
         assertThat(provider).containsExactly(action);
+    }
+
+    @Test
+    void shouldRefuseAModelCallUnderTheRunsLockWhenTheMemberLeftWhileItWaited() {
+        AgentRunFence fence = fence(runningTurn());
+        // The narrowing commits while the call would still wait for the run's lock.
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+
+        var refused = catchThrowableOfType(
+                AuthorityRefusedException.class,
+                () -> new TransactionTemplate(transactions)
+                        .executeWithoutResult(
+                                status -> agentRuns.requireCurrentUnder(fence, AuthorityBoundary.MODEL_DISPATCH)));
+
+        assertThat(refused.refusal())
+                .isEqualTo(new AuthorityRefusal(
+                        AuthorityBoundary.MODEL_DISPATCH, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
     }
 
     @Test

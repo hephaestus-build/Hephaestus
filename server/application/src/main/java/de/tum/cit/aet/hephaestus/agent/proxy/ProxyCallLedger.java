@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -134,6 +136,7 @@ class ProxyCallLedger {
      * @param practiceId the practice that the review sandbox names for the call; the row keeps it only when the call's
      *     job measures that practice
      * @throws ClaimLost when the claim no longer holds its run
+     * @throws AuthorityRefusedException when the workspace's authority narrowed since the work was requested
      * @throws BudgetHeld when the call's bound does not fit under its purse's cap
      */
     UUID open(ProxyRouting routing, Bound bound, String upstreamModel, @Nullable Long practiceId) {
@@ -146,7 +149,10 @@ class ProxyCallLedger {
         UUID call;
         try {
             call = Objects.requireNonNull(ownTransaction.execute(status -> {
-                runs.requireCurrent(new AgentRunFence(runId, workspaceId, attempt.epoch()));
+                // The model dispatch boundary under the run's lock: the lock can be waited for while a narrowing
+                // commits (ADR 0134).
+                runs.requireCurrentUnder(
+                        new AgentRunFence(runId, workspaceId, attempt.epoch()), AuthorityBoundary.MODEL_DISPATCH);
                 OpenCall open = attempt.sourceType() == UsageSourceType.CONVERSATION_TURN
                         ? turnCall(attempt, workspaceId, runId, bound)
                         : reviewCall(attempt, workspaceId, runId, bound, practiceId);
