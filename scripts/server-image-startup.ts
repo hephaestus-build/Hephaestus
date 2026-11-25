@@ -25,6 +25,7 @@ import {
 } from "./kubernetes-chart-render-support.ts";
 import { serverBuildEnvironment } from "./lib/buildpack-descriptor.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
+import { waitForFinalServer } from "./lib/postgres-container.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { sample } from "./lib/prometheus-text.ts";
 
@@ -344,24 +345,7 @@ async function main(): Promise<void> {
 			"POSTGRES_PASSWORD=root",
 			postgresImage,
 		);
-		for (let attempt = 1; ; attempt += 1) {
-			// The image's init scripts run on a server that listens on the socket only, then restart it, so only
-			// the final server answers on TCP.
-			const ready = spawnSync("docker", [
-				"exec",
-				postgres,
-				"pg_isready",
-				"--host=127.0.0.1",
-				"--username=root",
-			]);
-			if (ready.status === 0) {
-				break;
-			}
-			if (attempt === 60) {
-				throw new Error("PostgreSQL did not become ready");
-			}
-			await sleep(1000);
-		}
+		await waitForFinalServer(postgres);
 		const chart = chartOf();
 		const image: Subject = { image: serverImage, database: "hephaestus" };
 		// The base image migrates a database of its own: this image's schema may have renamed what the base reads.
