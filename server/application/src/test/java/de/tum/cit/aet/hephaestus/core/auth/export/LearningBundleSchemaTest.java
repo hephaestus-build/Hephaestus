@@ -85,8 +85,8 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         "additionalProperties",
                         "/records/0"),
                 refused(
-                        "a revision number past the integer range",
-                        b -> record(b, 0).put("revision", 2_147_483_648L),
+                        "a revision number past the exact integer range of JSON readers",
+                        b -> record(b, 0).put("revision", 9_007_199_254_740_992L),
                         "maximum",
                         "/records/0/revision"),
                 refused(

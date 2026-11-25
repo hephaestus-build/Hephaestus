@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
 	"title": "Hephaestus learning bundle, format version 1",
-	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text that names no other person, and in a HEPHAESTUS record only the exact text that the person confirmed. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof.",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text about the person's own learning that identifies no other person, directly or indirectly, and in a HEPHAESTUS record only the exact text that the person confirmed. A writer whose bundle would exceed the size limit fails the download with that reason and serves no part of it. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof. Revisions and tombstones compare only within one instanceId and portableId; origin is a hint that two items are copies of one, never a reason to change or remove an item of another issuer.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -71,10 +71,10 @@
 			"$ref": "#/$defs/uuid"
 		},
 		"revision": {
-			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. A reader keeps the highest revision of one portableId. On equal revisions, a tombstone wins over the item.",
+			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. A reader keeps the highest revision of one portableId from one instanceId. On equal revisions, a tombstone wins over the item.",
 			"type": "integer",
 			"minimum": 1,
-			"maximum": 2147483647
+			"maximum": 9007199254740991
 		},
 		"origin": {
 			"description": "Where an imported item first came from. An instance that imported the item copies it unchanged into each later bundle, so an import recognizes the item again through any number of instances.",
