@@ -157,8 +157,9 @@ void describe("ci-contract: merge-queue", () => {
 				`server change, ${JSON.stringify(filter)}`,
 			);
 		}
-		// Every pull request but a layer of a stack runs the numbered shards, as the merge group does,
-		// so a failing class shows on the pull request first. A failed read selects them.
+		// Every pull request but a layer of a stack or a draft runs the numbered shards, as the merge group
+		// does, so a failing class shows on the pull request first. `ci:full` or a failed read selects them.
+		const draftOnly = { draft: true };
 		const fullIntegration = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "full-integration"]),
 		);
@@ -168,6 +169,15 @@ void describe("ci-contract: merge-queue", () => {
 			["pull_request", { full: "true", light: "false" }, "true", "true"],
 			["pull_request", {}, "true", "true"],
 			["pull_request", { full: "true", light: "true" }, "false", "false"],
+			["pull_request", { full: "false", light: "false", pullRequest: draftOnly }, "false", "false"],
+			["pull_request", { full: "true", light: "false", pullRequest: draftOnly }, "true", "true"],
+			["pull_request", { pullRequest: draftOnly }, "true", "true"],
+			[
+				"pull_request",
+				{ full: "false", light: "false", pullRequest: { draft: false } },
+				"true",
+				"false",
+			],
 			["merge_group", {}, "true", "true"],
 			["push", {}, "true", "true"],
 			["workflow_dispatch", {}, "true", "true"],

@@ -205,7 +205,11 @@ void describe("ci-contract: server", () => {
 				{
 					needs: {
 						"detect-changes": {
-							outputs: { "rename-only": "false", "server-tests": output("server-tests") },
+							outputs: {
+								"rename-only": "false",
+								"server-tests": output("server-tests"),
+								"full-integration": output("full-integration"),
+							},
 						},
 					},
 				},
@@ -230,6 +234,21 @@ void describe("ci-contract: server", () => {
 				}),
 				"false",
 				"a rename-only head leaves the database tests to the merge group",
+			);
+			assert.equal(
+				expandExpressions(caller.getIn(["jobs", "Build", "with", "database_tier"]), {
+					needs: {
+						"detect-changes": {
+							outputs: {
+								"rename-only": "false",
+								"server-tests": "true",
+								"full-integration": "false",
+							},
+						},
+					},
+				}),
+				"false",
+				"a draft or a stack layer, which runs no shards, runs no database tier either",
 			);
 			if (only) {
 				assert.equal(

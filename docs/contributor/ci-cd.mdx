@@ -999,7 +999,7 @@ A queue-tier failure removes the entry from the queue, and the failure comment l
 So does an image build or scan failure, because a pull request builds images only for the `ci:images` label, Kubernetes qualification or release evidence.
 Fix the failure and queue the pull request again.
 
-A draft pull request keeps its selected tier.
+A draft pull request keeps its selected tier, without the numbered shards and the database tests ([Server suites on pull requests](#server-suites-on-pull-requests)).
 Without `ci:images` or release evidence, it builds no image and gets no cluster qualification or image scan.
 The [image selection rules](./ci-cd.mdx#the-preview-label) apply to drafts too.
 
@@ -1048,6 +1048,12 @@ A failing class then shows on the pull request first.
 In the merge group, the same failure removes the entry and resets every group behind it.
 The merge group still runs every check on the merged result.
 A layer of a stack and a [rename-only head](#rename-only-heads) keep their reduced runs.
+
+A draft runs neither the shards nor the database tests.
+Marking it ready for review starts a run that includes them.
+`ci:full` selects them on a draft, and so does a label read that fails.
+A draft that changes a migration still runs the database tests and the drills ([Migration checks on PRs](#migration-checks-on-prs)).
+In the 7 days to 2026-11-25, 170 of 1,000 pull-request runs of `CI/CD` were for drafts.
 
 Before this rule, the pull request ran only `review`.
 In the 7 days to 2026-11-24, 14 merge-group dequeues came from an integration or database test that the pull request had not run.
