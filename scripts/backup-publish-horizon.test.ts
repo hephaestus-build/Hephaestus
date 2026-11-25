@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const parser = fileURLToPath(
 	new URL("../deploy/chart/hephaestus/files/backup-oldest-point.pl", import.meta.url),
 );
+// The reporter is a Perl script that runs only in the Linux backup container, so Windows has nothing
+// to check here, and a cold Perl start on the Windows runner can outlast the parser's timeout.
+const posixOnly = { skip: process.platform === "win32" };
 const olderBackup = 1_795_020_000;
 const inventory = {
 	name: "hephaestus",
@@ -29,13 +32,13 @@ function parse(stanza: object) {
 	return result;
 }
 
-await test("the reporter reads the oldest backup in the retained inventory", () => {
+await test("the reporter reads the oldest backup in the retained inventory", posixOnly, () => {
 	const result = parse(inventory);
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(result.stdout, `${olderBackup}\n`);
 });
 
-await test("an invalid status cannot produce a backup horizon", () => {
+await test("an invalid status cannot produce a backup horizon", posixOnly, () => {
 	for (const code of [undefined, false, "unavailable", 1]) {
 		const result = parse({ ...inventory, status: { code } });
 		assert.notEqual(result.status, 0);
@@ -45,7 +48,7 @@ await test("an invalid status cannot produce a backup horizon", () => {
 
 await test(
 	"a stalled reporter ends within its deadline and preserves the backup exit status",
-	{ skip: process.platform === "win32" },
+	posixOnly,
 	async (t) => {
 		// The test database runs the postmaster as PID 1. A killed orphan can trigger crash recovery.
 		// In production the reporter runs in a separate Job.
