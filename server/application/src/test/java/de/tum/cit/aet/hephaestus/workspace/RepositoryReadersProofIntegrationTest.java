@@ -258,6 +258,23 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo((double) waiting);
     }
 
+    /** A proof that waits shows its age; the alert reads the oldest one. */
+    @Test
+    void shouldShowOperatorsHowLongTheLongestWaitingProofHasWaited() {
+        var monitor = monitor("meter-age");
+        jdbc.update(
+                "UPDATE repository_to_monitor SET proof_changed_at = now() - interval '2 days' WHERE id = ?",
+                monitor.getId());
+
+        meter.measure();
+
+        assertThat(meterRegistry
+                        .get(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_PENDING)
+                        .gauge()
+                        .value())
+                .isGreaterThanOrEqualTo((double) Duration.ofDays(2).toSeconds());
+    }
+
     /**
      * The gauge reads across workspaces, so it carries only counts: no repository name, no workspace and no person,
      * and each label takes one of a closed set of values.
@@ -275,7 +292,8 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
                         "visibilityClass:VisibilityClass",
                         "proofState:ProofState",
                         "proofReason:ProofReason",
-                        "monitors:long");
+                        "monitors:long",
+                        "oldestActiveChange:Instant");
         var gauges = meterRegistry
                 .find(WorkspaceMetrics.MONITORED_REPOSITORY_READERS)
                 .gauges();

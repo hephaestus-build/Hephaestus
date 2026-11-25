@@ -557,7 +557,10 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         verify(syncTargetProvider, never()).recordRepositoryReaders(any(), any());
     }
 
-    /** Enterprise members outside the organization read an internal repository, and no listing names them. */
+    /**
+     * Enterprise members outside the organization read an internal repository, and no listing names them. The listing's
+     * own answer decides, not the mirror row.
+     */
     @Test
     void shouldNeverProveTheReadersOfAnInternalRepository() {
         readOf(Repository.Visibility.INTERNAL, true);
@@ -567,7 +570,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         when(syncTargetProvider.readersListingDue(eq(SYNC_TARGET_ID), any(), any()))
                 .thenReturn(true);
         when(collaboratorSyncService.listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID))
-                .thenReturn(new CollaboratorListing(CollaboratorListing.Outcome.COMPLETE, List.of(listed(11L))));
+                .thenReturn(new CollaboratorListing(CollaboratorListing.Outcome.NOT_LISTABLE, List.of(listed(11L))));
 
         service.syncSyncTarget(syncTarget(null, null));
 

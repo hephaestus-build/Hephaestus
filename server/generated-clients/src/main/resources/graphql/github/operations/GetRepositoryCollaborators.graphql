@@ -10,6 +10,7 @@ query GetRepositoryCollaborators($owner: String!, $name: String!, $first: Int!, 
     }
     repository(owner: $owner, name: $name) {
         databaseId
+        visibility
         # ALL lists outside collaborators, direct collaborators and organization members who can read the repository.
         collaborators(first: $first, after: $after, affiliation: ALL) {
             pageInfo {

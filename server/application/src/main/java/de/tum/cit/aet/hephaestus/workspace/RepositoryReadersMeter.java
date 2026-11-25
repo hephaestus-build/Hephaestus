@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProofState;
 import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -9,6 +10,9 @@ import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +29,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @Profile("!specs & !cds-training")
-@WorkspaceAgnostic("Bounded by the at most nine combinations of class, proof state and reason: one grouped count of"
-        + " every workspace's monitored repositories and one oldest waiting time for operator gauges, with no repository"
+@WorkspaceAgnostic("Bounded by the at most nine combinations of class, proof state and reason: one grouped count and"
+        + " oldest change time of every workspace's monitored repositories for operator gauges, with no repository"
         + " content")
 public class RepositoryReadersMeter {
 
@@ -51,36 +55,35 @@ public class RepositoryReadersMeter {
 
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     public void measure() {
+        List<RepositoryReadersCount> counts;
         try {
-            readers.register(
-                    monitors.countByReadersProof().stream()
-                            .map(count -> MultiGauge.Row.of(
-                                    Tags.of(
-                                            "visibility_class",
-                                                    count.visibilityClass().name(),
-                                            "proof_state", count.proofState().name(),
-                                            "proof_reason", count.proofReason().name()),
-                                    count.monitors()))
-                            .toList(),
-                    true);
+            counts = monitors.countByReadersProof();
         } catch (RuntimeException e) {
-            // Keep the last counts: a database blip must not read as "every repository is proven".
+            // Keep the last values: a database blip must not read as "every repository is proven".
             log.warn(
                     "Repository readers count failed, keeping last values: errorType={}",
                     e.getClass().getName());
+            return;
         }
-        try {
-            Instant waitingSince = monitors.oldestPendingProof();
-            pendingSeconds.set(
-                    waitingSince == null
-                            ? Double.NaN
-                            : (double) Duration.between(waitingSince, Instant.now())
-                                    .toSeconds());
-        } catch (RuntimeException e) {
-            // Keep the last age, for the same reason as the counts.
-            log.warn(
-                    "Repository readers pending age failed, keeping last value: errorType={}",
-                    e.getClass().getName());
-        }
+        readers.register(
+                counts.stream()
+                        .map(count -> MultiGauge.Row.of(
+                                Tags.of(
+                                        "visibility_class",
+                                                count.visibilityClass().name(),
+                                        "proof_state", count.proofState().name(),
+                                        "proof_reason", count.proofReason().name()),
+                                count.monitors()))
+                        .toList(),
+                true);
+        Instant now = Instant.now();
+        pendingSeconds.set(counts.stream()
+                .filter(count -> count.proofState() == ProofState.PENDING)
+                .map(RepositoryReadersCount::oldestActiveChange)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .map(waitingSince ->
+                        (double) Duration.between(waitingSince, now).toSeconds())
+                .orElse(Double.NaN));
     }
 }

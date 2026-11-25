@@ -16,29 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryToMonitor, Long> {
 
-    @WorkspaceAgnostic("Bounded by the at most nine combinations of class, proof state and reason; returns counts only,"
-            + " for the instance-wide operator gauge")
+    @WorkspaceAgnostic(
+            "Bounded by the at most nine combinations of class, proof state and reason; returns counts and the oldest time"
+                    + " that an active workspace's proof changed, for the instance-wide operator gauges")
     @Query("""
             SELECT new de.tum.cit.aet.hephaestus.workspace.RepositoryReadersCount(
-                m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason, COUNT(m))
-            FROM RepositoryToMonitor m
+                m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason, COUNT(m),
+                MIN(CASE WHEN w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
+                         THEN m.readers.proofChangedAt END))
+            FROM RepositoryToMonitor m JOIN m.workspace w
             GROUP BY m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason
             """)
     List<RepositoryReadersCount> countByReadersProof();
-
-    /**
-     * When the proof that has waited longest among the active workspaces' monitored repositories began to wait, or null
-     * when none waits.
-     */
-    @WorkspaceAgnostic("One instance-wide minimum over the monitors' proof times for an operator gauge; returns a time"
-            + " only, with no repository, workspace or person")
-    @Query("""
-            SELECT MIN(m.readers.proofChangedAt) FROM RepositoryToMonitor m
-            WHERE m.readers.proofState = de.tum.cit.aet.hephaestus.integration.core.spi.ProofState.PENDING
-              AND m.workspace.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
-            """)
-    @Nullable
-    Instant oldestPendingProof();
 
     /**
      * Narrows every monitor of the repository with this native id in one statement, as the mirror row's trigger does:

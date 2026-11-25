@@ -451,6 +451,21 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         assertThat(listing.collaborators()).isEmpty();
     }
 
+    /** Enterprise members outside the organization read an internal repository, and its collaborators omit them. */
+    @Test
+    void shouldReportThatAnInternalRepositorysReadersCannotBeListed() {
+        String login = "internal-" + repositoryId;
+        serve(collaboratorsPage(
+                repositoryNativeId,
+                "INTERNAL",
+                "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":null},\"totalCount\":1",
+                collaborator(login, 1)));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.NOT_LISTABLE);
+    }
+
     @Test
     void shouldReportARepositoryThatGitHubNoLongerShows() {
         serve("""
@@ -464,9 +479,13 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
     }
 
     private String collaboratorsPage(long repositoryDatabaseId, String pageFields, String edges) {
+        return collaboratorsPage(repositoryDatabaseId, "PRIVATE", pageFields, edges);
+    }
+
+    private String collaboratorsPage(long repositoryDatabaseId, String visibility, String pageFields, String edges) {
         return """
-                {"data":{%s,"repository":{"databaseId":%d,"collaborators":{%s,"edges":[%s]}}}}
-                """.formatted(RATE_LIMIT, repositoryDatabaseId, pageFields, edges);
+                {"data":{%s,"repository":{"databaseId":%d,"visibility":"%s","collaborators":{%s,"edges":[%s]}}}}
+                """.formatted(RATE_LIMIT, repositoryDatabaseId, visibility, pageFields, edges);
     }
 
     /** GitHub user ids are GraphQL {@code Int}s, so the fixtures stay in that range. */

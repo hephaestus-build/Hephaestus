@@ -307,7 +307,8 @@ public class GitHubDataSyncService {
             syncTargetProvider.updateSyncTimestamp(
                     syncTarget.id(), SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
             // The repository holds what this read stored; the shared row may already hold another workspace's read.
-            if (repository.isPublicOnProvider()) {
+            boolean repositoryPublic = repository.isPublicOnProvider();
+            if (repositoryPublic) {
                 syncTargetProvider.recordRepositoryPublic(readersRead);
             } else {
                 syncTargetProvider.recordRepositoryNotPublic(readersRead);
@@ -331,7 +332,8 @@ public class GitHubDataSyncService {
             // is independently cost-bounded (cooldowns; ~1-point count/latest-update probes).
 
             // Sync collaborators (with cooldown)
-            int collaboratorsCount = syncCollaboratorsIfNeeded(syncTarget, scopeId, repository, providerId);
+            int collaboratorsCount =
+                    syncCollaboratorsIfNeeded(syncTarget, scopeId, repositoryId, repositoryPublic, providerId);
 
             // Sync labels (with cooldown — labels rarely change)
             int labelsCount = syncLabelsIfNeeded(syncTarget, scopeId, repositoryId);
@@ -875,19 +877,19 @@ public class GitHubDataSyncService {
      *
      * @param syncTarget the sync target containing cooldown timestamps
      * @param scopeId the scope ID
-     * @param repository the repository that this sync's metadata read stored
+     * @param repositoryId the mirror repository that this sync's metadata read stored
+     * @param repositoryPublic whether this sync's metadata read showed the repository public
      * @param providerId the provider the metadata read asked
      * @return number of collaborators synced, or -1 if skipped due to cooldown
      */
-    private int syncCollaboratorsIfNeeded(SyncTarget syncTarget, Long scopeId, Repository repository, long providerId) {
-        Long repositoryId = repository.getId();
+    private int syncCollaboratorsIfNeeded(
+            SyncTarget syncTarget, Long scopeId, Long repositoryId, boolean repositoryPublic, long providerId) {
         Instant now = Instant.now();
         Duration cooldown = Duration.ofMinutes(syncSchedulerProperties.cooldownMinutes());
         boolean mirrorDue = syncTarget.lastCollaboratorsSyncedAt() == null
                 || syncTarget.lastCollaboratorsSyncedAt().isBefore(now.minus(cooldown));
-        boolean provesReaders = !repository.isPublicOnProvider();
         // The monitor as committed now, not the snapshot this sync began with: an answer may have narrowed it since.
-        boolean readersDue = provesReaders && syncTargetProvider.readersListingDue(syncTarget.id(), now, cooldown);
+        boolean readersDue = !repositoryPublic && syncTargetProvider.readersListingDue(syncTarget.id(), now, cooldown);
 
         if (!mirrorDue && !readersDue) {
             log.debug(
@@ -897,19 +899,16 @@ public class GitHubDataSyncService {
             return -1;
         }
 
-        long repositoryNativeId = repository.getNativeId();
+        // A monitor whose identity changed since this snapshot moved its generation, so a listing of the old
+        // repository does not apply to it.
+        long repositoryNativeId = syncTarget.nativeId();
         ReadersRead readersRead =
                 syncTargetProvider.beginReadersProof(syncTarget.id(), repositoryNativeId, providerId, Instant.now());
-        // Enterprise members outside the organization can read an internal repository, and no listing names them.
-        boolean listable = repository.getVisibility() == Repository.Visibility.PRIVATE && repository.isPrivate();
-        if (readersDue && !listable) {
-            syncTargetProvider.recordRepositoryReaders(readersRead, new ReaderListing.NotListable());
-        }
 
         CollaboratorListing listing =
                 collaboratorSyncService.listCollaborators(scopeId, repositoryId, repositoryNativeId);
 
-        if (readersDue && listable) {
+        if (readersDue) {
             switch (listing.outcome()) {
                 case COMPLETE ->
                     syncTargetProvider.recordRepositoryReaders(
@@ -924,6 +923,8 @@ public class GitHubDataSyncService {
                 case INCOMPLETE ->
                     syncTargetProvider.recordRepositoryReaders(
                             readersRead, new ReaderListing.Stopped(ProofReason.LISTING_INCOMPLETE));
+                case NOT_LISTABLE ->
+                    syncTargetProvider.recordRepositoryReaders(readersRead, new ReaderListing.NotListable());
                 case REPOSITORY_MISSING -> syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
             }
         }

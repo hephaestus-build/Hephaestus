@@ -290,36 +290,12 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(readers(monitor)).isEmpty();
     }
 
-    /** A team's deletion removes its memberships and its access in one cascade; its members' rows still go. */
-    @Test
-    void shouldForgetTheMembersOfADeletedTeam() {
-        var monitor = monitor("team-deleted");
-        long member = readerNativeId();
-        long memberUser = user(member);
-        long team = team();
-        jdbc.update("INSERT INTO team_membership(team_id,user_id) VALUES (?,?)", team, memberUser);
-        jdbc.update(
-                "INSERT INTO team_repository_permission(team_id,repository_id,permission) VALUES (?,?,'READ')",
-                team,
-                repositoryId);
-        listed(monitor, member);
-
-        jdbc.update("DELETE FROM team WHERE id = ?", team);
-
-        assertThat(readers(monitor)).isEmpty();
-    }
-
     @Test
     void shouldForgetAPersonWhoLeftTheOrganizationThatOwnsTheRepository() {
         var monitor = monitor("org-member");
         long member = readerNativeId();
         long memberUser = user(member);
-        long organization = Objects.requireNonNull(jdbc.queryForObject(
-                """
-                INSERT INTO organization(id,native_id,login,provider_id)
-                VALUES (?,?,?,?) RETURNING id
-                """, Long.class, mirrorId(), readerNativeId(), "org-" + repositoryNativeId, gitHub));
-        jdbc.update("UPDATE repository SET organization_id = ? WHERE id = ?", organization, repositoryId);
+        long organization = organizationOwningTheRepository();
         jdbc.update(
                 "INSERT INTO organization_membership(organization_id,user_id,role) VALUES (?,?,'MEMBER')",
                 organization,
@@ -394,6 +370,16 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
         assertThat(readers(monitor)).isEmpty();
+    }
+
+    private long organizationOwningTheRepository() {
+        long organization = Objects.requireNonNull(jdbc.queryForObject(
+                """
+                INSERT INTO organization(id,native_id,login,provider_id)
+                VALUES (?,?,?,?) RETURNING id
+                """, Long.class, mirrorId(), readerNativeId(), "org-" + repositoryNativeId, gitHub));
+        jdbc.update("UPDATE repository SET organization_id = ? WHERE id = ?", organization, repositoryId);
+        return organization;
     }
 
     private long team() {

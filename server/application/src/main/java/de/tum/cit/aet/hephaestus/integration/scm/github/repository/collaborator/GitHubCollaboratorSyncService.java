@@ -102,7 +102,12 @@ public class GitHubCollaboratorSyncService {
             RATE_LIMITED,
             INCOMPLETE,
             /** GitHub answered that the repository does not exist or this credential cannot see it. */
-            REPOSITORY_MISSING
+            REPOSITORY_MISSING,
+            /**
+             * GitHub answered that the repository is internal: enterprise members outside its organization can read it,
+             * and no listing names them.
+             */
+            NOT_LISTABLE
         }
 
         public CollaboratorListing {
@@ -236,6 +241,11 @@ public class GitHubCollaboratorSyncService {
                 if (!(pageRepositoryId instanceof Number number) || number.longValue() != expectedNativeId) {
                     return stopped(
                             CollaboratorListing.Outcome.INCOMPLETE, List.of(), safeNameWithOwner, "anotherRepository");
+                }
+                // This read's own answer decides whether a listing can name every reader, not the mirror row.
+                if ("INTERNAL"
+                        .equals(graphQlResponse.field("repository.visibility").getValue())) {
+                    return stopped(CollaboratorListing.Outcome.NOT_LISTABLE, fetched, safeNameWithOwner, "internal");
                 }
                 // The generated model reads a missing count or page flag as zero or false; only a present one counts.
                 Object totalCountValue = graphQlResponse

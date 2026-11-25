@@ -49,14 +49,16 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "workspace_id",
                         "",
                         0),
-                // A reader is a provider identity of the person. Erasure deletes it before the provider profile is
-                // anonymized; that narrows who a monitor's proof names, and the next listing proves the rest again.
+                // A reader is a provider identity of the person, matched by its native subject on any provider:
+                // erasing a namesake's row on another provider only narrows a proof, and the next listing restores it.
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
                         "resource_reader",
                         "resource_reader",
-                        "t.reader_native_id IN (SELECT u.native_id FROM \"user\" u WHERE u.id = ANY(:users))",
+                        "EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
+                                + " i(\"providerId\" bigint,subject text,\"teamId\" text)"
+                                + " WHERE i.subject=t.reader_native_id::text)",
                         "id,workspace_id,repository_to_monitor_id,reader_native_id",
                         "id",
                         "",

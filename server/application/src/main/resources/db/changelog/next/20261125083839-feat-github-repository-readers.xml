@@ -82,7 +82,7 @@
         </rollback>
     </changeSet>
     <changeSet id="1795595919745-9" author="hephaestus">
-        <comment>A reader of a monitored repository is removed in the transaction that records, from any path, that GitHub removed the person: a collaborator, a team member, a team's access, a team, an organization member or an organization. Every monitor of the repository moves its proof generation on, so a listing that began before the removal does not restore the person. A deleted repository drops every monitor's readers and proof. The narrowing that a repository turned private already makes also stamps when the proof changed.</comment>
+        <comment>A reader of a monitored repository is removed in the transaction that records, from any path, that GitHub removed the person: a collaborator, a team member, a team's access or an organization member. A team or an organization is deleted only after these rows, because their keys do not cascade to them all. Every monitor of the repository moves its proof generation on, so a listing that began before the removal does not restore the person. A deleted repository drops every monitor's readers and proof. The narrowing that a repository turned private already makes also stamps when the proof changed.</comment>
         <sql splitStatements="false"><![CDATA[
 CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
 DECLARE
@@ -170,16 +170,6 @@ END
 $$;
 CREATE TRIGGER team_repository_permission_removed BEFORE DELETE ON public.team_repository_permission
     FOR EACH ROW EXECUTE FUNCTION public.forget_removed_team_access();
-CREATE FUNCTION public.forget_removed_team() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    PERFORM public.forget_readers_of_repositories(
-        ARRAY(SELECT p.repository_id FROM public.team_repository_permission p WHERE p.team_id = OLD.id),
-        ARRAY(SELECT t.user_id FROM public.team_membership t WHERE t.team_id = OLD.id));
-    RETURN OLD;
-END
-$$;
-CREATE TRIGGER team_removed BEFORE DELETE ON public.team
-    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_team();
 CREATE FUNCTION public.forget_removed_organization_member() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM public.forget_readers_of_repositories(
@@ -190,24 +180,11 @@ END
 $$;
 CREATE TRIGGER organization_membership_removed BEFORE DELETE ON public.organization_membership
     FOR EACH ROW EXECUTE FUNCTION public.forget_removed_organization_member();
-CREATE FUNCTION public.forget_removed_organization() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    PERFORM public.forget_readers_of_repositories(
-        ARRAY(SELECT r.id FROM public.repository r WHERE r.organization_id = OLD.id),
-        ARRAY(SELECT o.user_id FROM public.organization_membership o WHERE o.organization_id = OLD.id));
-    RETURN OLD;
-END
-$$;
-CREATE TRIGGER organization_removed BEFORE DELETE ON public.organization
-    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_organization();
+
         ]]></sql>
         <rollback>
-            <sql>DROP TRIGGER organization_removed ON public.organization</sql>
-            <sql>DROP FUNCTION public.forget_removed_organization()</sql>
             <sql>DROP TRIGGER organization_membership_removed ON public.organization_membership</sql>
             <sql>DROP FUNCTION public.forget_removed_organization_member()</sql>
-            <sql>DROP TRIGGER team_removed ON public.team</sql>
-            <sql>DROP FUNCTION public.forget_removed_team()</sql>
             <sql>DROP TRIGGER team_repository_permission_removed ON public.team_repository_permission</sql>
             <sql>DROP FUNCTION public.forget_removed_team_access()</sql>
             <sql>DROP TRIGGER team_membership_removed ON public.team_membership</sql>
