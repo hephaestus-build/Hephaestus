@@ -48,8 +48,11 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
    It also refuses an end with a `context_edit` whose `replacement` is not null, because Pi replays a replacement as the result's content.
    After `staleContextResults` goes, Pi writes only null replacements.
    It never truncates or rewrites output into a note.
-3. The server derives the note from the one call of the attempt with the result's `toolCallId`.
-   An end with no such call, or with two, is refused.
+3. The server derives the note from one call: the call with the result's `toolCallId`.
+   It looks for that call in the nearest assistant message before the result.
+   Pi pairs a result with its call in that message.
+   A provider can use the same call id again in a later response.
+   An end whose result has no such call there, or two, is refused.
    The note forms:
    - ``[read <path>, read at <time>. This result is from an earlier turn and may be out of date; read it again for current data.]``
    - ``[bash `<command>`, run at <time>. This result is from an earlier turn and may be out of date; run it again for current data.]``
@@ -65,7 +68,7 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
    The path builder links the stored entries itself, so a dropped summary leaves no gap in the replay path.
    A summary that the attempt appends before its question reads only stored entries, and is stored.
 5. One migration converts the stored rows, in batches by id:
-   - It rewrites each unredacted context-tool result, `fetch_context` included, to its note, and removes its `details`. It matches the call by `toolCallId` within the same turn. A redacted row stays as it is.
+   - It rewrites each unredacted context-tool result, `fetch_context` included, to its note, and removes its `details`. It takes the call by `toolCallId` from the nearest assistant entry before the result, as decision 3 does. A result with no such call there, or with two, gets the note with `an earlier path` or an empty command. A redacted row stays as it is.
    - Each unredacted summary that can quote such a result gets a marker as its text, in the payload and in `text`.
      The marker is ``[This summary quoted tool outputs that are no longer stored. Read the sources again for current data.]``
      The summary keeps its `firstKeptEntryId`, and the row stays unredacted.
@@ -78,19 +81,23 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
    - It runs in the stopped cutover of ADR 0096, so no old writer stores output after it.
    - A restored database runs it again before the server serves, because the migrator applies every changeset that the database lacks.
    - It cannot be undone: the old outputs are the copies that this decision removes.
-6. This ADR covers raw tool output only. Other stored words keep their rules:
+6. This ADR covers the output of context tools only. Other stored words keep their rules:
    - Hephaestus's own words keep the conversation retention. They are an answer, its thinking blocks, a tool call's arguments, and the command that a note repeats.
      They can repeat a source (cascade table, `DERIVED_ANSWER`, #4979).
+   - The person erasure keeps its step for copying tool results (`ConversationToolResultCopyPersonDataStore`) unchanged.
+     It selects the notes, and from them the answers and digests after them and the summaries that cover those.
+     Its receipt also fences running turns, and its preparation removes the sandbox copies.
    - An entry written in a Slack channel belongs to the channel. A Slack disconnect or a channel erasure redacts it with the summaries that cover it (ADR 0128 decision 7).
    - A `search_conversation` result quotes the developer's own entries and goes with them.
 
 ## Consequences
 
 - Good: a source erasure has no stored tool output to erase. The context change revokes the sandboxes, which hold the only live output.
-- Good: no stored row holds tool output after the migration.
-  So #5158 removes the redaction of copying tool results (`COPIES_PERSON_DATA`).
-  Three paths use it: the Slack copy retention, the Slack disconnect and the person erasure.
-  That step selects rows by tool name. If it stays, it redacts each note and the summaries that cover it.
+- Good: no stored row holds the output of a context tool after the migration.
+  So #5158 removes the redaction of copying tool results from two paths: the Slack copy retention and the Slack disconnect.
+  Both select rows by tool name (`COPIES_PERSON_DATA`) and redact only those rows and their summaries. If they stay, they redact each note.
+  The person erasure keeps its step (decision 6).
+  The notes lead it to the answers that can repeat the person's data.
 - Good: an answer that needs a file reads its current version.
 - Bad: a turn reads a file again when the previous turn read it. This costs one tool call and its tokens.
   Every later turn already pays this cost today.
@@ -104,6 +111,8 @@ Not enforced yet: the #5158 pull request adds these checks, and its review confi
 - A server test: `turn/end` refuses a context-tool result with output, one with `details`, and one with a note that carries extra text.
   It also refuses a `context_edit` with a replacement, and it accepts a result with `durationMs`.
 - A server test: `turn/end` drops an overflow summary and keeps a pre-prompt summary. The next turn's context holds the question, and a turn forced over its threshold compacts again.
+- A server test: `turn/end` takes each note from the call in the nearest assistant message.
+  It does so also when an earlier message used the same call id.
 - A database test: on seeded rows, each context-tool output, a truncated `read` with `details` and a `fetch_context` result become notes. A covering summary and a thread summary hold the marker and keep their `firstKeptEntryId`.
   The next turn's context starts at the covering summary.
   A redacted row stays, and no other row changes.
