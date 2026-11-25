@@ -1076,6 +1076,8 @@ Thus, readback proves a copy absent only from a read that starts one hour after 
 Until then the send waits without spending an attempt. A request that lands late is found and delivered once.
 
 Current source version, scope, consent, feedback mode, delivery pause and approval are checked at egress.
+A merged GitLab merge request uses its recorded diff head for the delivery check.
+If GitLab confirms that an open merge request has no source branch, delivery records `SOURCE_BRANCH_MISSING` and withholds the feedback.
 A work-state refusal does not erase the result.
 Practice-page and conversation feedback retain their own visibility checks.
 

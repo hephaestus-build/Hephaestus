@@ -1,10 +1,13 @@
 # The merge request's head on GitLab now, which a send compares with the reviewed head before it writes. GitLab
-# refreshes diffHeadSha after a push, so the source branch is read as well, in its own project for a fork.
-query GetFeedbackMergeRequestHead($fullPath: ID!, $iid: String!) {
+# refreshes diffHeadSha after a push, so an unmerged request also needs the branch head. If we cannot read that
+# head, read the merge request again to distinguish a concurrent merge from a missing branch.
+query GetFeedbackMergeRequestHead($fullPath: ID!, $iid: String!, $checkSourceBranch: Boolean!) {
     project(fullPath: $fullPath) {
         mergeRequest(iid: $iid) {
             diffHeadSha
+            state
             sourceBranch
+            sourceBranchExists @include(if: $checkSourceBranch)
             sourceProject {
                 fullPath
             }

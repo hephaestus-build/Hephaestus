@@ -101,8 +101,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     /**
-     * Reads the merge request's head and its source branch's head. GitLab refreshes the merge request's diff after a
-     * push, so only both together say that the reviewed head is still current.
+     * A merged request retains its diff head. For unmerged work, also check the source branch because GitLab
+     * refreshes the diff asynchronously after a push.
      */
     @Override
     public LiveHead liveHead(FeedbackTarget target) {
@@ -112,30 +112,57 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             String reviewed = ScmVersion.reviewedHead(target.version());
             if (reviewed == null) return LiveHead.UNKNOWN;
             var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
-            var request = graphQl(
-                    workspace,
-                    "GetFeedbackMergeRequestHead",
-                    Map.of("fullPath", mr.projectPath(), "iid", String.valueOf(mr.iid())));
-            if (request == null) return LiveHead.UNKNOWN;
-            String diffHead = request.field("project.mergeRequest.diffHeadSha").getValue();
-            String branch = request.field("project.mergeRequest.sourceBranch").getValue();
-            String source =
-                    request.field("project.mergeRequest.sourceProject.fullPath").getValue();
-            if (diffHead == null || branch == null || source == null) return LiveHead.UNKNOWN;
-            if (!diffHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
-            // The full branch ref: a tag of the same name could still point at the reviewed commit.
-            var ref = graphQl(
-                    workspace, "GetFeedbackBranchHead", Map.of("fullPath", source, "ref", "refs/heads/" + branch));
-            String branchHead = ref == null
-                    ? null
-                    : ref.field("project.repository.commit.sha").getValue();
-            if (branchHead == null) return LiveHead.UNKNOWN;
-            if (!branchHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+            var head = readLiveHead(workspace, mr, reviewed, false);
             // The package needs the rest of the budget: a read that spent it lets the send wait, not fail.
-            return gitLabProvider.isRateLimitCritical(workspace) ? LiveHead.UNKNOWN : LiveHead.CURRENT;
+            return head == LiveHead.CURRENT && gitLabProvider.isRateLimitCritical(workspace) ? LiveHead.UNKNOWN : head;
         } catch (RuntimeException unknown) {
             return LiveHead.UNKNOWN;
         }
+    }
+
+    private LiveHead readLiveHead(long workspace, MrCoordinates mr, String reviewed, boolean checkSourceBranch) {
+        if (checkSourceBranch && gitLabProvider.isRateLimitCritical(workspace)) return LiveHead.UNKNOWN;
+        var request = mergeRequestHead(workspace, mr, checkSourceBranch);
+        if (request == null) return LiveHead.UNKNOWN;
+        String diffHead = request.field("project.mergeRequest.diffHeadSha").getValue();
+        if (diffHead == null || diffHead.isBlank()) return LiveHead.UNKNOWN;
+        if (!diffHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+        String state = request.field("project.mergeRequest.state").getValue();
+        if (state == null) return LiveHead.UNKNOWN;
+        if ("merged".equals(state)) return LiveHead.CURRENT;
+        if (checkSourceBranch) {
+            Boolean exists =
+                    request.field("project.mergeRequest.sourceBranchExists").getValue();
+            return "opened".equals(state) && Boolean.FALSE.equals(exists)
+                    ? LiveHead.SOURCE_BRANCH_MISSING
+                    : LiveHead.UNKNOWN;
+        }
+
+        String branch = request.field("project.mergeRequest.sourceBranch").getValue();
+        String source =
+                request.field("project.mergeRequest.sourceProject.fullPath").getValue();
+        if (branch == null || source == null) return readLiveHead(workspace, mr, reviewed, true);
+        // The full branch ref: a tag of the same name could still point at the reviewed commit.
+        var ref =
+                graphQl(workspace, "GetFeedbackBranchHead", Map.of("fullPath", source, "ref", "refs/heads/" + branch));
+        if (ref == null) return LiveHead.UNKNOWN;
+        String branchHead = ref.field("project.repository.commit.sha").getValue();
+        if (branchHead == null || branchHead.isBlank()) return readLiveHead(workspace, mr, reviewed, true);
+        return branchHead.equalsIgnoreCase(reviewed) ? LiveHead.CURRENT : LiveHead.MOVED;
+    }
+
+    private @Nullable ClientGraphQlResponse mergeRequestHead(
+            long workspace, MrCoordinates mr, boolean checkSourceBranch) {
+        return graphQl(
+                workspace,
+                "GetFeedbackMergeRequestHead",
+                Map.of(
+                        "fullPath",
+                        mr.projectPath(),
+                        "iid",
+                        String.valueOf(mr.iid()),
+                        "checkSourceBranch",
+                        checkSourceBranch));
     }
 
     private @Nullable ClientGraphQlResponse graphQl(long workspace, String document, Map<String, Object> variables) {

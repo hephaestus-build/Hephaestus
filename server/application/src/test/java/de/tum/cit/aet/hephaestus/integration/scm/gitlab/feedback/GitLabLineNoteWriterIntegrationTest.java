@@ -26,23 +26,32 @@ import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PostedCopyCorrector;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
+    enum MergeRequestCase {
+        OPEN,
+        REJECTED_POSITION,
+        MERGED_WITHOUT_BRANCH,
+        OPEN_WITHOUT_BRANCH
+    }
+
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldPublishTheCompleteCheckedPackageOrKeepRejectedPlacementsPrivate(boolean rejected) {
+    @EnumSource(MergeRequestCase.class)
+    void shouldPublishTheCompleteCheckedPackageOrRecordWhyItStopped(MergeRequestCase scenario) {
         String base = "a".repeat(40);
         String head = "c".repeat(40);
         String start = "b".repeat(40);
@@ -54,8 +63,11 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var targets = mock(ScmFeedbackTargetResolver.class);
         when(targets.subject(target, IntegrationKind.GITLAB)).thenReturn("group/project!42");
         var gitlab = new ScriptedGitLabNotes(guard, targets);
-        gitlab.rejectPositions(rejected);
+        gitlab.rejectPositions(scenario == MergeRequestCase.REJECTED_POSITION);
         gitlab.head(42, head);
+        if (scenario == MergeRequestCase.MERGED_WITHOUT_BRANCH) gitlab.merge(42);
+        if (scenario == MergeRequestCase.MERGED_WITHOUT_BRANCH || scenario == MergeRequestCase.OPEN_WITHOUT_BRANCH)
+            gitlab.deleteBranch(42);
         var tokens = mock(GitLabTokenService.class);
         when(tokens.resolveServerUrl(workspace.getId())).thenReturn("https://gitlab.example.test");
         when(tokens.getAccessToken(workspace.getId())).thenReturn("synthetic-token");
@@ -107,7 +119,19 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 Clock.systemUTC()));
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
-        if (rejected) {
+        if (scenario == MergeRequestCase.OPEN_WITHOUT_BRANCH) {
+            assertThat(current().getState()).isEqualTo(FeedbackState.WITHHELD);
+            assertThat(current().getStopReason()).isEqualTo(FeedbackStopReason.SOURCE_BRANCH_MISSING);
+            assertThat(children()).hasSize(2).allSatisfy(copy -> {
+                assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WITHHELD);
+                assertThat(copy.getStopReason()).isEqualTo(FeedbackStopReason.SOURCE_BRANCH_MISSING);
+                assertThat(copy.getWriteStartedAt()).isNull();
+            });
+            assertThat(gitlab.bulkPublications()).isZero();
+            assertThat(reads.get()).isZero();
+            return;
+        }
+        if (scenario == MergeRequestCase.REJECTED_POSITION) {
             assertThat(current().getState()).isNotEqualTo(FeedbackState.DELIVERED);
             assertThat(gitlab.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
                     .isEmpty();

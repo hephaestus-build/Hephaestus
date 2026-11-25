@@ -54,6 +54,10 @@ public final class ScriptedGitLabNotes {
     private int draftCalls;
     private int failDraft;
     private final Map<Integer, String> heads = new ConcurrentHashMap<>();
+    private final Set<Integer> merged = ConcurrentHashMap.newKeySet();
+    private final Set<Integer> deletedBranches = ConcurrentHashMap.newKeySet();
+    private final Set<Integer> unreadableRepositories = ConcurrentHashMap.newKeySet();
+    private final Set<Integer> mergeOnBranchRead = ConcurrentHashMap.newKeySet();
     private final Map<Integer, String> branches = new ConcurrentHashMap<>();
     private boolean failDelete;
     private int loseDraftAnswer;
@@ -75,6 +79,22 @@ public final class ScriptedGitLabNotes {
     /** Moves only the source branch, as a push does before GitLab refreshes the merge request's diff. */
     void branchHead(int iid, String sha) {
         branches.put(iid, sha);
+    }
+
+    void merge(int iid) {
+        merged.add(iid);
+    }
+
+    void deleteBranch(int iid) {
+        deletedBranches.add(iid);
+    }
+
+    void hideSourceRepository(int iid) {
+        unreadableRepositories.add(iid);
+    }
+
+    void mergeAndDeleteOnBranchRead(int iid) {
+        mergeOnBranchRead.add(iid);
     }
 
     void failDraft(int call) {
@@ -367,6 +387,10 @@ public final class ScriptedGitLabNotes {
                         : threads.resolve(Map.of(
                                 "project.mergeRequest.diffHeadSha",
                                 head,
+                                "project.mergeRequest.state",
+                                merged.contains(iid(request)) ? "merged" : "opened",
+                                "project.mergeRequest.sourceBranchExists",
+                                !deletedBranches.contains(iid(request)),
                                 "project.mergeRequest.sourceBranch",
                                 "source-" + iid(request),
                                 "project.mergeRequest.sourceProject.fullPath",
@@ -378,6 +402,12 @@ public final class ScriptedGitLabNotes {
                 if (!ref.startsWith("refs/heads/source-"))
                     yield Mono.error(new IllegalStateException("A branch is read by its full ref"));
                 int iid = Integer.parseInt(ref.substring("refs/heads/source-".length()));
+                if (mergeOnBranchRead.remove(iid)) {
+                    merge(iid);
+                    deleteBranch(iid);
+                }
+                if (unreadableRepositories.contains(iid) || deletedBranches.contains(iid))
+                    yield threads.resolve(Map.of());
                 String head = branches.getOrDefault(iid, heads.get(iid));
                 yield head == null
                         ? Mono.error(new IllegalStateException("GitLab did not answer"))

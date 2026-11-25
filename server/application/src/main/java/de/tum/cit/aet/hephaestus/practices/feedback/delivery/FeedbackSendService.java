@@ -248,6 +248,10 @@ public class FeedbackSendService {
                 transactions.refuseTarget(workspaceId, feedbackId, owner, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
                 return null;
             }
+            case SOURCE_BRANCH_MISSING -> {
+                transactions.refuseTarget(workspaceId, feedbackId, owner, FeedbackStopReason.SOURCE_BRANCH_MISSING);
+                return null;
+            }
             case UNKNOWN -> {
                 log.info(
                         "Feedback send waits for the provider head: workspaceId={}, feedbackId={}, attempt={}",
