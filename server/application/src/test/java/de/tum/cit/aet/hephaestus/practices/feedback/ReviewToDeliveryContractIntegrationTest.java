@@ -344,6 +344,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private FeedbackDecisionService decisions;
 
     @Autowired
+    private FeedbackStoreService feedbackStore;
+
+    @Autowired
     private FeedbackContentDigest digests;
 
     @Autowired
@@ -1924,10 +1927,44 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(copy.getWriteStartedAt()).isNull();
                     });
             assertThat(sendQueue.current(review.workspaceId(), feedbackId))
-                    .hasValueSatisfying(send -> assertThat(send.getState()).isNotEqualTo(FeedbackSendState.DONE));
+                    .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.PENDING));
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.READY));
 
             github.head(review.repository(), review.pullRequestNumber(), "a".repeat(40));
             ActionTestSupport.due(jdbc, "feedback:" + feedbackId);
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .hasSize(1);
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED));
+        }
+    }
+
+    @Test
+    void shouldFailWithoutWritingWhenGitHubNeverSaysWhereThePullRequestIsAndDeliverOnAnAdminRetry() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
+            github.head(review.repository(), review.pullRequestNumber(), null);
+            jdbc.update(
+                    "UPDATE agent_action SET attempts = max_attempts - 1 WHERE lane_key = ?", "feedback:" + feedbackId);
+
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .isEmpty();
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.FAILED));
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), feedbackId))
+                    .singleElement()
+                    .satisfies(copy -> assertThat(copy.getWriteStartedAt()).isNull());
+
+            github.head(review.repository(), review.pullRequestNumber(), "a".repeat(40));
+            feedbackStore.retry(review.workspaceId(), feedbackId, review.developerId());
             ActionTestSupport.drain(executor, jdbc);
 
             assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))

@@ -96,7 +96,9 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     .field("repository.pullRequest.headRefOid")
                     .getValue();
             if (head == null || head.isBlank()) return LiveHead.UNKNOWN;
-            return head.equalsIgnoreCase(reviewed) ? LiveHead.CURRENT : LiveHead.MOVED;
+            if (!head.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+            // The package needs the rest of the budget: a read that spent it lets the send wait, not fail.
+            return gitHubProvider.isRateLimitCritical(workspace) ? LiveHead.UNKNOWN : LiveHead.CURRENT;
         } catch (RuntimeException unknown) {
             return LiveHead.UNKNOWN;
         }

@@ -224,6 +224,11 @@ public class FeedbackSendService {
                 return null;
             }
             case UNKNOWN -> {
+                log.info(
+                        "Feedback send waits for the provider head: workspaceId={}, feedbackId={}, attempt={}",
+                        workspaceId,
+                        feedbackId,
+                        owner.attempt());
                 return new ActionResult.Retry(ActionExecutor.backoff(owner.attempt()));
             }
         }

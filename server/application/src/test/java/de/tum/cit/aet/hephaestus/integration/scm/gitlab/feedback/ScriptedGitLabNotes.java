@@ -54,6 +54,7 @@ public final class ScriptedGitLabNotes {
     private int draftCalls;
     private int failDraft;
     private final Map<Integer, String> heads = new ConcurrentHashMap<>();
+    private final Map<Integer, String> branches = new ConcurrentHashMap<>();
     private boolean losePublish;
     private int bulkPublications;
 
@@ -62,8 +63,14 @@ public final class ScriptedGitLabNotes {
      * request with no head set answers its head read with an error, as an unreachable provider does.
      */
     void head(int iid, @Nullable String sha) {
+        branches.remove(iid);
         if (sha == null) heads.remove(iid);
         else heads.put(iid, sha);
+    }
+
+    /** Moves only the source branch, as a push does before GitLab refreshes the merge request's diff. */
+    void branchHead(int iid, String sha) {
+        branches.put(iid, sha);
     }
 
     void failDraft(int call) {
@@ -154,6 +161,7 @@ public final class ScriptedGitLabNotes {
         versions.computeIfAbsent(iid, ignored -> new CopyOnWriteArrayList<>()).add(version);
         // A push makes a new diff version, and the merge request's head is the head of its newest version.
         heads.put(iid, head);
+        branches.remove(iid);
     }
 
     Mono<ClientResponse> exchange(ClientRequest request) {
@@ -302,7 +310,20 @@ public final class ScriptedGitLabNotes {
                 String head = heads.get(iid(request));
                 yield head == null
                         ? Mono.error(new IllegalStateException("GitLab did not answer"))
-                        : threads.resolve(Map.of("project.mergeRequest.diffHeadSha", head));
+                        : threads.resolve(Map.of(
+                                "project.mergeRequest.diffHeadSha",
+                                head,
+                                "project.mergeRequest.sourceBranch",
+                                "source-" + iid(request),
+                                "project.mergeRequest.sourceProject.fullPath",
+                                "group/project"));
+            }
+            case "GetFeedbackBranchHead" -> {
+                int iid = Integer.parseInt(request.text("ref").substring("source-".length()));
+                String head = branches.getOrDefault(iid, heads.get(iid));
+                yield head == null
+                        ? Mono.error(new IllegalStateException("GitLab did not answer"))
+                        : threads.resolve(Map.of("project.repository.commit.sha", head));
             }
             case "GetMergeRequestGlobalId" ->
                 threads.resolve(Map.of("project.mergeRequest.id", mergeRequest(iid(request))));

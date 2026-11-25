@@ -171,6 +171,13 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSeeAPushOnTheSourceBranchBeforeGitLabRefreshesTheMergeRequest() {
+        provider.head(42, "c".repeat(40));
+        provider.branchHead(42, "d".repeat(40));
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.MOVED);
+    }
+
+    @Test
     void shouldNotReadTheHeadWhileTheRateLimitIsCritical() {
         provider.head(42, "c".repeat(40));
         when(provider.provider().isRateLimitCritical(1L)).thenReturn(true);
