@@ -287,7 +287,7 @@ public class ReviewJobClaimService {
             // makes the check exact when two servers dispatched reviews of one pool at once.
             poolId = callPools.poolFor(snapshot.model().connectionRef());
             callPools.lockAdmission(poolId);
-            if (!ReviewPoolAdmission.admits(jobRepository.poolLoad(poolId), callPools, poolId))
+            if (!ReviewPoolAdmission.admits(jobRepository.poolLoad(poolId), callPools, poolId, assigned.size()))
                 return new PoolWait(fence.runId(), poolId);
         }
 

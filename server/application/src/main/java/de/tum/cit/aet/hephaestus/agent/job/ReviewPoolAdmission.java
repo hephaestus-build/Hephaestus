@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.RunAdmission;
@@ -25,10 +26,11 @@ import org.springframework.stereotype.Component;
 
 /**
  * Whether a model pool takes another measuring review now. A pool with no running measurement always takes one. Past
- * that, it takes the next one only while no measuring call waits longer than the permit aging, and only once its
- * newest measurement has run that long: a pool that has just admitted a review shows its congestion before it admits
- * another. Reviews admitted past a pool's capacity slow down together and all run out of time, while a waiting review
- * keeps its whole budget.
+ * that, it takes the next one only while the practices of its running measurements and of the next one fit the calls
+ * that the pool lets measurements hold: each practice is a session with one call in flight, so a review counts as wide
+ * as its practices, not as one. It also waits while a measuring call waits longer than the permit aging, and until its
+ * newest measurement has run that long. Reviews admitted past a pool's capacity slow down together and all run out of
+ * time, while a waiting review keeps its whole budget.
  *
  * <p>The dispatch asks this in the claim's order, so the workspace with the fewest leased runs goes first, and a held
  * review gets no sandbox. The claim asks it again under the pool's lock, so two servers never admit past the rule.
@@ -58,6 +60,7 @@ public class ReviewPoolAdmission implements RunAdmission {
         private final Map<Long, Boolean> admitting = new HashMap<>();
         private final Map<Long, Long> holding = new HashMap<>();
         private final Map<UUID, @Nullable Long> poolOfRun = new HashMap<>();
+        private final Map<UUID, Integer> practicesOfRun = new HashMap<>();
         private final Map<LlmModelResolver.ConnectionRef, Long> poolOfModel = new HashMap<>();
 
         ReviewPass(Set<AgentRunKind> kinds) {
@@ -79,7 +82,10 @@ public class ReviewPoolAdmission implements RunAdmission {
                     .toList();
             if (unread.isEmpty()) return;
             unread.forEach(run -> poolOfRun.put(run, null));
-            for (var model : jobs.findQueuedModels(unread)) poolOfRun.put(model.getRunId(), poolOf(model));
+            for (var model : jobs.findQueuedModels(unread)) {
+                poolOfRun.put(model.getRunId(), poolOf(model));
+                practicesOfRun.put(model.getRunId(), model.getPractices());
+            }
         }
 
         @Override
@@ -90,7 +96,8 @@ public class ReviewPoolAdmission implements RunAdmission {
             // The claim refuses an unreadable snapshot or an unavailable model with its own reason.
             if (pool == null) return true;
             // One admission for each pool in a pass: the next one waits until the first shows its load.
-            boolean admitted = admitting.computeIfAbsent(pool, ReviewPoolAdmission.this::admits);
+            int practices = practicesOfRun.getOrDefault(due.run().id(), 1);
+            boolean admitted = admitting.computeIfAbsent(pool, key -> ReviewPoolAdmission.this.admits(key, practices));
             if (admitted) admitting.put(pool, false);
             else holding.merge(pool, 1L, Long::sum);
             return admitted;
@@ -126,14 +133,20 @@ public class ReviewPoolAdmission implements RunAdmission {
         }
     }
 
-    /** Whether the pool takes another measurement now. */
-    public boolean admits(long poolId) {
-        return admits(jobs.poolLoad(poolId), pools, poolId);
+    /** Whether the pool takes another measurement of {@code practices} practices now. */
+    public boolean admits(long poolId, int practices) {
+        return admits(jobs.poolLoad(poolId), pools, poolId, practices);
     }
 
     /** The rule, which the claim also applies while it holds the pool's lock. */
-    static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPools pools, long poolId) {
+    static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPools pools, long poolId, int practices) {
         if (load.getRunning() == 0) return true;
+        Integer learned = load.getLearnedLimit();
+        // A pool that is gone holds nothing: the claim refuses the review with its own reason.
+        if (learned == null) return true;
+        int limit = LlmCallLimit.effective(learned, load.getMaxConcurrentCalls());
+        // Measurements never hold the calls kept for interactive work.
+        if (load.getPractices() + practices > limit - LlmCallLimit.reserve(limit)) return false;
         Instant newest = load.getNewestStart();
         return !pools.congested(poolId)
                 && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
