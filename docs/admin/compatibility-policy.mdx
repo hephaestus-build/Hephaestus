@@ -34,7 +34,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 CI enforces these rules from 1.0.0: see [Public contract gate](../contributor/ci-cd#public-contract-gate) and [API compatibility](../contributor/ci-cd#api-compatibility).
 
 The operation registry names each public operation's 1.0 caller.
-The build checks changes to each operation and the schemas it references.
+The build checks that the registry lists every operation in the packaged spec.
 An operation marked `reserved` is for a later 1.x release.
 Documented operator and automation calls also have a named caller in the registry.
 

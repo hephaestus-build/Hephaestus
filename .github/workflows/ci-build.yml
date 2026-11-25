@@ -13,8 +13,8 @@ on:
         required: false
         type: string
         default: "false"
-      base_sha:
-        description: "Comparison commit for the packaged API and PostgreSQL image"
+      postgres_base_sha:
+        description: "Commit whose published PostgreSQL image the database legs reuse"
         required: true
         type: string
       migrations_changed:
@@ -54,7 +54,7 @@ jobs:
       - uses: ./.github/actions/postgres-image
         with:
           phase: start
-          base-sha: ${{ inputs.base_sha }}
+          base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain
@@ -73,21 +73,19 @@ jobs:
         continue-on-error: true
         env:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
-          API_BASE_SHA: ${{ inputs.base_sha }}
         run: |
-          if ! git cat-file -e "${API_BASE_SHA}^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=1 origin "$API_BASE_SHA"
-          fi
           vp run generate:api
-          node scripts/check-api-operation-classification.ts "$API_BASE_SHA"
+          status=0
           if ! node scripts/assert-generated-clean.ts server/openapi.yaml webapp/src/api extension/src/api; then
             echo "::error::OpenAPI out of sync. Run: vp run generate:api"
             echo "### OpenAPI Validation" >> $GITHUB_STEP_SUMMARY
             echo "| Check | Status | Fix |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|--------|-----|" >> $GITHUB_STEP_SUMMARY
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
-            exit 1
+            status=1
           fi
+          node scripts/check-api-operation-classification.ts || status=1
+          exit "$status"
       # Judges the spec generated above against the latest published release, which it fetches from
       # origin. docs/contributor/ci-cd.mdx § API compatibility.
       - uses: ./.github/actions/setup-ci-tool
@@ -194,7 +192,7 @@ jobs:
       - uses: ./.github/actions/postgres-image
         with:
           phase: start
-          base-sha: ${{ inputs.base_sha }}
+          base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain
@@ -271,7 +269,7 @@ jobs:
       - uses: ./.github/actions/postgres-image
         with:
           phase: start
-          base-sha: ${{ inputs.base_sha }}
+          base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain

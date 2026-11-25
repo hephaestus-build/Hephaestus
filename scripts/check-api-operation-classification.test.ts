@@ -1,93 +1,58 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
+	API_OPERATION_REGISTRY,
 	apiOperationClassifications,
 	apiOperations,
 	operationClassificationProblems,
 } from "./lib/api-operation-classification.ts";
 
-const before = apiOperations({ paths: { "/old": { get: { operationId: "old" } } } });
-const after = apiOperations({
+const spec = {
 	paths: {
-		"/old": { get: { operationId: "old" } },
 		"/threads": {
-			post: { operationId: "startThread" },
+			parameters: [],
 			get: { operationId: "listThreads" },
+			post: { operationId: "startThread" },
+			delete: { operationId: "removeThreads" },
 		},
 	},
-});
+};
+const operations = apiOperations(spec);
+const entries = [
+	{ operation: "GET /threads", access: "public", callers: ["webapp"] },
+	{ operation: "POST /threads", access: "internal" },
+	{ operation: "DELETE /threads", access: "reserved" },
+];
 
-void test("each method added to the packaged spec needs an explicit classification", () => {
-	const start = { operation: "POST /threads", access: "public", callers: ["webapp"] };
+void test("the registry classifies each method and ignores path metadata", () => {
+	assert.deepEqual([...operations.values()], ["listThreads", "startThread", "removeThreads"]);
 	assert.deepEqual(
-		operationClassificationProblems(before, after, apiOperationClassifications([start])),
-		["Unclassified API operation in the generated diff: GET /threads"],
-	);
-	assert.deepEqual(
-		operationClassificationProblems(
-			before,
-			after,
-			apiOperationClassifications([start, { operation: "GET /threads", access: "reserved" }]),
-		),
+		operationClassificationProblems(operations, apiOperationClassifications(entries)),
 		[],
 	);
 });
 
-void test("a removed path cannot remain in the operation registry", () => {
-	assert.deepEqual(
-		operationClassificationProblems(
-			before,
-			before,
-			apiOperationClassifications([{ operation: "POST /threads", access: "internal" }]),
-		),
-		["Classified operation is absent from the packaged API: POST /threads"],
-	);
+void test("missing and stale classifications both fail", () => {
+	const classes = apiOperationClassifications([
+		...entries.slice(1),
+		{ operation: "POST /old", access: "internal" },
+	]);
+	assert.deepEqual(operationClassificationProblems(operations, classes), [
+		"Unclassified API operation: GET /threads",
+		"Classified operation is absent from the packaged API: POST /old",
+	]);
 });
 
-void test("a changed operation in the packaged diff also needs a classification", () => {
-	const changed = apiOperations({
-		paths: { "/old": { get: { operationId: "old", deprecated: true } } },
-	});
-	assert.deepEqual(
-		operationClassificationProblems(before, changed, apiOperationClassifications([])),
-		["Unclassified API operation in the generated diff: GET /old"],
-	);
-});
-
-function specWithThreadState(stateType: string): unknown {
-	return {
-		paths: {
-			"/status": { get: { operationId: "getStatus" } },
-			"/threads": {
-				get: {
-					operationId: "listThreads",
-					responses: { "200": { $ref: "#/components/responses/Threads" } },
-				},
-			},
-		},
-		components: {
-			responses: {
-				Threads: {
-					content: { "application/json": { schema: { $ref: "#/components/schemas/Thread" } } },
-				},
-			},
-			schemas: {
-				Thread: { properties: { state: { $ref: "#/components/schemas/State" } } },
-				State: { type: stateType, properties: { owner: { $ref: "#/components/schemas/Thread" } } },
-			},
-		},
-	};
-}
-
-void test("a change to a reachable schema requires classification of the operation that uses it", () => {
-	assert.deepEqual(
-		operationClassificationProblems(
-			apiOperations(specWithThreadState("string")),
-			apiOperations(specWithThreadState("integer")),
-			apiOperationClassifications([]),
-		),
-		["Unclassified API operation in the generated diff: GET /threads"],
+void test("an operation has exactly one entry", () => {
+	assert.throws(
+		() => apiOperationClassifications([...entries, entries[0]]),
+		/Duplicate operation classification: GET \/threads/u,
 	);
 });
 
@@ -99,4 +64,20 @@ void test("a public operation needs at least one named caller", () => {
 			/POST \/threads needs a distinct, named 1\.0 caller/u,
 		);
 	}
+});
+
+void test("the CLI annotates invalid registries without a stack trace", async (context) => {
+	const cwd = await mkdtemp(path.join(tmpdir(), "api-operation-classification-"));
+	context.after(async () => rm(cwd, { recursive: true, force: true }));
+	await mkdir(path.join(cwd, "server"));
+	await writeFile(path.join(cwd, "server/openapi.yaml"), JSON.stringify(spec));
+	await writeFile(path.join(cwd, API_OPERATION_REGISTRY), JSON.stringify(entries.slice(1)));
+	const command = fileURLToPath(new URL("check-api-operation-classification.ts", import.meta.url));
+	const result = spawnSync(process.execPath, [command], { cwd, encoding: "utf8" });
+	assert.equal(result.status, 1, result.stderr);
+	assert.match(
+		result.stderr,
+		/^::error file=server\/public-api-operations\.json::Unclassified API operation: GET \/threads%0A/u,
+	);
+	assert.equal(result.stderr.trimEnd().split("\n").length, 1);
 });

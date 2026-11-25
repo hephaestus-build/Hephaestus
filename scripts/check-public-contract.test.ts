@@ -527,8 +527,8 @@ void test("the public operation list covers existing documented methods and exte
 	const promised = [...classes].filter(([, item]) => item.access === "public").map(([key]) => key);
 	assert.notEqual(promised.length, 0);
 	const operations = new Map(
-		[...apiOperations(parse(readRepositoryFile("server/openapi.yaml")))].map(([key, operation]) => [
-			operation.id,
+		[...apiOperations(parse(readRepositoryFile("server/openapi.yaml")))].map(([key, id]) => [
+			id,
 			key,
 		]),
 	);
@@ -584,19 +584,24 @@ void test("the public operation list covers existing documented methods and exte
 		}),
 	);
 	const root = fileURLToPath(new URL("../", import.meta.url));
+	const documentedProblems: string[] = [];
 	for (const file of globSync("docs/{admin,user}/**/*.{md,mdx}", {
 		cwd: root,
 		exclude: ["docs/admin/_configuration-reference/**"],
 	})) {
 		const text = readFileSync(path.join(root, file), "utf8").replaceAll("`", "");
-		const assertPublic = (method: string, resource: string): void => {
+		const checkDocumentedCall = (method: string, resource: string): void => {
 			const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
 			if (operation !== undefined) {
-				assert.equal(
-					classes.get(operation)?.access,
-					"public",
-					`${file} documents ${operation} outside the public promise`,
-				);
+				const classification = classes.get(operation);
+				if (
+					classification?.access !== "public" ||
+					!classification.callers.some((caller) => caller === "operator" || caller === "automation")
+				) {
+					documentedProblems.push(
+						`${file} documents ${operation} without a public operator or automation caller`,
+					);
+				}
 			}
 		};
 		for (const match of text.matchAll(
@@ -609,11 +614,12 @@ void test("the public operation list covers existing documented methods and exte
 			assert.notEqual(verbs, "");
 			assert.notEqual(resource, "");
 			for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
-				assertPublic(method, resource);
+				checkDocumentedCall(method, resource);
 			}
 		}
 		for (const { method, resource } of curlApiRequests(text)) {
-			assertPublic(method, resource);
+			checkDocumentedCall(method, resource);
 		}
 	}
+	assert.deepEqual(documentedProblems, []);
 });

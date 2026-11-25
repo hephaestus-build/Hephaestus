@@ -1,6 +1,4 @@
-import { isDeepStrictEqual } from "node:util";
-
-import { asArray, asRecord, asString, at, isRecord } from "./json.ts";
+import { asArray, asRecord, asString } from "./json.ts";
 
 export const API_OPERATION_REGISTRY = "server/public-api-operations.json";
 export const HTTP_METHODS = new Set([
@@ -71,55 +69,16 @@ export function apiOperationClassifications(
 	return classes;
 }
 
-interface ApiOperation {
-	id: string;
-	definition: Readonly<Record<string, unknown>>;
-	pathParameters: unknown;
-	components: ReadonlyMap<string, unknown>;
-}
-
-function referencedComponents(spec: unknown, ...nodes: unknown[]): ReadonlyMap<string, unknown> {
-	const reached = new Map<string, unknown>();
-	const walk = (node: unknown): void => {
-		if (isRecord(node)) {
-			const { $ref } = node;
-			if (typeof $ref === "string" && $ref.startsWith("#/components/") && !reached.has($ref)) {
-				const pointer = decodeURIComponent($ref.slice(2))
-					.split("/")
-					.map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
-				const target = at(spec, pointer, $ref);
-				reached.set($ref, target);
-				walk(target);
-			}
-		}
-		if (Array.isArray(node) || isRecord(node)) {
-			for (const child of Object.values(node)) {
-				walk(child);
-			}
-		}
-	};
-	for (const node of nodes) {
-		walk(node);
-	}
-	return reached;
-}
-
-/** The packaged methods and paths, with their definitions, parameters and reachable components. */
-export function apiOperations(spec: unknown): ReadonlyMap<string, ApiOperation> {
-	const operations = new Map<string, ApiOperation>();
+/** Maps each packaged method and path to its operation ID. */
+export function apiOperations(spec: unknown): ReadonlyMap<string, string> {
+	const operations = new Map<string, string>();
 	const paths = asRecord(asRecord(spec, "OpenAPI").paths, "OpenAPI paths");
 	for (const [resource, item] of Object.entries(paths)) {
 		const pathItem = asRecord(item, resource);
 		for (const [method, raw] of Object.entries(pathItem)) {
 			if (HTTP_METHODS.has(method)) {
 				const key = `${method.toUpperCase()} ${resource}`;
-				const definition = asRecord(raw, key);
-				operations.set(key, {
-					id: asString(definition.operationId, `${key} operationId`),
-					definition,
-					pathParameters: pathItem.parameters,
-					components: referencedComponents(spec, definition, pathItem.parameters),
-				});
+				operations.set(key, asString(asRecord(raw, key).operationId, `${key} operationId`));
 			}
 		}
 	}
@@ -127,19 +86,15 @@ export function apiOperations(spec: unknown): ReadonlyMap<string, ApiOperation> 
 }
 
 export function operationClassificationProblems(
-	base: ReadonlyMap<string, ApiOperation>,
-	head: ReadonlyMap<string, ApiOperation>,
+	operations: ReadonlyMap<string, string>,
 	classes: ReadonlyMap<string, OperationClassification>,
 ): string[] {
 	return [
-		...[...head]
-			.filter(
-				([operation, definition]) =>
-					!classes.has(operation) && !isDeepStrictEqual(base.get(operation), definition),
-			)
-			.map(([operation]) => `Unclassified API operation in the generated diff: ${operation}`),
+		...[...operations.keys()]
+			.filter((operation) => !classes.has(operation))
+			.map((operation) => `Unclassified API operation: ${operation}`),
 		...[...classes.keys()]
-			.filter((operation) => !head.has(operation))
+			.filter((operation) => !operations.has(operation))
 			.map((operation) => `Classified operation is absent from the packaged API: ${operation}`),
 	];
 }
