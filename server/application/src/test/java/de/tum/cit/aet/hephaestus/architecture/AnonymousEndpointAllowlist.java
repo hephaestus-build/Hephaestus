@@ -7,6 +7,8 @@ final class AnonymousEndpointAllowlist {
             "PublicActivityController.getPublicActivity",
             "PublicActivityController.getPublicActivityPerson",
             "PublicActivityController.getPublicActivityPersonWork",
+            "PublicUsageController.getPublicUsage",
+            "PublicUsageController.getPublicUsagePeriod",
             "CsrfController.token",
             "BrowserFaultsController.report",
             "ContributorController.listGlobalContributors",

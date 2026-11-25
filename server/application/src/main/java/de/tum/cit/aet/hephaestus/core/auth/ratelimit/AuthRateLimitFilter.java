@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
+import de.tum.cit.aet.hephaestus.core.auth.web.PublicUsageReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
@@ -83,6 +84,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         // Workspace MCP endpoint calls, keyed by the account that approved the client (ADR 0110).
         MCP_CALL("mcp-call", true, false),
         PUBLIC_ACTIVITY("public-activity", false, false),
+        // The public usage page: anonymous, keyed by IP, with its own bucket so it cannot drain public activity.
+        PUBLIC_USAGE("public-usage", false, false),
         // What a browser measured or met: losing a report costs less than refusing it with a 503. Anyone
         // can send one, so a refusal is counted, never logged: a log line per refusal is the flood itself.
         BROWSER_REPORTS("browser-reports", true, true, false);
@@ -176,6 +179,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
                     && !(authentication instanceof AnonymousAuthenticationToken)) return null;
             return Endpoint.PUBLIC_ACTIVITY;
         }
+        if (PublicUsageReadRequestMatcher.MATCHER.matches(request)) {
+            return Endpoint.PUBLIC_USAGE;
+        }
         // The MCP authorization endpoint and its consent decisions start a sign-in for a client, and they
         // fetch the client's metadata document, so they share the sign-in budget.
         if (("GET".equals(method) && (path.startsWith("/oauth2/authorization/") || path.equals("/mcp/oauth/authorize")))
@@ -245,6 +251,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case GITLAB_PREFLIGHT -> properties.gitlabPreflight();
             case MCP_CALL -> properties.mcpCall();
             case PUBLIC_ACTIVITY -> properties.publicActivity();
+            case PUBLIC_USAGE -> properties.publicUsage();
             case BROWSER_REPORTS -> properties.browserReports();
         };
     }

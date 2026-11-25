@@ -116,12 +116,12 @@ A figure that fails a rule is stored as not published, never as zero.
 Not enforced.
 The implementing pull request adds the checks below, and its review checks that each one exists:
 
-- UsageDisclosureTest covers the floors and rounding at 9, 10, 999 and 1,000. It covers a count that rounds to zero. It covers dominance at exactly a third and just above it.
-- UsageReleaseServiceTest checks which periods the server releases. It releases no period before its due time, and nothing while the page is off. The next run after that releases every due period after the latest stored one, in order. With no period stored, the next run makes the first release, also after the page was off. With no reviews, or with trials only, it stores nothing.
-- UsageReleaseIntegrationTest counts each of the five figures from real rows. It counts a developer of two workspaces once, and leaves out trials. It fails when a period is computed again, released twice, changed, deleted or overlaps another.
-- PublicUsageControllerIntegrationTest checks that, while the page is off, each route returns 404 with `Cache-Control: no-store`. It fails when a route shows a withdrawn figure. It checks the cache headers and the audit records. The test withdraws a visible figure and sends the earlier ETag. The server returns 200 with a new ETag. The test then turns the page off and sends that latest ETag. The server returns 404 with `no-store`.
+- `UsageDisclosureTest` covers the floors and rounding at 9, 10, 999 and 1,000. It covers a count that rounds to zero. It covers dominance at exactly a third and just above it.
+- `UsageReleaseServiceTest` checks which periods the server releases. It releases no period before its due time, and nothing while the page is off. The next run after that releases every due period after the latest stored one, in order. With no period stored, the next run makes the first release, also after the page was off. With no reviews, or with trials only, it stores nothing.
+- `UsageReleaseIntegrationTest` counts each of the five figures from real rows. It counts a developer of two workspaces once, and leaves out trials. It fails when a period is computed again, released twice, changed, deleted or overlaps another.
+- `PublicUsageControllerIntegrationTest` checks that, while the page is off, each route returns 404 with `Cache-Control: no-store`. It fails when a route shows a withdrawn figure. It checks the cache headers and the audit records. The test withdraws a visible figure and sends the earlier ETag. The server returns 200 with a new ETag. The test then turns the page off and sends that latest ETag. The server returns 404 with `no-store`.
 - `ResponsePeopleCountTest` requires the count of developers to be a `ShownCount`.
-- The implementing pull request adds the admin guide page **Publish Hephaestus in numbers** and links it from this ADR. The page describes how to turn the page on and how to withdraw. It names the delay of 5 minutes.
+- The implementing pull request adds the admin guide page [Publish Hephaestus in numbers](../admin/public-usage.mdx) and links it from this ADR. The page describes how to turn the page on and how to withdraw. It names the delay of 5 minutes.
 
 ## Revisit trigger
 

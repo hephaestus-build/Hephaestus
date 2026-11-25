@@ -434,6 +434,9 @@ hephaestus:
             public-activity:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY:60}
                 period: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD:1m}
+            public-usage:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_USAGE_CAPACITY:60}
+                period: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_USAGE_PERIOD:1m}
             sync-trigger:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}

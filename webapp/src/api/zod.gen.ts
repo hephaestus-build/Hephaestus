@@ -265,6 +265,8 @@ export const zAuthEventEventType = z.enum([
 	"LOGIN_PROVIDER_DELETED",
 	"SILENT_MODE_CHANGED",
 	"PUBLIC_ACTIVITY_CHANGED",
+	"PUBLIC_USAGE_CHANGED",
+	"PUBLIC_USAGE_WITHDRAWN",
 	"PRODUCT_FEEDBACK_DESTINATIONS_CHANGED",
 	"PRODUCT_FEEDBACK_CLEANUP_CONFIRMED",
 	"PRODUCT_FEEDBACK_FILED_BY_ADMIN",
@@ -3212,6 +3214,46 @@ export const zPublicActivityWorkspaceSettings = z.object({
 });
 
 /**
+ * The figures of one released half-year. Each is rounded down, and null when it is not published. No figure counts
+ * one workspace or one person.
+ */
+export const zPublicUsageFigures = z.object({
+	feedbackDelivered: z.int().optional(),
+	practiceReviews: z.int().optional(),
+	reviewedPeople: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	reviewedWork: z.int().optional(),
+	workspaces: z.int().optional(),
+});
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zPublicUsageStatus = z.string();
+
+/**
+ * One released half-year of the public usage page.
+ */
+export const zPublicUsagePeriod = z.object({
+	figures: zPublicUsageFigures,
+	firstDay: z.iso.date().pipe(z.coerce.date()),
+	lastDay: z.iso.date().pipe(z.coerce.date()),
+	period: z.string(),
+	releasedOn: z.iso.date().pipe(z.coerce.date()),
+	status: zPublicUsageStatus,
+});
+
+/**
+ * Every released half-year of the public usage page, newest first (ADR 0153).
+ */
+export const zPublicUsage = z.object({
+	periods: z.array(zPublicUsagePeriod),
+});
+
+/**
  * Vendor API rate-limit observation, read from in-memory trackers (not persisted across restarts). Every field except observedAt is present only if the vendor actually reported it.
  */
 export const zRateLimitSnapshot = z.object({
@@ -5913,6 +5955,10 @@ export const zUpdateProductFeedbackSharing = z.object({
 	mention: z.boolean(),
 });
 
+export const zUpdatePublicUsagePolicy = z.object({
+	allowed: z.boolean(),
+});
+
 export const zUpdateReviewBatchStatusRequest = z.object({
 	status: zReviewBatchStatus,
 });
@@ -6018,6 +6064,28 @@ export const zUpdateWorkspacePublicActivityRequest = z.object({
  */
 export const zUpdateWorkspaceTokenRequest = z.object({
 	personalAccessToken: z.string().min(1),
+});
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zUsageFigure = z.string();
+
+/**
+ * A withdrawn period, or one withdrawn figure of it.
+ */
+export const zPublicUsageWithdrawal = z.object({
+	figure: zUsageFigure.optional(),
+	period: z.string().regex(/\d{4}-(04|10)/),
+});
+
+/**
+ * The instance admin's view of the public usage page: whether it is on, and each withdrawal.
+ */
+export const zPublicUsagePolicy = z.object({
+	allowed: z.boolean(),
+	withdrawals: z.array(zPublicUsageWithdrawal),
+	withdrawalsUnreadable: z.boolean(),
 });
 
 /**
@@ -6377,6 +6445,16 @@ export const zConversationThread = z.object({
 	conversationId: z.uuid().optional(),
 	parent: zConversationEntry,
 	replies: zCursorPageDtoConversationEntry,
+});
+
+/**
+ * A withdrawal request: one figure of a period, or the whole period, said explicitly. A body that names neither, such
+ * as one with a misspelled field, is refused, so a typo can never withdraw a whole period for good.
+ */
+export const zWithdrawPublicUsage = z.object({
+	figure: zUsageFigure.optional(),
+	period: z.string().regex(/\d{4}-(04|10)/),
+	wholePeriod: z.boolean().optional(),
 });
 
 export const zWithheldScanReportItem = z.object({

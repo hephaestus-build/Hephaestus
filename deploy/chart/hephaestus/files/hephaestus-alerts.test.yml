@@ -178,6 +178,26 @@ tests:
               summary: The outbox could not record an action's result or end, so its email, issue or record did not move on
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a failed release of Hephaestus in numbers fires
+    interval: 1m
+    input_series:
+      - series: 'practice_usage_release_runs_total{job="hephaestus",instance="server:9090",outcome="success"}'
+        values: "0 1 1 1 1"
+      - series: 'practice_usage_release_runs_total{job="hephaestus",instance="server:9090",outcome="failure"}'
+        values: "_ _ _ 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusUsageReleaseFailing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusUsageReleaseFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Hephaestus in numbers could not release its due half-years; the page keeps showing the last release
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: an outbox failure recorded before the first scrape fires
     interval: 1m
     input_series:

@@ -89,6 +89,8 @@ import type {
 	GetPublicActivityPersonResponse,
 	GetPublicActivityPersonWorkResponse,
 	GetPublicActivityResponse,
+	GetPublicUsagePeriodResponse,
+	GetPublicUsageResponse,
 	GetReviewFeedbackResponse,
 	GetReviewLineageResponse,
 	GetReviewOverviewResponse,
@@ -796,6 +798,32 @@ export const makeMyProductFeedbackPrivateResponseTransformer = async (
 	data: any,
 ): Promise<MakeMyProductFeedbackPrivateResponse> => {
 	data = myProductFeedbackSchemaResponseTransformer(data);
+	return data;
+};
+
+const publicUsagePeriodSchemaResponseTransformer = (data: any) => {
+	data.firstDay = new Date(data.firstDay);
+	data.lastDay = new Date(data.lastDay);
+	data.releasedOn = new Date(data.releasedOn);
+	return data;
+};
+
+const publicUsageSchemaResponseTransformer = (data: any) => {
+	data.periods = data.periods.map((item: any) => publicUsagePeriodSchemaResponseTransformer(item));
+	return data;
+};
+
+export const getPublicUsageResponseTransformer = async (
+	data: any,
+): Promise<GetPublicUsageResponse> => {
+	data = publicUsageSchemaResponseTransformer(data);
+	return data;
+};
+
+export const getPublicUsagePeriodResponseTransformer = async (
+	data: any,
+): Promise<GetPublicUsagePeriodResponse> => {
+	data = publicUsagePeriodSchemaResponseTransformer(data);
 	return data;
 };
 

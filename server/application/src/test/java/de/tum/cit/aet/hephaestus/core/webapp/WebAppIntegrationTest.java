@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.tum.cit.aet.hephaestus.core.settings.spi.PublicUsagePolicy;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import jakarta.servlet.Filter;
@@ -25,7 +26,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.json.JsonCompareMode;
+import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -47,6 +51,18 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private PublicUsagePolicy publicUsage;
+
+    /** Runs the background read of the switch, as the scheduler does on a server; tests run no scheduler. */
+    private void readTheSwitchInTheBackground() {
+        Object policy = AopTestUtils.getTargetObject(publicUsage);
+        ReflectionTestUtils.invokeMethod(policy, "refreshLastKnownAllowed");
+    }
 
     /** MockMvc runs only the filters it is given: the host rules, then Spring Security. */
     @Autowired
@@ -91,6 +107,35 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
         mvc().perform(head("/w/acme"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Security-Policy", containsString("'strict-dynamic'")));
+    }
+
+    private void switchPublicUsage(boolean on) {
+        jdbc.update(
+                "INSERT INTO instance_settings (id, silent_mode_engaged, version, public_usage_allowed)"
+                        + " VALUES (1, true, 0, ?) ON CONFLICT (id) DO UPDATE SET public_usage_allowed = ?",
+                on,
+                on);
+    }
+
+    private void expectPublicUsage(boolean on) throws Exception {
+        for (var request : new MockHttpServletRequestBuilder[] {get("/"), get("/w/acme/practices")}) {
+            mvc().perform(request)
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("\"publicUsage\":" + on + "}")));
+        }
+    }
+
+    @Test
+    void shouldTellThePageWhetherHephaestusInNumbersIsOnFromTheBackgroundRead() throws Exception {
+        switchPublicUsage(true);
+        readTheSwitchInTheBackground();
+        expectPublicUsage(true);
+
+        // A page load never reads the database: the switch shows only after the next background read.
+        switchPublicUsage(false);
+        expectPublicUsage(true);
+        readTheSwitchInTheBackground();
+        expectPublicUsage(false);
     }
 
     @Test

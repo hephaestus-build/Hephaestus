@@ -88,6 +88,9 @@ public class WorkspaceScopedTables {
             "instance_settings",
             // The releases this instance started; no tenant dimension exists
             "release_start",
+            // Hephaestus in numbers (ADR 0153): instance totals after the disclosure rules, never a raw or
+            // per-workspace count
+            "usage_release",
             // Event ids and step names; each row is owned by its provider event and deleted with it.
             "provider_event_step",
             // Native-account email subscriptions are independent of workspace membership.

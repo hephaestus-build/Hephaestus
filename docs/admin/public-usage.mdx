@@ -1,0 +1,169 @@
+---
+title: Publish Hephaestus in numbers
+description: Turn on the public page that shows instance totals once each half-year, and withdraw a released period or figure.
+page_type: how-to
+---
+
+**Hephaestus in numbers** shows that your instance is in use, to anyone and without sign-in.
+The server publishes it through `GET /api/public/usage` and `GET /api/public/usage/{period}`.
+Each half-year, it shows five totals: workspaces, developers whose work was reviewed, reviewed work, practice reviews, and practice feedback delivered.
+The page is off by default.
+[ADR 0153](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0153-a-public-page-shows-instance-reach-released-once-each-half-year.md) records the rules.
+
+## How the server makes the figures
+
+- A period is a half-year in UTC: 1 October to 31 March, or 1 April to 30 September.
+- The server releases a period 14 days after it ends. It computes the period once and stores only the figures that it may show. It never computes the period again.
+- The first release covers every closed half-year since the first practice review of the instance.
+- A period shows figures only if it counts at least 5 workspaces and at least 5 developers. Otherwise the page shows "Not enough activity to publish."
+- The server rounds each count down. Below 1,000, it rounds to a multiple of 10. From 1,000, it rounds to a multiple of 100. A count that rounds to zero is not shown.
+- A figure that one workspace makes up more than a third of is not shown.
+- Trials count nowhere.
+
+A hidden figure reads "Not published". The page does not tell why.
+
+## Before you start
+
+- You need the instance admin role and a recent sign-in.
+- Add the page to your privacy notice. The page shows only rounded totals of the instance, and no person or workspace.
+
+## Turn on the page
+
+Set the chart value, then run the install command again:
+
+```yaml title="values.yaml"
+config:
+  publicUsage:
+    # Turns on Hephaestus in numbers.
+    enabled: true
+```
+
+The server checks each hour whether a period is due.
+The first release follows at the next check after you turn on the page.
+It needs a half-year that ended at least 14 days ago, with a practice review that is not a trial.
+
+An instance admin can also turn the page on or off with `PUT /api/admin/settings/public-usage` and the body `{"allowed": true}`.
+A saved choice takes precedence over the chart value, and the audit log records each change as `PUBLIC_USAGE_CHANGED`.
+
+## Withdraw a period or a figure
+
+Withdraw a released period, or one of its figures, when a figure must not stay public.
+A withdrawal is final. You cannot show the figure again.
+
+1. To withdraw a whole released period, send `POST /api/admin/settings/public-usage/withdrawals` with `{"period": "2026-04", "wholePeriod": true}`.
+2. To withdraw one figure, send the figure instead, such as `{"period": "2026-04", "figure": "REVIEWED_PEOPLE"}`.
+   A body with neither, or with both, is refused. A period that is not released is refused.
+   The figures are `WORKSPACES`, `REVIEWED_PEOPLE`, `REVIEWED_WORK`, `PRACTICE_REVIEWS` and `FEEDBACK_DELIVERED`.
+
+The server stores each withdrawal in the instance settings, and the audit log records it as `PUBLIC_USAGE_WITHDRAWN`.
+A shared cache can keep a response for 5 minutes. A request that starts more than 5 minutes after the change shows it. A page that is already open keeps what it loaded.
+
+## Keep copies outside the database
+
+A restore or a rollback can lose released half-years and withdrawals, with their audit events.
+So keep two copies outside the database, with your restricted incident records:
+
+- After each withdrawal, save the response of `GET /api/admin/settings/public-usage`. It lists every withdrawal.
+  If it says `"withdrawalsUnreadable": true`, a stored withdrawal cannot be read, and the page hides every figure.
+  The list is then incomplete. Repair the stored withdrawals before you rely on the copy.
+- Save the released rows from the database after each release:
+
+  ```bash
+  tmp=$(mktemp usage-release.sql.XXXXXX) &&
+  kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
+    sh -c 'exec pg_dump --data-only --inserts --on-conflict-do-nothing --table=usage_release -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+    > "$tmp" && mv "$tmp" usage-release.sql || { rm -f "$tmp"; false; }
+  ```
+
+  Each run writes its own temporary file and replaces the saved copy only when the dump succeeds.
+  If the dump fails, the command removes the temporary file and exits with an error.
+
+  Do not save `GET /api/public/usage` for this. A shared cache can answer it with an older list for 5 minutes.
+
+The server counts each released half-year in the metric `practice_usage_releases_total`.
+Save the rows again each time it grows.
+The metric shows a release only at the next scrape, so it is a prompt to save, not a proof that a copy is complete.
+
+## Recover after a restore or a rollback
+
+Keep the page off through every step.
+
+A restore can lose the writes after its recovery point: a release, or a withdrawal.
+The original server can write until every server Pod stops, or until its database writes are blocked.
+Record that moment as the cutoff. An admin can still withdraw a figure after an incident starts.
+Your copies are complete only if one of these holds:
+
+- The restore recovered the database through the cutoff, with no lost writes.
+- Your copies hold each release and each withdrawal between the recovery point and the cutoff.
+  For releases, start one scrape interval before the recovery point. The metric shows a release only at the next scrape.
+
+If you cannot show either, keep the page off.
+
+If the restored release is older than Hephaestus in numbers, do these steps after the upgrade that adds it.
+The released rows come first, because the server refuses a withdrawal of a half-year that is not released.
+
+1. Load the saved rows into the database:
+
+   ```bash
+   kubectl -n hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < usage-release.sql
+   ```
+
+2. List the released half-years with `SELECT to_char(period_start, 'YYYY-MM') FROM usage_release ORDER BY 1;`, run in the same way.
+   Check that the list holds each half-year of the saved rows.
+   A half-year that was due while the page was off was never released. It has no row, and the server releases it when you turn on the page.
+3. Reapply each saved withdrawal, as [Withdraw a period or a figure](#withdraw-a-period-or-a-figure) describes.
+4. Send `GET /api/admin/settings/public-usage`.
+   Check that it lists each saved withdrawal and says `"withdrawalsUnreadable": false`.
+5. Turn on the page only if steps 2 and 4 hold, and your copies are complete.
+
+If a check fails, keep the page off.
+The server would compute a released half-year again, from records that changed since.
+
+## Check that it worked
+
+1. Send `GET /api/public/usage` without sign-in.
+2. Check that the response lists the released half-years.
+3. Check that it has the header `Cache-Control: max-age=300, must-revalidate, public`.
+
+## Undo
+
+1. Send `PUT /api/admin/settings/public-usage` with `{"allowed": false}`.
+   A choice that an admin saved takes precedence over the chart value.
+   So `config.publicUsage.enabled: false` alone does not turn off a page that an admin turned on.
+   Use the chart value only for an instance where no admin saved a choice.
+2. After 5 minutes, send `GET /api/public/usage` without sign-in, and check that it answers 404.
+
+The released periods stay stored. When you turn on the page again, it shows them again, with each withdrawal still in place.
+
+## Rate limit
+
+The page has its own rate limit for each client address: 60 reads each minute.
+
+## Roll back an upgrade
+
+A rollback restores a database from before Hephaestus in numbers.
+That database has no released half-year, no saved choice and no withdrawal.
+
+1. Set `server.stopped=true`, and wait until no server Pod runs.
+   No release or withdrawal can then follow your copies.
+2. Save the released rows, as [Keep copies outside the database](#keep-copies-outside-the-database) shows.
+   Save the withdrawals from the stopped database too:
+
+   ```bash
+   tmp=$(mktemp usage-withdrawals.json.XXXXXX) &&
+   kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT public_usage_withdrawn FROM instance_settings WHERE id = 1"' \
+     > "$tmp" && mv "$tmp" usage-withdrawals.json || { rm -f "$tmp"; false; }
+   ```
+
+   Each entry is a withdrawn half-year, such as `2026-04`, or one of its figures, such as `2026-04/REVIEWED_PEOPLE`.
+   If either command exits with an error, stop. Do not restore the database until both copies are saved.
+3. Follow [Roll back](./upgrade-to-1-0#roll-back): restore the verified backup into the database, then install the previous release.
+   Do not start the previous release on the upgraded database.
+   Its audit log does not know the events `PUBLIC_USAGE_CHANGED` and `PUBLIC_USAGE_WITHDRAWN`.
+   A page of the audit log that holds one of them fails to load, also for the events beside it.
+4. Before you upgrade again, set `config.publicUsage.enabled: false`. The saved choice is gone, so the chart value decides.
+5. After the upgrade, follow [Recover after a restore or a rollback](#recover-after-a-restore-or-a-rollback).
+
+The migration refuses its own rollback while released half-years, a saved choice or a withdrawal exist.

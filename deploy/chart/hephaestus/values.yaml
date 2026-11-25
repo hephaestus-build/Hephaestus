@@ -399,6 +399,10 @@ config:
   publicActivity:
     enabled: false
     repositoryVisibilityMaxAge: 48h
+  # Hephaestus in numbers: a public page of instance totals, released once each half-year. An instance
+  # admin can change it with PUT /api/admin/settings/public-usage: docs/admin/public-usage.mdx.
+  publicUsage:
+    enabled: false
   # Readers' browsers report how fast pages load and respond. In the EU this can need consent or a
   # documented legal basis: docs/admin/legal-pages.mdx.
   pageExperienceMetrics: false

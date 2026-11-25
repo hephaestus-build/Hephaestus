@@ -65,7 +65,8 @@ class ScheduledJobLockTest {
             Map.entry("ConversationFeedbackTtlSweeper#sweep", "ROW"),
             Map.entry("FilingService#fileDue", "ROW"),
             Map.entry("FilingService#measureWaiting", "LOCAL"),
-            Map.entry("RoutingService#routeAnswered", "ROW"));
+            Map.entry("RoutingService#routeAnswered", "ROW"),
+            Map.entry("PublicUsagePolicyService#refreshLastKnownAllowed", "LOCAL"));
 
     private static final URL MAIN_CLASSES =
             Application.class.getProtectionDomain().getCodeSource().getLocation();

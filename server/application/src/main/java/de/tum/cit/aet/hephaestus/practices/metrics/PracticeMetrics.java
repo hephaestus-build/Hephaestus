@@ -16,6 +16,8 @@ public final class PracticeMetrics {
     public static final String FEEDBACK_THREAD_ACTOR_MISMATCH = "practice.feedback.thread.actor.mismatch";
     public static final String RESULT_RECORDED = "practice.result.recorded";
     public static final String RESULT_MARKED = "practice.result.marked";
+    public static final String USAGE_RELEASE_RUNS = "practice.usage.release.runs";
+    public static final String USAGE_RELEASES = "practice.usage.releases";
 
     private PracticeMetrics() {}
 }

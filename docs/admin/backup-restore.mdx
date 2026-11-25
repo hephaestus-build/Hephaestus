@@ -267,8 +267,11 @@ Its lockdown SQL changes the control settings of the clone.
    It turns on silent mode, pauses feedback and review triggers in each workspace, and turns off each conversation model.
    If it prints `restore clone lockdown did not engage`, stop.
 7. Resolve provider write receipts before the server starts.
-8. Upgrade with `migration.enabled=true` and `server.stopped=false`. Verify the migration, readiness and authenticated reads.
-9. To run test reviews on the clone, use only controlled providers.
+8. Upgrade with `migration.enabled=true` and `server.stopped=true`. Wait until the migration Job of the revision is `Complete`.
+   Then turn off Hephaestus in numbers, as step 6 of [Recover the live installation](#recover-the-live-installation) describes.
+   The page answers without sign-in, and the backup can be older than a withdrawal.
+9. Upgrade with `server.stopped=false`. Verify the migration, readiness and authenticated reads.
+10. To run test reviews on the clone, use only controlled providers.
    Follow [Prove silence](./silent-deployment#prove-silence) before you open any external destination.
    Before you turn off silent mode, replace the token of each GitLab workspace.
    Use a token for a GitLab group that you control.
@@ -309,6 +312,11 @@ Scheduled sync cannot recover every event in the gap.
    The last line prints `t`.
    Check the delivery status, the review triggers and the conversation models of each workspace against the intended live settings.
 6. Upgrade with `migration.enabled=true` and `server.stopped=true`. Wait until the migration Job of the revision is `Complete`.
+   Before any server Pod starts, turn off Hephaestus in numbers, and check that it reads `f`. Run the statements as in step 5:
+   `UPDATE instance_settings SET public_usage_allowed = FALSE WHERE id = 1;` and `SELECT public_usage_allowed FROM instance_settings WHERE id = 1;`.
+   A release that is older than Hephaestus in numbers has no such column, and the statements fail.
+   Then skip them, and set `config.publicUsage.enabled: false` before you upgrade to a release that has it.
+   A backup can be older than a withdrawal, and no Pod may show a withdrawn figure again.
 7. Reapply the erasures after the recovery point, as [Reapply erasures after a restore](./erasure-recovery) describes.
    Do this also when no erasure occurred: the manifest then declares that no erasure followed the recovery point.
 8. Upgrade with your site values, the values of step 3 and `server.stopped=false`.
@@ -316,6 +324,8 @@ Scheduled sync cannot recover every event in the gap.
    If a value cannot be decrypted, keep the signing keys. Diagnose a missing encryption key apart from corrupt signing data.
 9. From the restricted incident record, reapply the account suspensions, session revocations and consent withdrawals after the backup.
    Do this before access or delivery resumes.
+   Recover Hephaestus in numbers before you turn on its page, as [Recover after a restore or a rollback](./public-usage#recover-after-a-restore-or-a-rollback) describes.
+   Its page stays off from step 6 until then.
 10. Remove the values of step 3, and upgrade with your site values. Keep silent mode on.
 11. Recover the provider writes and deliveries of the gap, as [Reconcile provider writes after a restore](./reconcile-after-restore) describes.
 12. Prove silence and turn off silent mode, as [Prove silence, then turn off silent mode](./silent-deployment) describes.

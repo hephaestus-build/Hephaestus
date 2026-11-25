@@ -148,6 +148,7 @@
 	"docs/admin/product-feedback.mdx",
 	"docs/admin/production-operations-runbook.mdx",
 	"docs/admin/public-activity.mdx",
+	"docs/admin/public-usage.mdx",
 	"docs/admin/pull-based-deployment.mdx",
 	"docs/admin/reconcile-after-restore.mdx",
 	"docs/admin/release-image-lock.mdx",

@@ -53,6 +53,7 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 configured.gitlabPreflight(),
                 configured.mcpCall(),
                 configured.publicActivity(),
+                configured.publicUsage(),
                 configured.browserReports());
         var first = new AuthRateLimitFilter(properties, buckets, objectMapper, metrics);
         var second = new AuthRateLimitFilter(properties, buckets, objectMapper, metrics);

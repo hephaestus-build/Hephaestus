@@ -408,6 +408,8 @@ export type AuthEventEventType =
 	| "LOGIN_PROVIDER_DELETED"
 	| "SILENT_MODE_CHANGED"
 	| "PUBLIC_ACTIVITY_CHANGED"
+	| "PUBLIC_USAGE_CHANGED"
+	| "PUBLIC_USAGE_WITHDRAWN"
 	| "PRODUCT_FEEDBACK_DESTINATIONS_CHANGED"
 	| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
 	| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
@@ -5433,6 +5435,90 @@ export type PublicActivityWorkspaceSettings = {
 };
 
 /**
+ * Every released half-year of the public usage page, newest first (ADR 0153).
+ */
+export type PublicUsage = {
+	periods: Array<PublicUsagePeriod>;
+};
+
+/**
+ * The figures of one released half-year. Each is rounded down, and null when it is not published. No figure counts
+ * one workspace or one person.
+ */
+export type PublicUsageFigures = {
+	/**
+	 * practice feedback delivered in the period
+	 */
+	feedbackDelivered?: number;
+	/**
+	 * practices checked in the reviews of the period, one per practice and review
+	 */
+	practiceReviews?: number;
+	/**
+	 * distinct people with an observation recorded in the period
+	 */
+	reviewedPeople?: number;
+	/**
+	 * distinct pull requests and merge requests with a judged or reused observation
+	 */
+	reviewedWork?: number;
+	/**
+	 * workspaces with at least one practice review in the period
+	 */
+	workspaces?: number;
+};
+
+/**
+ * One released half-year of the public usage page.
+ */
+export type PublicUsagePeriod = {
+	figures: PublicUsageFigures;
+	/**
+	 * the first day of the period, 1 April or 1 October
+	 */
+	firstDay: string;
+	/**
+	 * the last day of the period, 30 September or 31 March
+	 */
+	lastDay: string;
+	/**
+	 * the key of the period, such as <code>2026-04</code>
+	 */
+	period: string;
+	/**
+	 * the day the server released the period, in UTC
+	 */
+	releasedOn: string;
+	status: PublicUsageStatus;
+};
+
+/**
+ * The instance admin's view of the public usage page: whether it is on, and each withdrawal.
+ */
+export type PublicUsagePolicy = {
+	allowed: boolean;
+	withdrawals: Array<PublicUsageWithdrawal>;
+	/**
+	 * whether a stored withdrawal could not be read. The page then hides every figure, and
+	 * <code>withdrawals</code> lists only the ones that could be read, so the list is not a complete copy to restore from.
+	 */
+	withdrawalsUnreadable: boolean;
+};
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type PublicUsageStatus = string;
+
+/**
+ * A withdrawn period, or one withdrawn figure of it.
+ */
+export type PublicUsageWithdrawal = {
+	figure?: UsageFigure;
+	period: string;
+};
+
+/**
  * Vendor API rate-limit observation, read from in-memory trackers (not persisted across restarts). Every field except observedAt is present only if the vendor actually reported it.
  */
 export type RateLimitSnapshot = {
@@ -7763,6 +7849,10 @@ export type UpdateProductFeedbackSharing = {
 	mention: boolean;
 };
 
+export type UpdatePublicUsagePolicy = {
+	allowed: boolean;
+};
+
 export type UpdateReviewBatchStatusRequest = {
 	status: ReviewBatchStatus;
 };
@@ -7974,6 +8064,11 @@ export type UpdateWorkspaceTokenRequest = {
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
  */
+export type UsageFigure = string;
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
 export type UsageFundingSource = string;
 
 export type UsagePricingState = "PRICED" | "NO_CHARGE" | "UNPRICED";
@@ -8158,6 +8253,19 @@ export type WeeklyDigestFeedback = {
 	 * A workspace admin withdrew it; only the practice is shown
 	 */
 	withdrawn: boolean;
+};
+
+/**
+ * A withdrawal request: one figure of a period, or the whole period, said explicitly. A body that names neither, such
+ * as one with a misspelled field, is refused, so a typo can never withdraw a whole period for good.
+ */
+export type WithdrawPublicUsage = {
+	figure?: UsageFigure;
+	period: string;
+	/**
+	 * true withdraws every figure of the period
+	 */
+	wholePeriod?: boolean;
 };
 
 export type WithheldScanReportItem = {
@@ -11881,6 +11989,98 @@ export type UpdatePublicActivityPolicyResponses = {
 export type UpdatePublicActivityPolicyResponse =
 	UpdatePublicActivityPolicyResponses[keyof UpdatePublicActivityPolicyResponses];
 
+export type GetPublicUsagePolicyData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/admin/settings/public-usage";
+};
+
+export type GetPublicUsagePolicyErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPublicUsagePolicyError =
+	GetPublicUsagePolicyErrors[keyof GetPublicUsagePolicyErrors];
+
+export type GetPublicUsagePolicyResponses = {
+	/**
+	 * OK
+	 */
+	200: PublicUsagePolicy;
+};
+
+export type GetPublicUsagePolicyResponse =
+	GetPublicUsagePolicyResponses[keyof GetPublicUsagePolicyResponses];
+
+export type UpdatePublicUsagePolicyData = {
+	body: UpdatePublicUsagePolicy;
+	path?: never;
+	query?: never;
+	url: "/admin/settings/public-usage";
+};
+
+export type UpdatePublicUsagePolicyErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type UpdatePublicUsagePolicyError =
+	UpdatePublicUsagePolicyErrors[keyof UpdatePublicUsagePolicyErrors];
+
+export type UpdatePublicUsagePolicyResponses = {
+	/**
+	 * OK
+	 */
+	200: PublicUsagePolicy;
+};
+
+export type UpdatePublicUsagePolicyResponse =
+	UpdatePublicUsagePolicyResponses[keyof UpdatePublicUsagePolicyResponses];
+
+export type WithdrawPublicUsageData = {
+	body: WithdrawPublicUsage;
+	path?: never;
+	query?: never;
+	url: "/admin/settings/public-usage/withdrawals";
+};
+
+export type WithdrawPublicUsageErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type WithdrawPublicUsageError = WithdrawPublicUsageErrors[keyof WithdrawPublicUsageErrors];
+
+export type WithdrawPublicUsageResponses = {
+	/**
+	 * OK
+	 */
+	200: PublicUsagePolicy;
+};
+
+export type WithdrawPublicUsageResponse =
+	WithdrawPublicUsageResponses[keyof WithdrawPublicUsageResponses];
+
 export type AdminUpdateSilentModeData = {
 	body: UpdateSilentModeRequest;
 	headers?: {
@@ -13067,6 +13267,76 @@ export type MakeMyProductFeedbackPrivateResponses = {
 
 export type MakeMyProductFeedbackPrivateResponse =
 	MakeMyProductFeedbackPrivateResponses[keyof MakeMyProductFeedbackPrivateResponses];
+
+export type GetPublicUsageData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/public/usage";
+};
+
+export type GetPublicUsageErrors = {
+	/**
+	 * If-Match names another version
+	 */
+	412: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPublicUsageError = GetPublicUsageErrors[keyof GetPublicUsageErrors];
+
+export type GetPublicUsageResponses = {
+	/**
+	 * Released periods, newest first
+	 */
+	200: PublicUsage;
+};
+
+export type GetPublicUsageResponse = GetPublicUsageResponses[keyof GetPublicUsageResponses];
+
+export type GetPublicUsagePeriodData = {
+	body?: never;
+	path: {
+		period: string;
+	};
+	query?: never;
+	url: "/public/usage/{period}";
+};
+
+export type GetPublicUsagePeriodErrors = {
+	/**
+	 * If-Match names another version
+	 */
+	412: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPublicUsagePeriodError =
+	GetPublicUsagePeriodErrors[keyof GetPublicUsagePeriodErrors];
+
+export type GetPublicUsagePeriodResponses = {
+	/**
+	 * The released period
+	 */
+	200: PublicUsagePeriod;
+};
+
+export type GetPublicUsagePeriodResponse =
+	GetPublicUsagePeriodResponses[keyof GetPublicUsagePeriodResponses];
 
 export type GetPublicActivityData = {
 	body?: never;

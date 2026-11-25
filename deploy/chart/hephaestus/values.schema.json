@@ -1222,6 +1222,7 @@
 				"researchOrganization",
 				"workspaceCreationPolicy",
 				"publicActivity",
+				"publicUsage",
 				"pageExperienceMetrics",
 				"browserFaultReports",
 				"mcpEnabled",
@@ -1308,6 +1309,16 @@
 						},
 						"repositoryVisibilityMaxAge": {
 							"$ref": "#/definitions/duration"
+						}
+					}
+				},
+				"publicUsage": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["enabled"],
+					"properties": {
+						"enabled": {
+							"type": "boolean"
 						}
 					}
 				},

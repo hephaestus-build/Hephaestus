@@ -22,6 +22,7 @@ import org.springframework.validation.annotation.Validated;
  *   <li>User-view selection and normal-app reads — keyed by admin account</li>
  *   <li>{@code DELETE /user} — keyed by account</li>
  *   <li>{@code POST /user/exports} — keyed by account</li>
+ *   <li>{@code GET /public/usage} and {@code GET /public/usage/*} — keyed by client IP</li>
  *   <li>{@code POST /web-vitals} and {@code POST /browser-faults} — keyed by account, IP fallback</li>
  * </ul>
  *
@@ -53,6 +54,7 @@ public record AuthRateLimitProperties(
         @Valid @NotNull Limit gitlabPreflight,
         @Valid @NotNull Limit mcpCall,
         @Valid @NotNull Limit publicActivity,
+        @Valid @NotNull Limit publicUsage,
         @Valid @NotNull Limit browserReports) {
 
     /**

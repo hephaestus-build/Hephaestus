@@ -165,7 +165,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "AttemptPublicKey",
             "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
-            "ReleaseStart" // The releases this instance started
+            "ReleaseStart", // The releases this instance started
+            "UsageRelease" // Hephaestus in numbers: instance totals after the disclosure rules (ADR 0153)
             );
 
     @Test

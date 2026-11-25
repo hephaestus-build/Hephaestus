@@ -562,6 +562,15 @@ import type {
 	GetPublicActivityPolicyErrors,
 	GetPublicActivityPolicyResponses,
 	GetPublicActivityResponses,
+	GetPublicUsageData,
+	GetPublicUsageErrors,
+	GetPublicUsagePeriodData,
+	GetPublicUsagePeriodErrors,
+	GetPublicUsagePeriodResponses,
+	GetPublicUsagePolicyData,
+	GetPublicUsagePolicyErrors,
+	GetPublicUsagePolicyResponses,
+	GetPublicUsageResponses,
 	GetRepositoriesToMonitorData,
 	GetRepositoriesToMonitorErrors,
 	GetRepositoriesToMonitorResponses,
@@ -1081,6 +1090,9 @@ import type {
 	UpdatePublicActivityPolicyErrors,
 	UpdatePublicActivityPolicyResponses,
 	UpdatePublicActivityResponses,
+	UpdatePublicUsagePolicyData,
+	UpdatePublicUsagePolicyErrors,
+	UpdatePublicUsagePolicyResponses,
 	UpdateRepositoryVisibilityData,
 	UpdateRepositoryVisibilityErrors,
 	UpdateRepositoryVisibilityResponses,
@@ -1123,6 +1135,9 @@ import type {
 	VerifyPasskeyData,
 	VerifyPasskeyErrors,
 	VerifyPasskeyResponses,
+	WithdrawPublicUsageData,
+	WithdrawPublicUsageErrors,
+	WithdrawPublicUsageResponses,
 	WorkspaceCreateLlmConnectionData,
 	WorkspaceCreateLlmConnectionErrors,
 	WorkspaceCreateLlmConnectionResponses,
@@ -2743,6 +2758,62 @@ export const updatePublicActivityPolicy = <ThrowOnError extends boolean = false>
 	});
 
 /**
+ * Get the instance public usage policy
+ */
+export const getPublicUsagePolicy = <ThrowOnError extends boolean = false>(
+	options?: Options<GetPublicUsagePolicyData, ThrowOnError>,
+): RequestResult<GetPublicUsagePolicyResponses, GetPublicUsagePolicyErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetPublicUsagePolicyResponses,
+		GetPublicUsagePolicyErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/settings/public-usage",
+		...options,
+	});
+
+/**
+ * Turn the public usage page on or off
+ */
+export const updatePublicUsagePolicy = <ThrowOnError extends boolean = false>(
+	options: Options<UpdatePublicUsagePolicyData, ThrowOnError>,
+): RequestResult<UpdatePublicUsagePolicyResponses, UpdatePublicUsagePolicyErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdatePublicUsagePolicyResponses,
+		UpdatePublicUsagePolicyErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/settings/public-usage",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Withdraw a released period or one of its figures from the public usage page, for good
+ */
+export const withdrawPublicUsage = <ThrowOnError extends boolean = false>(
+	options: Options<WithdrawPublicUsageData, ThrowOnError>,
+): RequestResult<WithdrawPublicUsageResponses, WithdrawPublicUsageErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		WithdrawPublicUsageResponses,
+		WithdrawPublicUsageErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/settings/public-usage/withdrawals",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
  * Engage or release the instance-wide silent mode
  */
 export const adminUpdateSilentMode = <ThrowOnError extends boolean = false>(
@@ -3347,6 +3418,29 @@ export const makeMyProductFeedbackPrivate = <ThrowOnError extends boolean = fals
 		url: "/product-feedback/{feedbackId}/make-private",
 		...options,
 	});
+
+/**
+ * Read the released half-years of Hephaestus in numbers
+ */
+export const getPublicUsage = <ThrowOnError extends boolean = false>(
+	options?: Options<GetPublicUsageData, ThrowOnError>,
+): RequestResult<GetPublicUsageResponses, GetPublicUsageErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetPublicUsageResponses, GetPublicUsageErrors, ThrowOnError>({
+		url: "/public/usage",
+		...options,
+	});
+
+/**
+ * Read one released half-year of Hephaestus in numbers
+ */
+export const getPublicUsagePeriod = <ThrowOnError extends boolean = false>(
+	options: Options<GetPublicUsagePeriodData, ThrowOnError>,
+): RequestResult<GetPublicUsagePeriodResponses, GetPublicUsagePeriodErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPublicUsagePeriodResponses,
+		GetPublicUsagePeriodErrors,
+		ThrowOnError
+	>({ url: "/public/usage/{period}", ...options });
 
 /**
  * Read human contributions to public repositories
