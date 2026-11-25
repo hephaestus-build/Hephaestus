@@ -26,23 +26,35 @@ jobs:
           PROBE_KNOWN_HOSTS: ${{ secrets.PUBLIC_PORT_PROBE_KNOWN_HOSTS }}
         run: |
           if [[ -z "$PROBE_HOST" || -z "$PROBE_KEY" || -z "$PROBE_KNOWN_HOSTS" ]]; then
-            echo "The external probe connection is not configured."
-            exit 1
+            echo "Public port probe unavailable. The connection is not configured."
+            exit 2
           fi
           probe_directory="$(mktemp -d)"
           trap 'rm -rf "$probe_directory"' EXIT
           umask 077
           printf '%s\n' "$PROBE_KEY" > "$probe_directory/key"
           printf '%s\n' "$PROBE_KNOWN_HOSTS" > "$probe_directory/known_hosts"
-          if ! probe_result="$(ssh -T -i "$probe_directory/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+          probe_result="$probe_directory/result"
+          probe_status=0
+          ssh -T -i "$probe_directory/key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$probe_directory/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-            -o ClearAllForwardings=yes -- "heph-probe@$PROBE_HOST" 2>/dev/null)"; then
-            echo "The external probe failed or could not connect."
+            -o ClearAllForwardings=yes -- "heph-probe@$PROBE_HOST" > "$probe_result" 2>/dev/null || probe_status=$?
+          passed='Public port verification passed for [1-9][0-9]* hosts on IPv4 and IPv6[.]'
+          failed='Public port verification failed[.] Run the check on the probe host for details[.]'
+          route='Host [1-9][0-9]*, IPv[46]: routing failure[.]'
+          down='Host [1-9][0-9]*, IPv[46]: unreachable [(]expected while down[)][.]'
+          if [[ "$probe_status" -eq 1 ]] \
+            && [[ "$(grep -aEc "^$failed$" "$probe_result" || true)" -eq 1 ]] \
+            && ! grep -aEvq "^($failed|$route|$down)$" "$probe_result"; then
+            grep -aE "^$route$" "$probe_result" || true
+            echo "The external probe reported a failed check."
             exit 1
           fi
-          if ! grep -Eq '^Public port verification passed for [1-9][0-9]* hosts on IPv4 and IPv6\.$' <<< "$probe_result"; then
-            echo "The external probe did not report a complete result."
-            exit 1
+          if [[ "$probe_status" -ne 0 ]] \
+            || [[ "$(grep -aEc "^$passed$" "$probe_result" || true)" -ne 1 ]] \
+            || grep -aEvq "^($passed|$down)$" "$probe_result"; then
+            echo "Public port probe unavailable."
+            exit 2
           fi
-          grep -E '^(Public port verification passed for [1-9][0-9]* hosts on IPv4 and IPv6\.|Host [1-9][0-9]*, IPv[46]: unreachable \(expected while down\)\.)$' <<< "$probe_result"
+          cat "$probe_result"

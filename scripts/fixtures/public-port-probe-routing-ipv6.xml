@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- Probe and target details and individual routing-error port ranges removed. -->
+<nmaprun scanner="nmap" version="7.94SVN" xmloutputversion="1.05">
+  <scaninfo type="syn" protocol="tcp" numservices="65535" services="1-65535" />
+  <scaninfo type="udp" protocol="udp" numservices="65535" services="1-65535" />
+  <host>
+    <ports>
+      <extraports state="filtered" count="66448">
+        <extrareasons reason="no-response" count="64566" proto="tcp" />
+        <extrareasons reason="host-unreach" count="969" proto="tcp" />
+        <extrareasons reason="host-unreach" count="913" proto="udp" />
+      </extraports>
+      <extraports state="closed|filtered" count="64622">
+        <extrareasons reason="no-response" count="64622" proto="udp" />
+      </extraports>
+    </ports>
+  </host>
+  <runstats>
+    <finished exit="success" />
+    <hosts up="1" down="0" total="1" />
+  </runstats>
+</nmaprun>
