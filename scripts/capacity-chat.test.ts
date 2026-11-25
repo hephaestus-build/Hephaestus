@@ -5,17 +5,24 @@ import { test, type TestContext } from "node:test";
 import { runCapacityChat } from "./lib/capacity-chat.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 
+function frame(name: string, value: unknown) {
+	return new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+}
+
 function fixture(
 	context: TestContext,
-	mode: "resync" | "abort-post" | "cleanup-fails" | "no-snapshot",
+	mode: "resync" | "abort-post" | "cleanup-fails" | "no-snapshot" | "early-done",
 ) {
 	const abort = new AbortController();
 	const active = new Map<string, Record<string, unknown>>();
 	const entries: { id: string; turnStatus: string }[] = [];
 	const counts = { posts: 0, stops: 0, snapshots: 0, entryReads: 0 };
 	let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+	let drained: ((value: undefined) => void) | undefined;
+	// Frames the stream hands over one at a time, each when the client asks for the next.
+	const held: Uint8Array[] = [];
 	const event = (name: string, value: unknown) => {
-		stream?.enqueue(new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`));
+		stream?.enqueue(frame(name, value));
 	};
 	context.mock.method(
 		globalThis,
@@ -32,6 +39,15 @@ function fixture(
 			if (url.endsWith("/events")) {
 				return new Response(
 					new ReadableStream<Uint8Array>({
+						// The client asks for the next frame only after it has handled the one before.
+						pull(controller) {
+							const next = held.shift();
+							if (next === undefined) {
+								drained?.(undefined);
+							} else {
+								controller.enqueue(next);
+							}
+						},
 						start(controller) {
 							stream = controller;
 							init?.signal?.addEventListener(
@@ -70,6 +86,20 @@ function fixture(
 				if (mode === "abort-post") {
 					abort.abort();
 					throw new DOMException("fixture response interrupted", "AbortError");
+				}
+				if (mode === "early-done") {
+					// The stream outruns the POST response: a full early buffer, then the turn's end.
+					const read = Promise.withResolvers<undefined>();
+					drained = read.resolve;
+					for (let index = 0; index < 64; index += 1) {
+						held.push(frame("turn", row));
+					}
+					held.push(frame("turn", { ...row, status: "DONE" }));
+					active.delete(id);
+					stream?.enqueue(held.shift() ?? new Uint8Array());
+					// The response waits until the client has read those frames, before it knows the turn's ID.
+					await read.promise;
+					drained = undefined;
 				}
 				if (mode === "resync") {
 					event("turn", row);
@@ -115,6 +145,22 @@ await test("a lag snapshot recovers terminal status through owner entries withou
 	assert.equal(result.done, 3);
 	assert.equal(counts.posts, 3);
 	assert.equal(counts.entryReads, 3);
+	assert.deepEqual(result.cleanup, { stopped: 0, failures: 0, remaining: 0 });
+});
+
+await test("a turn that ends before its POST response still ends when its early buffer is full", async (context) => {
+	const { abort, counts } = fixture(context, "early-done");
+	const result = await runCapacityChat({
+		base: "http://fixture/conversation",
+		tokens: ["synthetic"],
+		signal: abort.signal,
+		thinkMs: 0,
+		// A lost end frame would censor the turn at this timeout instead of ending it DONE.
+		turnTimeoutMs: 3000,
+		onEvent: () => undefined,
+	});
+	assert.equal(result.qualified, true);
+	assert.equal(result.done, counts.posts);
 	assert.deepEqual(result.cleanup, { stopped: 0, failures: 0, remaining: 0 });
 });
 
