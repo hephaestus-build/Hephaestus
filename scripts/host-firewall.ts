@@ -51,7 +51,22 @@ const confirmed = "/etc/hephaestus/host-firewall-confirmed.json";
 const rollback = "hephaestus-host-firewall-rollback";
 const recoveryDirectory = "/run/hephaestus-host-firewall-recovery";
 const recoveryChain = "HEPHAESTUS-RECOVERY";
-const auxiliaryInputChains = ["before-logging", "after-logging", "reject", "track"] as const;
+const inputHooks = [
+	"before-logging",
+	"before",
+	"after",
+	"after-logging",
+	"reject",
+	"track",
+] as const;
+const logOnlyChains = [
+	"before-logging-input",
+	"after-logging-input",
+	"reject-input",
+	"track-input",
+	"logging-allow",
+	"logging-deny",
+] as const;
 const ufw = "/usr/sbin/ufw";
 const systemctl = "/usr/bin/systemctl";
 const ufwDefaults = "/etc/default/ufw";
@@ -284,8 +299,8 @@ export function liveDrift(
 ): string[] {
 	const prefix = family === 4 ? "ufw" : "ufw6";
 	const input = `${prefix}-user-input`;
-	const wanted = rules
-		.filter((rule) => rule.family === undefined || rule.family === family)
+	const familyRules = rules.filter((rule) => rule.family === undefined || rule.family === family);
+	const wanted = familyRules
 		.map((rule) => liveRule(rule, input))
 		.toSorted((left, right) => left.localeCompare(right));
 	const actual = lines
@@ -309,14 +324,17 @@ export function liveDrift(
 	if (actual.join("\n") !== wanted.join("\n")) {
 		problems.push(`IPv${family} live UFW input rules differ.`);
 	}
-	if (lines.some((line) => unmanagedInputRule(line, prefix, family))) {
+	if (
+		lines.some((line) => unmanagedInputRule(line, prefix, family)) ||
+		notLocalDrift(lines, prefix)
+	) {
 		problems.push(`IPv${family} has an unmanaged input rule.`);
 	}
 	if (!guarded && lines.includes(`-A INPUT -j ${recoveryChain}`)) {
 		problems.push(`IPv${family} has an active emergency firewall guard.`);
 	}
 	if (
-		deniesBefore(lines, "INPUT", `${prefix}-before-input`) ||
+		deniesBefore(lines, "INPUT", `${prefix}-before-input`, familyRules) ||
 		deniesBefore(lines, `${prefix}-before-input`, input) ||
 		(lines
 			.slice(0, Math.max(lines.indexOf(`-A INPUT -j ${prefix}-before-input`), 0))
@@ -328,7 +346,7 @@ export function liveDrift(
 	return problems;
 }
 
-function deniesBefore(lines: string[], chain: string, next?: string) {
+function deniesBefore(lines: string[], chain: string, next?: string, rules?: Rule[]) {
 	const hook = next === undefined ? lines.length : lines.indexOf(`-A ${chain} -j ${next}`);
 	return lines.slice(0, Math.max(hook, 0)).some((line) => {
 		const rule = withoutComment(line);
@@ -337,59 +355,126 @@ function deniesBefore(lines: string[], chain: string, next?: string) {
 			(/ -[jg] (?:DROP|REJECT)(?: |$)/u.test(rule) ||
 				(next !== undefined && / -j RETURN(?: |$)/u.test(rule))) &&
 			rule !== `-A ${chain} -m conntrack --ctstate INVALID -j DROP` &&
-			rule !== `-A ${chain} -m rt --rt-type 0 -j DROP`
+			rule !== `-A ${chain} -m rt --rt-type 0 -j DROP` &&
+			(rules === undefined || denyCanBlockInput(rule, rules))
 		);
 	});
+}
+
+function denyCanBlockInput(line: string, rules: Rule[]) {
+	const scope =
+		/^-A INPUT -i (?<device>[\w.:-]+) -p (?<protocol>tcp|udp) -m (?:tcp|udp|multiport) --dports? (?<ports>\d+(?:,\d+)*) -j (?:DROP|REJECT|RETURN)(?: |$)/u.exec(
+			line,
+		)?.groups;
+	if (scope?.device === undefined || scope.ports === undefined) {
+		return true;
+	}
+	// k3s reaches INPUT from its Pod and overlay interfaces. Keep unrelated ingress denies.
+	const ports = new Set(scope.ports.split(",").map(Number));
+	return rules.some(
+		(rule) =>
+			rule.device === scope.device ||
+			(rule.port !== undefined && rule.protocol === scope.protocol && ports.has(rule.port)),
+	);
 }
 
 function withoutComment(line: string) {
 	return line.replaceAll(/ -m comment --comment (?:"(?:[^"\\]|\\.)*"|[^"\s]+)/gu, "");
 }
 
+function notLocalDrift(lines: string[], prefix: string) {
+	const chain = `${prefix}-not-local`;
+	const rules = lines.filter((line) => line.startsWith(`-A ${chain} `)).map(withoutComment);
+	if (rules.length === 0 && !lines.includes(`-A ${prefix}-before-input -j ${chain}`)) {
+		return false;
+	}
+	// The early returns are what keep the final drop from blocking traffic to this host.
+	const stock = [
+		...["LOCAL", "MULTICAST", "BROADCAST"].map(
+			(type) => `-m addrtype --dst-type ${type} -j RETURN`,
+		),
+		`-m limit --limit 3/min --limit-burst 10 -j ${prefix}-logging-deny`,
+		"-j DROP",
+	];
+	return rules.join("\n") !== stock.map((rule) => `-A ${chain} ${rule}`).join("\n");
+}
+
 function unmanagedInputRule(line: string, prefix: string, family: Family) {
 	const [action, chain] = line.split(" ");
 	const policyRule = withoutComment(line);
 	const target = / -[jg] (?<jump>\S+)/u.exec(policyRule)?.groups?.jump;
-	if (
-		action !== "-A" ||
-		target === undefined ||
-		["DROP", "REJECT", "RETURN", "LOG"].includes(target)
-	) {
+	if (action !== "-A" || chain === undefined || target === undefined) {
 		return false;
 	}
+	const match = policyRule.slice(`-A ${chain} `.length);
 	if (chain === "INPUT") {
-		// kube-router marks traffic already admitted by its NetworkPolicies.
-		if (
-			policyRule === "-A INPUT -m mark --mark 0x20000/0x20000 -j ACCEPT" ||
-			policyRule === "-A INPUT -i lo -j ACCEPT"
-		) {
+		return unmanagedKernelInputRule(match, target, prefix);
+	}
+	const hookName = chain.startsWith(`${prefix}-`) ? chain.slice(prefix.length + 1) : "";
+	const observabilityOnly = target === "LOG" || target === "RETURN";
+	if (logOnlyChains.some((name) => hookName === name)) {
+		return (
+			!observabilityOnly &&
+			!(hookName === "before-logging-input" && ["DROP", "REJECT"].includes(target))
+		);
+	}
+	if (hookName === "before-input") {
+		return unmanagedBeforeInputRule(match, target, prefix, family);
+	}
+	switch (hookName) {
+		case "after-input": {
+			return !observabilityOnly && target !== `${prefix}-skip-to-policy-input`;
+		}
+		case "skip-to-policy-input": {
+			return match !== "-j DROP";
+		}
+		case "user-limit": {
+			return (
+				!observabilityOnly &&
+				match !== `-j REJECT --reject-with ${family === 4 ? "icmp" : "icmp6"}-port-unreachable`
+			);
+		}
+		case "user-limit-accept": {
+			return match !== "-j ACCEPT";
+		}
+		default: {
+			// Stock user-input and not-local paths are compared separately, in order where needed.
 			return false;
 		}
-		return ![
+	}
+}
+
+function unmanagedBeforeInputRule(rule: string, target: string, prefix: string, family: Family) {
+	return (
+		!["DROP", "REJECT", "RETURN", "LOG"].includes(target) &&
+		![
+			`-j ${prefix}-not-local`,
+			`-j ${prefix}-user-input`,
+			`-m conntrack --ctstate INVALID -j ${prefix}-logging-deny`,
+		].includes(rule) &&
+		!(target === "ACCEPT" && standardBeforeInputAccept(rule, family))
+	);
+}
+
+function unmanagedKernelInputRule(rule: string, target: string, prefix: string) {
+	// kube-router marks traffic already admitted by its NetworkPolicies.
+	return (
+		rule !== "-m mark --mark 0x20000/0x20000 -j ACCEPT" &&
+		rule !== "-i lo -j ACCEPT" &&
+		rule !== `-j ${recoveryChain}` &&
+		!inputHooks.some((name) => rule === `-j ${prefix}-${name}-input`) &&
+		![
+			"DROP",
+			"REJECT",
+			"RETURN",
+			"LOG",
 			"KUBE-ROUTER-INPUT",
 			"KUBE-FIREWALL",
 			"KUBE-PROXY-FIREWALL",
 			"KUBE-NODEPORTS",
 			"KUBE-EXTERNAL-SERVICES",
 			"KUBE-SERVICES",
-			recoveryChain,
-			...["before-logging", "before", "after", "after-logging", "reject", "track"].map(
-				(name) => `${prefix}-${name}-input`,
-			),
-		].includes(target);
-	}
-	if (chain === `${prefix}-before-input`) {
-		return (
-			!["logging-deny", "not-local", "user-input"].some((name) => target === `${prefix}-${name}`) &&
-			!(
-				target === "ACCEPT" &&
-				standardBeforeInputAccept(policyRule.slice(`-A ${chain} `.length), family)
-			)
-		);
-	}
-	return (
-		(chain === `${prefix}-after-input` && target !== `${prefix}-skip-to-policy-input`) ||
-		auxiliaryInputChains.some((name) => chain === `${prefix}-${name}-input`)
+		].includes(target)
 	);
 }
 
@@ -654,6 +739,8 @@ export function recoveryFilter(family: Family, rules: Rule[], existing: string) 
 		"-P FORWARD DROP",
 		...previousHooks,
 		`-A ${recoveryChain} -i lo -j ACCEPT`,
+		// Keep loopback services private even before k3s inspects the packet.
+		`-A ${recoveryChain} -d ${family === 4 ? "127.0.0.0/8" : "::1/128"} -j DROP`,
 		`-A ${recoveryChain} ${established}${rules.every(({ port }) => port === 22) ? " --ctdir REPLY" : ""} -j ACCEPT`,
 		// Router advertisements, neighbor discovery and packet-too-big keep IPv6 SSH usable.
 		...(family === 6
@@ -817,16 +904,19 @@ function rebuildPolicy(
 	}
 }
 
+function confirmedPolicy(runtime: RecoveryRuntime) {
+	try {
+		return readChange(runtime.confirmed) ?? null;
+	} catch {
+		console.error("Cannot read the last confirmed firewall policy.");
+		return null;
+	}
+}
+
 export function restoreUfw(runtime = hostRecovery) {
 	let change: Change | undefined;
-	let last: Change | undefined;
-	let confirmedError: unknown;
-	try {
-		last = readChange(runtime.confirmed);
-	} catch (error) {
-		confirmedError = error;
-	}
-	const previous = last === undefined ? [] : rulesFor(last.policy);
+	const last = confirmedPolicy(runtime);
+	const previous = last === null ? [] : rulesFor(last.policy);
 	try {
 		change = readChange(runtime.pending);
 	} catch (error) {
@@ -840,8 +930,8 @@ export function restoreUfw(runtime = hostRecovery) {
 	}
 	const vpn = recoveryVpn(rulesFor(change.policy), previous);
 	try {
-		if (last === undefined) {
-			throw new Error("Cannot read a last confirmed firewall policy.", { cause: confirmedError });
+		if (last === null) {
+			throw new Error("No valid firewall policy has been confirmed.");
 		}
 		if (last.id !== change.id) {
 			rebuildPolicy(previous, runtime, vpn);
@@ -916,7 +1006,8 @@ export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
 	saveChange(runtime.pending, { ...change, started: true });
 	console.log("The recovery timer will reapply the last confirmed UFW policy at its next run:");
 	console.log(runtime.execute(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
-	rebuildPolicy(rules, runtime);
+	const last = confirmedPolicy(runtime);
+	rebuildPolicy(rules, runtime, recoveryVpn(rules, last === null ? [] : rulesFor(last.policy)));
 	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("The recovery timer has expired.");
 	}

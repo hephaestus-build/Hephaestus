@@ -46,8 +46,10 @@ Verify the public ports from a network outside the admin VPN and the hosting pro
 Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
 The script manages all UFW rules added through the UFW command line.
 It checks the saved and live UFW user rules, their chain hooks, and the default policies.
-It also reports unmanaged rules and jumps in the kernel input and UFW input chains.
+It also checks the kernel input chain and the UFW hooks and helper chains on the input path.
+
 An early deny can prevent required traffic from reaching the UFW user rules.
+Keep interface-specific denies for private ports that leave the declared traffic available.
 If you use custom packet filter rules or container port forwarding, check those rules separately.
 
 Use UFW to load the host rules at boot.
@@ -84,8 +86,9 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    Make sure you have console access before changing the firewall.
    During a change, the script uses UFW reset and rebuilds the policy.
    The temporary filter permits declared input and lets k3s handle forwarding for its networks and web ingress.
+   On hosts without k3s, the filter drops forwarded traffic during the change.
    UFW reset backs up and replaces its before and after rules with package defaults.
-   Move any required custom rules before you apply the policy.
+   Review the custom rules on your host before you apply the policy.
    Run this command from the trusted checkout:
 
    ```bash
@@ -112,6 +115,7 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
 
    If the apply fails, correct the problem and retry before the timer expires.
    The retry uses the time left on the timer.
+   After an error during the rebuild, the temporary filter permits VPN SSH until you retry or recovery runs.
 
    If recovery fails, check the journal for `hephaestus-host-firewall-rollback.service`.
    From the console, run `sudo node scripts/host-firewall.ts --restore-ufw` to retry recovery.
@@ -121,7 +125,7 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    Keep the host running until you confirm the change or recover the saved policy.
    A reboot interrupts automatic recovery and clears the pending timer.
    UFW loads the rules on disk at the time of the reboot.
-   The last confirmed declaration stays available on disk.
+   From the console, check the rules against the last confirmed declaration before you retry.
 
 To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 

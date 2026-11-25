@@ -158,6 +158,7 @@ void test("emergency recovery puts the VPN-only guard before existing accepts", 
 		/^-A HEPHAESTUS-RECOVERY -s 192\.0\.2\.0\/24 -p tcp -m tcp --dport 22 -j ACCEPT$/mu,
 	);
 	assert.match(ipv4, /^-A HEPHAESTUS-RECOVERY -j DROP$/mu);
+	assert.match(ipv4, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/u);
 	assert.doesNotMatch(ipv4, /6443|2001:db8|--dport (?:80|443)|-i (?:cni0|flannel\.1)/u);
 	const ipv6 = recoveryFilter(
 		6,
@@ -175,6 +176,11 @@ void test("the rebuild guard admits declared traffic and leaves k3s forwarding t
 	const rules = rulesFor({ ...base, k3s: true, http3: false });
 	for (const family of [4, 6] as const) {
 		const guard = recoveryFilter(family, rules, "");
+		const loopbackDrop = guard.indexOf(
+			`-A HEPHAESTUS-RECOVERY -d ${family === 4 ? "127.0.0.0/8" : "::1/128"} -j DROP`,
+		);
+		assert.ok(loopbackDrop > guard.indexOf("-A HEPHAESTUS-RECOVERY -i lo -j ACCEPT"));
+		assert.ok(loopbackDrop < guard.indexOf("-A HEPHAESTUS-RECOVERY -i cni0 -j ACCEPT"));
 		assert.match(
 			guard,
 			/^-A HEPHAESTUS-RECOVERY -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT$/mu,
@@ -195,6 +201,25 @@ void test("the rebuild guard admits declared traffic and leaves k3s forwarding t
 
 function wanted(rules: ReturnType<typeof rulesFor>) {
 	return rules.map((rule) => ufwArgs(rule).join(" "));
+}
+
+function guardRules(input: string) {
+	return input.split("\n").filter((line) => line.startsWith("-A HEPHAESTUS-RECOVERY"));
+}
+
+function assertEmergencyGuards(guards: Map<string, string>, includesConfirmedVpn: boolean) {
+	assert.equal(guards.size, 2);
+	const ipv4 = guards.get("/usr/sbin/iptables") ?? "";
+	const ipv6 = guards.get("/usr/sbin/ip6tables") ?? "";
+	assert.match(ipv4, /192\.0\.2\.0\/24 .*--dport 22 -j ACCEPT/u);
+	assert.match(ipv6, /2001:db8:1::\/64 .*--dport 22 -j ACCEPT/u);
+	if (includesConfirmedVpn) {
+		assert.match(ipv4, /198\.51\.100\.128\/25 .*--dport 22 -j ACCEPT/u);
+	}
+	for (const filter of [ipv4, ipv6]) {
+		assert.match(filter, /--ctstate RELATED,ESTABLISHED --ctdir REPLY -j ACCEPT/u);
+		assert.doesNotMatch(filter, /--dport (?:80|443) /u);
+	}
 }
 
 function readTestChange(file: string) {
@@ -318,12 +343,24 @@ for (const scenario of [
 			},
 			drift(rules: ReturnType<typeof rulesFor>, guarded?: boolean) {
 				if (guarded !== true) {
+					if (policies.length > 0) {
+						assert.equal(guards.size, 0);
+						calls.push("verify live");
+					}
 					const matchesRules =
 						scenario === "baseline matches" ||
 						JSON.stringify(policies.at(-1)) === JSON.stringify(wanted(rules));
 					return matchesRules ? [] : [driftProblem];
 				}
 				assert.equal(guards.size, 2);
+				assert.deepEqual(
+					guardRules(guards.get("/usr/sbin/iptables") ?? ""),
+					guardRules(recoveryFilter(4, rules, "")),
+				);
+				assert.deepEqual(
+					guardRules(guards.get("/usr/sbin/ip6tables") ?? ""),
+					guardRules(recoveryFilter(6, rules, "")),
+				);
 				assert.deepEqual(policies.at(-1), wanted(rules));
 				calls.push("verify");
 				if (scenario === "timer expires") {
@@ -377,7 +414,7 @@ for (const scenario of [
 				assert.equal(interrupted.started, true);
 				assert.equal(interrupted.changedAt, undefined);
 				retryId = interrupted.id;
-				assert.equal(guards.size, 2);
+				assertEmergencyGuards(guards, true);
 			}
 			apply(configured, desired, runtime);
 			assert.equal(armed, 1);
@@ -430,13 +467,14 @@ for (const scenario of [
 					? ["allow from 198.51.100.128/25 to any port 22 proto tcp"]
 					: []),
 			]);
-			assert.equal(guards.size, 2);
+			assertEmergencyGuards(guards, scenario === "verification fails");
 		} else {
 			restoreUfw(runtime);
 			assert.deepEqual(calls, [
 				...(scenario === "backup collision" ? ["wait for backup filename"] : []),
 				"reset",
 				"verify",
+				"verify live",
 			]);
 			assert.deepEqual(policies[0], wanted(rulesFor(previous)));
 			assert.equal(guards.size, 0);
@@ -462,6 +500,15 @@ const k3sV4 = [
 	"-A ufw-before-input -j ufw-user-input",
 	"-A ufw-before-forward -j ufw-user-forward",
 	"-A ufw-before-output -j ufw-user-output",
+	'-A ufw-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW BLOCK] "',
+	"-A ufw-not-local -m addrtype --dst-type LOCAL -j RETURN",
+	"-A ufw-not-local -m addrtype --dst-type MULTICAST -j RETURN",
+	"-A ufw-not-local -m addrtype --dst-type BROADCAST -j RETURN",
+	"-A ufw-not-local -m limit --limit 3/min --limit-burst 10 -j ufw-logging-deny",
+	"-A ufw-not-local -j DROP",
+	"-A ufw-skip-to-policy-input -j DROP",
+	"-A ufw-user-limit -j REJECT --reject-with icmp-port-unreachable",
+	"-A ufw-user-limit-accept -j ACCEPT",
 	"-A ufw-user-input -s 192.0.2.0/24 -p tcp -m tcp --dport 22 -j ACCEPT",
 	"-A ufw-user-input -s 198.51.100.4/32 -p tcp -m tcp --dport 9100 -j ACCEPT",
 	"-A ufw-user-input -p tcp -m tcp --dport 80 -j ACCEPT",
@@ -488,6 +535,10 @@ const k3sV6 = [
 	"-A ufw6-before-input -j ufw6-user-input",
 	"-A ufw6-before-forward -j ufw6-user-forward",
 	"-A ufw6-before-output -j ufw6-user-output",
+	'-A ufw6-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW BLOCK] "',
+	"-A ufw6-skip-to-policy-input -j DROP",
+	"-A ufw6-user-limit -j REJECT --reject-with icmp6-port-unreachable",
+	"-A ufw6-user-limit-accept -j ACCEPT",
 	"-A ufw6-user-input -s 2001:db8:1::/64 -p tcp -m tcp --dport 22 -j ACCEPT",
 	"-A ufw6-user-input -s 2001:db8:2::4/128 -p tcp -m tcp --dport 9100 -j ACCEPT",
 	"-A ufw6-user-input -p tcp -m tcp --dport 80 -j ACCEPT",
@@ -519,6 +570,30 @@ void test("the check reports unmanaged input rules and jumps around the UFW user
 			rules,
 		),
 		[],
+	);
+});
+
+void test("reports altered UFW input helper chains", () => {
+	const rules = rulesFor({ ...base, k3s: true, http3: false });
+	for (const [family, lines, rule] of [
+		[4, k3sV4, "-A ufw-not-local -p tcp -m tcp --dport 443 -j DROP"],
+		[4, k3sV4, "-A ufw-not-local -j ACCEPT"],
+		[4, k3sV4, "-A ufw-logging-deny -j DROP"],
+		[4, k3sV4, "-A ufw-skip-to-policy-input -j ACCEPT"],
+		[4, k3sV4, "-A ufw-user-limit -j ACCEPT"],
+		[6, k3sV6, "-A ufw6-user-limit-accept -p tcp -m tcp --dport 443 -j REJECT"],
+	] as const) {
+		assert.deepEqual(liveDrift([rule, ...lines], family, rules), [
+			`IPv${family} has an unmanaged input rule.`,
+		]);
+	}
+	assert.deepEqual(
+		liveDrift(
+			k3sV4.filter((line) => !line.includes("--dst-type LOCAL -j RETURN")),
+			4,
+			rules,
+		),
+		["IPv4 has an unmanaged input rule."],
 	);
 });
 
@@ -575,6 +650,26 @@ void test("reports denies before required input rules and allows stock invalid-p
 			[`IPv${family} has an input deny before the required UFW rules.`],
 		);
 		assert.deepEqual(liveDrift([...lines, `-A ${chain} -j RETURN`], family, rules), []);
+	}
+});
+
+void test("preserves scoped ingress denies for private platform ports", () => {
+	const rules = rulesFor({ ...base, k3s: true, http3: false });
+	const denies = [
+		'-A INPUT -i eth0 -p udp -m udp --dport 8472 -m comment --comment "protect overlay" -j DROP',
+		"-A INPUT -i eth0 -p tcp -m multiport --dports 6443,10250 -j DROP",
+	];
+	assert.deepEqual(liveDrift([...denies, ...k3sV4], 4, rules), []);
+	assert.deepEqual(liveDrift([...denies, ...k3sV6], 6, rules), []);
+	for (const conflicting of [
+		"-A INPUT -i eth0 -p tcp -m multiport --dports 6443,443 -j DROP",
+		"-A INPUT -i eth0 -p tcp -m tcp --dport 9100 -j REJECT",
+		"-A INPUT -i cni0 -p tcp -m tcp --dport 6443 -j DROP",
+		"-A INPUT -i flannel.1 -p udp -m udp --dport 8472 -j DROP",
+	]) {
+		assert.deepEqual(liveDrift([conflicting, ...k3sV4], 4, rules), [
+			"IPv4 has an input deny before the required UFW rules.",
+		]);
 	}
 });
 
