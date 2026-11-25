@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import java.time.Clock;
@@ -23,7 +24,11 @@ class ClientInputsTest {
     void shouldEnforceTheRetryWindowAndClockSkew() {
         Instant now = Instant.parse("2026-11-24T00:00:00Z");
         var inputs = new ClientInputs(
-                mock(JdbcClient.class), mock(OwnerScope.class), JsonMapper.shared(), Clock.fixed(now, ZoneOffset.UTC));
+                mock(JdbcClient.class),
+                mock(OwnerScope.class),
+                mock(PrivacyJobMetrics.class),
+                JsonMapper.shared(),
+                Clock.fixed(now, ZoneOffset.UTC));
         Instant oldest = now.minus(Duration.ofDays(3));
         Instant newest = now.plus(Duration.ofMinutes(5));
 
@@ -42,7 +47,11 @@ class ClientInputsTest {
     @Test
     void shouldIncludeAttachmentHashesInTheFingerprint() {
         var inputs = new ClientInputs(
-                mock(JdbcClient.class), mock(OwnerScope.class), JsonMapper.shared(), Clock.systemUTC());
+                mock(JdbcClient.class),
+                mock(OwnerScope.class),
+                mock(PrivacyJobMetrics.class),
+                JsonMapper.shared(),
+                Clock.systemUTC());
         var first = inputs.fingerprint("submit", "A message", List.of("a".repeat(64)));
         assertThat(inputs.fingerprint("submit", "A message", List.of("a".repeat(64))))
                 .isEqualTo(first);

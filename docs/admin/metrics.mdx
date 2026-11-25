@@ -396,7 +396,7 @@ outcome per run, published by the server role.
 | `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
 | `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
-`job` is one of `account_erasure`, `conversation_copy_retention`, `conversation_retention`, `export_generation`, `export_retention`, or `llm_usage_retention`.
+`job` is one of `account_erasure`, `client_input_retention`, `conversation_copy_retention`, `conversation_retention`, `export_generation`, `export_retention`, or `llm_usage_retention`.
 A scrape sets its own `job`, so the store keeps this label as `exported_job`.
 `outcome` is `success`, `incomplete`, or `failure`.
 An empty backlog is a `success`.

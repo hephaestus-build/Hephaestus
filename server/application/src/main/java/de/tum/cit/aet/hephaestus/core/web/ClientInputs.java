@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.web;
 
+import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
+import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
+import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
@@ -29,11 +32,13 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class ClientInputs {
     public static final String HEADER = "Idempotency-Key";
+    private static final int PRUNE_BATCH_SIZE = 1000;
     private static final Duration KEY_AGE = Duration.ofDays(3);
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
     private final JdbcClient jdbc;
     private final OwnerScope owners;
+    private final PrivacyJobMetrics metrics;
     private final ObjectMapper json;
     private final Clock clock;
 
@@ -99,9 +104,18 @@ public class ClientInputs {
 
     @Scheduled(cron = "0 */5 * * * *")
     @SchedulerLock(name = "client-input-cleanup", lockAtMostFor = "PT5M")
-    @Transactional
     public void prune() {
-        jdbc.sql("SELECT public.prune_client_inputs()").query(Integer.class).single();
+        try {
+            int removed = jdbc.sql("SELECT public.prune_client_inputs()")
+                    .query(Integer.class)
+                    .single();
+            metrics.record(
+                    Job.CLIENT_INPUT_RETENTION, removed == PRUNE_BATCH_SIZE ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            metrics.recordAffected(Job.CLIENT_INPUT_RETENTION, removed);
+        } catch (RuntimeException exception) {
+            metrics.record(Job.CLIENT_INPUT_RETENTION, Outcome.FAILURE);
+            throw exception;
+        }
     }
 
     void validateAge(UUID key) {
