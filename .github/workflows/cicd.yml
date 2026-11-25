@@ -236,6 +236,12 @@ jobs:
           if [ "$base" != "$DEFAULT_BRANCH" ] && [ "$full" != true ] && [ "$RELEASE_CANDIDATE" != true ]; then light=true; fi
           echo "light=$light" >> "$GITHUB_OUTPUT"
 
+      # The run records the tier that `ci:full` selected for it, so a report reads the tier this run
+      # used, whatever labels the pull request carries later (scripts/report-ci-latency.ts).
+      - name: Record the queue tier that ci:full selects
+        if: steps.opt_in.outputs.full == 'true'
+        run: echo "ci:full selects the queue tier for this run."
+
       # A queue merge can push the version commit with later commits on top, so the version is read
       # at the tip this push replaced. Without that tip the push is validated as a bump.
       - name: Detect version bump

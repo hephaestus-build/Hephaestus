@@ -58,7 +58,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, asStringArray, at as valueAt, isRecord } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
-import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
+import { FULL_VERIFICATION_STEP, QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 
 void describe("ci-contract: merge-queue", () => {
@@ -237,6 +237,11 @@ void describe("ci-contract: merge-queue", () => {
 				}
 			}
 		}
+		// The latency report reads a pull request's tier from this step of its run, not from its labels.
+		assert.equal(
+			String(namedStep(orchestrator, ["jobs", "detect-changes"], FULL_VERIFICATION_STEP).get("if")),
+			"steps.opt_in.outputs.full == 'true'",
+		);
 		assert.deepEqual(guarded.toSorted(), [
 			"extension-e2e",
 			"postgres-drill",

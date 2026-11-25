@@ -539,24 +539,24 @@ export function failedJobNames(jobs: readonly unknown[]): string[] {
 		.map((job) => asString(job.name, "job name"));
 }
 
-/**
- * Whether a pull request carries `ci:full`, from its label listing. Its run verifies the queue tier, so
- * it is not a fast-tier sample. The report reads the labels the pull request has now, not at the run.
- */
-export function carriesFullVerification(labels: unknown): boolean {
-	return asArray(labels, "labels").some((label) => asRecord(label, "label").name === "ci:full");
-}
+/** The `Changes` step that runs only when `ci:full` selects the queue tier for a pull request's run. */
+export const FULL_VERIFICATION_STEP = "Record the queue tier that ci:full selects";
 
-async function fastTierPullRequest(repository: string, run: Record<string, unknown>) {
-	const [pullRequest] = asArray(run.pull_requests ?? [], "pull_requests");
-	if (pullRequest === undefined) {
-		return true;
-	}
-	const { number } = asRecord(pullRequest, "pull request");
-	const labels = parseJson(
-		await output("gh", ["api", `repos/${repository}/issues/${String(number)}/labels`]),
-	);
-	return !carriesFullVerification(labels);
+/**
+ * Whether a pull request's run verified the queue tier because it carried `ci:full`, read from the
+ * run's own jobs: the labels the pull request carries later do not change the run's tier.
+ */
+export function selectedFullVerification(jobs: unknown): boolean {
+	return asArray(asRecord(jobs, "jobs response").jobs, "jobs").some((value) => {
+		const job = asRecord(value, "job");
+		return (
+			job.name === "Changes" &&
+			asArray(job.steps ?? [], "steps").some((step) => {
+				const { name, conclusion } = asRecord(step, "step");
+				return name === FULL_VERIFICATION_STEP && conclusion === "success";
+			})
+		);
+	});
 }
 
 /** The latest ten qualifying verdicts of one event, as run summaries. */
@@ -569,10 +569,11 @@ async function sample(
 ) {
 	const summaries = [];
 	for (const run of selectLatencyRuns(listing, now, event)) {
-		if (event === "pull_request" && !(await fastTierPullRequest(repository, run))) {
+		const jobs = await jobsOf(repository, run, 1);
+		if (event === "pull_request" && selectedFullVerification(jobs)) {
 			continue;
 		}
-		const summary = summarizeCiTimings(run, await jobsOf(repository, run, 1));
+		const summary = summarizeCiTimings(run, jobs);
 		if (isLatencySample(summary.jobs) && qualifies(summary.jobs)) {
 			summaries.push(summary);
 			if (summaries.length === 10) {
