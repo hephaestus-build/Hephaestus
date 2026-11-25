@@ -68,7 +68,7 @@ class NativeQueryCommentArchTest extends HephaestusArchitectureTest {
      * method declares no query annotation, or declares one whose query is defined some other way
      * (a named query, or a defaulted {@code countQuery}).
      */
-    private static Map<String, String> queryStrings(JavaMethod method) {
+    static Map<String, String> queryStrings(JavaMethod method) {
         Map<String, String> found = new LinkedHashMap<>();
         method.getAnnotations().stream()
                 .filter(annotation ->

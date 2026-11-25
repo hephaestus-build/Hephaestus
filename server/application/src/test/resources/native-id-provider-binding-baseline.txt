@@ -1,0 +1,120 @@
+# Existing comparisons with no direct provider binding recognized by the rule.
+# Each entry identifies one occurrence. Remove the entry when its comparison is bound or removed.
+# Locations point to the query method, SQL literal, or changelog predicate.
+
+# src/main/java/de/tum/cit/aet/hephaestus/activity/ActivityLedgerRepository.java:140 m.native_id=r.native_id
+src/main/java/de/tum/cit/aet/hephaestus/activity/ActivityLedgerRepository.java | m.native_id=r.native_id | e8f53ce4709a46dbc51ae7d9d2b08e4e9560744b2e483368d17fcb8e4d916c33
+
+# src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/EvidenceFolderPersonDataCatalog.java:233 i.subject=k.subject
+src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/EvidenceFolderPersonDataCatalog.java | i.subject=k.subject | f6f2538d8b5971b0a3f73e51ac63c5939c27fb819a99300fb0d8944f4681b21d
+
+# src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/EvidenceReceipts.java:343 s.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/agent/adapter/EvidenceReceipts.java | s.provider_user_key= | b8dbc3a0ad1bb809639458ad0b439ed2cd587de8d1389bb241ef5b87f78242aa
+
+# src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java:98 p.subject =
+src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java | p.subject = | 385501e0f6b23cdd44b2a0c70c789f2945a306fe1ee667b77e3257d41e6627bb
+
+# src/main/java/de/tum/cit/aet/hephaestus/core/privacy/IdentityRestrictionService.java:215 s.provider_user_key=i.provider_user_key
+src/main/java/de/tum/cit/aet/hephaestus/core/privacy/IdentityRestrictionService.java | s.provider_user_key=i.provider_user_key | 9d657ad8a91273578dfeb70234c04dd6608dafdbc021d48758514739466a3442
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java:36 i.subject=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java | i.subject= | a75542aaa1999a8a0f084ab344017ab35008a3054c83cc0f997890ff13db1251
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java:56 i.subject=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java | i.subject= | ef4c807016dd81a9572076964a502007136bb79159a40d1359764678f44047c9
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 i.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 i.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 s.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 s.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 i.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 i.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 s.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 s.provider_user_key=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:261 authors.subject=
+src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | authors.subject= | c528dff81f4b1135e6db018bf66ec918ff26526b0d1b63e72d39d6519dcfba91
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/ScmPersonSourceIdentityContributor.java:114 rm.native_id=
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/ScmPersonSourceIdentityContributor.java | rm.native_id= | e14fc9d806cad218ef4fac1370f0f76bb32010d538bc8030297090e7705558fc
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/commit/CommitContributorRepository.java:65 u.native_id =
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/commit/CommitContributorRepository.java | u.native_id = | cc89e9970065212e13587a77d3e7d57b6fd10a97eeab682c8ff71b65f202eb05
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/issuetype/IssueTypeRepository.java:14 OrganizationIdAndNativeId
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/issuetype/IssueTypeRepository.java | OrganizationIdAndNativeId | db186c748f453597a562a5784fe0a2ae01f9a447714690623c9e41816c15697a
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java:33 monitor.native_id=r.native_id
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java | monitor.native_id=r.native_id | 5580a1850731cefdbbe4bfd7078f3a774510269d4c406b2b3e894b5f0d0daf15
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java:111 m.native_id=r.native_id
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java | m.native_id=r.native_id | 768d119b9f7500b6228807dbbcc3e6310eee7dc51b0c793dcba008f04678bc8e
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java:127 m.native_id=r.native_id
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/domain/item/ScmItemQueryRepository.java | m.native_id=r.native_id | 5b50ff72e1b96638c9b793f902f2ccc3c08a9677f4814fb05eaa74c7d5628648
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/installation/adoption/GitHubInstallationRequestPersonDataCatalog.java:37 i.subject =
+src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/installation/adoption/GitHubInstallationRequestPersonDataCatalog.java | i.subject = | cd5184ec7c53c32577c40934e841dc1b532c285cb6ed261a0e1cf003848b0be4
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/slack/adapter/IntegrationSlackPersonDataCatalog.java:39 i.subject=
+src/main/java/de/tum/cit/aet/hephaestus/integration/slack/adapter/IntegrationSlackPersonDataCatalog.java | i.subject= | 88f231a49ffc6968bc84acba82bae5ab584b4531d7d3f76ec21fab34fc770eb4
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/slack/adapter/IntegrationSlackPersonDataCatalog.java:49 i.subject=
+src/main/java/de/tum/cit/aet/hephaestus/integration/slack/adapter/IntegrationSlackPersonDataCatalog.java | i.subject= | 187b0ecb9df940b2e8bddf52a4246ba3e54f53cfcad296a2e01e89e360584390
+
+# src/main/java/de/tum/cit/aet/hephaestus/integration/slack/domain/SlackParticipantConsentRepository.java:49 s.provider_user_key =
+src/main/java/de/tum/cit/aet/hephaestus/integration/slack/domain/SlackParticipantConsentRepository.java | s.provider_user_key = | 9267438700c0237dd7b15d77b02209b2c2f2d265d14e936b96fbd56647f5c43a
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:110 rtm.native_id =
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | rtm.native_id = | e9cdc33d5dcd063e0d634ecc37290c8fbcc38eb2764e9f356a390ed3f82cd549
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:139 r.native_id =
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | r.native_id = | f5cac46a0e280461d10a8deff96b357e0f6d22fa63e844bc0cffd7a201b9457f
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:139 r.native_id = rtm.native_id
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | r.native_id = rtm.native_id | f5cac46a0e280461d10a8deff96b357e0f6d22fa63e844bc0cffd7a201b9457f
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:139 r.native_id = rtm.native_id
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | r.native_id = rtm.native_id | f5cac46a0e280461d10a8deff96b357e0f6d22fa63e844bc0cffd7a201b9457f
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:177 r.native_id = rtm.native_id
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | r.native_id = rtm.native_id | 417ad0045c33035c730b4b924915f00b2014c5d14d65cf7830ba61d913bb8e1d
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:193 WorkspaceIdAndNativeId
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | WorkspaceIdAndNativeId | 299e5913537cce401d8bef386c145a3dea64989f63c7c3a322f038a1afdea9a4
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:196 WorkspaceIdAndNativeId
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | WorkspaceIdAndNativeId | 6e7571cd4508a6042002290710ae0e21722c158be4292047981436ded2d9492c
+
+# src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java:198 WorkspaceIdAndNativeIdAndIdNot
+src/main/java/de/tum/cit/aet/hephaestus/workspace/RepositoryToMonitorRepository.java | WorkspaceIdAndNativeIdAndIdNot | 31937e9ccc42ec93e81e8ca57f620af8dd697d5473de1e48560cdf70c326aeb5
+
+# src/main/resources/db/changelog/next/20261115170728-fix-issue-type-identity-per-organization.xml:33 e.native_id = m.native_id
+src/main/resources/db/changelog/next/20261115170728-fix-issue-type-identity-per-organization.xml | e.native_id = m.native_id | 9c6361ce6baec6ed2c23fd1d1609f20e6ca1b6de9487674a3179c444636a1f25
+
+# src/main/resources/db/changelog/next/20261115170728-fix-issue-type-identity-per-organization.xml:41 t.native_id = m.native_id
+src/main/resources/db/changelog/next/20261115170728-fix-issue-type-identity-per-organization.xml | t.native_id = m.native_id | 9c6361ce6baec6ed2c23fd1d1609f20e6ca1b6de9487674a3179c444636a1f25
+
+# src/main/resources/db/changelog/next/20261121123743-fix-gitlab-sync-continues-capped-window.xml:14 rtm.native_id = r.native_id
+src/main/resources/db/changelog/next/20261121123743-fix-gitlab-sync-continues-capped-window.xml | rtm.native_id = r.native_id | de3d1b927512ec9ddb785d675ce954f116573b2be210622c40f46786b02f6fed
+
+# src/main/resources/db/changelog/next/20261124152315-feat-resource-visibility-class.xml:57 rtm.native_id = r.native_id
+src/main/resources/db/changelog/next/20261124152315-feat-resource-visibility-class.xml | rtm.native_id = r.native_id | e1f41036bc80be0d28c12fa6eeaa9d0925e919be8cbc23636afcdd666695b507
+
+# src/main/resources/db/changelog/next/20261125025001-feat-resource-readers.xml:109 native_id = p_native_id
+src/main/resources/db/changelog/next/20261125025001-feat-resource-readers.xml | native_id = p_native_id | 3c01259a95d1bc6d8d69dcb76f3b67e1699383b9802c36a20928e8ebedfec32c

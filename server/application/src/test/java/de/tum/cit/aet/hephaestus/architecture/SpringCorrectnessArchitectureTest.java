@@ -321,7 +321,7 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
         };
     }
 
-    private static boolean isEffectivelyTransactional(JavaMethod method) {
+    static boolean isEffectivelyTransactional(JavaMethod method) {
         boolean methodAnnotated = isTransactionallyAnnotatedMethod(method);
         boolean ownerAnnotated = method.getOwner().getAllClassesSelfIsAssignableTo().stream()
                 .anyMatch(owner ->

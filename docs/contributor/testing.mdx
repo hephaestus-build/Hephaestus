@@ -188,6 +188,22 @@ The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fa
 This safety net cannot see `@WorkspaceAgnostic` queries or string-keyed scopes.
 Thus, HTTP-level assertions remain necessary.
 
+## Provider queries and database transactions
+
+`NativeIdProviderBindingArchTest` checks direct native ID comparisons in repository queries,
+Java SQL literals, and SQL in changelogs. When you match a native ID, compare the provider or
+source connection in the same predicate. A provider bound in a different query or an alternative
+branch cannot bind the native ID. The test reads declared queries and literals. It cannot resolve
+SQL assembled at run time.
+
+`RemoteCallTransactionArchTest` checks direct calls to outbound clients in Spring transactional
+methods and inline `TransactionTemplate` callbacks. Move the call before the transaction, then
+persist its result in the transaction. For a write that must follow a commit, use the existing
+after-commit path. The test does not infer calls through other service methods or callbacks passed
+as values.
+
+If you fix a call site or query in either baseline, remove its baseline entry in the same change.
+
 ## Webhook fixtures and tooling
 
 Reusable webhook JSON lives in `server/application/src/test/resources/github` and `…/gitlab`, named after the event it records. Load one with a `ClassPathResource`.
