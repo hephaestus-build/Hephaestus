@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -172,6 +173,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
                         messages,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager),
@@ -184,8 +186,8 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         long event = StoredEventHandling.leased(eventStore, jdbcTemplate, workspaceId, "slack.T1.C1.message");
         var tx = new TransactionTemplate(transactionManager);
         var handler = HeldTransaction.holdIn(tx, jdbcTemplate, () -> eventStore.claimStep(event, 1, "persist"));
-        var erasure = CompletableFuture.runAsync(
-                () -> tx.executeWithoutResult(status -> ingestService.eraseChannel(workspaceId, CHANNEL)));
+        var erasure = CompletableFuture.runAsync(() ->
+                tx.executeWithoutResult(status -> ingestService.eraseChannel(workspaceId, CHANNEL, Instant.now())));
         handler.commitAfter(
                 erasure,
                 () -> tx.executeWithoutResult(status -> {

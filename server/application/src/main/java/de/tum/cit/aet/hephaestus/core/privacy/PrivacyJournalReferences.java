@@ -72,6 +72,7 @@ final class PrivacyJournalReferences {
     private static Set<String> optional(PrivacyJournalKind kind) {
         return switch (kind) {
             case PERSON_ERASED -> Set.of("accountId");
+            case SLACK_CHANNEL_ERASED -> Set.of("erasedAt");
             case SESSION_REVOKED -> Set.of("keepTokenId", "keepSessionId", "sessionId", "tokenId", "grantId");
             case REPOSITORY_REMOVED -> Set.of("monitorId", "repositoryId", "itemId");
             default -> Set.of();
@@ -98,7 +99,8 @@ final class PrivacyJournalReferences {
 
     private static boolean valid(String name, Object value) {
         return switch (name) {
-            case "through", "releasedAt", "useUntil", "decidedAt", "removedAt", "closedAt" -> value instanceof Instant;
+            case "through", "releasedAt", "useUntil", "decidedAt", "removedAt", "closedAt", "erasedAt" ->
+                value instanceof Instant;
             case "scope" -> "MONITORED_CHANNELS".equals(value);
             case "target" -> value instanceof String;
             case "receiptDigest" ->

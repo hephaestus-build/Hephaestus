@@ -403,7 +403,7 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
         Workspace workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("deleted-" + UUID.randomUUID()));
         String subject = "slack.T1.C1.channel_deleted";
         var event = leased(workspace, subject, Map.of(), """
-                {"team_id":"T1","event":{"type":"channel_deleted","channel":"C1"}}
+                {"team_id":"T1","event":{"type":"channel_deleted","channel":"C1","event_ts":"1700000000.123456"}}
                 """);
         var lifecycle = mock(SlackChannelLifecycleService.class);
         doAnswer(call -> {
@@ -414,7 +414,7 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
                     return null;
                 })
                 .when(lifecycle)
-                .onDeleted(eq("T1"), any());
+                .onDeleted(eq("T1"), any(), eq(Instant.ofEpochSecond(1_700_000_000L, 123_456_000L)));
         var handler = new SlackChannelDeletedMessageHandler(lifecycle, deserializer);
         var registry = new SimpleMeterRegistry();
         var activity = mock(ConnectionActivityRecorder.class);

@@ -248,7 +248,7 @@ public class SlackChannelConsentService {
             }
             case REVOKED -> {
                 announcements.cancel(workspaceId, channelId);
-                ingestService.eraseChannel(workspaceId, channelId);
+                ingestService.eraseChannel(workspaceId, channelId, Instant.now());
                 channel.setConsentState(ConsentState.REVOKED);
                 channel.setLastSyncError(null);
             }
@@ -379,7 +379,7 @@ public class SlackChannelConsentService {
      * single choke point ({@link SlackIngestService#eraseChannel}) as {@code * → REVOKED} via {@link #transition}.
      * No-op if the channel was never allow-listed or is already {@code REVOKED}.
      */
-    public void revokeForPlatformEvent(long workspaceId, String slackChannelId, String reason) {
+    public void revokeForPlatformEvent(long workspaceId, String slackChannelId, Instant erasedAt, String reason) {
         runInTx(() -> {
             if (!DeliveryInbox.claim("slack.channel.revoke." + workspaceId + "." + slackChannelId)) return;
             SlackMonitoredChannel channel = monitoredChannelRepository
@@ -390,7 +390,7 @@ public class SlackChannelConsentService {
             }
             ConsentState from = channel.getConsentState();
             announcements.cancel(workspaceId, slackChannelId);
-            ingestService.eraseChannel(workspaceId, slackChannelId);
+            ingestService.eraseChannel(workspaceId, slackChannelId, erasedAt);
             recordAudit(workspaceId, slackChannelId, from, ConsentState.REVOKED, reason, null);
         });
     }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.ReviewJobService;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
@@ -260,6 +261,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager),

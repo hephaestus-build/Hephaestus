@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +27,7 @@ class SlackChannelLifecycleServiceTest extends BaseUnitTest {
 
     private static final long WORKSPACE = 42L;
     private static final String TEAM = "T1";
+    private static final Instant DELETED_AT = Instant.parse("2026-01-02T00:00:00Z");
     private static final String CHANNEL = "C1";
 
     private final JsonMapper mapper = JsonMapper.builder().build();
@@ -60,9 +62,9 @@ class SlackChannelLifecycleServiceTest extends BaseUnitTest {
 
     @Test
     void deleted_revokesAndErases() {
-        service.onDeleted(TEAM, stringChannelEvent(CHANNEL));
+        service.onDeleted(TEAM, stringChannelEvent(CHANNEL), DELETED_AT);
 
-        verify(consentService).revokeForPlatformEvent(WORKSPACE, CHANNEL, "channel deleted in Slack");
+        verify(consentService).revokeForPlatformEvent(WORKSPACE, CHANNEL, DELETED_AT, "channel deleted in Slack");
     }
 
     @Test
@@ -84,7 +86,7 @@ class SlackChannelLifecycleServiceTest extends BaseUnitTest {
 
         service.onBotRemoved("T-unknown", event);
         service.onArchived("T-unknown", event);
-        service.onDeleted("T-unknown", event);
+        service.onDeleted("T-unknown", event, DELETED_AT);
         service.onRenamed("T-unknown", event);
 
         verifyNoInteractions(consentService);
@@ -93,7 +95,7 @@ class SlackChannelLifecycleServiceTest extends BaseUnitTest {
     @Test
     void blankChannel_isANoOp() {
         service.onBotRemoved(TEAM, stringChannelEvent(""));
-        service.onDeleted(TEAM, mapper.createObjectNode());
+        service.onDeleted(TEAM, mapper.createObjectNode(), DELETED_AT);
 
         verifyNoInteractions(consentService);
     }

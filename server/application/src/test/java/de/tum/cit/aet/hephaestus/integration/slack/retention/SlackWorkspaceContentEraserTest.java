@@ -65,7 +65,7 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
         verify(slackParticipantConsentRepository).deleteByWorkspaceId(42L);
         // Every Hephaestus entry written in Slack, and the Slack DM identities of Hephaestus conversations.
         verify(conversationEntries).redactSlackEntries(42L);
-        verify(conversationEntries).redactCopyingToolResults(42L);
+        verify(conversationEntries).redactCopyingToolResults(42L, null);
         verify(conversations).clearSlackIdentities(42L);
     }
 }

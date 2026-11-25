@@ -41,7 +41,7 @@ class ActionExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldEndUncertainWhenTheAdapterThrowsAfterTheFence() {
-        when(store.beginWrite(eq(ID), eq(7L), any())).thenReturn(true);
+        when(store.beginWrite(eq(ID), eq(7L), any(), any())).thenReturn(true);
 
         ActionResult result = executor(attempt -> {
                     attempt.fence().beginWrite();

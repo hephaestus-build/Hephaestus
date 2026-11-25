@@ -98,7 +98,9 @@ Just before the provider call, the adapter calls `ActionAttempt.fence().beginWri
 It sets `write_started_at` in its own short transaction.
 It refuses when another claim took the action, when an erasure deleted it, or when less than 60 seconds of the lease are left.
 The provider call must end within those 60 seconds.
-If it refuses, the adapter must not call the provider and returns `Abandoned`.
+If the lease check refuses, the adapter must not call the provider and returns `Abandoned`.
+For a new Slack reply, the same transaction locks the question and checks that it is still present and unredacted.
+If the source check refuses, the executor rolls back the write marker and ends the action as `CANCELLED` with `WITHDRAWN`.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.mdx)).
 
 ## What an adapter returns

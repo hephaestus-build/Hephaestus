@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializ
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -45,7 +46,8 @@ class SlackChannelLifecycleMessageHandlerTest {
                 Arguments.of(
                         "channel_deleted",
                         (Builder) (svc, de) -> new SlackChannelDeletedMessageHandler(svc, de),
-                        (Verifier) svc -> verify(svc).onDeleted(eq("T1"), any(JsonNode.class))),
+                        (Verifier) svc -> verify(svc)
+                                .onDeleted(eq("T1"), any(JsonNode.class), eq(Instant.ofEpochSecond(1_700_000_000L)))),
                 Arguments.of(
                         "channel_rename",
                         (Builder) (svc, de) -> new SlackChannelRenameMessageHandler(svc, de),
@@ -61,7 +63,9 @@ class SlackChannelLifecycleMessageHandlerTest {
         AbstractSlackEnvelopeHandler handler = build.apply(lifecycleService, deserializer);
 
         assertThat(handler.key().eventType()).isEqualTo(eventType);
-        handler.onMessage(inbox("{\"team_id\":\"T1\",\"event\":{\"type\":\"" + eventType + "\",\"channel\":\"C1\"}}"));
+        handler.onMessage(inbox("""
+                {"team_id":"T1","event_time":1700000000,"event":{"type":"%s","channel":"C1"}}
+                """.formatted(eventType)));
 
         verifier.check(lifecycleService);
     }

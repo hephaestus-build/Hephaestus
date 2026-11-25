@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -47,6 +50,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -324,7 +328,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 .seedThread(workspace.getId(), "C-erased", "1700000003.000300", "1700000003.000300", 1, "{}");
         var backup = Backup.of(jdbc, workspace.getId());
         // The admin's revoke: the same erasure that Slack's channel_deleted runs.
-        channelErasure.erase(workspace.getId(), "C-erased");
+        channelErasure.erase(workspace.getId(), "C-erased", Instant.now());
         assertThat(slackRows("C-erased")).isZero();
 
         backup.restore();
@@ -348,6 +352,53 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         // The same manifest is safe after a restart.
         recover(manifest);
         assertThat(slackRows("C-erased")).isZero();
+    }
+
+    @Test
+    void shouldRedactCopyingToolResultsOnlyThroughTheChannelErasureOnReplay() throws Exception {
+        UUID before = copyingToolResult("2026-01-01T00:00:00Z", "Earlier channel words");
+        UUID after = copyingToolResult("2026-01-03T00:00:00Z", "Later work");
+        String manifest = """
+                {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackMessageChanges":[],
+                 "slackChannelErasures":[{"workspaceId":%d,"channelId":"C-erased"%s}]}
+                """;
+
+        // Old manifests have only the recovery point as a safe cutoff.
+        recover(manifest.formatted(workspace.getId(), ""));
+        assertThat(words(before)).isBlank();
+        assertThat(words(after)).contains("Later work");
+
+        UUID atErasure = copyingToolResult("2026-01-02T00:00:00Z", "Words copied by the time of erasure");
+        String dated = manifest.formatted(workspace.getId(), ",\"erasedAt\":\"2026-01-02T00:00:00Z\"");
+        recover(dated);
+        assertThat(words(atErasure)).isBlank();
+        assertThat(words(after)).contains("Later work");
+
+        UUID afterFirstReplay = copyingToolResult("2026-01-04T00:00:00Z", "Work before the repeated replay");
+        recover(dated);
+        assertThat(words(after)).contains("Later work");
+        assertThat(words(afterFirstReplay)).contains("Work before the repeated replay");
+    }
+
+    private UUID copyingToolResult(String time, String text) {
+        var main = conversations.findOrCreateMain(workspace.getId(), ownerAccount);
+        String call = ConversationLedgerFixtures.piId();
+        var entry = entries.append(
+                workspace.getId(),
+                main.getId(),
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.TOOL_RESULT,
+                        ConversationEntry.Surface.APP,
+                        text,
+                        ConversationLedgerFixtures.toolResult(call, call, "read", text, false),
+                        null,
+                        null,
+                        null));
+        jdbc.update(
+                "UPDATE conversation_entry SET created_at = CAST(? AS timestamptz) WHERE id = ?", time, entry.getId());
+        return entry.getId();
     }
 
     private long slackThreads(String channelId) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
@@ -144,6 +145,7 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                         channels,
                         conversationFeedbackErasure,
                         messages,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 true,
                 new TransactionTemplate(transactionManager),

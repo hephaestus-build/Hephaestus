@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
@@ -10,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -20,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Erases a Slack channel from the workspace: revokes its consent so ingestion stops, and deletes its stored provider
  * events, its messages, its thread aggregates (which hold {@code participant_account_ids}) and the conversation feedback
- * derived from them. Idempotent: an unknown or already erased channel deletes nothing. It reads no Slack API, so
- * erasure recovery runs it while Slack is turned off.
+ * derived from them. Redacts tool results that could have copied channel content through the original erasure time.
+ * It reads no Slack API, so recovery runs it while Slack is turned off.
  */
 @Component
 @ConditionalOnServerRole
@@ -34,6 +36,7 @@ public class SlackChannelErasure {
     private final ConversationFeedbackErasure conversationFeedback;
     private final SlackMessageRepository messages;
 
+    private final ConversationEntryService conversationEntries;
     private final PrivacyJournal journal;
 
     public SlackChannelErasure(
@@ -42,6 +45,7 @@ public class SlackChannelErasure {
             SlackMonitoredChannelRepository channels,
             ConversationFeedbackErasure conversationFeedback,
             SlackMessageRepository messages,
+            ConversationEntryService conversationEntries,
             PrivacyJournal journal) {
         this.journal = journal;
         this.providerEvents = providerEvents;
@@ -49,25 +53,36 @@ public class SlackChannelErasure {
         this.channels = channels;
         this.conversationFeedback = conversationFeedback;
         this.messages = messages;
+        this.conversationEntries = conversationEntries;
     }
 
     @Transactional
-    public void erase(long workspaceId, String channelId) {
+    public void erase(long workspaceId, String channelId, Instant erasedAt) {
+        eraseContent(workspaceId, channelId, erasedAt);
+        journal.record(
+                PrivacyJournalKind.SLACK_CHANNEL_ERASED,
+                Map.of("workspaceId", workspaceId, "channelId", new NativeId(channelId), "erasedAt", erasedAt));
+        // A recovery manifest lists each channel erasure after its recovery point, by ids and time.
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "slack.channel_erased")
+                .addKeyValue("workspace.id", workspaceId)
+                .addKeyValue("slack.channel.id", channelId)
+                .addKeyValue("slack.channel.erased_at", erasedAt)
+                .log("A Slack channel was erased"));
+    }
+
+    @Transactional
+    public void replay(long workspaceId, String channelId, Instant erasedAt) {
+        eraseContent(workspaceId, channelId, erasedAt);
+    }
+
+    private void eraseContent(long workspaceId, String channelId, Instant erasedAt) {
         providerEvents.deleteResource(workspaceId, "slack", channelId);
         List<Long> threadIds = threads.findIdsByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         channels.revokeConsent(workspaceId, channelId);
         conversationFeedback.eraseForThreads(workspaceId, threadIds);
         messages.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         threads.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
-        journal.record(
-                PrivacyJournalKind.SLACK_CHANNEL_ERASED,
-                Map.of("workspaceId", workspaceId, "channelId", new NativeId(channelId)));
-        // An erasure recovery manifest lists each channel erasure after its recovery point: a restore brings the
-        // channel back. Logged only after commit, by ids alone.
-        TransactionCallbacks.afterCommit(() -> log.atInfo()
-                .addKeyValue("event.name", "slack.channel_erased")
-                .addKeyValue("workspace.id", workspaceId)
-                .addKeyValue("slack.channel.id", channelId)
-                .log("A Slack channel was erased"));
+        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
     }
 }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.slack.api.model.Message;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
@@ -119,6 +120,7 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                         channels,
                         feedbackErasure,
                         messages,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 true,
                 new TransactionTemplate(transactionManager),

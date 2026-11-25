@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
-import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
@@ -19,6 +18,7 @@ import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** One completed Slack reply or digest note, keyed by its ledger entry and owned by the outbox. */
@@ -58,8 +58,14 @@ public class ConversationSlackReplies {
     }
 
     /** What an attempt of a post carries out. */
-    public Payload payload(ActionAttempt attempt) {
-        return mapper.treeToValue(attempt.payload(), Payload.class);
+    public Payload payload(JsonNode payload) {
+        return mapper.treeToValue(payload, Payload.class);
+    }
+
+    /** Holds the question in its current state until the outbox write admission commits. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdQuestionForSend(long workspaceId, UUID entryId, UUID turnId) {
+        return entries.lockUnredactedQuestion(workspaceId, entryId, turnId).isPresent();
     }
 
     /** How a post stands, as its action shows it; {@code null} without an action. */

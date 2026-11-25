@@ -315,18 +315,23 @@ public class ActionExecutor implements SmartLifecycle {
 
     private ActionResult attempt(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
+        var payload = mapper.readTree(claim.payload());
         var attempt = new ActionAttempt(
                 claim.id(),
                 claim.workspaceId(),
                 claim.kind(),
                 claim.idempotencyKey(),
-                mapper.readTree(claim.payload()),
+                payload,
                 claim.attempts(),
                 claim.epoch(),
                 claim.writeStarted(),
                 claim.readbackRef(),
                 () -> {
-                    boolean begun = store.beginWrite(claim.id(), claim.epoch(), WRITE_MARGIN);
+                    boolean begun = store.beginWrite(
+                            claim.id(),
+                            claim.epoch(),
+                            WRITE_MARGIN,
+                            () -> claim.writeStarted() || adapter.sourceIsCurrent(claim.workspaceId(), payload));
                     if (begun) fenced.set(true);
                     return begun;
                 },
@@ -336,6 +341,8 @@ public class ActionExecutor implements SmartLifecycle {
         ActionResult result;
         try {
             result = adapter.execute(attempt);
+        } catch (ActionStore.SourceWithdrawn withdrawn) {
+            result = new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         } catch (RuntimeException failure) {
             // The class only: a provider's exception message can carry the payload it refused.
             event(log.atWarn(), "action.attempt.failed", claim.id(), claim.workspaceId(), claim.kind())

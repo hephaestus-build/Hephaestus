@@ -399,6 +399,26 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     @Test
+    void shouldWithdrawTheReplyWhenItsQuestionIsDeletedAfterTheAdapterReadsIt() {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        var running = claims.claim(asked.turn());
+        end(running, "Complete reply to the deleted question");
+        posts();
+        when(slack.isConnected(workspace.getId())).thenAnswer(invocation -> {
+            // The adapter has built the reply. Commit the deletion before it asks to begin the write.
+            entries.deleteMessage(workspace.getId(), asked.question().getId());
+            return true;
+        });
+
+        var result = ActionTestSupport.runLane(executor, jdbc, key(asked));
+
+        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        assertThat(result).contains(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
+        assertThat(replies.forQuestion(workspace.getId(), asked.question().getId()))
+                .isEmpty();
+    }
+
+    @Test
     void shouldRemoveAnUnknownOutcomeWhenRedactionCommitsDuringItsSettlement() throws Exception {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());

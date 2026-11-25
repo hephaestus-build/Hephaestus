@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -60,12 +61,12 @@ public class SlackChannelLifecycleService {
      * {@code channel_deleted}: the channel and its data are gone on Slack's side, so erase our copy too rather than
      * leave a zombie allow-list row and lingering thread-aggregate PII.
      */
-    public void onDeleted(String teamId, JsonNode event) {
+    public void onDeleted(String teamId, JsonNode event, Instant erasedAt) {
         withChannel(
                 teamId,
                 event,
-                (workspaceId, channelId) ->
-                        consentService.revokeForPlatformEvent(workspaceId, channelId, "channel deleted in Slack"));
+                (workspaceId, channelId) -> consentService.revokeForPlatformEvent(
+                        workspaceId, channelId, erasedAt, "channel deleted in Slack"));
     }
 
     /**

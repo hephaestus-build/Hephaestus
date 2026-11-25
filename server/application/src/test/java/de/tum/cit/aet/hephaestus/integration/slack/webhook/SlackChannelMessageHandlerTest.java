@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
@@ -93,6 +94,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 true, // conversation-ingest capability on
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
@@ -128,6 +130,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 false, // conversation-ingest capability OFF
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),

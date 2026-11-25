@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
+
 /**
  * Carries out one {@link ActionKind}. The executor calls it with no transaction active, and the adapter calls the
  * provider only after {@link ActionAttempt.Fence#beginWrite()} accepted.
@@ -19,6 +22,14 @@ public interface ActionAdapter {
     ActionVariants variants();
 
     ActionResult execute(ActionAttempt attempt);
+
+    /**
+     * Checks the source of a new provider write, in the transaction that starts it and after the action is locked.
+     * A source check locks the domain row until admission commits. Returning false withdraws the action.
+     */
+    default boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode payload) {
+        return true;
+    }
 
     /**
      * Ends the domain row of an action that ended, in the same transaction, whoever ended it: an attempt, expiry or

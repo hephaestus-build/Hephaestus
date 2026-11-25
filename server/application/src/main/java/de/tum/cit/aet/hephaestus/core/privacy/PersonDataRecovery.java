@@ -124,7 +124,8 @@ final class PersonDataRecovery implements SmartLifecycle {
     record MessageDeletion(long workspaceId, UUID entryId) {}
 
     /** A Slack channel that an admin revoked or that Slack deleted. */
-    record SlackChannelErasure(long workspaceId, String channelId) {}
+    record SlackChannelErasure(
+            long workspaceId, String channelId, @Nullable Instant erasedAt) {}
 
     /** A stored Slack message that its author edited or deleted in Slack. */
     record SlackMessageChange(long workspaceId, long messageId, Change change) {
@@ -180,7 +181,8 @@ final class PersonDataRecovery implements SmartLifecycle {
                     && manifest.messageDeletions().isEmpty()
                     && manifest.slackMessageChanges().isEmpty()
                     && manifest.slackChannelErasures().isEmpty();
-            if (manifest.restorePoint().isAfter(Instant.now())
+            Instant now = Instant.now();
+            if (manifest.restorePoint().isAfter(now)
                     || manifest.noLaterErasures() != none
                     || manifest.workspacePurges().stream().anyMatch(purge -> purge.workspaceId() <= 0)
                     || manifest.disconnects().stream()
@@ -194,6 +196,8 @@ final class PersonDataRecovery implements SmartLifecycle {
                             .anyMatch(message -> message.workspaceId() <= 0 || message.entryId() == null)
                     || manifest.slackChannelErasures().stream()
                             .anyMatch(channel -> channel.workspaceId() <= 0
+                                    || (channel.erasedAt() != null
+                                            && channel.erasedAt().isAfter(now))
                                     || channel.channelId() == null
                                     || channel.channelId().isBlank())
                     || manifest.slackMessageChanges().stream()
@@ -229,7 +233,10 @@ final class PersonDataRecovery implements SmartLifecycle {
             for (MessageDeletion message : manifest.messageDeletions())
                 messages.deleteAgain(message.workspaceId(), message.entryId());
             for (SlackChannelErasure channel : manifest.slackChannelErasures())
-                slackChannels.eraseAgain(channel.workspaceId(), channel.channelId());
+                slackChannels.eraseAgain(
+                        channel.workspaceId(),
+                        channel.channelId(),
+                        Objects.requireNonNullElse(channel.erasedAt(), manifest.restorePoint()));
             for (SlackMessageChange message : manifest.slackMessageChanges())
                 slackMessages.eraseAgain(
                         message.workspaceId(),

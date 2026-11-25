@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
+import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -23,6 +26,14 @@ public class SlackChannelDeletedMessageHandler extends SlackChannelLifecycleMess
 
     @Override
     protected void handleEnvelope(JsonNode root) {
-        lifecycleService.onDeleted(teamId(root), root.path("event"));
+        JsonNode event = root.path("event");
+        Instant erasedAt = SlackTs.toInstant(event.path("event_ts").asString(""));
+        if (erasedAt == null) {
+            long seconds = root.path("event_time").asLong(0);
+            if (seconds <= 0 || seconds > Instant.MAX.getEpochSecond())
+                throw new PayloadParsingException("Slack channel deletion has no valid event time");
+            erasedAt = Instant.ofEpochSecond(seconds);
+        }
+        lifecycleService.onDeleted(teamId(root), event, erasedAt);
     }
 }

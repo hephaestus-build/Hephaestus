@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
@@ -94,6 +95,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         journal),
                 conversationIngestEnabled,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
@@ -350,20 +352,25 @@ class SlackIngestServiceTest extends BaseUnitTest {
 
         var appender = new ListAppender<ILoggingEvent>();
         appender.start();
+        Instant erasedAt = Instant.parse("2026-01-02T00:00:00Z");
         Logger logger = (Logger) LoggerFactory.getLogger(SlackChannelErasure.class);
         logger.addAppender(appender);
         try {
-            service.eraseChannel(7L, "C1");
+            service.eraseChannel(7L, "C1", erasedAt);
         } finally {
             logger.detachAppender(appender);
         }
 
-        // The erasure is logged by its ids alone, for an erasure recovery manifest to list.
+        // The erasure log gives recovery its ids and cutoff.
         assertThat(appender.list)
                 .singleElement()
                 .satisfies(event -> assertThat(event.getKeyValuePairs())
                         .extracting(pair -> pair.key + "=" + pair.value)
-                        .containsExactly("event.name=slack.channel_erased", "workspace.id=7", "slack.channel.id=C1"));
+                        .containsExactly(
+                                "event.name=slack.channel_erased",
+                                "workspace.id=7",
+                                "slack.channel.id=C1",
+                                "slack.channel.erased_at=" + erasedAt));
 
         // Consent flip stops future ingestion + drops threads out of the ACTIVE-consent projectors…
         verify(monitoredChannelRepository).revokeConsent(7L, "C1");
@@ -376,7 +383,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         assertThat(journal.facts())
                 .containsExactly(new Fact(
                         PrivacyJournalKind.SLACK_CHANNEL_ERASED,
-                        Map.of("workspaceId", 7L, "channelId", new NativeId("C1"))));
+                        Map.of("workspaceId", 7L, "channelId", new NativeId("C1"), "erasedAt", erasedAt)));
     }
 
     @Test

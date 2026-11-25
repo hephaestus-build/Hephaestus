@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** One completed Slack message per ledger entry, fenced and settled by the outbox executor. */
@@ -71,9 +72,17 @@ class SlackPostAdapter implements ActionAdapter {
     }
 
     @Override
+    public boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode body) {
+        var payload = replies.payload(body);
+        var turnId = payload.turnId();
+        return turnId == null
+                || replies.holdQuestionForSend(Objects.requireNonNull(workspaceId), payload.entryId(), turnId);
+    }
+
+    @Override
     public ActionResult execute(ActionAttempt attempt) {
         if (slack.getIfAvailable() == null) return unavailable(attempt, ActionStopReason.NOT_CONFIGURED);
-        var payload = replies.payload(attempt);
+        var payload = replies.payload(attempt.payload());
         if (payload.turnId() == null) {
             var notes = digests.getIfAvailable();
             return notes == null
