@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,8 +21,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestResponses;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -46,6 +48,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
@@ -97,6 +101,20 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
         private static final String SHA = "a".repeat(40);
 
+        @BeforeEach
+        void useTheRealClassification() {
+            service = new CommitAuthorEnrichmentService(
+                    commitRepository,
+                    identityResolutions,
+                    authorResolver,
+                    graphQlClientProvider,
+                    graphQlSyncCoordinator,
+                    new GitHubExceptionClassifier(new SimpleMeterRegistry()),
+                    userProcessor,
+                    eventPublisher,
+                    Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+        }
+
         private Map<String, List<CommitAuthorEnrichmentService.CommitActor>> read(
                 Map<String, Object> commit, List<ResponseError> errors) {
             var client = mock(HttpGraphQlClient.class);
@@ -114,7 +132,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .doReturn(commit)
                     .when(field)
                     .toEntity(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any());
-            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA));
+            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA)).bySha();
         }
 
         private static Map<String, Object> actor(String email, Map<String, Object> rest) {
@@ -170,34 +188,108 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .isFalse();
         }
 
+        private CommitAuthorEnrichmentService.CommitActors readBody(String body, List<String> shas) {
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class);
+            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(client.document(anyString())).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.just(GitHubGraphQlTestResponses.decode(body)));
+            return service.fetchCommitActors("owner/repo", 1L, shas);
+        }
+
         @Test
         void shouldAnswerTheOtherCommitsWhenOneCommitsAliasCarriesAnError() {
             String other = "b".repeat(40);
+            // GitHub could not read the first commit's user: its field is null, and its error names its alias.
+            var actors = readBody("""
+                    {"data":{"repository":{
+                      "commit0":{"author":{"email":"a@example.com","user":null},"committer":null,"authors":{"nodes":[]}},
+                      "commit1":{"author":{"email":"b@example.com","user":{"login":"b","databaseId":2}},
+                                 "committer":null,"authors":{"nodes":[]}}}},
+                     "errors":[{"message":"Something went wrong","path":["repository","commit0","author","user"]}]}
+                    """, List.of(SHA, other));
+
+            assertThat(actors.bySha())
+                    .as("the null user under the error is no answer that no account owns the email")
+                    .containsOnlyKeys(other);
+            var account = Objects.requireNonNull(actors.bySha().get(other)).getFirst();
+            assertThat(account.answered()).isTrue();
+            assertThat(Objects.requireNonNull(account.user()).getDatabaseId()).isEqualTo(2L);
+            assertThat(actors.throttled()).isFalse();
+        }
+
+        @Test
+        void shouldReportAThrottleAnsweredWithValidDataSoItsCommitsWait() {
+            var actors = readBody("""
+                    {"data":{"repository":{"commit0":null}},
+                     "errors":[{"type":"RATE_LIMITED","message":"You have exceeded a secondary rate limit."}]}
+                    """, List.of(SHA));
+
+            assertThat(actors.bySha()).isEmpty();
+            assertThat(actors.throttled())
+                    .as("a throttle with HTTP 200 is a wait, not a miss that spends an attempt")
+                    .isTrue();
+            verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());
+        }
+
+        @Test
+        void shouldFindAThrottleBehindAnAliasErrorAndKeepOnlyTheNamedAccounts() {
+            String named = "b".repeat(40);
+            String nobody = "c".repeat(40);
+            var actors = readBody("""
+                    {"data":{"repository":{
+                      "commit0":null,
+                      "commit1":{"author":{"email":"b@example.com","user":{"login":"b","databaseId":2}},
+                                 "committer":null,"authors":{"nodes":[]}},
+                      "commit2":{"author":{"email":"c@example.com","user":null},"committer":null,"authors":{"nodes":[]}}}},
+                     "errors":[{"type":"NOT_FOUND","message":"Could not resolve to a node","path":["repository","commit0"]},
+                               {"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}
+                    """, List.of(SHA, named, nobody));
+
+            assertThat(actors.throttled())
+                    .as("the NOT_FOUND of the first alias does not hide the throttle after it")
+                    .isTrue();
+            assertThat(actors.bySha())
+                    .as("a named account stays an answer; a null user under a throttle waits")
+                    .containsOnlyKeys(named);
+        }
+
+        private CommitAuthorEnrichmentService.CommitActors refuse(WebClientResponseException refusal) {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            var response = mock(ClientGraphQlResponse.class);
-            var readable = mock(ClientResponseField.class);
-            var error = mock(ResponseError.class);
-            when(error.getParsedPath()).thenReturn(List.of("repository", "commit1"));
             when(graphQlClientProvider.forScope(1L)).thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
-            when(request.execute()).thenReturn(Mono.just(response));
-            when(response.isValid()).thenReturn(true);
-            when(response.getErrors()).thenReturn(List.of(error));
-            when(response.field("repository.commit0")).thenReturn(readable);
-            Map<String, Object> commit = Map.of("author", actor("a@example.com", noUser()));
-            doReturn(commit).when(readable).getValue();
-            doReturn(commit)
-                    .when(readable)
-                    .toEntity(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any());
+            when(request.execute()).thenReturn(Mono.error(refusal));
+            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA, "b".repeat(40)));
+        }
 
-            var actors = service.fetchCommitActors("owner/repo", 1L, List.of(SHA, other));
+        private static WebClientResponseException refusal(int status, String header, String value, String body) {
+            var headers = new HttpHeaders();
+            headers.add(header, value);
+            return WebClientResponseException.create(
+                    status, "refused", headers, body.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        }
 
-            assertThat(actors)
-                    .as("the commit that GitHub could not read has no answer")
-                    .containsOnlyKeys(SHA);
-            assertThat(Objects.requireNonNull(actors.get(SHA)).getFirst().answered())
-                    .isTrue();
+        @Test
+        void shouldEndTheReadAtA429WithoutWaitingForItsReset() {
+            var actors = refuse(refusal(
+                    429,
+                    "X-RateLimit-Reset",
+                    Long.toString(Instant.now().plusSeconds(3600).getEpochSecond()),
+                    "{\"message\":\"API rate limit exceeded\"}"));
+
+            assertThat(actors.throttled()).isTrue();
+            assertThat(actors.bySha()).isEmpty();
+            verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());
+        }
+
+        @Test
+        void shouldEndTheReadAtASecondaryLimit403() {
+            var actors = refuse(
+                    refusal(403, "Retry-After", "60", "{\"message\":\"You have exceeded a secondary rate limit.\"}"));
+
+            assertThat(actors.throttled()).isTrue();
+            verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());
         }
 
         @Test

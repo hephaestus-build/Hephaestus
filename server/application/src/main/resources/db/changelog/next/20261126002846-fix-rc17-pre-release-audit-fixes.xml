@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795634098734-1" author="hephaestus">
+        <comment>A review that its model pool cannot take at its claim waits with the hold MODEL_POOL, so its idle sandbox goes back to the reaper.</comment>
+        <sql>
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_hold_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
+    CHECK (hold_reason IS NULL OR hold_reason IN ('BUDGET', 'SANDBOX_ROOM', 'MODEL_POOL'));
+        </sql>
+        <rollback>
+UPDATE agent_run SET hold_reason = NULL, available_at = LEAST(available_at, clock_timestamp()) WHERE hold_reason = 'MODEL_POOL';
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_hold_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
+    CHECK (hold_reason IS NULL OR hold_reason IN ('BUDGET', 'SANDBOX_ROOM'));
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

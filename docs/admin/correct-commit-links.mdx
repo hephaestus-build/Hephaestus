@@ -27,6 +27,9 @@ The correction job runs by default.
    - `erased`: the provider named an erased account, so the links are cleared.
    - `skipped`: another attempt already finished the email. No link changed.
    - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
+   - `deferred`: the provider limited its rate, so the email waits and spends no attempt.
+     The job pauses that repository for 10 minutes, and doubles the pause up to one hour while the limit lasts.
+     The other repositories continue.
 
 ## Check that it worked
 
@@ -64,7 +67,7 @@ To resume it, set the value to `true` again.
 
 1. Read the `Commit identity correction failed` log record for the queue ID and the cause.
 2. Fix the cause, for example the connection that monitors the repository.
-3. On the `UNANSWERED` rows of `commit_identity_resolution`, set `state` to `PENDING` and `attempts` to 0.
+3. On the `UNANSWERED` rows of the repositories that the outage affected, set `state` to `PENDING`, `attempts` to 0 and `finished_at` to NULL. Preview the rows first, and update in a transaction, as in [Ask again after an upgrade](#ask-again-after-an-upgrade-from-100-rc16-or-earlier).
 
 **Check:** `commit_identity_pending` rises, then falls as the provider answers.
 
@@ -72,6 +75,36 @@ To resume it, set the value to `true` again.
 
 **Cause:** GitHub could not read one commit of a batch of up to 50, for example a commit that a force-push removed. Earlier releases then dropped the answers for the whole batch. So the other emails of the repository also used their 5 attempts and left the queue as `UNANSWERED`.
 
-**Fix:** After the upgrade, do step 3 of [Ask again after a provider outage](#ask-again-after-a-provider-outage). Only the emails of a commit that GitHub cannot read end `UNANSWERED` again.
+**Fix:** After the upgrade, ask again only for the GitHub emails that ended unanswered while the earlier release ran.
+Run the steps in one `psql` session as the database owner.
+
+1. Set the window: from the start of the earlier release to the upgrade, for example `'2026-11-24 20:00Z'` and `'2026-11-25 20:00Z'`.
+2. Preview the rows. Write down the IDs of the repositories that the earlier release affected, and check that each count is plausible:
+
+   ```sql
+   SELECT q.repository_id, r.name_with_owner, count(*)
+     FROM commit_identity_resolution q
+     JOIN repository r ON r.id = q.repository_id
+     JOIN identity_provider p ON p.id = r.provider_id AND p.type = 'GITHUB'
+    WHERE q.state = 'UNANSWERED' AND q.finished_at BETWEEN '<from>' AND '<to>'
+    GROUP BY 1, 2 ORDER BY 3 DESC;
+   ```
+
+3. Queue the rows of those repositories again in a transaction. Clear `finished_at` with the attempts:
+
+   ```sql
+   BEGIN;
+   UPDATE commit_identity_resolution q SET state = 'PENDING', attempts = 0, finished_at = NULL
+     FROM repository r, identity_provider p
+    WHERE r.id = q.repository_id AND p.id = r.provider_id AND p.type = 'GITHUB'
+      AND q.repository_id IN (<repository IDs>)
+      AND q.state = 'UNANSWERED' AND q.finished_at BETWEEN '<from>' AND '<to>';
+   ```
+
+   Compare the count that the update reports with the sum of the preview counts of those repositories.
+   Run `COMMIT` if they match, otherwise `ROLLBACK`.
+
+A row asks GitHub about the same commit again. The emails of a commit that GitHub cannot read end `UNANSWERED` again after 5 attempts.
+GitLab rows stay as they are: GitLab reads each commit alone, so the earlier release did not drop its answers.
 
 **Check:** `commit_identity_resolutions_total` counts `resolved` or `no_account` again, and `commit_identity_pending` falls.

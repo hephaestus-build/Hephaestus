@@ -37,81 +37,116 @@ import org.springframework.modulith.events.ApplicationModuleListener;
  * the deepest calls in one build than in another, so an exception that a run does not find is no failure.
  *
  * <p>Limits: the walk follows direct calls, and an interface call to each production implementation, up to {@link
- * #DEPTH} calls deep. It cannot see a {@code catch} that rethrows, so it counts such a catch as settling.
+ * #DEPTH} calls deep. It cannot see a {@code catch} that rethrows, so it counts such a catch as settling. It proves no
+ * behaviour: #5196 tracks a test per listener below that a permanent failure records its stop reason.
  */
 class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
 
     private static final int DEPTH = 8;
 
     /**
-     * Listener ({@code Type.method}) to the domain exceptions that escape it today, and why. It may only shrink: settle a
-     * failure in its listener and remove it here.
+     * Listener ({@code Type.method(Parameter)}) to the domain exceptions that escape it today, and why. Each name is
+     * qualified below {@code BASE_PACKAGE}, so two types with one simple name cannot share an entry. It may only
+     * shrink: settle a failure in its listener and remove it here.
      */
     private static final Map<String, Escape> ESCAPES = Map.ofEntries(
             Map.entry(
-                    "ItemEventReviewListener.on",
+                    "agent.conversation.turn.ConversationTurnCompletion.billTakenBack(conversation.ConversationLedgerEvents$AttemptTakenBack)",
+                    new Escape(Set.of("core.exception.EntityNotFoundException"), "#5196: the turn is gone")),
+            Map.entry(
+                    "agent.conversation.turn.ConversationTurnCompletion.settle(agent.conversation.turn.ConversationReceiptsDue)",
+                    new Escape(Set.of("core.exception.EntityNotFoundException"), "#5196: the turn is gone")),
+            Map.entry(
+                    "integration.scm.gitlab.workspace.GitLabConnectionStateListener.onDeactivated(integration.core.events.ConnectionLifecycleEvent$Deactivated)",
                     new Escape(
                             Set.of(
-                                    "EntityNotFoundException",
-                                    "GitOperationException",
-                                    "InvalidInputException",
-                                    "ItemCaptureException",
-                                    "LlmModelUnavailableException",
-                                    "RepositoryFetchException",
-                                    "ReviewRequestRefused"),
-                            "#5196: review request failures, and the capture faults that #5190 rethrows so that they stay"
-                                    + " retryable while the occasion stays open")),
-            Map.entry(
-                    "ConversationTurnCompletion.billTakenBack",
-                    new Escape(Set.of("EntityNotFoundException"), "#5196: the turn is gone")),
-            Map.entry(
-                    "ConversationTurnCompletion.settle",
-                    new Escape(Set.of("EntityNotFoundException"), "#5196: the turn is gone")),
-            Map.entry(
-                    "GitLabConnectionStateListener.onDeactivated",
-                    new Escape(
-                            Set.of("CredentialUnreadableException", "EncryptionException"),
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "core.security.EncryptionException"),
                             "#5196: the stored token cannot be read")),
             Map.entry(
-                    "ProviderResourceRepairDispatcher.on",
+                    "practices.review.ItemEventReviewListener.on(integration.core.api.ItemEventRecorded)",
                     new Escape(
-                            Set.of("CredentialUnreadableException", "EncryptionException", "InvalidInputException"),
+                            Set.of(
+                                    "core.exception.EntityNotFoundException",
+                                    "integration.scm.domain.workdir.GitRepositoryManager$GitOperationException",
+                                    "core.exception.InvalidInputException",
+                                    "integration.core.spi.ItemCaptureException",
+                                    "agent.catalog.LlmModelUnavailableException",
+                                    "integration.scm.domain.workdir.GitRepositoryManager$RepositoryFetchException",
+                                    "practices.review.ReviewRequestRefused"),
+                            "#5196: review request failures, and capture faults that #5190 retries while the occasion stays open")),
+            Map.entry(
+                    "practices.review.ItemEventReviewListener.on(integration.core.api.ItemSourceObserved)",
+                    new Escape(
+                            Set.of(
+                                    "integration.core.spi.ItemCaptureException",
+                                    "integration.scm.domain.workdir.GitRepositoryManager$RepositoryFetchException"),
+                            "#5196: capture failures")),
+            Map.entry(
+                    "integration.core.connection.repair.ProviderResourceRepairDispatcher.on(integration.core.events.ConnectionCredentialsReplacedEvent)",
+                    new Escape(
+                            Set.of(
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "core.security.EncryptionException",
+                                    "core.exception.InvalidInputException"),
                             "#5196: the stored credential cannot be read, or the input is invalid")),
             Map.entry(
-                    "ProviderTeardown.on",
+                    "integration.core.connection.repair.ProviderResourceRepairDispatcher.on(integration.core.connection.repair.ProviderResourceRepairRequested)",
                     new Escape(
                             Set.of(
-                                    "CredentialUnreadableException",
-                                    "EncryptionException",
-                                    "InstallationNotFoundException",
-                                    "InvalidInputException",
-                                    "OutlineApiException",
-                                    "OutlineRateLimitedException",
-                                    "SlackOAuthException"),
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "core.security.EncryptionException",
+                                    "core.exception.InvalidInputException"),
+                            "#5196: the stored credential cannot be read, or the input is invalid")),
+            Map.entry(
+                    "integration.core.connection.ProviderTeardown.on(integration.core.connection.ProviderTeardownRequested)",
+                    new Escape(
+                            Set.of(
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "core.security.EncryptionException",
+                                    "integration.scm.domain.common.exception.InstallationNotFoundException",
+                                    "core.exception.InvalidInputException",
+                                    "integration.outline.client.OutlineApiException",
+                                    "integration.outline.client.OutlineRateLimitedException",
+                                    "integration.slack.connect.SlackOAuthException"),
                             "#5196: provider failures outside the recorded removal")),
             Map.entry(
-                    "ReviewCommandListener.on",
+                    "practices.review.ReviewCommandListener.on(integration.core.events.BotCommandReceivedEvent)",
                     new Escape(
                             Set.of(
-                                    "CredentialUnreadableException",
-                                    "FeedbackDeliveryException",
-                                    "GitOperationException",
-                                    "InstallationNotFoundException",
-                                    "InstallationSuspendedException",
-                                    "InvalidInputException",
-                                    "LlmModelUnavailableException",
-                                    "OutboundEgressSuppressedException",
-                                    "RepositoryFetchException",
-                                    "ReviewRequestRefused"),
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "integration.core.spi.FeedbackDeliveryException",
+                                    "integration.scm.domain.workdir.GitRepositoryManager$GitOperationException",
+                                    "integration.scm.domain.common.exception.InstallationNotFoundException",
+                                    "integration.scm.domain.common.exception.InstallationSuspendedException",
+                                    "core.exception.InvalidInputException",
+                                    "agent.catalog.LlmModelUnavailableException",
+                                    "integration.core.egress.OutboundEgressSuppressedException",
+                                    "integration.scm.domain.workdir.GitRepositoryManager$RepositoryFetchException",
+                                    "practices.review.ReviewRequestRefused"),
                             "#5196: the reply or the requested review cannot proceed")),
             Map.entry(
-                    "ReviewJobCompletionService.cancel",
+                    "practices.review.ReviewCommandListener.on(practices.review.CommentRequestedReviewEnded)",
                     new Escape(
-                            Set.of("EntityNotFoundException", "ReviewJobStateConflictException"),
+                            Set.of(
+                                    "integration.core.connection.CredentialUnreadableException",
+                                    "integration.core.spi.FeedbackDeliveryException",
+                                    "integration.scm.domain.common.exception.InstallationNotFoundException",
+                                    "integration.scm.domain.common.exception.InstallationSuspendedException",
+                                    "integration.core.egress.OutboundEgressSuppressedException"),
+                            "#5196: the reply cannot be sent")),
+            Map.entry(
+                    "agent.job.ReviewJobCompletionService.cancel(practices.spi.ReviewCancellationRequested)",
+                    new Escape(
+                            Set.of(
+                                    "core.exception.EntityNotFoundException",
+                                    "agent.job.ReviewJobStateConflictException"),
                             "#5196: the job is gone or in another state")),
             Map.entry(
-                    "SlackInteractivityHandler.onOptOutConfirmation",
-                    new Escape(Set.of("JournalPendingException"), "#5196: the privacy journal is not ready")));
+                    "integration.slack.interactivity.SlackInteractivityHandler.onOptOutConfirmation(integration.slack.interactivity.SlackInteractivityHandler$OptOutConfirmation)",
+                    new Escape(
+                            Set.of("core.exception.JournalPendingException"),
+                            "#5196: the privacy journal is not ready")));
 
     private record Escape(Set<String> exceptions, String reason) {}
 
@@ -122,7 +157,7 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
         for (JavaMethod listener : durableListeners()) {
             var walk = new Walk(listener.getOwner(), transientTypes);
             Set<String> escaping = walk.escapes(listener, Set.of(), 0).stream()
-                    .map(JavaClass::getSimpleName)
+                    .map(DurableListenerFailureArchTest::name)
                     .collect(Collectors.toCollection(TreeSet::new));
             if (!escaping.isEmpty()) found.put(id(listener), escaping);
         }
@@ -165,8 +200,18 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
                 .collect(Collectors.toSet());
     }
 
+    /** {@code Type.method(Parameter)}: overloads of one listener method are separate listeners. */
     private static String id(JavaMethod method) {
-        return method.getOwner().getSimpleName() + "." + method.getName();
+        return name(method.getOwner()) + "." + method.getName()
+                + method.getRawParameterTypes().stream()
+                        .map(DurableListenerFailureArchTest::name)
+                        .collect(Collectors.joining(",", "(", ")"));
+    }
+
+    /** The binary name, below {@code BASE_PACKAGE} for a project type. */
+    private static String name(JavaClass type) {
+        String prefix = BASE_PACKAGE + ".";
+        return type.getName().startsWith(prefix) ? type.getName().substring(prefix.length()) : type.getName();
     }
 
     /** One listener's walk: catches count only inside the listener's own class, the boundary that settles. */

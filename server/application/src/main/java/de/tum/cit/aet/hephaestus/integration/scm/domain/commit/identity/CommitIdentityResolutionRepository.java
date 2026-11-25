@@ -38,19 +38,23 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         int getAttempts();
     }
 
+    /** The repositories with pending emails, the one with the fewest attempts and the oldest row first. */
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """
-        SELECT q.repository_id AS repositoryId, r.provider_id AS providerId, r.native_id AS nativeId,
+        SELECT n.repository_id AS repositoryId, r.provider_id AS providerId, r.native_id AS nativeId,
                p.type AS providerType,
                r.name_with_owner AS nameWithOwner
-        FROM commit_identity_resolution q
-        JOIN repository r ON r.id = q.repository_id
+        FROM (SELECT q.repository_id, min(q.attempts) AS attempts, min(q.id) AS first_id
+              FROM commit_identity_resolution q
+              WHERE q.state = 'PENDING'
+              GROUP BY q.repository_id
+              ORDER BY 2, 3
+              LIMIT :limit) n
+        JOIN repository r ON r.id = n.repository_id
         JOIN identity_provider p ON p.id = r.provider_id
-        WHERE q.state = 'PENDING'
-        ORDER BY q.attempts, q.id
-        LIMIT 1
+        ORDER BY n.attempts, n.first_id
         """, nativeQuery = true)
-    Optional<NextRepository> findNextRepository();
+    List<NextRepository> findNextRepositories(@Param("limit") int limit);
 
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """

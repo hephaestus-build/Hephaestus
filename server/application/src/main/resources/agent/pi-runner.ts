@@ -704,6 +704,9 @@ async function runReview(): Promise<void> {
 		outputTokens: positiveIntegerEnv("PI_PRACTICE_OUTPUT_TOKENS"),
 		inputTokens: positiveIntegerEnv("PI_PRACTICE_INPUT_TOKENS"),
 	};
+	// The server sets how many practice sessions may run at once: the calls that the model pool lets this review hold.
+	// A wider review measures its practices in waves of that size.
+	const SESSION_LIMIT = positiveIntegerEnv("PI_SESSION_LIMIT");
 	// Abort a stalled stream independently of the turn's work budget. A call that waits for its first
 	// byte is not stalled: the proxy answers it when the pool grants it, or refuses it at the deadline.
 	const STALL_MS = 300_000;
@@ -3040,8 +3043,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return { slug, label, heading: `## Turn ${index + 1} of ${allSlugs.length}: ${slug}` };
 				});
 				const baseHeapBytes = getHeapStatistics().used_heap_size;
-				const pace = new SessionPace((running) =>
-					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
+				const pace = new SessionPace(
+					(running) =>
+						running < SESSION_LIMIT &&
+						roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
 				// Two unanswered sessions stop new starts only: a running session that is answered keeps its work, and

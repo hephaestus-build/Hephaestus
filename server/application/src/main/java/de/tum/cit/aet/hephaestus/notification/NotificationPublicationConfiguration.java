@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,48 @@ import org.springframework.util.function.SingletonSupplier;
 public class NotificationPublicationConfiguration {
 
     @Bean
+    PublicationCounts publicationCounts(JdbcOperations jdbc) {
+        return new PublicationCounts(jdbc);
+    }
+
+    /** The open publications of one listener: those exhausted, and the others still open past the overdue bound. */
+    public record OpenPublications(String listenerId, long exhausted, long overdue) {}
+
+    /**
+     * Counts the open publications by listener in the database. It reads no payload, so it also counts a row whose
+     * event type an upgrade removed. A failed row is exhausted at once, however young, with the predicate that the retry
+     * uses; a running last attempt can still end.
+     */
+    public static final class PublicationCounts {
+        private final JdbcOperations jdbc;
+
+        PublicationCounts(JdbcOperations jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        public List<OpenPublications> byListener(Duration overdueAfter) {
+            String exhaustedRow = FAILED + " AND completion_attempts >= ?";
+            String sql = """
+                    SELECT listener_id,
+                           count(*) FILTER (WHERE %1$s) AS exhausted,
+                           count(*) FILTER (WHERE NOT (%1$s)
+                                              AND publication_date < clock_timestamp() - make_interval(mins => CAST(? AS integer)))
+                               AS overdue
+                      FROM event_publication
+                     WHERE completion_date IS NULL
+                     GROUP BY listener_id
+                    """.formatted(exhaustedRow);
+            return jdbc.query(
+                    sql,
+                    (row, index) -> new OpenPublications(
+                            row.getString("listener_id"), row.getLong("exhausted"), row.getLong("overdue")),
+                    NotificationRedeliveryJob.MAX_ATTEMPTS,
+                    NotificationRedeliveryJob.MAX_ATTEMPTS,
+                    overdueAfter.toMinutes());
+        }
+    }
+
+    @Bean
     static BeanPostProcessor fairNotificationRetries(
             ObjectProvider<JdbcOperations> jdbc, ObjectProvider<EventSerializer> serializer) {
         return new FairRetryPostProcessor(jdbc, serializer);
@@ -59,6 +102,9 @@ public class NotificationPublicationConfiguration {
         }
     }
 
+    /** The publications that a retry may take: failed, or open in the state that an older Modulith wrote. */
+    static final String FAILED = "(status = 'FAILED' OR (status IS NULL AND completion_date IS NULL))";
+
     private static List<TargetEventPublication> findFailed(
             JdbcOperations jdbc, EventSerializer serializer, FailedCriteria criteria) {
         Instant before = criteria.getPublicationDateReference();
@@ -67,11 +113,19 @@ public class NotificationPublicationConfiguration {
                 SELECT id, serialized_event, event_type, listener_id, publication_date,
                        last_resubmission_date, completion_attempts, status, completion_date
                   FROM event_publication
-                 WHERE (status = 'FAILED' OR (status IS NULL AND completion_date IS NULL))
+                 WHERE %s
                    AND completion_attempts < ?
-                """;
+                   AND COALESCE(last_resubmission_date, publication_date)
+                       + make_interval(mins => LEAST(? * power(2, GREATEST(completion_attempts - 1, 0)), ?)::int)
+                       < clock_timestamp()
+                """.formatted(FAILED);
+        // The backoff counts from the last attempt, in the SQL before the batch limit: Modulith's minimum age counts
+        // from the publication, so servers that take turns would otherwise retry a row every few minutes. The database
+        // clock decides, so the clocks of the servers that take turns cannot disagree about a row.
         var arguments = new ArrayList<Object>();
         arguments.add(NotificationRedeliveryJob.MAX_ATTEMPTS);
+        arguments.add(NotificationRedeliveryJob.FIRST_BACKOFF.toMinutes());
+        arguments.add(NotificationRedeliveryJob.MAX_BACKOFF.toMinutes());
         if (before != null) {
             sql += " AND publication_date < ?";
             arguments.add(Timestamp.from(before));

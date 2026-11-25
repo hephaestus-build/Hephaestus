@@ -419,6 +419,7 @@ public class CommitAuthorEnrichmentService {
                     buildBatchQuery(owner, repoName, batch, ""),
                     scopeId,
                     nameWithOwner,
+                    true,
                     response -> extractLoginsFromResponse(response, batch, shaToEmail, emailToLogin, usersToUpsert));
         }
 
@@ -432,9 +433,15 @@ public class CommitAuthorEnrichmentService {
      * Follows the gold standard pattern: transport retry, GraphQL error classification,
      * rate limit tracking, and exception classification.
      */
-    private void fetchBatch(
-            String queryString, Long scopeId, String nameWithOwner, Consumer<ClientGraphQlResponse> onResponse) {
+    private boolean fetchBatch(
+            String queryString,
+            Long scopeId,
+            String nameWithOwner,
+            boolean waitOnThrottle,
+            Consumer<ClientGraphQlResponse> onResponse) {
         int retryAttempt = 0;
+        // Whether the batch ended on a throttle: its commits then wait for the provider, and spend no attempt.
+        boolean throttled = false;
         while (retryAttempt <= MAX_RETRY_ATTEMPTS) {
             boolean pendingPermit = false;
             try {
@@ -462,6 +469,8 @@ public class CommitAuthorEnrichmentService {
                     pendingPermit = false;
                     graphQlClientProvider.recordFailure(new IllegalStateException("Invalid GraphQL response"));
                     ClassificationResult classification = graphQlSyncCoordinator.classifyGraphQlErrors(response);
+                    throttled = rateLimited(classification);
+                    if (throttled && !waitOnThrottle) break;
                     if (classification != null) {
                         if (graphQlSyncCoordinator.handleGraphQlClassification(new GraphQlClassificationContext(
                                 classification,
@@ -493,8 +502,32 @@ public class CommitAuthorEnrichmentService {
                 pendingPermit = false;
                 graphQlClientProvider.recordSuccess();
 
+                // GitHub can answer a throttle with HTTP 200 and partial data: the throttle is a wait, never an answer.
+                ClassificationResult throttle = exceptionClassifier.throttleOf(response);
+                if (throttle != null && !waitOnThrottle) {
+                    onResponse.accept(response);
+                    throttled = true;
+                    break;
+                }
+                if (throttle != null) {
+                    if (graphQlSyncCoordinator.handleGraphQlClassification(new GraphQlClassificationContext(
+                            throttle,
+                            retryAttempt,
+                            MAX_RETRY_ATTEMPTS,
+                            "commit author enrichment",
+                            "repo",
+                            nameWithOwner,
+                            log))) {
+                        retryAttempt++;
+                        continue;
+                    }
+                    throttled = true;
+                    break;
+                }
+
                 // Extract results from aliased fields
                 onResponse.accept(response);
+                throttled = false;
                 break; // Success — exit retry loop
             } catch (Exception e) {
                 if (pendingPermit) {
@@ -502,6 +535,8 @@ public class CommitAuthorEnrichmentService {
                 }
 
                 ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
+                throttled = rateLimited(classification);
+                if (throttled && !waitOnThrottle) break;
                 if (graphQlSyncCoordinator.handleGraphQlClassification(new GraphQlClassificationContext(
                         classification,
                         retryAttempt,
@@ -517,36 +552,56 @@ public class CommitAuthorEnrichmentService {
                 break;
             }
         }
+        return throttled;
+    }
+
+    private static boolean rateLimited(@Nullable ClassificationResult classification) {
+        return classification != null && classification.category() == GitHubExceptionClassifier.Category.RATE_LIMITED;
     }
 
     /**
      * Reads every actor of the given commits, for callers that need GitHub's answer for an email.
-     * It stops before a batch when the rate limit is near, and the remaining SHAs have no entry. A rate limit
-     * response to a batch that has started can still wait, as it does for every batch of this class.
+     * It stops before a batch when the rate limit is near, and at the first throttle that GitHub answers. It does not
+     * wait for the reset: the remaining SHAs have no entry, and the result says that a throttle cut the read short.
      *
      * @return the actors per SHA; a SHA has no entry when GitHub gave no answer for that commit
      */
-    public Map<String, List<CommitActor>> fetchCommitActors(String nameWithOwner, Long scopeId, List<String> shas) {
+    public CommitActors fetchCommitActors(String nameWithOwner, Long scopeId, List<String> shas) {
         Map<String, List<CommitActor>> actors = new HashMap<>();
         String[] parts = nameWithOwner.split("/", 2);
         if (parts.length != 2) {
-            return actors;
+            return new CommitActors(actors, false);
         }
+        boolean throttled = false;
         List<String> valid =
                 shas.stream().filter(sha -> SHA_PATTERN.matcher(sha).matches()).toList();
         for (int start = 0; start < valid.size(); start += BATCH_SIZE) {
             if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
+                throttled = true;
                 break;
             }
             List<String> batch = valid.subList(start, Math.min(start + BATCH_SIZE, valid.size()));
-            fetchBatch(
+            // A throttle ends the read at once: its commits wait for the next run, and this job holds no lock
+            // meanwhile.
+            boolean batchThrottled = fetchBatch(
                     buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD),
                     scopeId,
                     nameWithOwner,
+                    false,
                     response -> extractActors(response, batch, actors));
+            if (batchThrottled) {
+                throttled = true;
+                break;
+            }
         }
-        return actors;
+        return new CommitActors(actors, throttled);
     }
+
+    /**
+     * The actors that GitHub gave per SHA, and whether a throttle cut the read short. A SHA without an entry then waits
+     * for the provider: it is no miss, and spends no attempt.
+     */
+    public record CommitActors(Map<String, List<CommitActor>> bySha, boolean throttled) {}
 
     private void extractActors(
             ClientGraphQlResponse response, List<String> batch, Map<String, List<CommitActor>> actors) {
@@ -554,8 +609,14 @@ public class CommitAuthorEnrichmentService {
         // error under one commit's alias spoils only that commit, for example a SHA that GitHub no longer has; an error
         // anywhere else spoils the whole batch.
         Set<String> spoiled = new HashSet<>();
-        for (ResponseError error : response.getErrors()) {
+        boolean throttled = false;
+        for (int index = 0; index < response.getErrors().size(); index++) {
+            ResponseError error = response.getErrors().get(index);
             String alias = commitAlias(error);
+            if (alias == null && GitHubExceptionClassifier.isThrottle(response, index)) {
+                throttled = true;
+                continue;
+            }
             if (alias == null) {
                 log.warn(
                         "Dropped a commit actor batch on a GraphQL error: commits={}, errorType={}",
@@ -588,15 +649,17 @@ public class CommitAuthorEnrichmentService {
                     && authors.get("nodes") instanceof List<?> nodes) {
                 found.addAll(nodes);
             }
-            actors.put(
-                    batch.get(i),
-                    found.stream()
-                            .<CommitActor>mapMulti((actor, sink) -> {
-                                if (actor instanceof Map<?, ?> map && map.get("email") instanceof String email) {
-                                    sink.accept(actorOf(email, map));
-                                }
-                            })
-                            .toList());
+            List<CommitActor> read = found.stream()
+                    .<CommitActor>mapMulti((actor, sink) -> {
+                        if (actor instanceof Map<?, ?> map && map.get("email") instanceof String email) {
+                            sink.accept(actorOf(email, map));
+                        }
+                    })
+                    .toList();
+            // A throttle can cut a resolution short, so under it only a named account is an answer. A commit with a
+            // null user waits for a read that GitHub completes.
+            if (throttled && !read.stream().allMatch(actor -> actor.user() != null)) continue;
+            actors.put(batch.get(i), read);
         }
     }
 

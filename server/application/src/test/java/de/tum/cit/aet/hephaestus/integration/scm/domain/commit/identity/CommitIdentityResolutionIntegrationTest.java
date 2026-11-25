@@ -29,6 +29,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -374,6 +375,48 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         assertThat(authorOf(commit)).isEqualTo(wrong.getId());
         assertThat(states()).containsOnly("PENDING");
         assertThat(attempts()).containsOnly(0);
+    }
+
+    @Test
+    void shouldPauseAThrottledRepositorySoTheNextOneIsCorrected() throws Exception {
+        User wrong = user("wrong");
+        User right = user("right");
+        String throttledEmail = "throttled@example.com";
+        Repository throttled = repository();
+        Repository healthy = repository();
+        long waiting = commit(throttled, wrong, null, throttledEmail);
+        long corrected = commit(healthy, wrong, null, EMAIL);
+        seed();
+        assertThat(resolutions.findNextRepositories(1).getFirst().getRepositoryId())
+                .as("the throttled repository stands first in the queue")
+                .isEqualTo(throttled.getId());
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return question.email().equals(throttledEmail)
+                    ? new Answer.Deferred()
+                    : new Answer.Account(id(right), right.getNativeId());
+        };
+
+        run(50);
+        run(50);
+        run(50);
+
+        assertThat(authorOf(corrected))
+                .as("the repository behind the throttled one is corrected")
+                .isEqualTo(right.getId());
+        assertThat(authorOf(waiting)).isEqualTo(wrong.getId());
+        assertThat(asked)
+                .as("the paused repository is not asked again before its pause ends")
+                .containsExactly(throttledEmail, EMAIL);
+        assertThat(jdbc.queryForObject(
+                        "SELECT attempts FROM commit_identity_resolution WHERE repository_id = ?",
+                        Integer.class,
+                        throttled.getId()))
+                .isZero();
+        assertThat(meters.counter("commit.identity.resolutions", "outcome", "deferred")
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test

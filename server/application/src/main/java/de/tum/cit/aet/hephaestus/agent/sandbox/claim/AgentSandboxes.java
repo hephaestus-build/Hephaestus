@@ -100,7 +100,12 @@ public class AgentSandboxes {
         /** Its network policy did not hold in time, so its driver ran nothing (isolation gate G6). */
         UNISOLATED,
         /** A report draft returned its lease and waits for its next attempt. */
-        DRAFT_REQUEUED;
+        DRAFT_REQUEUED,
+        /**
+         * Its claim put the run back on a hold, such as a full model pool. The run is not due, so the sandbox would only
+         * keep a slot that the dispatch needs, until the reaper's next pass.
+         */
+        RUN_HELD;
 
         /** The reason as the event and the counter name it. */
         public String value() {
@@ -301,7 +306,11 @@ public class AgentSandboxes {
                 String reviewId = sandbox.reviewId();
                 if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
                 else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
-                if (!claimed.test(leased)) return Optional.<AgentRunLease>empty();
+                if (!claimed.test(leased)) {
+                    if (runs.isHeld(new AgentRunRef(leased.runId(), sandbox.workspaceId())))
+                        revoke(sandbox, Revocation.RUN_HELD);
+                    return Optional.<AgentRunLease>empty();
+                }
                 sandboxes.used(sandbox.id(), sandbox.workspaceId());
                 log.atInfo()
                         .addKeyValue("event.name", "agent.sandbox.leased")

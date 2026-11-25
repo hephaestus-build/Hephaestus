@@ -18,12 +18,16 @@ public record PracticeAgentRequest(
         @Nullable ReasoningEffort reasoningEffort,
         String jobToken,
         int timeoutSeconds,
-        boolean forcedToolChoice) {
+        boolean forcedToolChoice,
+        int sessionLimit) {
     public PracticeAgentRequest {
         Objects.requireNonNull(apiProtocol, "apiProtocol must not be null");
         Objects.requireNonNull(upstreamModelId, "upstreamModelId must not be null");
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException("timeoutSeconds must be positive, got: " + timeoutSeconds);
+        }
+        if (sessionLimit <= 0) {
+            throw new IllegalArgumentException("sessionLimit must be positive, got: " + sessionLimit);
         }
         if (jobToken == null || jobToken.isBlank()) {
             throw new IllegalArgumentException("jobToken is required — every sandbox talks to the LLM proxy");

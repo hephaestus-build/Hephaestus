@@ -38,10 +38,11 @@ public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
     public Map<Question, Answer> answer(String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
         var shas = questions.stream().map(Question::sha).distinct().toList();
         var actors = commits.fetchCommitActors(nameWithOwner, scopeId, shas);
-        boolean stopped = graphQlClientProvider.isRateLimitCritical(scopeId);
+        // A throttled read is a wait: its unanswered commits are deferred and spend no attempt.
+        boolean stopped = actors.throttled() || graphQlClientProvider.isRateLimitCritical(scopeId);
         Map<Question, Answer> answers = new HashMap<>();
         for (var question : questions) {
-            var commitActors = actors.get(question.sha());
+            var commitActors = actors.bySha().get(question.sha());
             if (commitActors == null) {
                 if (stopped) answers.put(question, new Answer.Deferred());
                 continue;

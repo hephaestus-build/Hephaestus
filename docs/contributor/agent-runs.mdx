@@ -349,7 +349,12 @@ A due review whose sandbox has started, but has not claimed its run yet, holds i
 A review that a hold or a backoff put back to a later time is not due, so its idle sandbox holds no place.
 The pass reads the due runs a page at a time until its room is used or the queue ends, so the reviews that a full pool holds do not hide the runs behind them.
 The claim applies the rule again while it holds the pool's row lock, so two servers that dispatched reviews of one pool at once admit only one.
-It records the pool on the job, and it defers a run that the rule holds ([Claim](#claim)).
+It records the pool on the job.
+A run that the rule refuses at its claim waits with the hold `MODEL_POOL` for one minute: it spends nothing and keeps its place in the claim order.
+The run is not due while it waits. The claim gives the sandbox back in the same transaction, and the dispatch starts a new one only once the pool admits the review.
+A deferral would keep the run due, so its ready sandbox would ask for it again and again and hold its slot.
+A review that a pool takes runs at most as many practice sessions at once as the pool's room leaves it after the other running reviews, and at least one (`PI_SESSION_LIMIT`).
+Thus, a review wider than the room, which an idle pool takes alone, measures its practices in waves of that size.
 A composition, a conversation and product feedback do not count and are not held.
 A held review starts no clock: its deadline, lease and work deadline start at its claim, and a review run has no start window.
 Its provider outage window counts from its first admission, not from its submission.

@@ -249,19 +249,20 @@ public class GitHubGraphQlConfig {
     }
 
     /**
-     * Retries 5xx server errors and 429 (rate limited) responses with exponential backoff; see
-     * {@link #MAX_RETRIES} for the timing rationale.
+     * Retries 5xx server errors with exponential backoff; see {@link #MAX_RETRIES} for the timing rationale. A 429
+     * passes through like every 4xx: its {@code Retry-After} and reset headers reach the caller's classification, which
+     * waits until the provider's reset. A blind backoff here would discard them and can outlast the caller's timeout.
      */
-    private ExchangeFilterFunction retryFilter() {
+    static ExchangeFilterFunction retryFilter() {
         return (request, next) -> next.exchange(request)
                 .flatMap(response -> {
                     HttpStatusCode status = response.statusCode();
 
-                    if (status.is4xxClientError() && status.value() != 429) {
+                    if (status.is4xxClientError()) {
                         return Mono.just(response);
                     }
 
-                    if (status.is5xxServerError() || status.value() == 429) {
+                    if (status.is5xxServerError()) {
                         // Release the body to prevent a resource leak on the discarded response
                         return response.releaseBody().then(Mono.error(new RetryableException(status.value())));
                     }

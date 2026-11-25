@@ -543,6 +543,41 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldTakeBackTheSandboxInTheLeaseThatHeldItsRunAndKeepItForARequeueWithoutAHold() {
+        String pooled = "review:" + UUID.randomUUID();
+        String requeued = "review:" + UUID.randomUUID();
+        queueReview(pooled);
+        queueReview(requeued);
+        var pooledSandbox = ensure(pooled, AgentSandboxKind.REVIEW);
+        var requeuedSandbox = ensure(requeued, AgentSandboxKind.REVIEW);
+        var pooledToken = token(pooledSandbox);
+        sandboxes.authenticate(pooledToken);
+        sandboxes.authenticate(token(requeuedSandbox));
+
+        // The claim found the model pool full and held the run: no reaper pass is needed to free the sandbox.
+        assertThat(sandboxes.lease(
+                        pooledSandbox,
+                        Set.of(AgentRunKind.REVIEW),
+                        lease -> !runs.requeue(
+                                lease.fence(), AgentRuns.Charge.FREE, Duration.ofMinutes(1), AgentRunHold.MODEL_POOL)))
+                .isEmpty();
+        assertThat(sandboxes.lease(
+                        requeuedSandbox,
+                        Set.of(AgentRunKind.REVIEW),
+                        lease -> !runs.requeue(lease.fence(), AgentRuns.Charge.FREE, Duration.ofMinutes(1), null)))
+                .isEmpty();
+
+        assertThat(sandboxes.authenticate(pooledToken))
+                .as("the held run's sandbox gives its pool slot back in the refused claim")
+                .isEmpty();
+        assertThat(meters.counter("agent.sandbox.revoked", "reason", "run_held").count())
+                .isEqualTo(1.0);
+        assertThat(repository.findLive(workspace, requeued))
+                .as("a run that waits without a hold keeps its sandbox")
+                .isPresent();
+    }
+
+    @Test
     void shouldKeepAHeldReviewsSandboxThatLeasedARunJustNow() {
         String subject = "review:" + UUID.randomUUID();
         var run = queueReview(subject);

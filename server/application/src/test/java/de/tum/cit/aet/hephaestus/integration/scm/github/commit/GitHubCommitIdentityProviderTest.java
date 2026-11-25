@@ -53,7 +53,8 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
     }
 
     private Map<Question, Answer> ask(List<CommitActor> actors) {
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA))).thenReturn(Map.of(SHA, actors));
+        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(SHA, actors), false));
         return provider.answer("o/r", 7L, 9L, Set.of(QUESTION));
     }
 
@@ -112,17 +113,30 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
 
     @Test
     void shouldGiveNoAnswerWhenGitHubDoesNotReturnTheCommit() {
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA))).thenReturn(Map.of());
+        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), false));
 
         assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION))).isEmpty();
     }
 
     @Test
     void shouldDeferWhenTheRateLimitStoppedTheRead() {
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA))).thenReturn(Map.of());
+        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), false));
         when(graphQlClientProvider.isRateLimitCritical(anyLong())).thenReturn(true);
 
         assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION))).containsEntry(QUESTION, new Answer.Deferred());
         verify(suppression, never()).isSuppressed(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void shouldDeferEveryUnansweredCommitOfAThrottledReadThoughTheQuotaLooksFree() {
+        // A secondary limit, or a throttle answered with HTTP 200, while the tracked primary quota still has room.
+        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), true));
+
+        assertThat(provider.answer("o/r", 1L, 9L, Set.of(QUESTION)))
+                .as("a throttle is a wait: deferred, it spends no attempt of the five")
+                .containsEntry(QUESTION, new Answer.Deferred());
     }
 }
