@@ -59,7 +59,7 @@ Felix decided on 2026-11-25 to split the two jobs, as a breaking cutover with no
    A workspace switch still loads a new document.
 4. **One app origin, and the workspace host serves only the signed-out public page (chosen).** The signed-in app moves to the apex, where one origin holds every workspace.
    The host keeps the public job, which needs no cookie.
-   Old links into the app keep working through a redirect.
+   With the switch on, old links into the app keep working through a redirect.
 
 Products with many workspaces in one account put the app on one origin.
 Slack's docs show a channel of its web client at a path on `app.slack.com` [1].
@@ -119,10 +119,13 @@ Read the Docs serves documentation at `<project>.readthedocs.io`, and its commun
 
 This is a breaking change for instances that turned on workspace subdomains.
 
-- **Before the upgrade,** replace `workspaceSubdomains` with `publicWorkspaceHosts` in `site.yaml`. The chart schema refuses the old value.
+- **Before the upgrade,** remove `workspaceSubdomains` from `site.yaml`. The chart schema refuses the old value.
+  To keep workspace hosts, set `publicWorkspaceHosts.enabled: true` in its place. The new switch is off by default.
 - **Keep** the wildcard DNS record, the DNS API token and the certificate, as long as the switch is on.
-- **Members' links** to `<slug>.<host>/<path>` answer `308` and land in the app at `<host>/w/<slug>/<path>`.
+- **With the switch on, members' links** to `<slug>.<host>/<path>` answer `308` and land in the app at `<host>/w/<slug>/<path>`.
   This includes links in email, Slack messages and provider comments from before the upgrade.
+- **With the switch off,** these links no longer reach Hephaestus. The same workspace is at `<host>/w/<slug>`.
+  Remove the wildcard DNS record, the DNS API token and the certificate.
 - **The root of a public workspace host** now shows the signed-out public page, also to a member. Its **Open in app** link leads into the app.
 - **The session does not change.** It was always on the instance host, so a signed-in person stays signed in.
 - **A tab left open on a workspace host** runs the old web app, whose credentialed API calls now fail. Its next load lands on the public page or the redirect.
