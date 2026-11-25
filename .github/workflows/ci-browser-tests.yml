@@ -89,6 +89,7 @@ jobs:
           export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
+            if [[ -n "${WATCH_PID:-}" ]]; then kill "$WATCH_PID" 2>/dev/null || true; fi
             if [[ -n "${SERVER_PID:-}" ]]; then
               kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
               (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &
@@ -116,6 +117,9 @@ jobs:
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
           timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
+          # A server that stops answering holds every test to its timeout and leaves no record. The watch dumps its threads and stops it.
+          node scripts/e2e-server-watch.ts "$SERVER_PID" http://localhost:8080/login e2e-server-threads &
+          WATCH_PID=$!
           curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           docker compose -f server/compose.yaml exec -T postgres \
@@ -131,6 +135,7 @@ jobs:
           path: |
             webapp/test-results
             e2e-server.log
+            e2e-server-threads.*
           if-no-files-found: warn
           retention-days: 7
 
@@ -201,6 +206,7 @@ jobs:
           export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
+            if [[ -n "${WATCH_PID:-}" ]]; then kill "$WATCH_PID" 2>/dev/null || true; fi
             if [[ -n "${SERVER_PID:-}" ]]; then
               kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
               (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &
@@ -229,6 +235,9 @@ jobs:
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
           timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
+          # A server that stops answering holds every test to its timeout and leaves no record. The watch dumps its threads and stops it.
+          node scripts/e2e-server-watch.ts "$SERVER_PID" http://localhost:8080/login e2e-server-threads &
+          WATCH_PID=$!
           curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
@@ -249,6 +258,7 @@ jobs:
           path: |
             extension/test-results
             e2e-server.log
+            e2e-server-threads.*
           if-no-files-found: warn
           retention-days: 7
 
