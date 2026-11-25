@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -31,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabReposito
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabStoppedProjectService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -52,6 +54,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private SyncTargetProvider syncTargets;
+
+    @Autowired
+    private SharedEventRecorder events;
 
     @Autowired
     private WorkspaceRepositoryMonitorService monitorService;
@@ -316,6 +321,12 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
 
         assertActive(fixture.workspace(), itemId, false);
         assertThat(repositories.findById(fixture.repository().getId())).isEmpty();
+        // The removal tells running Hephaestus turns of the workspace that what they may read changed.
+        assertThat(events.of(
+                        RepositoryMonitoringChangedEvent.class,
+                        RepositoryMonitoringChangedEvent::workspaceId,
+                        fixture.workspace().getId()))
+                .isNotEmpty();
     }
 
     @Test

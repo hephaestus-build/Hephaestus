@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
@@ -621,6 +622,19 @@ class ConnectionServiceTest extends BaseUnitTest {
 
             verify(eventPublisher)
                     .publishEvent(new ConnectionLifecycleEvent.Deactivated(55L, 7L, IntegrationKind.GITHUB));
+        }
+
+        /** A disconnect of an active connection tells running Hephaestus turns that what they may read changed. */
+        @Test
+        void transitionActiveToUninstalled_tellsRunningTurnsTheContextChanged() {
+            Connection connection = connectionInState(IntegrationState.ACTIVE);
+
+            service.transition(
+                    connection,
+                    TransitionRequest.byAccount(
+                            IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", 42L, "corr-4", "disconnected"));
+
+            verify(eventPublisher).publishEvent(new AgentContextChangedEvent(7L));
         }
 
         @Test

@@ -227,6 +227,18 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
     }
 
+    /** A revocation erases the channel, and running Hephaestus turns drop its threads from their context folders. */
+    @Test
+    void transitionToRevoked_tellsRunningTurnsTheContextChanged() {
+        stubChannel(channel(ConsentState.ACTIVE, Instant.parse("2020-01-01T00:00:00Z")));
+        stubActor(5L);
+
+        service().transition(WS, CHANNEL, ConsentState.REVOKED, null);
+
+        verify(ingestService).eraseChannel(WS, CHANNEL);
+        verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
+    }
+
     /** A same-state PATCH is an idempotent no-op — it must not re-fire the kick on every admin double-click. */
     @Test
     void redundantActivation_publishesNoKick() {

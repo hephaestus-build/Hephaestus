@@ -116,17 +116,29 @@ class CascadeTableTest extends BaseUnitTest {
             CONTEXT + "shouldTellTheWorkersOfTheWorkspaceWhenWhatItsTurnsMayReadChanges";
 
     /** How each source erasure changes the context, which revokes the workspace's conversation sandboxes. */
-    private static final String CONTEXT_CHANGING_ERASURES = "Each source erasure changes the context, which revokes the"
-            + " workspace's conversation sandboxes. A disconnect deactivates its connection (ConnectionLifecycleEffects),"
-            + " a channel erasure revokes the channel's consent, and a collection removal, an SCM mirror erasure and a"
-            + " repository removal announce the change.";
+    private static final String CONTEXT_CHANGING_ERASURES = "A disconnect of an active connection deactivates it"
+            + " (ConnectionLifecycleEffects), a channel erasure revokes the channel's consent, and a collection removal,"
+            + " an SCM mirror erasure and a repository removal announce the change. Each change revokes the"
+            + " workspace's conversation sandboxes.";
 
-    /** The proof that a source erasure changes the context, and that a context change revokes the sandboxes. */
+    /** Each source erasure's context change, entered through its cause, and the revocation that a change makes. */
     private static final List<String> CONTEXT_CHANGE_PROOFS = List.of(
+            "integration.core.connection.ConnectionServiceTest$LifecycleEvents#"
+                    + "transitionActiveToUninstalled_tellsRunningTurnsTheContextChanged",
+            "integration.slack.channel.SlackChannelConsentServiceTest#"
+                    + "transitionToRevoked_tellsRunningTurnsTheContextChanged",
             "integration.outline.collection.OutlineCollectionAdminServiceTest#"
                     + "delete_erasesTheCollectionsDocuments_andTheRegistryRow",
+            "integration.scm.workspace.ScmWorkspaceContentEraserTest#"
+                    + "erase_publishesTheDerivedRowEventBeforeDroppingTheItemsItPointsAt",
+            "integration.scm.domain.item.ScmRepositoryItemLifecycleIntegrationTest#"
+                    + "shouldRemoveTheItemBeforeDeletingTheLastMonitoredRepository",
             NARROWING_PROOF,
             REVOCATION_PROOF);
+
+    /** The source erasure that reaches no sandbox. */
+    private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended connection publishes"
+            + " no context change, so it reaches no sandbox.";
 
     /** The partial answer of a turn stays in memory until the turn ends. */
     private static final String PARTIAL_GAP = "Gap, owned by #5141: a server keeps a running turn's partial answer in"
@@ -196,12 +208,12 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.ANSWERING_TURN,
-                    Action.DISCARD,
+                    Action.KEEP,
                     Stream.concat(CONTEXT_CHANGE_PROOFS.stream(), Stream.of(SLACK_ENTRIES_PROOF))
                             .toList(),
-                    CONTEXT_CHANGING_ERASURES + " The sandbox revocation is the fence: the attempt's next write is"
-                            + " refused. A Slack disconnect also stops every Slack turn. Gap, owned by #5158: a write in"
-                            + " flight still commits what it read."),
+                    CONTEXT_CHANGING_ERASURES + " The revocation refuses the attempt's next write, and a Slack"
+                            + " disconnect also stops every Slack turn. " + SUSPENDED_GAP + " A write in flight still"
+                            + " commits what it read."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.ANSWERING_TURN,
@@ -302,9 +314,9 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.SANDBOX,
-                    Action.REVOKE,
+                    Action.KEEP,
                     CONTEXT_CHANGE_PROOFS,
-                    CONTEXT_CHANGING_ERASURES),
+                    CONTEXT_CHANGING_ERASURES + " " + SUSPENDED_GAP),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.SANDBOX,
@@ -330,7 +342,14 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(CascadeCause.NARROWING, CascadeDependent.MODEL_PROVIDER_COPY, Action.KEEP, List.of(), PROVIDER),
             // BACKUP
             new Cell(CascadeCause.REMOVAL, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
-            new Cell(CascadeCause.SOURCE_ERASURE, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
+            new Cell(
+                    CascadeCause.SOURCE_ERASURE,
+                    CascadeDependent.BACKUP,
+                    Action.KEEP,
+                    List.of(),
+                    "A backup keeps its copy until the backup expires. A restore reapplies the journaled disconnects,"
+                            + " collection removals and Slack channel erasures before it serves data. Gap, owned by"
+                            + " #4968: it reapplies no repository removal or SCM mirror erasure."),
             new Cell(CascadeCause.ERASURE, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             new Cell(CascadeCause.NARROWING, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             // EXPORT
@@ -373,7 +392,8 @@ class CascadeTableTest extends BaseUnitTest {
             Map.entry("Optional trace export and log collection", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("External avatar hosts and browser caches", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Container logs and support bundles", EnumSet.noneOf(CascadeDependent.class)),
-            Map.entry("PostgreSQL and filesystem backups", EnumSet.of(CascadeDependent.BACKUP)));
+            Map.entry("PostgreSQL and filesystem backups", EnumSet.of(CascadeDependent.BACKUP)),
+            Map.entry("Conversation sandboxes", EnumSet.of(CascadeDependent.SANDBOX)));
 
     /**
      * The dependent kinds that each store of the person-data map holds. A store that holds none is in
@@ -600,6 +620,14 @@ class CascadeTableTest extends BaseUnitTest {
         assertThat(new TreeSet<>(OUTSIDE_ROWS.keySet()))
                 .as("every row of the main table that names no store says which dependent kinds it holds")
                 .containsExactlyElementsOf(outside);
+        Set<CascadeDependent> held = OUTSIDE_ROWS.values().stream()
+                .flatMap(Set::stream)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(CascadeDependent.class)));
+        assertThat(held)
+                .as("the kinds that live outside PostgreSQL are the kinds that a row outside the inventory holds")
+                .containsExactlyInAnyOrderElementsOf(Arrays.stream(CascadeDependent.values())
+                        .filter(kind -> kind.home() == CascadeDependent.Home.OUTSIDE)
+                        .toList());
     }
 
     private static Set<String> mapStores() throws IOException {
