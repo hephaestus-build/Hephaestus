@@ -7,7 +7,7 @@
 
 **Supersedes:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md), [ADR 0047](0047-the-practice-profile-has-one-reader.md), [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), [ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md)
 
-**Builds on:** [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) (rule 16, read-only user views), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (standing), [ADR 0053](0053-workspace-addresses-are-a-presentation-origin.md) (the public page at the workspace address)
+**Builds on:** [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) (rule 16, read-only user views), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (standing), [ADR 0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md) (the public page at the workspace host)
 
 ## Context
 

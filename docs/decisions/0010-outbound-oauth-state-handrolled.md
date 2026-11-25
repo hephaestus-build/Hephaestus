@@ -151,7 +151,7 @@ OWASP ASVS 5.0 10.1.2 requires values that "are securely bound to both the clien
   Without the cookie, the callback answers `browser_unconfirmed` and leaves the state for the browser that started the flow.
   The Slack cancellation, which consumes a state to return to its workspace, also needs the cookie.
   Each callback that carries a state clears the cookie.
-- The API and the callback share the apex host (ADR 0053), and the provider's redirect is a top-level navigation, so a `SameSite=Lax` cookie reaches the callback.
+- The API and the callback share the instance host ([ADR 0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md)), and the provider's redirect is a top-level navigation, so a `SameSite=Lax` cookie reaches the callback.
 - No legitimate flow returns with a state in another browser.
   A GitHub installation that an organization owner approves arrives without a state and takes the setup path.
 
