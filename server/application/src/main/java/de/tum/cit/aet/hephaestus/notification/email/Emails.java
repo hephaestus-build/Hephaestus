@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,9 +54,7 @@ public class Emails {
         Optional<CheckedAuthority> authority =
                 workspace == null ? Optional.empty() : generations.authorize(workspace, ready);
         if (workspace == null ? !ready.getAsBoolean() : authority.isEmpty()) {
-            var refused = withheld.get();
-            // A workspace that is gone, such as a purged one, is never asked about: its email is no news any more.
-            metrics.record(notice.kind(), refused == null ? Outcome.EXPIRED : refused.outcome());
+            metrics.record(notice.kind(), Objects.requireNonNull(withheld.get()).outcome());
             return;
         }
         actions.enqueue(request(notice, event, authority.orElse(null), MAX_ATTEMPTS));
