@@ -24,14 +24,11 @@ import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
-import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
-import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.adapter.ProductfeedbackPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
-import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
@@ -59,12 +56,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -76,20 +70,11 @@ import org.springframework.web.server.ResponseStatusException;
  * stuck. The destination names no model here, so every report routes without a draft
  * ({@link ProductFeedbackDraftIntegrationTest} drafts). Only the GitHub transport is controlled.
  */
-@Import(CapturingMailTestConfiguration.class)
-@TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
-class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
+class ProductFeedbackTrustGatesIntegrationTest extends AbstractProductFeedbackFilingIntegrationTest {
     private static final ProductFeedbackIssues.Repository PUBLIC_REPOSITORY =
             new ProductFeedbackIssues.Repository(51, "R_public", "acme/feedback-public", 7, false);
     private static final ProductFeedbackIssues.Repository PRIVATE_REPOSITORY =
             new ProductFeedbackIssues.Repository(52, "R_private", "acme/feedback-private", 7, true);
-
-    @MockitoBean
-    private ProductFeedbackIssues issues;
-
-    // One adapter implements both interfaces, so replacing only one would leave a bean of the wrong type.
-    @MockitoBean
-    private ProductFeedbackIssueUpdates updates;
 
     @Autowired
     private DestinationService destinationService;
@@ -285,7 +270,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
                                     + " next_attempt_at = now() + interval '45 seconds' WHERE feedback_id = ?",
                             id))
                     .hasMessageContaining("takes no new lease");
-            // A hand-over to a draft action also counts the attempt, and it may move the next attempt out too.
+            // A new draft run counts the generation and can move the next attempt out.
             assertThat(jdbc.update(
                             "UPDATE product_feedback_filing SET attempt = attempt + 1, drafting_started_at = now(),"
                                     + " next_attempt_at = now() + interval '5 minutes' WHERE feedback_id = ?",
@@ -483,9 +468,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM agent_action WHERE lane_key = ? AND kind = 'DRAFT_REPORT'",
+                        "SELECT count(*) FROM agent_run WHERE concurrency_key = ? AND kind = 'DRAFT_REPORT'",
                         Long.class,
-                        FileIssueAdapter.lane(id)))
+                        "draft:" + id + ":1"))
                 .isZero();
         routing.routeAnswered();
 
@@ -1136,7 +1121,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isTrue();
 
-        // ANSWERED never reaches a model: only a DRAFT_QUEUED report has a draft action.
+        // ANSWERED never reaches a model. A draft run is queued when the filing enters DRAFT_QUEUED.
         ProductFeedbackFiling moved = filings.findById(id).orElseThrow();
         assertThat(moved.getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(moved.getPromptInput()).isNull();

@@ -36,6 +36,10 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     private static final Map<String, String> MIXED_SCOPE_TABLES = Map.of(
             "agent_action",
             "workspace_id is NULL only for an instance-level action, such as an email to an account",
+            "agent_run",
+            "workspace_id is NULL only for DRAFT_REPORT, enforced by ck_agent_run_scope",
+            "agent_sandbox",
+            "workspace_id is NULL only for DRAFT_REPORT, enforced by ck_agent_sandbox_scope",
             "provider_event",
             "workspace_id is NULL only for a GitHub App installation event, which can arrive before its workspace",
             "config_audit_event",

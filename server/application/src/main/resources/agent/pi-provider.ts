@@ -164,7 +164,7 @@ function positiveInteger(value: unknown): boolean {
 	return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
-function asProviderConfig(parsed: unknown): ProviderConfig | null {
+export function asProviderConfig(parsed: unknown): ProviderConfig | null {
 	if (!isRecord(parsed)) {
 		return null;
 	}

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
@@ -31,6 +32,7 @@ class ProxyRoutingService {
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
     private final ProductFeedbackDraftCalls drafts;
+    private final LlmModelResolver models;
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
@@ -38,7 +40,9 @@ class ProxyRoutingService {
             ObjectMapper mapper,
             ReviewSnapshotQuery reviews,
             AgentRuns runs,
-            ProductFeedbackDraftCalls drafts) {
+            ProductFeedbackDraftCalls drafts,
+            LlmModelResolver models) {
+        this.models = models;
         this.drafts = drafts;
         this.agentJobRepository = jobs;
         this.runs = runs;
@@ -77,7 +81,9 @@ class ProxyRoutingService {
     boolean ownsAttempt(ProxyRouting routing) {
         var attempt = routing.attempt();
         if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
-            return drafts.waits(attempt.sourceId(), attempt.number());
+            return attempt.runId() != null
+                    && runs.isCurrent(new AgentRunRef(attempt.runId(), AgentRunRef.INSTANCE_SCOPE), attempt.epoch())
+                    && drafts.waits(attempt.sourceId(), attempt.number());
         if (attempt.sourceType() == UsageSourceType.PROBE)
             return routing.workDeadline() != null && Instant.now().isBefore(routing.workDeadline());
         UUID lease = attempt.runId();
@@ -89,7 +95,10 @@ class ProxyRoutingService {
     }
 
     ProxyRouting resolve(ProxyIdentity identity) {
-        if (identity.turn() != null) return turnRouting(identity.turn());
+        var draft = identity.draft();
+        if (draft != null) return draftRouting(draft);
+        var turn = identity.turn();
+        if (turn != null) return turnRouting(turn);
         var caller = identity.job();
         if (caller == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
         var job = agentJobRepository
@@ -102,6 +111,31 @@ class ProxyRoutingService {
         // The live checks above decide whether this attempt may call at all; its work deadline decides until when.
         Instant workDeadline = Objects.requireNonNull(caller.workDeadline(), "a review attempt has a work deadline");
         return reviewRouting(job, caller.runId(), snapshot, workDeadline);
+    }
+
+    private ProxyRouting draftRouting(ProxyAttempt caller) {
+        int generation = Objects.requireNonNull(caller.draftGeneration());
+        var draft = drafts.waiting(caller.id(), generation).orElseThrow(ProxyRoutingService::attemptEnded);
+        var model = models.resolveInstanceModel(draft.llmModelId());
+        if (model == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The report model is unavailable");
+        var ref = model.ref();
+        return new ProxyRouting(
+                "report-draft:" + caller.runId(),
+                model.protocol().wire(),
+                model.credential().baseUrl(),
+                ref.scope(),
+                ref.connectionId(),
+                ref.modelId(),
+                null,
+                new ProxyRouting.BilledAttempt(
+                        UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
+                        caller.id(),
+                        generation,
+                        caller.runId(),
+                        null,
+                        caller.epoch()),
+                caller.workDeadline(),
+                ProxyRouting.draftOutputLimit(model, draft.maxOutputTokens()));
     }
 
     /** The refusal that the authentication filter also gives an attempt that no longer runs, so its runner stops. */

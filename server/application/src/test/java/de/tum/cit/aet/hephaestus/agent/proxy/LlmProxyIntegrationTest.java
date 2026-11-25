@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -49,9 +50,13 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportAdapterFixture;
+import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportRunFixture;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
@@ -63,12 +68,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
-import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
-import de.tum.cit.aet.hephaestus.core.action.ActionKind;
-import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
-import de.tum.cit.aet.hephaestus.core.action.ActionResult;
-import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
-import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
@@ -105,6 +104,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -125,6 +125,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -147,6 +148,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private SystemSecrets systemSecrets;
+
+    @Autowired
+    private ApplicationContext beans;
 
     private static final String PRACTICE = "comment-quality";
 
@@ -234,9 +238,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private LlmCallPermitRepository callRows;
 
     @Autowired
-    private ProductFeedbackDrafts drafts;
-
-    @Autowired
     private ProductFeedbackDraftCalls draftCalls;
 
     @Autowired
@@ -247,12 +248,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private AccountRepository accounts;
-
-    @Autowired
-    private AgentActions actions;
-
-    @Autowired
-    private ActionExecutor actionExecutor;
 
     private JobTokenAuthenticationFilter filter;
     private Workspace workspace;
@@ -595,8 +590,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
      */
     @ParameterizedTest
     @CsvSource({"200,100,ADMIN", "429,100,ADMIN", "200,0,ADMIN", "200,100,DISCOVERED", "200,100,OVERRIDE"})
-    void shouldDraftThroughTheRealInstanceResolverAndLedgerAndSettleTheAction(
-            int providerStatus, int dailyLimit, String limits) throws Exception {
+    void shouldDraftThroughTheInstanceResolverAndRecordTheRunClaim(int providerStatus, int dailyLimit, String limits)
+            throws Exception {
         try (var upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(new MockResponse.Builder()
@@ -655,74 +650,92 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     SET llm_model_id=excluded.llm_model_id,daily_draft_limit=excluded.daily_draft_limit
                 """, model.getId(), dailyLimit);
             try {
-                String lane = "file_issue:" + report;
-                var request = new ActionRequest(
-                        ActionKind.DRAFT_REPORT,
-                        null,
-                        lane,
-                        "draft:" + report + ":1",
-                        objectMapper.valueToTree(new ProductFeedbackDrafts.Payload(report, 1)),
-                        account.getId(),
-                        3,
-                        Instant.now().plusSeconds(600),
-                        null);
-                UUID action = Objects.requireNonNull(transactionTemplate.execute(tx -> actions.enqueue(request)));
+                var subject = new ProductFeedbackDrafts.Subject(report, 1);
+                var lease = Objects.requireNonNull(transactionTemplate.execute(tx -> {
+                    agentRuns.enqueueReportDraft(subject.key(), Duration.ofMinutes(10));
+                    return agentRuns
+                            .claimSubject(AgentRunRef.INSTANCE_SCOPE, subject.key(), Set.of(AgentRunKind.DRAFT_REPORT))
+                            .orElseThrow();
+                }));
                 var proxy = proxyService(guardedClient(), mock(LlmBudgetService.class), admittingPermits());
-                var adapter = DraftReportAdapterFixture.adapter(
-                        drafts,
-                        draftCalls,
-                        modelResolver,
-                        new ProductFeedbackModelGateway(proxy, objectMapper),
-                        objectMapper,
-                        usageRecorder);
-                ActionTestSupport.due(jdbc, lane);
-                var result = ActionTestSupport.runLane(actionExecutor, jdbc, lane, adapter)
-                        .orElseThrow();
+                var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
+                request.setRemoteAddr("127.0.0.1");
+                var response = new MockHttpServletResponse();
+                var sandboxOwner = SandboxOwnerFixtures.owner(beans, jwtIssuer);
+                var sandbox =
+                        sandboxOwner.ensure(AgentRunRef.INSTANCE_SCOPE, subject.key(), AgentSandboxKind.DRAFT_REPORT);
+                var authFilter = new JobTokenAuthenticationFilter(
+                        jobRepository,
+                        agentRuns,
+                        jwtVerifier,
+                        sandboxOwner,
+                        Map.of(AgentRunKind.DRAFT_REPORT, DraftReportRunFixture.kind(beans)),
+                        mock(ProxyAccounting.class));
+                request.addHeader(
+                        HttpHeaders.AUTHORIZATION,
+                        "Bearer "
+                                + jwtIssuer.issueForSandbox(
+                                        sandbox.id(),
+                                        sandbox.workspaceId(),
+                                        sandbox.subjectKey(),
+                                        Instant.now().plusSeconds(120)));
+                request.addHeader(
+                        SandboxRunArgumentResolver.RUN_HEADER, lease.runId().toString());
+                request.addHeader(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(lease.epoch()));
+                var headers = new HttpHeaders();
+                headers.set(ProxyRouting.DRAFT_MODEL_HEADER, Long.toString(model.getId()));
+                byte[] body = """
+                        {"model":"draft-live","stream":true,"max_completion_tokens":1500,
+                         "messages":[{"role":"user","content":"Draft"}]}
+                        """.getBytes(StandardCharsets.UTF_8);
+                AtomicReference<@Nullable ResponseEntity<?>> result = new AtomicReference<>();
+                authFilter.doFilter(
+                        request,
+                        response,
+                        (incoming, outgoing) -> result.set(proxy.proxy(request, response, headers, body)));
                 if (dailyLimit == 0) {
-                    assertThat(result).isInstanceOf(ActionResult.Failed.class);
+                    assertThat(Objects.requireNonNull(result.get())
+                                    .getStatusCode()
+                                    .value())
+                            .isEqualTo(429);
                     assertThat(upstream.getRequestCount()).isZero();
                     assertThat(meterRegistry
                                     .find(AgentMetrics.LLM_BUDGET_BLOCKED)
                                     .counter())
                             .isNull();
                     assertThat(jdbc.queryForObject(
-                                    "SELECT count(*) FROM llm_usage_event WHERE action_id=?", Long.class, action))
+                                    "SELECT count(*) FROM llm_usage_event WHERE run_id=?", Long.class, lease.runId()))
                             .isZero();
                     return;
                 }
-                assertThat(upstream.getRequestCount()).isEqualTo(1);
-                var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
-                var body = objectMapper.readTree(
-                        Objects.requireNonNull(sent.getBody()).utf8());
-                long output = body.has("max_completion_tokens")
-                        ? body.path("max_completion_tokens").asLong()
-                        : body.path("max_tokens").asLong();
-                assertThat(output).isEqualTo(100);
-                if (providerStatus == 200) {
-                    assertThat(result).isInstanceOf(ActionResult.Done.class);
-                    assertThat(jdbc.queryForObject("SELECT state FROM agent_action WHERE id=?", String.class, action))
-                            .isEqualTo("DONE");
-                    assertThat(jdbc.queryForObject(
-                                    "SELECT state FROM product_feedback_filing WHERE feedback_id=?",
-                                    String.class,
-                                    report))
-                            .isEqualTo("ANSWERED");
-                } else {
-                    assertThat(result).isInstanceOf(ActionResult.Retry.class);
-                    assertThat(jdbc.queryForObject(
-                                    "SELECT attempts FROM agent_action WHERE id=?", Integer.class, action))
-                            .isEqualTo(1);
+                if (providerStatus == 429) {
+                    assertThat(Objects.requireNonNull(result.get()).getBody())
+                            .asString()
+                            .contains("draft_unavailable:");
                 }
-                var row = jdbc.queryForMap("SELECT * FROM llm_usage_event WHERE action_id=?", action);
+                assertThat(upstream.getRequestCount())
+                        .as("proxy response: %s, authentication status: %s", result.get(), response.getStatus())
+                        .isEqualTo(1);
+                var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+                var forwarded = objectMapper.readTree(
+                        Objects.requireNonNull(sent.getBody()).utf8());
+                long output = forwarded.has("max_completion_tokens")
+                        ? forwarded.path("max_completion_tokens").asLong()
+                        : forwarded.path("max_tokens").asLong();
+                assertThat(output).isEqualTo(100);
+                var row = jdbc.queryForMap("SELECT * FROM llm_usage_event WHERE run_id=?", lease.runId());
                 assertThat(row)
                         .containsEntry("workspace_id", null)
-                        .containsEntry("run_id", null)
+                        .containsEntry("run_id", lease.runId())
+                        .containsEntry("lease_epoch", lease.epoch())
                         .containsEntry("call_state", "ENDED");
                 if (providerStatus == 200) {
                     assertThat(row).containsEntry("input_tokens", 10L).containsEntry("output_tokens", 2L);
                     assertThat((BigDecimal) row.get("cost_usd")).isEqualByComparingTo("0.000036");
                 }
             } finally {
+                SecurityContextHolder.clearContext();
+                jdbc.update("DELETE FROM product_feedback WHERE id=?", report);
                 if (oldDestination.isEmpty()) jdbc.update("DELETE FROM product_feedback_destination WHERE id=1");
                 else
                     jdbc.update(
@@ -1722,7 +1735,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
-                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls),
+                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls, modelResolver),
                 new ProxyCallsInFlight(12),
                 health,
                 capacity,
@@ -1791,7 +1804,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls)
+        return new ProxyRoutingService(
+                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls, modelResolver)
                 .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 

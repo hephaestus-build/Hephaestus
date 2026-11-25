@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -129,33 +130,8 @@ class ProxyCallLedger {
      */
     UUID open(ProxyRouting routing, Bound bound, String upstreamModel, @Nullable Long practiceId) {
         var attempt = routing.attempt();
-        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
-            return Objects.requireNonNull(ownTransaction.execute(status -> {
-                if (routing.workspaceId() != null
-                        || attempt.runId() != null
-                        || !drafts.waits(attempt.sourceId(), attempt.number()))
-                    throw new ClaimLost(new IllegalStateException("The report no longer waits for this draft"));
-                if (!drafts.admitCall(attempt.sourceId(), attempt.number(), Objects.requireNonNull(routing.modelId())))
-                    throw new BudgetHeld();
-                var charge = admission.admitInstance(Objects.requireNonNull(routing.modelId()));
-                return recorder.open(new OpenCall(
-                        null,
-                        null,
-                        null,
-                        "REPORT_DRAFT",
-                        UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
-                        attempt.sourceId(),
-                        attempt.number(),
-                        null,
-                        ModelKind.CHAT,
-                        null,
-                        charge.model(),
-                        charge.price(),
-                        costBound(charge.price(), bound),
-                        Objects.requireNonNull(routing.actionId()),
-                        Objects.requireNonNull(routing.workDeadline())));
-            }));
-        }
+
+        if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) return draftCall(routing, bound);
         if (attempt.sourceType() == UsageSourceType.PROBE) return probeCall(routing, bound, upstreamModel);
         long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
         UUID runId = Objects.requireNonNull(attempt.runId(), "a billed call has a run");
@@ -177,6 +153,37 @@ class ProxyCallLedger {
         if (attempt.sourceType() == UsageSourceType.CONVERSATION_TURN)
             turnCallAdmitted(workspaceId, attempt.sourceId());
         return call;
+    }
+
+    private UUID draftCall(ProxyRouting routing, Bound bound) {
+        var attempt = routing.attempt();
+        UUID runId = Objects.requireNonNull(attempt.runId());
+        long modelId = Objects.requireNonNull(routing.modelId());
+        try {
+            return Objects.requireNonNull(ownTransaction.execute(status -> {
+                // The destination and filing precede the run lock, as in a claim and its end.
+                if (!drafts.admitCall(attempt.sourceId(), attempt.number(), modelId)) throw new BudgetHeld();
+                runs.requireCurrent(new AgentRunFence(runId, AgentRunRef.INSTANCE_SCOPE, attempt.epoch()));
+                if (recorder.hasReportDraftCall(runId, attempt.epoch())) throw new BudgetHeld();
+                var charge = admission.admitInstance(modelId);
+                return recorder.open(new OpenCall(
+                        null,
+                        runId,
+                        attempt.epoch(),
+                        "REPORT_DRAFT",
+                        UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
+                        attempt.sourceId(),
+                        attempt.number(),
+                        null,
+                        ModelKind.CHAT,
+                        null,
+                        charge.model(),
+                        charge.price(),
+                        costBound(charge.price(), bound)));
+            }));
+        } catch (StaleRunException lost) {
+            throw new ClaimLost(lost);
+        }
     }
 
     /** After the call's row committed, so a failure here cannot refuse the call: readers only see the change late. */
@@ -229,7 +236,7 @@ class ProxyCallLedger {
     private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {
         UUID call = Objects.requireNonNull(ownTransaction.execute(status -> {
             var attempt = routing.attempt();
-            if (attempt.runId() != null || attempt.number() != 0 || routing.actionId() != null)
+            if (attempt.runId() != null || attempt.number() != 0)
                 throw new IllegalArgumentException("A capability probe has no run or action");
             var charge = admission.admitProbe(new LlmModelResolver.ConnectionRef(
                     routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));

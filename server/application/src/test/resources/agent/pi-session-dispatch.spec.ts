@@ -2,6 +2,7 @@
 // the in-process kinds with a recording factory, and the review runner that REVIEW starts runs with one too.
 
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,7 @@ const OWN_CLIENT_UNTIL_CUTOVER = "REVIEW_COMPOSE";
  * What a kind's runner built: sessions through the factory, Pi sessions past it, and model sessions of its own.
  */
 interface Use {
+	outsideFactory?: number;
 	factory: number;
 	direct: number;
 	modelSession: number;
@@ -38,6 +40,9 @@ function breach(kind: string, use: Use): string | null {
 	}
 	if (kind === OWN_CLIENT_UNTIL_CUTOVER) {
 		return null;
+	}
+	if (kind === "DRAFT_REPORT" && (use.outsideFactory ?? 0) > 0) {
+		return `${kind} called the model outside its Pi session`;
 	}
 	if (use.modelSession > 0) {
 		return `${kind} built a model session of its own`;
@@ -175,6 +180,7 @@ async function dispatch(): Promise<void> {
 	// installs the session's tool hooks. A session of the factory's is one that a call to the factory returned.
 	let built: object[] = [];
 	let fromFactory = new WeakSet<object>();
+	const factoryPrompt = new AsyncLocalStorage<boolean>();
 	const sdk = await import("@earendil-works/pi-coding-agent");
 	const sessionPrototype: object = sdk.AgentSession.prototype;
 	const installToolHooks: unknown = Reflect.get(sessionPrototype, "_installAgentToolHooks");
@@ -198,6 +204,9 @@ async function dispatch(): Promise<void> {
 			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
 				const opened = await factory.openRunSession(...args);
 				fromFactory.add(opened.session);
+				const prompt = opened.session.prompt.bind(opened.session);
+				opened.session.prompt = async (...promptArgs) =>
+					factoryPrompt.run(true, async () => prompt(...promptArgs));
 				return opened;
 			},
 		},
@@ -223,22 +232,74 @@ async function dispatch(): Promise<void> {
 	 * Runs a kind's runner against a gateway that serves its context, a composition with nothing to compose, and a
 	 * model that refuses each call, so a turn ends after its session's first request.
 	 */
+	const failures = {
+		refuses: [400, "refused"],
+		times_out: [504, "upstream_stalled: timed out"],
+		throttled: [429, "draft_unavailable: provider rate limit"],
+		provider_error: [502, "draft_unavailable: provider failed"],
+		paused: [503, "upstream_paused: provider paused"],
+		capacity: [503, "draft_capacity: unavailable"],
+		budget: [429, "budget exhausted"],
+		ai_choice: [403, "AI choice refused"],
+	} as const;
+
 	async function measure(
 		kind: string,
 		runner: KindRunner,
-	): Promise<Use & { asked: number; outcome: unknown }> {
+		model: keyof typeof failures | "answers" | "cancelled" = "refuses",
+	): Promise<Use & { asked: number; outsideFactory: number; outcome: unknown }> {
 		built = [];
 		fromFactory = new WeakSet();
 		modelSessions = 0;
 		let asked = 0;
+		let outsideFactory = 0;
+		const claim = new AbortController();
 		// Only this run's own stand-in goes when it ends: the module recorders stay for every later import.
 		const gateway = mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
 			const url = new URL(input instanceof Request ? input.url : input);
 			if (url.pathname.startsWith("/internal/llm")) {
 				asked += 1;
-				return Response.json({ error: { message: "refused" } }, { status: 400 });
+				if (factoryPrompt.getStore() !== true) {
+					outsideFactory += 1;
+				}
+				if (model === "cancelled") {
+					claim.abort();
+				}
+				if (model === "answers") {
+					const chunk = {
+						id: "draft",
+						object: "chat.completion.chunk",
+						created: 1,
+						model: "draft-model",
+					};
+					const frames = [
+						{
+							index: 0,
+							delta: { role: "assistant", content: '{"disposition":"ISSUE"}' },
+							finish_reason: null,
+						},
+						{ index: 0, delta: {}, finish_reason: "stop" },
+					].map((choice) => `data: ${JSON.stringify({ ...chunk, choices: [choice] })}\n\n`);
+					return new Response(`${frames.join("")}data: [DONE]\n\n`, {
+						headers: { "content-type": "text/event-stream" },
+					});
+				}
+				const [status, message] = failures[model === "cancelled" ? "refuses" : model];
+				return Response.json({ error: { message } }, { status });
 			}
 			if (url.pathname.endsWith("/context")) {
+				if (kind === "DRAFT_REPORT") {
+					return Response.json({
+						instanceModelId: "5",
+						system: "Draft one report.",
+						prompt: "Redacted report.",
+						model: {
+							apiProtocol: "openai-completions",
+							modelId: "draft-model",
+							maxOutputTokens: 1500,
+						},
+					});
+				}
 				return Response.json(
 					kind === "REVIEW"
 						? {
@@ -265,7 +326,7 @@ async function dispatch(): Promise<void> {
 					deadline: null,
 				},
 				gateway: { url: "http://gateway:8081", headers: { authorization: "Bearer sandbox-token" } },
-				signal: new AbortController().signal,
+				signal: claim.signal,
 			});
 			const factorySessions = built.filter((session) => fromFactory.has(session)).length;
 			return {
@@ -273,6 +334,7 @@ async function dispatch(): Promise<void> {
 				direct: built.length - factorySessions,
 				modelSession: modelSessions,
 				asked,
+				outsideFactory,
 				outcome,
 			};
 		} finally {
@@ -306,6 +368,38 @@ async function dispatch(): Promise<void> {
 			}
 		});
 	}
+
+	const draft = KINDS.DRAFT_REPORT;
+	assert.ok(draft);
+	for (const [model, outcome] of [
+		["answers", { leaseLost: false, outcome: "completed", answer: '{"disposition":"ISSUE"}' }],
+		["times_out", { leaseLost: false, outcome: "completed", cause: "model_timeout" }],
+		["cancelled", { leaseLost: true }],
+		["throttled", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
+		["provider_error", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
+		["paused", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
+		["capacity", { leaseLost: false, outcome: "handed_on", cause: "model_capacity" }],
+		["refuses", { leaseLost: false, outcome: "completed", cause: "model_failed" }],
+		["budget", { leaseLost: false, outcome: "completed", cause: "model_failed" }],
+		["ai_choice", { leaseLost: false, outcome: "completed", cause: "model_failed" }],
+	] as const) {
+		void test(`a draft whose model ${model} makes exactly one call through Pi`, async () => {
+			const measured = await measure("DRAFT_REPORT", draft, model);
+			assert.equal(breach("DRAFT_REPORT", measured), null);
+			assert.equal(measured.asked, 1);
+			assert.equal(measured.outsideFactory, 0);
+			assert.deepEqual(measured.outcome, outcome);
+		});
+	}
+
+	void test("a draft that calls the proxy outside its opened session breaks the rule", async () => {
+		const measured = await measure("DRAFT_REPORT", async (run) => {
+			await fetch(`${run.gateway.url}/internal/llm/chat/completions`);
+			return draft(run);
+		});
+		assert.equal(measured.factory, 1);
+		assert.match(breach("DRAFT_REPORT", measured) ?? "", /outside its Pi session/u);
+	});
 
 	/** A runner that imports the composer's model client when it runs and builds one, as a kind's own loop would. */
 	const ownLoop: KindRunner = async () => {

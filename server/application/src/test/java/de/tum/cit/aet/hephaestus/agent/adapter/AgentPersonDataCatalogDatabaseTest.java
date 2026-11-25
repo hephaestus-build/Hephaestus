@@ -134,13 +134,19 @@ class AgentPersonDataCatalogDatabaseTest {
         var preview = ledger.select(person);
         assertThat(preview.rows())
                 .anySatisfy(row -> assertThat(row.columns()).containsEntry("source_id", report.toString()));
+        UUID run = UUID.randomUUID();
+        plain.update("""
+            INSERT INTO agent_run(id,kind,band,concurrency_key,state,lease_epoch,started_at,leased_until,deadline)
+            VALUES (?,'DRAFT_REPORT','BACKGROUND',?,'LEASED',1,clock_timestamp(),
+                clock_timestamp()+interval '2 minutes',clock_timestamp()+interval '10 minutes')
+            """, run, "draft:" + report + ":1");
         UUID call = UUID.randomUUID();
         plain.update("""
             INSERT INTO llm_usage_event(id,job_type,source_type,source_id,source_attempt,model_kind,funding_source,
-                action_id,settle_after,initial_pricing_state,pricing_state,call_state,occurred_at,started_at)
-            VALUES (?,'REPORT_DRAFT','PRODUCT_FEEDBACK_DRAFT',?,1,'CHAT','INSTANCE',gen_random_uuid(),clock_timestamp()+interval '2 minutes','UNPRICED','UNPRICED','OPEN',
+                run_id,lease_epoch,initial_pricing_state,pricing_state,call_state,occurred_at,started_at)
+            VALUES (?,'REPORT_DRAFT','PRODUCT_FEEDBACK_DRAFT',?,1,'CHAT','INSTANCE',?,1,'UNPRICED','UNPRICED','OPEN',
                 clock_timestamp(),clock_timestamp())
-            """, call, report);
+            """, call, report, run);
         assertThat(ledger.export(preview, person)).anySatisfy(row -> {
             assertThat(row.path("source_id").asString()).isEqualTo(report.toString());
             assertThat(row.path("calls").get(0).path("id").asString()).isEqualTo(call.toString());

@@ -37,8 +37,8 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     // generation that the hand-over checks. They carry the maintenance barrier, so none starts during a migration.
 
     /**
-     * A report whose draft answer, or lack of one, waits for the server to route it. Its {@code draft_report} action's
-     * end put it there, whether the action drafted it, failed or expired.
+     * A report whose draft answer, or lack of one, waits for the server to route it. Its draft run can end with an
+     * answer, a failure or an expiry.
      */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing

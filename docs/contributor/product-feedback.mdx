@@ -18,17 +18,16 @@ The model supplies structured data but has no tools and no authority to publish.
 The `productfeedback` module owns the lifecycle and trust decisions.
 It owns input stripping, redaction, the prompt, output validation, routing, rendering, and the durable filing state.
 
-The closed `agent` module supplies the draft adapter in `agent.productfeedback`.
-It is the outbox adapter of `DRAFT_REPORT`, and it runs on a server with the agent runtime.
-That adapter and the LLM proxy call the named `productfeedback.drafting` API.
+The `agent` module supplies the `DRAFT_REPORT` run kind in `agent.productfeedback`.
+The run kind and the LLM proxy use the `productfeedback.drafting` API.
 The dependency is `agent` → `productfeedback`. Product feedback never imports agent internals.
 
 ```mermaid
 flowchart LR
     accTitle: Product feedback module and role boundaries
-    accDescr: The draft adapter on the server reads the draft call from productfeedback and sends it through the LLM proxy. The server routes and files through the GitHub adapter.
-    A[agent.productfeedback on server] --> D[productfeedback.drafting API]
-    A --> L[LLM proxy in the server JVM]
+    accDescr: A report sandbox reads the draft context from the gateway and calls the LLM proxy. The server routes and files through the GitHub adapter.
+    A[Report sandbox] --> D[Gateway and productfeedback.drafting]
+    A --> L[LLM proxy]
     D --> DB[(Product feedback state)]
     S[productfeedback on server] --> DB
     S --> P[integration.scm.spi.ProductFeedbackIssues]
@@ -36,18 +35,17 @@ flowchart LR
     G --> GH[GitHub]
 ```
 
-The drafting API and the other product feedback services load on every server. Only the model adapter needs the agent runtime.
+The drafting API and the other product feedback services load on every server. The run kind that dispatches drafts needs the agent runtime.
 The server refreshes issue snapshots, files issues, polls follow-up, processes `/publish`, transfers issues, and performs external cleanup.
-It also makes the one model call of each draft, through the LLM proxy in its own JVM. No sandbox runs for a draft.
+One sandbox serves each draft generation. The sandbox calls the model through the LLM proxy.
 
 The `productfeedback.drafting` contract has these operations:
 
 - `waiting(feedbackId, generation)` returns the `DraftCall` while the report waits for that generation: the opaque `llmModelId`, the two messages, and the token cap.
 - `waits(feedbackId, generation)` tells the proxy whether the report still waits for that generation.
-- `answered(attempt, feedbackId, generation, rawText)` keeps the model output while the attempt holds its action.
-- `claimed` and `deferred` apply filing lifecycle events while the action holds its fence.
+- `claimed` applies the filing lifecycle event while the sandbox holds the run.
 - `count(feedbackId, inputTokens, outputTokens)` adds the tokens of one measured call to the report.
-- `ended(ended)` moves the report on when its action ends.
+- `ended` moves the report on when the run ends.
 
 Each write checks the generation before it changes the row.
 
@@ -57,7 +55,7 @@ It files as the instance's GitHub App, so it carries an `EgressExempt(PRODUCT_FE
 Each issue operation uses the numeric repository and installation IDs frozen during routing.
 GitLab, Slack, and Outline do not implement product feedback destinations.
 
-### The draft action
+### The draft run
 
 A report enters `DRAFT_QUEUED` in four cases:
 
@@ -66,10 +64,11 @@ A report enters `DRAFT_QUEUED` in four cases:
 - When an admin selects **Retry** for a report without a draft.
 - When an admin files a saved report whose author was told about the model.
 
-In the same transaction, `FileIssueQueue.draft` makes three checks.
-The author was told about the model, the destination names a model, and the daily limits allow a draft.
+In the same transaction, `FileIssueQueue.draft` checks that the agent runtime is on and the destination names a model.
+It also checks that the author was told about the model and the daily limits allow a draft.
 A report that fails a check goes to `ANSWERED` without a draft.
-Otherwise the report's generation rises by one, and one `DRAFT_REPORT` action is enqueued ([The outbox](./outbox.mdx#product-feedback-draft)).
+Otherwise the report's generation rises by one, and the server queues one `DRAFT_REPORT` run.
+Its scope is the instance. Its subject is this report generation, and its deadline is ten minutes from enqueue.
 
 The model call offers the model no tools. This is a security property, not a limit of the current drafter ([OWASP LLM06](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)).
 Before each call, the proxy checks that the destination still names the call's model.
@@ -77,22 +76,29 @@ It also checks that the report still waits for this generation.
 It sends the call through its permits and its egress guard, as it does for a review call.
 
 After capacity is granted, admission locks the destination settings and reserves the daily allowance before provider work.
-A queued action reads the current limits.
+The proxy reads the current limits.
 A reservation covers its retries. A limit of zero stops them.
 
-The action's end moves the report to `ANSWERED`.
-When the action is `DONE`, the report keeps the model's answer.
-When the action failed, expired or was cancelled, the report has no draft.
+The proxy opens at most one billed call per lease epoch.
+Pi asks for a fresh lease after a temporary provider failure. The run gets up to two retries within its original deadline.
+If the model pool is full, the run waits for capacity without using a retry.
+A model silence timeout ends the run even if time remains.
+
+The run's end moves the report to `ANSWERED` if it still waits for that generation.
+A completed run keeps the model's answer. If the model fails or the deadline passes, the report goes on without a draft.
+A withdrawn generation accepts no late answer.
+A terminal draft or an erased report revokes its sandbox credential. The sandbox owner deletes the claim, and the reaper retries a failed deletion.
 
 ## State machine and leases
 
 The filing row belongs to one saved report.
-The outbox owns the claims, leases, retries, and expiry of model calls and GitHub writes.
+The run owns the draft's claim, lease and expiry.
+The outbox owns the claims, leases, retries and expiry of GitHub writes.
 Network calls run outside the transaction.
 Fenced action results apply filing lifecycle events in the transaction that records the result.
 
-A capacity refusal applies `DRAFT_DEFERRED` and enters `DRAFT_WAITING` without spending an attempt.
-The next claim applies `DRAFT_CLAIMED` and enters `DRAFTING`.
+The claim applies `DRAFT_CLAIMED` and enters `DRAFTING`.
+A capacity refusal moves the filing to `DRAFT_WAITING`. The run returns to the queue with the same deadline and attempt count.
 The terminal event `DRAFT_ENDED` moves any draft state to `ANSWERED`.
 
 `FilingLifecycle` is the one definition of the machine.
@@ -109,11 +115,11 @@ stateDiagram-v2
     [*] --> DRAFT_QUEUED
     [*] --> SAVED: No destination or paused
     DRAFT_QUEUED --> DRAFTING: DRAFT_CLAIMED
+    DRAFT_QUEUED --> ANSWERED: DRAFT_ENDED
     DRAFTING --> DRAFT_WAITING: DRAFT_DEFERRED
     DRAFT_WAITING --> DRAFTING: DRAFT_CLAIMED
-    DRAFT_QUEUED --> ANSWERED: DRAFT_ENDED
-    DRAFTING --> ANSWERED: DRAFT_ENDED
     DRAFT_WAITING --> ANSWERED: DRAFT_ENDED
+    DRAFTING --> ANSWERED: DRAFT_ENDED
     ANSWERED --> HELD: ROUTED_TO_HOLD
     ANSWERED --> QUEUED: ROUTED_TO_FILE
     HELD --> DRAFT_QUEUED: EDITED

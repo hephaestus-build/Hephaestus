@@ -20,15 +20,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
-import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
-import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPreferencesDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
-import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -52,12 +49,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -67,17 +61,9 @@ import org.springframework.web.server.ResponseStatusException;
  * An erased report's GitHub issue: the app scrubs what it can, then hands the rest to a maintainer with an email and a
  * Needs action entry that stays until an admin confirms the step. Only the GitHub transport is controlled.
  */
-@Import(CapturingMailTestConfiguration.class)
-@TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
-class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
+class ProductFeedbackCleanupIntegrationTest extends AbstractProductFeedbackFilingIntegrationTest {
     private static final ProductFeedbackIssues.Repository PRIVATE_REPOSITORY =
             new ProductFeedbackIssues.Repository(41, "", "acme/feedback-private", 7, true);
-
-    @MockitoBean
-    private ProductFeedbackIssues issues;
-
-    @MockitoBean
-    private ProductFeedbackIssueUpdates updates;
 
     @Autowired
     private CleanupService cleanup;

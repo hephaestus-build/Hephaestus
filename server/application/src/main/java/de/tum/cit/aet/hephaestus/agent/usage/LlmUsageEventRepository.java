@@ -113,27 +113,19 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("call") LlmUsageRecorder.OpenCall call,
             @Param("costUsd") @Nullable BigDecimal costUsd);
 
-    String SETTLE_INSTANCE =
-            "UPDATE llm_usage_event e SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',"
-                    + " pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1"
-                    + " WHERE e.workspace_id IS NULL AND e.call_state='OPEN' AND e.source_type='PRODUCT_FEEDBACK_DRAFT'";
+    @Query(value = """
+        SELECT EXISTS (SELECT 1 FROM llm_usage_event
+                        WHERE workspace_id IS NULL AND source_type = 'PRODUCT_FEEDBACK_DRAFT'
+                          AND run_id = :runId AND lease_epoch = :epoch)
+        """, nativeQuery = true)
+    boolean hasReportDraftCall(@Param("runId") UUID runId, @Param("epoch") int epoch);
 
-    @WorkspaceAgnostic("Instance action completion settles only the calls owned by that action")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = SETTLE_INSTANCE + " AND e.action_id=:actionId", nativeQuery = true)
-    int settleAction(@Param("actionId") UUID actionId);
-
-    @WorkspaceAgnostic("Recovery settles runless draft and probe calls by their durable deadline or action")
+    @WorkspaceAgnostic("Recovery settles the expired calls of capability probes")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         UPDATE llm_usage_event e SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',
             pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1
-        WHERE e.call_state='OPEN' AND e.run_id IS NULL AND (
-            (e.source_type='PROBE' AND e.settle_after <= clock_timestamp()) OR
-            (e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.workspace_id IS NULL AND (
-                e.settle_after <= clock_timestamp() OR NOT EXISTS (
-                    SELECT 1 FROM agent_action a WHERE a.id=e.action_id AND a.state='EXECUTING'
-                        AND a.leased_until > clock_timestamp()))))
+        WHERE e.call_state='OPEN' AND e.source_type='PROBE' AND e.settle_after <= clock_timestamp()
         """, nativeQuery = true)
     int settleAbandonedInstanceCalls();
 

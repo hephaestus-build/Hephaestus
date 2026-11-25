@@ -137,32 +137,32 @@ class ActionExecutorTest extends BaseUnitTest {
         assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
     }
 
-    /** On one replica, a draft that waits for its model holds one slot, and the next run claims another kind's action. */
+    /** On one replica, a notice that waits for its provider holds one slot, and the next run claims another kind's action. */
     @Test
-    void shouldRunAnotherKindsActionWhileADraftAttemptStillWaits() throws Exception {
-        var draftWaits = new CountDownLatch(1);
+    void shouldRunAnotherKindsActionWhileANoticeAttemptStillWaits() throws Exception {
+        var noticeWaits = new CountDownLatch(1);
         var executor = executor(
                 attempt -> {
-                    if (attempt.kind() == ActionKind.DRAFT_REPORT) awaitQuietly(draftWaits);
+                    if (attempt.kind() == ActionKind.SLACK_NOTICE) awaitQuietly(noticeWaits);
                     return new ActionResult.Done(null);
                 },
                 ActionExecutor.LEASE);
         when(store.claim(anyInt(), any(), any()))
-                .thenReturn(List.of(claim(ActionKind.DRAFT_REPORT)))
+                .thenReturn(List.of(claim(ActionKind.SLACK_NOTICE)))
                 .thenReturn(List.of(claim(ActionKind.FILE_ISSUE)));
 
-        var draft = executor.startDue();
+        var notice = executor.startDue();
         var filing = executor.startDue();
 
         assertThat(filing)
                 .singleElement()
                 .satisfies(
                         attempt -> assertThat(attempt.get(5, TimeUnit.SECONDS)).isEqualTo(new ActionResult.Done(null)));
-        assertThat(draft)
+        assertThat(notice)
                 .singleElement()
                 .satisfies(attempt -> assertThat(attempt).isNotDone());
         verify(store).claim(eq(ActionExecutor.SLOTS - 1), any(), any());
-        draftWaits.countDown();
+        noticeWaits.countDown();
         assertThat(executor.awaitIdle(Duration.ofSeconds(5))).isTrue();
     }
 

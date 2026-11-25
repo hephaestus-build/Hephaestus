@@ -112,10 +112,15 @@ class AgentNextWaitsIntegrationTest extends BaseIntegrationTest {
     /** {@code next}, counting its claims. */
     private CompletableFuture<Optional<AgentRunLease>> next(
             AgentNextWaits replica, AgentSandboxes.LiveSandbox sandbox, AtomicInteger claims) {
+        return next(replica, sandbox, REVIEW, claims);
+    }
+
+    private CompletableFuture<Optional<AgentRunLease>> next(
+            AgentNextWaits replica, AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> kinds, AtomicInteger claims) {
         return CompletableFuture.supplyAsync(
-                () -> replica.claim(sandbox, REVIEW, () -> {
+                () -> replica.claim(sandbox, kinds, () -> {
                     var lease = Objects.requireNonNull(transactions.execute(
-                            status -> runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), REVIEW)));
+                            status -> runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds)));
                     claims.incrementAndGet();
                     return lease;
                 }),
@@ -148,6 +153,35 @@ class AgentNextWaitsIntegrationTest extends BaseIntegrationTest {
         assertThat(Duration.ofNanos(System.nanoTime() - queued)).isLessThan(Duration.ofSeconds(1));
         assertThat(lease.runId()).isEqualTo(run.id());
         assertThat(runs.find(run).orElseThrow().getState()).isEqualTo(AgentRunState.LEASED);
+    }
+
+    @Test
+    void shouldWakeAnInstanceSandboxOnceItsDeferredDraftIsDue() throws Exception {
+        var replica = replica(Duration.ofSeconds(25));
+        var subject = "draft:" + UUID.randomUUID() + ":1";
+        var kinds = Set.of(AgentRunKind.DRAFT_REPORT);
+        var sandbox = new AgentSandboxes.LiveSandbox(
+                UUID.randomUUID(), AgentRunRef.INSTANCE_SCOPE, subject, AgentSandboxKind.DRAFT_REPORT);
+        var first = Objects.requireNonNull(transactions.execute(status -> {
+            runs.enqueueReportDraft(subject, Duration.ofMinutes(10));
+            var lease = runs.claimSubject(sandbox.workspaceId(), subject, kinds).orElseThrow();
+            assertThat(runs.defer(lease.fence(), AgentRuns.Deferral.MODEL_POOL)).isTrue();
+            return lease;
+        }));
+        try {
+            var claims = new AtomicInteger();
+            var answer = next(replica, sandbox, kinds, claims);
+            await().atMost(Duration.ofSeconds(10)).untilAtomic(claims, greaterThanOrEqualTo(1));
+            replica.pass();
+            assertThat(answer).isNotDone();
+
+            jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", first.runId());
+            replica.pass();
+
+            assertThat(answer.get(5, TimeUnit.SECONDS).orElseThrow().runId()).isEqualTo(first.runId());
+        } finally {
+            jdbc.update("DELETE FROM agent_run WHERE id=?", first.runId());
+        }
     }
 
     @Test

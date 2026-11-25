@@ -281,13 +281,13 @@ public class LlmUsageRecorder {
         return true;
     }
 
-    /** Ends the unmeasured calls owned by an action, in the transaction that ends it. */
+    /** Whether this instance draft claim already opened its one model call. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void settleAction(UUID actionId) {
-        reportSettled(usageRepository.settleAction(actionId));
+    public boolean hasReportDraftCall(UUID runId, int epoch) {
+        return usageRepository.hasReportDraftCall(runId, epoch);
     }
 
-    /** Recovers instance calls after their deadline, lost claim or process failure. Late measurement stays possible. */
+    /** Recovers abandoned model capability probes after their deadline. Late measurement stays possible. */
     @Transactional
     public void recoverInstanceCalls() {
         reportSettled(usageRepository.settleAbandonedInstanceCalls());

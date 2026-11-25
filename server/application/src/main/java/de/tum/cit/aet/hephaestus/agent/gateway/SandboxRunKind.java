@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -62,6 +64,13 @@ public interface SandboxRunKind {
      */
     default boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
         return end(run, outcome);
+    }
+
+    /** Ends a run with the optional output that its kind accepts. */
+    default boolean end(SandboxRun run, Outcome outcome, @Nullable String cause, @Nullable String answer) {
+        if (answer != null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This run does not accept a draft answer");
+        return end(run, outcome, cause);
     }
 
     /** The registered kinds by the run kind that each drives; two beans of one run kind are a defect. */

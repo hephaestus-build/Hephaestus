@@ -50,6 +50,8 @@ class SandboxDispatchConfiguration {
                 Map.of(
                         AgentSandboxKind.REVIEW,
                         sandbox.maxConcurrentContainers(),
+                        AgentSandboxKind.DRAFT_REPORT,
+                        1,
                         AgentSandboxKind.CONVERSATION,
                         capacity.turns() == null ? Integer.MAX_VALUE : capacity.turns()),
                 custody,

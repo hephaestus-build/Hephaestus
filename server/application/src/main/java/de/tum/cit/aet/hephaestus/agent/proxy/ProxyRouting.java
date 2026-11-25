@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelLimits;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
@@ -29,32 +30,9 @@ public record ProxyRouting(
         @Nullable Long workspaceId,
         BilledAttempt attempt,
         @Nullable Instant workDeadline,
-        @Nullable Long outputLimit,
-        @Nullable UUID actionId) {
-    public ProxyRouting(
-            String principalDescription,
-            String apiProtocol,
-            String baseUrl,
-            @Nullable UsageFundingSource connectionScope,
-            @Nullable Long connectionId,
-            @Nullable Long modelId,
-            @Nullable Long workspaceId,
-            BilledAttempt attempt,
-            @Nullable Instant workDeadline,
-            @Nullable Long outputLimit) {
-        this(
-                principalDescription,
-                apiProtocol,
-                baseUrl,
-                connectionScope,
-                connectionId,
-                modelId,
-                workspaceId,
-                attempt,
-                workDeadline,
-                outputLimit,
-                null);
-    }
+        @Nullable Long outputLimit) {
+    /** The instance model in the run context. The proxy refuses a model setting that changed after that context. */
+    public static final String DRAFT_MODEL_HEADER = "X-Draft-Model";
 
     public ProxyRouting {
         if (attempt != null && attempt.sourceType() != UsageSourceType.CONVERSATION_TURN && workDeadline == null)
@@ -73,6 +51,12 @@ public record ProxyRouting(
                 ? maxOutputTokens
                 : ModelLimits.derivedMaxOutputTokens(contextWindow);
         return limit == null || limit <= 0 ? null : limit.longValue();
+    }
+
+    /** The smaller of the model's limit and the draft prompt's limit, for both the descriptor and the proxy. */
+    public static long draftOutputLimit(LlmModelResolver.InstanceModel model, int draftLimit) {
+        Long modelLimit = outputLimitOf(model.contextWindow(), model.maxOutputTokens());
+        return modelLimit == null ? draftLimit : Math.min(modelLimit, draftLimit);
     }
 
     /** Whether the call belongs to a Hephaestus turn, which logs one line per model call with its turn. */
@@ -95,7 +79,17 @@ public record ProxyRouting(
             UUID sourceId,
             int number,
             @Nullable UUID runId,
-            @Nullable Long workspaceId) {
+            @Nullable Long workspaceId,
+            @Nullable Integer draftEpoch) {
+
+        public BilledAttempt(
+                UsageSourceType sourceType,
+                UUID sourceId,
+                int number,
+                @Nullable UUID runId,
+                @Nullable Long workspaceId) {
+            this(sourceType, sourceId, number, runId, workspaceId, null);
+        }
 
         public BilledAttempt(UsageSourceType sourceType, UUID sourceId, int number, @Nullable UUID runId) {
             this(sourceType, sourceId, number, runId, null);
@@ -103,6 +97,7 @@ public record ProxyRouting(
 
         /** The claim of the run that this attempt holds: a turn's attempt is its epoch, a review's is one less. */
         public int epoch() {
+            if (draftEpoch != null) return draftEpoch;
             return sourceType == UsageSourceType.CONVERSATION_TURN ? number : ReviewRunKind.epoch(number);
         }
     }

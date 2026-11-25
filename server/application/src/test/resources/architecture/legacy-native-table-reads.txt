@@ -83,7 +83,6 @@ agent de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository reads workspace of
 agent de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository reads conversation_entry of conversation x16
 agent de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository reads conversation_turn of conversation x16
 agent de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository reads workspace of workspace x6
-agent de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository reads agent_action of core x1
 agent de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository reads workspace of workspace x2
 conversation de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository reads workspace of workspace x1
 conversation de.tum.cit.aet.hephaestus.conversation.ConversationRepository reads membership of workspace x1

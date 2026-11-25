@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -89,14 +90,16 @@ public class AgentRunController {
         boolean held = Boolean.TRUE.equals(transactions.execute(status -> {
             kind.beforeWrite(run.sandbox());
             if (unisolated) sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.UNISOLATED);
-            return kind.end(run, outcome, request.cause());
+            return kind.end(run, outcome, request.cause(), request.answer());
         }));
+        if (run.kind() == AgentRunKind.DRAFT_REPORT) sandboxes.deleteRevoked(run.sandbox());
         if (!held) throw new StaleRunException(run.fence());
     }
 
     private SandboxRunKind kind(SandboxRun run) {
         var kind = kinds.get(run.kind());
-        if (kind == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (kind == null || kind.sandbox() != run.sandbox().kind())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return kind;
     }
 
@@ -108,5 +111,12 @@ public class AgentRunController {
      * @param cause the hand-on cause that the server answered a composition loop's close, or the crash of a review
      *     program; {@code null} for none
      */
-    public record End(@NotBlank String outcome, @Nullable String cause) {}
+    public record End(
+            @NotBlank String outcome,
+            @Nullable String cause,
+            @Nullable @Size(max = 24_000) String answer) {
+        public End(String outcome, @Nullable String cause) {
+            this(outcome, cause, null);
+        }
+    }
 }

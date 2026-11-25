@@ -342,6 +342,21 @@ public class AgentSandboxes {
         });
     }
 
+    /** Frees a revoked sandbox's slot after commit. The reaper retries any deletion the claim API fails. */
+    public void deleteRevoked(LiveSandbox sandbox) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A sandbox claim is deleted after its revocation commits");
+        try {
+            sandboxes.findDeleting(sandbox.id(), sandbox.workspaceId()).ifPresent(this::deleteClaim);
+        } catch (RuntimeException e) {
+            log.atWarn()
+                    .addKeyValue("event.name", "agent.sandbox.delete_failed")
+                    .addKeyValue(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName())
+                    .addKeyValue("error.type", e.getClass().getName())
+                    .log("Sandbox claim deletion failed; the reaper retries it");
+        }
+    }
+
     /** Deletes a {@code DELETING} sandbox's claim, then its row, and reads how it ended before its Pod goes. */
     void deleteClaim(AgentSandboxRepository.SandboxRow row) {
         deleteClaim(row, readEnd(row));

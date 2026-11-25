@@ -375,7 +375,7 @@ A run reconstructs its Pi session from the conversation ledger.
 
 ### The session factory
 
-`openRunSession` in `pi-session.ts` builds every Pi session: the turns of `turn.ts` and the practice sessions of `pi-runner.ts`.
+`openRunSession` in `pi-session.ts` builds every Pi session: conversation turns, report drafts and practice reviews.
 The run gives it a run descriptor.
 The descriptor holds the model and its runtime, the system prompt, the tools and the run kind's extensions.
 It also holds the settings and the session manager.
@@ -399,10 +399,10 @@ It observes two things:
 
 It runs these cases:
 
-- Each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`), with the real factory and the real SDK.
+- Each in-process runner of the registry (`TURN`, `DIGEST`, `DRAFT_REPORT`, `REVIEW_COMPOSE`), with the real factory and the real SDK.
   The model refuses each call, so a turn ends after its first request.
-  `TURN` and `DIGEST` must open a factory session and ask the model. They must build no Pi session past the factory and no `ModelSession`.
-  If an SDK update stops the construction count, these two fail, because they then open no factory session.
+  `TURN`, `DIGEST` and `DRAFT_REPORT` must open a factory session and ask the model. They must build no Pi session past the factory and no `ModelSession`.
+  If an SDK update stops the construction count, these run kinds fail, because they then open no factory session.
 - `REVIEW`'s runner, which is the measurement that starts the staged review runner.
   The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
   The measurement must build no session at all, through the factory or past it.
@@ -413,7 +413,8 @@ It runs these cases:
   - A model that refuses each call. The runner must exit as it does when the model is unreachable, before admission.
   The runner must open its sessions through the factory, and it must build no other Pi session and no `ModelSession`.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
-- Eight fixtures break the rule and must fail it:
+- Nine fixtures break the rule and must fail it:
+  - A draft calls the proxy outside its Pi session.
   - A runner imports `ModelSession` at run time and builds one.
   - A turn builds a second Pi session while its factory call is open.
   - A turn constructs a Pi session itself after its factory session.
@@ -424,7 +425,12 @@ It runs these cases:
     One constructs it with an agent of its own, and one uses the SDK's services.
     One continues a stored session through `SessionManager.continueRecent`, and the fixture checks that the SDK selected it.
 
-The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
+A report draft opens a tool-free session in the sandbox.
+The filing and model call use the same run and lease.
+[Product feedback architecture](./product-feedback.mdx#the-draft-run) gives the instance-level checks.
+
+The server's capability probes enter the model proxy directly.
+`ModelCallBoundaryArchTest` refuses any other caller of that in-process route.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
 A model request is told by its shape, not by its address: a POST whose body parses as JSON, whatever content type it declares.
 The body, or an object nested at most six levels below its root, asks a model when it has one of these:

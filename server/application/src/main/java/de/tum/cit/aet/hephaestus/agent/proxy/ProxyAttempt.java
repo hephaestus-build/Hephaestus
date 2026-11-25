@@ -21,12 +21,19 @@ public record ProxyAttempt(
         long workspaceId,
         int epoch,
         UUID runId,
-        @Nullable Instant workDeadline) {
+        @Nullable Instant workDeadline,
+        @Nullable Integer draftGeneration) {
+
+    public ProxyAttempt(
+            Caller caller, UUID id, long workspaceId, int epoch, UUID runId, @Nullable Instant workDeadline) {
+        this(caller, id, workspaceId, epoch, runId, workDeadline, null);
+    }
 
     /** Whose attempt it is. */
     public enum Caller {
         REVIEW,
-        TURN
+        TURN,
+        DRAFT_REPORT
     }
 
     static ProxyAttempt of(AttemptJwt token) {

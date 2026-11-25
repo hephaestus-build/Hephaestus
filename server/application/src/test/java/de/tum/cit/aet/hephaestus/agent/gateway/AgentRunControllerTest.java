@@ -70,6 +70,7 @@ class AgentRunControllerTest extends BaseUnitTest {
                         .<TransactionCallback<?>>getArgument(0)
                         .doInTransaction(mock(TransactionStatus.class)));
         when(review.kind()).thenReturn(AgentRunKind.REVIEW);
+        lenient().when(review.sandbox()).thenReturn(AgentSandboxKind.REVIEW);
         var run = mock(AgentRun.class);
         // Shared by the cases that reach the run; a refused header never does.
         lenient().when(run.getConcurrencyKey()).thenReturn(SUBJECT);
@@ -147,13 +148,13 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     @Test
     void shouldEndTheRunThroughItsKindAndAnswerAStaleEndAsLeaseLost() throws Exception {
-        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null)).thenReturn(true);
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null, null)).thenReturn(true);
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\":\"handed_on\"}"))
                 .andExpect(status().isNoContent());
 
-        when(review.end(run(), SandboxRunKind.Outcome.COMPLETED, null)).thenReturn(false);
+        when(review.end(run(), SandboxRunKind.Outcome.COMPLETED, null, null)).thenReturn(false);
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\":\"completed\"}"))
@@ -167,7 +168,7 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     @Test
     void shouldHandOnTheRunOfAnUnisolatedSandboxAndRevokeTheSandboxEvenWhenTheRunMovedOn() throws Exception {
-        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null)).thenReturn(true, false);
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null, null)).thenReturn(true, false);
 
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -183,7 +184,8 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     @Test
     void shouldPassTheHandOnCauseThatTheLoopEchoesToTheKind() throws Exception {
-        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, "PROVIDER")).thenReturn(true);
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, "PROVIDER", null))
+                .thenReturn(true);
 
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)

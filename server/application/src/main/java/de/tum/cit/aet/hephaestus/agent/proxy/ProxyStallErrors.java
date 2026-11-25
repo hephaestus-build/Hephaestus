@@ -2,15 +2,17 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.ObjectMapper;
@@ -44,14 +46,36 @@ final class ProxyStallErrors {
         }
     }
 
+    /** Pi only exposes the message for a rejected HTTP request. Give the draft loop a stable cause to read. */
+    ResponseEntity<?> draftResponse(ResponseEntity<?> result, @Nullable ModelCallFailure failure) {
+        var status = result.getStatusCode();
+        String refusal = result.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER);
+        if (ProxyRefusal.CAPACITY.name().equals(refusal)) {
+            return providerError(status, "draft_capacity", "The model capacity was unavailable.", refusal);
+        }
+        if (ProxyRefusal.WORK_TIME.name().equals(refusal)) {
+            return providerError(status, LlmProxyService.UPSTREAM_STALLED, "The draft deadline passed.", refusal);
+        }
+        if (refusal == null
+                && (status.value() == 429 || status.is5xxServerError())
+                && (failure == null || !LlmProxyService.UPSTREAM_STALLED.equals(failure.kind()))) {
+            return providerError(status, "draft_unavailable", "The model provider is temporarily unavailable.");
+        }
+        return result;
+    }
+
     /**
      * An error a model client reads as the provider's: a JSON body with {@code error}, whose message starts with the
      * code. The turn driver recognizes the codes ({@code turn.ts}).
      */
-    ResponseEntity<String> providerError(HttpStatus status, String code, String message) {
-        return ResponseEntity.status(status)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(objectMapper.writeValueAsString(errorPayload(code, message)));
+    ResponseEntity<String> providerError(HttpStatusCode status, String code, String message) {
+        return providerError(status, code, message, null);
+    }
+
+    ResponseEntity<String> providerError(HttpStatusCode status, String code, String message, @Nullable String refusal) {
+        var response = ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON);
+        if (refusal != null) response.header(LlmProxyService.REFUSAL_HEADER, refusal);
+        return response.body(objectMapper.writeValueAsString(errorPayload(code, message)));
     }
 
     ObjectNode errorPayload(String code, String message) {

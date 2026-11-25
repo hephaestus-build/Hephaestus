@@ -1,12 +1,5 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
-import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
-import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
-import de.tum.cit.aet.hephaestus.core.action.ActionKind;
-import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
-import de.tum.cit.aet.hephaestus.core.action.ActionState;
-import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
@@ -14,7 +7,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,30 +14,18 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
-/**
- * Drafting through the outbox. A report that waits for a draft has one {@code draft_report} action, which makes one
- * tool-less model call through the LLM proxy; the action's end hands the answer, or that none came, to routing. It
- * loads wherever the proxy does and decides nothing: the server's {@link RoutingService} validates the answer, redacts
- * it again and routes it.
- */
+/** The report state and quota behind a sandbox draft run. Routing validates and redacts the answer. */
 @Service
 @ConditionalOnServerRole
 class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCalls {
-    /** A slow model must not decide where a report goes, so a failed call gets more chances before filing goes on. */
-    static final int DRAFT_ATTEMPTS = 3;
-
     static final Duration HOLD = Duration.ofMinutes(5);
     /** How long a report waits for its draft before it routes without one. */
     static final Duration EXPIRY = Duration.ofMinutes(10);
 
-    private static final String KEY_PREFIX = "draft:";
-
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackRepository feedback;
     private final DestinationSettings destinations;
-    private final AgentActions actions;
     private final Clock clock;
     private final ProductFeedbackMeters meters;
 
@@ -53,30 +33,13 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
             ProductFeedbackFilingRepository filings,
             ProductFeedbackRepository feedback,
             DestinationSettings destinations,
-            AgentActions actions,
             Clock clock,
             ProductFeedbackMeters meters) {
         this.filings = filings;
         this.feedback = feedback;
         this.destinations = destinations;
-        this.actions = actions;
         this.clock = clock;
         this.meters = meters;
-    }
-
-    /** The {@code draft_report} action of one generation, in the report's lane, so it runs before its filing. */
-    static ActionRequest request(
-            ObjectMapper mapper, UUID feedbackId, int generation, @Nullable Long accountId, Instant now) {
-        return new ActionRequest(
-                ActionKind.DRAFT_REPORT,
-                null,
-                FileIssueAdapter.lane(feedbackId),
-                KEY_PREFIX + feedbackId + ":" + generation,
-                mapper.valueToTree(new Payload(feedbackId, generation)),
-                accountId,
-                DRAFT_ATTEMPTS,
-                now.plus(EXPIRY),
-                null);
     }
 
     @Override
@@ -137,35 +100,29 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
     }
 
     @Override
-    @Transactional
-    public boolean claimed(ActionAttempt attempt, UUID feedbackId, int generation) {
-        return transition(attempt, feedbackId, generation, FilingLifecycle.Event.DRAFT_CLAIMED);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lock(Subject subject) {
+        filings.lock(subject.feedbackId());
     }
 
     @Override
-    @Transactional
-    public boolean deferred(ActionAttempt attempt, UUID feedbackId, int generation) {
-        return transition(attempt, feedbackId, generation, FilingLifecycle.Event.DRAFT_DEFERRED);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean claimed(Subject subject) {
+        return transition(subject, FilingLifecycle.Event.DRAFT_CLAIMED);
     }
 
-    private boolean transition(ActionAttempt attempt, UUID id, int generation, FilingLifecycle.Event event) {
-        if (!actions.holds(attempt)) return false;
-        var filing = filings.lock(id).filter(row -> waits(row, generation)).orElse(null);
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void deferred(Subject subject) {
+        transition(subject, FilingLifecycle.Event.DRAFT_DEFERRED);
+    }
+
+    private boolean transition(Subject subject, FilingLifecycle.Event event) {
+        var filing = filings.lock(subject.feedbackId())
+                .filter(row -> waits(row, subject.generation()))
+                .orElse(null);
         if (filing == null) return false;
         filing.apply(event);
-        filing.setUpdatedAt(clock.instant());
-        return true;
-    }
-
-    @Override
-    @Transactional
-    public boolean answered(ActionAttempt attempt, UUID feedbackId, int generation, String answer) {
-        if (!actions.holds(attempt)) return false;
-        var filing =
-                filings.lock(feedbackId).filter(row -> waits(row, generation)).orElse(null);
-        if (filing == null) return false;
-        filing.setAnswer(answer);
-        filing.setDraftedAt(clock.instant());
         filing.setUpdatedAt(clock.instant());
         return true;
     }
@@ -185,41 +142,28 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
         });
     }
 
-    /** A done draft routes with the answer it kept; any other end routes without one. */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void ended(ActionEnded ended) {
-        // The key is draft:<report>:<generation>.
-        String rest = ended.idempotencyKey().substring(KEY_PREFIX.length());
-        UUID id = UUID.fromString(rest.substring(0, rest.indexOf(':')));
-        int generation = Integer.parseInt(rest.substring(rest.indexOf(':') + 1));
-        ProductFeedbackFiling filing =
-                filings.lock(id).filter(row -> waits(row, generation)).orElse(null);
+    public void ended(Subject subject, @Nullable String answer, String reason) {
+        var filing = filings.lock(subject.feedbackId())
+                .filter(row -> waits(row, subject.generation()))
+                .orElse(null);
         if (filing == null) return;
         Instant now = clock.instant();
         try {
-            if (ended.state() == ActionState.DONE && filing.getAnswer() != null) {
-                meters.draft("answered");
-                answered(filing, filing.getAnswer(), now);
-                return;
-            }
-            meters.draft(ended.reason().name().toLowerCase(Locale.ROOT));
-            filing.setDraftedAt(null);
-            answered(filing, null, now);
+            meters.draft(answer == null ? reason : "answered");
+            filing.setDraftedAt(answer == null ? null : now);
+            answered(filing, answer, now);
         } catch (FilingLifecycle.IllegalTransition refused) {
             meters.failed(refused);
             throw refused;
         }
     }
 
-    /**
-     * About when the report leaves drafting without a draft: its action expires after {@link #EXPIRY}, and an
-     * attempt that started just before that ends within one lease. A crashed attempt is retried only after its lease,
-     * so it can end later. Null while no model drafts it.
-     */
+    /** The run's deadline, after which the report routes without a draft. */
     static @Nullable Instant deadline(ProductFeedbackFiling filing) {
         Instant started = filing.getDraftingStartedAt();
-        return started == null ? null : started.plus(EXPIRY).plus(ActionExecutor.LEASE);
+        return started == null ? null : started.plus(EXPIRY);
     }
 
     private static boolean waits(ProductFeedbackFiling filing, int generation) {

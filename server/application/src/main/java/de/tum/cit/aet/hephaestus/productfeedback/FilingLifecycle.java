@@ -17,7 +17,7 @@ final class FilingLifecycle {
     private FilingLifecycle() {}
 
     enum Event {
-        /** The draft action ended with an answer, or without one; or no model may draft the report. */
+        /** The draft run ended with an answer, or without one; or no model may draft the report. */
         DRAFT_ENDED,
         DRAFT_CLAIMED,
         DRAFT_DEFERRED,

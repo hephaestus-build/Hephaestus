@@ -1,17 +1,19 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-/** Hands a report to the outbox, in the caller's transaction: its draft, its filing and what follows them. */
+/** Queues a report's draft run and its outbox effects in the caller's transaction. */
 @Component
 @RequiredArgsConstructor
 class FileIssueQueue {
@@ -21,16 +23,18 @@ class FileIssueQueue {
     private final ObjectMapper mapper;
     private final DestinationSettings destinations;
     private final ProductFeedbackFilingRepository filings;
+    private final Optional<ProductFeedbackDrafts.Queue> draftRuns;
 
     /**
-     * Queues the draft of a report that just entered {@link FilingState#DRAFT_QUEUED}, as one {@code draft_report}
-     * action. A report whose author was not told about the model, or that no model or daily limit lets draft, goes to
+     * Queues the draft of a report that just entered {@link FilingState#DRAFT_QUEUED}, as one sandbox run. A report whose author was not told about the model, or that no model or daily limit lets draft, goes to
      * routing without a draft instead.
      */
     void draft(ProductFeedbackFiling filing, ProductFeedback report, Instant now) {
+        var queue = draftRuns.orElse(null);
         ProductFeedbackDestination destination = destinations.current();
         // A report whose author was not told about the model never reaches one, whatever path led here.
-        if (!filing.isFileDisclosed()
+        if (queue == null
+                || !filing.isFileDisclosed()
                 || destination.getLlmModelId() == null
                 || filing.getPromptInput() == null
                 || overBudget(report, destination, now)) {
@@ -40,8 +44,8 @@ class FileIssueQueue {
         filing.setAttempt(filing.getAttempt() + 1);
         filing.setDraftingStartedAt(now);
         filing.setUpdatedAt(now);
-        actions.enqueue(DraftingService.request(
-                mapper, filing.getFeedbackId(), filing.getAttempt(), report.getAccountId(), now));
+        queue.enqueue(
+                new ProductFeedbackDrafts.Subject(filing.getFeedbackId(), filing.getAttempt()), DraftingService.EXPIRY);
     }
 
     private boolean overBudget(ProductFeedback report, ProductFeedbackDestination destination, Instant now) {
