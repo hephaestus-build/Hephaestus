@@ -1,14 +1,16 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
+import com.tngtech.archunit.core.domain.JavaMethod;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.data.jpa.repository.NativeQuery;
+import org.springframework.data.jpa.repository.Query;
 
 /**
- * The SQL that a Java source file can run: its string literals and text blocks outside Java comments, with literals
- * that {@code +} joins read as one. Each statement is normalized: SQL comments go, the contents of SQL string literals
- * are blanked, and white space collapses. SQL that the code assembles from values at run time stays invisible to it.
+ * SQL from Java source files and compiled Spring Data query annotations. Source reads join adjacent literals and
+ * skip Java comments. Normalization removes SQL comments, blanks SQL string literals, and collapses white space.
  */
 final class SourceSql {
     // An unrolled loop: a repeated alternation recurses once per character and overflows on a long literal.
@@ -18,6 +20,24 @@ final class SourceSql {
     private static final Pattern QUERY_ANNOTATION = Pattern.compile("@(?:\\w+\\.)*(?:Query|NativeQuery)\\s*\\(");
 
     private SourceSql() {}
+
+    /** The compiled query values include constants that the source scanner cannot assemble. */
+    static List<String> annotationSql(JavaMethod method, boolean nativeOnly) {
+        var sql = new ArrayList<String>();
+        if (method.isAnnotatedWith(NativeQuery.class)) {
+            NativeQuery query = method.getAnnotationOfType(NativeQuery.class);
+            sql.add(query.value());
+            if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
+        }
+        if (method.isAnnotatedWith(Query.class)) {
+            Query query = method.getAnnotationOfType(Query.class);
+            if (!nativeOnly || query.nativeQuery()) {
+                sql.add(query.value());
+                if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
+            }
+        }
+        return sql.stream().map(SourceSql::normalized).toList();
+    }
 
     static List<String> statements(String javaSource) {
         String source = withoutJavaComments(javaSource);

@@ -309,8 +309,8 @@ class AccountExportServiceTest extends BaseUnitTest {
             return e;
         });
 
-        AccountExportService service =
-                new AccountExportService(repo, activeAccounts(), events, logger, clock, mockOwnerScope());
+        AccountExportService service = new AccountExportService(
+                repo, new AccountExportWriter(repo, activeAccounts(), clock), events, logger, clock, mockOwnerScope());
 
         AccountExport created = service.requestExport(PersonActFixture.self(ACCOUNT_ID));
 
@@ -328,13 +328,13 @@ class AccountExportServiceTest extends BaseUnitTest {
         AuthEventLogger logger = mock(AuthEventLogger.class);
         when(repo.existsByAccountIdAndStatusIn(eq(ACCOUNT_ID), any())).thenReturn(true);
 
-        AccountExportService service =
-                new AccountExportService(repo, activeAccounts(), events, logger, clock, mockOwnerScope());
+        AccountExportService service = new AccountExportService(
+                repo, new AccountExportWriter(repo, activeAccounts(), clock), events, logger, clock, mockOwnerScope());
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> service.requestExport(PersonActFixture.self(ACCOUNT_ID)))
                 .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
-        verify(repo, never()).save(any());
+        verify(repo, never()).saveAndFlush(any());
         verify(events, never()).publishEvent(any(Object.class));
     }
 
@@ -343,7 +343,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         var scope = new OwnerScope(mock(JdbcTemplate.class));
         var service = new AccountExportService(
                 mock(AccountExportRepository.class),
-                mock(AccountRepository.class),
+                mock(AccountExportWriter.class),
                 mock(ApplicationEventPublisher.class),
                 mock(AuthEventLogger.class),
                 clock,
@@ -370,7 +370,7 @@ class AccountExportServiceTest extends BaseUnitTest {
     private AccountExportService newService(AccountExportRepository repo) {
         return new AccountExportService(
                 repo,
-                mock(AccountRepository.class),
+                mock(AccountExportWriter.class),
                 mock(ApplicationEventPublisher.class),
                 mock(AuthEventLogger.class),
                 clock,
