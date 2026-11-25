@@ -1718,8 +1718,11 @@ Manual runs and pull request runs do not enter the shared reporter.
 `Security / Public host ports` runs each hour from a dual-stack Linux probe outside the target networks.
 It checks all TCP and UDP ports on each public IPv4 and IPv6 address.
 It accepts responses on TCP 80 and TCP 443. It also accepts UDP 443 for hosts that serve HTTP/3.
+
 An incomplete scan fails the check.
 A silent address also fails unless its host has an approved outage marker.
+The probe reports a routing failure separately and fails the check even if the host has an outage marker.
+Administrative prohibitions count as port responses.
 
 UDP silence does not prove that a port is closed.
 Check the [host firewall policy](../admin/k3s#host-firewall-policy) on the host as well.
@@ -1776,6 +1779,8 @@ Set three secrets in that environment.
 - `PUBLIC_PORT_PROBE_KNOWN_HOSTS` holds the probe's SSH host key in `known_hosts` format. Verify it against the host's key before you save it.
 
 Dispatch `Security / Public host ports` on `main` to check the connection and the result.
+If the probe is unavailable, check its SSH connection, pinned host key, and forced command.
+If the run reports a routing failure, check the route from the probe to the affected address.
 If a run fails, sign in to the probe and run the forced command as `heph-probe`.
 The command shows which address family and ports need attention.
 The public workflow log omits the target details.

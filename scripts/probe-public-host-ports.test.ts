@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { parse } from "yaml";
+
+import { asArray, asRecord, asString } from "./lib/json.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { assessScan, probeTargets } from "./probe-public-host-ports.ts";
 
 function report(ports: string[] = [], aggregateState = "filtered") {
@@ -39,7 +48,7 @@ void test("probes both address families and validates optional host settings", (
 
 void test("fails on unexpected responses, including TCP resets and UDP port unreachable", () => {
 	assert.deepEqual(assessScan(report([port("tcp", 80), port("tcp", 443, "closed")]), online), {
-		reachable: true,
+		status: "reachable",
 		hiddenReplies: false,
 		unexpected: [],
 	});
@@ -91,11 +100,155 @@ void test("ICMP prohibition is a reply even when Nmap reports the port as filter
 void test("a complete silent scan passes only for a host marked down", () => {
 	assert.throws(() => assessScan(report([], "open|filtered"), online));
 	assert.deepEqual(assessScan(report([], "open|filtered"), down), {
-		reachable: false,
+		status: "unreachable",
 		hiddenReplies: false,
 		unexpected: [],
 	});
 	assert.deepEqual(assessScan(report([port("tcp", 22)]), down).unexpected, ["22/tcp"]);
+});
+
+for (const family of ["ipv4", "ipv6"]) {
+	void test(`an ICMP routing failure in the captured ${family} scan is neither silence nor a port reply`, () => {
+		const capture = readFileSync(
+			new URL(`fixtures/public-port-probe-routing-${family}.xml`, import.meta.url),
+			"utf8",
+		);
+		for (const target of [online, down]) {
+			assert.deepEqual(assessScan(capture, target), {
+				status: "routing-failure",
+				hiddenReplies: false,
+				unexpected: [],
+			});
+		}
+	});
+}
+
+void test("the CLI and workflow fail for both routing captures even during an expected outage", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "public-port-probe-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const config = path.join(directory, "hosts.json");
+	const preload = path.join(directory, "nmap.mjs");
+	const entry = fileURLToPath(new URL("probe-public-host-ports.ts", import.meta.url));
+	writeFileSync(config, JSON.stringify([{ ipv4: "192.0.2.3", ipv6: "2001:db8::3", ...down }]));
+	writeFileSync(
+		preload,
+		`import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { mock } from "node:test";
+mock.module(${JSON.stringify(new URL("lib/process.ts", import.meta.url).href)}, {
+  exports: {
+    output(executable, args) {
+      assert.equal(executable, "/usr/local/libexec/hephaestus-probe-nmap");
+      const family = args.includes("-6") ? "ipv6" : "ipv4";
+      return readFileSync(new URL("public-port-probe-routing-" + family + ".xml",
+        ${JSON.stringify(new URL("fixtures/", import.meta.url).href)}), "utf8");
+    },
+  },
+});
+`,
+	);
+	const preloadUrl = pathToFileURL(preload).href;
+	const options = { encoding: "utf8", timeout: 15_000, maxBuffer: CAPTURE_LIMIT_BYTES } as const;
+	const cli = spawnSync(
+		process.execPath,
+		["--experimental-test-module-mocks", "--import", preloadUrl, entry, config],
+		options,
+	);
+	const routeLines = ["Host 1, IPv4: routing failure.", "Host 1, IPv6: routing failure."];
+	assert.equal(cli.status, 1, cli.stderr);
+	assert.deepEqual(cli.stdout.trim().split("\n"), [
+		...routeLines,
+		"Public port verification failed. Run the check on the probe host for details.",
+	]);
+
+	if (process.platform === "win32") {
+		// The workflow runs on Linux and the SSH transport fixture is a POSIX executable.
+		return;
+	}
+	const ssh = path.join(directory, "ssh");
+	writeFileSync(
+		ssh,
+		`#!/bin/sh
+exec "$PROBE_TEST_NODE" --experimental-test-module-mocks --import "$PROBE_TEST_PRELOAD" "$PROBE_TEST_ENTRY" "$PROBE_TEST_CONFIG"
+`,
+		{ mode: 0o700 },
+	);
+	const workflow = asRecord(
+		parse(
+			readFileSync(new URL("../.github/workflows/public-host-ports.yml", import.meta.url), "utf8"),
+		),
+		"workflow",
+	);
+	const job = asRecord(asRecord(workflow.jobs, "jobs").probe, "probe");
+	const step = asRecord(asArray(job.steps, "steps")[0], "probe step");
+	const runWorkflow = (overrides: NodeJS.ProcessEnv = {}) =>
+		spawnSync("bash", ["-eo", "pipefail", "-c", asString(step.run, "probe script")], {
+			...options,
+			env: {
+				...process.env,
+				PATH: directory + path.delimiter + (process.env.PATH ?? ""),
+				PROBE_HOST: "probe.invalid",
+				PROBE_KEY: "test key",
+				PROBE_KNOWN_HOSTS: "test host key",
+				PROBE_TEST_NODE: process.execPath,
+				PROBE_TEST_PRELOAD: preloadUrl,
+				PROBE_TEST_ENTRY: entry,
+				PROBE_TEST_CONFIG: config,
+				...overrides,
+			},
+		});
+	const run = runWorkflow();
+	assert.equal(run.status, 1, run.stderr);
+	assert.deepEqual(run.stdout.trim().split("\n"), [
+		...routeLines,
+		"The external probe reported a failed check.",
+	]);
+	writeFileSync(
+		ssh,
+		`#!/bin/sh
+printf '%s\\n' "$PROBE_TEST_SSH_STDOUT"
+exit "$PROBE_TEST_SSH_STATUS"
+`,
+	);
+	for (const [status, stdout] of [
+		["255", cli.stdout],
+		["1", ""],
+		["0", ""],
+	] as const) {
+		const unavailable = runWorkflow({
+			PROBE_TEST_SSH_STATUS: status,
+			PROBE_TEST_SSH_STDOUT: stdout,
+		});
+		assert.equal(unavailable.status, 2, unavailable.stderr);
+		assert.equal(unavailable.stdout.trim(), "Public port probe unavailable.");
+	}
+	const passed = runWorkflow({
+		PROBE_TEST_SSH_STATUS: "0",
+		PROBE_TEST_SSH_STDOUT: "Public port verification passed for 1 hosts on IPv4 and IPv6.",
+	});
+	assert.equal(passed.status, 0, passed.stderr);
+	assert.match(passed.stdout, /^Public port verification passed/u);
+});
+
+void test("a routing failure keeps its state and still reports responses on other ports", () => {
+	const unreachable = port("tcp", 80, "filtered", "host-unreach");
+	for (const reason of ["host-unreach", "net-unreach", "no-route"]) {
+		assert.deepEqual(assessScan(report([port("tcp", 80, "filtered", reason)]), down), {
+			status: "routing-failure",
+			hiddenReplies: false,
+			unexpected: [],
+		});
+	}
+	const replies = [
+		port("tcp", 10_250),
+		port("tcp", 6443, "closed", "reset"),
+		port("udp", 8472, "filtered", "admin-prohibited"),
+	];
+	assert.deepEqual(assessScan(report([unreachable, ...replies]), down), {
+		status: "routing-failure",
+		hiddenReplies: false,
+		unexpected: ["10250/tcp", "6443/tcp", "8472/udp"],
+	});
 });
 
 void test("incomplete scans fail even for a host marked down", () => {

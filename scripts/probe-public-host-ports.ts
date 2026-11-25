@@ -5,6 +5,7 @@ import { output } from "./lib/process.ts";
 
 const publicPorts = new Set(["80/tcp", "443/tcp"]);
 const respondingStates = new Set(["open", "closed", "unfiltered"]);
+const routingFailureReasons = new Set(["net-unreach", "host-unreach", "no-route"]);
 
 function responseReason(attributes: string) {
 	return /(?:^|\s)reason="(?<reason>[^"]+)"/u.exec(attributes)?.groups?.reason;
@@ -13,8 +14,15 @@ function responseReason(attributes: string) {
 function answered(state: string, reason?: string) {
 	return (
 		respondingStates.has(state) ||
-		(state === "filtered" && reason !== undefined && reason !== "no-response")
+		(state === "filtered" &&
+			reason !== undefined &&
+			reason !== "no-response" &&
+			!routingFailureReasons.has(reason))
 	);
+}
+
+function routingFailed(state: string, reason?: string) {
+	return state === "filtered" && reason !== undefined && routingFailureReasons.has(reason);
 }
 
 interface Target {
@@ -105,12 +113,16 @@ export function assessScan(report: string, { expectedOnline, http3 }: Omit<Targe
 	const hiddenReplies = elided.some(
 		({ state, reasons }) => answered(state) || reasons.some((reason) => answered(state, reason)),
 	);
-	const reachable = responding.length > 0 || hiddenReplies;
-	if (!reachable && expectedOnline) {
+	const routingFailure =
+		ports.some(({ state, reason }) => routingFailed(state, reason)) ||
+		elided.some(({ state, reasons }) => reasons.some((reason) => routingFailed(state, reason)));
+	const responseStatus = responding.length > 0 || hiddenReplies ? "reachable" : "unreachable";
+	const status = routingFailure ? "routing-failure" : responseStatus;
+	if (status === "unreachable" && expectedOnline) {
 		throw new Error("The address did not answer on either protocol.");
 	}
 	return {
-		reachable,
+		status,
 		hiddenReplies,
 		unexpected: responding
 			.filter(({ port }) => !publicPorts.has(port) && !(http3 && port === "443/udp"))
@@ -164,12 +176,16 @@ async function main() {
 				const family = isIP(address);
 				try {
 					const result = await probe(address, target);
+					if (result.status === "routing-failure") {
+						console.log(`Host ${index + 1}, IPv${family}: routing failure.`);
+						passed = false;
+					}
 					if (result.hiddenReplies || result.unexpected.length > 0) {
 						console.error(
 							`Host ${index + 1}, IPv${family}, unexpected responding ports: ${result.hiddenReplies ? "grouped replies" : result.unexpected.join(", ")}`,
 						);
 						passed = false;
-					} else if (!result.reachable) {
+					} else if (result.status === "unreachable") {
 						console.log(`Host ${index + 1}, IPv${family}: unreachable (expected while down).`);
 					}
 				} catch (error) {
