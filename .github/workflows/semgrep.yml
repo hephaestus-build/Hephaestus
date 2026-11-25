@@ -45,15 +45,26 @@ jobs:
             --exclude security/semgrep .
       # A fork pull request's token cannot hold security-events: write, so the upload would fail on
       # a clean scan. The scan itself still reports the verdict.
+      # Only the scan's verdict fails the job. The upload action retries server errors itself; an
+      # upload that still fails is GitHub's code-scanning service, not the policy, so the next step
+      # reports it instead of failing every pull request while that service is degraded.
       - name: Upload code scanning results
+        id: upload
         if: >-
           ${{ !cancelled() && hashFiles('tmp/semgrep.sarif') != ''
           && (github.event_name != 'pull_request'
           || github.event.pull_request.head.repo.full_name == github.repository) }}
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: tmp/semgrep.sarif
           category: semgrep-tls
+      - name: Report a failed code scanning upload
+        if: ${{ steps.upload.outcome == 'failure' }}
+        run: |
+          message="The scan result was not uploaded to code scanning. The scan's verdict stands, and the SARIF file is kept as this run's artifact."
+          echo "::warning title=Code scanning upload failed::$message"
+          echo "**Code scanning upload failed.** $message" >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve scan evidence
         if: ${{ !cancelled() && hashFiles('tmp/semgrep.sarif') != '' }}
         uses: ./.github/actions/upload-artifact-retry
