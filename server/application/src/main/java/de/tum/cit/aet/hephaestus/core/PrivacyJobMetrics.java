@@ -22,6 +22,7 @@ public class PrivacyJobMetrics {
     public enum Job {
         ACCOUNT_ERASURE("account_erasure"),
         CONVERSATION_RETENTION("conversation_retention"),
+        CONVERSATION_COPY_RETENTION("conversation_copy_retention"),
         EXPORT_GENERATION("export_generation"),
         EXPORT_RETENTION("export_retention"),
         LLM_USAGE_RETENTION("llm_usage_retention");

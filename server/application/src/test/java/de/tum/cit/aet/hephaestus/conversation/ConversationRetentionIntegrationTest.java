@@ -277,6 +277,36 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         return ids;
     }
 
+    /** {@code count} tool results of the conversation that read the context, a second apart after {@code first}. */
+    private List<UUID> copyBacklog(Conversation conversation, int count, Instant first) {
+        List<UUID> ids = jdbc
+                .queryForList(
+                        """
+                INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                          payload, created_at)
+                SELECT gen_random_uuid(), ?, ?, ?, ? + s, 'TOOL_RESULT', 'APP', '',
+                       jsonb_build_object('type', 'message', 'id', 'pi-' || gen_random_uuid(), 'message',
+                           jsonb_build_object('role', 'toolResult', 'toolName', 'read', 'toolCallId', 'call-' || s,
+                               'content', jsonb_build_array(
+                                   jsonb_build_object('type', 'text', 'text', 'words-channel-message')))),
+                       CAST(? AS timestamptz) + s * interval '1 second'
+                FROM generate_series(1, ?) s
+                RETURNING id
+                """,
+                        UUID.class,
+                        conversation.getWorkspaceId(),
+                        conversation.getId(),
+                        conversation.getAccountId(),
+                        seq,
+                        Timestamp.from(first),
+                        count)
+                .stream()
+                .map(Objects::requireNonNull)
+                .toList();
+        seq += count;
+        return ids;
+    }
+
     private long unerased(Collection<UUID> ids) {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM conversation_entry WHERE id = ANY(?) AND redacted_at IS NULL",
@@ -299,6 +329,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                 ownerScope,
                 transactions,
                 retention,
+                () -> List.of(slackRetention),
                 metrics,
                 new SimpleMeterRegistry(),
                 Clock.systemUTC(),
@@ -625,16 +656,18 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     @Test
     void shouldEraseACopyingToolResultWithTheSlackRetentionAndKeepTheMessagesAndOtherResults() {
         connectSlack(workspace);
-        UUID oldRead = entry(main, "TOOL_RESULT", "read", Duration.ofDays(17), "words-channel-message");
-        UUID oldBash = entry(main, "TOOL_RESULT", "bash", Duration.ofDays(17), "words-grep-output");
+        UUID oldRead = entry(main, "TOOL_RESULT", "read", Duration.ofDays(24), "words-channel-message");
+        UUID oldBash = entry(main, "TOOL_RESULT", "bash", Duration.ofDays(24), "words-grep-output");
+        // Due when older than the Slack retention of 30 days less two weeks at the start of the retention week: 24 days
+        // always, 15 days never.
         UUID recentRead = entry(main, "TOOL_RESULT", "read", Duration.ofDays(15), "words-recent-read");
         UUID oldSearch =
-                entry(main, "TOOL_RESULT", "search_conversation", Duration.ofDays(17), "words-own-conversation");
-        UUID oldAnswer = entry(main, "ANSWER", "", Duration.ofDays(17), "words-answer");
+                entry(main, "TOOL_RESULT", "search_conversation", Duration.ofDays(24), "words-own-conversation");
+        UUID oldAnswer = entry(main, "ANSWER", "", Duration.ofDays(24), "words-answer");
         UUID summary = summary(main);
-        UUID otherRead = entry(otherMain, "TOOL_RESULT", "read", Duration.ofDays(17), "words-other-workspace");
+        UUID otherRead = entry(otherMain, "TOOL_RESULT", "read", Duration.ofDays(24), "words-other-workspace");
 
-        slackRetention.sweepCopiesNow();
+        conversationRetention.sweepCopiesNow();
 
         assertThat(erased(oldRead)).isTrue();
         assertThat(erased(oldBash)).isTrue();
@@ -654,11 +687,109 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     @Test
     void shouldEraseACopyingToolResultWhileTheSlackConnectionIsSuspended() {
         connectSlack(workspace, IntegrationState.SUSPENDED);
-        UUID oldRead = entry(main, "TOOL_RESULT", "read", Duration.ofDays(17), "words-channel-message");
+        UUID oldRead = entry(main, "TOOL_RESULT", "read", Duration.ofDays(24), "words-channel-message");
 
-        slackRetention.sweepCopiesNow();
+        conversationRetention.sweepCopiesNow();
 
         assertThat(erased(oldRead)).isTrue();
+    }
+
+    /**
+     * A backlog of copying tool results in two Slack workspaces, larger than one run: each run hands at most its page
+     * budget to erasure, oldest first across both workspaces, and the next runs drain the rest. A question of the same
+     * age keeps the conversation retention.
+     */
+    @Test
+    void shouldDrainTheCopiesOfSeveralWorkspacesInBoundedRunsOldestFirst() {
+        connectSlack(workspace);
+        connectSlack(otherWorkspace);
+        Instant written = Instant.now().minus(Duration.ofDays(60));
+        List<UUID> here = copyBacklog(main, 9, written);
+        List<UUID> there = copyBacklog(otherMain, 9, written.plusMillis(500));
+        UUID question = entry(main, "USER", "", written, "words-question");
+        ConversationRetentionSweeper sweeper = sweeper(reportingRedaction(), 4, 1);
+
+        ConversationRetentionSweeper.Run first = sweeper.sweepCopiesNow();
+
+        assertThat(first.erased()).as("one page of four").isEqualTo(4);
+        assertThat(first.drained()).isFalse();
+        assertThat(unerased(here))
+                .as("the oldest come first, in either workspace")
+                .isEqualTo(7);
+        assertThat(unerased(there)).isEqualTo(7);
+
+        int runs = 1;
+        ConversationRetentionSweeper.Run next;
+        do {
+            next = sweeper.sweepCopiesNow();
+            runs++;
+        } while (!next.drained() && runs < 20);
+
+        assertThat(runs).as("18 copies in runs of four").isEqualTo(5);
+        assertThat(unerased(here)).isZero();
+        assertThat(unerased(there)).isZero();
+        assertThat(erased(question))
+                .as("a question keeps the conversation retention")
+                .isFalse();
+    }
+
+    /**
+     * One person's conversation tree is locked: the copy sweep passes over that person and still erases the copies of
+     * another person of the same workspace and of another workspace. The next run gets back to the first person.
+     */
+    @Test
+    void shouldEraseTheCopiesOfOtherPeopleWhileOnePersonsTreeIsLocked() throws Exception {
+        connectSlack(workspace);
+        connectSlack(otherWorkspace);
+        Instant written = Instant.now().minus(Duration.ofDays(60));
+        List<UUID> locked = copyBacklog(main, 6, written);
+        List<UUID> colleague = copyBacklog(colleagueMain, 6, written.plusSeconds(60));
+        List<UUID> elsewhere = copyBacklog(otherMain, 6, written.plusSeconds(120));
+        ConversationRetentionSweeper sweeper = sweeper(reportingRedaction(), 5, 10);
+
+        ConversationRetentionSweeper.Run run;
+        try (java.sql.Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT id FROM conversation WHERE id = ? FOR UPDATE")) {
+                lock.setObject(1, main.getId());
+                lock.executeQuery().close();
+            }
+            run = sweeper.sweepCopiesNow();
+            holder.rollback();
+        }
+
+        assertThat(run.failedOwners()).isEqualTo(1);
+        assertThat(unerased(locked)).isEqualTo(6);
+        assertThat(unerased(colleague))
+                .as("another person of the same workspace")
+                .isZero();
+        assertThat(unerased(elsewhere)).as("another workspace").isZero();
+
+        sweeper.sweepCopiesNow();
+
+        assertThat(unerased(locked)).isZero();
+    }
+
+    /**
+     * The database clock decides which copies are due, by the week: a copy written a minute before the start of the
+     * retention week less the Slack retention less two weeks is due, one written a minute after it is not.
+     */
+    @Test
+    void shouldEraseACopyDueByTheDatabaseClockAndKeepOneJustAfterTheCutoff() {
+        connectSlack(workspace);
+        String week = "date_bin(interval '7 days', clock_timestamp(), timestamptz '2000-01-02 03:45:00+00')";
+        Instant weekStart = Objects.requireNonNull(jdbc.queryForObject("SELECT " + week, Timestamp.class))
+                .toInstant();
+        Instant cutoff = weekStart.minus(Duration.ofDays(30 - 14));
+        UUID justDue = entry(main, "TOOL_RESULT", "read", cutoff.minusSeconds(60), "words-just-due");
+        UUID justKept = entry(main, "TOOL_RESULT", "read", cutoff.plusSeconds(60), "words-just-kept");
+
+        conversationRetention.sweepCopiesNow();
+
+        assumeTrue(weekStart.equals(Objects.requireNonNull(jdbc.queryForObject("SELECT " + week, Timestamp.class))
+                .toInstant()));
+        assertThat(erased(justDue)).isTrue();
+        assertThat(erased(justKept)).isFalse();
     }
 
     @Test

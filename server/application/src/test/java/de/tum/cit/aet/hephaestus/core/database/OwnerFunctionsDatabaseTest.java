@@ -425,6 +425,9 @@ class OwnerFunctionsDatabaseTest {
             ownerConnection.commit();
 
             assertThat(dueEntries(app)).containsExactly(ADA_OLD);
+            assertThat(deadlineEntries(app))
+                    .as("the deadline margin also leaves out an account in erasure: erasure removes its entries")
+                    .containsExactly(ADA_OLD);
             assertThat(sweep(app, RowSweepRule.EXPIRED_EXPORTS, null, null)).isZero();
             owner.update("UPDATE account SET status = 'DELETED' WHERE id = 12");
             ownerConnection.commit();
@@ -471,6 +474,12 @@ class OwnerFunctionsDatabaseTest {
     private static List<@Nullable UUID> dueEntries(JdbcTemplate app) {
         return app.queryForList(
                 "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 10)",
+                UUID.class);
+    }
+
+    private static List<@Nullable UUID> deadlineEntries(JdbcTemplate app) {
+        return app.queryForList(
+                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION_DEADLINE', 2592000, NULL, NULL, '{}', '{}', 10)",
                 UUID.class);
     }
 
