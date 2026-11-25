@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -143,8 +144,9 @@ public class AgentSandboxes {
         var requested = Objects.requireNonNull(transactions.execute(status -> {
             if (!sandboxes.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
             // Held until the row commits: an erasure that suspends the workspace waits, and then finds this sandbox
-            // to delete; a request after the suspension gets none.
-            if (!workspaces.holdActive(workspaceId)) throw new InactiveWorkspaceException(workspaceId);
+            // to delete; a request after the suspension gets none. An instance-scoped run has no workspace.
+            if (workspaceId != AgentRunRef.INSTANCE_SCOPE && !workspaces.holdActive(workspaceId))
+                throw new InactiveWorkspaceException(workspaceId);
             return sandboxes
                     .findLive(workspaceId, subjectKey)
                     .map(live -> new Requested(live, false))
