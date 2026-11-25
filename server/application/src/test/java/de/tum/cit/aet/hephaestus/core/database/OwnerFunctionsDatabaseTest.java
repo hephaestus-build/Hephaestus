@@ -293,6 +293,53 @@ class OwnerFunctionsDatabaseTest {
         }
     }
 
+    /**
+     * The approved purge sweep takes a personal space only once its owner's erasure suspended it (#5094). An active
+     * personal space is refused, also with a valid approval, so no purge reaches a space that its owner still uses.
+     */
+    @Test
+    void shouldSweepAPersonalSpaceOnlyOnceItsErasureSuspendedIt() throws Exception {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_personal", SEEDED);
+        try (Connection owner = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(owner).execute("""
+                    INSERT INTO workspace (id, account_login, account_type, display_name, slug, status, kind,
+                        personal_account_id)
+                    VALUES (3, 'me--aaaaaaaaaaaaaaac', 'USER', 'Personal space', 'me--aaaaaaaaaaaaaaac', 'ACTIVE',
+                        'PERSONAL', 13);
+                    INSERT INTO conversation (id, created_at, last_activity_at, account_id, workspace_id)
+                    VALUES ('00000000-0000-0000-0000-00000000c003', now(), now(), 13, 3);
+                    """);
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var app = jdbc(connection);
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.WORKSPACE_PURGE, 3, null);
+            assertThatThrownBy(() -> sweep(app, RowSweepRule.WORKSPACE_PURGE, 3L, null))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("workspace is unavailable for purge");
+            connection.rollback();
+        }
+        try (Connection owner = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(owner).update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = 3");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var app = jdbc(connection);
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.WORKSPACE_PURGE, 3, null);
+            sweep(app, RowSweepRule.WORKSPACE_PURGE, 3L, null);
+            connection.commit();
+        }
+        try (Connection owner = connect(PostgreSQLTestContainer.asOwner(database))) {
+            assertThat(jdbc(owner).queryForList("SELECT id FROM conversation WHERE workspace_id = 3", UUID.class))
+                    .isEmpty();
+            assertThat(jdbc(owner).queryForList("SELECT id FROM conversation ORDER BY id", UUID.class))
+                    .containsExactly(ADA_MAIN, BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
     @Test
     void shouldRefuseAnOldApprovalAfterTheDatabaseOwnerReplacesItsSigningKey() throws Exception {
         var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_key_reset", SEEDED);
