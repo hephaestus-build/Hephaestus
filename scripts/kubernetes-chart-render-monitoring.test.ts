@@ -455,6 +455,36 @@ await test("the monitoring stack loads every shipped alert group whose exporter 
 	);
 });
 
+await test("the monitoring stack marks only enrolled firewall policy exporters", () => {
+	const enrolled = "192.168.5.21:9100";
+	const other = "192.168.5.22:9100";
+	const stack = {
+		nodeExporters: [enrolled, other],
+		firewallPolicyNodeExporters: [enrolled],
+	};
+	const marked = stackFor({ observability: { stack } });
+	const unmarked = stackFor({ observability: { stack: { nodeExporters: stack.nodeExporters } } });
+	assert.deepEqual(
+		marked.jobs.find((job) => get(job, "job_name") === "node"),
+		{
+			job_name: "node",
+			static_configs: [
+				{ targets: [other] },
+				{ targets: [enrolled], labels: { host_firewall_policy: "enrolled" } },
+			],
+		},
+	);
+	assert.deepEqual(marked.egress, unmarked.egress);
+	assert.match(
+		render([
+			...layersFor("small"),
+			stackOn,
+			{ observability: { stack: { firewallPolicyNodeExporters: [enrolled] } } },
+		]).stderr,
+		/firewallPolicyNodeExporters must contain only addresses from observability.stack.nodeExporters/u,
+	);
+});
+
 await test("a release package ships the alert rules without their promtool cases", async (t) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));

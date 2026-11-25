@@ -18,12 +18,113 @@ To upgrade, follow [Upgrade the host](#upgrade-the-host).
 - A host of 4 vCPU, 16 GiB of memory, and 150 GiB of disk, as [Profiles](./helm-chart#profiles) gives for `small.yaml`.
 - Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. The installer refuses another OS or kernel unless you add `--allow-unqualified-host`.
 - A DNS A record for your host name that points to the public address of the host.
-- Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
-- If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
+- A host firewall that follows the [host firewall policy](#host-firewall-policy).
 - Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
 - `curl`, `jq`, `openssl`, `python3`, [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, and Helm 4. Ubuntu includes `python3`.
 - A clock that NTP keeps synchronized, as [Clocks](./helm-chart#clocks) describes.
 - A GitHub OAuth app for sign-in, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
+
+## Host firewall policy
+
+Allow inbound TCP traffic from the internet on ports 80 and 443.
+These ports serve HTTP, HTTPS, certificate validation, and provider webhooks.
+Allow UDP port 443 only if your public proxy serves HTTP/3.
+
+Keep the Kubernetes API (TCP 6443), the kubelet (TCP 10250), node_exporter (TCP 9100), and Flannel VXLAN (UDP 8472) off the internet.
+Allow SSH (TCP 22) only from your admin VPN.
+Allow TCP 9100 only from the host that collects node metrics.
+Set the default policy to deny inbound and routed traffic and allow outbound traffic.
+On the k3s host, allow Pod and Service traffic on `cni0` and `flannel.1`.
+Remove any source-only inbound rules for the Pod and Service networks (`10.42.0.0/16` and `10.43.0.0/16`) that apply to all interfaces.
+
+Enforce the public port policy for IPv4 and IPv6.
+Set the host and provider firewalls to drop packets sent to blocked ports.
+Container port forwarding can bypass host input rules.
+Verify the public ports from a network outside the admin VPN and the hosting provider's private network.
+
+### Set reverse-path filtering
+
+Set IPv4 reverse-path filtering to strict mode (`rp_filter=1`) on the public interface.
+Linux uses the greater of the public interface value and `net.ipv4.conf.all.rp_filter`.
+A global value of 2 overrides the public interface setting.
+If the global value is 2, keep the current effective values on other interfaces before you set the global value to 0.
+
+Record the settings in a file such as `/etc/sysctl.d/99-hephaestus-public-rp-filter.conf`.
+Replace `eth0` with your public interface:
+
+```ini
+net/ipv4/conf/all/rp_filter = 0
+net/ipv4/conf/eth0/rp_filter = 1
+```
+
+### Check the policy with UFW
+
+Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
+It checks the saved and live UFW user rules, their chain hooks, and the default policies.
+It also checks the kernel input chain and the UFW hooks and helper chains on the input path.
+
+An early deny can prevent required traffic from reaching the UFW user rules.
+Keep interface-specific denies for private ports that leave the declared traffic available.
+If you use custom packet filter rules or container port forwarding, check those rules separately.
+
+Use UFW to load the host rules at boot.
+If `netfilter-persistent` reloads saved snapshots, use the host console for the migration.
+Back up the saved snapshots and capture the live IPv4 and IPv6 tables with `iptables-save` and `ip6tables-save`.
+Compare each saved rule with the live rules and identify which rules UFW and k3s own.
+Move the required host rules to UFW, then disable `netfilter-persistent` and archive its snapshots.
+
+Remove the conflicting rules that remain loaded in the kernel by their full rule specification.
+Use `iptables -D` for IPv4 rules or `ip6tables -D` for IPv6 rules.
+Verify the UFW policy and check that k3s remains healthy.
+
+Store `host-firewall.json` in `/etc/hephaestus`. Give it root ownership and mode `0600`.
+Keep it outside your Git checkout.
+
+Replace the example addresses with your VPN networks and the addresses of your monitoring host.
+For each source, include only the IP families it uses.
+Use an empty `monitoringAddresses` list if the k3s Pod network already allows your scraper.
+Set `k3s` for a host with the default k3s interfaces, and set `http3` for a proxy that serves HTTP/3.
+Set `publicInterface` to your public IPv4 interface.
+With no `publicInterface` value, the check requires one interface on the IPv4 default route.
+
+```json
+{
+  "sshVpnCidrs": ["192.0.2.0/24", "2001:db8:1::/64"],
+  "monitoringAddresses": ["198.51.100.4", "2001:db8:2::4"],
+  "k3s": true,
+  "http3": false,
+  "publicInterface": "eth0"
+}
+```
+
+Use separate UFW rules for the two TCP web ports.
+Run each source rule once for each listed VPN range or monitoring address.
+Replace the source placeholders before you run the commands.
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default deny routed
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from <vpn-range> to any port 22 proto tcp
+sudo ufw allow from <monitoring-address> to any port 9100 proto tcp
+sudo ufw allow in on cni0
+sudo ufw allow in on flannel.1
+```
+
+Add `sudo ufw allow 443/udp` if the proxy serves HTTP/3.
+Use the `cni0` and `flannel.1` rules on the k3s host only.
+
+Run the policy check on the host:
+
+```bash
+sudo node scripts/host-firewall.ts --check /etc/hephaestus/host-firewall.json
+```
+
+The check exits with an error if the host differs from the policy.
+
+To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 
 ## What the installer checks
 

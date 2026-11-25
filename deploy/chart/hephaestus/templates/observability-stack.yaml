@@ -13,6 +13,18 @@ docs/admin/monitoring.mdx § Run the monitoring stack.
 {{- $metrics := include "hephaestus.name" (dict "root" . "component" "victoria-metrics") }}
 {{- $vmalert := include "hephaestus.name" (dict "root" . "component" "vmalert") }}
 {{- $alertmanager := include "hephaestus.name" (dict "root" . "component" "alertmanager") }}
+{{- $enrolled := $stack.firewallPolicyNodeExporters }}
+{{- range $enrolled }}
+{{- if not (has . $stack.nodeExporters) }}
+{{- fail "observability.stack.firewallPolicyNodeExporters must contain only addresses from observability.stack.nodeExporters" }}
+{{- end }}
+{{- end }}
+{{- $unenrolled := list }}
+{{- range $stack.nodeExporters }}
+{{- if not (has . $enrolled) }}
+{{- $unenrolled = append $unenrolled . }}
+{{- end }}
+{{- end }}
 {{- /*
 The release's rules without the groups that read exporters the stack does not scrape. Their series never exist
 here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, would fire for ever.
@@ -125,7 +137,14 @@ data:
       # node-exporter on the hosts, outside the release. The address is the instance label of the node rules.
       - job_name: node
         static_configs:
+          {{- with $unenrolled }}
           - targets: {{ toJson . }}
+          {{- end }}
+          {{- with $enrolled }}
+          - targets: {{ toJson . }}
+            labels:
+              host_firewall_policy: enrolled
+          {{- end }}
       {{- end }}
 ---
 apiVersion: v1

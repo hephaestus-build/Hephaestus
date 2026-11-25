@@ -754,7 +754,7 @@ ufw_allows() {
 if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q '^Status: active'; then
 	for port in 80 443; do
 		ufw_allows "$port" ||
-			die "ufw is active and allows no $port/tcp: no port rule and no Nginx, Apache or WWW profile, the profiles that this check reads. Run: sudo ufw allow 80,443/tcp && sudo ufw allow from 10.42.0.0/16 && sudo ufw allow from 10.43.0.0/16"
+			die "ufw is active and allows no $port/tcp: no port rule and no Nginx, Apache or WWW profile, the profiles that this check reads. Run: sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow in on cni0 && sudo ufw allow in on flannel.1"
 	done
 fi
 if systemctl is-active --quiet firewalld 2>/dev/null; then

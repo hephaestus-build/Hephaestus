@@ -1915,6 +1915,103 @@ tests:
               summary: A node-exporter target cannot be scraped, so the node disk and memory alerts cannot fire for it
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: host firewall drift fires and clears when the host matches its policy again
+    interval: 1m
+    input_series:
+      - series: 'host_firewall_policy_ok{job="node",instance="node-a"}'
+        values: "1 0 0 0 1"
+      - series: 'host_firewall_policy_ok{job="node",instance="node-b"}'
+        values: "1x4"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusHostFirewallPolicyDrift
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusHostFirewallPolicyDrift
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusHostFirewallPolicyDrift
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: node
+              instance: node-a
+            exp_annotations:
+              summary: A host firewall differs from its policy
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 4m
+        alertname: HephaestusHostFirewallPolicyDrift
+        exp_alerts: []
+
+  - name: a host firewall check is stale after two missed runs and clears when it reports again
+    interval: 1m
+    input_series:
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-a"}'
+        values: "0 0 0 0 0 300"
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-b"}'
+        values: "0+60x5"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusHostFirewallPolicyStale
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusHostFirewallPolicyStale
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusHostFirewallPolicyStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: node-a
+            exp_annotations:
+              summary: A host firewall has reported no policy check for more than two minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 5m
+        alertname: HephaestusHostFirewallPolicyStale
+        exp_alerts: []
+
+  - name: missing firewall metrics alert only for enrolled exporters that can be scraped
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_ok{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "1 1 stale _ 1"
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "0 stale _ _ 240"
+      - series: 'up{job="node",instance="node-b"}'
+        values: "1x4"
+      - series: 'up{job="node",instance="node-c",host_firewall_policy="enrolled"}'
+        values: "0x4"
+      - series: 'up{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_ok{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "0+60x4"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: node-a
+              host_firewall_policy: enrolled
+            exp_annotations:
+              summary: An enrolled host is missing firewall policy metrics
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 4m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+
   # 6 days and 30 days after the start.
   - name: a certificate that expires within seven days fires after one hour, a later one does not
     interval: 1m
