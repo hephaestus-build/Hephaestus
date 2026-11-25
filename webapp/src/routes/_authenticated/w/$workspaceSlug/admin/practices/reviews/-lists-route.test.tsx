@@ -413,7 +413,10 @@ describe("practice review list routes", () => {
 		);
 		await screen.findByText("No feedback for this developer yet", undefined, ROUTE_RENDER_WAIT);
 		// The empty state comes from the counts; the filtered list is its own request.
-		await waitFor(() => expect(feedbackUrls.at(-1)?.searchParams.get("personId")).toBe("9"));
+		await waitFor(
+			() => expect(feedbackUrls.at(-1)?.searchParams.get("personId")).toBe("9"),
+			ROUTE_RENDER_WAIT,
+		);
 
 		expect(feedbackUrls.at(-1)?.searchParams.get("location")).toBe("CONVERSATION");
 		const counts = locationCountUrls.at(-1);
