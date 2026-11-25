@@ -31,6 +31,16 @@ const bounded = (milliseconds: number) => ({
 });
 const quick = bounded(15_000);
 
+/** How a Docker call ended: a timeout ends with ETIMEDOUT, a call that could not start with another code. */
+function howItEnded(result: { status: number | null; error?: Error }): string {
+	const code =
+		result.error !== undefined && "code" in result.error ? String(result.error.code) : undefined;
+	if (code === "ETIMEDOUT") {
+		return "timed out";
+	}
+	return code === undefined ? `exit ${String(result.status)}` : `failed to run (${code})`;
+}
+
 function docker(...args: string[]): string {
 	// Building the image installs packages; every other call is a container or volume operation.
 	const result = spawnSync("docker", args, {
@@ -39,9 +49,7 @@ function docker(...args: string[]): string {
 		...bounded(args[0] === "build" ? 900_000 : 120_000),
 	});
 	if (result.status !== 0) {
-		// A call that ran out of time has no status, only the signal that ended it.
-		const ended =
-			result.signal === null ? `exit ${String(result.status)}` : `timed out (${result.signal})`;
+		const ended = howItEnded(result);
 		throw new Error(`docker ${args.join(" ")} ${ended}:\n${result.stdout}${result.stderr}`);
 	}
 	return result.stdout.trim();

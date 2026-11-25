@@ -120,13 +120,15 @@ await test("the backup alert renders on the switch that gives the server the bac
 await test("the exporter's absence alerts only where the chart runs the exporter", () => {
 	// absent(up{job="postgresql"}) fires for ever where no exporter is scraped, so the group follows the switch
 	// that deploys it.
-	for (const metrics of [false, true]) {
-		const resources = rendered([
-			...layersFor("small"),
-			alertRulesOn,
-			stackOn,
-			...(metrics ? [metricsOn] : []),
-		]);
+	for (const [metrics, namespace] of [
+		[false, "hephaestus"],
+		[true, "hephaestus"],
+		[true, "team-b"],
+	] as const) {
+		const resources = rendered(
+			[...layersFor("small"), alertRulesOn, stackOn, ...(metrics ? [metricsOn] : [])],
+			{ namespace },
+		);
 		const [configMap, prometheusRule] = ruleResources(resources);
 		const vmalert = resources.find(
 			(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "vmalert",
@@ -148,7 +150,7 @@ await test("the exporter's absence alerts only where the chart runs the exporter
 			if (exporter !== undefined) {
 				assert.deepEqual(
 					list(get(exporter, "rules")).map((rule) => get(rule, "expr")),
-					['absent(up{job="postgresql",namespace="hephaestus"})'],
+					[`absent(up{job="postgresql",namespace="${namespace}"})`],
 					destination,
 				);
 			}

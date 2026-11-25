@@ -236,6 +236,7 @@ Mount the ConfigMap into your Prometheus or vmalert, and let its rule loader rea
 Without the chart, load the file from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
 Leave out the group `hephaestus-backups` if you run no backups.
 Leave out the group `hephaestus-postgresql-exporter` if you scrape no PostgreSQL exporter as `job="postgresql"`.
+If you load that group, add `namespace="<release namespace>"` to the selector of its `absent()` rule, as the chart does, and set that label in the scrape.
 
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
@@ -314,8 +315,8 @@ To turn it on:
 4. Scrape the exporter's port `metrics` (9187) on the path `/metrics`.
    The [monitoring stack](#run-the-monitoring-stack) does this as the job `postgresql`.
    Another scraper needs the namespace and labels of `networkPolicy.metrics`.
-   Set `job` to `postgresql` with a relabeling, and keep the `namespace` label: the rules read both.
-   Without that job, `HephaestusPostgresExporterMissing` stays critical.
+   Set `job` to `postgresql` with a relabeling, and set `namespace` to the release's namespace: the rules read both.
+   Without both labels, `HephaestusPostgresExporterMissing` stays critical.
 
 The exporter reports the default collectors, the oldest open transaction, the transaction ID age of each database, and the statement statistics.
 The statement statistics hold the `postgresql.metrics.statementLimit` statements with the most total execution time, 20 by default.
