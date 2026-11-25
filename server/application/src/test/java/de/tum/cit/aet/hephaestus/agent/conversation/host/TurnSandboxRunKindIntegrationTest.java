@@ -527,6 +527,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         ask("Question");
         SandboxRun run = claim();
 
+        // Only a developer who signed in can choose: the fixture's account starts unclaimed.
+        jdbc.update("UPDATE account SET status = 'ACTIVE' WHERE id = ?", developerAccountId);
         beans.getBean(AccountDirectory.class).setAiChoice(developerAccountId, AiChoice.NO_AI);
 
         assertThat(sandboxes.hasLive(workspace.getId(), run.sandbox().subjectKey()))
