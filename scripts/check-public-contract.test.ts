@@ -20,7 +20,12 @@ import {
 	refusals,
 	secretKeys,
 } from "./check-public-contract.ts";
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import {
+	API_OPERATION_REGISTRY,
+	apiOperationClassifications,
+	apiOperations,
+} from "./lib/api-operation-classification.ts";
+import { parseJson } from "./lib/json.ts";
 
 const CHART = "deploy/chart/hephaestus/values.schema.json";
 const ALERTS = "deploy/chart/hephaestus/files/hephaestus-alerts.yml";
@@ -498,29 +503,67 @@ function normalizeApiResource(resource: string) {
 		.replaceAll(/\{[^/]+?\}|<[^/]+?>/gu, "{}");
 }
 
-void test("the public operation list covers existing documented methods and extension SDK imports", () => {
-	const promised = asArray(
-		parseJson(readRepositoryFile("server/public-api-operations.json")),
-		"public operations",
-	).map((value) => asString(value, "public operation"));
-	assert.notEqual(promised.length, 0);
-	assert.equal(new Set(promised).size, promised.length, "duplicate public operation");
-	const specification = asRecord(parse(readRepositoryFile("server/openapi.yaml")), "OpenAPI");
-	const paths = asRecord(specification.paths, "OpenAPI paths");
-	const methods = new Set(["get", "post", "put", "patch", "delete", "head", "options", "trace"]);
-	const operations = new Map<string, string>();
-	for (const [resource, raw] of Object.entries(paths)) {
-		for (const [method, value] of Object.entries(asRecord(raw, resource))) {
-			if (!methods.has(method)) {
-				continue;
-			}
-			const operation = asRecord(value, `${method} ${resource}`);
-			operations.set(
-				asString(operation.operationId, "operation ID"),
-				`${method.toUpperCase()} ${resource}`,
-			);
+function* curlApiRequests(source: string): Generator<{ method: string; resource: string }> {
+	const joinedLines = source.replaceAll(/\\\r?\n[\t ]*/gu, " ");
+	for (const [command] of joinedLines.matchAll(/^[\t ]*curl[\t ]+[^\r\n]+/gmu)) {
+		const method = /\s(?:--request|-X)\s+(?<method>[A-Z]+)(?=\s|$)/u.exec(command)?.groups?.method;
+		const hasData = /\s(?:--data(?:-raw|-binary|-urlencode|-ascii)?|--json|-d)(?=\s|=)/u.test(
+			command,
+		);
+		for (const match of command.matchAll(
+			/["']https?:\/\/(?:<[^>\r\n]+>|[^/"'\s]+)(?<resource>\/api\/[^"'\r\n]+)["']/gu,
+		)) {
+			const resource = match.groups?.resource;
+			assert.ok(resource !== undefined);
+			yield { method: method ?? (hasData ? "POST" : "GET"), resource };
 		}
 	}
+}
+
+function* documentedApiRequests(source: string): Generator<{ method: string; resource: string }> {
+	for (const match of source.matchAll(
+		/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?:https?:\/\/(?:<[^>\r\n]+>|[^/\s"'<>]+))?(?<resource>\/(?:<[^>\r\n]+>|\{[^}\r\n]+\}|[^\s"'<>{}])+)/gu,
+	)) {
+		const { verbs, resource } = match.groups ?? {};
+		assert.ok(verbs !== undefined && resource !== undefined);
+		for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
+			yield { method, resource };
+		}
+	}
+	yield* curlApiRequests(source);
+}
+
+void test("documented calls accept absolute and relative paths with placeholders", () => {
+	assert.deepEqual(
+		[
+			...documentedApiRequests(
+				"GET https://<instance host>/.well-known/oauth-authorization-server\n" +
+					"PUT or DELETE /api/workspaces/<workspace slug>/practice-repository\n" +
+					"GET https://hephaestus.example/.well-known/oauth-protected-resource/{resourcePath}\n" +
+					"The /api/workspaces/<slug>/practice-repository path supports changes.",
+			),
+		],
+		[
+			{ method: "GET", resource: "/.well-known/oauth-authorization-server" },
+			{ method: "PUT", resource: "/api/workspaces/<workspace slug>/practice-repository" },
+			{ method: "DELETE", resource: "/api/workspaces/<workspace slug>/practice-repository" },
+			{ method: "GET", resource: "/.well-known/oauth-protected-resource/{resourcePath}" },
+		],
+	);
+});
+
+void test("the public operation list covers existing documented methods and extension SDK imports", () => {
+	const classes = apiOperationClassifications(
+		parseJson(readRepositoryFile(API_OPERATION_REGISTRY)),
+	);
+	const promised = [...classes].filter(([, item]) => item.access === "public").map(([key]) => key);
+	assert.notEqual(promised.length, 0);
+	const operations = new Map(
+		[...apiOperations(parse(readRepositoryFile("server/openapi.yaml")))].map(([key, id]) => [
+			id,
+			key,
+		]),
+	);
 	for (const operation of promised) {
 		assert.ok(
 			[...operations.values()].includes(operation),
@@ -553,9 +596,10 @@ void test("the public operation list covers existing documented methods and exte
 					`${file} imports unknown SDK operation ${name}`,
 				);
 				imported.add(operation);
+				const classification = classes.get(operation);
 				assert.ok(
-					promised.includes(operation),
-					`${file} uses ${operation} outside the public promise`,
+					classification?.access === "public" && classification.callers.includes("extension"),
+					`${file} uses ${operation} without a public classification for the extension`,
 				);
 			}
 		}
@@ -572,29 +616,29 @@ void test("the public operation list covers existing documented methods and exte
 		}),
 	);
 	const root = fileURLToPath(new URL("../", import.meta.url));
+	const documentedProblems: string[] = [];
 	for (const file of globSync("docs/{admin,user}/**/*.{md,mdx}", {
 		cwd: root,
 		exclude: ["docs/admin/_configuration-reference/**"],
 	})) {
 		const text = readFileSync(path.join(root, file), "utf8").replaceAll("`", "");
-		for (const match of text.matchAll(
-			/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?<resource>\/[^\s]+)/gu,
-		)) {
-			const { groups } = match;
-			assert.ok(groups !== undefined);
-			const { verbs, resource } = groups;
-			assert.ok(verbs !== undefined && resource !== undefined);
-			assert.notEqual(verbs, "");
-			assert.notEqual(resource, "");
-			for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
-				const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
-				if (operation !== undefined) {
-					assert.ok(
-						promised.includes(operation),
-						`${file} documents ${operation} outside the public promise`,
+		const checkDocumentedCall = (method: string, resource: string): void => {
+			const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
+			if (operation !== undefined) {
+				const classification = classes.get(operation);
+				if (
+					classification?.access !== "public" ||
+					!classification.callers.some((caller) => caller === "operator" || caller === "automation")
+				) {
+					documentedProblems.push(
+						`${file} documents ${operation} without a public operator or automation caller`,
 					);
 				}
 			}
+		};
+		for (const { method, resource } of documentedApiRequests(text)) {
+			checkDocumentedCall(method, resource);
 		}
 	}
+	assert.deepEqual(documentedProblems, []);
 });

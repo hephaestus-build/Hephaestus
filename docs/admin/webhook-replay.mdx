@@ -29,7 +29,7 @@ No web app screen lists dead letters. Use the API.
    ```
 
    Replace `<access token>` with the access token, `<host>` with the instance host name, and `<workspace slug>` with the slug of the workspace.
-   For installation events, use the path `/api/admin/integration/dead-letters`.
+   For installation events, use `GET /api/admin/integration/dead-letters`.
 
 3. Find the record of the event in `content`.
    Each record has its `id`, `provider`, `errorClass`, `receivedAt`, `failedAt`, `replayedAt` and `replayedBy`.
@@ -48,7 +48,7 @@ The API does not return payloads or headers.
    ```
 
    Replace `<id>` with the `id` of the record.
-   For an installation event, use the path `/api/admin/integration/dead-letters/<id>/replays`.
+   For an installation event, use `POST /api/admin/integration/dead-letters/<id>/replays`.
 
 2. Check that the response has a `replayedAt` time.
 

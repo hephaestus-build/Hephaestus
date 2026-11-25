@@ -610,12 +610,16 @@ jobs:
               - 'scripts/client-generators/**'
               - 'scripts/check-client-generators.ts'
               - 'scripts/check-api-compatibility.ts'
+              - 'scripts/lib/api-operation-classification.ts'
               - '.github/ci-tools/openapi-generator-cli.json'
               - '.github/workflows/ci-quality-gates.yml'
             api-clients:
               - 'webapp/src/api/**'
               - 'extension/src/api/**'
               - 'scripts/api-generator/**'
+              - 'scripts/check-api-operation-classification.ts'
+              - 'scripts/lib/api-operation-classification.ts'
+              - 'server/public-api-operations.json'
             agent-images:
               - 'docker/agents/**'
               # What docker/agents/pi/Dockerfile copies from the agent runtime: the sandbox driver, its run kinds and

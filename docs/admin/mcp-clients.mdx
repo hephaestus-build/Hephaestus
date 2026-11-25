@@ -123,4 +123,5 @@ These budgets are fixed and have no chart value. They stop a runaway client. An 
 
 - `GET https://<instance host>/.well-known/oauth-authorization-server` answers with the issuer and the sign-in endpoints.
 - `POST https://<instance host>/api/workspaces/<slug>/mcp` without a token answers 401 with a `resource_metadata` link.
+- The link gives the URL for `GET /.well-known/oauth-protected-resource/<resourcePath>`. The response names the authorization server.
 - If a client reports that it cannot find the authorization server, compare `hephaestus.auth.issuer` with the host in the client's endpoint URL.

@@ -150,7 +150,7 @@ If you change `hephaestus.webapp.url`, records signed under the old address no l
 
 Hephaestus makes the first signing key at start and seals it with the system key ([Secret custody](./secret-custody#what-the-database-seals)).
 It keeps every signing key for the life of the instance, so that each record stays valid.
-`/.well-known/hephaestus-provenance-keys.json` publishes the public keys without sign-in.
+`GET /.well-known/hephaestus-provenance-keys.json` returns the public keys without sign-in.
 No setting turns the records off.
 
 ### Model limits

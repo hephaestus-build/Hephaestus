@@ -75,14 +75,17 @@ jobs:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: |
           vp run generate:api
+          status=0
           if ! node scripts/assert-generated-clean.ts server/openapi.yaml webapp/src/api extension/src/api; then
             echo "::error::OpenAPI out of sync. Run: vp run generate:api"
             echo "### OpenAPI Validation" >> $GITHUB_STEP_SUMMARY
             echo "| Check | Status | Fix |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|--------|-----|" >> $GITHUB_STEP_SUMMARY
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
-            exit 1
+            status=1
           fi
+          node scripts/check-api-operation-classification.ts || status=1
+          exit "$status"
       # Judges the spec generated above against the latest published release, which it fetches from
       # origin. docs/contributor/ci-cd.mdx § API compatibility.
       - uses: ./.github/actions/setup-ci-tool
