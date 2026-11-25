@@ -55,7 +55,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
     private final FeedbackVisibilityService visibility;
     private final ResultRepository results;
     private final ResultHistoryQuery history;
-    private final FeedbackQueryRepository queries;
+    private final FeedbackConversationHistory conversationHistory;
     private final FeedbackPublicHistory publicHistoryReader;
     private final AccountMembershipQuery memberships;
     private final FeedbackPublicationContext publication;
@@ -142,7 +142,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         var entries = new ArrayList<PrivateFeedbackHistory.Entry>();
         int withoutCopyAuthority = 0;
         var listed = rows.stream().limit(limit).toList();
-        var page = new Page(workspaceId, listed, developerAccountId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var page = new Page(workspaceId, listed, developerAccountId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, true);
         for (var row : listed) {
             var facts = page.facts(row);
             // A row whose support may not be copied for this purpose is left out whole, and counted.
@@ -205,7 +205,9 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         if (limit < 1) throw new InvalidInputException("A history read needs a positive limit.");
         var rows = feedback.findAll(selected, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
                 .getContent();
-        var page = new Page(workspaceId, rows, viewerAccountId, purpose);
+        // A read across viewers, which one transaction may make for several: it reads no conversation, as each
+        // conversation has one owner.
+        var page = new Page(workspaceId, rows, viewerAccountId, purpose, false);
         return rows.stream().map(row -> page.facts(row).entry()).toList();
     }
 
@@ -225,7 +227,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
             var rows = feedback.findAll(
                             visible, PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
                     .getContent();
-            var read = new Page(workspaceId, rows, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
+            var read = new Page(workspaceId, rows, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING, true);
             for (var row : rows) {
                 if (kept.size() >= limit) break;
                 var facts = read.facts(row);
@@ -263,12 +265,18 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         private final Map<UUID, String> identities = new HashMap<>();
         private final Map<String, NoteThreadState> threadStates = new HashMap<>();
 
-        Page(long workspaceId, List<Feedback> rows, long viewerAccountId, SourceUsePurpose purpose) {
+        Page(
+                long workspaceId,
+                List<Feedback> rows,
+                long viewerAccountId,
+                SourceUsePurpose purpose,
+                boolean conversationThreads) {
             this.viewerAccountId = viewerAccountId;
-            for (var chunk : chunks(rows)) read(workspaceId, chunk, purpose);
+            for (var chunk : chunks(rows)) read(workspaceId, chunk, purpose, conversationThreads);
         }
 
-        private void read(long workspaceId, List<Feedback> rows, SourceUsePurpose purpose) {
+        private void read(
+                long workspaceId, List<Feedback> rows, SourceUsePurpose purpose, boolean conversationThreads) {
             var ids = rows.stream().map(Feedback::getId).toList();
             basis.findReadRows(workspaceId, ids)
                     .forEach(edge -> edges.computeIfAbsent(edge.feedbackId(), ignored -> new ArrayList<>())
@@ -337,8 +345,16 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 responses
                         .findCurrentForFeedbackIds(workspaceId, own)
                         .forEach(response -> responsesOf.put(response.getFeedbackId(), response));
-            queries.threadIds(workspaceId, ids)
-                    .forEach(thread -> threads.put(thread.getFeedbackId(), thread.getConversationId()));
+            var ownConversation = rows.stream()
+                    .filter(row -> conversationThreads
+                            && row.getDeveloperId() == viewerAccountId
+                            && row.getDestination() == FeedbackDestination.CONVERSATION)
+                    .toList();
+            if (!ownConversation.isEmpty()) {
+                conversationHistory
+                        .threads(workspaceId, ownConversation)
+                        .forEach(thread -> threads.put(thread.getFeedbackId(), thread.getConversationId()));
+            }
         }
 
         private List<UUID> resultIds(UUID feedbackId) {

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -67,6 +69,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -80,6 +83,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @Autowired
     FeedbackHistoryQueryService history;
+
+    @Autowired
+    FeedbackConversationHistory conversationHistory;
+
+    @Autowired
+    OwnerScope owners;
 
     @Autowired
     FeedbackRepair repairs;
@@ -1076,38 +1085,58 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         bind(row, proof);
         authorize(proof);
         UUID conversation = UUID.randomUUID(), answer = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
-                        + " VALUES (?,?,?,now(),now())",
-                conversation,
-                workspace.getId(),
-                developerId);
-        jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
-                        + "created_at) VALUES (?,?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
-                answer,
-                workspace.getId(),
-                conversation,
-                developerId);
-        UUID id = FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0);
-        copies.saveAndFlush(FeedbackCopy.builder()
-                .id(id)
-                .workspaceId(workspace.getId())
-                .feedbackId(row.getId())
-                .kind(FeedbackCopyKind.CHAT_TURN)
-                .state(FeedbackCopyState.POSTED)
-                .body("Try a focused test.")
-                .writeKey(id.toString())
-                .writeStartedAt(AT)
-                .postedAt(AT)
-                .conversationEntryId(answer)
-                .createdAt(AT)
-                .build());
+        var transaction = new TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(status -> {
+            owners.ofJob(developerId);
+            jdbc.update(
+                    "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                            + " VALUES (?,?,?,now(),now())",
+                    conversation,
+                    workspace.getId(),
+                    developerId);
+            jdbc.update(
+                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
+                            + "created_at) VALUES (?,?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
+                    answer,
+                    workspace.getId(),
+                    conversation,
+                    developerId);
+            UUID id = FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0);
+            copies.saveAndFlush(FeedbackCopy.builder()
+                    .id(id)
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .kind(FeedbackCopyKind.CHAT_TURN)
+                    .state(FeedbackCopyState.POSTED)
+                    .body("Try a focused test.")
+                    .writeKey(id.toString())
+                    .writeStartedAt(AT)
+                    .postedAt(AT)
+                    .conversationEntryId(answer)
+                    .createdAt(AT)
+                    .build());
+        });
         var entry = history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1)
                 .getFirst();
         assertThat(entry.body()).isEqualTo("Try a focused test.").isNotEqualTo(row.getBody());
         assertThat(entry.threadId()).isEqualTo(conversation);
         assertThat(entry.publicHistory()).isNull();
+
+        long other =
+                Objects.requireNonNull(persistAccount("Another history owner").getId());
+        transaction.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            owners.ofJob(other);
+            assertThatThrownBy(() -> history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1))
+                    .as("a transaction bound to another owner does not read this developer's conversations")
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Owner scope could not be set.");
+        });
+        assertThatThrownBy(() -> conversationHistory.threads(
+                        workspace.getId(),
+                        List.of(row, Feedback.builder().developerId(other).build())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A conversation history read requires one developer.");
     }
 
     @Test

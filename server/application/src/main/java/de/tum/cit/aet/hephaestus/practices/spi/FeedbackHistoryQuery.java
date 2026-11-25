@@ -16,7 +16,8 @@ public interface FeedbackHistoryQuery {
 
     /**
      * The item's feedback that {@code viewerAccountId} may read: their own in every state, and delivered feedback on the
-     * work. Not a developer-facing read: its caller keeps only delivered feedback on the work.
+     * work. Not a developer-facing read: its caller keeps only delivered feedback on the work, so it names no
+     * conversation thread.
      */
     List<FeedbackHistoryEntry> forItem(long workspaceId, long itemId, long viewerAccountId, int limit);
 

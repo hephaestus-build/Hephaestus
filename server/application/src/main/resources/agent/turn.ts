@@ -493,7 +493,9 @@ export function httpTurnApi(
 				return { admitted: false, reason };
 			}
 			const value = await json(response, `${tool}(${id})`);
-			return isRecord(value) && value[idKey] === id
+			// The worker writes the id in its canonical form; a UUID compares without regard to case.
+			const echoed = isRecord(value) ? value[idKey] : undefined;
+			return typeof echoed === "string" && echoed.toLowerCase() === id.toLowerCase()
 				? { admitted: true }
 				: { admitted: false, reason: null };
 		},

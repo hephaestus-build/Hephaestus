@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransac
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PostedCopyCorrector;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
@@ -85,6 +86,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFeedbackIntegrationTest {
     @Autowired
     protected FeedbackStoreService store;
+
+    @Autowired
+    protected ConversationClaims conversationClaims;
 
     @Autowired
     protected FeedbackSendTransactions transactions;

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.WeeklyDigestContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationReceiptAnswers;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -154,6 +155,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConversationClaims claims;
+
+    @Autowired
+    private ConversationReceiptAnswers answers;
 
     @Autowired
     private ReviewIntegrationData data;
@@ -720,7 +724,14 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                     .put("id", UUID.randomUUID().toString());
             prompt.putObject("message").put("role", "user").put("content", stimulus.getText());
             new ConversationTurnCompletion(
-                            turns, eligibility(), claims, usage, meters, Clock.fixed(due(), ZoneOffset.UTC), events)
+                            turns,
+                            eligibility(),
+                            claims,
+                            answers,
+                            usage,
+                            meters,
+                            Clock.fixed(due(), ZoneOffset.UTC),
+                            events)
                     .end(
                             workspaceId,
                             turnId,

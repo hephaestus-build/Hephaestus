@@ -60,12 +60,15 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -86,6 +89,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.awaitility.Awaitility;
@@ -107,6 +112,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -551,9 +557,9 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         UUID ready = UUID.randomUUID();
         UUID taken = UUID.randomUUID();
         ConversationClaims store = mock(ConversationClaims.class);
-        when(store.claimConversationCopy(workspace.getId(), ready, turn.getId(), turn.getAttempt()))
+        when(store.claimConversationCopy(workspace.getId(), developerAccount, ready, turn.getId(), turn.getAttempt()))
                 .thenReturn(Optional.of(new CopyWriteFence(ready, UUID.randomUUID(), turn.getId(), Instant.now())));
-        when(store.claimConversationCopy(workspace.getId(), taken, turn.getId(), turn.getAttempt()))
+        when(store.claimConversationCopy(workspace.getId(), developerAccount, taken, turn.getId(), turn.getAttempt()))
                 .thenReturn(Optional.empty());
         gatewayWith(mock(AssessmentPort.class), store);
 
@@ -564,7 +570,59 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         call("POST", "show-feedback", turn.getAttempt(), """
                         {"feedbackId":"%s"}""".formatted(taken))
                 .andExpect(status().isUnprocessableContent());
-        verify(store).claimConversationCopy(workspace.getId(), ready, turn.getId(), turn.getAttempt());
+        verify(store)
+                .claimConversationCopy(workspace.getId(), developerAccount, ready, turn.getId(), turn.getAttempt());
+    }
+
+    /**
+     * {@code show_feedback} claims through the real store in the transaction that holds the turn. A claim that took its
+     * own transaction would wait for the turn row that its caller holds, which PostgreSQL does not see as a deadlock.
+     */
+    @Test
+    void shouldShowTheAttemptsClaimedFeedbackWithoutWaitingForItsOwnTurnWhenTheTurnShowsFeedback() throws Exception {
+        UUID own = ConversationFeedbackRows.claimedBy(
+                jdbc, workspace.getId(), developerAccount, turn.getId(), "Pin the deployment image.");
+        User colleague =
+                persistUser("ask-turn-colleague-" + UUID.randomUUID().toString().substring(0, 8));
+        ensureMembership(workspace, colleague, Membership.WorkspaceRole.MEMBER);
+        UUID colleagues = ConversationFeedbackRows.claimedBy(
+                jdbc, workspace.getId(), accountId(colleague), turn.getId(), "Pin the deployment image.");
+
+        assertThat(showFeedback(own)).isEqualTo(200);
+        assertThat(showFeedback(colleagues))
+                .as("feedback of another developer than the turn's")
+                .isEqualTo(422);
+        assertThat(ConversationFeedbackRows.settled(jdbc, colleagues)).isEqualTo("UNCONFIRMED/WRITE_STARTED/-");
+    }
+
+    /**
+     * The status of {@code show_feedback} for the feedback. A request that is still waiting after ten seconds fails the
+     * test, and its waiting statement is cancelled, as a lock timeout would end it.
+     */
+    private int showFeedback(UUID feedbackId) {
+        var shown = CompletableFuture.supplyAsync(() -> {
+            try {
+                return call("POST", "show-feedback", turn.getAttempt(), """
+                                {"feedbackId":"%s"}""".formatted(feedbackId))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus();
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        });
+        try {
+            return assertThat(shown).succeedsWithin(Duration.ofSeconds(10)).actual();
+        } finally {
+            var administrator = PostgreSQLTestContainer.administrator();
+            new JdbcTemplate(new DriverManagerDataSource(
+                            administrator.jdbcUrl(), administrator.username(), administrator.password()))
+                    .queryForList("""
+                            SELECT pg_cancel_backend(pid) FROM pg_stat_activity
+                            WHERE datname = current_database() AND wait_event_type = 'Lock'
+                              AND query LIKE '%FROM conversation_turn t%FOR SHARE OF t%'
+                            """);
+        }
     }
 
     @Test

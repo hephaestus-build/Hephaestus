@@ -275,10 +275,13 @@ The code sets no limit for each turn.
 
 #### The claim
 
-`show-feedback` calls `FeedbackStore.claimConversationCopy` while the tool call runs, in its own transaction.
-The claim holds the person-data write fence of the developer ([Personal data](#personal-data)).
+`show-feedback` calls `ConversationClaims.claimConversationCopy` in the tool call's transaction.
+That transaction already holds the person-data write fence of the developer ([Personal data](#personal-data)) and the turn.
+The claim then locks the feedback and its copy, and binds the developer as the owner of the transaction.
+A refused or failed tool call rolls the claim back, so the next attempt can claim the copy.
 It succeeds only when all of these are true:
 
+- The feedback is for the turn's developer.
 - The feedback is `READY`, has the destination `CONVERSATION`, is not withdrawn, and passes the delivery policy.
 - Its only copy is a `PLANNED` copy of the kind `CHAT_TURN`.
 - The turn runs this attempt, in a conversation of the developer.
@@ -292,9 +295,17 @@ An attempt cannot use a claim of an earlier attempt.
 #### The receipt
 
 The transaction that records how an attempt or its Slack reply ended also publishes `ConversationReceiptsDue`.
-The event publication registry keeps the event until `ConversationTurnCompletion.settle` stored one receipt for each copy that the attempt claimed (`FeedbackStore.recordConversationReceipt`).
+The event publication registry keeps the event until `ConversationTurnCompletion.settle` stored one receipt for each copy that the attempt claimed (`ConversationClaims.recordConversationReceipt`).
 A crash after the commit or a failed receipt write leaves the publication incomplete, and `NotificationRedeliveryJob` resubmits it.
 A receipt is stored once, so a repeat settles only what is left.
+
+The end of an attempt reads the event's cutoff after it takes the turn's lock.
+Thus, the cutoff follows each claim that committed while the end waited.
+The receipts of a Slack reply read the cutoff after the turn ended, without the turn's lock.
+No claim of the attempt commits after its end.
+`settle` reads the answer as the person that each claimed feedback is for, which an account absorption moves with the feedback.
+A claim whose answer can no longer be read or checked, for example after a redaction, gets an unconfirmed receipt with its reason.
+
 A Hephaestus message shows a piece of feedback when it stores a `show_feedback` call for it whose tool result succeeded.
 The call names the feedback by a well-formed id in any letter case.
 

@@ -49,6 +49,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.WorkspacePurgeIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("AgentRuntimeOffIntegrationTest", "agent-off-e2e"),
+            assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -295,6 +296,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("agent-off-e2e", "E2E profile precedence with agent jobs off and no Kubernetes Pod metadata"),
+            Map.entry(
+                    "recipient-row-security",
+                    "its own database with the conversation tables under owner policies, on a one-connection pool"),
             Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"),
             Map.entry(
                     "practice-repository-checkout",
@@ -306,6 +310,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.evaluation.EvaluationIntegrationTest",
             "StartupBudgetIntegrationTest",
             "AgentRuntimeOffIntegrationTest",
+            "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -324,6 +329,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.evaluation.EvaluationIntegrationTest",
             "StartupBudgetIntegrationTest",
             "AgentRuntimeOffIntegrationTest",
+            "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.review.ReviewEndToEndIntegrationTest",
             "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
@@ -405,6 +411,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "core.evaluation.EvaluationDigestIntegrationTest",
+            "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.repository.PracticeRepositorySyncIntegrationTest",
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "observability.ScrapeContractIntegrationTest",

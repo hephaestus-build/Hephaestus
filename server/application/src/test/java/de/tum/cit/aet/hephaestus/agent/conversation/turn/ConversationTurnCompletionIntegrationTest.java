@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
@@ -39,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -327,6 +330,31 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(settled(neverCalled)).isEqualTo("FAILED/FAILED/true/-");
     }
 
+    /**
+     * A person erasure, of anyone, that completes during the attempt fails its turn, because the stored answer could copy
+     * the erased data. The feedback the answer called may have been on screen, so it is unconfirmed, never not shown.
+     */
+    @Test
+    void shouldLeaveTheFeedbackUnconfirmedWhenAnErasureDuringTheAttemptFailsTheTurnThatCalledIt() {
+        ConversationTurn turn = admittedTurn(Duration.ofMinutes(5));
+        UUID called = claimed(turn);
+        UUID erasure = UUID.randomUUID();
+        schemaOwner.update("""
+                INSERT INTO person_data_request(id,state,counts_json,completed_json,created_at,expires_at,version)
+                VALUES (?,'ERASING','{}',CAST(jsonb_build_object(?::text,jsonb_build_object('completedAt',clock_timestamp()))
+                    AS text),now(),now() + interval '2 days',0)
+                """, erasure, ConversationEntryRepository.COPIES_PERSON_DATA_STORE);
+        try {
+            end(turn, ConversationTurn.Status.DONE, showing(called, "m4a1b2c3"));
+
+            assertThat(turnRepository.findById(turn.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ConversationTurn.Status.FAILED);
+            assertThat(settled(called)).isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
+        } finally {
+            schemaOwner.update("DELETE FROM person_data_request WHERE id = ?", erasure);
+        }
+    }
+
     @Test
     void shouldLeaveTheFeedbackUnconfirmedWhenTheDeveloperStopsTheAnswerThatShowedIt() {
         ConversationTurn turn = admittedTurn(Duration.ofMinutes(5));
@@ -336,6 +364,55 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
         end(turn, ConversationTurn.Status.STOPPED, showing(called, "m2a1b2c3"));
 
         assertThat(settled(called)).isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
+    }
+
+    /**
+     * A tool call holds the turn, as a claim's does, while the end waits for the turn. A claim stamped after the end
+     * started commits before the tool call lets the turn go. The end reads its cutoff after it takes the turn, so the
+     * cutoff follows every claim that committed while it waited: a cutoff read before the lock, or the transaction's
+     * start, precedes this claim.
+     */
+    @Test
+    void shouldSettleAClaimThatCommittedWhileTheEndWaitedForTheTurn() throws Exception {
+        ConversationTurn turn = admittedTurn(Duration.ofMinutes(5));
+        UUID called = UUID.randomUUID();
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        var toolCall = CompletableFuture.runAsync(() -> transactionTemplate.executeWithoutResult(status -> {
+            jdbc.queryForList("SELECT id FROM conversation_turn WHERE id = ? FOR SHARE", turn.getId());
+            held.countDown();
+            try {
+                assertThat(release.await(30, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }));
+        assertThat(held.await(30, TimeUnit.SECONDS)).isTrue();
+        var ending =
+                CompletableFuture.runAsync(() -> end(turn, ConversationTurn.Status.DONE, showing(called, "m5a1b2c3")));
+        try {
+            awaitALockWaitForTheTurn();
+            ConversationFeedbackRows.claimedBy(jdbc, workspace.getId(), account, turn.getId(), "Pin images.", called);
+        } finally {
+            release.countDown();
+        }
+        toolCall.get(30, TimeUnit.SECONDS);
+        ending.get(30, TimeUnit.SECONDS);
+
+        assertThat(settled(called)).isEqualTo("DELIVERED/POSTED/true/m5a1b2c3");
+    }
+
+    private void awaitALockWaitForTheTurn() throws InterruptedException {
+        for (int i = 0; i < 300; i++) {
+            Integer waiting = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"
+                            + " AND wait_event_type = 'Lock' AND query LIKE '%conversation_turn%'",
+                    Integer.class);
+            if (waiting != null && waiting > 0) return;
+            Thread.sleep(50); // NOPMD - poll interval of a bounded wait
+        }
+        throw new AssertionError("The end never waited for the turn");
     }
 
     @Test
@@ -348,7 +425,8 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(settled(called)).isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
         ConversationTurn second = claims.claimNext().orElseThrow();
         assertThat(second.getAttempt()).isEqualTo(2);
-        assertThat(feedback.claimConversationCopy(workspace.getId(), called, second.getId(), second.getAttempt()))
+        assertThat(feedback.claimConversationCopy(
+                        workspace.getId(), account, called, second.getId(), second.getAttempt()))
                 .isEmpty();
         end(second, ConversationTurn.Status.DONE, showing(called, "m3a1b2c3"));
         assertThat(settled(called))
