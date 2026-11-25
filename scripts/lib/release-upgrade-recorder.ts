@@ -3,7 +3,9 @@
  * and lists the calls at `GET /calls?after=<sequence>` on its control port. It sends nothing on. The answers are empty
  * successes, so a release continues after its write and the drill sees the next one.
  *
- * Run: `node release-upgrade-recorder.ts <key.pem> <cert.pem>`. Provider calls on 443, the control port on 8080.
+ * Run: `node release-upgrade-recorder.ts serve <directory>` with the files of `writeProviderCertificates`: provider
+ * calls on 443, the control port on 8080. `node release-upgrade-recorder.ts plant <directory>` posts the planted write
+ * once to the recorder on this host.
  */
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -212,12 +214,30 @@ export function providerRecorder(tls: { key: string; cert: string }): {
 	return { providers, control };
 }
 
+/** The planted write: a Slack message, which the drill sends twice. */
+export const PLANTED_WRITE = {
+	host: "slack.com",
+	path: "/api/chat.postMessage",
+	body: "channel=D0UPGRADE&text=planted",
+} as const;
+
 if (import.meta.main) {
-	const [keyFile = "", certFile = ""] = process.argv.slice(2);
-	const { providers, control } = providerRecorder({
-		key: readFileSync(keyFile, "utf8"),
-		cert: readFileSync(certFile, "utf8"),
-	});
+	const [mode = "", directory = ""] = process.argv.slice(2);
+	const file = (name: string) => readFileSync(nodePath.join(directory, name), "utf8");
+	if (mode === "plant") {
+		const status = await plantWrite(
+			443,
+			file("ca.crt"),
+			PLANTED_WRITE.host,
+			PLANTED_WRITE.path,
+			PLANTED_WRITE.body,
+		);
+		process.exit(status === 200 ? 0 : 1);
+	}
+	if (mode !== "serve") {
+		throw new Error("Usage: node release-upgrade-recorder.ts serve|plant <directory>");
+	}
+	const { providers, control } = providerRecorder({ key: file("key.pem"), cert: file("cert.pem") });
 	providers.listen(443, "0.0.0.0");
 	control.listen(8080, "0.0.0.0");
 	for (const signal of ["SIGTERM", "SIGINT"] as const) {

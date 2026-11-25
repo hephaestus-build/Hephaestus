@@ -33,7 +33,7 @@ import {
 	prefixChangelog,
 	prefixHistorySql,
 } from "./lib/release-upgrade-prefix.ts";
-import { plantWrite, writeProviderCertificates } from "./lib/release-upgrade-recorder.ts";
+import { writeProviderCertificates } from "./lib/release-upgrade-recorder.ts";
 import {
 	type AttributedCall,
 	attribute,
@@ -97,8 +97,9 @@ const recorder = `${runId}-providers`;
 const RECORDER_IMAGE =
 	"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d";
 const recorderFiles = mkdtempSync(nodePath.join(tmpdir(), "hephaestus-upgrade-providers-"));
-const providerCertificates = writeProviderCertificates(recorderFiles);
 const RECORDER_CA = "/etc/hephaestus/upgrade-drill-ca.crt";
+/** The recorder's CA on this host, once `startRecorder` wrote it. */
+let recorderCa = "";
 /** Each running release by container name: its address on the drill's network and its database. */
 const liveReleases = new Map<string, { address: string; database: string }>();
 const providerCalls: AttributedCall[] = [];
@@ -262,7 +263,7 @@ function startApplication(
 		// Each provider host resolves to the recorder, and the release trusts the recorder's CA as the chart's
 		// config.privateCa does. The SCM egress guard admits the hosts at the recorder's private address.
 		"--mount",
-		`type=bind,source=${providerCertificates.ca},target=${RECORDER_CA},readonly`,
+		`type=bind,source=${recorderCa},target=${RECORDER_CA},readonly`,
 		"--env",
 		`SSL_CERT_FILE=${RECORDER_CA}`,
 		"--env",
@@ -311,6 +312,7 @@ async function releaseStops(name: string): Promise<void> {
 }
 
 function startRecorder(): void {
+	recorderCa = writeProviderCertificates(recorderFiles).ca;
 	docker(
 		"run",
 		"--detach",
@@ -330,27 +332,21 @@ function startRecorder(): void {
 		RECORDER_IMAGE,
 		"node",
 		"/drill/release-upgrade-recorder.ts",
-		"/tls/key.pem",
-		"/tls/cert.pem",
+		"serve",
+		"/tls",
 	);
 }
 
-/** Posts one provider write to the recorder from the drill itself, under the planted label. */
-async function plantSlackWrite(): Promise<void> {
-	await plantWrite(
-		publishedPort(recorder, "443/tcp"),
-		readFileSync(providerCertificates.ca, "utf8"),
-		"slack.com",
-		"/api/chat.postMessage",
-		"channel=D0UPGRADE&text=planted",
-	);
+/** Posts the planted write once, from inside the recorder's container, under the planted label. */
+function plantWrite(): void {
+	docker("exec", recorder, "node", "/drill/release-upgrade-recorder.ts", "plant", "/tls");
 }
 
 /** Proves on the drill's own recorder that the check catches a write that reaches a provider twice. */
 async function assertRecorderCatchesARepeat(): Promise<void> {
 	for (let attempt = 0; ; attempt += 1) {
 		try {
-			await plantSlackWrite();
+			plantWrite();
 			break;
 		} catch (error) {
 			if (attempt === 30) {
@@ -359,7 +355,7 @@ async function assertRecorderCatchesARepeat(): Promise<void> {
 			await sleep(1000);
 		}
 	}
-	await plantSlackWrite();
+	plantWrite();
 	await collectProviderCalls();
 	const caught = repeatedWrites(
 		providerCalls.filter(({ database }) => database === PLANTED_SOURCE),
