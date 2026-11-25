@@ -96,10 +96,15 @@ class OwnerFunctionsDatabaseTest {
             UPDATE conversation_entry SET redacted_at = now() WHERE id = '00000000-0000-0000-0000-0000000e0006';
             UPDATE conversation SET slack_team_id = 'T1', slack_user_id = 'U12', slack_channel_id = 'D12'
             WHERE id = '00000000-0000-0000-0000-00000000b001';
+            BEGIN;
+            -- A ready export is inserted only under its owner's export fence, as the export worker publishes it.
+            SELECT pg_advisory_xact_lock(hashtext('account-export-sources'), hashtext(CAST(a AS text)) & 63)
+            FROM (VALUES (11), (12)) owners(a);
             INSERT INTO account_export (id, account_id, status, expires_at, payload)
             VALUES (21, 11, 'READY', now() - interval '1 hour', '\\x01'),
                    (22, 12, 'READY', now() - interval '1 hour', '\\x01'),
                    (23, 11, 'READY', now() + interval '1 hour', '\\x01');
+            COMMIT;
             ALTER TABLE conversation ENABLE ROW LEVEL SECURITY;
             ALTER TABLE conversation_entry ENABLE ROW LEVEL SECURITY;
             ALTER TABLE conversation_turn ENABLE ROW LEVEL SECURITY;
@@ -358,10 +363,13 @@ class OwnerFunctionsDatabaseTest {
                 // One call expires at most a batch, and an account in erasure keeps its export for the erasure.
                 try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
                     jdbc(connection).execute("""
+                            BEGIN;
+                            SELECT pg_advisory_xact_lock(hashtext('account-export-sources'), hashtext('13') & 63);
                             INSERT INTO account_export (id, account_id, status, expires_at, payload)
                             SELECT 100 + n, 13, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second',
                                    '\\x01'
                             FROM generate_series(1, 101) n;
+                            COMMIT;
                             UPDATE account SET status = 'DELETING' WHERE id = 12;
                             """);
                 }
@@ -376,6 +384,17 @@ class OwnerFunctionsDatabaseTest {
                                     Long.class))
                             .as("the account in erasure is skipped, and the batch leaves two of the 103 due exports")
                             .isEqualTo(2);
+                    assertThat(owner.queryForObject("SELECT status FROM account_export WHERE id = 22", String.class))
+                            .isEqualTo("READY");
+                }
+            }
+            case EXPORT_SOURCES_CHANGED -> {
+                // Erasing one of Ada's messages, through its trigger, expires her export that is still in its window.
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    JdbcTemplate owner = jdbc(connection);
+                    owner.update("UPDATE conversation_entry SET redacted_at = now(), text = '' WHERE id = ?", ADA_NEW);
+                    assertThat(owner.queryForObject("SELECT status FROM account_export WHERE id = 23", String.class))
+                            .isEqualTo("EXPIRED");
                     assertThat(owner.queryForObject("SELECT status FROM account_export WHERE id = 22", String.class))
                             .isEqualTo("READY");
                 }
@@ -866,7 +885,7 @@ class OwnerFunctionsDatabaseTest {
 
     /**
      * Every registered rule reaches its own branch. A purge requires admission, an expiry before any export changes
-     * no row, and an account cannot be absorbed into itself.
+     * no row, an account cannot be absorbed into itself, and a change of export sources runs only from its triggers.
      */
     @ParameterizedTest
     @EnumSource(RowSweepRule.class)
@@ -875,11 +894,13 @@ class OwnerFunctionsDatabaseTest {
             case WORKSPACE_PURGE -> new @Nullable Object[] {rule.name(), -1L, null, null};
             case EXPIRED_EXPORTS -> new @Nullable Object[] {rule.name(), null, null, "-infinity"};
             case ACCOUNT_ABSORB -> new @Nullable Object[] {rule.name(), 11L, 11L, null};
+            case EXPORT_SOURCES_CHANGED -> new @Nullable Object[] {rule.name(), -1L, null, null};
         };
         var refusal = switch (rule) {
             case WORKSPACE_PURGE -> Optional.of("lifecycle admission required");
             case EXPIRED_EXPORTS -> Optional.<String>empty();
             case ACCOUNT_ABSORB -> Optional.of("ACCOUNT_ABSORB needs two different accounts");
+            case EXPORT_SOURCES_CHANGED -> Optional.of("runs only from the triggers of its sources");
         };
         String call = "SELECT public.person_row_sweep(?, ?::bigint, ?::bigint, ?::timestamptz)";
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {

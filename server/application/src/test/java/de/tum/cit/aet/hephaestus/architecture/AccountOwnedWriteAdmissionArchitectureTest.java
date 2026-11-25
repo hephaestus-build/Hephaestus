@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,8 +41,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     .map(JavaFieldAccess::getOrigin)
                     .collect(Collectors.toUnmodifiableSet());
     private static final String EXPORT_TABLE = "account_export";
-    private static final Set<String> NON_WRITING_REPOSITORY_METHODS =
-            Set.of("findByIdAndAccountId", "findStatus", "tryLockGeneration", "existsByAccountIdAndStatusIn");
+    private static final Set<String> NON_WRITING_REPOSITORY_METHODS = Set.of(
+            "findByIdAndAccountId", "findStatus", "tryLockGeneration", "existsByAccountIdAndStatusIn", "lockSources");
 
     private static final Pattern EXPORT_DML = Pattern.compile(
             "\\b(?:insert into|update|merge into|delete from|truncate(?: table)?) (?:only )?"
@@ -82,7 +83,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         assertThat(writer.getMethod("createPending", long.class).getMethodCallsFromSelf())
                 .anyMatch(call ->
                         call.getTargetOwner().equals(writer) && call.getName().equals("admit"));
-        assertThat(writer.getMethod("finish", Long.class, Long.class, byte[].class, String.class)
+        assertThat(writer.getMethod("finish", Long.class, Long.class, Supplier.class, String.class)
                         .getMethodCallsFromSelf())
                 .anyMatch(call ->
                         call.getTargetOwner().equals(writer) && call.getName().equals("admit"));
@@ -118,7 +119,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         var writer = classes.get(AccountExportWriter.class);
         var origin = access.getOrigin();
         boolean create = origin.equals(writer.getMethod("createPending", long.class));
-        boolean finish = origin.equals(writer.getMethod("finish", Long.class, Long.class, byte[].class, String.class));
+        boolean finish =
+                origin.equals(writer.getMethod("finish", Long.class, Long.class, Supplier.class, String.class));
         boolean fail = origin.equals(writer.getMethod("fail", AccountExport.class, String.class));
         String operation = access.getName();
 

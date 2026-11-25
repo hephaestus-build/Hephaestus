@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -101,12 +102,13 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
                 accountRepository.save(new Account("Export Retention Batch")).getId());
         List<Long> ids = PostgreSQLTestContainer.ownerJdbc()
                 .query(
-                        """
+                        ReadyExportFence.CTE + """
                         INSERT INTO account_export(account_id, status, expires_at, payload)
                         SELECT ?, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second', ?
-                        FROM generate_series(1, ?) n RETURNING id
+                        FROM fence, generate_series(1, ?) n RETURNING id
                         """,
                         (rs, row) -> rs.getLong(1),
+                        accountId,
                         accountId,
                         "{\"pii\":true}".getBytes(UTF_8),
                         ExportRetentionSweeper.BATCH + 1);
@@ -161,9 +163,14 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         long accountId = Objects.requireNonNull(accountRepository.save(account).getId());
         return Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
                 .queryForObject(
-                        """
+                        ReadyExportFence.CTE + """
                         INSERT INTO account_export(account_id, status, expires_at, payload)
-                        VALUES (?, 'READY', ?, ?) RETURNING id
-                        """, Long.class, accountId, Timestamp.from(expiresAt), "{\"pii\":true}".getBytes(UTF_8)));
+                        SELECT ?, 'READY', ?, ? FROM fence RETURNING id
+                        """,
+                        Long.class,
+                        accountId,
+                        accountId,
+                        Timestamp.from(expiresAt),
+                        "{\"pii\":true}".getBytes(UTF_8)));
     }
 }

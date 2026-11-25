@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -15,6 +16,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /** Additional rows of one person, linked to the integration scenario's real account, workspace and review. */
@@ -937,7 +940,11 @@ final class PersonErasureAllStoresFixture {
             }
         }
         if ("account_export".equals(table)) {
-            new SchemaRowSeeder(owner).insert(table, values);
+            new TransactionTemplate(new DataSourceTransactionManager(Objects.requireNonNull(owner.getDataSource())))
+                    .executeWithoutResult(status -> {
+                        owner.queryForList(ReadyExportFence.LOCK, values.get("account_id"));
+                        new SchemaRowSeeder(owner).insert(table, values);
+                    });
         } else {
             rows.insert(table, values);
         }
