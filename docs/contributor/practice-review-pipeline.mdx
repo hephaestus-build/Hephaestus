@@ -1064,6 +1064,15 @@ Current source version, scope, consent, feedback mode, delivery pause and approv
 A work-state refusal does not erase the result.
 Practice-page and conversation feedback retain their own visibility checks.
 
+The checks at egress read this server's copy of the work, which can miss a push.
+An example is a push event that waits in the inbox, or one that a restart lost.
+Thus, before a send writes a package on a pull or merge request, it reads the head from GitHub or GitLab.
+GitLab refreshes a merge request's head after a push, so the send also reads the source branch, in the fork for a fork.
+
+If the head moved past the reviewed version, the piece is withheld as `REVIEWED_VERSION_CHANGED` and nothing is written.
+If the provider does not answer, or its rate limit allows no read, the send writes nothing and tries again later.
+After its last attempt, the piece ends Failed, and an admin can retry it.
+
 A public piece keeps the publication context of the history read that it was composed from.
 The history read issues the context first and then reads the history page, in the transaction that holds the attempt.
 Thus, feedback delivered between the two reads can be on the page but not in the context.

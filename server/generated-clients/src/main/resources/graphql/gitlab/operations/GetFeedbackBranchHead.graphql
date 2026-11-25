@@ -1,0 +1,10 @@
+# The commit a branch points at now: the source branch of a merge request, which a push moves first.
+query GetFeedbackBranchHead($fullPath: ID!, $ref: String!) {
+    project(fullPath: $fullPath) {
+        repository {
+            commit(ref: $ref) {
+                sha
+            }
+        }
+    }
+}

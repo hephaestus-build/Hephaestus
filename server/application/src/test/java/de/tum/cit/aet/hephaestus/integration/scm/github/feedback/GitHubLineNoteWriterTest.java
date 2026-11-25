@@ -2,9 +2,12 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -15,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
@@ -50,6 +54,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     private final List<Map<String, Object>> reviews = new ArrayList<>();
     private final List<Map<String, Object>> threads = new ArrayList<>();
     private boolean loseSubmit;
+    private @Nullable String providerHead = COMMIT;
     private int failThread;
     private int createdThreads;
     private GitHubLineNoteWriter writer;
@@ -273,6 +278,32 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadThePullRequestHeadFromGitHubNotFromThisServer() {
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.CURRENT);
+
+        providerHead = "c".repeat(40);
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.MOVED);
+
+        providerHead = null;
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
+        assertThat(writes).isEmpty();
+    }
+
+    @Test
+    void shouldNotReadTheHeadWhileTheRateLimitIsCritical() {
+        when(provider.isRateLimitCritical(1L)).thenReturn(true);
+        providerHead = "c".repeat(40);
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
+        verify(provider, never()).forScope(anyLong());
+    }
+
+    @Test
+    void shouldLetTheSendWaitWhenTheHeadReadSpendsTheLastOfTheBudget() {
+        when(provider.isRateLimitCritical(1L)).thenReturn(false, true);
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
+    }
+
+    @Test
     void shouldCreateNothingWhenTheInitialFenceRefuses() {
         writer.postPackage(TARGET, publication(), (ids, done) -> false);
         assertThat(writes).isEmpty();
@@ -343,6 +374,10 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                 fields.put(
                         "repository.pullRequest.reviews",
                         Map.of("nodes", reviews, "pageInfo", Map.of("hasNextPage", false)));
+            }
+            case "GetFeedbackPullRequestHead" -> {
+                if (providerHead == null) throw new IllegalStateException("GitHub did not answer");
+                fields.put("repository.pullRequest.headRefOid", providerHead);
             }
             case "GetPullRequestReviewThreads" ->
                 fields.put(

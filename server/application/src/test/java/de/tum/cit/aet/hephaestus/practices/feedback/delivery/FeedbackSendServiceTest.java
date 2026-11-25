@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
@@ -26,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
@@ -248,6 +250,7 @@ class FeedbackSendServiceTest {
     FeedbackSendService pullRequest(List<LineNoteWriter> writers, FeedbackCopyState summary, FeedbackCopyState line) {
         when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
         when(notes.kind()).thenReturn(IntegrationKind.GITHUB);
+        when(notes.liveHead(target)).thenReturn(LiveHead.CURRENT);
         when(transactions.claim(eq(1L), eq(id), eq(owner)))
                 .thenReturn(new FeedbackSendTransactions.Attempt(
                         feedback, FeedbackSendAction.POST, List.of(copy(summary), note(line)), 1));
@@ -280,11 +283,44 @@ class FeedbackSendServiceTest {
     }
 
     @Test
+    void shouldReadTheProviderHeadOnceBeforeItWritesAPackage() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
+        when(notes.postPackage(eq(target), any(), any())).thenReturn(CopyWriteResult.of(List.of()));
+        sender.send(owner);
+        var order = inOrder(notes);
+        order.verify(notes).liveHead(target);
+        order.verify(notes).postPackage(eq(target), any(), any());
+        verify(notes, times(1)).liveHead(any());
+    }
+
+    @Test
+    void shouldWithholdWithoutWritingWhenTheProviderHeadMovedPastTheReviewedVersion() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
+        when(notes.liveHead(target)).thenReturn(LiveHead.MOVED);
+        sender.send(owner);
+        verify(transactions).refuseTarget(1L, id, owner, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        verify(notes, never()).postPackage(any(), any(), any());
+        verify(transactions, never()).fence(anyLong(), any(), any(), anyList(), anyList());
+    }
+
+    @Test
+    void shouldWriteNothingAndTryAgainLaterWhenTheProviderHeadCannotBeRead() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
+        when(notes.liveHead(target)).thenReturn(LiveHead.UNKNOWN);
+        assertThat(sender.send(owner)).isInstanceOf(ActionResult.Retry.class);
+        verify(notes, never()).postPackage(any(), any(), any());
+        verify(transactions, never()).refuseTarget(anyLong(), any(), any(), any());
+        verify(transactions, never()).fence(anyLong(), any(), any(), anyList(), anyList());
+        verify(transactions, never()).finish(anyLong(), any(), any());
+    }
+
+    @Test
     void shouldOnlyReadBackAPackageWhoseSubmissionMayHaveHappened() {
         var sender = pullRequest(List.of(notes), FeedbackCopyState.POSTED, FeedbackCopyState.WRITE_STARTED);
         when(notes.findPosted(eq(target), any())).thenReturn(List.of());
         sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
+        verify(notes, never()).liveHead(any());
         verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(noteId));
         verify(transactions, never()).absent(eq(1L), eq(id), eq(owner), eq(copyId));
         assertThat(readbacks("absent")).isEqualTo(1);

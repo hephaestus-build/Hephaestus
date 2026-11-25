@@ -6,6 +6,12 @@ import org.jspecify.annotations.Nullable;
 public interface LineNoteWriter {
     IntegrationKind kind();
 
+    /**
+     * Reads the work's head from the provider, not from this server's copy, which can miss a push: an event still
+     * waiting in the inbox, or one lost during a restart. A send asks once, before it writes a package.
+     */
+    LiveHead liveHead(FeedbackTarget target);
+
     CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence);
 
     @Nullable

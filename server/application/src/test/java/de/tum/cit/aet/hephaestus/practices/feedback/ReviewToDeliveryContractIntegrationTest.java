@@ -344,6 +344,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private FeedbackDecisionService decisions;
 
     @Autowired
+    private FeedbackStoreService feedbackStore;
+
+    @Autowired
     private FeedbackContentDigest digests;
 
     @Autowired
@@ -1877,6 +1880,101 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldWithholdWithoutPostingWhenGitHubHasAPushThatThisServerHasNotSeen() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
+            // The push event is still in the inbox, or was lost in a restart: only GitHub has the new head.
+            github.head(review.repository(), review.pullRequestNumber(), "d".repeat(40));
+
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .isEmpty();
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> {
+                        assertThat(row.getState()).isEqualTo(FeedbackState.WITHHELD);
+                        assertThat(row.getStopReason()).isEqualTo(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+                    });
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), feedbackId))
+                    .singleElement()
+                    .satisfies(copy -> {
+                        assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WITHHELD);
+                        assertThat(copy.getWriteStartedAt()).isNull();
+                    });
+        }
+    }
+
+    @Test
+    void shouldWriteNothingAndTryAgainLaterWhileGitHubCannotSayWhereThePullRequestIs() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
+            github.head(review.repository(), review.pullRequestNumber(), null);
+
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .isEmpty();
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), feedbackId))
+                    .singleElement()
+                    .satisfies(copy -> {
+                        assertThat(copy.getState()).isEqualTo(FeedbackCopyState.PLANNED);
+                        assertThat(copy.getWriteStartedAt()).isNull();
+                    });
+            assertThat(sendQueue.current(review.workspaceId(), feedbackId))
+                    .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.PENDING));
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.READY));
+
+            github.head(review.repository(), review.pullRequestNumber(), "a".repeat(40));
+            ActionTestSupport.due(jdbc, "feedback:" + feedbackId);
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .hasSize(1);
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED));
+        }
+    }
+
+    @Test
+    void shouldFailWithoutWritingWhenGitHubNeverSaysWhereThePullRequestIsAndDeliverOnAnAdminRetry() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
+            github.head(review.repository(), review.pullRequestNumber(), null);
+            jdbc.update(
+                    "UPDATE agent_action SET attempts = max_attempts - 1 WHERE lane_key = ?", "feedback:" + feedbackId);
+
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .isEmpty();
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.FAILED));
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), feedbackId))
+                    .singleElement()
+                    .satisfies(copy -> assertThat(copy.getWriteStartedAt()).isNull());
+
+            github.head(review.repository(), review.pullRequestNumber(), "a".repeat(40));
+            feedbackStore.retry(review.workspaceId(), feedbackId, review.developerId());
+            ActionTestSupport.drain(executor, jdbc);
+
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .hasSize(1);
+            assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
+                    .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED));
+        }
+    }
+
+    @Test
     void shouldPostTheObservationOnlyAfterTheDeveloperApprovesItWhenThePracticeAsksForApprovalFirst() {
         try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
             var response = admitStaged(review.identity(), request(review));
@@ -3225,6 +3323,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         pull.setHeadRefName("export-retry");
         pull.setBaseRefName("main");
         pull = pullRequests.saveAndFlush(pull);
+        github.head(repository.getNameWithOwner(), pull.getNumber(), pull.getHeadRefOid());
         var parent = new Item();
         parent.setWorkspaceId(workspace.getId());
         parent.setKind(ScmItemEvents.REPOSITORY);

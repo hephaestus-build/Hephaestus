@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.HttpMessageWriter;
@@ -38,6 +39,7 @@ public final class ScriptedGitHub implements ExchangeFunction {
 
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads(COMMENT_ID);
     private final Map<String, PendingReview> reviews = new ConcurrentHashMap<>();
+    private final Map<String, String> heads = new ConcurrentHashMap<>();
 
     private record PendingReview(String parent, String id, String body, String commit, AtomicBoolean submitted) {
         Map<String, Object> fields() {
@@ -63,6 +65,15 @@ public final class ScriptedGitHub implements ExchangeFunction {
 
     public ScriptedCommentThreads threads() {
         return threads;
+    }
+
+    /**
+     * Sets a pull request's head on GitHub, as a push does, whether or not a webhook tells this server. A pull request
+     * with no head set answers its head read as an error, as an unreachable provider does.
+     */
+    public void head(String nameWithOwner, int number, @Nullable String sha) {
+        if (sha == null) heads.remove(pullRequest(nameWithOwner, number));
+        else heads.put(pullRequest(nameWithOwner, number), sha);
     }
 
     /** The node id GitHub gives a pull request, and the thread its comments are kept under. */
@@ -129,6 +140,12 @@ public final class ScriptedGitHub implements ExchangeFunction {
                                                         .toList(),
                                                 "pageInfo",
                                                 Map.of("hasNextPage", false))))));
+            case "GetFeedbackPullRequestHead" -> {
+                String head = heads.get(pullRequest(path(variables), number(variables)));
+                yield head == null
+                        ? Map.of("errors", List.of(Map.of("message", "GitHub did not answer")))
+                        : data(Map.of("repository", Map.of("pullRequest", Map.of("headRefOid", head))));
+            }
             case "GetPullRequestReviewThreads" ->
                 data(Map.of(
                         "repository",

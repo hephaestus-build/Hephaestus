@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -73,8 +75,10 @@ public class FeedbackSendService {
                 case EDIT -> editor.edit(attempt, target, owner);
                 case RETRACT -> corrector.correct(attempt, target, owner);
                 case POST -> {
-                    if (target.item().kind().value().equals("scm.pull_request")) packageOnWork(attempt, target, owner);
-                    else
+                    if (target.item().kind().value().equals("scm.pull_request")) {
+                        var unread = packageOnWork(attempt, target, owner);
+                        if (unread != null) return unread;
+                    } else
                         for (var copy : attempt.copies())
                             if (copy.getKind() == FeedbackCopyKind.SUMMARY) summary(attempt, target, owner, copy);
                 }
@@ -153,7 +157,12 @@ public class FeedbackSendService {
                         copy.getId(), CopyDisposition.POSTED, handle.externalRef(), handle.url(), true, null)));
     }
 
-    private void packageOnWork(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
+    /**
+     * Writes the package, or reads back a write that may have reached the provider. It returns the attempt's result
+     * only when it stops before anything is written, because the provider's head could not be read.
+     */
+    private @Nullable ActionResult packageOnWork(
+            FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
         long workspaceId = attempt.feedback().getWorkspaceId();
         UUID feedbackId = attempt.feedback().getId();
         var unresolved = copies(attempt, FeedbackCopyState.WRITE_STARTED);
@@ -168,7 +177,7 @@ public class FeedbackSendService {
                     FeedbackStopReason.DELIVERY_UNCONFIRMED);
             planned = List.of();
         }
-        if (unresolved.isEmpty() && planned.isEmpty()) return;
+        if (unresolved.isEmpty() && planned.isEmpty()) return null;
         var matching = notes.stream()
                 .filter(writer -> writer.kind() == target.integration().kind())
                 .toList();
@@ -180,7 +189,7 @@ public class FeedbackSendService {
                     (unresolved.isEmpty() ? planned : unresolved)
                             .stream().map(FeedbackCopy::getId).toList(),
                     FeedbackStopReason.RECIPIENT_UNAVAILABLE);
-            return;
+            return null;
         }
         var writer = matching.getFirst();
         if (!unresolved.isEmpty()) {
@@ -192,7 +201,7 @@ public class FeedbackSendService {
                 readbacks.record(
                         target.integration().kind(),
                         found == null ? LookupPresence.UNKNOWN : FeedbackReadbackMeters.outcome(found, copy.getId()));
-            if (found == null) return;
+            if (found == null) return null;
             var ids = unresolved.stream().map(FeedbackCopy::getId).toList();
             transactions.receipt(
                     workspaceId,
@@ -204,7 +213,24 @@ public class FeedbackSendService {
             for (var copy : unresolved)
                 if (found.stream().noneMatch(receipt -> receipt.copyId().equals(copy.getId())))
                     transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId());
-            return;
+            return null;
+        }
+        // The locked checks read this server's copy of the work, which can miss a push. The provider's head decides,
+        // read once for this send. Nothing is written for a reviewed version that is no longer the head.
+        switch (writer.liveHead(target)) {
+            case CURRENT -> {}
+            case MOVED -> {
+                transactions.refuseTarget(workspaceId, feedbackId, owner, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+                return null;
+            }
+            case UNKNOWN -> {
+                log.info(
+                        "Feedback send waits for the provider head: workspaceId={}, feedbackId={}, attempt={}",
+                        workspaceId,
+                        feedbackId,
+                        owner.attempt());
+                return new ActionResult.Retry(ActionExecutor.backoff(owner.attempt()));
+            }
         }
         var publication = publication(attempt, planned);
         var result = writer.postPackage(
@@ -216,6 +242,7 @@ public class FeedbackSendService {
         transactions.receipt(workspaceId, feedbackId, owner, result.receipts());
         transactions.withholdCopies(
                 workspaceId, feedbackId, owner, result.withheldCopyIds(), FeedbackStopReason.VOLUME_CAPPED);
+        return null;
     }
 
     private static List<FeedbackCopy> copies(FeedbackSendTransactions.Attempt attempt, FeedbackCopyState state) {

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
@@ -95,6 +96,51 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITLAB;
+    }
+
+    /**
+     * Reads the merge request's head and its source branch's head. GitLab refreshes the merge request's diff after a
+     * push, so only both together say that the reviewed head is still current.
+     */
+    @Override
+    public LiveHead liveHead(FeedbackTarget target) {
+        long workspace = target.item().workspaceId();
+        if (gitLabProvider.isRateLimitCritical(workspace)) return LiveHead.UNKNOWN;
+        try {
+            String reviewed = ScmVersion.reviewedHead(target.version());
+            if (reviewed == null) return LiveHead.UNKNOWN;
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            var request = graphQl(
+                    workspace,
+                    "GetFeedbackMergeRequestHead",
+                    Map.of("fullPath", mr.projectPath(), "iid", String.valueOf(mr.iid())));
+            if (request == null) return LiveHead.UNKNOWN;
+            String diffHead = request.field("project.mergeRequest.diffHeadSha").getValue();
+            String branch = request.field("project.mergeRequest.sourceBranch").getValue();
+            String source =
+                    request.field("project.mergeRequest.sourceProject.fullPath").getValue();
+            if (diffHead == null || branch == null || source == null) return LiveHead.UNKNOWN;
+            if (!diffHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+            // The full branch ref: a tag of the same name could still point at the reviewed commit.
+            var ref = graphQl(
+                    workspace, "GetFeedbackBranchHead", Map.of("fullPath", source, "ref", "refs/heads/" + branch));
+            String branchHead = ref == null
+                    ? null
+                    : ref.field("project.repository.commit.sha").getValue();
+            if (branchHead == null) return LiveHead.UNKNOWN;
+            if (!branchHead.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+            // The package needs the rest of the budget: a read that spent it lets the send wait, not fail.
+            return gitLabProvider.isRateLimitCritical(workspace) ? LiveHead.UNKNOWN : LiveHead.CURRENT;
+        } catch (RuntimeException unknown) {
+            return LiveHead.UNKNOWN;
+        }
+    }
+
+    private @Nullable ClientGraphQlResponse graphQl(long workspace, String document, Map<String, Object> variables) {
+        var request = gitLabProvider.forScope(workspace).documentName(document);
+        variables.forEach(request::variable);
+        ClientGraphQlResponse response = request.execute().block(GRAPHQL_TIMEOUT);
+        return response == null || !response.getErrors().isEmpty() ? null : response;
     }
 
     @Override

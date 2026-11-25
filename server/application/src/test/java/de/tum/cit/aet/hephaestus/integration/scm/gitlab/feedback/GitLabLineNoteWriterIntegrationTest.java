@@ -53,6 +53,7 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         when(targets.subject(target, IntegrationKind.GITLAB)).thenReturn("group/project!42");
         var gitlab = new ScriptedGitLabNotes(guard, targets);
         gitlab.rejectPositions(rejected);
+        gitlab.head(42, head);
         var tokens = mock(GitLabTokenService.class);
         when(tokens.resolveServerUrl(workspace.getId())).thenReturn("https://gitlab.example.test");
         when(tokens.getAccessToken(workspace.getId())).thenReturn("synthetic-token");

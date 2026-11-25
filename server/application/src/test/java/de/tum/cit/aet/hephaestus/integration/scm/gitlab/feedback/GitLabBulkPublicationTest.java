@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
@@ -155,6 +156,32 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         assertThat(provider.bulkPublications()).isEqualTo(1);
         assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42))).hasSize(3);
+    }
+
+    @Test
+    void shouldReadTheMergeRequestHeadFromGitLabNotFromThisServer() {
+        provider.head(42, "c".repeat(40));
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.CURRENT);
+
+        provider.head(42, "d".repeat(40));
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.MOVED);
+
+        provider.head(42, null);
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
+    }
+
+    @Test
+    void shouldSeeAPushOnTheSourceBranchBeforeGitLabRefreshesTheMergeRequest() {
+        provider.head(42, "c".repeat(40));
+        provider.branchHead(42, "d".repeat(40));
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.MOVED);
+    }
+
+    @Test
+    void shouldNotReadTheHeadWhileTheRateLimitIsCritical() {
+        provider.head(42, "c".repeat(40));
+        when(provider.provider().isRateLimitCritical(1L)).thenReturn(true);
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
     }
 
     @Test

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
@@ -79,6 +80,28 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITHUB;
+    }
+
+    @Override
+    public LiveHead liveHead(FeedbackTarget target) {
+        long workspace = target.item().workspaceId();
+        String reviewed = commitOid(target);
+        if (reviewed == null || gitHubProvider.isRateLimitCritical(workspace)) return LiveHead.UNKNOWN;
+        try {
+            var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
+            String head = execute(
+                            workspace,
+                            "GetFeedbackPullRequestHead",
+                            Map.of("owner", pr.owner(), "name", pr.name(), "number", pr.number()))
+                    .field("repository.pullRequest.headRefOid")
+                    .getValue();
+            if (head == null || head.isBlank()) return LiveHead.UNKNOWN;
+            if (!head.equalsIgnoreCase(reviewed)) return LiveHead.MOVED;
+            // The package needs the rest of the budget: a read that spent it lets the send wait, not fail.
+            return gitHubProvider.isRateLimitCritical(workspace) ? LiveHead.UNKNOWN : LiveHead.CURRENT;
+        } catch (RuntimeException unknown) {
+            return LiveHead.UNKNOWN;
+        }
     }
 
     @Override

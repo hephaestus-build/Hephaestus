@@ -1,0 +1,13 @@
+# The merge request's head on GitLab now, which a send compares with the reviewed head before it writes. GitLab
+# refreshes diffHeadSha after a push, so the source branch is read as well, in its own project for a fork.
+query GetFeedbackMergeRequestHead($fullPath: ID!, $iid: String!) {
+    project(fullPath: $fullPath) {
+        mergeRequest(iid: $iid) {
+            diffHeadSha
+            sourceBranch
+            sourceProject {
+                fullPath
+            }
+        }
+    }
+}
