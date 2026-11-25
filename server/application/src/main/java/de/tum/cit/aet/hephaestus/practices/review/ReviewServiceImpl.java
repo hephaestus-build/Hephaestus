@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.integration.core.api.OccasionSettlement;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -48,6 +51,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRequestAdmission requestAdmission;
     private final ReviewRecorder recorder;
     private final ReviewTermination termination;
+    private final ItemEventService events;
 
     /**
      * Admits the request without a lock. Then it pins the item, judges the item's results and reads the sources that
@@ -60,7 +64,7 @@ public class ReviewServiceImpl implements ReviewService {
             throw new IllegalStateException("A review request runs only outside a database transaction");
         validate(request);
         return switch (transactions.read(() -> requestAdmission.admit(request, workspace(request)))) {
-            case ReviewRequestAdmission.Admission.Replay replay -> replay.reviewId();
+            case ReviewRequestAdmission.Admission.Replay replay -> replayed(request, replay.reviewId());
             case ReviewRequestAdmission.Admission.Admitted admitted -> {
                 var pinned = pin(request, admitted.item());
                 var unlocked = unlockedRead(request, admitted.item(), pinned);
@@ -68,20 +72,84 @@ public class ReviewServiceImpl implements ReviewService {
                     var workspace =
                             workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
                     return switch (requestAdmission.admit(request, workspace)) {
-                        case ReviewRequestAdmission.Admission.Replay replay -> replay.reviewId();
+                        case ReviewRequestAdmission.Admission.Replay replay -> {
+                            settleReplayed(request);
+                            yield replay.reviewId();
+                        }
                         case ReviewRequestAdmission.Admission.Admitted locked -> {
                             requirePinnedVersion(request, pinned);
-                            yield recorder.record(
+                            var reviewId = recorder.record(
                                     request,
                                     workspace,
                                     pinned,
                                     planner.plan(request, workspace, locked.item(), pinned, unlocked.currentness()),
                                     unlocked);
+                            settleRecorded(request);
+                            yield reviewId;
                         }
                     };
                 });
             }
         };
+    }
+
+    /**
+     * The review's own transaction decides its window ({@link OccasionSettlement.Outcome#RECORDED}), so no other
+     * offer, replay or expiry comes between the review and its occasions. The reaper expires only an open occasion,
+     * and this update requires the newest one still open, so whichever of the two commits first wins.
+     */
+    private void settleRecorded(ReviewRequest request) {
+        var eventId = request.eventId();
+        if (eventId == null) return;
+        var open = events.open(request.workspaceId(), request.itemId());
+        var ids = open.stream().map(ItemEventService.Open::id).collect(Collectors.toSet());
+        if (!ids.contains(eventId))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The occasion was already decided.");
+        // An older occasion that the reaper or another offer decided since the window was read no longer selects. The
+        // selection is stale, so nothing is recorded and the occasion is offered again.
+        if (!ids.containsAll(request.coalesced()))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.PRACTICES_CHANGED,
+                    "An occasion of the window was decided while its review was recorded.");
+        for (var waiting : open) {
+            boolean newest = waiting.id().equals(eventId);
+            if (!newest && !request.coalesced().contains(waiting.id())) continue;
+            settle(request, waiting, newest, OccasionSettlement.Outcome.RECORDED);
+        }
+    }
+
+    private UUID replayed(ReviewRequest request, UUID reviewId) {
+        if (request.eventId() == null) return reviewId;
+        return transactions.write(() -> {
+            if (workspaces.findByIdForUpdate(request.workspaceId()).isEmpty())
+                throw new IllegalStateException("The review's workspace no longer exists");
+            settleReplayed(request);
+            return reviewId;
+        });
+    }
+
+    /**
+     * A replayed review's own occasion starts from the review's stored link, such as one whose settlement an earlier
+     * release did not commit. An older occasion stays eligible.
+     */
+    private void settleReplayed(ReviewRequest request) {
+        var eventId = request.eventId();
+        if (eventId == null) return;
+        for (var waiting : events.open(request.workspaceId(), request.itemId()))
+            if (waiting.id().equals(eventId)) settle(request, waiting, true, OccasionSettlement.Outcome.REPLAYED);
+    }
+
+    private void settle(
+            ReviewRequest request, ItemEventService.Open waiting, boolean newest, OccasionSettlement.Outcome outcome) {
+        var role = newest ? OccasionSettlement.Role.NEWEST : OccasionSettlement.Role.OLDER;
+        if (OccasionSettlement.next(waiting.state(), role, outcome, null).orElse(null)
+                        instanceof OccasionSettlement.Next.Decide decide
+                && !events.decide(
+                        request.workspaceId(), waiting.id(), waiting.state(), decide.state(), decide.reason()))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
+                    "The occasion was decided while its review was recorded.");
     }
 
     /**
@@ -113,8 +181,8 @@ public class ReviewServiceImpl implements ReviewService {
                     ? items.pinOccasion(ref, requestedVersion, occasion)
                     : items.pin(ref, requestedVersion);
         } catch (ItemCaptureException unavailable) {
-            // Settled here, not in the listener: the listener fails on any other exception, and its event is sent
-            // again.
+            // A request refused for missing occasion evidence. The listener settles the other capture codes
+            // (ItemEventReviewListener.settleCapture).
             if (unavailable.code() != ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE) throw unavailable;
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE,

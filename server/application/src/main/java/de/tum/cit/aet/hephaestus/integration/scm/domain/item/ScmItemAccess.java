@@ -63,21 +63,31 @@ public class ScmItemAccess {
 
     public Optional<ItemRef> find(long workspaceId, long itemId) {
         return items.find(workspaceId, itemId).map(item -> {
-            if (item.removed()) throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Item has been removed");
+            // The index removes the row of a withdrawn repository's work too: only the source confirms a deletion.
+            if (item.removed())
+                throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Item has left the workspace index");
             return item.ref();
         });
     }
 
     /**
      * The item's parent of {@code kind}. A parent that is missing, gone or of another kind makes the item not visible:
-     * no read can be authorized through it. An item without a parent is not visible either, never a crash.
+     * no read can be authorized through it. An item without a parent is not visible either, never a crash. A removed
+     * parent says nothing about the item itself: a repository that the workspace stopped monitoring keeps its pull
+     * requests, so only the item's own removal is {@link ItemCaptureCode#ITEM_REMOVED}.
      */
     public ItemRef parent(ItemRef item, ItemKind kind) {
         Long parentId = item.parentId();
         if (parentId == null) throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Item has no parent");
-        ItemRef parent = find(item.workspaceId(), parentId)
-                .orElseThrow(
-                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item is unavailable"));
+        ItemRef parent;
+        try {
+            parent = find(item.workspaceId(), parentId)
+                    .orElseThrow(() ->
+                            new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item is unavailable"));
+        } catch (ItemCaptureException removed) {
+            if (removed.code() != ItemCaptureCode.ITEM_REMOVED) throw removed;
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item has been removed", removed);
+        }
         if (!parent.kind().equals(kind))
             throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent has the wrong kind");
         return parent;

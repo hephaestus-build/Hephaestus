@@ -36,6 +36,7 @@ class ReviewOriginTest extends BaseUnitTest {
                 List.of(),
                 true,
                 Set.of(),
+                Set.of(),
                 null,
                 null,
                 null,

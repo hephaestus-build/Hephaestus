@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
+import de.tum.cit.aet.hephaestus.integration.core.api.OccasionSettlement;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
@@ -312,7 +313,14 @@ public class ScmItemEventRecorder {
 
     private void withhold(long workspace, long itemId, ReviewRequestReason reason) {
         for (var event : events.unresolved(workspace, itemId))
-            events.decide(workspace, event.id(), event.state(), ItemEventState.WITHHELD, reason);
+            if (OccasionSettlement.next(
+                                    event.state(),
+                                    OccasionSettlement.Role.NEWEST,
+                                    OccasionSettlement.Outcome.ITEM_UNAVAILABLE,
+                                    reason)
+                            .orElse(null)
+                    instanceof OccasionSettlement.Next.Decide withheld)
+                events.decide(workspace, event.id(), event.state(), withheld.state(), withheld.reason());
     }
 
     /** The item's pending fence, or null while the source cannot compose one (no head stored, or not visible). */

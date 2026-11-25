@@ -664,6 +664,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 List.of(job.getInput().assignments().getFirst().practiceId()),
                 false,
                 Set.of(),
+                Set.of(),
                 null,
                 null,
                 null,

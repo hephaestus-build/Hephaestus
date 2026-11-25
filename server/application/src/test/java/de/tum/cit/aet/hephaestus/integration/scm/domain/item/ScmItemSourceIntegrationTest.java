@@ -644,7 +644,8 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 sources.labels(holder.workspaceId(), List.of(issueRef)).get(issueRef.itemId()));
         assertThat(removedLabel.title()).isEqualTo("An issue");
         assertThat(removedLabel.url()).isNull();
-        assertUnavailable(issueRef, ItemCaptureCode.ITEM_REMOVED);
+        // The index removal does not prove a deletion: a withdrawn repository's work leaves the index too.
+        assertUnavailable(issueRef, ItemCaptureCode.ITEM_NOT_VISIBLE);
         writer.restore(holder.workspaceId(), issueRef.itemId());
         assertThat(sources.pin(issueRef, null).item()).isEqualTo(issueRef);
 
@@ -1688,7 +1689,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(productItems
                         .read(item, Set.of(LinkedWorkItemContentSource.KIND), null)
                         .unreadReason())
-                .isEqualTo("ITEM_REMOVED");
+                .isEqualTo("ITEM_NOT_VISIBLE");
 
         long unavailableId = Objects.requireNonNull(jdbc.queryForObject(
                 "INSERT INTO item(workspace_id,kind,source_id,parent_id,created_at)"

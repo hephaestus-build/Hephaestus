@@ -257,7 +257,14 @@ public class ItemEventService {
             throw new IllegalArgumentException("Invalid item event evidence");
         if (repository.existsByWorkspaceIdAndItemIdAndNameAndItemVersion(
                 workspaceId, itemId, event.name().value(), itemVersion)) {
-            decide(workspaceId, event.id(), event.state(), ItemEventState.WITHHELD, ReviewRequestReason.COALESCED);
+            if (OccasionSettlement.next(
+                                    event.state(),
+                                    OccasionSettlement.Role.NEWEST,
+                                    OccasionSettlement.Outcome.DUPLICATE,
+                                    null)
+                            .orElse(null)
+                    instanceof OccasionSettlement.Next.Decide duplicate)
+                decide(workspaceId, event.id(), event.state(), duplicate.state(), duplicate.reason());
             observeSource(workspaceId, itemId, event.name());
             return false;
         }
@@ -307,7 +314,7 @@ public class ItemEventService {
         var record = row.getEvidence();
         if (record == null || expiresAt == null || !expiresAt.isAfter(clock.instant()))
             return RetainedEvidence.missing(ItemEventInput.EXPIRED);
-        return new RetainedEvidence(record, null, expiresAt);
+        return new RetainedEvidence(record, null, expiresAt, row.getItemVersion());
     }
 
     /**
@@ -315,11 +322,14 @@ public class ItemEventService {
      *
      * @param unretained {@link #NOT_RETAINED} for an occasion recorded without evidence, {@link #UNKNOWN} for no such
      *     pinned occasion, or the {@link ItemEventInput#unretained} reason that core or its source stated
+     * @param itemVersion the version that the ledger pinned for the occasion whose record this is, null while the
+     *     occasion is pending; a record that names another version is corrupt
      */
     public record RetainedEvidence(
             @Nullable String record,
             @Nullable String unretained,
-            @Nullable Instant expiresAt) {
+            @Nullable Instant expiresAt,
+            @Nullable String itemVersion) {
         public static final String NOT_RETAINED = "NOT_RETAINED";
         public static final String UNKNOWN = "UNKNOWN";
 
@@ -329,7 +339,7 @@ public class ItemEventService {
         }
 
         static RetainedEvidence missing(String reason) {
-            return new RetainedEvidence(null, reason, null);
+            return new RetainedEvidence(null, reason, null, null);
         }
     }
 
