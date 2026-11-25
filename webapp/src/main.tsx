@@ -10,6 +10,7 @@ import { csrfFetch } from "@/runtime/auth/csrf";
 import { RouteError } from "@/runtime/errors/RouteError";
 import { installPageIdle } from "@/runtime/page-idle";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
+import { installEarlyRouteCode } from "@/runtime/route-code";
 import { useUpdateNotice } from "@/runtime/use-update-notice";
 import {
 	installWorkspaceNavigation,
@@ -76,6 +77,7 @@ reportFailedRequests(client, faults);
 installPasskeyChallenge(router);
 reportVisitVitals(router, TanstackQuery.getContext().queryClient);
 installPreloadErrorReload(router, faults);
+installEarlyRouteCode(router);
 installPageIdle(router, TanstackQuery.getContext().queryClient);
 
 client.interceptors.response.use((response) => {
