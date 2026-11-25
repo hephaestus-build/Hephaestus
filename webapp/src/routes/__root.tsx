@@ -16,6 +16,7 @@ import {
 	useMatches,
 	useNavigate,
 	useRouter,
+	useRouterState,
 } from "@tanstack/react-router";
 import { cn } from "cn";
 import {
@@ -75,6 +76,7 @@ import { WorkProviderContext } from "@/lib/work-provider-context";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
+import { usePageIdle } from "@/runtime/page-idle";
 import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
@@ -319,6 +321,7 @@ function useGetStartedCornerState(pathname: string) {
 
 /** The announcer sits above the layout, whose auth and app branches each remount what they hold. */
 function RootRoute() {
+	usePageIdle(useRouterState({ select: (state) => state.status === "pending" || state.isLoading }));
 	return (
 		<>
 			<RouteAnnouncer />

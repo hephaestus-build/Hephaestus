@@ -15,7 +15,7 @@ import { THEME_COOKIE } from "@/runtime/theme/theme-cookie";
 import { asReturningReader } from "./first-visit.ts";
 import { useFixtureApi } from "./fixture-api.ts";
 import { BASE_URL } from "./server.ts";
-import { settled, watchRequests } from "./settled.ts";
+import { settled } from "./settled.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";
 
 const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/public/img/user");
@@ -126,7 +126,6 @@ for (const shot of shots) {
 			test(colorScheme, async ({ browser }) => {
 				const unanswered = new Set<string>();
 				const page = await open(browser, shot, colorScheme, unanswered);
-				watchRequests(page);
 				await page.goto(shot.route);
 				await expect(shot.ready(page)).toBeVisible();
 				await settled(page);

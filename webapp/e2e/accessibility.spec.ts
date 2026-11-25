@@ -5,7 +5,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test as base } from "./fixtures";
 import { asFirstVisit, asReturningReader } from "./screenshots/first-visit.ts";
-import { settled, watchRequests } from "./screenshots/settled.ts";
+import { settled } from "./screenshots/settled.ts";
 
 /**
  * The integrated half of the accessibility evaluation in
@@ -119,7 +119,6 @@ const firstVisitTest = base.extend({
 });
 
 async function open(page: Page, path: string) {
-	watchRequests(page);
 	await page.goto(path);
 	await loaded(page);
 }
