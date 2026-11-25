@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 class ResourceReadersTest {
@@ -201,11 +202,12 @@ class ResourceReadersTest {
 
     /** Operators read how long a proof waits; an answer that keeps the class and reason keeps that time. */
     @Test
-    void shouldStampWhenTheProofLastChangedOnlyWhenItChanges() throws InterruptedException {
+    void shouldStampWhenTheProofLastChangedOnlyWhenItChanges() {
         var readers = new ResourceReaders();
         readers.listingStopped(ProofReason.RATE_LIMITED);
-        Instant waitingSince = readers.getProofChangedAt();
-        Thread.sleep(2);
+        // The proof began to wait a minute ago.
+        Instant waitingSince = Instant.now().minusSeconds(60);
+        ReflectionTestUtils.setField(readers, "proofChangedAt", waitingSince);
 
         readers.listingStopped(ProofReason.RATE_LIMITED);
         assertThat(readers.getProofChangedAt()).isEqualTo(waitingSince);
