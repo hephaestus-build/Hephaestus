@@ -245,6 +245,15 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             """, nativeQuery = true)
     int revokeConversations(@Param("workspaceId") long workspaceId);
 
+    /** A removed entry can have been read anywhere in its owner's conversation tree. */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+        UPDATE agent_sandbox s SET state = 'DELETING'
+         WHERE s.workspace_id = :workspaceId AND s.kind = 'CONVERSATION' AND s.state IN ('REQUESTED', 'READY')
+           AND s.subject_key = ANY(CAST(:subjects AS text[]))
+        """, nativeQuery = true)
+    int revokeConversationSubjects(@Param("workspaceId") long workspaceId, @Param("subjects") String[] subjects);
+
     /**
      * The reaper's one rule. A live sandbox is taken back when its shutdown time passed, when it did not call the
      * gateway within the start limit, or when its subject has no queued or leased run and it leased no run for its

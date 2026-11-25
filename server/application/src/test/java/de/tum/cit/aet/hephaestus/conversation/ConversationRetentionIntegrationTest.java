@@ -93,6 +93,9 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     private PersonDataCopyFence copies;
 
     @Autowired
+    private ConversationContextChanges contextChanges;
+
+    @Autowired
     private ObjectMapper mapper;
 
     @Autowired
@@ -339,7 +342,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     /** Redaction that counts, after commit, the entries each erasure reported as changed. */
     private ConversationRedaction reportingRedaction() {
-        return new ConversationRedaction(copies, entryRepository, reporting(), mapper);
+        return new ConversationRedaction(copies, entryRepository, reporting(), mapper, contextChanges);
     }
 
     private ApplicationEventPublisher reporting() {
@@ -454,15 +457,16 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         List<UUID> backlog = backlog(main, 17, Instant.parse("1971-02-01T00:00:00Z"));
         UUID thirdBatchSummary = summaryOver(main, before + 11, before + 15);
         AtomicInteger calls = new AtomicInteger();
-        ConversationRedaction dying = new ConversationRedaction(copies, entryRepository, reporting(), mapper) {
-            @Override
-            public void redact(Collection<UUID> entryIds) {
-                super.redact(entryIds);
-                if (calls.incrementAndGet() == 3) {
-                    throw new Crash();
-                }
-            }
-        };
+        ConversationRedaction dying =
+                new ConversationRedaction(copies, entryRepository, reporting(), mapper, contextChanges) {
+                    @Override
+                    public void removeDue(long workspaceId, long accountId, List<UUID> entryIds) {
+                        super.removeDue(workspaceId, accountId, entryIds);
+                        if (calls.incrementAndGet() == 3) {
+                            throw new Crash();
+                        }
+                    }
+                };
 
         assertThatThrownBy(() -> sweeper(dying, 5, 10).sweepNow()).isInstanceOf(Crash.class);
 
@@ -562,11 +566,12 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                             copies,
                                             entryRepository,
                                             reporting(Objects.requireNonNull(reportedBy.get(replica))),
-                                            mapper) {
+                                            mapper,
+                                            contextChanges) {
                                         @Override
-                                        public void redact(Collection<UUID> entryIds) {
+                                        public void removeDue(long workspaceId, long accountId, List<UUID> entryIds) {
                                             if (firstPage.putIfAbsent(replica, List.copyOf(entryIds)) != null) {
-                                                super.redact(entryIds);
+                                                super.removeDue(workspaceId, accountId, entryIds);
                                                 return;
                                             }
                                             await(samePage);
@@ -574,7 +579,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                             if (!leads) {
                                                 await(leaderCommitted);
                                             }
-                                            super.redact(entryIds);
+                                            super.removeDue(workspaceId, accountId, entryIds);
                                             afterCommit(() -> {
                                                 firstCommitted.put(replica, true);
                                                 if (leads) {

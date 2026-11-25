@@ -36,6 +36,9 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
     private ConversationRedaction redaction;
 
     @Mock
+    private ConversationContextChanges contextChanges;
+
+    @Mock
     private ConversationContextPathBuilder paths;
 
     @Mock
@@ -86,6 +89,7 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
                 runs,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 slackReplies,
-                journal);
+                journal,
+                contextChanges);
     }
 }

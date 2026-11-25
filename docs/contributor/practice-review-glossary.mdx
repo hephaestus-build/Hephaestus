@@ -369,6 +369,11 @@ The [data model](./practice-feedback-schema.mdx) owns durable keys and guards.
 It does not mean that the scan used up its budget.
 An execution that made no model call adds no usage row.
 
+## Turn stop reasons
+
+**Context erased** (`CONTEXT_ERASED`) is the stop reason of a turn whose readable context was erased during the attempt.
+See [conversation runtime](./unified-pi-runtime.mdx#context-of-a-turn).
+
 ## Mentoring terms (planned)
 
 These terms name the runtime of the accepted design in [Mentoring framework](./mentoring-framework.mdx).

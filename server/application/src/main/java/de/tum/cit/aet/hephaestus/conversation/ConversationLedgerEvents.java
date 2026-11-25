@@ -46,11 +46,25 @@ public final class ConversationLedgerEvents {
     }
 
     /**
-     * Data of the workspace that a Hephaestus turn may have staged changed: a person was erased, chose not to have AI read
-     * their work, or a repository was hidden or no longer monitored. The server revokes the conversation sandboxes
-     * of the workspace, so no running turn reads a copy that is no longer allowed.
+     * Data that a turn may have staged changed. A removal affects one account's conversation tree. Erasure
+     * of a source or person and access changes affect turns across the workspace. Each affected sandbox loses
+     * its credentials and each server drops the partial answers in that scope. Person-erasure admission drops
+     * partial answers alone. The erasure step owns physical sandbox custody.
      */
-    public record ContextChanged(long workspaceId) implements LedgerChanged {}
+    public record ContextChanged(long workspaceId, @Nullable Long accountId, boolean partialAnswersOnly)
+            implements LedgerChanged {
+        public ContextChanged(long workspaceId) {
+            this(workspaceId, null, false);
+        }
+
+        public ContextChanged(long workspaceId, long accountId) {
+            this(workspaceId, accountId, false);
+        }
+
+        public boolean affects(long workspace, long account) {
+            return workspaceId == workspace && (accountId == null || accountId == account);
+        }
+    }
 
     /** Entries of one conversation were appended, or their text, vote or redaction changed. */
     public record EntryChanged(long workspaceId, UUID conversationId, long accountId, List<UUID> entryIds)

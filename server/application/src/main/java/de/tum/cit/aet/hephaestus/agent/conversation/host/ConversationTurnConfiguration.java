@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
@@ -47,8 +48,18 @@ public class ConversationTurnConfiguration {
             AgentRuns runs,
             ConversationTurnService turns,
             AgentSandboxes sandboxes,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            ConversationContextChanges contextChanges) {
         return new ConversationTurns(
-                rows, conversations, writeFence, copyFence, clock, runs, turns, sandboxes, transactions);
+                rows,
+                conversations,
+                writeFence,
+                copyFence,
+                clock,
+                runs,
+                turns,
+                sandboxes,
+                transactions,
+                contextChanges);
     }
 }

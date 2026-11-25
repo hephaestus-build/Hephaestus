@@ -226,7 +226,9 @@ public class ConversationTurnService {
             long workspaceId, UUID turnId, int epoch, UUID runId, ConversationTurnProgress.Update update) {
         int attempt = epoch;
         turns.commitWithoutFlushWait();
-        if (!copies.tryHoldForCapture()) return false;
+        if (!copies.tryHoldForCapture()
+                || copies.erasurePendingInWorkspace(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, workspaceId))
+            return false;
         ConversationTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, epoch, runId)
                 .orElseThrow(() -> new ConversationLeaseLostException(turnId, attempt));
         if (redaction.personErasedSince(running.getStartedAt()))
@@ -454,7 +456,7 @@ public class ConversationTurnService {
      * @param reply what the developer reads for a turn that fails
      * @param cause why it failed, for the operator
      */
-    private LostAttempt takeBack(ConversationTurn turn, boolean retry, Instant now, String reply, String cause) {
+    LostAttempt takeBack(ConversationTurn turn, boolean retry, Instant now, String reply, String cause) {
         int attempt = turn.getAttempt();
         JsonNode admission = turn.getAdmission();
         Instant startedAt = Objects.requireNonNull(turn.getStartedAt(), "A leased turn has started");

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRepository;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,11 @@ class ConversationAccessAdapter implements ConversationAccess {
     @Override
     public Optional<Long> findAccountId(long workspaceId, UUID conversationId) {
         return conversations.findAccountIdByIdAndWorkspaceId(conversationId, workspaceId);
+    }
+
+    @Override
+    public List<UUID> conversationIds(long workspaceId, long accountId) {
+        return conversations.findIdsOfAccount(workspaceId, accountId);
     }
 
     @Override

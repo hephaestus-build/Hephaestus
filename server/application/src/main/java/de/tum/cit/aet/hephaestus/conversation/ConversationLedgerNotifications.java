@@ -125,6 +125,8 @@ public class ConversationLedgerNotifications implements DisposableBean {
                 if (!running) {
                     return;
                 }
+                progress.resync();
+                listeners.forEach(ConversationLedgerNotifications::resync);
                 log.warn(
                         "Hephaestus ledger notifications lost their connection; reconnecting in {}: {}",
                         backoff,
@@ -158,6 +160,9 @@ public class ConversationLedgerNotifications implements DisposableBean {
         }
         if (change instanceof ConversationLedgerEvents.TurnChanged turn) {
             progress.changed(turn);
+        }
+        if (change instanceof ConversationLedgerEvents.ContextChanged context) {
+            progress.contextChanged(context);
         }
         for (Listener listener : listeners) {
             switch (change) {

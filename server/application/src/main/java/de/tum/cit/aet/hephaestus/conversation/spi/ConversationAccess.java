@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation.spi;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -14,6 +15,9 @@ public interface ConversationAccess {
 
     /** The account whose conversation it is; empty when the workspace has no such conversation. */
     Optional<Long> findAccountId(long workspaceId, UUID conversationId);
+
+    /** The main conversation and all its threads in this workspace. */
+    List<UUID> conversationIds(long workspaceId, long accountId);
 
     /**
      * The user question or the system digest that started the turn.

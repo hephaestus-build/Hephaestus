@@ -864,6 +864,16 @@ An edit of a Slack message keeps the message, but erases every summary that cove
 A turn that ran during an erasure or an edit erases the same copies when it ends (`ConversationRedaction.eraseStaleCopies`).
 The next turn then pays for one new compaction.
 
+A message deletion or retention sweep discards the running attempts of that person's conversation tree.
+The server records `CONTEXT_ERASED` when an active reply stops because the history it could read went away.
+The removal takes the history lock before turn or conversation rows. A sandbox must share that lock before it claims a turn or writes a result.
+The removal revokes the tree's sandbox credentials in the same transaction that clears the message.
+The sandbox reaper deletes the revoked sandboxes.
+
+All replicas discard partial answers when the ledger announces a removal, source erasure, person erasure, or access change.
+On loss of the notification connection, a replica drops every cached partial answer. It can rebuild a still-authorized answer from its next whole snapshot.
+Person erasure announces the affected workspaces at admission. Partial answers in those workspaces wait until the erasure completes.
+
 An erasure locks the main conversation row of each tree that it changes before it changes an entry.
 The context read shares that row, and the end of a turn locks it before it stores entries.
 Thus, a context read either omits an erased entry, or it ran before the erasure started.

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.exception.JournalPendingException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataErasureAdmission;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -169,6 +170,7 @@ public class PersonDataService {
                         HttpStatus.CONFLICT, "An erasure request already owns this account. Resume that request.");
         }
         hold.suppress(person, id, externalCopiesRemoved);
+        announceErasureAdmission(selected, person);
         if (person.accountId() != null) {
             jdbc.update(
                     "UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP,version=version+1"
@@ -178,6 +180,14 @@ public class PersonDataService {
                     person.accountId(), Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         }
         r.startErasure(administratorId);
+    }
+
+    private void announceErasureAdmission(Map<String, PersonDataSelection> selected, PersonScope person) {
+        for (var store : registry.stores()) {
+            if (store instanceof PersonDataErasureAdmission participant) {
+                participant.erasureAdmitted(Objects.requireNonNull(selected.get(store.store())), person);
+            }
+        }
     }
 
     private Map<String, Object> erasureReferences(PersonScope person, boolean externalCopiesRemoved) {
@@ -237,6 +247,7 @@ public class PersonDataService {
         request.startErasure(null);
         requests.saveAndFlush(request);
         hold.suppress(person, request.getId(), false);
+        announceErasureAdmission(selected, person);
         if (!deliveries(selected).isEmpty()) {
             request.fail("EXTERNAL_COPIES_REQUIRE_REMOVAL");
             requests.saveAndFlush(request);

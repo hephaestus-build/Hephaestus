@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -41,11 +42,16 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ConversationSandboxRevocations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.ConversationPartialUpdates;
+import de.tum.cit.aet.hephaestus.conversation.ConversationRetentionSweeper;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
@@ -57,7 +63,15 @@ import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -149,7 +163,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(ConversationContextChanges.class));
         kind = new TurnSandboxRunKind(
                 ConversationTurnStarts.admitting(beans, meters, digests),
                 beans.getBean(TurnRunsAdapter.class),
@@ -445,7 +460,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(ConversationContextChanges.class));
         var read = new AtomicBoolean();
         doAnswer(call -> read.get()).when(copyFence).erasedSince(any(), any());
         assertThatThrownBy(() -> observed.read(run, turn -> {
@@ -537,6 +553,144 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldDiscardTheRunningAnswerAndRevokeItsSandboxWhenAnEarlierMessageIsDeleted() {
+        var earlier = ask("An earlier confidential message");
+        var first = claim();
+        held.write(
+                first,
+                true,
+                attempt -> turns.end(
+                        workspace.getId(),
+                        earlier.getId(),
+                        attempt.attempt(),
+                        attempt.runId(),
+                        new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null)));
+        var answering = ask("What did I just say?");
+        var run = claim();
+        assertThat(run.sandbox().id()).isEqualTo(first.sandbox().id());
+        assertThat(kind.context(run).toString()).contains("An earlier confidential message");
+        publishPartial(answering, run);
+
+        beans.getBean(ConversationEntryService.class)
+                .deleteMessage(
+                        workspace.getId(),
+                        turns.question(workspace.getId(), earlier.getId()).getId());
+
+        assertThatThrownBy(() -> held.read(run, attempt -> attempt.turnId())).isInstanceOf(StaleRunException.class);
+        await().untilAsserted(() -> assertThat(beans.getBean(ConversationTurnProgress.class)
+                        .snapshot(
+                                workspace.getId(),
+                                answering.getId(),
+                                run.fence().epoch()))
+                .isNull());
+        assertThat(turnRows.findById(answering.getId()).orElseThrow().getFailureCause())
+                .isEqualTo("context_changed");
+    }
+
+    @Test
+    void shouldDiscardTheRunningAnswerAndRevokeItsSandboxWhenAnEarlierMessageExpires() {
+        var earlier = ask("An expired message");
+        var first = claim();
+        held.write(
+                first,
+                true,
+                attempt -> turns.end(
+                        workspace.getId(),
+                        earlier.getId(),
+                        attempt.attempt(),
+                        attempt.runId(),
+                        new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null)));
+        var entry = turns.question(workspace.getId(), earlier.getId());
+        jdbc.update("UPDATE conversation_entry SET created_at = '1972-01-01T00:00:00Z' WHERE id = ?", entry.getId());
+        var answering = ask("What did I say before?");
+        var run = claim();
+        publishPartial(answering, run);
+
+        beans.getBean(ConversationRetentionSweeper.class).sweepNow();
+
+        assertThat(turns.question(workspace.getId(), earlier.getId()).isRedacted())
+                .isTrue();
+        assertThatThrownBy(() -> held.read(run, attempt -> attempt.turnId())).isInstanceOf(StaleRunException.class);
+        await().untilAsserted(() -> assertThat(beans.getBean(ConversationTurnProgress.class)
+                        .snapshot(
+                                workspace.getId(),
+                                answering.getId(),
+                                run.fence().epoch()))
+                .isNull());
+    }
+
+    @Test
+    void shouldDropThePartialAnswerWhenASuspendedSlackConnectionIsErased() {
+        var team = "T-" + workspace.getId();
+        var connection = new Connection(
+                workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
+        connection = beans.getBean(ConnectionRepository.class).saveAndFlush(connection);
+        var answering = ask("What did I say in Slack?");
+        var run = claim();
+        publishPartial(answering, run);
+
+        beans.getBean(ConnectionService.class)
+                .disconnectForErasure(
+                        connection,
+                        new ConnectionService.TransitionRequest(
+                                IntegrationState.UNINSTALLED,
+                                "TEST_ERASURE",
+                                "SYSTEM",
+                                team,
+                                UUID.randomUUID().toString(),
+                                "Erase Slack content"),
+                        () -> beans.getBean(SlackWorkspaceContentEraser.class).eraseWorkspace(workspace.getId()));
+
+        assertThatThrownBy(() -> held.read(run, attempt -> attempt.turnId())).isInstanceOf(StaleRunException.class);
+        await().untilAsserted(() -> assertThat(beans.getBean(ConversationTurnProgress.class)
+                        .snapshot(
+                                workspace.getId(),
+                                answering.getId(),
+                                run.fence().epoch()))
+                .isNull());
+    }
+
+    @Test
+    void shouldDropThePartialAnswerWhenTheWorkspaceContextNarrows() {
+        var answering = ask("Which work can you read?");
+        var run = claim();
+        publishPartial(answering, run);
+
+        transactions.executeWithoutResult(
+                status -> beans.publishEvent(new AgentContextChangedEvent(workspace.getId())));
+
+        assertThatThrownBy(() -> held.read(run, attempt -> attempt.turnId())).isInstanceOf(StaleRunException.class);
+        await().untilAsserted(() -> assertThat(beans.getBean(ConversationTurnProgress.class)
+                        .snapshot(
+                                workspace.getId(),
+                                answering.getId(),
+                                run.fence().epoch()))
+                .isNull());
+    }
+
+    private void publishPartial(ConversationTurn answering, SandboxRun run) {
+        var partial = beans.getBean(ObjectMapper.class).createObjectNode().put("text", "Copied words");
+        await().untilAsserted(() -> {
+            held.write(
+                    run,
+                    false,
+                    attempt -> turns.updatePartial(
+                            workspace.getId(),
+                            answering.getId(),
+                            attempt.attempt(),
+                            attempt.runId(),
+                            ConversationPartialUpdates.whole(partial)));
+            assertThat(beans.getBean(ConversationTurnProgress.class)
+                            .snapshot(
+                                    workspace.getId(),
+                                    answering.getId(),
+                                    run.fence().epoch()))
+                    .isEqualTo(partial);
+        });
+    }
+
+    @Test
     void shouldRevokeTheWorkspacesConversationSandboxInTheAccessChangeTransaction() {
         ask("Question");
         SandboxRun run = claim();
@@ -570,7 +724,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(ConversationContextChanges.class));
         var captured = new AtomicBoolean();
         try (var erasure = copyFence.erase()) {
             assertThat(erasure).isNotNull();
@@ -620,7 +775,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(ConversationContextChanges.class));
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var claimed = Objects.requireNonNull(transactions.execute(status -> {
                 fence.holdForErasure(identities);

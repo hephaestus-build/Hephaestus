@@ -133,7 +133,13 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         this.mapper = mapper;
         this.emitters = emitters;
         this.queueCapacity = queueCapacity;
-        Gauge.builder(AgentMetrics.CONVERSATION_LIVE_STREAMS, streams, ConversationLiveHub::count)
+        Gauge.builder(
+                        AgentMetrics.CONVERSATION_LIVE_STREAMS,
+                        streams,
+                        map -> map.values().stream()
+                                .flatMap(Set::stream)
+                                .distinct()
+                                .count())
                 .description("Live Hephaestus streams open on this server")
                 .register(meters);
     }
@@ -214,6 +220,15 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         }
     }
 
+    @Override
+    public void contextChanged(ConversationLedgerEvents.ContextChanged change) {
+        streams.forEach((developer, open) -> {
+            if (change.affects(developer.workspaceId(), developer.accountId())) {
+                open.forEach(stream -> read(() -> snapshot(stream)));
+            }
+        });
+    }
+
     /** Changes made while the notification connection was down were missed: every stream starts over. */
     @Override
     public void resync() {
@@ -250,10 +265,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         return streams.values().stream().flatMap(Set::stream).distinct().toList();
     }
 
-    private static double count(Map<Developer, Set<Stream>> streams) {
-        return streams.values().stream().flatMap(Set::stream).distinct().count();
-    }
-
     private void read(Runnable read) {
         try {
             reader.execute(() -> {
@@ -269,6 +280,9 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     }
 
     private void snapshot(Stream stream) {
+        synchronized (stream.queue) {
+            stream.queue.clear();
+        }
         if (!stream.closed.get() && admitted(stream)) {
             send(
                     stream,

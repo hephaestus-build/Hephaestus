@@ -524,6 +524,9 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
     String COPIES_PERSON_DATA_STORE = "conversation_entry_tool_result_copy";
 
+    @Query("SELECT e.redactedAt FROM ConversationEntry e WHERE e.workspaceId = :workspaceId AND e.id = :id")
+    Optional<Instant> findRedaction(@Param("workspaceId") long workspaceId, @Param("id") UUID id);
+
     /** Locks the main conversation row of each tree that holds one of these entries, in id order. */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """

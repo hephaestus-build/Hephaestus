@@ -122,15 +122,17 @@ class CascadeTableTest extends BaseUnitTest {
             SANDBOX_RUNS + "shouldRevokeTheSandboxAndRefuseTheRunningAttemptWhenAnAccessChangeIsAnnounced";
 
     /** How each source erasure changes the context, which revokes the workspace's conversation sandboxes. */
-    private static final String CONTEXT_CHANGING_ERASURES = "A disconnect of an active connection deactivates it"
-            + " (ConnectionLifecycleEffects), a channel erasure revokes the channel's consent, and an admin's collection removal,"
-            + " an SCM mirror erasure and a repository removal announce the change. Each change revokes the"
-            + " workspace's conversation sandboxes.";
+    private static final String CONTEXT_CHANGING_ERASURES = "A disconnect, channel consent revocation,"
+            + " Outline collection removal or tombstone, SCM mirror erasure, and repository removal each announce"
+            + " the change and revoke the workspace's conversation sandboxes.";
 
     /** Each source erasure's context change, entered through its cause, and the revocation that a change makes. */
     private static final List<String> CONTEXT_CHANGE_PROOFS = List.of(
             "integration.core.connection.ConnectionServiceTest#"
                     + "disconnect_erasesUnderTheFenceAndKeepsTheFootprintForTheProviderTeardown",
+            SANDBOX_RUNS + "shouldDropThePartialAnswerWhenASuspendedSlackConnectionIsErased",
+            "integration.outline.sync.OutlineDocumentSyncServiceTest#"
+                    + "refreshCollectionCatalog_deleteEvent_tombstonesTheCollectionsDocuments",
             "integration.slack.channel.SlackChannelConsentServiceTest#"
                     + "transitionToRevoked_tellsRunningTurnsTheContextChanged",
             "integration.outline.collection.OutlineCollectionAdminServiceTest#"
@@ -144,17 +146,14 @@ class CascadeTableTest extends BaseUnitTest {
             WIRED_REVOCATION_PROOF);
 
     /** The source erasure that reaches no sandbox. */
-    private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended Slack or Outline"
-            + " connection, an Outline collection deleted upstream, and the withdrawal of a stopped repository's"
-            + " retained work publish no context change, so they reach no sandbox. The withdrawal publishes"
+    private static final String WITHDRAWAL_GAP = "Gap, owned by #5158: the withdrawal of a stopped repository's"
+            + " retained work publishes no context change, so it reaches no sandbox and no partial answer. It publishes"
             + " RepositoryWithdrawnFromWorkspaceEvent, which ConversationContextChanges does not consume, and with no"
-            + " monitor left no monitoring change follows. An SCM disconnect erases its mirror, which announces the"
-            + " change.";
+            + " monitor left no monitoring change follows.";
 
-    /** A partial answer is Hephaestus's own words, which a revoked turn keeps until it ends. */
-    private static final String PARTIAL_REVOKED = "A partial answer holds Hephaestus's own words, as an answer does."
-            + " The revocation refuses the attempt's next write, but does not end the turn. Gap, owned by #5141: a"
-            + " server serves the last partial answer until the turn ends.";
+    private static final List<String> RUNNING_REMOVAL_PROOFS = List.of(
+            SANDBOX_RUNS + "shouldDiscardTheRunningAnswerAndRevokeItsSandboxWhenAnEarlierMessageIsDeleted",
+            SANDBOX_RUNS + "shouldDiscardTheRunningAnswerAndRevokeItsSandboxWhenAnEarlierMessageExpires");
 
     /** The gap of every stored dependent under a narrowing: #4907 owns the authorization generations of ADR 0134. */
     private static final String NARROWING_GAP =
@@ -216,12 +215,15 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.REMOVAL,
                     CascadeDependent.ANSWERING_TURN,
                     Action.STOP,
-                    List.of(
-                            CONTROLLER + "shouldEraseTheMessageAndStopItsTurnWhenTheDeveloperDeletesTheirQuestion",
-                            TURNS
-                                    + "shouldStoreNothingOfTheTurnWhenTheDeveloperDeletedTheQuestionWhileHephaestusAnswered"),
-                    "Retention reaches no question whose turn still runs: its cutoff lies at least a day back, and a"
-                            + " turn ends within its deadline."),
+                    Stream.concat(
+                                    RUNNING_REMOVAL_PROOFS.stream(),
+                                    Stream.of(
+                                            CONTROLLER
+                                                    + "shouldEraseTheMessageAndStopItsTurnWhenTheDeveloperDeletesTheirQuestion",
+                                            TURNS
+                                                    + "shouldStoreNothingOfTheTurnWhenTheDeveloperDeletedTheQuestionWhileHephaestusAnswered"))
+                            .toList(),
+                    "An active reply may have read the removed entry, including a reply to a later question."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.ANSWERING_TURN,
@@ -229,7 +231,7 @@ class CascadeTableTest extends BaseUnitTest {
                     Stream.concat(CONTEXT_CHANGE_PROOFS.stream(), Stream.of(SLACK_ENTRIES_PROOF))
                             .toList(),
                     CONTEXT_CHANGING_ERASURES + " The revocation refuses the attempt's next write, and a Slack"
-                            + " disconnect also stops every Slack turn. " + SUSPENDED_GAP + " A write in flight still"
+                            + " disconnect also stops every Slack turn. " + WITHDRAWAL_GAP + " A write in flight still"
                             + " commits what it read."),
             new Cell(
                     CascadeCause.ERASURE,
@@ -247,29 +249,26 @@ class CascadeTableTest extends BaseUnitTest {
                     List.of(NARROWING_PROOF, AI_CHOICE_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
                     "The sandbox revocation is the fence: the attempt's next write is refused."),
             // PARTIAL_ANSWER
-            new Cell(
-                    CascadeCause.REMOVAL,
-                    CascadeDependent.PARTIAL_ANSWER,
-                    Action.KEEP,
-                    List.of(),
-                    "A removed question stops its turn, and a stopped turn's partial answer is not served. Gap, owned"
-                            + " by #5141: a running turn that read another removed entry serves its partial answer until"
-                            + " it ends."),
+            new Cell(CascadeCause.REMOVAL, CascadeDependent.PARTIAL_ANSWER, Action.EVICT, RUNNING_REMOVAL_PROOFS, ""),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.PARTIAL_ANSWER,
                     Action.KEEP,
-                    List.of(),
-                    PARTIAL_REVOKED),
+                    CONTEXT_CHANGE_PROOFS,
+                    "Every server evicts the partial answer when it hears of a context change. "
+                            + CONTEXT_CHANGING_ERASURES + " " + WITHDRAWAL_GAP),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.PARTIAL_ANSWER,
-                    Action.KEEP,
-                    List.of(),
-                    "A partial frame is refused once the erasure holds the copy fence. Gap, owned by #5141: a frame"
-                            + " written between the erasure's admission and the fence, and the last frame, are served"
-                            + " until the turn ends."),
-            new Cell(CascadeCause.NARROWING, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_REVOKED),
+                    Action.EVICT,
+                    List.of(PERSON_ERASURE + "shouldDropThePartialAnswerWhenErasureIsAdmittedAndRefuseLaterFrames"),
+                    ""),
+            new Cell(
+                    CascadeCause.NARROWING,
+                    CascadeDependent.PARTIAL_ANSWER,
+                    Action.EVICT,
+                    List.of(NARROWING_PROOF, SANDBOX_RUNS + "shouldDropThePartialAnswerWhenTheWorkspaceContextNarrows"),
+                    ""),
             // DERIVED_ANSWER
             new Cell(
                     CascadeCause.REMOVAL,
@@ -342,16 +341,15 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.REMOVAL,
                     CascadeDependent.SANDBOX,
-                    Action.KEEP,
-                    List.of(),
-                    "Gap, owned by #5141: a removal does not reach a running sandbox. The sandbox reaper deletes an idle"
-                            + " sandbox, and the next sandbox starts from PostgreSQL."),
+                    Action.REVOKE,
+                    RUNNING_REMOVAL_PROOFS,
+                    "A turn may read the entire conversation tree, so every sandbox of that tree loses its credentials."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.SANDBOX,
                     Action.KEEP,
                     CONTEXT_CHANGE_PROOFS,
-                    CONTEXT_CHANGING_ERASURES + " " + SUSPENDED_GAP),
+                    CONTEXT_CHANGING_ERASURES + " " + WITHDRAWAL_GAP),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.SANDBOX,

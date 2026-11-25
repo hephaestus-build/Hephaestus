@@ -567,16 +567,17 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
         ConversationTurn running = claims.claimNext().orElseThrow();
         entryService.deleteMessage(workspace.getId(), submission.question().getId());
 
-        turns.end(
-                running.getWorkspaceId(),
-                running.getId(),
-                running.getAttempt(),
-                Objects.requireNonNull(running.getRunId()),
-                new ConversationTurnService.Ending(
-                        ConversationTurn.Status.STOPPED,
-                        answerThatReadContext("Half an answer about the secret"),
-                        null,
-                        null));
+        assertThatThrownBy(() -> turns.end(
+                        running.getWorkspaceId(),
+                        running.getId(),
+                        running.getAttempt(),
+                        Objects.requireNonNull(running.getRunId()),
+                        new ConversationTurnService.Ending(
+                                ConversationTurn.Status.STOPPED,
+                                answerThatReadContext("Half an answer about the secret"),
+                                null,
+                                null)))
+                .isInstanceOf(ConversationLeaseLostException.class);
 
         ConversationEntry question =
                 entryRepository.findById(submission.question().getId()).orElseThrow();

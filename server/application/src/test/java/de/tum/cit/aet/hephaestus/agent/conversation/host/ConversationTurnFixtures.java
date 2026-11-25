@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationContextPathBuilder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
@@ -51,7 +52,8 @@ final class ConversationTurnFixtures {
                 beans.getBean(AgentRuns.class),
                 beans.getBean(ConversationTurnService.class),
                 sandboxes,
-                beans.getBean(TransactionTemplate.class));
+                beans.getBean(TransactionTemplate.class),
+                beans.getBean(ConversationContextChanges.class));
     }
 
     static ConversationTurnContexts contexts(ApplicationContext beans) {

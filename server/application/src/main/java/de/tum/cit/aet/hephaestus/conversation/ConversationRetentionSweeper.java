@@ -406,17 +406,19 @@ public class ConversationRetentionSweeper {
 
     /**
      * Erases one person's due entries in a transaction bound to that person. A person who entered erasure after the
-     * page was read is passed over: the erasure removes the entries.
+     * page was read is passed over: the erasure removes the entries. A message whose retention ends is removed history,
+     * so it also takes back the person's running replies; an aged copy is not.
      *
      * @return whether it erased them
      */
-    private boolean eraseAsOwner(Owner owner, List<UUID> ids) {
+    private boolean eraseAsOwner(Rule rule, Owner owner, List<UUID> ids) {
         return Boolean.TRUE.equals(transaction.execute(status -> {
             if (!accounts.holdForRetention(owner.accountId())) {
                 return false;
             }
             ownerScope.ofJob(owner.accountId());
-            redaction.redact(ids);
+            if (rule == Rule.ENTRIES) redaction.removeDue(owner.workspaceId(), owner.accountId(), ids);
+            else redaction.redact(ids);
             return true;
         }));
     }
@@ -580,7 +582,7 @@ public class ConversationRetentionSweeper {
                     return false;
                 }
                 try {
-                    if (eraseAsOwner(owner.getKey(), owner.getValue())) {
+                    if (eraseAsOwner(rule, owner.getKey(), owner.getValue())) {
                         progress.erased += owner.getValue().size();
                     }
                 } catch (RuntimeException e) {

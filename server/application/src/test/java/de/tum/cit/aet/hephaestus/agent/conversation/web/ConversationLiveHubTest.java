@@ -135,6 +135,23 @@ class ConversationLiveHubTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReplaceQueuedEventsWithASnapshotWhenTheReadersContextChanges() throws InterruptedException {
+        emitter.holdSends();
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        assertThat(emitter.awaitHeld()).isTrue();
+
+        UUID queued = UUID.randomUUID();
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(queued)));
+        hub.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT));
+        verify(timeline, timeout(WAIT.toMillis()).times(2)).conversation(anyLong(), anyLong());
+        emitter.release();
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "snapshot"));
+        assertThat(emitter.frames()).noneMatch(frame -> frame.contains(queued.toString()));
+    }
+
+    @Test
     void shouldSendAnEntryCommittedWhileTheSnapshotIsReadAfterTheSnapshotWhenAStreamOpens() {
         UUID committed = UUID.randomUUID();
         when(timeline.conversation(anyLong(), anyLong())).thenAnswer(call -> {

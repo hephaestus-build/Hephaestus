@@ -17,6 +17,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -53,6 +54,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /**
@@ -95,6 +97,9 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
     @Mock
     private Connection connection;
 
+    @Mock
+    private ApplicationEventPublisher events;
+
     private OutlineCollection collection;
 
     private OutlineDocumentSyncService service(int exportBudget) {
@@ -107,7 +112,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
                 new OutlineProperties.Cache(cacheMaxSizeMb),
                 Duration.ofDays(30));
         OutlineMirrorWriter mirrorWriter = new OutlineMirrorWriter(new OutlineMirrorTransactions(
-                documentRepository, collectionRepository, mock(OutlineRosterIdentityResolver.class)));
+                documentRepository, collectionRepository, mock(OutlineRosterIdentityResolver.class), events));
         return new OutlineDocumentSyncService(
                 connectionService,
                 outlineApiClient,
@@ -785,6 +790,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
 
         assertThat(row.isDeleted()).isTrue();
         assertThat(collection.getLastSyncError()).contains("deleted in Outline");
+        verify(events).publishEvent(new AgentContextChangedEvent(WORKSPACE));
     }
 
     @Test

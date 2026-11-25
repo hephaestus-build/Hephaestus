@@ -81,7 +81,7 @@ public class ConversationTurn implements Persistable<UUID> {
     /** The cause of a turn whose holder was lost on its last attempt. */
     static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
 
-    /** The cause of a turn whose person was erased while it ran with their context. */
+    /** The cause of a turn whose context was erased while it ran. */
     static final String CONTEXT_CHANGED_CAUSE = "context_changed";
 
     /** How the cause of a failure that a turn's sandbox reported starts; its reason and detail follow. */
@@ -103,7 +103,7 @@ public class ConversationTurn implements Persistable<UUID> {
         ATTEMPTS_EXHAUSTED,
         /** The model or its provider stopped answering. */
         MODEL_UNAVAILABLE,
-        /** The person was erased while the turn ran with their context. */
+        /** Context the turn could read was erased while it ran. */
         CONTEXT_ERASED,
         /** Any other failure, or one whose cause was not recorded. */
         UNKNOWN;

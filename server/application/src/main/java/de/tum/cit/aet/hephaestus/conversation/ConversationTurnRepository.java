@@ -204,6 +204,19 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     List<ConversationTurn> lockActiveByWorkspaceIdAndConversationId(
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
 
+    /** Running and stopped attempts that can still write in this account's conversation tree. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT t FROM ConversationTurn t
+            WHERE t.workspaceId = :workspaceId AND t.accountId = :accountId
+              AND t.status IN (de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.RUNNING,
+                               de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.STOPPED)
+              AND""" + HELD_RUN + """
+            ORDER BY t.id
+            """)
+    List<ConversationTurn> lockHeldOfAccount(
+            @Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
     /**
      * The queued turns {@code t} that a worker may start: the head of its conversation's queue, in a conversation
      * where no host holds a turn. The queue of a conversation is in the order of its questions' {@code seq}, which a
@@ -328,8 +341,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     }
 
     /**
-     * The running attempt that holds this live claim, read without a lock or a write: a partial answer only checks the
-     * claim, because memory alone keeps it ({@link ConversationTurnProgress}).
+     * The running attempt that holds this live claim, held until its frames commit so a discarded
+     * attempt cannot publish behind its end. Memory alone keeps the partial answer ({@link ConversationTurnProgress}).
      *
      * @return the attempt, or empty when the attempt no longer holds its live claim
      */
@@ -341,6 +354,7 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             """ + LIVE_CLAIM + """
              WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId
                AND t.status = 'RUNNING'
+             FOR SHARE OF t
             """, nativeQuery = true)
     Optional<RunningAttempt> findRunningAttempt(
             @Param("workspaceId") long workspaceId,

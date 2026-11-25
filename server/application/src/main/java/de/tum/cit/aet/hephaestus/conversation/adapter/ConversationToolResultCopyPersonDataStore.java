@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataErasureAdmission;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
@@ -36,7 +37,8 @@ import tools.jackson.databind.ObjectMapper;
  * ({@link ConversationRedaction#eraseStaleCopies}). A turn that starts after it reads erased sources. They are Hephaestus's runtime
  * memory, not anyone's record, and Hephaestus reads current data again when it needs it. They are never exported.
  */
-final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStore {
+final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStore
+        implements PersonDataErasureAdmission {
     /** After every other step, including the steps that erase the sources the context folder reads. */
     static final int ORDER = Integer.MAX_VALUE;
 
@@ -102,6 +104,14 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                                         .sorted()
                                         .toList()))))
                 .toList());
+    }
+
+    @Override
+    public void erasureAdmitted(PersonDataSelection selection, PersonScope frozenScope) {
+        var workspaces = selection.rows().stream()
+                .map(row -> Long.valueOf(Objects.requireNonNull(row.columns().get("workspace_id"))))
+                .toList();
+        contextChanges.erasureAdmitted(workspaces, frozenScope.accountId());
     }
 
     @Override

@@ -43,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -99,7 +100,10 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
         OutlineProperties properties = new OutlineProperties(
                 new OutlineProperties.Sync(100), new OutlineProperties.Cache(200), Duration.ofDays(30));
         OutlineMirrorWriter mirrorWriter = new OutlineMirrorWriter(new OutlineMirrorTransactions(
-                documentRepository, collectionRepository, mock(OutlineRosterIdentityResolver.class)));
+                documentRepository,
+                collectionRepository,
+                mock(OutlineRosterIdentityResolver.class),
+                mock(ApplicationEventPublisher.class)));
         return new OutlineDocumentSyncService(
                 connectionService,
                 outlineApiClient,

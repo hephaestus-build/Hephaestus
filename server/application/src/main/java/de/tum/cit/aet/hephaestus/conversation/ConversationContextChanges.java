@@ -4,6 +4,9 @@ import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AiChoiceChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
+import java.util.Collection;
+import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -43,6 +46,28 @@ public class ConversationContextChanges {
     @EventListener
     public void mirrorErased(ScmMirrorErasedEvent change) {
         changed(change.workspaceId());
+    }
+
+    /** Person erasure also reaches member conversations that the selected source rows did not name. */
+    public void erasureAdmitted(Collection<Long> workspaces, @Nullable Long accountId) {
+        var affected = new TreeSet<>(workspaces);
+        if (accountId != null) affected.addAll(conversations.findMemberWorkspaceIds(accountId));
+        affected.forEach(workspaceId ->
+                events.publishEvent(new ConversationLedgerEvents.ContextChanged(workspaceId, null, true)));
+    }
+
+    /** Claims and callbacks cross this lock before holding a sandbox or turn row. */
+    public void shareHistory(long workspaceId, long accountId) {
+        conversations.lockKey(historyKey(workspaceId, accountId), true);
+    }
+
+    /** The caller must take this lock before it locks any turn or conversation row. */
+    void lockHistoryForRemoval(long workspaceId, long accountId) {
+        conversations.lockKey(historyKey(workspaceId, accountId), false);
+    }
+
+    private static String historyKey(long workspaceId, long accountId) {
+        return "conversation-history:" + workspaceId + ":" + accountId;
     }
 
     public void changed(long workspaceId) {

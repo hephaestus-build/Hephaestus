@@ -106,6 +106,19 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
                 """, Boolean.class, store, Timestamp.from(since)));
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean erasurePendingInWorkspace(String store, long workspaceId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS (
+                SELECT 1 FROM person_data_request
+                WHERE state IN ('ERASING', 'FAILED')
+                  AND (CAST(selections_json AS jsonb) -> ? -> 'rows') @>
+                      jsonb_build_array(jsonb_build_object('columns',
+                          jsonb_build_object('workspace_id', CAST(? AS text)))))
+            """, Boolean.class, store, Long.toString(workspaceId)));
+    }
+
     private Lease acquire(boolean shared) {
         Connection connection;
         try {

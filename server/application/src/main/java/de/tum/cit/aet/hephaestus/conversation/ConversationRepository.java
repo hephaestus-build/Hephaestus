@@ -60,6 +60,9 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
     List<Conversation> findByWorkspaceIdAndParentConversationId(Long workspaceId, UUID parentConversationId);
 
+    @Query("SELECT c.id FROM Conversation c WHERE c.workspaceId = :workspaceId AND c.accountId = :accountId")
+    List<UUID> findIdsOfAccount(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
     /**
      * Holds the conversation row until the transaction ends, so appends to one conversation take their sequence
      * numbers one at a time on every replica. Foreign-key checks of new entries only share the row.
@@ -81,8 +84,11 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
     /** A transaction-scoped advisory lock on {@code key}; reads no rows. */
     @WorkspaceAgnostic("Takes an advisory lock and reads no table")
-    @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))) locked", nativeQuery = true)
-    int lockMainCreation(@Param("key") String key);
+    @Query(value = """
+            SELECT 1 FROM (SELECT CASE WHEN :shared THEN pg_advisory_xact_lock_shared(hashtextextended(:key, 0))
+                                       ELSE pg_advisory_xact_lock(hashtextextended(:key, 0)) END) locked
+            """, nativeQuery = true)
+    int lockKey(@Param("key") String key, @Param("shared") boolean shared);
 
     @Modifying(flushAutomatically = true)
     @Query("""

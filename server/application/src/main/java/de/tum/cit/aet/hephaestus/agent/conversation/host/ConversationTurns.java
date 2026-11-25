@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -64,6 +65,7 @@ public class ConversationTurns {
     private final ConversationTurnService turns;
     private final AgentSandboxes sandboxes;
     private final TransactionTemplate transactions;
+    private final ConversationContextChanges contextChanges;
 
     /** An erasure holds this fence exclusively while it changes the account and revokes the sandbox. */
     public void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {
@@ -81,6 +83,7 @@ public class ConversationTurns {
         // A suppressed or erased account can still end its run. The domain end omits its person data.
         account.ifPresent(accountId -> {
             var _ = writeFence.holdForAccountWrite(accountId);
+            contextChanges.shareHistory(sandbox.workspaceId(), accountId);
         });
     }
 

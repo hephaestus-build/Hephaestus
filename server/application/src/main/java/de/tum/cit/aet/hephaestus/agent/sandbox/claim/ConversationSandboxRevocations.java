@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -21,14 +23,17 @@ public class ConversationSandboxRevocations {
     private final AgentSandboxRepository sandboxes;
     private final TransactionTemplate transactions;
     private final @Nullable AgentSandboxes owners;
+    private final ConversationAccess conversations;
 
     public ConversationSandboxRevocations(
             AgentSandboxRepository sandboxes,
             PlatformTransactionManager transactions,
-            @Nullable AgentSandboxes owners) {
+            @Nullable AgentSandboxes owners,
+            ConversationAccess conversations) {
         this.sandboxes = sandboxes;
         this.transactions = new TransactionTemplate(transactions);
         this.owners = owners;
+        this.conversations = conversations;
     }
 
     public Map<Long, Set<UUID>> snapshot(Set<Long> workspaceIds) {
@@ -59,6 +64,17 @@ public class ConversationSandboxRevocations {
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
     public void contextChanged(ConversationLedgerEvents.ContextChanged change) {
-        transactions.executeWithoutResult(status -> sandboxes.revokeConversations(change.workspaceId()));
+        if (change.partialAnswersOnly()) return;
+        transactions.executeWithoutResult(status -> {
+            Long accountId = change.accountId();
+            if (accountId == null) {
+                sandboxes.revokeConversations(change.workspaceId());
+            } else {
+                var subjects = conversations.conversationIds(change.workspaceId(), accountId).stream()
+                        .map(TurnRunsAdapter::subject)
+                        .toArray(String[]::new);
+                if (subjects.length > 0) sandboxes.revokeConversationSubjects(change.workspaceId(), subjects);
+            }
+        });
     }
 }

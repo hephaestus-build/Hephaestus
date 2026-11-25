@@ -54,15 +54,17 @@ public class ConversationTurnProgress {
 
     private record Attempt(long workspaceId, UUID turnId, int attempt) {}
 
-    private record Snapshot(long sequence, String text) {}
+    private record Snapshot(long accountId, long sequence, String text) {}
 
     private static final class Assembly {
+        private final long accountId;
         private final long sequence;
         private final int count;
         private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         private int next;
 
-        private Assembly(long sequence, int count) {
+        private Assembly(long accountId, long sequence, int count) {
+            this.accountId = accountId;
             this.sequence = sequence;
             this.count = count;
         }
@@ -132,7 +134,7 @@ public class ConversationTurnProgress {
         }
         Attempt attempt = new Attempt(frame.workspaceId(), frame.turnId(), frame.attempt());
         if (frame.index() == 0) {
-            assemblies.put(attempt, new Assembly(frame.sequence(), frame.count()));
+            assemblies.put(attempt, new Assembly(frame.accountId(), frame.sequence(), frame.count()));
         }
         Assembly assembly = assemblies.getIfPresent(attempt);
         if (assembly == null
@@ -158,7 +160,7 @@ public class ConversationTurnProgress {
             return Optional.empty();
         }
         assemblies.invalidate(attempt);
-        return apply(attempt, assembly.bytes.toByteArray())
+        return apply(attempt, assembly.accountId, assembly.bytes.toByteArray())
                 ? Optional.of(new ConversationLedgerEvents.TurnChanged(
                         frame.workspaceId(),
                         frame.conversationId(),
@@ -170,7 +172,7 @@ public class ConversationTurnProgress {
                 : Optional.empty();
     }
 
-    private boolean apply(Attempt attempt, byte[] json) {
+    private boolean apply(Attempt attempt, long accountId, byte[] json) {
         try {
             Update update = mapper.readValue(json, Update.class);
             Snapshot prior = snapshots.getIfPresent(attempt);
@@ -200,7 +202,7 @@ public class ConversationTurnProgress {
             if (text.length() > MAX_SNAPSHOT_CHARS) {
                 return false;
             }
-            snapshots.put(attempt, new Snapshot(update.sequence(), text));
+            snapshots.put(attempt, new Snapshot(accountId, update.sequence(), text));
             return true;
         } catch (JacksonException | IllegalArgumentException malformed) {
             // A malformed update costs only progress, which the next whole snapshot replaces.
@@ -221,8 +223,22 @@ public class ConversationTurnProgress {
         assemblies.asMap().keySet().removeIf(key -> key.turnId().equals(change.turnId()));
     }
 
-    /** Frames were missed: a change waits for the next whole snapshot; the kept snapshots stay until then. */
+    /** Drops complete and in-flight partial answers in the scope of a committed context change. */
+    void contextChanged(ConversationLedgerEvents.ContextChanged change) {
+        snapshots
+                .asMap()
+                .entrySet()
+                .removeIf(entry -> change.affects(
+                        entry.getKey().workspaceId(), entry.getValue().accountId()));
+        assemblies
+                .asMap()
+                .entrySet()
+                .removeIf(entry -> change.affects(entry.getKey().workspaceId(), entry.getValue().accountId));
+    }
+
+    /** A connection loss can hide a context change, so only fresh snapshots may be served after it. */
     void resync() {
+        snapshots.invalidateAll();
         assemblies.invalidateAll();
     }
 

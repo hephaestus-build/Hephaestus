@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
@@ -11,10 +12,12 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationPartialUpdates;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRejectedException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.adapter.ConversationPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -152,6 +155,9 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
     private ConversationEntryService entryService;
 
     @Autowired
+    private ConversationTurnProgress progress;
+
+    @Autowired
     private PersonDataService personData;
 
     /** The developer's workspace and conversation, and the erasure of another member that the test runs. */
@@ -160,6 +166,12 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     /** Requests and runs the erasure of the target, whose data a turn's {@code fetch_context} copies. */
     private Erasure requestErasure(PersonDataContributor source) {
+        Erasure erasure = previewErasure(source);
+        run(erasure);
+        return erasure;
+    }
+
+    private Erasure previewErasure(PersonDataContributor source) {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-erasure.example.test"));
@@ -179,9 +191,7 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                         transaction().execute(status -> service.preview(adminId, null, identities)))
                 .request()
                 .getId();
-        var erasure = new Erasure(workspace, main, service, requestId, adminId);
-        run(erasure);
-        return erasure;
+        return new Erasure(workspace, main, service, requestId, adminId);
     }
 
     /** Confirms the erasure (again, after a failure) and runs it. */
@@ -203,6 +213,40 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .filter(entry -> entry.getKind() == ConversationEntry.Kind.TOOL_RESULT)
                 .findFirst()
                 .orElseThrow();
+    }
+
+    @Test
+    void shouldDropThePartialAnswerWhenErasureIsAdmittedAndRefuseLaterFrames() {
+        var erasure = previewErasure(sourceThatFailsOnce());
+        var turning = ask(erasure.workspace(), erasure.main(), "Who reviews?");
+        var runId = Objects.requireNonNull(turning.getRunId());
+        var partial = mapper.createObjectNode().put("text", "The words to erase");
+        await().untilAsserted(() -> {
+            assertThat(turns.updatePartial(
+                            turning.getWorkspaceId(),
+                            turning.getId(),
+                            turning.getAttempt(),
+                            runId,
+                            ConversationPartialUpdates.whole(partial)))
+                    .isTrue();
+            assertThat(progress.snapshot(turning.getWorkspaceId(), turning.getId(), turning.getAttempt()))
+                    .isEqualTo(partial);
+        });
+
+        transaction()
+                .executeWithoutResult(
+                        status -> erasure.service().requestErasure(erasure.requestId(), erasure.adminId(), true));
+
+        assertThat(turns.updatePartial(
+                        turning.getWorkspaceId(),
+                        turning.getId(),
+                        turning.getAttempt(),
+                        runId,
+                        ConversationPartialUpdates.whole(partial)))
+                .isFalse();
+        await().untilAsserted(() -> assertThat(
+                        progress.snapshot(turning.getWorkspaceId(), turning.getId(), turning.getAttempt()))
+                .isNull());
     }
 
     @Test

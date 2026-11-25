@@ -48,11 +48,26 @@ public class ConversationRedaction {
     private final ConversationEntryRepository entries;
     private final ApplicationEventPublisher events;
     private final ObjectMapper mapper;
+    private final ConversationContextChanges contextChanges;
 
     /** An attempt may have retained copied context even when it made no new tool call. */
     @Transactional(readOnly = true)
     public boolean personErasedSince(Instant startedAt) {
         return copies.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt);
+    }
+
+    /** Retention may have found the same entries as another already committed removal. */
+    @Transactional
+    public void removeDue(long workspaceId, long accountId, List<UUID> entryIds) {
+        contextChanges.lockHistoryForRemoval(workspaceId, accountId);
+        List<UUID> remaining = entries.findUnredactedIds(workspaceId, entryIds);
+        if (!remaining.isEmpty()) remove(workspaceId, accountId, remaining);
+    }
+
+    /** Discards the turns that may have seen these entries before removing their stored copies. */
+    void remove(long workspaceId, long accountId, Collection<UUID> entryIds) {
+        events.publishEvent(new ConversationLedgerEvents.ContextChanged(workspaceId, accountId));
+        redactWithCopies(entryIds);
     }
 
     /** Redacts the entries and every copy of them, in any workspace. */

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
@@ -573,6 +574,8 @@ public class ConnectionService {
                     var ref = new IntegrationRef(
                             locked.getKind(), locked.getWorkspace().getId(), locked.getInstanceKey(), locked.getId());
                     strategy.eraseLocalData(ref);
+                    if (locked.getState() != IntegrationState.ACTIVE)
+                        eventPublisher.publishEvent(new AgentContextChangedEvent(ref.workspaceId()));
                     // The erasure's fact commits with the erasure, and only a transition that erased records it.
                     ConnectionErasures.record(journal, Objects.requireNonNull(locked.getId()), ref.workspaceId());
                 },
@@ -599,10 +602,10 @@ public class ConnectionService {
                     resourceRegistrations.requestRemoval(locked, false);
                     if (erase == null) return;
                     erase.run();
-                    ConnectionErasures.record(
-                            journal,
-                            Objects.requireNonNull(locked.getId()),
-                            locked.getWorkspace().getId());
+                    long workspaceId = locked.getWorkspace().getId();
+                    if (locked.getState() != IntegrationState.ACTIVE)
+                        eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
+                    ConnectionErasures.record(journal, Objects.requireNonNull(locked.getId()), workspaceId);
                 },
                 /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
                 false);

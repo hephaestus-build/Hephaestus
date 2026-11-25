@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import de.tum.cit.aet.hephaestus.agent.adapter.ConversationSandboxCopiesAdapter;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -40,6 +41,9 @@ public final class SandboxOwnerFixtures {
 
     public static ConversationSandboxCopies revocations(ApplicationContext beans, @Nullable AgentSandboxes owner) {
         return new ConversationSandboxCopiesAdapter(new ConversationSandboxRevocations(
-                beans.getBean(AgentSandboxRepository.class), beans.getBean(PlatformTransactionManager.class), owner));
+                beans.getBean(AgentSandboxRepository.class),
+                beans.getBean(PlatformTransactionManager.class),
+                owner,
+                beans.getBean(ConversationAccess.class)));
     }
 }

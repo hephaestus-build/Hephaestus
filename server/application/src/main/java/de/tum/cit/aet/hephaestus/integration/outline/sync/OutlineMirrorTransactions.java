@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
@@ -15,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,14 +41,17 @@ public class OutlineMirrorTransactions {
     private final OutlineDocumentRepository documentRepository;
     private final OutlineCollectionRepository collectionRepository;
     private final OutlineRosterIdentityResolver people;
+    private final ApplicationEventPublisher events;
 
     public OutlineMirrorTransactions(
             OutlineDocumentRepository documentRepository,
             OutlineCollectionRepository collectionRepository,
-            OutlineRosterIdentityResolver people) {
+            OutlineRosterIdentityResolver people,
+            ApplicationEventPublisher events) {
         this.documentRepository = documentRepository;
         this.collectionRepository = collectionRepository;
         this.people = people;
+        this.events = events;
     }
 
     /**
@@ -120,8 +125,11 @@ public class OutlineMirrorTransactions {
                     if (!DeliveryInbox.claim("outline.document.update." + connectionId + "." + documentId)) {
                         return OutlineDocumentSnapshot.of(doc);
                     }
+                    boolean deleted = doc.isDeleted();
                     mutator.accept(doc);
-                    return OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
+                    var stored = OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
+                    if (!deleted && stored.isDeleted()) events.publishEvent(new AgentContextChangedEvent(workspaceId));
+                    return stored;
                 })
                 .orElse(null);
     }

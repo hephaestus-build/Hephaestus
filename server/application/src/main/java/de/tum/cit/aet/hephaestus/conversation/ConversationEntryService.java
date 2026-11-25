@@ -57,6 +57,7 @@ public class ConversationEntryService {
     private final Clock clock;
     private final ConversationSlackReplies slackReplies;
     private final PrivacyJournal journal;
+    private final ConversationContextChanges contextChanges;
 
     public enum SearchScope {
         MAIN,
@@ -212,7 +213,9 @@ public class ConversationEntryService {
         if (entry.getKind() != ConversationEntry.Kind.USER) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.NOT_DELETABLE);
         }
-        if (entry.isRedacted()) {
+        long accountId = entry.getAccountId();
+        contextChanges.lockHistoryForRemoval(workspaceId, accountId);
+        if (entries.findRedaction(workspaceId, entryId).isPresent()) {
             journal.confirmPending(
                     PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
             return;
@@ -221,7 +224,7 @@ public class ConversationEntryService {
         if (turnId != null) {
             turns.lockById(turnId).ifPresent(this::stop);
         }
-        redaction.redact(List.of(entryId));
+        redaction.remove(workspaceId, accountId, List.of(entryId));
         journal.record(PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
         // An erasure recovery manifest lists this delete after its recovery point, so a rolled-back delete logs
         // nothing.

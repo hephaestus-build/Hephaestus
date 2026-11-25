@@ -27,6 +27,9 @@ public interface PersonDataCopyFence {
      */
     boolean erasedSince(String store, Instant since);
 
+    /** Whether an unfinished erasure selected this workspace for the named copy store. Hold capture admission first. */
+    boolean erasurePendingInWorkspace(String store, long workspaceId);
+
     interface Lease extends AutoCloseable {
         /** Uses the leased session outside a source reader's transaction; never closes the session. */
         JdbcOperations jdbc();

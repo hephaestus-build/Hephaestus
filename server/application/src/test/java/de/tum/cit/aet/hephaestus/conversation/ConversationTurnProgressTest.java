@@ -163,6 +163,31 @@ class ConversationTurnProgressTest {
         assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isNull();
     }
 
+    @Test
+    void shouldDiscardOnlyTheAffectedHistoryAndForgetAllSnapshotsAfterAConnectionLoss() {
+        UUID otherTurn = UUID.randomUUID();
+        var unrelated = reader.frames(
+                WORKSPACE,
+                CONVERSATION,
+                ACCOUNT + 1,
+                otherTurn,
+                ConversationTurn.Surface.APP,
+                1,
+                whole(1, answer("Another developer")));
+        assertThat(deliver(unrelated)).isTrue();
+        assertThat(deliver(send(whole(1, answer("Removed words"))))).isTrue();
+        var pending = send(whole(2, answer("x".repeat(20_000))));
+        assertThat(reader.accept(pending.getFirst())).isEmpty();
+
+        reader.contextChanged(new ConversationLedgerEvents.ContextChanged(WORKSPACE, ACCOUNT));
+
+        assertThat(reader.snapshot(turn)).isNull();
+        assertThat(deliver(pending.subList(1, pending.size()))).isFalse();
+        assertThat(reader.snapshot(WORKSPACE, otherTurn, 1)).isNotNull();
+        reader.resync();
+        assertThat(reader.snapshot(WORKSPACE, otherTurn, 1)).isNull();
+    }
+
     private List<ConversationLedgerEvents.ProgressChanged> send(ConversationTurnProgress.Update update) {
         return reader.frames(WORKSPACE, CONVERSATION, ACCOUNT, turnId, ConversationTurn.Surface.APP, 1, update);
     }
