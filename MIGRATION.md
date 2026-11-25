@@ -52,6 +52,57 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.16
+
+#### 🔴 Stop every role before enabling person row-level security
+
+- **When:** in the window
+- **Action:** Stop all runtime roles and wait for all run and action leases to expire.
+
+Follow the [person row-level security upgrade note](https://docs.hephaestus.build/admin/upgrade-notes/person-row-level-security).
+
+#### 🔴 Stop every role before the authorization recheck
+
+- **When:** in the window
+- **Action:** Stop all runtime roles before the migration, and start only servers of the new release.
+
+Follow the [authorization recheck upgrade note](https://docs.hephaestus.build/admin/upgrade-notes/authorization-recheck).
+
+#### 🔴 Stop every role before conversation rows record their account
+
+- **When:** in the window
+- **Action:** Use the [stopped upgrade](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). The migration fills in each conversation entry's and turn's account. A server of the previous release cannot write these rows.
+
+#### 🔴 Stop every role to rename the practice review person fields
+
+- **When:** before the window, in the window
+- **Action:** Update clients to use the [1.0 practice review field names](https://docs.hephaestus.build/admin/upgrade-notes/04-person-vocabulary) before the window. Stop every role before you start the upgrade.
+
+#### 🔴 Stop every role before you enable the journal bucket
+
+- **When:** before the window
+- **Action:** If you use the journal bucket, create its credential Secret. Use the stopped upgrade procedure so that all server replicas begin using the same bucket and prefix.
+
+The chart uses the backup bucket for the privacy journal by default. Use the separate credential and prefix permissions in the [backup and restore guide](https://docs.hephaestus.build/admin/backup-restore#keep-the-privacy-journal-outside-the-database).
+
+#### 🔴 Create the backup reporter credential
+
+- **When:** before the window
+- **Action:** For a chart-managed PostgreSQL backup, rerun the release key setup with backups enabled. See [privacy journal retention](https://docs.hephaestus.build/admin/upgrade-notes/privacy-journal).
+
+This adds the `DATABASE_BACKUP_REPORTER_PASSWORD` key to the release Secret.
+The role setup uses it to give the backup Jobs a login that writes only the oldest recovery point.
+
+#### 🔴 Stop every role before migrating report drafts
+
+- **When:** in the window
+- **Action:** Stop every server replica and take a verified database backup before you run the migration.
+
+Follow [Database maintenance](https://docs.hephaestus.build/admin/maintenance#database-maintenance).
+The migration moves pending report drafts into the run queue and settles any open calls from the old workers.
+Start only the new server version after migration.
+To return to the previous version, restore the verified backup before you start it.
+
 ### v1.0.0-rc.13
 
 #### 🔴 List the disconnects whose provider cleanup was never confirmed
