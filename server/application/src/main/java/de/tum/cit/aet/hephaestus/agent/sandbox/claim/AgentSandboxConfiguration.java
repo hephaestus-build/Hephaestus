@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -28,6 +29,7 @@ public class AgentSandboxConfiguration {
     @Bean
     AgentSandboxes agentSandboxes(
             AgentSandboxRepository sandboxes,
+            WorkspaceLocks workspaces,
             AgentRuns runs,
             SandboxClaims claims,
             AttemptTokenIssuer tokens,
@@ -36,6 +38,7 @@ public class AgentSandboxConfiguration {
             MeterRegistry meters) {
         return new AgentSandboxes(
                 sandboxes,
+                workspaces,
                 runs,
                 claims,
                 tokens,
