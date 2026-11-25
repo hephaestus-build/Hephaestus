@@ -122,6 +122,12 @@ The draft is one `<databaseChangeLog>` with only change sets.
 Promotion writes these into this branch's changelog with the usual ids and author.
 It replays the whole chain on a disposable database and refreshes the ERD, as above.
 
+### Routine references
+
+Every routine in `public` names the schema of each table reference and table row type.
+`DatabaseRolesDatabaseTest` checks the installed routines, including definer functions.
+New migrations run without the `TEMPORARY` privilege, which temporary tables and functions in `pg_temp` need.
+
 ### Definer functions
 
 A `SECURITY DEFINER` function runs with the rights of its owner.

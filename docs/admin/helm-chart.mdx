@@ -395,6 +395,11 @@ No Hephaestus process logs in as a superuser.
 | `hephaestus_monitor` | The PostgreSQL exporter | It reads statistics only, as a member of `pg_monitor` ([Database metrics](./monitoring#turn-on-database-metrics)). | `DATABASE_MONITOR_PASSWORD` |
 
 Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
+The migration removes the database's `TEMPORARY` grant from `PUBLIC`, the owner, the application, the backup reporter, and the monitor.
+On a fresh install, older migrations that need temporary tables run before that change.
+If the migration reports a remaining grant, remove it from the role that grants access and run the migration again.
+After a logical restore, run the database role setup again before you start the server.
+The setup reapplies these database grants using the restored migration history.
 
 If a key is missing from the Secret, `helm upgrade` stops and names it.
 It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`. No Hephaestus Pod uses these keys.

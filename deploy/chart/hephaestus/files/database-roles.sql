@@ -75,6 +75,19 @@ WHERE NOT (pg_has_role('hephaestus_owner', 'SET') AND pg_has_role('hephaestus_ow
 -- pg_database_owner.
 SELECT format('ALTER DATABASE %I OWNER TO hephaestus_owner', current_database()) \gexec
 
+-- A logical restore can copy the Liquibase history and leave the target database's default ACL.
+SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()) \gexec
+SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM %I CASCADE', current_database(), rolname)
+FROM pg_roles WHERE rolname IN ('hephaestus_app', 'hephaestus_backup_reporter', 'hephaestus_monitor') \gexec
+-- The owner keeps TEMPORARY until the last historical migration that needs it has run.
+SELECT to_regclass('public.databasechangelog') IS NOT NULL AS hephaestus_has_history \gset
+\if :hephaestus_has_history
+SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM hephaestus_owner CASCADE', current_database())
+WHERE EXISTS (
+    SELECT FROM public.databasechangelog WHERE id = '1795584893243-1' AND author = 'hephaestus'
+) \gexec
+\endif
+
 -- A database created before PostgreSQL 15 keeps public with its old owner, and lets every role create objects there.
 -- The application role must not: an object that it plants there would resolve in a later migration of the owner.
 -- The owner keeps CREATE through the grant, whoever owns public.

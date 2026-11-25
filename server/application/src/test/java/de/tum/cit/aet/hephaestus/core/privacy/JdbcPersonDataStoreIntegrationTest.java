@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.util.List;
 import java.util.stream.LongStream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -24,12 +26,20 @@ class JdbcPersonDataStoreIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactions;
 
+    @AfterEach
+    void dropKeyFixture() {
+        PostgreSQLTestContainer.ownerJdbc().execute("DROP TABLE IF EXISTS public.person_data_key_test");
+    }
+
     @Test
     void shouldPreserveFrozenTimestampKeysAcrossSessionTimeZonesAndLargeScopes() {
+        PostgreSQLTestContainer.ownerJdbc().execute("""
+            CREATE TABLE public.person_data_key_test (
+                id bigint, occurred_at timestamptz, owner_id bigint, body text, PRIMARY KEY (id, occurred_at)
+            )
+            """);
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var plain = jdbc.getJdbcTemplate();
-            plain.execute(
-                    "CREATE TEMP TABLE person_data_key_test(id bigint, occurred_at timestamptz, owner_id bigint, body text, PRIMARY KEY(id,occurred_at)) ON COMMIT DROP");
             plain.execute(
                     "INSERT INTO person_data_key_test VALUES (1,'2026-10-01T12:00:00Z',42,'Target content'),(2,'2026-10-01T12:00:00Z',70001,'Other content')");
             var store = new JdbcPersonDataStore(
@@ -63,10 +73,11 @@ class JdbcPersonDataStoreIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRedactOnlyFrozenReferencesUsingTheOriginalSubjectScope() {
+        PostgreSQLTestContainer.ownerJdbc()
+                .execute(
+                        "CREATE TABLE public.person_data_key_test (id bigint PRIMARY KEY, subject_id bigint, actor_id bigint)");
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var plain = jdbc.getJdbcTemplate();
-            plain.execute(
-                    "CREATE TEMP TABLE person_data_key_test(id bigint PRIMARY KEY, subject_id bigint, actor_id bigint) ON COMMIT DROP");
             plain.execute("INSERT INTO person_data_key_test VALUES (1,42,84),(2,84,42)");
             var store = new JdbcPersonDataStore(
                     jdbc,
@@ -97,10 +108,11 @@ class JdbcPersonDataStoreIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotEraseARowWhoseFrozenAccountAttributionChanged() {
+        PostgreSQLTestContainer.ownerJdbc()
+                .execute(
+                        "CREATE TABLE public.person_data_key_test (id bigint PRIMARY KEY, owner_id bigint, body text)");
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var plain = jdbc.getJdbcTemplate();
-            plain.execute(
-                    "CREATE TEMP TABLE person_data_key_test(id bigint PRIMARY KEY, owner_id bigint, body text) ON COMMIT DROP");
             plain.execute("INSERT INTO person_data_key_test VALUES (1,42,'Shared operational facts')");
             var store = new JdbcPersonDataStore(
                     jdbc,

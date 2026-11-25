@@ -196,6 +196,17 @@ try {
 		throw new Error(`restore failed:\n${restore.stdout}${restore.stderr}`);
 	}
 
+	// A dump without database ACLs can restore the change-set history without the revocation.
+	applyDatabaseRoles(target, "hephaestus", credentials);
+	if (
+		sql(
+			target,
+			"SELECT count(*) FROM pg_roles WHERE rolname IN ('hephaestus_owner', 'hephaestus_app', 'hephaestus_backup_reporter', 'hephaestus_monitor') AND has_database_privilege(oid, current_database(), 'TEMPORARY')",
+		) !== "0"
+	) {
+		throw new Error("a restored Hephaestus role can create temporary tables");
+	}
+
 	if (!sql(target, "SHOW server_version_num").startsWith("18")) {
 		throw new Error("target is not PostgreSQL 18");
 	}
