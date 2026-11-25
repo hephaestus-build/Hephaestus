@@ -92,23 +92,6 @@ class PrivacyJournalOutageIntegrationTest extends AbstractWorkspaceIntegrationTe
     private ObjectMapper mapper;
 
     @Test
-    void doesNotWaitForTheBucketOnASettingChange() {
-        var accountId = Objects.requireNonNull(
-                accounts.saveAndFlush(new Account("Test account")).getId());
-        client.put()
-                .uri("/user/public-activity")
-                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + accountId))
-                .bodyValue(Map.of("visible", true))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.visible")
-                .isEqualTo(true);
-        verifyNoInteractions(bucket);
-    }
-
-    @Test
     void shouldWaitForAWorkspaceDeletionFactAndConfirmItOnTheSameRequest() {
         var user = persistUser("journal-requester");
         var workspace =

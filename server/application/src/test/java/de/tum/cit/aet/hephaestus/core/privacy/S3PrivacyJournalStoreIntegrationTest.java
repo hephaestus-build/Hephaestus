@@ -10,10 +10,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Clock;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
@@ -29,18 +27,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.images.builder.Transferable;
 
 @Tag("integration")
 class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
 
-    private static final String BUCKET = "test-archive";
-    private static final String PREFIX = "privacy-journal/";
+    private static final String PREFIX = JournalMinio.PREFIX;
     private static final String JOURNAL_KEY = "instance/2026-11-24/entry.json";
-    private static final String JOURNAL_USER = "journal-user";
-    private static final String JOURNAL_PASSWORD = "journal-password-fixture";
     private static final byte[] BODY = "{}".getBytes(StandardCharsets.UTF_8);
     private static final String CHECKSUM = "RBNvo1WzZ4oRRq0W9+hknpT7T8If536DEMBg9hyq/4o=";
 
@@ -61,36 +53,10 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void acceptsMinioConditionalWritesAndKeepsTheCredentialWithinTheJournalPrefix() throws Exception {
-        // The legacy Bitnami distribution ships the MinIO server and its administration client in one image.
-        try (var minio = new GenericContainer<>(
-                        "bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20")
-                // The image setup opens the port on a temporary server before the final server starts.
-                .withCreateContainerCmdModifier(cmd -> cmd.withEntrypoint("minio"))
-                .withCommand("server", "--address", ":9000", "/tmp/journal-fixture")
-                .withEnv("MINIO_ROOT_USER", "fixture-admin")
-                .withEnv("MINIO_ROOT_PASSWORD", "fixture-admin-password")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000))) {
-            minio.start();
-            mc(minio, "alias", "set", "test", "http://127.0.0.1:9000", "fixture-admin", "fixture-admin-password");
-            mc(minio, "mb", "test/" + BUCKET);
-            minio.copyFileToContainer(Transferable.of("""
-                            {
-                              "Version": "2012-10-17",
-                              "Statement": [{
-                                "Effect": "Allow",
-                                "Action": ["s3:PutObject", "s3:GetObject"],
-                                "Resource": "arn:aws:s3:::test-archive/privacy-journal/*"
-                              }]
-                            }
-                            """), "/tmp/journal-policy.json");
-            mc(minio, "admin", "user", "add", "test", JOURNAL_USER, JOURNAL_PASSWORD);
-            mc(minio, "admin", "policy", "create", "test", "journal-prefix", "/tmp/journal-policy.json");
-            mc(minio, "admin", "policy", "attach", "test", "journal-prefix", "--user", JOURNAL_USER);
-            var endpoint = URI.create("http://" + minio.getHost() + ":" + minio.getMappedPort(9000));
-            try (var writer = store(endpoint, PREFIX);
-                    var anotherWriter = store(endpoint, PREFIX);
-                    var outsidePrefix = store(endpoint, "postgres-backups/")) {
+        try (var minio = new JournalMinio()) {
+            try (var writer = minio.store(PREFIX);
+                    var anotherWriter = minio.store(PREFIX);
+                    var outsidePrefix = minio.store("postgres-backups/")) {
                 writer.verifyBucket();
                 assertThat(writer.store(JOURNAL_KEY, BODY)).isTrue();
                 anotherWriter.verifyBucket();
@@ -135,7 +101,7 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
             s3.start();
             s3.enqueue(new MockResponse.Builder().code(200).add100Continue().build());
             s3.enqueue(new MockResponse.Builder().code(200).add100Continue().build());
-            try (var writer = store(s3.url("/").uri(), PREFIX)) {
+            try (var writer = JournalMinio.store(s3.url("/").uri(), PREFIX)) {
                 assertThatThrownBy(writer::verifyBucket)
                         .isInstanceOf(IllegalStateException.class)
                         .hasMessageContaining("conditional PutObject and SHA-256");
@@ -150,7 +116,7 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
             s3.enqueue(new MockResponse.Builder().code(200).add100Continue().build());
             s3.enqueue(new MockResponse.Builder().code(412).add100Continue().build());
             s3.enqueue(new MockResponse.Builder().code(200).build());
-            try (var writer = store(s3.url("/").uri(), PREFIX)) {
+            try (var writer = JournalMinio.store(s3.url("/").uri(), PREFIX)) {
                 assertThatThrownBy(writer::verifyBucket)
                         .isInstanceOf(IllegalStateException.class)
                         .hasMessageEndingWith("the stored object did not return the expected SHA-256 checksum");
@@ -163,7 +129,7 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
         try (var s3 = new MockWebServer()) {
             s3.start();
             s3.enqueue(new MockResponse.Builder().code(503).add100Continue().build());
-            try (var writer = store(s3.url("/").uri(), PREFIX)) {
+            try (var writer = JournalMinio.store(s3.url("/").uri(), PREFIX)) {
                 writer.verifyBucket();
                 assertThat(writer.verified()).isFalse();
 
@@ -194,7 +160,7 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
             s3.enqueue(new MockResponse.Builder()
                     .addHeader("x-amz-checksum-sha256", CHECKSUM)
                     .build());
-            try (var writer = store(s3.url("/").uri(), PREFIX)) {
+            try (var writer = JournalMinio.store(s3.url("/").uri(), PREFIX)) {
                 writer.verifyBucket();
                 for (int request = 0; request < 3; request++) {
                     assertThat(s3.takeRequest(3, TimeUnit.SECONDS)).isNotNull();
@@ -220,20 +186,5 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
         s3.enqueue(new MockResponse.Builder()
                 .addHeader("x-amz-checksum-sha256", checksum)
                 .build());
-    }
-
-    private static S3PrivacyJournalStore store(URI endpoint, String prefix) {
-        return new S3PrivacyJournalStore(
-                new PrivacyJournalProperties.S3(
-                        BUCKET, prefix, endpoint, "us-east-1", true, null, JOURNAL_USER, JOURNAL_PASSWORD, 0),
-                Clock.systemUTC());
-    }
-
-    private static void mc(GenericContainer<?> minio, String... args) throws Exception {
-        var command = new String[args.length + 1];
-        command[0] = "mc";
-        System.arraycopy(args, 0, command, 1, args.length);
-        var result = minio.execInContainer(command);
-        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
     }
 }

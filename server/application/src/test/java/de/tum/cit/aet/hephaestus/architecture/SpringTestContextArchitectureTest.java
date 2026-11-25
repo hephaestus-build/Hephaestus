@@ -52,6 +52,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
+            assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
             assignment("core.privacy.S3PrivacyJournalStoreIntegrationTest", "privacy-journal-bucket"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -418,6 +419,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.privacy.PrivacyJournalOutageIntegrationTest",
+            "core.privacy.PrivacyJournalReplyIntegrationTest",
             "core.privacy.S3PrivacyJournalStoreIntegrationTest",
             "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.repository.PracticeRepositorySyncIntegrationTest",
