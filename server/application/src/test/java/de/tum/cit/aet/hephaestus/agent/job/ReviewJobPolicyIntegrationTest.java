@@ -1094,6 +1094,52 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCountTheRoomOfThePoolsLearnedLimitWhenItFellBelowTheConfiguredOne() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)), 2);
+        // The provider made the pool learn 3 calls: one is the interactive reserve, so measurements hold two.
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=3 WHERE id=?", pool.poolId());
+
+        assertThat(claimLeased(job, pool.claims()))
+                .as("two running sessions fill the learned room, though the configured eight calls had room")
+                .isEmpty();
+
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
+        jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldLetNoNarrowerReviewPassAWideReviewThatThePoolHolds() {
+        var pool = poolScenario();
+        var wide = queued(pool.selected());
+        withPractices(wide, 6);
+        var narrow = queued(pool.selected());
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+        var admission = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry());
+        var running = runningMeasurement(pool, narrow, Instant.now().minus(Duration.ofMinutes(2)), 1);
+
+        var pass = admission.pass(reviews);
+        assertThat(pass.admits(due(wide)))
+                .as("one running session and six more exceed the room")
+                .isFalse();
+        assertThat(pass.admits(due(narrow)))
+                .as("a narrower review behind it waits too, so the wide one keeps its place")
+                .isFalse();
+
+        // The running review ends: an idle pool takes the wide review, however wide it is.
+        transactions.executeWithoutResult(status -> {
+            jdbc.update(
+                    "UPDATE agent_run SET state='ENDED', ended_at=now(), leased_until=NULL, stop_reason='COMPLETED'"
+                            + " WHERE id=?",
+                    running.getRunId());
+            jdbc.update("UPDATE review_job SET status='COMPLETED', completed_at=now() WHERE id=?", running.getId());
+        });
+        assertThat(admission.pass(reviews).admits(due(wide))).isTrue();
+    }
+
+    @Test
     void shouldHoldAReviewWhileAMeasuringCallWaitsLongerThanThePermitAging() {
         var pool = poolScenario();
         var job = queued(pool.selected());
