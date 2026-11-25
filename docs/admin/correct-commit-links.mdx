@@ -67,3 +67,11 @@ To resume it, set the value to `true` again.
 3. On the `UNANSWERED` rows of `commit_identity_resolution`, set `state` to `PENDING` and `attempts` to 0.
 
 **Check:** `commit_identity_pending` rises, then falls as the provider answers.
+
+### Ask again after an upgrade from 1.0.0-rc.16 or earlier
+
+**Cause:** GitHub could not read one commit of a batch of up to 50, for example a commit that a force-push removed. Earlier releases then dropped the answers for the whole batch. So the other emails of the repository also used their 5 attempts and left the queue as `UNANSWERED`.
+
+**Fix:** After the upgrade, do step 3 of [Ask again after a provider outage](#ask-again-after-a-provider-outage). Only the emails of a commit that GitHub cannot read end `UNANSWERED` again.
+
+**Check:** `commit_identity_resolutions_total` counts `resolved` or `no_account` again, and `commit_identity_pending` falls.

@@ -40,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,8 @@ public class CommitAuthorEnrichmentService {
 
     /** Pattern to validate SHA-1 hex strings (prevents injection into dynamic query). */
     private static final Pattern SHA_PATTERN = Pattern.compile("^[0-9a-f]{40}$");
+
+    private static final Pattern COMMIT_ALIAS = Pattern.compile("commit\\d+");
 
     /**
      * Emails that should never be resolved to a user. GitHub's web-flow bot uses
@@ -547,11 +550,29 @@ public class CommitAuthorEnrichmentService {
 
     private void extractActors(
             ClientGraphQlResponse response, List<String> batch, Map<String, List<CommitActor>> actors) {
-        // A partial error can leave a null user in valid data. That null is a failure, not GitHub's "no account".
-        if (!response.getErrors().isEmpty()) {
-            return;
+        // A partial error can leave a null user in valid data. That null is a failure, not GitHub's "no account". An
+        // error under one commit's alias spoils only that commit, for example a SHA that GitHub no longer has; an error
+        // anywhere else spoils the whole batch.
+        Set<String> spoiled = new HashSet<>();
+        for (ResponseError error : response.getErrors()) {
+            String alias = commitAlias(error);
+            if (alias == null) {
+                log.warn(
+                        "Dropped a commit actor batch on a GraphQL error: commits={}, errorType={}",
+                        batch.size(),
+                        error.getErrorType());
+                return;
+            }
+            spoiled.add(alias);
+        }
+        if (!spoiled.isEmpty()) {
+            log.warn(
+                    "Left commits without an actor answer on their GraphQL errors: commits={}, unanswered={}",
+                    batch.size(),
+                    spoiled.size());
         }
         for (int i = 0; i < batch.size(); i++) {
+            if (spoiled.contains("commit" + i)) continue;
             ClientResponseField field = response.field("repository.commit" + i);
             if (field.getValue() == null) {
                 continue;
@@ -577,6 +598,16 @@ public class CommitAuthorEnrichmentService {
                             })
                             .toList());
         }
+    }
+
+    /** The commit alias that an error's path names, {@code repository.commitN...}; null for an error of no commit. */
+    private static @Nullable String commitAlias(ResponseError error) {
+        List<Object> path = error.getParsedPath();
+        if (path.size() < 2 || !"repository".equals(path.get(0))) return null;
+        return path.get(1) instanceof String alias
+                        && COMMIT_ALIAS.matcher(alias).matches()
+                ? alias
+                : null;
     }
 
     /** Only an explicit {@code user: null} says that no account owns the email. Anything unreadable is no answer. */
