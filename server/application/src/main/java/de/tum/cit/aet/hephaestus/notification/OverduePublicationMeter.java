@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.slf4j.Logger;
@@ -18,9 +19,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Counts, by listener, the event publications still open {@link #OVERDUE_AFTER} after they were published.
- * {@link NotificationRedeliveryJob} retries a failed publication without a limit, so one that its listener can never
- * complete is otherwise invisible. Every replica measures, so the gauge does not depend on which replica holds the
+ * Counts, by listener, the event publications still open {@link #OVERDUE_AFTER} after they were published, and those
+ * that are exhausted: {@link NotificationRedeliveryJob} retries a failed publication up to its attempt limit, and an
+ * exhausted one is otherwise invisible. Every replica measures, so the gauges do not depend on which replica holds the
  * redelivery lock.
  */
 @Component
@@ -36,6 +37,7 @@ public class OverduePublicationMeter {
     private final EventPublicationRepository publications;
     private final Clock clock;
     private final MultiGauge overdue;
+    private final MultiGauge exhausted;
 
     public OverduePublicationMeter(EventPublicationRepository publications, Clock clock, MeterRegistry meterRegistry) {
         this.publications = publications;
@@ -43,15 +45,22 @@ public class OverduePublicationMeter {
         this.overdue = MultiGauge.builder(NotificationMetrics.EVENT_PUBLICATIONS_OVERDUE)
                 .description("Event publications still not completed one hour after they were published, by listener")
                 .register(meterRegistry);
+        this.exhausted = MultiGauge.builder(NotificationMetrics.EVENT_PUBLICATIONS_EXHAUSTED)
+                .description("Event publications that failed every attempt and are retried no more, by listener")
+                .register(meterRegistry);
     }
 
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     public void measure() {
-        Map<String, Long> byListener = new TreeMap<>();
+        Map<String, Long> overdueByListener = new TreeMap<>();
+        Map<String, Long> exhaustedByListener = new TreeMap<>();
         try {
             for (var publication : publications.findIncompletePublicationsPublishedBefore(
                     clock.instant().minus(OVERDUE_AFTER))) {
-                byListener.merge(listenerName(publication.getTargetIdentifier().getValue()), 1L, Long::sum);
+                var counts = publication.getCompletionAttempts() >= NotificationRedeliveryJob.MAX_ATTEMPTS
+                        ? exhaustedByListener
+                        : overdueByListener;
+                counts.merge(listenerName(publication.getTargetIdentifier().getValue()), 1L, Long::sum);
             }
         } catch (RuntimeException e) {
             // Keep the last counts: a database blip must not read as "nothing is overdue".
@@ -60,11 +69,15 @@ public class OverduePublicationMeter {
                     e.getClass().getName());
             return;
         }
-        overdue.register(
-                byListener.entrySet().stream()
-                        .map(entry -> MultiGauge.Row.of(Tags.of("listener", entry.getKey()), entry.getValue()))
-                        .toList(),
-                true);
+        overdue.register(rows(overdueByListener), true);
+        exhausted.register(rows(exhaustedByListener), true);
+    }
+
+    private static List<MultiGauge.Row<?>> rows(Map<String, Long> byListener) {
+        return byListener.entrySet().stream()
+                .<MultiGauge.Row<?>>map(
+                        entry -> MultiGauge.Row.of(Tags.of("listener", entry.getKey()), entry.getValue()))
+                .toList();
     }
 
     /** {@code Type.method}: the listener id is the method's full signature, too long for a label. */

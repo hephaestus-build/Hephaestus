@@ -7,5 +7,8 @@ public final class NotificationMetrics {
     /** Event publications still open an hour after they were published, by listener. */
     public static final String EVENT_PUBLICATIONS_OVERDUE = "event.publications.overdue";
 
+    /** Event publications that failed every attempt and are retried no more, by listener. */
+    public static final String EVENT_PUBLICATIONS_EXHAUSTED = "event.publications.exhausted";
+
     private NotificationMetrics() {}
 }

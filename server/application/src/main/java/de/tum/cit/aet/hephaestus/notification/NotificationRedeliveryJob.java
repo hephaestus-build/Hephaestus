@@ -12,8 +12,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Resubmits failed event publications of every module: notifications, and other durable work such as
- * account exports. Expiration belongs to listeners: filtering after Modulith's SQL batch limit would let
- * expired rows starve later publications (ADR 0044).
+ * account exports. A publication that failed {@link #MAX_ATTEMPTS} times is exhausted: it stays in the registry as the
+ * record of the failure, and no resubmission picks it again. The limit is part of the selection's SQL, before its batch
+ * limit, so exhausted rows cannot starve later publications (ADR 0044).
  */
 @Component
 @ConditionalOnServerRole
@@ -23,6 +24,12 @@ public class NotificationRedeliveryJob {
 
     static final Duration MIN_AGE = Duration.ofMinutes(5);
     static final int BATCH_SIZE = 50;
+
+    /**
+     * The attempts after which a failed publication is exhausted, as for an integration event. A failure that repeats
+     * ten times over at least 45 minutes is the listener's, not an outage's.
+     */
+    public static final int MAX_ATTEMPTS = 10;
 
     private final FailedEventPublications failedPublications;
 

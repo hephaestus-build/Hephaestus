@@ -27,7 +27,10 @@ import org.springframework.modulith.events.core.TargetEventPublication;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.function.SingletonSupplier;
 
-/** Modulith owns delivery; only failed-batch ordering differs to prevent retry starvation. */
+/**
+ * Modulith owns delivery. Only the selection of failed publications differs: least recently retried first, so no failing
+ * batch takes every pass, and without the exhausted ones ({@link NotificationRedeliveryJob#MAX_ATTEMPTS}).
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnServerRole
 public class NotificationPublicationConfiguration {
@@ -65,8 +68,10 @@ public class NotificationPublicationConfiguration {
                        last_resubmission_date, completion_attempts, status, completion_date
                   FROM event_publication
                  WHERE (status = 'FAILED' OR (status IS NULL AND completion_date IS NULL))
+                   AND completion_attempts < ?
                 """;
         var arguments = new ArrayList<Object>();
+        arguments.add(NotificationRedeliveryJob.MAX_ATTEMPTS);
         if (before != null) {
             sql += " AND publication_date < ?";
             arguments.add(Timestamp.from(before));
