@@ -40,6 +40,9 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private EvidenceReceipts custody;
+
     @Test
     void shouldDeleteOnlyTheReceiptsWhoseJobRetentionDeleted() {
         Workspace workspace = createWorkspace(
@@ -90,6 +93,62 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
         jdbc.update("UPDATE person_evidence_copy SET payload=payload-'sandboxId' WHERE id=?", pending);
         receipts.retireReceiptsOfDeletedJobs(500);
         assertThat(states(pending)).isEmpty();
+    }
+
+    /**
+     * A read that checks many producing jobs reads their receipts in one batch. Each job's custody must be what its own
+     * read decides, for every way a receipt can vouch or refuse.
+     */
+    @Test
+    void shouldDecideEachJobsCustodyInABatchAsItsOwnReadDoes() {
+        Workspace workspace = createWorkspace(
+                "receipt-batch",
+                "Receipt batch",
+                "receipt-batch-org",
+                AccountType.ORG,
+                persistUser("receipt-batch-owner"));
+        var provider = ensureGitHubProvider();
+        UUID complete = job(workspace).getId();
+        UUID capturing = job(workspace).getId();
+        UUID missing = job(workspace).getId();
+        UUID unvouched = job(workspace).getId();
+        UUID erased = job(workspace).getId();
+        receipt(workspace, complete, "READY", vouching("batch-kept"));
+        receipt(workspace, capturing, "CAPTURING", vouching("batch-capturing"));
+        receipt(workspace, unvouched, "READY", "{\"identities\":[],\"repositories\":[],\"copiedJobs\":[]}");
+        receipt(workspace, erased, "READY", vouching("batch-erased"));
+        jdbc.update(
+                "INSERT INTO identity_restriction(id,provider_id,provider_user_key,team_key,kind) VALUES (?,?,?,'','ERASED')",
+                UUID.randomUUID(),
+                provider.getId(),
+                "batch-erased");
+        var all = List.of(complete, capturing, missing, unvouched, erased);
+
+        var batch = custody.custodyOfEach(workspace.getId(), all);
+
+        assertThat(batch).containsOnlyKeys(all);
+        all.forEach(job -> assertThat(batch.get(job))
+                .as("custody of job %s", job)
+                .isEqualTo(custody.custody(workspace.getId(), List.of(job))));
+        assertThat(batch)
+                .hasEntrySatisfying(
+                        complete, held -> assertThat(held.complete()).isTrue());
+        assertThat(batch)
+                .hasEntrySatisfying(
+                        capturing, held -> assertThat(held.refused()).isTrue());
+        assertThat(batch)
+                .hasEntrySatisfying(missing, held -> assertThat(held.complete()).isFalse());
+        assertThat(batch)
+                .hasEntrySatisfying(
+                        unvouched, held -> assertThat(held.complete()).isFalse());
+        assertThat(batch)
+                .hasEntrySatisfying(erased, held -> assertThat(held.refused()).isTrue());
+    }
+
+    private static String vouching(String subject) {
+        return "{\"dependencies\":\"COMPLETE\",\"repositories\":[],\"copiedJobs\":[],\"identities\":"
+                + "[{\"providerType\":\"GITHUB\",\"providerOrigin\":\"https://github.com\",\"subject\":\""
+                + subject + "\"}]}";
     }
 
     @Test

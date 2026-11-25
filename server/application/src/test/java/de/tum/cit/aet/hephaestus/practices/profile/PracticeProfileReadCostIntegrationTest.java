@@ -6,6 +6,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultFeedQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultQueryService;
+import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
@@ -51,6 +53,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,6 +140,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
     int seeded;
 
+    /** Whether seeded results keep no custody of their own and the receipt of their producing job vouches for them. */
+    boolean vouchedByJob;
+
     @MockitoBean
     ScmSourceFingerprints sourceFingerprints;
 
@@ -209,6 +215,60 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         seed(works.size());
 
         assertThat(workReads().get("reviews")).isPositive().isLessThanOrEqualTo(5);
+    }
+
+    /**
+     * A result usually keeps no custody of its own: the receipt of the job that produced it vouches for it, and every
+     * review has its own job. Standings and the overview check the receipt of every producing job in their look-back,
+     * in a fixed number of statements however many jobs that is.
+     */
+    @Test
+    void shouldCheckEveryProducingJobsReceiptAtAFixedStatementCount() {
+        vouchedByJob = true;
+        seed(2 * works.size());
+        var few = receiptCosts();
+        seed(4 * works.size());
+        var many = receiptCosts();
+
+        assertThat(many).isEqualTo(few);
+    }
+
+    /**
+     * The batch answers each producing job on its own. A job whose receipt refuses custody keeps its result out of the
+     * standings and the overview's history, while the other job of the same read still vouches for its own.
+     */
+    @Test
+    void shouldLeaveOutTheResultOfAJobWhoseReceiptRefusesCustody() {
+        vouchedByJob = true;
+        works = List.of(onNewWork(), onNewWork());
+        seed(2);
+        var vouched =
+                Objects.requireNonNull(newestOnWork.get(works.get(0).item().getId()));
+        var refused =
+                Objects.requireNonNull(newestOnWork.get(works.get(1).item().getId()));
+        // A receipt still capturing refuses custody, as an interrupted capture leaves it.
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role=replica");
+            jdbc.update(
+                    "UPDATE person_evidence_copy SET state='CAPTURING' WHERE workspace_id=? AND job_id="
+                            + "(SELECT job_id FROM review_item WHERE workspace_id=? AND result_id=?)",
+                    refused.getWorkspaceId(),
+                    refused.getWorkspaceId(),
+                    refused.getId());
+        });
+
+        var history = standings.history(
+                scenario.workspace().getId(),
+                Objects.requireNonNull(scenario.account().getId()),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+        assertThat(history.permittedViews())
+                .extracting(view -> view.result().id())
+                .contains(vouched.getId())
+                .doesNotContain(refused.getId());
+        assertThat(standings.getStandings(scenario.workspace().getId()).stream()
+                        .flatMap(standing -> Stream.concat(standing.toWorkOn().stream(), standing.strengths().stream()))
+                        .map(PracticeStandingResultDTO::resultId))
+                .doesNotContain(refused.getId());
     }
 
     @Test
@@ -360,6 +420,31 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         return counts;
     }
 
+    /** The statements of each read that checks the custody of its whole look-back. */
+    private Map<String, Long> receiptCosts() {
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+        var shown = groups.findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(
+                scenario.workspace().getId());
+        Map<String, Long> costs = new LinkedHashMap<>();
+        costs.put(
+                "overview",
+                cost(
+                        () -> overview.getOverview(context),
+                        read -> assertThat(read.latestReview()).isNotNull()));
+        costs.put(
+                "standings",
+                cost(
+                        () -> standings.getStandings(scenario.workspace().getId()),
+                        read -> assertThat(read).hasSize(1)));
+        costs.put(
+                "group standings",
+                cost(
+                        () -> groupStandings.getGroupStandings(
+                                scenario.workspace().getId(), shown),
+                        read -> assertThat(read).hasSize(1)));
+        return costs;
+    }
+
     private <T> long cost(Supplier<T> read, Consumer<T> check) {
         var measured = reads.measure(read);
         check.accept(measured.value());
@@ -395,11 +480,13 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
             // Only capture writes custody receipts; the guard that refuses other writers stays on.
             new TransactionTemplate(transactions).executeWithoutResult(status -> {
                 jdbc.execute("SET LOCAL session_replication_role=replica");
-                jdbc.update(
-                        "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
-                        completeCustody(),
-                        result.getWorkspaceId(),
-                        result.getId());
+                if (vouchedByJob) producedByJob(result);
+                else
+                    jdbc.update(
+                            "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
+                            completeCustody(),
+                            result.getWorkspaceId(),
+                            result.getId());
             });
         }
     }
@@ -459,6 +546,32 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         item.setSourceId(ThreadLocalRandom.current().nextLong(1000000000000L, Long.MAX_VALUE));
         item.setCreatedAt(Instant.now().minus(2, ChronoUnit.HOURS));
         return new Scenario(scenario.workspace(), scenario.account(), scenario.practice(), items.saveAndFlush(item));
+    }
+
+    /** Binds the result to a completed job whose READY receipt indexes every copy of the job's capture. */
+    private void producedByJob(Result result) {
+        var job = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,"
+                        + "config_snapshot,submitted_at,completed_at)"
+                        + " VALUES(?,?,?,'COMPLETED',?,'NONE',?,'{}'::jsonb,'{}'::jsonb,now(),now())",
+                job,
+                result.getReviewId(),
+                result.getWorkspaceId(),
+                RuntimeJobTestData.insertRun(jdbc, result.getWorkspaceId(), result.getReviewId(), "COMPLETED", 1),
+                job.toString().replace("-", ""));
+        jdbc.update(
+                "UPDATE review_item SET job_id=? WHERE workspace_id=? AND result_id=?",
+                job,
+                result.getWorkspaceId(),
+                result.getId());
+        jdbc.update(
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload) VALUES(?,?,?,'READY',"
+                        + "CAST(? AS jsonb))",
+                UUID.randomUUID(),
+                result.getWorkspaceId(),
+                job,
+                "{\"dependencies\":\"COMPLETE\",\"identities\":[],\"repositories\":[],\"copiedJobs\":[]}");
     }
 
     private String completeCustody() {

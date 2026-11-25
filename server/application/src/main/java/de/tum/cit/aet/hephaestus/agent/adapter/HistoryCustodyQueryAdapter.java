@@ -29,6 +29,11 @@ public class HistoryCustodyQueryAdapter implements HistoryCustodyQuery {
         return copies.custody(workspaceId, producingJobIds);
     }
 
+    @Override
+    public Map<UUID, HistoryCustody> findEach(long workspaceId, Collection<UUID> producingJobIds) {
+        return copies.custodyOfEach(workspaceId, producingJobIds);
+    }
+
     /** The retained manifest keeps its capture time when admission retires the staged files. */
     @Override
     public Map<Receipt, Instant> capturedAt(long workspaceId, Collection<Receipt> receipts) {

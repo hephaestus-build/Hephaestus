@@ -9,6 +9,9 @@ import java.util.UUID;
 public interface HistoryCustodyQuery {
     HistoryCustody find(long workspaceId, List<UUID> producingJobIds);
 
+    /** {@link #find} of each producing job on its own, read in one batch for a read that checks many of them. */
+    Map<UUID, HistoryCustody> findEach(long workspaceId, Collection<UUID> producingJobIds);
+
     /** The job that produced a result of {@code reviewId}. */
     record Receipt(UUID reviewId, UUID producingJobId) {}
 
