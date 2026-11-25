@@ -152,6 +152,8 @@ public final class ScriptedGitLabNotes {
         version.put("start_commit_sha", start);
         version.put("diffs", List.of(Map.of("old_path", path, "new_path", path, "renamed_file", false, "diff", diff)));
         versions.computeIfAbsent(iid, ignored -> new CopyOnWriteArrayList<>()).add(version);
+        // A push makes a new diff version, and the merge request's head is the head of its newest version.
+        heads.put(iid, head);
     }
 
     Mono<ClientResponse> exchange(ClientRequest request) {
