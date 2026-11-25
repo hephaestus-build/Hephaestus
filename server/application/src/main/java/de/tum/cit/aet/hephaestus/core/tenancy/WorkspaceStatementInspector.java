@@ -166,9 +166,13 @@ public class WorkspaceStatementInspector implements StatementInspector {
     /** Hibernate's optimistic-lock predicate, which rides along with the key on a versioned entity. */
     private static final String VERSION_COLUMN = "version";
 
-    /** A key bound to one parameter, to an array parameter, or to a list of parameters. */
+    /**
+     * A key bound to one parameter, to an array parameter, or to a list of parameters. The list's repetition is
+     * possessive, because a backtracking group takes one stack frame per key and a long key list would overflow the
+     * thread's stack. A key given back could never let the closing {@code )} match, so it matches the same text.
+     */
     private static final String KEY_BINDING =
-            "(?:=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))|IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))";
+            "(?:=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))|IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*+\\s*\\))";
 
     /**
      * Matches a Hibernate-emitted load that pins the result set to a single row (or a
@@ -224,8 +228,9 @@ public class WorkspaceStatementInspector implements StatementInspector {
      */
     private static final Pattern KEY_TUPLE_SELECT_PATTERN = Pattern.compile(
             "^\\s*SELECT\\b.+?\\bFROM\\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+WHERE\\s+"
-                    + "\\(([^()]+)\\)\\s+IN\\s+\\(\\s*(\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\)"
-                    + "(?:\\s*,\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))*)\\s*\\)\\s*$",
+                    // Possessive for the reason KEY_BINDING gives.
+                    + "\\(([^()]+)\\)\\s+IN\\s+\\(\\s*(\\(\\s*\\?(?:\\s*,\\s*\\?)*+\\s*\\)"
+                    + "(?:\\s*,\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*+\\s*\\))*+)\\s*\\)\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     private static final Pattern SUPPORTED_STATEMENT_PATTERN = Pattern.compile(
