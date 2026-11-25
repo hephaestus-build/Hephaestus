@@ -558,6 +558,8 @@ instead of a second deletion service or an operator-SQL fallback. A new store ca
    They also cover changed preview, failure/resume and any writer or derived-copy boundary relevant to the new store.
 5. The controller-facing retention and source-governance records and data-subject disclosure match
    the implementation. Declare inbox, backup and provider limits rather than promising their erasure.
+6. Each kind of record that depends on the store's rows has its cells in the
+   [cascade table](/contributor/system-design#cascade-table).
 
 The existing executable proof includes
 `server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/AccountErasureIntegrationTest.java`,

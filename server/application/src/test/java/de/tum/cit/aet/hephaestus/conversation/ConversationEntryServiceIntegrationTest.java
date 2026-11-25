@@ -203,6 +203,47 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     @Test
+    void shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt() {
+        ConversationTurnService.Submission asked = ask(main, "Rebase secret");
+        ConversationEntry answer = ended(
+                claim(asked),
+                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Noted the Rebase secret"));
+        ConversationEntry covering = entries.append(
+                workspace.getId(),
+                main.getId(),
+                summary("Asked about the rebase secret", ConversationLedgerFixtures.piIdOf(answer)));
+        Conversation thread = conversations.openThread(workspace.getId(), answer.getId());
+        ConversationEntry result = ended(runningTurn(thread), searchResult(asked.question(), "Rebase secret"));
+
+        entries.deleteMessage(workspace.getId(), asked.question().getId());
+
+        assertThat(stored(covering)).satisfies(summary -> {
+            assertThat(summary.isRedacted()).isTrue();
+            assertThat(summary.getText()).isEmpty();
+            assertThat(summary.getPayload()).isNull();
+        });
+        assertThat(stored(result).isRedacted()).isTrue();
+        assertThat(payload(result).toString()).doesNotContain("Rebase secret");
+        // The answer is Hephaestus's own message, so it stays, also where it repeats the question.
+        assertThat(stored(answer).isRedacted()).isFalse();
+        assertThat(stored(answer).getText()).contains("Rebase secret");
+    }
+
+    @Test
+    void shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst() {
+        ConversationTurnService.Submission asked = ask(main, "Rebase secret");
+        ended(claim(asked), ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Noted"));
+        ConversationTurn reading = runningTurn(main);
+
+        entries.deleteMessage(workspace.getId(), asked.question().getId());
+        ConversationEntry result = ended(reading, searchResult(asked.question(), "Rebase secret"));
+
+        assertThat(stored(result).isRedacted()).isTrue();
+        assertThat(stored(result).getText()).doesNotContain("Rebase secret");
+        assertThat(payload(result).toString()).doesNotContain("Rebase secret");
+    }
+
+    @Test
     void shouldEraseANewSearchResultWhenItQuotesAMessageErasedSinceTheSearch() {
         ConversationEntry secret =
                 entries.append(workspace.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("Rebase secret"));
