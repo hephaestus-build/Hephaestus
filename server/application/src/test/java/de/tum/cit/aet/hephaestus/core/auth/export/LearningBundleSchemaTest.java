@@ -41,6 +41,14 @@ class LearningBundleSchemaTest extends BaseUnitTest {
         assertThat(SCHEMA.validate(bundle)).isEmpty();
     }
 
+    @Test
+    void shouldAcceptARecordTextWhenItHoldsBidirectionalMarks() {
+        ObjectNode bundle = fixture();
+        record(bundle, 0).put("text", "\u05e9\u05dc\u05d5\u05dd \u200Fv2\u200E \u061Cok");
+
+        assertThat(SCHEMA.validate(bundle)).isEmpty();
+    }
+
     /** Each case changes one value of the valid fixture, so the named keyword at the named place is the refusal. */
     @ParameterizedTest
     @MethodSource("refusedBundles")

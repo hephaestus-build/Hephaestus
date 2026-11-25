@@ -129,6 +129,7 @@
 					"enum": ["WRITTEN", "CONFIRMED"]
 				},
 				"text": {
+					"description": "Refuses control characters other than tab, line feed and carriage return, and the bidirectional embeddings, overrides and isolates. The bidirectional marks stay, because right-to-left writing needs them.",
 					"type": "string",
 					"minLength": 1,
 					"maxLength": 8000,
@@ -204,7 +205,7 @@
 			"properties": {
 				"itemType": { "enum": ["RECORD", "GROWTH_POINT"] },
 				"reason": {
-					"description": "DELETED: the person deleted it. WITHDRAWN: it still exists but may no longer leave the instance, for example after a recall or a narrower export policy. A reader that applies tombstones removes the item in both cases, and reports only the person's deletion as a deletion.",
+					"description": "DELETED: the person deleted it. WITHDRAWN: it still exists but may no longer leave the instance, for example after a recall or a narrower export policy. A reader that applies tombstones removes the item in both cases, and reports only the person's deletion as a deletion. A reader that does not apply them still validates them.",
 					"enum": ["DELETED", "WITHDRAWN"]
 				},
 				"portableId": { "$ref": "#/$defs/portableId" },
