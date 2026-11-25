@@ -24,8 +24,11 @@ Follow the [writing standard](../../../docs/contributor/simplified-technical-eng
 Diagnose every failing check in one pass.
 Then push once.
 
-A queue-tier failure (integration, database, drills, browser suites) first shows as a removal from
-the merge queue, with a comment that links the failed run. Read that run like a pull-request run.
+A queue-tier failure (drills, browser suites) first shows as a removal from the merge queue,
+with a comment that links the failed run. Read that run like a pull-request run.
+A server PR runs the integration shards and the database tests itself.
+When they fail only in the merge group, the usual cause is the merged result or a flaky test.
+A stack layer that ran only the light tier is the other cause.
 To reproduce it on the pull request, add the `ci:full` label
 ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 

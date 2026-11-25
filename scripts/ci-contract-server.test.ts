@@ -139,6 +139,8 @@ void describe("ci-contract: server", () => {
 			[[migrate, source], "pull_request", "false", "false", false, false, true],
 			[[migrate, ".changeset/config.json"], "pull_request", "false", "false", false, false, true],
 			[[".github/workflows/cicd.yml"], "pull_request", "false", "false", false, false, false],
+			// It selects the server suites through test-config, without a contract change.
+			[[".github/workflows/ci-tests.yml"], "pull_request", "false", "false", false, false, false],
 			[["webapp/e2e/review.spec.ts"], "pull_request", "false", "false", false, false, false],
 			[[migrate], "pull_request", "true", "false", false, true, true],
 			[[migrate], "pull_request", undefined, "false", false, true, true],
@@ -185,7 +187,7 @@ void describe("ci-contract: server", () => {
 			// Every server pull request runs the numbered shards, as the merge group does.
 			assert.equal(output("full-integration"), "true", label);
 			assert.deepEqual(
-				server ? serverShards(caller, true, only) : [],
+				server ? serverShards(caller, output("full-integration") === "true", only) : [],
 				server ? [...(only ? [] : SERVER_TIERS), ...integrationShards()] : [],
 			);
 			const contracts = expandExpressions(
@@ -222,7 +224,8 @@ void describe("ci-contract: server", () => {
 						migrations_changed: output("migrations-changed"),
 						database_tier: databaseTier,
 					}),
-					name === "server-database" ? database || (event === "pull_request" && server) : database,
+					// The contract checks gate both jobs; within them, a server change selects the database tests.
+					contracts === "true" && (name === "server-database" ? database || server : database),
 					`${name}: ${label}`,
 				);
 			}

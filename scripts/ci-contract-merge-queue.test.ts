@@ -58,7 +58,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, asStringArray, at as valueAt, isRecord } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
-import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
+import { QUEUE_TIER_JOBS, QUEUE_TIER_STEP } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 
 void describe("ci-contract: merge-queue", () => {
@@ -218,19 +218,42 @@ void describe("ci-contract: merge-queue", () => {
 			const jobs = callee.get("jobs");
 			assert.ok(isMap(jobs));
 			for (const entry of jobs.items) {
-				if (
-					isMap(entry.value) &&
-					/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(String(entry.value.get("if")))
-				) {
+				if (!isMap(entry.value)) {
+					continue;
+				}
+				const condition = String(entry.value.get("if"));
+				if (/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(condition)) {
 					const name = `${caller} / ${String(entry.value.get("name"))}`;
 					guarded.push(String(entry.key));
-					assert.ok(
+					// Every server pull request runs the shards (`full_integration`) and the database tests
+					// (`database_tier`), so only the other guarded jobs count toward the revert criterion.
+					const everyServerPullRequest =
+						/inputs\.(?:full_integration|database_tier) == 'true'/u.test(condition);
+					assert.equal(
 						QUEUE_TIER_JOBS.some((pattern) => pattern.test(name)),
-						`report-ci-latency.ts does not count ${name} as queue tier`,
+						!everyServerPullRequest,
+						`report-ci-latency.ts counts ${name} as queue tier: ${String(!everyServerPullRequest)} expected`,
 					);
 				}
 			}
 		}
+		// The latency report reads a pull request's tier from this step of its run, not from its labels,
+		// so the step runs exactly when the `queue-tier` output selects the queue tier.
+		const recorded = `\${{ ${String(namedStep(orchestrator, ["jobs", "detect-changes"], QUEUE_TIER_STEP).get("if"))} }}`;
+		for (const run of [
+			{ full: "true", light: "false" },
+			{ full: "false", light: "false" },
+			{ full: "true", light: "true" },
+			{ full: "false", light: "true" },
+			{},
+		]) {
+			assert.equal(
+				evaluateTierOutput(recorded, "pull_request", run),
+				evaluateTierOutput(decision, "pull_request", run),
+				`the record follows the queue tier: ${JSON.stringify(run)}`,
+			);
+		}
+		assert.equal(evaluateTierOutput(recorded, "merge_group", {}), "false");
 		assert.deepEqual(guarded.toSorted(), [
 			"extension-e2e",
 			"postgres-drill",

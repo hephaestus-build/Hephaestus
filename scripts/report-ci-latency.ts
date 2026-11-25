@@ -91,14 +91,11 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 // pull request the drills. The browser suites run only in the queue tier.
 const QUEUE_ONLY_JOBS = [/^Browser tests \/ Webapp$/u, /^Browser tests \/ Extension$/u];
 
-// The merge group's queue-tier failure classes, including checks that also run on a pull request.
-// ci-contract*.test.ts ties this list to the jobs that carry the tier guard.
-export const QUEUE_TIER_JOBS = [
-	...QUEUE_ONLY_JOBS,
-	/^Server tests \/ Integration \((?!review\))/u,
-	/^Build \/ Database migrations$/u,
-	/^Build \/ PostgreSQL drill/u,
-];
+// The jobs that a pull request outside the light tier can skip while its merge group runs them: the
+// browser suites, and the drills unless it changes a migration. The shards and the database tests run on
+// every server pull request, so their merge-group failures come from the merged result, not from a gap
+// that the revert criterion asks about. ci-contract-merge-queue.test.ts ties this list to the tier guards.
+export const QUEUE_TIER_JOBS = [...QUEUE_ONLY_JOBS, /^Build \/ PostgreSQL drill/u];
 
 /**
  * A PR that exercised server tests without browser suites.
@@ -542,6 +539,30 @@ export function failedJobNames(jobs: readonly unknown[]): string[] {
 		.map((job) => asString(job.name, "job name"));
 }
 
+/** The `Changes` step that runs only when a pull request's run verifies the queue tier. */
+export const QUEUE_TIER_STEP = "Record that this run verifies the queue tier";
+
+/**
+ * The tier that a pull request's run verified, read from the run's own `Changes` job, so the labels
+ * the pull request carries later do not move the run. `unknown` is a run from before that job
+ * recorded its tier; the fast-tier sample leaves it out.
+ */
+export function pullRequestTier(jobs: unknown): "queue" | "fast" | "unknown" {
+	for (const value of asArray(asRecord(jobs, "jobs response").jobs, "jobs")) {
+		const job = asRecord(value, "job");
+		if (job.name !== "Changes") {
+			continue;
+		}
+		for (const stepValue of asArray(job.steps ?? [], "steps")) {
+			const { name, conclusion } = asRecord(stepValue, "step");
+			if (name === QUEUE_TIER_STEP) {
+				return conclusion === "success" ? "queue" : "fast";
+			}
+		}
+	}
+	return "unknown";
+}
+
 /** The latest ten qualifying verdicts of one event, as run summaries. */
 async function sample(
 	repository: string,
@@ -552,7 +573,11 @@ async function sample(
 ) {
 	const summaries = [];
 	for (const run of selectLatencyRuns(listing, now, event)) {
-		const summary = summarizeCiTimings(run, await jobsOf(repository, run, 1));
+		const jobs = await jobsOf(repository, run, 1);
+		if (event === "pull_request" && pullRequestTier(jobs) !== "fast") {
+			continue;
+		}
+		const summary = summarizeCiTimings(run, jobs);
 		if (isLatencySample(summary.jobs) && qualifies(summary.jobs)) {
 			summaries.push(summary);
 			if (summaries.length === 10) {

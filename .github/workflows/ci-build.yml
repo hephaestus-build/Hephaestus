@@ -26,10 +26,9 @@ on:
         required: true
         type: string
       database_tier:
-        description: "Whether a pull request changes the server, which selects the database tests"
-        required: false
+        description: "Whether the run's server-tests filter matched outside a rename-only head, which selects the database tests (docs/contributor/ci-cd.mdx § Server suites on pull requests)"
+        required: true
         type: string
-        default: "false"
 
 permissions: {}
 
