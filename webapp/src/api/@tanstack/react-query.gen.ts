@@ -105,7 +105,6 @@ export {
 	adminExportAuthEventsOptions,
 	adminExportAuthEventsQueryKey,
 } from "./react-query/adminExportAuthEvents.gen.js";
-export { adminExportPersonDataMutation } from "./react-query/adminExportPersonData.gen.js";
 export {
 	adminGetConfigurationReadinessOptions,
 	adminGetConfigurationReadinessQueryKey,

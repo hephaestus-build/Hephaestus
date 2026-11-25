@@ -44,7 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -91,25 +90,6 @@ public class PersonDataService {
     public Snapshot get(UUID id) {
         PersonDataRequest r = require(id);
         return new Snapshot(r, r.getSelectionsJson() == null ? List.of() : deliveries(selections(r)));
-    }
-
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public JsonNode export(UUID id) {
-        PersonDataRequest r = require(id);
-        requirePreview(r);
-        var selected = selections(r);
-        requireUnchanged(r, selected);
-        var frozenScope = scope(r);
-        var bundle = mapper.createObjectNode();
-        bundle.put("schemaVersion", "1.0");
-        bundle.put("generatedAt", Instant.now().toString());
-        bundle.set("scope", mapper.valueToTree(frozenScope));
-        var stores = bundle.putObject("stores");
-        for (var store : registry.stores())
-            stores.set(
-                    store.store(),
-                    mapper.valueToTree(store.export(Objects.requireNonNull(selected.get(store.store())), frozenScope)));
-        return bundle;
     }
 
     @Transactional
@@ -450,7 +430,7 @@ public class PersonDataService {
         Map<String, PersonDataSelection> selected = mapper.readValue(
                 Objects.requireNonNull(r.getSelectionsJson()),
                 new TypeReference<Map<String, PersonDataSelection>>() {});
-        // A request frozen before the journal was added has no recovery facts to export or erase.
+        // A request frozen before the journal was added has no recovery facts to erase.
         String journalStore = CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL;
         if (!selected.containsKey(journalStore)
                 && registry.stores().stream().anyMatch(s -> s.store().equals(journalStore))) {

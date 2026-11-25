@@ -1230,10 +1230,6 @@
 		"access": "internal"
 	},
 	{
-		"operation": "POST /admin/person-data/{id}/export",
-		"access": "internal"
-	},
-	{
 		"operation": "POST /admin/practice-catalog/groups",
 		"access": "internal"
 	},

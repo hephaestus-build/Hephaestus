@@ -40,7 +40,6 @@ export { adminDeleteLlmModel } from "./sdk/adminDeleteLlmModel.gen.js";
 export { adminDeleteLoginProvider } from "./sdk/adminDeleteLoginProvider.gen.js";
 export { adminErasePersonData } from "./sdk/adminErasePersonData.gen.js";
 export { adminExportAuthEvents } from "./sdk/adminExportAuthEvents.gen.js";
-export { adminExportPersonData } from "./sdk/adminExportPersonData.gen.js";
 export { adminGetConfigurationReadiness } from "./sdk/adminGetConfigurationReadiness.gen.js";
 export { adminGetInstanceSettings } from "./sdk/adminGetInstanceSettings.gen.js";
 export { adminGetLlmSettings } from "./sdk/adminGetLlmSettings.gen.js";

@@ -2024,39 +2024,6 @@ paths:
       summary: Start or resume the preview's audited erasure job
       tags:
       - Person Data
-  /admin/person-data/{id}/export:
-    post:
-      operationId: adminExportPersonData
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: string
-                format: binary
-          description: JSON file
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Download the preview's frozen scope as one JSON file
-      tags:
-      - Person Data
   /admin/practice-catalog:
     get:
       operationId: getInstanceCatalog

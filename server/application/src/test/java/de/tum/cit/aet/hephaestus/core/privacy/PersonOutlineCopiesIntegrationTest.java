@@ -19,10 +19,14 @@ import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private ApplicationContext beans;
+
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -94,7 +98,7 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
         }
         var preview = service.preview(
                 adminId, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), target, null)));
-        var export = service.export(preview.request().getId()).path("stores");
+        var export = PersonDataProjections.of(beans, preview.request().getId()).path("stores");
         assertThat(export.path("outline_document_content").size()).isEqualTo(2);
         assertThat(export.path("outline_document_editor").size()).isEqualTo(1);
         assertThat(export.path("outline_document_collaborator").size()).isEqualTo(1);

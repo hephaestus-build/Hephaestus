@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataProjections;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -34,11 +35,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private ApplicationContext beans;
+
     @Autowired
     private ConnectionRepository connections;
 
@@ -228,7 +233,7 @@ class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
         admin.setAppRole(Account.AppRole.APP_ADMIN);
         long adminId = Objects.requireNonNull(accounts.saveAndFlush(admin).getId());
         var preview = persons.preview(adminId, null, List.of(exact));
-        assertThat(persons.export(preview.request().getId())
+        assertThat(PersonDataProjections.of(beans, preview.request().getId())
                         .path("stores")
                         .path("outline_document")
                         .size())

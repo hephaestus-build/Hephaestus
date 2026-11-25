@@ -10672,39 +10672,6 @@ export type AdminErasePersonDataResponses = {
 export type AdminErasePersonDataResponse =
 	AdminErasePersonDataResponses[keyof AdminErasePersonDataResponses];
 
-export type AdminExportPersonDataData = {
-	body?: never;
-	path: {
-		id: string;
-	};
-	query?: never;
-	url: "/admin/person-data/{id}/export";
-};
-
-export type AdminExportPersonDataErrors = {
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type AdminExportPersonDataError =
-	AdminExportPersonDataErrors[keyof AdminExportPersonDataErrors];
-
-export type AdminExportPersonDataResponses = {
-	/**
-	 * JSON file
-	 */
-	200: Blob | File;
-};
-
-export type AdminExportPersonDataResponse =
-	AdminExportPersonDataResponses[keyof AdminExportPersonDataResponses];
-
 export type GetInstanceCatalogData = {
 	body?: never;
 	path?: never;

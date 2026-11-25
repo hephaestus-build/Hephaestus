@@ -128,6 +128,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -137,6 +138,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private ApplicationContext beans;
 
     @Autowired
     private ConversationTurnClaims claims;
@@ -474,7 +477,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
         var preview = personData.preview(administratorId, targetId, List.of());
         UUID requestId = preview.request().getId();
-        var export = personData.export(requestId);
+        var export = PersonDataProjections.of(beans, requestId);
         assertThat(export.path("stores").path("practice_version"))
                 .singleElement()
                 .satisfies(row -> {
@@ -705,9 +708,6 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         + " state='POSTED',posted_at=CURRENT_TIMESTAMP,external_ref='note-99'"
                         + " WHERE feedback_id=?",
                 fixture.feedbackId());
-        assertThatThrownBy(() -> personData.export(preview.request().getId()))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("preview scope changed");
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), true))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
@@ -897,7 +897,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         UUID requestId = preview.request().getId();
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
         assertThat(counts.get("composer_transcript_part")).isEqualTo(2L);
-        var export = personData.export(requestId);
+        var export = PersonDataProjections.of(beans, requestId);
         assertThat(export.path("stores").path("composer_transcript_part")).isEmpty();
         assertThat(export.toString()).doesNotContain("ANSWER-NAMES-THE-DEVELOPER-CANARY");
         // A claim that still runs adds a part after the preview; the erasure deletes it too.
@@ -1333,7 +1333,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         UUID requestId = preview.request().getId();
         PersonScope frozen =
                 mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
-        var export = personData.export(requestId);
+        var export = PersonDataProjections.of(beans, requestId);
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
         Set<String> nonPersonalProjections = Set.of(
                 "organization",
@@ -1771,7 +1771,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         UUID requestId = preview.request().getId();
         var scope = mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
         assertThat(scope.derivedJobIds()).containsExactlyInAnyOrderElementsOf(copiedJobs);
-        var export = personData.export(requestId);
+        var export = PersonDataProjections.of(beans, requestId);
         assertThat(export.toString())
                 .doesNotContain(
                         "Result title",

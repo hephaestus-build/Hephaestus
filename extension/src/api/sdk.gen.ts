@@ -70,9 +70,6 @@ import type {
 	AdminExportAuthEventsData,
 	AdminExportAuthEventsErrors,
 	AdminExportAuthEventsResponses,
-	AdminExportPersonDataData,
-	AdminExportPersonDataErrors,
-	AdminExportPersonDataResponses,
 	AdminGetConfigurationReadinessData,
 	AdminGetConfigurationReadinessErrors,
 	AdminGetConfigurationReadinessResponses,
@@ -2058,22 +2055,6 @@ export const adminErasePersonData = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-/**
- * Download the preview's frozen scope as one JSON file
- */
-export const adminExportPersonData = <ThrowOnError extends boolean = false>(
-	options: Options<AdminExportPersonDataData, ThrowOnError>,
-): RequestResult<AdminExportPersonDataResponses, AdminExportPersonDataErrors, ThrowOnError> =>
-	(options.client ?? client).post<
-		AdminExportPersonDataResponses,
-		AdminExportPersonDataErrors,
-		ThrowOnError
-	>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/admin/person-data/{id}/export",
-		...options,
 	});
 
 export const getInstanceCatalog = <ThrowOnError extends boolean = false>(

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataProjections;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataStoreReceipt;
@@ -39,12 +40,15 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private ApplicationContext beans;
 
     @Autowired
     private PersonProcessingSuppression suppression;
@@ -127,7 +131,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         long administratorId =
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
-        var export = personData.export(snapshot.request().getId());
+        var export = PersonDataProjections.of(beans, snapshot.request().getId());
         Set<String> exportedStores = new TreeSet<>();
         export.path("stores").propertyNames().forEach(exportedStores::add);
         Map<String, Long> counts =

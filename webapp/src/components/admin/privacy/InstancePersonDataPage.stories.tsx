@@ -26,7 +26,7 @@ const request = {
 } satisfies PersonDataRequest;
 
 const onErase = fn();
-const ready = { status: "ready", request, onExport: fn(), onErase } as const;
+const ready = { status: "ready", request, onErase } as const;
 
 const meta = {
 	component: InstancePersonDataPage,
@@ -156,19 +156,6 @@ export const ActionRejected: Story = {
 	},
 };
 
-export const Downloading: Story = {
-	args: { state: { ...ready, pendingAction: "export" } },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Downloading…" })).toHaveAttribute(
-			"aria-disabled",
-			"true",
-		);
-		await expect(canvas.getByRole("button", { name: "Erase data…" })).toBeDisabled();
-		await expect(canvas.getByLabelText("Account ID")).toBeDisabled();
-		await expect(canvas.getByRole("cell", { name: "practice_result" })).toBeVisible();
-	},
-};
-
 export const StartingErasure: Story = {
 	args: { state: { ...ready, pendingAction: "erase" } },
 	play: async ({ canvas }) => {
@@ -176,7 +163,8 @@ export const StartingErasure: Story = {
 			"aria-disabled",
 			"true",
 		);
-		await expect(canvas.getByRole("button", { name: "Download JSON export" })).toBeDisabled();
+		await expect(canvas.queryByRole("button", { name: /export/iu })).toBeNull();
+		await expect(canvas.getByLabelText("Account ID")).toBeDisabled();
 	},
 };
 
@@ -209,7 +197,6 @@ export const Failed: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/STORE_ERASURE_FAILED/u)).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Resume erasure…" })).toBeEnabled();
-		await expect(canvas.queryByRole("button", { name: "Download JSON export" })).toBeNull();
 	},
 };
 

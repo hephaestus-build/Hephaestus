@@ -97,8 +97,8 @@ Every other lookup by slug or provider login finds team workspaces only.
 Thus, user view, the instance console, the instance budget routes, public activity, MCP and provider routing never reach a personal space.
 Bootstrap and startup activation read team workspaces only.
 
-An instance admin's person-data preview and export of an account select its team memberships only.
-They name the personal space only by its slug and creation time (`PersonalSpacePersonDataStore`).
+An instance admin's person-data preview of an account counts its rows, and no admin route returns their content (`StaffRoutePersonContentArchTest`).
+The person's own export answers an access request.
 `WorkspaceKindArchitectureTest` fails when another class calls the any-kind lookup.
 
 The erasure of an account ends its personal space (`WorkspaceLifecycleService.erasePersonalSpace`).

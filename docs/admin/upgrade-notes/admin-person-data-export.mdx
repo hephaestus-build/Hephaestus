@@ -1,0 +1,19 @@
+---
+title: Point access requests to the person's own export
+description: From 1.0, no instance admin downloads a person's data, and a person answers their own access request.
+page_type: how-to
+---
+
+From 1.0, no instance admin can download the data of one person.
+The **Download JSON export** button on **Instance administration → Person data** is gone, and so is `POST /api/admin/person-data/{id}/export`.
+The person-data preview still shows how many rows each store holds, never their content.
+Erasure works as before.
+
+1. Before the upgrade, stop each script that calls `POST /api/admin/person-data/{id}/export`.
+2. Update your access-request procedure: point the verified requester to **User settings → Export your data**.
+   [Answer an access or erasure request](../person-data-requests#answer-an-access-request) gives the steps.
+
+## What changes
+
+- The person's own export holds their account data, their conversations, and the feedback delivered to them.
+- Audit rows of earlier admin exports stay. The audit log still shows them as **Person data exported**.
