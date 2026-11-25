@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +48,9 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
     private AgentSandboxRepository repository;
 
     @Autowired
+    private WorkspaceLocks workspaceLocks;
+
+    @Autowired
     private AgentRuns runs;
 
     @Autowired
@@ -72,6 +76,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         sandboxes = new AgentSandboxes(
                 repository,
+                workspaceLocks,
                 runs,
                 claims,
                 new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),

@@ -1404,8 +1404,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(3L);
         assertThat(counts.get("conversation")).isEqualTo(2L);
         assertThat(counts.get("conversation_entry")).isEqualTo(3L);
+        // The two team workspaces, and the personal space, whose sandboxes hold the person's own copies.
         assertThat(counts.get(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
-                .isEqualTo(2L);
+                .isEqualTo(3L);
         assertThat(counts.get("conversation_entry_feedback_copy")).isEqualTo(2L);
         assertThat(export.path("stores")
                         .path("conversation_entry_feedback_copy")

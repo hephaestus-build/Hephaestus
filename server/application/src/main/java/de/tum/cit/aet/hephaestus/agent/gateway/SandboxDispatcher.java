@@ -140,7 +140,12 @@ public class SandboxDispatcher implements DisposableBean {
                 }
                 // A run that may not start yet keeps its place in the claim order and gets no sandbox.
                 if (!pass.admits(due)) continue;
-                sandboxes.ensure(workspace, due.concurrencyKey(), sandbox);
+                try {
+                    sandboxes.ensure(workspace, due.concurrencyKey(), sandbox);
+                } catch (AgentSandboxes.InactiveWorkspaceException inactive) {
+                    // Suspended or erased after this page was read: its runs are no longer claimed.
+                    continue;
+                }
                 room -= 1;
                 log.atInfo()
                         .addKeyValue("event.name", "agent.sandbox.dispatched")

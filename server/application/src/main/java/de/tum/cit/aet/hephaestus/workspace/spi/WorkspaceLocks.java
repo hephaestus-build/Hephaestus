@@ -11,6 +11,13 @@ public interface WorkspaceLocks {
     /** The workspace, locked. */
     Optional<Workspace> lock(long workspaceId);
 
+    /**
+     * Share-locks the workspace until the caller's transaction ends, and says whether it is active. A suspension, a
+     * purge or an erasure of the workspace waits for the caller, and a caller after one of them finds it inactive.
+     * Callers of one workspace do not wait for each other.
+     */
+    boolean holdActive(long workspaceId);
+
     /** The workspace that holds or last held the GitHub App installation, locked. */
     Optional<Workspace> lockByInstallation(long installationId);
 

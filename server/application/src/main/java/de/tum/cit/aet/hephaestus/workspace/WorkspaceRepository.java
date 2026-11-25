@@ -225,6 +225,10 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Query("SELECT w.id FROM Workspace w WHERE w.personalAccountId = :accountId")
     Optional<Long> findPersonalSpaceId(@Param("accountId") long accountId);
 
+    /** The workspace's status, share-locked: a status change or a delete waits for the caller ({@code holdActive}). */
+    @Query(value = "SELECT status FROM workspace WHERE id = :id FOR SHARE", nativeQuery = true)
+    Optional<String> lockStatusForShare(@Param("id") long id);
+
     /** A personal space's id and address. */
     interface PersonalSpaceRow {
         long getId();
