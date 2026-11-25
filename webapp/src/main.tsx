@@ -8,6 +8,7 @@ import environment from "@/environment";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { csrfFetch } from "@/runtime/auth/csrf";
 import { RouteError } from "@/runtime/errors/RouteError";
+import { installPageIdle } from "@/runtime/page-idle";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
 import { useUpdateNotice } from "@/runtime/use-update-notice";
 import {
@@ -75,6 +76,7 @@ reportFailedRequests(client, faults);
 installPasskeyChallenge(router);
 reportVisitVitals(router, TanstackQuery.getContext().queryClient);
 installPreloadErrorReload(router, faults);
+installPageIdle(router, TanstackQuery.getContext().queryClient);
 
 client.interceptors.response.use((response) => {
 	void handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);

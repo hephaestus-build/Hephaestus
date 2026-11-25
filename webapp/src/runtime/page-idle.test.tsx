@@ -1,93 +1,123 @@
-import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
-import { afterEach, expect, it } from "vitest";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { deferred } from "@/test/async";
 
-import { usePageIdle } from "./page-idle";
-
-afterEach(() => {
-	delete document.documentElement.dataset.pageIdle;
-});
-
-function harness() {
-	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	const wrapper = ({ children }: { children: ReactNode }) =>
-		createElement(QueryClientProvider, { client }, children);
-	return { client, wrapper };
-}
-
-const idle = () => document.documentElement.dataset.pageIdle;
+import { installPageIdle, PAGE_IDLE_SETTLE_MS } from "./page-idle";
 
 const FIRST_KEY = ["first-load"];
 const POLLED_KEY = ["polled-read"];
+const OTHER_PAGE_KEY = ["other-page"];
 
-it("marks the page idle only after its first loads answer", async () => {
-	const { wrapper } = harness();
+/** The router's loading state and its events, driven by the test. */
+function fakeRouter() {
+	const listeners = new Set<() => void>();
+	const router = {
+		state: { status: "idle", isLoading: false },
+		subscribe: (_event: string, listener: () => void) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+	};
+	const load = (loading: boolean) => {
+		router.state = { status: loading ? "pending" : "idle", isLoading: loading };
+		for (const listener of listeners) {
+			listener();
+		}
+	};
+	return { router, load };
+}
+
+let stop: () => void = () => undefined;
+
+beforeEach(() => {
+	vi.useFakeTimers();
+});
+
+afterEach(() => {
+	stop();
+	vi.useRealTimers();
+});
+
+const mark = () => document.documentElement.dataset.pageIdle;
+
+function install(client: QueryClient) {
+	const { router, load } = fakeRouter();
+	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake carries only what installPageIdle reads.
+	stop = installPageIdle(router as unknown as Parameters<typeof installPageIdle>[0], client);
+	return load;
+}
+
+/** A query that something on the page observes, as `useQuery` makes one. */
+function observe<T>(client: QueryClient, queryKey: string[], queryFn: () => Promise<T>) {
+	return new QueryObserver(client, { queryKey, queryFn, retry: false }).subscribe(() => undefined);
+}
+
+it("marks the page idle only after its first load answers, and only after the hold", async () => {
+	const client = new QueryClient();
+	install(client);
 	const answer = deferred<string>();
-	renderHook(
-		() => {
-			useQuery({ queryKey: FIRST_KEY, queryFn: async () => answer.promise });
-			usePageIdle(false);
-		},
-		{ wrapper },
-	);
-	expect(idle()).toBeUndefined();
-	await act(async () => {
-		answer.resolve("ready");
-	});
-	await waitFor(() => {
-		expect(idle()).toBe("true");
-	});
+	const unobserve = observe(client, FIRST_KEY, async () => answer.promise);
+	expect(mark(), "the fetch takes the mark at once").toBeUndefined();
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 4);
+	expect(mark()).toBeUndefined();
+	answer.resolve("ready");
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS - 10);
+	expect(mark(), "not before the hold").toBeUndefined();
+	await vi.advanceTimersByTimeAsync(20);
+	expect(mark()).toMatch(/^\d+$/u);
+	unobserve();
 });
 
-it("stays idle while a poll refetches data that is already shown", async () => {
-	const { client, wrapper } = harness();
+it("stays idle while a poll refetches data on screen and while another page is preloaded", async () => {
+	const client = new QueryClient();
 	client.setQueryData(POLLED_KEY, "shown");
+	install(client);
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	const idle = mark();
+	expect(idle).toMatch(/^\d+$/u);
 	const refetch = deferred<string>();
-	renderHook(
-		() => {
-			useQuery({ queryKey: POLLED_KEY, queryFn: async () => refetch.promise, staleTime: 0 });
-			usePageIdle(false);
-		},
-		{ wrapper },
-	);
-	await waitFor(() => {
-		expect(client.isFetching({ queryKey: POLLED_KEY })).toBe(1);
-	});
-	await waitFor(() => {
-		expect(idle()).toBe("true");
-	});
+	const unobserve = observe(client, POLLED_KEY, async () => refetch.promise);
+	const preload = deferred<string>();
+	void client
+		.query({ queryKey: OTHER_PAGE_KEY, queryFn: async () => preload.promise })
+		.catch(() => undefined);
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	expect(client.isFetching({ queryKey: POLLED_KEY })).toBe(1);
+	expect(client.isFetching({ queryKey: OTHER_PAGE_KEY })).toBe(1);
+	expect(mark(), "the same idle period").toBe(idle);
 	refetch.resolve("new");
+	preload.resolve("later");
+	unobserve();
 });
 
-it("is not idle while a route loads or a write is pending", async () => {
-	const { wrapper } = harness();
+it("is not idle while a route loads or a write is pending, and starts a new idle period after", async () => {
+	const client = new QueryClient();
+	const load = install(client);
+	load(true);
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	expect(mark(), "a route is loading").toBeUndefined();
+	load(false);
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	const first = mark();
+	expect(first).toMatch(/^\d+$/u);
 	const write = deferred<undefined>();
-	const { result, rerender } = renderHook(
-		({ routeLoading }: { routeLoading: boolean }) => {
-			const mutation = useMutation({ mutationFn: async () => write.promise });
-			usePageIdle(routeLoading);
-			return mutation;
-		},
-		{ wrapper, initialProps: { routeLoading: true } },
-	);
-	expect(idle()).toBeUndefined();
-	rerender({ routeLoading: false });
-	await waitFor(() => {
-		expect(idle()).toBe("true");
-	});
-	act(() => {
-		result.current.mutate();
-	});
-	await waitFor(() => {
-		expect(idle()).toBeUndefined();
-	});
-	await act(async () => {
-		write.resolve(undefined);
-	});
-	await waitFor(() => {
-		expect(idle()).toBe("true");
-	});
+	const mutation = client
+		.getMutationCache()
+		.build(client, { mutationFn: async () => write.promise })
+		.execute(undefined);
+	expect(mark(), "the write takes the mark at once").toBeUndefined();
+	write.resolve(undefined);
+	await mutation;
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	expect(mark()).toMatch(/^\d+$/u);
+	expect(mark(), "a new idle period").not.toBe(first);
+});
+
+it("takes the mark away when it stops", async () => {
+	install(new QueryClient());
+	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
+	expect(mark()).toMatch(/^\d+$/u);
+	stop();
+	expect(mark()).toBeUndefined();
 });
