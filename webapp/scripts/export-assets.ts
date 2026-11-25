@@ -354,9 +354,12 @@ async function captureReadmeImage(
 	await page.goto(
 		`${storybookUrl}/iframe.html?id=${capture.storyId}&viewMode=story&globals=${globals}`,
 	);
-	// A story has no data to wait for: its fonts and eager images are what the capture needs. One bound
-	// covers both, so a font that never loads cannot hold the export.
-	// Synchronous: Playwright stops polling at the first promise a predicate returns.
+	// The story mounts after the preview shell loads, so its surface comes first. Then its fonts and
+	// eager images: a story has no data to wait for. One bound covers both, so a font that never loads
+	// cannot hold the export. Synchronous: Playwright stops polling at the first promise a predicate
+	// returns.
+	const surface = page.locator(capture.selector);
+	await surface.waitFor({ state: "visible" });
 	await page.waitForFunction(
 		() =>
 			document.fonts.status === "loaded" &&
@@ -369,8 +372,6 @@ async function captureReadmeImage(
 			"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" +
 			"[data-readme-actions]{display:none!important}",
 	});
-	const surface = page.locator(capture.selector);
-	await surface.waitFor({ state: "visible" });
 	const bounds = await surface.boundingBox();
 	if (!bounds || Math.round(bounds.width) !== capture.expectedWidth) {
 		throw new Error(

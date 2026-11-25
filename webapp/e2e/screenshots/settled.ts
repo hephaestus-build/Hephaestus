@@ -7,7 +7,13 @@ import { expect, type Page, type Request } from "@playwright/test";
 const LOADING = '[data-slot="skeleton"], [aria-busy="true"]';
 
 /**
- * The requests that carry the page's data: reads. Images, fonts and scripts have their own waits, and
+ * How long the page must stay still: no document change and no read ending. The app's shortest poll is
+ * 2 s (`DELIVERY_POLL_MS`), so every page has such a moment between its reads.
+ */
+const QUIET_MS = 300;
+
+/**
+ * The requests that carry the page's data: reads. Images, fonts and scripts have their own wait, and
  * a write, such as a page-experience beacon the last document sent on its way out, is not data to show.
  */
 function isData(request: Request): boolean {
@@ -17,45 +23,47 @@ function isData(request: Request): boolean {
 	);
 }
 
-/** How long the document must stay unchanged to count as rendered. */
-const QUIET_MS = 300;
-
 interface Watched {
 	open: Set<Request>;
-	started: number;
+	/** When the last read ended, on this process's clock. */
+	ended: number;
 }
 
 const watched = new WeakMap<Page, Watched>();
 
 /**
- * Records the page's data requests from now on. Call it before the page navigates: `settled` waits
- * only for the requests it has seen.
+ * Records the page's reads from now on. Call it before the page navigates: `settled` waits only for
+ * the reads it has seen.
  */
 export function watchRequests(page: Page): void {
 	if (watched.has(page)) {
 		return;
 	}
-	const state: Watched = { open: new Set(), started: 0 };
+	const state: Watched = { open: new Set(), ended: 0 };
 	watched.set(page, state);
 	page.on("request", (request) => {
 		if (isData(request)) {
 			state.open.add(request);
-			state.started += 1;
 		}
 	});
-	const end = (request: Request) => state.open.delete(request);
+	const end = (request: Request) => {
+		if (state.open.delete(request)) {
+			state.ended = performance.now();
+		}
+	};
 	page.on("requestfinished", end);
 	page.on("requestfailed", end);
 }
 
 /**
- * Waits until the page shows its content: nothing still loads, no data request is open, every eager
- * image and every font is ready, and the document has not changed for a moment without a new request.
- * The test's own timeout bounds each wait.
+ * Waits until the page shows its content: no placeholder, no read open and none ended in the last
+ * `QUIET_MS`, a document that has not changed for `QUIET_MS`, and its fonts and eager images ready.
+ * All of it holds at one moment, in the document that is current then. The test's own timeout bounds
+ * the wait.
  *
- * Not `networkidle`: that waits for 500 ms with no request at all, which a poll can deny for the whole
- * test, and then the timeout names no cause. Here a request that never ends fails the wait with its
- * address. A query that shows no loading state is still waited for, through its request.
+ * Not `networkidle`: that waits for 500 ms with no request at all, and its timeout names no cause.
+ * Here a read that never ends fails the wait with its address, and a query that shows no loading
+ * state is still waited for, through its read.
  */
 export async function settled(page: Page): Promise<void> {
 	watchRequests(page);
@@ -65,76 +73,63 @@ export async function settled(page: Page): Promise<void> {
 	}
 	for (;;) {
 		await expect(page.locator(LOADING), "the page loads its data").toHaveCount(0, { timeout: 0 });
-		// The requests open now, not every request at once: polls that overlap must not starve the wait.
-		const waiting = [...state.open];
 		await expect
-			.poll(
-				() =>
-					waiting
-						.filter((request) => state.open.has(request))
-						.map((request) => `${request.method()} ${request.url()}`),
-				{ message: "the page's data requests end", timeout: 0 },
-			)
+			.poll(() => [...state.open].map((request) => `${request.method()} ${request.url()}`), {
+				message: "the page's reads end",
+				timeout: 0,
+			})
 			.toEqual([]);
-		const { started } = state;
-		// A page that redirects replaces its document while it is read: wait again on the new one.
-		if (!(await rendered(page))) {
+		if (!(await still(page))) {
 			continue;
 		}
-		// An answer can start the next request, and a redirect can bring the next page's placeholders.
-		if (state.started === started && (await page.locator(LOADING).count()) === 0) {
+		// Checked after the page held still: a placeholder that a redirect brought, or a read that
+		// started or ended meanwhile, starts the wait again.
+		const placeholders = await page.locator(LOADING).count();
+		if (
+			placeholders === 0 &&
+			state.open.size === 0 &&
+			performance.now() - state.ended >= QUIET_MS
+		) {
 			return;
 		}
 	}
 }
 
 /**
- * Every eager image and every font is ready, and then the document has not changed for `QUIET_MS`.
- * False when the page navigated meanwhile.
+ * The document stays unchanged for `QUIET_MS`, and then its fonts and eager images are ready, all in
+ * one call in one document. False when they are not, or when the page navigated meanwhile. Timers,
+ * not a clock: a screenshot test fixes the page's clock, and its timers still run. A lazy image below
+ * the fold loads only when the page scrolls to it.
  */
-async function rendered(page: Page): Promise<boolean> {
+async function still(page: Page): Promise<boolean> {
 	try {
-		// Synchronous: Playwright stops polling at the first promise a predicate returns, whatever it
-		// resolves to. A lazy image below the fold loads only when the page scrolls to it.
-		await page.waitForFunction(
-			() =>
+		return await page.evaluate(async (quietMs) => {
+			const { promise, resolve } = Promise.withResolvers<undefined>();
+			const done = () => {
+				observer.disconnect();
+				resolve(undefined);
+			};
+			let timer = setTimeout(done, quietMs);
+			const observer = new MutationObserver(() => {
+				clearTimeout(timer);
+				timer = setTimeout(done, quietMs);
+			});
+			observer.observe(document, {
+				subtree: true,
+				childList: true,
+				attributes: true,
+				characterData: true,
+			});
+			await promise;
+			return (
 				document.fonts.status === "loaded" &&
-				[...document.images].every((image) => image.complete || image.loading === "lazy"),
-			undefined,
-			{ timeout: 0 },
-		);
-		await quiet(page);
-		return true;
+				[...document.images].every((image) => image.complete || image.loading === "lazy")
+			);
+		}, QUIET_MS);
 	} catch (error) {
 		if (error instanceof Error && error.message.includes("Execution context was destroyed")) {
 			return false;
 		}
 		throw error;
 	}
-}
-
-/**
- * The document has not changed for `QUIET_MS`. Timers, not a clock: a screenshot test fixes the page's
- * clock, and its timers still run.
- */
-async function quiet(page: Page): Promise<void> {
-	await page.evaluate(async (quietMs) => {
-		const { promise, resolve } = Promise.withResolvers<undefined>();
-		const done = () => {
-			observer.disconnect();
-			resolve(undefined);
-		};
-		let timer = setTimeout(done, quietMs);
-		const observer = new MutationObserver(() => {
-			clearTimeout(timer);
-			timer = setTimeout(done, quietMs);
-		});
-		observer.observe(document, {
-			subtree: true,
-			childList: true,
-			attributes: true,
-			characterData: true,
-		});
-		await promise;
-	}, QUIET_MS);
 }
