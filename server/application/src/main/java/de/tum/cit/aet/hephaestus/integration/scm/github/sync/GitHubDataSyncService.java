@@ -10,7 +10,9 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProofReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReaderListing;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
@@ -47,6 +49,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService.CollaboratorListing;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.exception.SyncInterruptedException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.exception.SyncRetriesExhaustedException;
@@ -59,6 +62,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -327,7 +331,7 @@ public class GitHubDataSyncService {
             // is independently cost-bounded (cooldowns; ~1-point count/latest-update probes).
 
             // Sync collaborators (with cooldown)
-            int collaboratorsCount = syncCollaboratorsIfNeeded(syncTarget, scopeId, repositoryId);
+            int collaboratorsCount = syncCollaboratorsIfNeeded(syncTarget, scopeId, repository, providerId);
 
             // Sync labels (with cooldown — labels rarely change)
             int labelsCount = syncLabelsIfNeeded(syncTarget, scopeId, repositoryId);
@@ -865,19 +869,27 @@ public class GitHubDataSyncService {
     }
 
     /**
-     * Syncs collaborators for a repository if the cooldown has expired.
+     * Lists a repository's collaborators if the mirror's cooldown has expired, or if the monitor's readers wait for a
+     * listing. For a private repository the same listing proves the monitor's readers, which are recorded before the
+     * shared mirror changes: a removal in the mirror moves every monitor's proof generation on.
      *
-     * @param syncTarget   the sync target containing cooldown timestamps
-     * @param scopeId      the scope ID
-     * @param repositoryId the repository ID
+     * @param syncTarget the sync target containing cooldown timestamps
+     * @param scopeId the scope ID
+     * @param repository the repository that this sync's metadata read stored
+     * @param providerId the provider the metadata read asked
      * @return number of collaborators synced, or -1 if skipped due to cooldown
      */
-    private int syncCollaboratorsIfNeeded(SyncTarget syncTarget, Long scopeId, Long repositoryId) {
-        Instant cooldownThreshold = Instant.now().minusSeconds(syncSchedulerProperties.cooldownMinutes() * 60L);
-        boolean shouldSync = syncTarget.lastCollaboratorsSyncedAt() == null
-                || syncTarget.lastCollaboratorsSyncedAt().isBefore(cooldownThreshold);
+    private int syncCollaboratorsIfNeeded(SyncTarget syncTarget, Long scopeId, Repository repository, long providerId) {
+        Long repositoryId = repository.getId();
+        Instant now = Instant.now();
+        Duration cooldown = Duration.ofMinutes(syncSchedulerProperties.cooldownMinutes());
+        boolean mirrorDue = syncTarget.lastCollaboratorsSyncedAt() == null
+                || syncTarget.lastCollaboratorsSyncedAt().isBefore(now.minus(cooldown));
+        boolean provesReaders = !repository.isPublicOnProvider();
+        // The monitor as committed now, not the snapshot this sync began with: an answer may have narrowed it since.
+        boolean readersDue = provesReaders && syncTargetProvider.readersListingDue(syncTarget.id(), now, cooldown);
 
-        if (!shouldSync) {
+        if (!mirrorDue && !readersDue) {
             log.debug(
                     "Skipped collaborator sync: reason=cooldownActive, repoId={}, lastSyncedAt={}",
                     repositoryId,
@@ -885,8 +897,39 @@ public class GitHubDataSyncService {
             return -1;
         }
 
+        long repositoryNativeId = repository.getNativeId();
+        ReadersRead readersRead =
+                syncTargetProvider.beginReadersProof(syncTarget.id(), repositoryNativeId, providerId, Instant.now());
+        // Enterprise members outside the organization can read an internal repository, and no listing names them.
+        boolean listable = repository.getVisibility() == Repository.Visibility.PRIVATE && repository.isPrivate();
+        if (readersDue && !listable) {
+            syncTargetProvider.recordRepositoryReaders(readersRead, new ReaderListing.NotListable());
+        }
+
+        CollaboratorListing listing =
+                collaboratorSyncService.listCollaborators(scopeId, repositoryId, repositoryNativeId);
+
+        if (readersDue && listable) {
+            switch (listing.outcome()) {
+                case COMPLETE ->
+                    syncTargetProvider.recordRepositoryReaders(
+                            readersRead,
+                            new ReaderListing.Listed(listing.collaborators().stream()
+                                    .map(collaborator -> Objects.requireNonNull(
+                                            collaborator.user().databaseId()))
+                                    .collect(Collectors.toSet())));
+                case RATE_LIMITED ->
+                    syncTargetProvider.recordRepositoryReaders(
+                            readersRead, new ReaderListing.Stopped(ProofReason.RATE_LIMITED));
+                case INCOMPLETE ->
+                    syncTargetProvider.recordRepositoryReaders(
+                            readersRead, new ReaderListing.Stopped(ProofReason.LISTING_INCOMPLETE));
+                case REPOSITORY_MISSING -> syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+            }
+        }
+
         int count = retryOnTransientFailure(
-                () -> collaboratorSyncService.syncCollaboratorsForRepository(scopeId, repositoryId),
+                () -> collaboratorSyncService.storeCollaborators(repositoryId, listing),
                 "collaborator sync for repoId=" + repositoryId);
 
         syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.COLLABORATORS, Instant.now());

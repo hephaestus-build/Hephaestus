@@ -10,13 +10,17 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
+import de.tum.cit.aet.hephaestus.integration.core.framework.ResourceReaders;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProofState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.ResourceReaderRepository;
 import de.tum.cit.aet.hephaestus.workspace.SyncTargetFactory;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
@@ -54,6 +58,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
 
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final ResourceReaderRepository resourceReaderRepository;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final ConnectionService connectionService;
     private final ApplicationEventPublisher eventPublisher;
@@ -68,6 +73,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     public WorkspaceSyncTargetProvider(
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
+            ResourceReaderRepository resourceReaderRepository,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
@@ -78,6 +84,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         this.journal = journal;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.resourceReaderRepository = resourceReaderRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         this.eventPublisher = eventPublisher;
@@ -216,18 +223,24 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional
     public void recordRepositoryPublic(ReadersRead read) {
-        // The read asked the provider of this monitor's workspace connection about exactly this repository.
-        boolean sameRepository =
-                repositoryToMonitorRepository
-                        .findByNativeIdOnSourceProvider(read.repositoryNativeId(), read.providerId())
-                        .stream()
-                        .anyMatch(monitor -> read.syncTargetId().equals(monitor.getId()));
-        if (!sameRepository) {
+        if (!readOfThisMonitor(read)) {
             return;
         }
         locked(read.syncTargetId(), null)
                 .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
-                .ifPresent(rtm -> rtm.getReaders().confirmedPublic(read.generation(), read.requestedAt()));
+                .ifPresent(rtm -> {
+                    if (rtm.getReaders().confirmedPublic(read.generation(), read.requestedAt())) {
+                        forgetReaders(rtm);
+                    }
+                });
+    }
+
+    /** Whether the read asked the provider of this monitor's workspace connection about exactly this repository. */
+    private boolean readOfThisMonitor(ReadersRead read) {
+        return repositoryToMonitorRepository
+                .findByNativeIdOnSourceProvider(read.repositoryNativeId(), read.providerId())
+                .stream()
+                .anyMatch(monitor -> read.syncTargetId().equals(monitor.getId()));
     }
 
     @Override
@@ -236,6 +249,57 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         locked(read.syncTargetId(), null)
                 .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
                 .ifPresent(rtm -> rtm.getReaders().confirmedNotPublic());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean readersListingDue(Long syncTargetId, Instant now, Duration renewAfter) {
+        return repositoryToMonitorRepository
+                .findById(syncTargetId)
+                .map(RepositoryToMonitor::getReaders)
+                .map(readers -> readers.getVisibilityClass() != VisibilityClass.RESTRICTED
+                        || readers.getProofState() != ProofState.PROVEN
+                        || readers.getReadersSyncedAt() == null
+                        || readers.getReadersSyncedAt().isBefore(now.minus(renewAfter)))
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public void recordRepositoryReaders(ReadersRead read, ReaderListing listing) {
+        if (listing instanceof ReaderListing.Listed && !readOfThisMonitor(read)) {
+            return;
+        }
+        locked(read.syncTargetId(), null)
+                .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
+                .ifPresent(rtm -> {
+                    ResourceReaders readers = rtm.getReaders();
+                    switch (listing) {
+                        case ReaderListing.Listed listed -> {
+                            if (readers.readersListed(read.generation(), read.requestedAt())) {
+                                forgetReaders(rtm);
+                                resourceReaderRepository.insertReaders(
+                                        workspaceIdOf(rtm),
+                                        Objects.requireNonNull(rtm.getId()),
+                                        listed.readerNativeIds().toArray(Long[]::new));
+                            }
+                        }
+                        case ReaderListing.Stopped stopped -> readers.listingStopped(stopped.reason());
+                        case ReaderListing.NotListable notListable -> {
+                            readers.readersNotListable();
+                            forgetReaders(rtm);
+                        }
+                    }
+                });
+    }
+
+    /** A monitor holds readers only while a listing proves its class, so every answer that ends that proof drops them. */
+    private void forgetReaders(RepositoryToMonitor rtm) {
+        resourceReaderRepository.deleteReaders(workspaceIdOf(rtm), Objects.requireNonNull(rtm.getId()));
+    }
+
+    private static long workspaceIdOf(RepositoryToMonitor rtm) {
+        return Objects.requireNonNull(Objects.requireNonNull(rtm.getWorkspace()).getId());
     }
 
     @Override
@@ -299,7 +363,10 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     public void recordRepositoryUnavailable(Long scopeId, Long syncTargetId) {
         Instant now = Instant.now();
         repositoryToMonitorRepository.recordUnavailable(scopeId, syncTargetId, now, now.plus(Duration.ofDays(1)));
-        locked(syncTargetId, scopeId).ifPresent(rtm -> rtm.getReaders().unavailable());
+        locked(syncTargetId, scopeId).ifPresent(rtm -> {
+            rtm.getReaders().unavailable();
+            forgetReaders(rtm);
+        });
     }
 
     @Override
@@ -595,6 +662,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                 } else {
                     rtm.setNativeId(resolvedNativeId);
                     rtm.getReaders().identityChanged();
+                    forgetReaders(rtm);
                     dirty = true;
                 }
             }

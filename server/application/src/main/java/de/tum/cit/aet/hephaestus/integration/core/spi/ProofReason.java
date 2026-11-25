@@ -13,7 +13,12 @@ public enum ProofReason {
     /** The listing of readers stopped before its end; the next sync lists them again. */
     LISTING_INCOMPLETE(ProofState.PENDING),
     /** The provider no longer shows the resource to this workspace. */
-    RESOURCE_UNAVAILABLE(ProofState.FAILED);
+    RESOURCE_UNAVAILABLE(ProofState.FAILED),
+    /**
+     * The provider cannot list every reader of the resource, such as a GitHub internal repository that enterprise
+     * members outside its organization can read. It waits until its visibility changes.
+     */
+    READERS_NOT_LISTABLE(ProofState.FAILED);
 
     private final ProofState state;
 

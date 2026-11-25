@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795595919745-1" author="hephaestus">
+        <createTable tableName="resource_reader">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="resource_readerPK"/>
+            </column>
+            <column name="reader_native_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="repository_to_monitor_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795595919745-2" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795595919745-3" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795595919745-4" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795595919745-5" author="hephaestus">
+        <addUniqueConstraint columnNames="repository_to_monitor_id, reader_native_id" constraintName="uk_resource_reader_monitor_reader" tableName="resource_reader"/>
+    </changeSet>
+    <changeSet id="1795595919745-6" author="hephaestus">
+        <createIndex indexName="idx_resource_reader_reader_native_id" tableName="resource_reader">
+            <column name="reader_native_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795595919745-7" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="repository_to_monitor_id,workspace_id" baseTableName="resource_reader" constraintName="fk_resource_reader_repository_to_monitor" deferrable="false" initiallyDeferred="false" referencedColumnNames="id,workspace_id" onDelete="CASCADE" referencedTableName="repository_to_monitor" validate="true"/>
+    </changeSet>
+    <changeSet id="1795595919745-8" author="hephaestus">
+        <comment>A repository whose readers no provider listing can name, such as a GitHub internal repository, records READERS_NOT_LISTABLE and waits.</comment>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_readers_proof</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_proof_reason</sql>
+            <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE'), ('UNPROVEN', 'FAILED', 'READERS_NOT_LISTABLE')))</sql>
+            <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE', 'READERS_NOT_LISTABLE'))</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_readers_proof</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_proof_reason</sql>
+            <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE'), ('UNPROVEN', 'FAILED', 'READERS_NOT_LISTABLE')))</sql>
+            <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE', 'READERS_NOT_LISTABLE'))</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_readers_proof</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_proof_reason</sql>
+            <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE'), ('UNPROVEN', 'FAILED', 'READERS_NOT_LISTABLE')))</sql>
+            <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE', 'READERS_NOT_LISTABLE'))</sql>
+        <rollback>
+            <comment>Fail closed: a repository that recorded READERS_NOT_LISTABLE waits for its readers again.</comment>
+            <sql>UPDATE repository_to_monitor SET visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS' WHERE proof_reason = 'READERS_NOT_LISTABLE'</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_readers_proof</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_proof_reason</sql>
+            <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+            <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+            <sql>UPDATE outline_collection SET visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS' WHERE proof_reason = 'READERS_NOT_LISTABLE'</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_readers_proof</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_proof_reason</sql>
+            <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+            <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+            <sql>UPDATE slack_monitored_channel SET visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS' WHERE proof_reason = 'READERS_NOT_LISTABLE'</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_readers_proof</sql>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_proof_reason</sql>
+            <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_readers_proof CHECK ((visibility_class, proof_state, proof_reason) IN (('UNPROVEN', 'PENDING', 'AWAITING_READERS'), ('WORKSPACE', 'PROVEN', 'PUBLIC_ON_PROVIDER'), ('RESTRICTED', 'PROVEN', 'READERS_LISTED'), ('UNPROVEN', 'PENDING', 'RATE_LIMITED'), ('RESTRICTED', 'PENDING', 'RATE_LIMITED'), ('UNPROVEN', 'PENDING', 'LISTING_INCOMPLETE'), ('RESTRICTED', 'PENDING', 'LISTING_INCOMPLETE'), ('UNPROVEN', 'FAILED', 'RESOURCE_UNAVAILABLE')))</sql>
+            <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_proof_reason CHECK (proof_reason IN ('AWAITING_READERS', 'PUBLIC_ON_PROVIDER', 'READERS_LISTED', 'RATE_LIMITED', 'LISTING_INCOMPLETE', 'RESOURCE_UNAVAILABLE'))</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795595919745-9" author="hephaestus">
+        <comment>A reader of a monitored repository is removed in the transaction that records, from any path, that GitHub removed the person: a collaborator, a team member, a team's access, a team, an organization member or an organization. Every monitor of the repository moves its proof generation on, so a listing that began before the removal does not restore the person. A deleted repository drops every monitor's readers and proof. The narrowing that a repository turned private already makes also stamps when the proof changed.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    UPDATE public.repository_to_monitor
+    SET proof_generation = proof_generation + 1,
+        visibility_class = CASE WHEN visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE visibility_class END,
+        proof_state = CASE WHEN visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE proof_state END,
+        proof_reason = CASE WHEN visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE proof_reason END,
+        proof_changed_at = CASE WHEN visibility_class = 'WORKSPACE' THEN now() ELSE proof_changed_at END
+    WHERE native_id = p_native_id;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+CREATE FUNCTION public.forget_repository_readers(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    DELETE FROM public.resource_reader rr
+    USING public.repository_to_monitor m
+    WHERE rr.repository_to_monitor_id = m.id AND m.native_id = p_native_id;
+    UPDATE public.repository_to_monitor
+    SET proof_generation = proof_generation + 1,
+        visibility_class = 'UNPROVEN',
+        proof_state = CASE WHEN proof_state = 'FAILED' THEN proof_state ELSE 'PENDING' END,
+        proof_reason = CASE WHEN proof_state = 'FAILED' THEN proof_reason ELSE 'AWAITING_READERS' END,
+        proof_changed_at = CASE WHEN visibility_class = 'UNPROVEN' THEN proof_changed_at ELSE now() END
+    WHERE native_id = p_native_id;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+CREATE FUNCTION public.forget_repository_monitors_of_row() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_repository_readers(OLD.native_id);
+    RETURN NULL;
+END
+$$;
+DROP TRIGGER repository_gone ON public.repository;
+CREATE TRIGGER repository_gone AFTER DELETE ON public.repository
+    FOR EACH ROW EXECUTE FUNCTION public.forget_repository_monitors_of_row();
+CREATE FUNCTION public.forget_readers_of_repositories(p_repository_ids bigint[], p_user_ids bigint[])
+    RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    IF cardinality(p_repository_ids) = 0 OR cardinality(p_user_ids) = 0 THEN
+        RETURN;
+    END IF;
+    UPDATE public.repository_to_monitor m
+    SET proof_generation = m.proof_generation + 1
+    FROM public.repository r
+    WHERE r.id = ANY (p_repository_ids) AND m.native_id = r.native_id;
+    DELETE FROM public.resource_reader rr
+    USING public.repository r, public.repository_to_monitor m, public."user" u
+    WHERE r.id = ANY (p_repository_ids) AND m.native_id = r.native_id AND rr.repository_to_monitor_id = m.id
+      AND u.id = ANY (p_user_ids) AND rr.reader_native_id = u.native_id;
+END
+$$;
+CREATE FUNCTION public.forget_removed_collaborator() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(ARRAY[OLD.repository_id], ARRAY[OLD.user_id]);
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER repository_collaborator_removed BEFORE DELETE ON public.repository_collaborator
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_collaborator();
+CREATE FUNCTION public.forget_removed_team_member() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(
+        ARRAY(SELECT p.repository_id FROM public.team_repository_permission p WHERE p.team_id = OLD.team_id),
+        ARRAY[OLD.user_id]);
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER team_membership_removed BEFORE DELETE ON public.team_membership
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_team_member();
+CREATE FUNCTION public.forget_removed_team_access() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(
+        ARRAY[OLD.repository_id],
+        ARRAY(SELECT t.user_id FROM public.team_membership t WHERE t.team_id = OLD.team_id));
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER team_repository_permission_removed BEFORE DELETE ON public.team_repository_permission
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_team_access();
+CREATE FUNCTION public.forget_removed_team() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(
+        ARRAY(SELECT p.repository_id FROM public.team_repository_permission p WHERE p.team_id = OLD.id),
+        ARRAY(SELECT t.user_id FROM public.team_membership t WHERE t.team_id = OLD.id));
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER team_removed BEFORE DELETE ON public.team
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_team();
+CREATE FUNCTION public.forget_removed_organization_member() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(
+        ARRAY(SELECT r.id FROM public.repository r WHERE r.organization_id = OLD.organization_id),
+        ARRAY[OLD.user_id]);
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER organization_membership_removed BEFORE DELETE ON public.organization_membership
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_organization_member();
+CREATE FUNCTION public.forget_removed_organization() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM public.forget_readers_of_repositories(
+        ARRAY(SELECT r.id FROM public.repository r WHERE r.organization_id = OLD.id),
+        ARRAY(SELECT o.user_id FROM public.organization_membership o WHERE o.organization_id = OLD.id));
+    RETURN OLD;
+END
+$$;
+CREATE TRIGGER organization_removed BEFORE DELETE ON public.organization
+    FOR EACH ROW EXECUTE FUNCTION public.forget_removed_organization();
+        ]]></sql>
+        <rollback>
+            <sql>DROP TRIGGER organization_removed ON public.organization</sql>
+            <sql>DROP FUNCTION public.forget_removed_organization()</sql>
+            <sql>DROP TRIGGER organization_membership_removed ON public.organization_membership</sql>
+            <sql>DROP FUNCTION public.forget_removed_organization_member()</sql>
+            <sql>DROP TRIGGER team_removed ON public.team</sql>
+            <sql>DROP FUNCTION public.forget_removed_team()</sql>
+            <sql>DROP TRIGGER team_repository_permission_removed ON public.team_repository_permission</sql>
+            <sql>DROP FUNCTION public.forget_removed_team_access()</sql>
+            <sql>DROP TRIGGER team_membership_removed ON public.team_membership</sql>
+            <sql>DROP FUNCTION public.forget_removed_team_member()</sql>
+            <sql>DROP TRIGGER repository_collaborator_removed ON public.repository_collaborator</sql>
+            <sql>DROP FUNCTION public.forget_removed_collaborator()</sql>
+            <sql>DROP FUNCTION public.forget_readers_of_repositories(bigint[], bigint[])</sql>
+            <sql>DROP TRIGGER repository_gone ON public.repository</sql>
+            <sql>CREATE TRIGGER repository_gone AFTER DELETE ON public.repository FOR EACH ROW EXECUTE FUNCTION public.narrow_monitors_of_repository()</sql>
+            <sql>DROP FUNCTION public.forget_repository_monitors_of_row()</sql>
+            <sql>DROP FUNCTION public.forget_repository_readers(bigint)</sql>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    UPDATE public.repository_to_monitor
+    SET proof_generation = proof_generation + 1,
+        visibility_class = CASE WHEN visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE visibility_class END,
+        proof_state = CASE WHEN visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE proof_state END,
+        proof_reason = CASE WHEN visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE proof_reason END
+    WHERE native_id = p_native_id;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

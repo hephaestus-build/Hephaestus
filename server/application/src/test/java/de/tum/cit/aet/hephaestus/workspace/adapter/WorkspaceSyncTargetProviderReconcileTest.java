@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.ResourceReaderRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
@@ -73,6 +74,7 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
         provider = new WorkspaceSyncTargetProvider(
                 workspaceRepository,
                 repositoryToMonitorRepository,
+                mock(ResourceReaderRepository.class),
                 workspaceScopeFilter,
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),

@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTar
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.ResourceReaderRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -65,6 +66,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
         provider = new WorkspaceSyncTargetProvider(
                 workspaceRepository,
                 repositoryToMonitorRepository,
+                mock(ResourceReaderRepository.class),
                 workspaceScopeFilter,
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),
@@ -206,6 +208,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
         provider = new WorkspaceSyncTargetProvider(
                 workspaceRepository,
                 repositoryToMonitorRepository,
+                mock(ResourceReaderRepository.class),
                 filter,
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),

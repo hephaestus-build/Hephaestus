@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -86,35 +87,62 @@ public class GitHubCollaboratorSyncService {
         this.transactionTemplate = transactionTemplate;
     }
 
+    /** One collaborator as GitHub listed them, with the permission the listing named. */
+    public record ListedCollaborator(GitHubUserDTO user, RepositoryCollaborator.Permission permission) {}
+
     /**
-     * Synchronizes all collaborators for a repository using GraphQL.
-     *
-     * @param scopeId  the scope ID for authentication
-     * @param repositoryId the repository ID to sync collaborators for
-     * @return number of collaborators synced
+     * What one listing of a repository's collaborators answered. Only {@link Outcome#COMPLETE} proves who can read the
+     * repository: every page arrived without errors, the cursor moved on, the repository was the one asked about on
+     * every page, and the distinct users match GitHub's count.
      */
-    public int syncCollaboratorsForRepository(Long scopeId, Long repositoryId) {
+    public record CollaboratorListing(Outcome outcome, List<ListedCollaborator> collaborators) {
+
+        public enum Outcome {
+            COMPLETE,
+            RATE_LIMITED,
+            INCOMPLETE,
+            /** GitHub answered that the repository does not exist or this credential cannot see it. */
+            REPOSITORY_MISSING
+        }
+
+        public CollaboratorListing {
+            collaborators = List.copyOf(collaborators);
+        }
+
+        static CollaboratorListing stopped(Outcome outcome, List<ListedCollaborator> collaborators) {
+            return new CollaboratorListing(outcome, collaborators);
+        }
+    }
+
+    /**
+     * Lists every collaborator of a repository through GraphQL, with every affiliation: outside collaborators, direct
+     * collaborators and organization members who can read it.
+     *
+     * @param scopeId the scope ID for authentication
+     * @param repositoryId the mirror repository to list
+     * @param expectedNativeId GitHub's id of the repository the monitor names; a page about another one stops the listing
+     */
+    public CollaboratorListing listCollaborators(Long scopeId, Long repositoryId, long expectedNativeId) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
             log.debug("Skipped collaborator sync: reason=repositoryNotFound, repoId={}", repositoryId);
-            return 0;
+            return CollaboratorListing.stopped(CollaboratorListing.Outcome.INCOMPLETE, List.of());
         }
 
         String safeNameWithOwner = Objects.requireNonNull(sanitizeForLog(repository.getNameWithOwner()));
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(repository.getNameWithOwner());
         if (parsedName.isEmpty()) {
             log.warn("Skipped collaborator sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return 0;
+            return CollaboratorListing.stopped(CollaboratorListing.Outcome.INCOMPLETE, List.of());
         }
         String owner = parsedName.get().owner();
         String name = parsedName.get().name();
 
-        List<FetchedCollaborator> fetched = new ArrayList<>();
-        boolean complete;
-        int pagesProcessed;
+        List<ListedCollaborator> fetched = new ArrayList<>();
+        Set<Long> distinctReaders = new HashSet<>();
         try {
             HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-            int collaboratorsReceived = 0;
+            int edgesReceived = 0;
             int reportedTotalCount = -1;
             String cursor = null;
             boolean hasNextPage = true;
@@ -128,7 +156,7 @@ public class GitHubCollaboratorSyncService {
                             "Reached maximum pagination limit for collaborators: repoName={}, limit={}",
                             safeNameWithOwner,
                             MAX_PAGINATION_PAGES);
-                    break;
+                    return stopped(CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "pageLimit");
                 }
 
                 final String currentCursor = cursor;
@@ -155,127 +183,189 @@ public class GitHubCollaboratorSyncService {
                                         signal.failure().getClass().getSimpleName())))
                         .block(syncProperties.graphqlTimeout());
 
-                if (graphQlResponse == null || !graphQlResponse.isValid()) {
+                // A valid response can still carry field errors, such as a rate limit or a refused repository.
+                if (graphQlResponse == null
+                        || !graphQlResponse.isValid()
+                        || !graphQlResponse.getErrors().isEmpty()) {
                     ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(graphQlResponse);
-                    if (classification != null) {
-                        if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
-                                classification,
-                                retryAttempt,
-                                MAX_RETRY_ATTEMPTS,
-                                "collaborator sync",
-                                "repoName",
+                    if (classification != null
+                            && graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
+                                    classification,
+                                    retryAttempt,
+                                    MAX_RETRY_ATTEMPTS,
+                                    "collaborator sync",
+                                    "repoName",
+                                    safeNameWithOwner,
+                                    log))) {
+                        retryAttempt++;
+                        continue;
+                    }
+                    if (classification != null && classification.category() == Category.RATE_LIMITED) {
+                        return stopped(
+                                CollaboratorListing.Outcome.RATE_LIMITED, fetched, safeNameWithOwner, "rateLimited");
+                    }
+                    if (graphQlResponse != null
+                            && graphQlResponse.isValid()
+                            && graphQlResponse.field("repository").getValue() == null) {
+                        return stopped(
+                                CollaboratorListing.Outcome.REPOSITORY_MISSING,
+                                fetched,
                                 safeNameWithOwner,
-                                log))) {
-                            retryAttempt++;
-                            continue;
-                        }
-                        break;
+                                "repositoryRefused");
                     }
                     log.warn(
                             "Received invalid GraphQL response: repoName={}, errors={}",
                             safeNameWithOwner,
                             graphQlResponse != null ? graphQlResponse.getErrors() : "null");
-                    break;
+                    return stopped(
+                            CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "invalidResponse");
                 }
 
-                // Track rate limit from response
                 graphQlClientProvider.trackRateLimit(scopeId, graphQlResponse);
 
-                // Check if we should pause due to rate limiting
-                if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
-                    if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
-                            scopeId, "collaborator sync", "repoName", safeNameWithOwner, log)) {
-                        break;
-                    }
+                if (graphQlResponse.field("repository").getValue() == null) {
+                    return stopped(
+                            CollaboratorListing.Outcome.REPOSITORY_MISSING,
+                            fetched,
+                            safeNameWithOwner,
+                            "repositoryMissing");
                 }
-
+                // A rename or transfer can put another repository behind the name between two pages.
+                Object pageRepositoryId =
+                        graphQlResponse.field("repository.databaseId").getValue();
+                if (!(pageRepositoryId instanceof Number number) || number.longValue() != expectedNativeId) {
+                    return stopped(
+                            CollaboratorListing.Outcome.INCOMPLETE, List.of(), safeNameWithOwner, "anotherRepository");
+                }
+                // The generated model reads a missing count or page flag as zero or false; only a present one counts.
+                Object totalCountValue = graphQlResponse
+                        .field("repository.collaborators.totalCount")
+                        .getValue();
+                Object hasNextPageValue = graphQlResponse
+                        .field("repository.collaborators.pageInfo.hasNextPage")
+                        .getValue();
                 GHRepositoryCollaboratorConnection response = graphQlResponse
                         .field("repository.collaborators")
                         .toEntity(GHRepositoryCollaboratorConnection.class);
-
-                if (response == null || response.getEdges() == null) {
-                    break;
+                if (response == null
+                        || response.getEdges() == null
+                        || !(totalCountValue instanceof Number totalCount)
+                        || !(hasNextPageValue instanceof Boolean pageHasNext)) {
+                    return stopped(
+                            CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "missingPageFields");
                 }
-
                 if (reportedTotalCount < 0) {
-                    reportedTotalCount = response.getTotalCount();
+                    reportedTotalCount = totalCount.intValue();
+                } else if (reportedTotalCount != totalCount.intValue()) {
+                    return stopped(CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "countChanged");
                 }
-                collaboratorsReceived += response.getEdges().size();
+                edgesReceived += response.getEdges().size();
 
+                boolean everyEdgeNamesAUser = true;
                 for (GHRepositoryCollaboratorEdge edge : response.getEdges()) {
-                    var graphQlUser = edge.getNode();
-                    if (graphQlUser == null) {
+                    GitHubUserDTO userDTO = GitHubUserDTO.fromUser(edge.getNode());
+                    if (userDTO == null || userDTO.databaseId() == null) {
+                        everyEdgeNamesAUser = false;
                         continue;
                     }
-
-                    GitHubUserDTO userDTO = GitHubUserDTO.fromUser(graphQlUser);
-                    if (userDTO == null) {
-                        continue;
-                    }
-                    fetched.add(new FetchedCollaborator(userDTO, parsePermission(edge.getPermission())));
+                    fetched.add(new ListedCollaborator(userDTO, parsePermission(edge.getPermission())));
+                    distinctReaders.add(userDTO.databaseId());
+                }
+                if (!everyEdgeNamesAUser) {
+                    return stopped(
+                            CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "edgeWithoutUser");
                 }
 
-                var pageInfo = response.getPageInfo();
-                hasNextPage = pageInfo != null && Boolean.TRUE.equals(pageInfo.getHasNextPage());
-                cursor = pageInfo != null ? pageInfo.getEndCursor() : null;
+                String endCursor = response.getPageInfo() == null
+                        ? null
+                        : response.getPageInfo().getEndCursor();
+                if (pageHasNext && (endCursor == null || endCursor.equals(cursor))) {
+                    return stopped(CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "cursorStalled");
+                }
+                hasNextPage = pageHasNext;
+                cursor = endCursor;
                 retryAttempt = 0;
+
+                if (hasNextPage
+                        && graphQlClientProvider.isRateLimitCritical(scopeId)
+                        && !graphQlSyncHelper.waitForRateLimitIfNeeded(
+                                scopeId, "collaborator sync", "repoName", safeNameWithOwner, log)) {
+                    return stopped(CollaboratorListing.Outcome.RATE_LIMITED, fetched, safeNameWithOwner, "rateLimited");
+                }
             }
 
-            // Mark sync as completed normally if we exhausted all pages
-            boolean syncCompletedNormally = !hasNextPage;
-
-            // Raw edges received vs collaborators.totalCount (totalSynced is post-filter).
-            if (reportedTotalCount >= 0) {
-                GraphQlConnectionOverflowDetector.checkPaginated(
-                        "collaborators",
-                        collaboratorsReceived,
-                        reportedTotalCount,
-                        !syncCompletedNormally,
-                        safeNameWithOwner);
+            GraphQlConnectionOverflowDetector.checkPaginated(
+                    "collaborators", edgesReceived, reportedTotalCount, false, safeNameWithOwner);
+            // A user listed twice hides a user not listed at all, so the distinct users must match the count.
+            if (edgesReceived != reportedTotalCount || distinctReaders.size() != reportedTotalCount) {
+                return stopped(CollaboratorListing.Outcome.INCOMPLETE, fetched, safeNameWithOwner, "countMismatch");
             }
-
-            complete = syncCompletedNormally;
-            pagesProcessed = pageCount;
+            return new CollaboratorListing(CollaboratorListing.Outcome.COMPLETE, fetched);
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
-            if (!graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
-                    classification, 0, MAX_RETRY_ATTEMPTS, "collaborator sync", "repoName", safeNameWithOwner, log))) {
-                return 0;
-            }
+            graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
+                    classification,
+                    MAX_RETRY_ATTEMPTS,
+                    MAX_RETRY_ATTEMPTS,
+                    "collaborator sync",
+                    "repoName",
+                    safeNameWithOwner,
+                    log));
+            return stopped(
+                    classification.category() == Category.RATE_LIMITED
+                            ? CollaboratorListing.Outcome.RATE_LIMITED
+                            : CollaboratorListing.Outcome.INCOMPLETE,
+                    fetched,
+                    safeNameWithOwner,
+                    "exception");
+        }
+    }
+
+    private static CollaboratorListing stopped(
+            CollaboratorListing.Outcome outcome,
+            List<ListedCollaborator> fetched,
+            String safeNameWithOwner,
+            String reason) {
+        log.warn(
+                "Stopped collaborator listing: outcome={}, reason={}, repoName={}, listed={}",
+                outcome,
+                reason,
+                safeNameWithOwner,
+                fetched.size());
+        return CollaboratorListing.stopped(outcome, fetched);
+    }
+
+    /**
+     * Stores the collaborators that a listing found in the shared mirror. Only a complete listing removes the stale
+     * ones: an aborted one (rate limit, error, pagination limit) would delete collaborators who still have access.
+     *
+     * @return the number of collaborators stored
+     */
+    public int storeCollaborators(Long repositoryId, CollaboratorListing listing) {
+        if (listing.outcome() == CollaboratorListing.Outcome.REPOSITORY_MISSING) {
             return 0;
         }
-
-        // Stale collaborators are removed only after a complete listing: an aborted one (rate limit, error,
-        // pagination limit) would delete collaborators who still have access.
-        if (!complete) {
-            log.warn(
-                    "Skipped stale collaborator removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
-                    safeNameWithOwner,
-                    pagesProcessed);
-        }
+        boolean complete = listing.outcome() == CollaboratorListing.Outcome.COMPLETE;
         // A database failure propagates, so the caller's transient-failure retry gets a fresh transaction.
-        CollaboratorWrite written = Objects.requireNonNull(
-                transactionTemplate.execute(status -> writeCollaborators(repositoryId, fetched, complete)));
-
+        CollaboratorWrite written = Objects.requireNonNull(transactionTemplate.execute(
+                status -> writeCollaborators(repositoryId, listing.collaborators(), complete)));
         log.info(
-                "Completed collaborator sync: repoName={}, collaboratorCount={}, removedCount={}, complete={}",
-                safeNameWithOwner,
+                "Completed collaborator sync: repoId={}, collaboratorCount={}, removedCount={}, complete={}",
+                repositoryId,
                 written.synced(),
                 written.removed(),
                 complete);
         return written.synced();
     }
 
-    private record FetchedCollaborator(GitHubUserDTO user, RepositoryCollaborator.Permission permission) {}
-
     private record CollaboratorWrite(int synced, int removed) {}
 
     /** Stores the collaborators that GitHub listed, and removes the stale ones if the listing is complete. */
     private CollaboratorWrite writeCollaborators(
-            Long repositoryId, List<FetchedCollaborator> fetched, boolean complete) {
+            Long repositoryId, List<ListedCollaborator> fetched, boolean complete) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
             return new CollaboratorWrite(0, 0);
@@ -283,7 +373,7 @@ public class GitHubCollaboratorSyncService {
         long providerId = Objects.requireNonNull(repository.getProvider().getId());
         Set<Long> syncedUserIds = new HashSet<>();
         int synced = 0;
-        for (FetchedCollaborator entry : fetched) {
+        for (ListedCollaborator entry : fetched) {
             User user = userProcessor.findOrCreate(entry.user(), providerId);
             if (user == null) {
                 continue;

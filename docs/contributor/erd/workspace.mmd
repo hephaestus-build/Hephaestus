@@ -56,6 +56,14 @@ erDiagram
         VARCHAR(32) proof_reason "NOT NULL"
         VARCHAR(16) proof_state "NOT NULL"
         BIGINT proof_generation "NOT NULL"
+        TIMESTAMPTZ proof_changed_at "NOT NULL"
+    }
+
+    ResourceReader {
+        BIGINT id PK
+        BIGINT reader_native_id UK "NOT NULL"
+        BIGINT repository_to_monitor_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     ReviewScopeRepository {
@@ -138,6 +146,7 @@ erDiagram
     Account ||--o{ Membership : belongs_to
     Workspace ||--o{ Membership : belongs_to
     Workspace ||--o{ RepositoryToMonitor : monitors
+    RepositoryToMonitor ||--o{ ResourceReader : has
     Workspace ||--o{ WorkspaceSlugHistory : has
 
     %% Many-to-Many relationships

@@ -372,6 +372,7 @@ erDiagram
         VARCHAR(32) proof_reason "NOT NULL"
         VARCHAR(16) proof_state "NOT NULL"
         BIGINT proof_generation "NOT NULL"
+        TIMESTAMPTZ proof_changed_at "NOT NULL"
     }
 
     OutlineDocument {
@@ -608,6 +609,7 @@ erDiagram
         VARCHAR(32) proof_reason "NOT NULL"
         VARCHAR(16) proof_state "NOT NULL"
         BIGINT proof_generation "NOT NULL"
+        TIMESTAMPTZ proof_changed_at "NOT NULL"
     }
 
     SlackParticipantConsent {

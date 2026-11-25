@@ -4502,3 +4502,29 @@ tests:
             exp_annotations:
               summary: A node has less than 10 % of its memory available
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a repository proof that keeps waiting past a missed daily sync fires, and clears once proven
+    interval: 1m
+    input_series:
+      - series: 'monitored_repository_readers_pending_seconds{job="hephaestus",instance="server-a:9090"}'
+        values: "93000x10 93700x30 NaNx20"
+      - series: 'monitored_repository_readers_pending_seconds{job="hephaestus",instance="server-b:9090"}'
+        values: "93000x10 93660x30 NaNx20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusRepositoryReadersWaiting
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusRepositoryReadersWaiting
+        exp_alerts: []
+      - eval_time: 27m
+        alertname: HephaestusRepositoryReadersWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A monitored repository has waited more than 26 hours for proof of who can see it; mentoring waits on it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 45m
+        alertname: HephaestusRepositoryReadersWaiting
+        exp_alerts: []

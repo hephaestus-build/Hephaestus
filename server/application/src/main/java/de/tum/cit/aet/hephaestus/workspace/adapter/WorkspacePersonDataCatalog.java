@@ -15,7 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"membership", "workspace_onboarding_settings", "workspace"})
+@PersonDataStores({"membership", "workspace_onboarding_settings", "workspace", "resource_reader"})
 // The membership store selects team memberships; the personal space store deletes the space and its owner's membership.
 @ErasesColumns({"membership.account_id", "workspace.personal_account_id"})
 public class WorkspacePersonDataCatalog implements PersonDataCatalog {
@@ -49,6 +49,18 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "workspace_id",
                         "",
                         0),
+                // A reader is a provider identity of the person. Erasure deletes it before the provider profile is
+                // anonymized; that narrows who a monitor's proof names, and the next listing proves the rest again.
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "resource_reader",
+                        "resource_reader",
+                        "t.reader_native_id IN (SELECT u.native_id FROM \"user\" u WHERE u.id = ANY(:users))",
+                        "id,workspace_id,repository_to_monitor_id,reader_native_id",
+                        "id",
+                        "",
+                        100),
                 new PersonalSpacePersonDataStore(jdbc, mapper, personalSpaces));
     }
 }

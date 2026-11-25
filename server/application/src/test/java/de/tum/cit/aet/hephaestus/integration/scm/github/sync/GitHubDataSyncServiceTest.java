@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
@@ -24,7 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProofReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReaderListing;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
@@ -37,6 +40,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.Install
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnrichmentService;
@@ -54,10 +59,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService.CollaboratorListing;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService.ListedCollaborator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -468,6 +477,113 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
             order.verify(syncTargetProvider).recordRepositoryNotPublic(begun);
             verify(syncTargetProvider, never()).recordRepositoryPublic(any());
         }
+    }
+
+    private Repository readOf(Repository.Visibility visibility, boolean isPrivate) {
+        Repository read = new Repository();
+        read.setId(REPOSITORY_ID);
+        read.setNativeId(NATIVE_ID);
+        read.setNameWithOwner(REPO_NAME);
+        read.setProvider(provider);
+        read.setVisibility(visibility);
+        read.setPrivate(isPrivate);
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                .thenReturn(Optional.of(read));
+        return read;
+    }
+
+    private static ListedCollaborator listed(long databaseId) {
+        return new ListedCollaborator(
+                new GitHubUserDTO(null, databaseId, "login" + databaseId, null, null, null, null, User.Type.USER),
+                RepositoryCollaborator.Permission.READ);
+    }
+
+    /**
+     * A private repository's listing proves this monitor's readers with the read begun just before the listing, and is
+     * recorded before the shared mirror changes: a removal in the mirror moves every monitor's generation on.
+     */
+    @Test
+    void shouldProveThePrivateRepositorysReadersBeforeTheMirrorChanges() {
+        readOf(Repository.Visibility.PRIVATE, true);
+        ReadersRead listingRead = new ReadersRead(SYNC_TARGET_ID, NATIVE_ID, PROVIDER_ID, 9L, Instant.EPOCH);
+        when(syncTargetProvider.beginReadersProof(eq(SYNC_TARGET_ID), eq(NATIVE_ID), eq(PROVIDER_ID), any()))
+                .thenReturn(new ReadersRead(SYNC_TARGET_ID, NATIVE_ID, PROVIDER_ID, 8L, Instant.EPOCH), listingRead);
+        when(syncTargetProvider.readersListingDue(eq(SYNC_TARGET_ID), any(), any()))
+                .thenReturn(true);
+        CollaboratorListing listing =
+                new CollaboratorListing(CollaboratorListing.Outcome.COMPLETE, List.of(listed(11L), listed(12L)));
+        when(collaboratorSyncService.listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID))
+                .thenReturn(listing);
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        InOrder order = inOrder(syncTargetProvider, collaboratorSyncService);
+        order.verify(collaboratorSyncService).listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID);
+        order.verify(syncTargetProvider)
+                .recordRepositoryReaders(listingRead, new ReaderListing.Listed(Set.of(11L, 12L)));
+        order.verify(collaboratorSyncService).storeCollaborators(REPOSITORY_ID, listing);
+    }
+
+    @ParameterizedTest(name = "{0} waits with {1}")
+    @CsvSource({"RATE_LIMITED,RATE_LIMITED", "INCOMPLETE,LISTING_INCOMPLETE"})
+    void shouldLetTheReadersWaitWhenTheListingStops(CollaboratorListing.Outcome outcome, ProofReason reason) {
+        readOf(Repository.Visibility.PRIVATE, true);
+        ReadersRead read = new ReadersRead(SYNC_TARGET_ID, NATIVE_ID, PROVIDER_ID, 3L, Instant.EPOCH);
+        when(syncTargetProvider.beginReadersProof(eq(SYNC_TARGET_ID), eq(NATIVE_ID), eq(PROVIDER_ID), any()))
+                .thenReturn(read);
+        when(syncTargetProvider.readersListingDue(eq(SYNC_TARGET_ID), any(), any()))
+                .thenReturn(true);
+        when(collaboratorSyncService.listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID))
+                .thenReturn(new CollaboratorListing(outcome, List.of(listed(11L))));
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        verify(syncTargetProvider).recordRepositoryReaders(read, new ReaderListing.Stopped(reason));
+        verify(syncTargetProvider, never()).recordRepositoryReaders(eq(read), any(ReaderListing.Listed.class));
+    }
+
+    /** Access lost between the metadata read and the listing is a definitive answer, not an incomplete listing. */
+    @Test
+    void shouldRecordTheRepositoryUnavailableWhenTheListingIsRefused() {
+        readOf(Repository.Visibility.PRIVATE, true);
+        when(syncTargetProvider.readersListingDue(eq(SYNC_TARGET_ID), any(), any()))
+                .thenReturn(true);
+        when(collaboratorSyncService.listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID))
+                .thenReturn(new CollaboratorListing(CollaboratorListing.Outcome.REPOSITORY_MISSING, List.of()));
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        verify(syncTargetProvider).recordRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
+        verify(syncTargetProvider, never()).recordRepositoryReaders(any(), any());
+    }
+
+    /** Enterprise members outside the organization read an internal repository, and no listing names them. */
+    @Test
+    void shouldNeverProveTheReadersOfAnInternalRepository() {
+        readOf(Repository.Visibility.INTERNAL, true);
+        ReadersRead read = new ReadersRead(SYNC_TARGET_ID, NATIVE_ID, PROVIDER_ID, 3L, Instant.EPOCH);
+        when(syncTargetProvider.beginReadersProof(eq(SYNC_TARGET_ID), eq(NATIVE_ID), eq(PROVIDER_ID), any()))
+                .thenReturn(read);
+        when(syncTargetProvider.readersListingDue(eq(SYNC_TARGET_ID), any(), any()))
+                .thenReturn(true);
+        when(collaboratorSyncService.listCollaborators(SCOPE_ID, REPOSITORY_ID, NATIVE_ID))
+                .thenReturn(new CollaboratorListing(CollaboratorListing.Outcome.COMPLETE, List.of(listed(11L))));
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        verify(syncTargetProvider).recordRepositoryReaders(read, new ReaderListing.NotListable());
+        verify(syncTargetProvider, never()).recordRepositoryReaders(any(), any(ReaderListing.Listed.class));
+    }
+
+    @Test
+    void shouldNotListTheReadersOfAPublicRepository() {
+        readOf(Repository.Visibility.PUBLIC, false);
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        verify(syncTargetProvider, never()).readersListingDue(any(), any(), any());
+        verify(syncTargetProvider, never()).recordRepositoryReaders(any(), any());
+        verify(collaboratorSyncService, never()).listCollaborators(any(), any(), anyLong());
     }
 
     @Test

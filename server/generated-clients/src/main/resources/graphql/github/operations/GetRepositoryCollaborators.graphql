@@ -9,7 +9,9 @@ query GetRepositoryCollaborators($owner: String!, $name: String!, $first: Int!, 
         resetAt
     }
     repository(owner: $owner, name: $name) {
-        collaborators(first: $first, after: $after) {
+        databaseId
+        # ALL lists outside collaborators, direct collaborators and organization members who can read the repository.
+        collaborators(first: $first, after: $after, affiliation: ALL) {
             pageInfo {
                 hasNextPage
                 endCursor

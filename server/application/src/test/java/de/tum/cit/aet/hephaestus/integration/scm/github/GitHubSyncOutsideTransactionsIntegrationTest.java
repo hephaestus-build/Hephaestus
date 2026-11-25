@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMileston
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService.CollaboratorListing;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
@@ -118,6 +119,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
     private long workspaceId;
     private long repositoryId;
+    private long repositoryNativeId;
 
     @BeforeEach
     void repositoryAndGitHub() {
@@ -135,6 +137,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")))
                 .getId());
         long nativeId = 2_000_000L + (unique.hashCode() & 0xfffffL) * 1_000L;
+        repositoryNativeId = nativeId;
         repositoryId =
                 Objects.requireNonNull(jdbc.queryForObject("""
                 INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
@@ -376,21 +379,107 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldAskGitHubWithNoTransactionOpenAndStoreTheCollaborators() {
         String login = "collaborator-" + repositoryId;
-        serve("""
-                {"data":{%s,"repository":{"collaborators":{"pageInfo":{"hasNextPage":false,"endCursor":null},
-                "totalCount":1,"edges":[{"permission":"WRITE","node":{"id":"U_%d","databaseId":%d,"login":"%s",
-                "avatarUrl":"https://avatars.example.com/u","name":"A Collaborator","email":null,
-                "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z"}}]}}}}
-                """.formatted(RATE_LIMIT, repositoryId, 9_000_000L + repositoryId, login));
+        serve(collaboratorsPage(
+                repositoryNativeId,
+                "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":null},\"totalCount\":1",
+                collaborator(login, 1)));
 
-        int synced = collaborators().syncCollaboratorsForRepository(workspaceId, repositoryId);
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+        int synced = collaborators().storeCollaborators(repositoryId, listing);
 
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.COMPLETE);
+        assertThat(listing.collaborators())
+                .extracting(collaborator -> collaborator.user().databaseId())
+                .containsExactly(readerId(1));
         assertThat(synced).isEqualTo(1);
         assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
         assertThat(jdbc.queryForObject("""
                         SELECT rc.permission FROM repository_collaborator rc JOIN "user" u ON u.id = rc.user_id
                         WHERE rc.repository_id = ? AND u.login = ?
                         """, String.class, repositoryId, login)).isEqualTo("WRITE");
+    }
+
+    /** A user listed twice hides a user not listed at all: the edge count alone would match GitHub's count. */
+    @Test
+    void shouldNotProveTheReadersWhenAListingNamesOneUserTwice() {
+        String login = "twice-" + repositoryId;
+        serve(collaboratorsPage(
+                repositoryNativeId,
+                "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":null},\"totalCount\":2",
+                collaborator(login, 1) + "," + collaborator(login, 1)));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.INCOMPLETE);
+    }
+
+    /** The generated model reads a missing count as zero and a missing page flag as false. */
+    @Test
+    void shouldNotProveTheReadersWhenAPageOmitsItsCountAndPageFlag() {
+        serve(collaboratorsPage(repositoryNativeId, "\"pageInfo\":{}", ""));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.INCOMPLETE);
+    }
+
+    @Test
+    void shouldNotProveTheReadersWhenACursorDoesNotMoveOn() {
+        String login = "stalled-" + repositoryId;
+        serve(collaboratorsPage(
+                repositoryNativeId,
+                "\"pageInfo\":{\"hasNextPage\":true,\"endCursor\":null},\"totalCount\":2",
+                collaborator(login, 1)));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.INCOMPLETE);
+    }
+
+    /** A rename or transfer between two pages puts another repository behind the name; nothing of it counts. */
+    @Test
+    void shouldDiscardAListingWhenAPageIsAboutAnotherRepository() {
+        String login = "elsewhere-" + repositoryId;
+        serve(collaboratorsPage(
+                repositoryNativeId + 1,
+                "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":null},\"totalCount\":1",
+                collaborator(login, 1)));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.INCOMPLETE);
+        assertThat(listing.collaborators()).isEmpty();
+    }
+
+    @Test
+    void shouldReportARepositoryThatGitHubNoLongerShows() {
+        serve("""
+                {"data":{%s,"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],
+                "message":"Could not resolve to a Repository with the name 'outside/repo'."}]}
+                """.formatted(RATE_LIMIT));
+
+        CollaboratorListing listing = collaborators().listCollaborators(workspaceId, repositoryId, repositoryNativeId);
+
+        assertThat(listing.outcome()).isEqualTo(CollaboratorListing.Outcome.REPOSITORY_MISSING);
+    }
+
+    private String collaboratorsPage(long repositoryDatabaseId, String pageFields, String edges) {
+        return """
+                {"data":{%s,"repository":{"databaseId":%d,"collaborators":{%s,"edges":[%s]}}}}
+                """.formatted(RATE_LIMIT, repositoryDatabaseId, pageFields, edges);
+    }
+
+    /** GitHub user ids are GraphQL {@code Int}s, so the fixtures stay in that range. */
+    private long readerId(int reader) {
+        return 9_000_000L + repositoryId * 10 + reader;
+    }
+
+    private String collaborator(String login, int reader) {
+        return """
+                {"permission":"WRITE","node":{"id":"U_%d","databaseId":%d,"login":"%s",
+                "avatarUrl":"https://avatars.example.com/u","name":"A Collaborator","email":null,
+                "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z"}}
+                """.formatted(readerId(reader), readerId(reader), login);
     }
 
     @Test
