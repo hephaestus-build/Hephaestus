@@ -1808,7 +1808,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             ProxyRouting routing = streamingRouting();
             stubStreamCredential(routing);
-            when(requestPolicy.allows(any())).thenReturn(true, true, false);
+            // Before the call, after its ledger opens, and then the retry without the usage request refuses.
+            when(requestPolicy.allows(any())).thenReturn(true, true, true, false);
 
             var answer = proxyReview(routing, new MockHttpServletResponse());
 
