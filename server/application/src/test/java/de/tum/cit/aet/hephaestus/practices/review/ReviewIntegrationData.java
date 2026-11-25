@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContract;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -53,6 +54,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -162,12 +164,16 @@ public class ReviewIntegrationData {
     }
 
     public JsonNode capturedSources(Scenario scenario) {
-        var item = productItems.require(
-                scenario.workspace().getId(), scenario.item().getId());
         var kinds = sourceCatalog.current().sources().stream()
-                .filter(contract -> contract.appliesTo(item.kind().value()))
+                .filter(contract -> contract.appliesTo(scenario.item().getKind().value()))
                 .map(SourceContract::kind)
                 .collect(Collectors.toSet());
+        return capturedSources(scenario, kinds);
+    }
+
+    private JsonNode capturedSources(Scenario scenario, Set<SourceKind> kinds) {
+        var item = productItems.require(
+                scenario.workspace().getId(), scenario.item().getId());
         var sources = productItems.fingerprints(item, kinds, null);
         var facts = json.createObjectNode();
         var fingerprints = facts.putObject("sourceFingerprints");
@@ -221,6 +227,25 @@ public class ReviewIntegrationData {
         return result(s, outcome, orderedAt, recordedAt, itemVersion, coverage, ReviewStatus.COMPLETE, null);
     }
 
+    /** A review whose capture carries just the fingerprints its own practice asked for. */
+    @Transactional
+    public Result resultWithDeclaredSources(Scenario s, ResultOutcome outcome, Instant at) {
+        var definition = json.treeToValue(s.practice().getCurrentVersion().getDefinition(), PracticeDefinition.class);
+        var kinds = definition.reads().sources().stream()
+                .map(source -> source.source())
+                .collect(Collectors.toSet());
+        return result(
+                s,
+                outcome,
+                at,
+                at,
+                "version-" + UUID.randomUUID(),
+                new HostCoverage(true, List.of(), 1, 0, 0, List.of()),
+                ReviewStatus.COMPLETE,
+                null,
+                kinds);
+    }
+
     private Result result(
             Scenario s,
             ResultOutcome outcome,
@@ -230,6 +255,19 @@ public class ReviewIntegrationData {
             HostCoverage coverage,
             ReviewStatus status,
             @Nullable ReviewStopReason reason) {
+        return result(s, outcome, orderedAt, recordedAt, itemVersion, coverage, status, reason, null);
+    }
+
+    private Result result(
+            Scenario s,
+            ResultOutcome outcome,
+            Instant orderedAt,
+            Instant recordedAt,
+            String itemVersion,
+            HostCoverage coverage,
+            ReviewStatus status,
+            @Nullable ReviewStopReason reason,
+            @Nullable Set<SourceKind> declaredSources) {
         var review = Review.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(s.workspace().getId())
@@ -254,7 +292,7 @@ public class ReviewIntegrationData {
                 .status(ReviewPracticeStatus.DONE)
                 .itemsListed(1)
                 .listingComplete(true)
-                .captureDecision(capturedSources(s))
+                .captureDecision(declaredSources == null ? capturedSources(s) : capturedSources(s, declaredSources))
                 .method(method())
                 .build());
         var baseEvidence = json.convertValue(json.readTree("""

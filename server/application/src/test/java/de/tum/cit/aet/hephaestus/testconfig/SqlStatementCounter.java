@@ -6,8 +6,9 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
@@ -93,7 +94,9 @@ public class SqlStatementCounter implements BeanPostProcessor {
 
     private static class Counter {
         private final boolean owners;
-        private final List<Prepared> prepared = new CopyOnWriteArrayList<>();
+        // Whole-request traces can prepare thousands of statements. The worker variant also
+        // needs a safe snapshot from its observer thread.
+        private final List<Prepared> prepared = Collections.synchronizedList(new ArrayList<>());
 
         Counter(boolean owners) {
             this.owners = owners;
