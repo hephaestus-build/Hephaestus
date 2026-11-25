@@ -101,9 +101,8 @@ public class AgentRun {
     private @Nullable Instant deferredUntil;
 
     /**
-     * How long the run may wait to start once it is due ({@code available_at}) and nothing of its subject is ahead of
-     * it; past that it ends as {@link AgentRunStopReason#NOT_STARTED}. A requeue makes it due again, so a retry gets
-     * the same wait.
+     * How long the run may wait for room before it ends as {@link AgentRunStopReason#NOT_STARTED}. A requeue starts
+     * the wait again for a question. A digest keeps the window it had at enqueue.
      */
     @Column(name = "start_within_seconds", updatable = false)
     private @Nullable Integer startWithinSeconds;

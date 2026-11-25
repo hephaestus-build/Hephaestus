@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -26,15 +28,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /** Checks the dispatch, wake, lease and reap decisions for the same rows on PostgreSQL. */
-@TestPropertySource(properties = {
-    "hephaestus.agent.capacity.lease-renewal=1h",
-    "hephaestus.agent.capacity.lease-ttl=2h"
-})
 class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final String ELAPSE_WINDOW = """
@@ -44,7 +41,11 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
             """;
 
     private enum QueueState {
-        DUE, DEFERRED, BEHIND_PREDECESSOR, PAST_START_WINDOW, PAST_DEADLINE
+        DUE,
+        DEFERRED,
+        BEHIND_PREDECESSOR,
+        PAST_START_WINDOW,
+        PAST_DEADLINE
     }
 
     @Autowired
@@ -87,39 +88,48 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @ParameterizedTest
     @EnumSource(QueueState.class)
-    void shouldAgreeOnWhichQueuedTurnsCanStart(QueueState queueState) {
+    void shouldAgreeOnWhichQueuedTurnsCanStart(QueueState queueState) throws SQLException {
         var predecessors = queueState == QueueState.BEHIND_PREDECESSOR
                 ? List.of(ask(conversation).turn())
                 : List.<ConversationTurn>of();
-        var excluded = predecessors.stream().map(this::runOf).map(AgentRunRef::id).toList();
+        var excluded =
+                predecessors.stream().map(this::runOf).map(AgentRunRef::id).toList();
         var turn = ask(conversation).turn();
         var run = runOf(turn);
-        switch (queueState) {
-            case BEHIND_PREDECESSOR, PAST_START_WINDOW -> jdbc.update(ELAPSE_WINDOW, run.id());
-            case DEFERRED -> jdbc.update(
-                    "UPDATE agent_run SET deferred_until = clock_timestamp() + interval '1 hour' WHERE id = ?", run.id());
-            case PAST_DEADLINE -> jdbc.update(
-                    "UPDATE agent_run SET deadline = clock_timestamp() - interval '1 minute' WHERE id = ?", run.id());
-            case DUE -> {}
-        }
+        try (var _ = lockTurnForReaper(turn)) {
+            switch (queueState) {
+                case BEHIND_PREDECESSOR, PAST_START_WINDOW -> jdbc.update(ELAPSE_WINDOW, run.id());
+                case DEFERRED ->
+                    jdbc.update(
+                            "UPDATE agent_run SET deferred_until = clock_timestamp() + interval '1 hour' WHERE id = ?",
+                            run.id());
+                case PAST_DEADLINE ->
+                    jdbc.update(
+                            "UPDATE agent_run SET deadline = clock_timestamp() - interval '1 minute' WHERE id = ?",
+                            run.id());
+                case DUE -> {}
+            }
 
-        assertStartPaths(turn, AgentRunKind.TURN, queueState == QueueState.DUE, excluded);
-        var overdue = runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of());
-        if (queueState == QueueState.PAST_START_WINDOW || queueState == QueueState.PAST_DEADLINE) {
-            assertThat(overdue).hasValueSatisfying(row -> {
-                assertThat(row.getId()).isEqualTo(run.id());
-                assertThat(row.getPastDeadline()).isEqualTo(queueState == QueueState.PAST_DEADLINE);
-            });
-        } else {
-            assertThat(overdue).isEmpty();
+            assertStartPaths(turn, AgentRunKind.TURN, queueState == QueueState.DUE, excluded);
+            var overdue = runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of());
+            if (queueState == QueueState.PAST_START_WINDOW || queueState == QueueState.PAST_DEADLINE) {
+                assertThat(overdue).hasValueSatisfying(row -> {
+                    assertThat(row.getId()).isEqualTo(run.id());
+                    assertThat(row.getPastDeadline()).isEqualTo(queueState == QueueState.PAST_DEADLINE);
+                });
+            } else {
+                assertThat(overdue).isEmpty();
+            }
         }
 
         if (queueState == QueueState.PAST_START_WINDOW) assertEndsWithoutStarting(turn);
         if (queueState == QueueState.BEHIND_PREDECESSOR) {
             reaper.reap();
             assertQueuedWithoutLease(turn);
-            turns.stop(workspace, predecessors.getFirst().getId());
-            assertStartPaths(turn, AgentRunKind.TURN, false, List.of());
+            try (var _ = lockTurnForReaper(turn)) {
+                turns.stop(workspace, predecessors.getFirst().getId());
+                assertStartPaths(turn, AgentRunKind.TURN, false, List.of());
+            }
             assertEndsWithoutStarting(turn);
         }
     }
@@ -128,55 +138,87 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
     void shouldRefuseAnExpiredTurnBeforeReapingWhenTheMigrationBarrierLifts() throws Exception {
         var submitted = ask(conversation);
         var expiring = submitted.turn();
-        var control = ask(conversations.openThread(workspace, submitted.question().getId())).turn();
+        var control = ask(conversations.openThread(
+                        workspace, submitted.question().getId()))
+                .turn();
         var expiredRun = runOf(expiring);
         var controlRun = runOf(control);
 
-        try (var migration = RunningMigration.start(dataSource)) {
-            assertStartPaths(expiring, AgentRunKind.TURN, false, List.of(controlRun.id()));
-            assertStartPaths(control, AgentRunKind.TURN, false, List.of(expiredRun.id()));
-            assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of())).isEmpty();
-            // Move the due time on the migration session so the window elapses while the barrier is up.
-            migration.update(ELAPSE_WINDOW, expiredRun.id());
-            assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of()))
-                    .map(AgentRunRepository.ExpiredRow::getId)
-                    .contains(expiredRun.id());
-        }
+        try (var _ = lockTurnForReaper(expiring)) {
+            try (var migration = RunningMigration.start(dataSource)) {
+                assertStartPaths(expiring, AgentRunKind.TURN, false, List.of(controlRun.id()));
+                assertStartPaths(control, AgentRunKind.TURN, false, List.of(expiredRun.id()));
+                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of()))
+                        .isEmpty();
+                // Move the due time on the migration session so the window elapses while the barrier is up.
+                migration.update(ELAPSE_WINDOW, expiredRun.id());
+                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of()))
+                        .map(AgentRunRepository.ExpiredRow::getId)
+                        .contains(expiredRun.id());
+            }
 
-        assertStartPaths(expiring, AgentRunKind.TURN, false, List.of(controlRun.id()));
-        assertStartPaths(control, AgentRunKind.TURN, true, List.of());
-        transactions.executeWithoutResult(status -> {
-            var lease = runs.claim(Set.of(AgentRunKind.TURN), List.of()).orElseThrow();
-            assertThat(lease.runId()).isEqualTo(controlRun.id());
-            assertThat(turns.start(workspace, lease.runId(), lease.epoch())).isPresent();
-        });
-        assertThat(turnRows.findById(control.getId()).orElseThrow().getAttempt()).isOne();
+            assertStartPaths(expiring, AgentRunKind.TURN, false, List.of(controlRun.id()));
+            assertStartPaths(control, AgentRunKind.TURN, true, List.of());
+            transactions.executeWithoutResult(status -> {
+                var lease = runs.claim(Set.of(AgentRunKind.TURN), List.of()).orElseThrow();
+                assertThat(lease.runId()).isEqualTo(controlRun.id());
+                assertThat(turns.start(workspace, lease.runId(), lease.epoch())).isPresent();
+            });
+        }
+        assertThat(turnRows.findById(control.getId()).orElseThrow().getAttempt())
+                .isOne();
         assertEndsWithoutStarting(expiring);
     }
 
     @Test
-    void shouldRefuseADigestPastItsContactWindowEvenIfItsDueTimeMoved() {
+    void shouldRefuseADigestPastItsContactWindowEvenIfItsDueTimeMoved() throws SQLException {
         String requestId = UUID.randomUUID().toString();
         assertThat(turns.submitDigest(
                         workspace,
                         conversation.getId(),
                         new ConversationTurnService.DigestRequest(
-                                requestId, "Weekly recap", JsonNodeFactory.instance.objectNode(), Duration.ofSeconds(1))))
+                                requestId,
+                                "Weekly recap",
+                                JsonNodeFactory.instance.objectNode(),
+                                Duration.ofSeconds(3))))
                 .isTrue();
-        var digest = turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
+        var digest =
+                turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
         var run = runOf(digest);
-        await().atMost(Duration.ofSeconds(10)).until(() -> Boolean.TRUE.equals(jdbc.queryForObject("""
+        try (var _ = lockTurnForReaper(digest)) {
+            await().atMost(Duration.ofSeconds(10))
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT created_at + make_interval(secs => start_within_seconds) <= clock_timestamp()
                   FROM agent_run WHERE id = ?
                 """, Boolean.class, run.id())));
-        jdbc.update("UPDATE agent_run SET available_at = clock_timestamp() WHERE id = ?", run.id());
+            jdbc.update("UPDATE agent_run SET available_at = clock_timestamp() WHERE id = ?", run.id());
 
-        assertStartPaths(digest, AgentRunKind.DIGEST, false, List.of());
+            assertStartPaths(digest, AgentRunKind.DIGEST, false, List.of());
+        }
         assertEndsWithoutStarting(digest);
     }
 
-    private void assertStartPaths(
-            ConversationTurn turn, AgentRunKind kind, boolean offered, List<UUID> excluded) {
+    /** The scheduled reaper must take this lock before it ends the turn. The run's claim stays free to proceed. */
+    private Connection lockTurnForReaper(ConversationTurn turn) throws SQLException {
+        var session = dataSource.getConnection();
+        try {
+            session.setAutoCommit(false);
+            try (var lock = session.prepareStatement(
+                    "SELECT id FROM conversation_turn WHERE id = ? AND workspace_id = ? FOR UPDATE")) {
+                lock.setObject(1, turn.getId());
+                lock.setLong(2, workspace);
+                try (var row = lock.executeQuery()) {
+                    if (!row.next()) throw new IllegalStateException("The fixture turn is missing");
+                }
+            }
+            return session;
+        } catch (SQLException | RuntimeException failure) {
+            session.close();
+            throw failure;
+        }
+    }
+
+    private void assertStartPaths(ConversationTurn turn, AgentRunKind kind, boolean offered, List<UUID> excluded) {
         var run = runOf(turn);
         var kinds = Set.of(kind);
         String subject = "conversation:" + turn.getConversationId();
@@ -187,7 +229,8 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
             softly.assertThat(probeLease(() -> runs.claimSubject(workspace, subject, kinds), run))
                     .as("subject claim")
                     .isEqualTo(offered);
-            softly.assertThat(runs.due(kinds, 0, 100).stream().anyMatch(row -> row.run().equals(run)))
+            softly.assertThat(runs.due(kinds, 0, 100).stream()
+                            .anyMatch(row -> row.run().equals(run)))
                     .as("dispatch")
                     .isEqualTo(offered);
             softly.assertThat(runs.dueOf(kinds, List.of(workspace), List.of(subject)).stream()
@@ -202,7 +245,7 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
     private boolean probeLease(Supplier<Optional<AgentRunLease>> claim, AgentRunRef run) {
         return Boolean.TRUE.equals(transactions.execute(status -> {
             status.setRollbackOnly();
-            var lease = claim.get();
+            var lease = claim.get().filter(claimed -> claimed.runId().equals(run.id()));
             if (lease.isEmpty()) return false;
             assertThat(lease.get().fence()).isEqualTo(new AgentRunFence(run.id(), workspace, 1));
             assertThat(runRows.findByRef(run.id(), workspace).orElseThrow().getState())
@@ -236,10 +279,14 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     private ConversationTurnService.Submission ask(Conversation target) {
         return turns.submit(
-                        workspace,
-                        target.getId(),
-                        new ConversationTurnService.Question(
-                                ConversationTurn.Surface.APP, "Question", UUID.randomUUID().toString(), null, null));
+                workspace,
+                target.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        "Question",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
     }
 
     private AgentRunRef runOf(ConversationTurn turn) {

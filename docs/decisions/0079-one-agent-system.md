@@ -492,6 +492,7 @@ sequenceDiagram
 - **Order.** The claim order is the band, then the workspace with the fewest running runs, then age. A `NOTIFY` on each new run wakes the replicas.
 - **Sandboxes.** The control concern takes the queued runs in that order, within the counts of the capacity home. It makes sure that a sandbox exists for each of their subjects. If none exists, it creates the claim.
 - **Claim.** The sandbox's `next` call claims its subject's next run, with `SKIP LOCKED`. The claim sets `LEASED`, raises `attempt` and `lease_epoch`, and sets `leased_until` on the database clock. A warm sandbox's `next` waits for the next run of its subject.
+  The claim and the two due reads follow the [run time limits](../contributor/agent-runs.mdx#clocks).
 - **One writer.** The sandbox that claimed the run is the only writer of its lease. Every write names `(run_id, lease_epoch)`. The database refuses the write unless the run is `LEASED` with that epoch and `leased_until` is after the database clock. Thus, a write after the lease expires fails before the reaper acts.
 - **Reaper.** The reaper is a conditional update on the database clock.
   - An expired lease requeues the run, or ends it with a reason when its attempt budget is spent.
