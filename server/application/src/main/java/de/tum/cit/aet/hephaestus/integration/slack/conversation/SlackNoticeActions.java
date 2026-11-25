@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,7 +39,7 @@ public class SlackNoticeActions {
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_NOTICE,
                 // A notice answers the Slack event that asks for it now, and checks no access of its own.
-                generations.requestedNow(workspaceId),
+                generations.requestedNow(workspaceId, List.of()),
                 "slack_dm:" + workspaceId + ":" + notice.channelId(),
                 key,
                 mapper.valueToTree(notice),

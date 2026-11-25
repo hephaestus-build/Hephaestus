@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795633800000-1" author="hephaestus">
+        <comment>A person has an authorization generation on their account, which only a narrowing of their AI choice raises (KR-10, ADR 0134 decision 1). Every account starts at generation 0. A narrowing is a change to NO_AI, from CLOUD to IN_HOUSE_ONLY, or a cleared choice, which a workspace that requires a choice refuses. The trigger is installed with the column, whoever writes the choice.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE account ADD COLUMN authority_generation bigint DEFAULT 0 NOT NULL,
+    ADD CONSTRAINT ck_account_authority_generation CHECK (authority_generation >= 0);
+CREATE FUNCTION ai_choice_narrows_authority() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.ai_choice IS DISTINCT FROM OLD.ai_choice
+       AND (NEW.ai_choice IS NULL
+            OR NEW.ai_choice = 'NO_AI'
+            OR (NEW.ai_choice = 'IN_HOUSE_ONLY' AND OLD.ai_choice = 'CLOUD')) THEN
+        NEW.authority_generation := OLD.authority_generation + 1;
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER account_ai_choice_narrows_authority BEFORE UPDATE OF ai_choice ON account
+    FOR EACH ROW EXECUTE FUNCTION ai_choice_narrows_authority();
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP TRIGGER account_ai_choice_narrows_authority ON account;
+DROP FUNCTION ai_choice_narrows_authority();
+ALTER TABLE account DROP COLUMN authority_generation;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795633800000-2" author="hephaestus">
+        <comment>A stamp also holds the generation of each person whose authority the work depends on, such as a review's developers or a turn's owner, under "accounts". The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.authorization_stamp_valid(stamp jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+    SELECT jsonb_typeof(stamp) = 'object'
+        AND jsonb_typeof(stamp -> 'workspace') = 'number'
+        AND (stamp ->> 'workspace') ~ '^[0-9]{1,19}$'
+        AND (stamp ->> 'workspace')::numeric <= 9223372036854775807
+        AND (NOT (stamp ? 'accounts')
+             OR (jsonb_typeof(stamp -> 'accounts') = 'object'
+                 AND NOT EXISTS (
+                     SELECT 1 FROM pg_catalog.jsonb_each(stamp -> 'accounts') AS person(account, generation)
+                      WHERE person.account !~ '^[0-9]{1,19}$'
+                         OR jsonb_typeof(person.generation) <> 'number'
+                         OR (person.generation #>> '{}') !~ '^[0-9]{1,19}$'
+                         OR (person.generation #>> '{}')::numeric > 9223372036854775807)))
+$$;
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_authorization_stamp;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_authorization_stamp
+    CHECK (public.authorization_stamp_valid(authorization_stamp) IS TRUE) NOT VALID;
+ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_authorization_stamp;
+ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_authorization_stamp
+    CHECK (public.authorization_stamp_valid(authorization_stamp) IS TRUE) NOT VALID;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_authorization_stamp;
+ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_authorization_stamp CHECK ((jsonb_typeof(authorization_stamp) = 'object'
+    AND jsonb_typeof(authorization_stamp -> 'workspace') = 'number'
+    AND (authorization_stamp ->> 'workspace') ~ '^[0-9]{1,19}$'
+    AND (authorization_stamp ->> 'workspace')::numeric <= 9223372036854775807) IS TRUE);
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_authorization_stamp;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_authorization_stamp CHECK ((jsonb_typeof(authorization_stamp) = 'object'
+    AND jsonb_typeof(authorization_stamp -> 'workspace') = 'number'
+    AND (authorization_stamp ->> 'workspace') ~ '^[0-9]{1,19}$'
+    AND (authorization_stamp ->> 'workspace')::numeric <= 9223372036854775807) IS TRUE);
+DROP FUNCTION public.authorization_stamp_valid(jsonb);
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795633800000-3" author="hephaestus">
+        <comment>Validate the stamp checks while ordinary row writes can continue.</comment>
+        <sql>ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_authorization_stamp;
+ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_authorization_stamp;</sql>
+        <rollback><sql>SELECT 1;</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

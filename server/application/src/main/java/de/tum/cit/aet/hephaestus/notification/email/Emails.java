@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,7 +53,7 @@ public class Emails {
         };
         Long workspace = notice.address(event).workspaceId();
         Optional<CheckedAuthority> authority =
-                workspace == null ? Optional.empty() : generations.authorize(workspace, ready);
+                workspace == null ? Optional.empty() : generations.authorize(workspace, List.of(), ready);
         if (workspace == null ? !ready.getAsBoolean() : authority.isEmpty()) {
             metrics.record(notice.kind(), Objects.requireNonNull(withheld.get()).outcome());
             return;

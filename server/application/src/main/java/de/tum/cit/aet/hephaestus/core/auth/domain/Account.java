@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.domain;
 
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBearing;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,6 +29,7 @@ import org.springframework.modulith.NamedInterface;
  * One human principal across workspaces. Roster identities can own an unclaimed account. A verified
  * sign-in claims its exact provider key. Email is contact data, never ownership proof.
  */
+@AuthorityBearing(generation = AuthorityBearing.Generation.ACCOUNT)
 @Entity
 @Table(name = "account")
 @Getter
@@ -103,6 +105,16 @@ public class Account {
 
     @Column(name = "ai_choice_at")
     private @Nullable Instant aiChoiceAt;
+
+    /**
+     * The person's authorization generation (ADR 0134). Only the database writes it, when the AI choice narrows; a flush
+     * never writes it, so it cannot put back an older value. A boundary reads it fresh through {@code
+     * AuthorityGenerations}.
+     */
+    @Column(name = "authority_generation", nullable = false, insertable = false, updatable = false)
+    @ColumnDefault("0")
+    @Setter(AccessLevel.NONE)
+    private long authorityGeneration;
 
     @Column(name = "feedback_delivery_enabled", nullable = false)
     @ColumnDefault("true")

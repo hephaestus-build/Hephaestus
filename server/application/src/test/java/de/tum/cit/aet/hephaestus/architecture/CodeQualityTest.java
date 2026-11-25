@@ -431,6 +431,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "LlmModelCapabilityProbe", // Catalog controllers remain available without the agent runtime;
                     // no provider call occurs when its proxy gateway is absent.
                     "MembershipService", // Reads exist on every role; PeopleRegistryService is server-only.
+                    "WorkspaceAuthorityGenerations", // Loads on every role; AccountAuthorityGenerations is server-only,
+                    // and only the server role asks a person's generation.
                     "ResultQueriesImpl", // Persistence slices load this repository fragment without the
                     // capture-role ResultFreshness bean, required only by source-filtered reads.
                     "ConnectionPurgeContributor", // Exists wherever workspaces are purged; ProviderTeardown is

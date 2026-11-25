@@ -73,7 +73,7 @@ class NativeActionRecipientIntegrationTest extends AbstractWorkspaceIntegrationT
         String key = "native-test:" + UUID.randomUUID();
         return actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_NOTICE,
-                context.getBean(AuthorityGenerations.class).requestedNow(workspaceId),
+                context.getBean(AuthorityGenerations.class).requestedNow(workspaceId, List.of()),
                 key,
                 key,
                 mapper.createObjectNode().put("channelId", "D_TEST"),

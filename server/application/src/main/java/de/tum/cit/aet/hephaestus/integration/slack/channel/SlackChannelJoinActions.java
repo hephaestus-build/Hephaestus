@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,7 +36,7 @@ public class SlackChannelJoinActions {
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_JOIN,
                 // A channel's own action, queued with the consent change that asks for it, checks no access here.
-                generations.requestedNow(workspace),
+                generations.requestedNow(workspace, List.of()),
                 lane(workspace, channel.getSlackChannelId()),
                 key,
                 mapper.valueToTree(new SlackChannelJoin(

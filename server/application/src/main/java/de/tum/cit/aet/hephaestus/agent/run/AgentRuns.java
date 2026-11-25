@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
-import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
@@ -25,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -143,7 +141,7 @@ public class AgentRuns {
             AgentRunBand band,
             String concurrencyKey,
             @Nullable Duration startWithin) {
-        return queue(generations.requestedNow(workspaceId), kind, band, concurrencyKey, startWithin);
+        return queue(generations.requestedNow(workspaceId, List.of()), kind, band, concurrencyKey, startWithin);
     }
 
     /**
@@ -239,7 +237,11 @@ public class AgentRuns {
                 kind,
                 previous.getBand(),
                 previous.getConcurrencyKey(),
-                generations.requestedNow(previous.getWorkspaceId()).stamp(),
+                generations
+                        .requestedNow(
+                                previous.getWorkspaceId(),
+                                previous.getAuthorizationStamp().accounts().keySet())
+                        .stamp(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + (again ? 1 : 0),
                 again ? startWithin(previous) : null,
@@ -650,8 +652,8 @@ public class AgentRuns {
     }
 
     /**
-     * Holds the lease as {@link #requireCurrent} does, then holds the workspace's authorization generation and checks
-     * the run's stamp against it (ADR 0134). The lease can be waited for while a narrowing commits; with both held, a
+     * Holds the lease as {@link #requireCurrent} does, then holds the workspace's and its people's authorization
+     * generations and checks the run's stamp against them (ADR 0134). The lease can be waited for while a narrowing commits; with both held, a
      * narrowing either committed before and refuses here, or waits until the caller's transaction ends. Instance work
      * carries no workspace authority.
      *
@@ -667,10 +669,9 @@ public class AgentRuns {
         AuthorizationStamp stamp = runs.findByRef(fence.runId(), fence.workspaceId())
                 .map(AgentRun::getAuthorizationStamp)
                 .orElseThrow(() -> new StaleRunException(fence));
-        OptionalLong held = generations.workspaceHeld(fence.workspaceId());
-        if (held.isEmpty() || held.getAsLong() != stamp.workspace())
-            throw new AuthorityRefusedException(
-                    new AuthorityRefusal(boundary, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        generations.checkHeld(stamp, fence.workspaceId(), boundary).ifPresent(refusal -> {
+            throw new AuthorityRefusedException(refusal);
+        });
     }
 
     /** Whether the claim numbered {@code epoch} holds {@code run} now; never for an epoch before the first claim. */

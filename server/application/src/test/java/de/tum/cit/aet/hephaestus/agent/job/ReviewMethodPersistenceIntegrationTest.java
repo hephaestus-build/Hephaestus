@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
@@ -74,6 +75,9 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentRuns agentRuns;
+
+    @Autowired
+    private AuthorityGenerations generations;
 
     @Autowired
     private ReviewJobAssignments assignments;
@@ -295,7 +299,17 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
         var policy = mock(ReviewMemberAiPolicy.class);
         when(policy.binding(any())).thenReturn(Optional.of(savedBinding));
         var queue = new ReviewJobService(
-                jobs, guard, assignments, assignmentStore, policy, resolver, mapper, admission, methods, agentRuns);
+                jobs,
+                guard,
+                assignments,
+                assignmentStore,
+                policy,
+                resolver,
+                mapper,
+                admission,
+                methods,
+                agentRuns,
+                generations);
         UUID jobId = Objects.requireNonNull(transactions.execute(status -> {
             var review = snapshots.find(workspace.getId(), reviewId).orElseThrow();
             return queue.enqueue(review, 978006L, List.of(new ReviewAssignmentId(reviewId, 978004L, 978006L)));

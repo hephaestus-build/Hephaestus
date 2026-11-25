@@ -92,7 +92,7 @@ public class ConversationSlackReplies {
         // The digest's admission is its request, and it checks no access of its own here.
         return actions.enqueueNew(
                 request(
-                        generations.requestedNow(workspaceId),
+                        generations.requestedNow(workspaceId, List.of(accountId)),
                         accountId,
                         digestKey(digestId),
                         new Payload(digestId, null)),

@@ -19,7 +19,11 @@ public record AuthorityRefusal(AuthorityBoundary boundary, Reason reason) {
          * The workspace's authority narrowed, for example by a membership change, after the work was requested. The
          * work does not go on under the old authority.
          */
-        WORKSPACE_AUTHORITY_NARROWED
+        WORKSPACE_AUTHORITY_NARROWED,
+        /**
+         * A person the work depends on narrowed their own choice, such as turning AI off, after the work was requested.
+         */
+        ACCOUNT_AUTHORITY_NARROWED
     }
 
     /** Counts this refusal. */

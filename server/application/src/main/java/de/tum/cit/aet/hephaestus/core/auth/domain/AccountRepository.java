@@ -18,6 +18,18 @@ import org.springframework.stereotype.Repository;
 @WorkspaceAgnostic(
         "Account is the Hephaestus-native principal; it spans workspaces (membership lives on" + " Membership)")
 public interface AccountRepository extends JpaRepository<Account, Long> {
+
+    /** The person's authorization generation as committed now, never as a cached entity holds it. */
+    @Query(value = "SELECT authority_generation FROM account WHERE id = :accountId", nativeQuery = true)
+    Optional<Long> findAuthorityGeneration(@Param("accountId") long accountId);
+
+    /**
+     * The person's authorization generation, held for the caller's transaction: a narrowing of their AI choice, which
+     * raises it, waits until that transaction ends.
+     */
+    @Query(value = "SELECT authority_generation FROM account WHERE id = :accountId FOR SHARE", nativeQuery = true)
+    Optional<Long> findAuthorityGenerationForShare(@Param("accountId") long accountId);
+
     Optional<Account> findByPasskeyUserHandle(String handle);
 
     boolean existsByAppRole(Account.AppRole appRole);

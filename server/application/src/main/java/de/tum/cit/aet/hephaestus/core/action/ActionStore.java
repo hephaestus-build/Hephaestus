@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
@@ -16,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -149,7 +149,7 @@ class ActionStore {
     /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
     @Transactional
     public Optional<Claim> claim(UUID id, Duration lease, ActionAdmission admission) {
-        return actions.claimById(id, lease.toSeconds(), admission.json()).map(ActionStore::claim);
+        return actions.claimById(id, lease.toSeconds(), admission.json()).map(this::claim);
     }
 
     @Transactional(readOnly = true)
@@ -195,7 +195,7 @@ class ActionStore {
     @Transactional
     public List<Claim> claim(int limit, Duration lease, ActionAdmission admission) {
         return actions.claim(limit, lease.toSeconds(), AT_MOST_ONCE, admission.json()).stream()
-                .map(ActionStore::claim)
+                .map(this::claim)
                 .toList();
     }
 
@@ -228,9 +228,9 @@ class ActionStore {
     private WriteAdmission admit(Claim claim, Duration margin, boolean checkAuthority) {
         Long workspace = claim.workspaceId();
         if (checkAuthority && workspace != null) {
-            OptionalLong held = generations.workspaceHeld(workspace);
-            if (held.isEmpty() || held.getAsLong() != claim.stamp().workspace())
-                return WriteAdmission.AUTHORITY_CHANGED;
+            if (generations
+                    .checkHeld(claim.stamp(), workspace, AuthorityBoundary.SEND)
+                    .isPresent()) return WriteAdmission.AUTHORITY_CHANGED;
         }
         return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1
                 ? WriteAdmission.ADMITTED
@@ -358,7 +358,7 @@ class ActionStore {
                 row.getReadbackRef());
     }
 
-    private static Claim claim(AgentActionRepository.ClaimRow row) {
+    private Claim claim(AgentActionRepository.ClaimRow row) {
         return new Claim(
                 row.getId(),
                 row.getWorkspaceId(),
@@ -370,6 +370,6 @@ class ActionStore {
                 row.getWriteStarted(),
                 row.getReadbackRef(),
                 row.getNativeRecipient(),
-                new AuthorizationStamp(row.getStampedGeneration()));
+                mapper.readValue(row.getAuthorizationStamp(), AuthorizationStamp.class));
     }
 }

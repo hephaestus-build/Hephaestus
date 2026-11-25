@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkChanged;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -124,7 +125,7 @@ class FeedbackThreadResolver {
         actions.enqueue(new ActionRequest(
                 ActionKind.RESOLVE_FEEDBACK_THREAD,
                 // The thread's state decides the write, and no access check runs before it in this transaction.
-                generations.requestedNow(workspaceId),
+                generations.requestedNow(workspaceId, List.of()),
                 lane,
                 lane + ":" + row.getGeneration() + ":" + (row.isResolved() ? "RESOLVE" : "REOPEN"),
                 mapper.valueToTree(new Payload(row.getId(), row.getGeneration())),

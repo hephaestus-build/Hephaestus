@@ -23,6 +23,8 @@ public @interface AuthorityBearing {
     /** The authorization generations of ADR 0134 decision 2. */
     enum Generation {
         /** {@code workspace.authority_generation}. */
-        WORKSPACE
+        WORKSPACE,
+        /** {@code account.authority_generation}: the person's own, such as their AI choice. */
+        ACCOUNT
     }
 }

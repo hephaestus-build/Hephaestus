@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
@@ -14,10 +15,13 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
@@ -25,9 +29,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -50,6 +57,7 @@ public class ReviewJobService implements ReviewQueue {
     private final LlmAdmissionService admission;
     private final ReviewMethodVerifier methods;
     private final AgentRuns runs;
+    private final AuthorityGenerations generations;
 
     @Override
     @Transactional
@@ -69,21 +77,34 @@ public class ReviewJobService implements ReviewQueue {
         job.setReviewId(review.id());
         job.setWorkspaceId(review.workspaceId());
         job.setInput(new ReviewJobInput(itemId, selected));
-        job.setRunId(runs.enqueue(
-                        review.workspaceId(),
-                        AgentRunKind.REVIEW,
-                        ReviewRunKind.band(review.origin()),
-                        ReviewRunKind.subject(review.id()),
-                        null)
-                .id());
         var pinned = assignments.load(job);
         ReviewMethod method = pinned.getFirst().practice().method();
         if (pinned.stream()
                 .anyMatch(assignment -> !assignment.practice().method().equals(method))) {
             throw new IllegalArgumentException("One invocation must use one frozen review method");
         }
-        var binding = policy.binding(job)
+        // The review depends on its developers' AI choices: the stamp holds their generations, read before the policy
+        // checks those choices (ADR 0134).
+        List<Long> developers = pinned.stream()
+                .map(ReviewAssignmentSnapshot::developerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        var permitted = new AtomicReference<@Nullable WorkspaceModelAssignment>();
+        CheckedAuthority authority = generations
+                .authorize(review.workspaceId(), developers, () -> {
+                    policy.binding(job).ifPresent(permitted::set);
+                    return permitted.get() != null;
+                })
                 .orElseThrow(() -> new ReviewJobStateConflictException("No permitted model serves these assignments"));
+        var binding = Objects.requireNonNull(permitted.get());
+        job.setRunId(runs.enqueue(
+                        authority,
+                        AgentRunKind.REVIEW,
+                        ReviewRunKind.band(review.origin()),
+                        ReviewRunKind.subject(review.id()),
+                        null)
+                .id());
         ConfigSnapshot snapshot = ConfigSnapshot.from(binding, models)
                 .withPriceSnapshot(admission.admit(binding).price());
         methods.require(method, "review", binding);

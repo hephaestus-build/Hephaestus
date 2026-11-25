@@ -525,6 +525,10 @@ This section gives the mechanism for runs.
 - A continuation keeps the stamp of the run that it continues: it is the same work.
   `AgentRuns.resume`, which queues completed work again because something asks for it now, takes the stamp of now.
   A database trigger refuses a change of the stamp.
+- A person has a generation too: `account.authority_generation`, which the trigger `account_ai_choice_narrows_authority` raises when their AI choice narrows (to NO_AI, from CLOUD to IN_HOUSE_ONLY, or cleared).
+  A stamp holds it for each person the work depends on, under `accounts`: a review's developers, a turn's owner, a feedback's developer.
+  Every boundary compares those too, and a refusal names `ACCOUNT_AUTHORITY_NARROWED`.
+  ADR 0134 puts the person's generation on the relationship, which #4903 has not added yet, so the account holds it until then.
 - Only a narrowing raises `authority_generation`.
   The trigger `membership_narrows_authority` raises it when a membership ends, is left, moves or loses a role, whatever wrote the row.
   `Workspace` maps the column neither insertable nor updatable, so a flush of the entity cannot write back an older value.

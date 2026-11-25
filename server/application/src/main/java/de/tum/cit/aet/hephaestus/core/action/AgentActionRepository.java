@@ -43,7 +43,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             SELECT a.id AS "id", a.workspace_id AS "workspaceId", a.kind AS "kind", a.idempotency_key AS "idempotencyKey",
             a.payload::text AS "payload", a.native_recipient::text AS "nativeRecipient", a.attempts AS "attempts", a.lease_epoch AS "epoch",
             a.write_started_at IS NOT NULL AS "writeStarted", a.readback_ref AS "readbackRef",
-            (a.authorization_stamp ->> 'workspace')::bigint AS "stampedGeneration"
+            a.authorization_stamp::text AS "authorizationStamp"
             """;
 
     /** An action as its owner reads it ({@link LaneRow}). A reread waits with its next attempt after its last update. */
@@ -83,7 +83,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
         @Nullable
         String getReadbackRef();
 
-        long getStampedGeneration();
+        String getAuthorizationStamp();
     }
 
     interface SettledRow {

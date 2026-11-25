@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEve
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +52,7 @@ public class SlackConsentActions {
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_CONSENT,
                 // A channel's own action, queued with the consent change that asks for it, checks no access here.
-                generations.requestedNow(workspace),
+                generations.requestedNow(workspace, List.of()),
                 SlackChannelJoinActions.lane(workspace, channel.getSlackChannelId()),
                 SlackConsentAnnouncement.idempotencyKey(workspace, requestId),
                 mapper.valueToTree(payload),

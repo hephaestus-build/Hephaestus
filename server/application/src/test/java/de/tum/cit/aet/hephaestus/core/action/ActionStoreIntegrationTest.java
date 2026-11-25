@@ -768,7 +768,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                                 kind.instanceLevel()
                                         ? null
                                         : context.getBean(AuthorityGenerations.class)
-                                                .requestedNow(workspace()),
+                                                .requestedNow(workspace(), List.of()),
                                 key,
                                 key,
                                 JsonNodeFactory.instance.objectNode().put("n", 1),

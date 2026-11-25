@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -85,15 +86,18 @@ public class FeedbackSendQueue {
 
     /**
      * The authority of a workspace admin's decision: it reads the stamp, then checks that the actor is still at least an
-     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction.
+     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction. The
+     * send also depends on the feedback's developer, whose AI choice can narrow it.
      *
      * @throws AccessForbiddenException when the actor is no longer an admin of the workspace
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public CheckedAuthority asAdmin(long workspaceId, long actorAccountId) {
+    public CheckedAuthority asAdmin(Feedback row, long actorAccountId) {
+        long workspaceId = row.getWorkspaceId();
         return generations
                 .authorize(
                         workspaceId,
+                        List.of(row.getDeveloperId()),
                         () -> memberships
                                 .activeRole(workspaceId, actorAccountId)
                                 .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
@@ -101,9 +105,12 @@ public class FeedbackSendQueue {
                 .orElseThrow(() -> new AccessForbiddenException("Only a workspace admin can decide on feedback."));
     }
 
-    /** The authority of a send that its request checks no access for in this transaction, such as a policy's send. */
+    /**
+     * The authority of a send that its request checks no access for in this transaction, such as a policy's send. It
+     * depends on the feedback's developer, whose AI choice can narrow it.
+     */
     public CheckedAuthority requestedNow(Feedback row) {
-        return generations.requestedNow(row.getWorkspaceId());
+        return generations.requestedNow(row.getWorkspaceId(), List.of(row.getDeveloperId()));
     }
 
     private void enqueue(Feedback row, FeedbackSendAction action, CheckedAuthority authority) {
@@ -126,11 +133,7 @@ public class FeedbackSendQueue {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void follow(Feedback row, FeedbackSendAction action) {
-        next(
-                row,
-                action,
-                actions.newestInLane(row.getWorkspaceId(), lane(row.getId())),
-                generations.requestedNow(row.getWorkspaceId()));
+        next(row, action, actions.newestInLane(row.getWorkspaceId(), lane(row.getId())), requestedNow(row));
     }
 
     private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior, CheckedAuthority authority) {

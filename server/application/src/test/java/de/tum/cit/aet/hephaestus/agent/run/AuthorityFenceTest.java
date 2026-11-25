@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
@@ -44,6 +45,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -168,7 +170,7 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
         UUID action = Objects.requireNonNull(new TransactionTemplate(transactions).execute(status -> {
             CheckedAuthority checked = generations
-                    .authorize(workspace.getId(), () -> {
+                    .authorize(workspace.getId(), List.of(), () -> {
                         // The member leaves on another connection after the stamp was read, and the check still
                         // passes in this transaction.
                         PostgreSQLTestContainer.ownerJdbc()
@@ -301,6 +303,87 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    @AuthorityFenceCase(setting = Account.class, boundary = AuthorityBoundary.CONTEXT_READ)
+    void shouldRefuseTheNextContextReadWhenTheOwnerTurnedAiOff() {
+        AgentRunFence fence = fence(runningTurn());
+
+        chooseAi("NO_AI");
+
+        var refused = catchThrowableOfType(
+                AuthorityRefusedException.class, () -> authority.require(fence, AuthorityBoundary.CONTEXT_READ));
+        assertThat(refused.refusal())
+                .isEqualTo(new AuthorityRefusal(
+                        AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.ACCOUNT_AUTHORITY_NARROWED));
+    }
+
+    @Test
+    @AuthorityFenceCase(setting = Account.class, boundary = AuthorityBoundary.MODEL_DISPATCH)
+    void shouldRefuseAModelCallWhoseOwnerTurnedAiOffWhileItWaitedForTheRunsLock() throws Exception {
+        AgentRunFence fence = fence(runningTurn());
+        CompletableFuture<Void> dispatch;
+        try (var holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT 1 FROM agent_run WHERE id = ? FOR UPDATE")) {
+                lock.setObject(1, fence.runId());
+                lock.executeQuery().close();
+            }
+            dispatch = CompletableFuture.runAsync(() -> new TransactionTemplate(transactions)
+                    .executeWithoutResult(
+                            status -> agentRuns.requireCurrentUnder(fence, AuthorityBoundary.MODEL_DISPATCH)));
+            awaitLockWaiter();
+            chooseAi("NO_AI");
+            holder.rollback();
+        }
+
+        assertThatThrownBy(() -> dispatch.get(10, TimeUnit.SECONDS))
+                .cause()
+                .isInstanceOfSatisfying(
+                        AuthorityRefusedException.class,
+                        refused -> assertThat(refused.refusal())
+                                .isEqualTo(new AuthorityRefusal(
+                                        AuthorityBoundary.MODEL_DISPATCH,
+                                        AuthorityRefusal.Reason.ACCOUNT_AUTHORITY_NARROWED)));
+    }
+
+    @Test
+    @AuthorityFenceCase(setting = Account.class, boundary = AuthorityBoundary.SEND)
+    void shouldRefuseTheSlackReplyOfATurnWhoseOwnerTurnedAiOffDuringTheTurn() {
+        ConversationTurn turn = runningTurn();
+        UUID question = entries.findStimulus(workspace.getId(), turn.getId()).getId();
+        chooseAi("NO_AI");
+        var posted = new CopyOnWriteArrayList<UUID>();
+        var executor =
+                ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_POST, attempt -> {
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    posted.add(attempt.id());
+                    return new ActionResult.Done(null);
+                }));
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> slackReplies.ended(turn, asker, question));
+        UUID reply = slackReplies.forQuestion(workspace.getId(), question).orElseThrow();
+
+        assertThat(executor.runNow(reply)).contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(posted).isEmpty();
+    }
+
+    @Test
+    void shouldRaiseThePersonsGenerationOnlyWhenTheirAiChoiceNarrows() {
+        chooseAi("CLOUD");
+        long before = personGeneration();
+
+        chooseAi("IN_HOUSE_ONLY");
+        assertThat(personGeneration()).isEqualTo(before + 1);
+        chooseAi("CLOUD");
+        assertThat(personGeneration()).isEqualTo(before + 1);
+        chooseAi("NO_AI");
+        assertThat(personGeneration()).isEqualTo(before + 2);
+        chooseAi(null);
+        assertThat(personGeneration()).isEqualTo(before + 3);
+        chooseAi("IN_HOUSE_ONLY");
+        assertThat(personGeneration()).isEqualTo(before + 3);
+    }
+
+    @Test
     void shouldRefuseAQuestionWhoseOwnerLeftBeforeItsRunWasStamped() {
         jdbc.update(
                 "UPDATE membership SET left_at = now() WHERE workspace_id = ? AND account_id = ?",
@@ -408,6 +491,21 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
                 .doesNotThrowAnyException();
     }
 
+    /** The member's AI choice, as their settings write it; {@code null} clears it. */
+    private void chooseAi(@Nullable String choice) {
+        jdbc.update(
+                "UPDATE account SET ai_choice = CAST(? AS varchar),"
+                        + " ai_choice_at = CASE WHEN CAST(? AS varchar) IS NULL THEN NULL ELSE now() END WHERE id = ?",
+                choice,
+                choice,
+                asker);
+    }
+
+    private long personGeneration() {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT authority_generation FROM account WHERE id = ?", Long.class, asker));
+    }
+
     /** Removes the member on another connection, waiting at most {@code timeout} for a lock. */
     private void narrowWithin(String timeout) {
         PostgreSQLTestContainer.ownerJdbc().execute("""
@@ -447,7 +545,7 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ActionRequest notice() {
-        return notice(generations.requestedNow(workspace.getId()));
+        return notice(generations.requestedNow(workspace.getId(), List.of()));
     }
 
     private ActionRequest notice(CheckedAuthority authority) {

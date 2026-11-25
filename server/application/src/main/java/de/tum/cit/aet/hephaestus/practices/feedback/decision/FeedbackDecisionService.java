@@ -72,12 +72,12 @@ public class FeedbackDecisionService {
         if (!privacy.holdForAccountWrite(actorAccountId)) {
             throw conflict("Your account cannot record feedback decisions.");
         }
-        // The route checked the actor's role before this transaction: a send that the decision queues carries the
-        // authority of a role check in this transaction, read after its stamp (ADR 0134).
-        CheckedAuthority actor = sendQueue.asAdmin(workspaceId, actorAccountId);
         Feedback feedback = feedbackRepository
                 .lockByIdAndWorkspaceId(feedbackId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
+        // The route checked the actor's role before this transaction: a send that the decision queues carries the
+        // authority of a role check in this transaction, read after its stamp (ADR 0134).
+        CheckedAuthority actor = sendQueue.asAdmin(feedback, actorAccountId);
         if (feedback.getDestination() == FeedbackDestination.ON_WORK && feedback.getState() == FeedbackState.REPLACED)
             throw conflict("A newer revision owns this copy. Open that revision to change its delivery.");
         var send = sendQueue.current(workspaceId, feedbackId);

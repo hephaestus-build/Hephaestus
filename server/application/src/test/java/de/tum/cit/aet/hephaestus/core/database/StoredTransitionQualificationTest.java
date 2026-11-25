@@ -56,6 +56,13 @@ class StoredTransitionQualificationTest {
                     WHERE id = '00000000-0000-4000-8000-000000997103'""", """
                     SELECT status = 'CANCELLED' AND stop_reason = 'AUTHORITY_CHANGED'
                     FROM review WHERE id = '00000000-0000-4000-8000-000000997103'"""),
+            new StoredTransition(
+                    "account authority_generation 0 -> 1 when the AI choice narrows (ADR 0134)",
+                    """
+                    INSERT INTO account(id,display_name,ai_choice,ai_choice_at) VALUES(997106,'AI choice',
+                        'CLOUD',now())""",
+                    "UPDATE account SET ai_choice = 'NO_AI', ai_choice_at = now() WHERE id = 997106",
+                    "SELECT authority_generation = 1 FROM account WHERE id = 997106"),
             actionEnd(997104, false, "CANCELLED"),
             actionEnd(997105, true, "UNCERTAIN"));
 

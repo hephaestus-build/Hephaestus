@@ -105,8 +105,8 @@ public class FeedbackStoreService implements FeedbackStore {
     @Override
     public void retry(long workspaceId, UUID feedbackId, long actorId) {
         if (actorId <= 0) throw new IllegalArgumentException("A retry requires an authenticated account.");
-        CheckedAuthority actor = sendQueue.asAdmin(workspaceId, actorId);
         var row = lock(workspaceId, feedbackId);
+        CheckedAuthority actor = sendQueue.asAdmin(row, actorId);
         var send = sendQueue.current(workspaceId, feedbackId);
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
         if (row.getDestination() == FeedbackDestination.ON_WORK && visibility.withdrawn(workspaceId, feedbackId)) {
@@ -136,8 +136,8 @@ public class FeedbackStoreService implements FeedbackStore {
 
     public void recheck(long workspaceId, UUID feedbackId, long actorId) {
         if (actorId <= 0) throw new IllegalArgumentException("A recheck requires an authenticated account.");
-        CheckedAuthority actor = sendQueue.asAdmin(workspaceId, actorId);
-        sendQueue.recheck(lock(workspaceId, feedbackId), actor);
+        var row = lock(workspaceId, feedbackId);
+        sendQueue.recheck(row, sendQueue.asAdmin(row, actorId));
     }
 
     /**

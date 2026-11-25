@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -55,6 +56,7 @@ public class TurnRunsAdapter implements TurnRuns {
         CheckedAuthority owner = generations
                 .authorize(
                         workspaceId,
+                        List.of(ownerAccountId),
                         () -> memberships
                                 .activeRole(workspaceId, ownerAccountId)
                                 .isPresent())
