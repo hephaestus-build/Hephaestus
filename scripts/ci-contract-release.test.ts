@@ -41,6 +41,43 @@ import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 import { validateManifest } from "./verify-release-evidence.ts";
 
 void describe("ci-contract: release", () => {
+	void test("1.0.0 verifies the signed plan before draft creation and retains it at publication", async () => {
+		const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+		const gate = namedStep(
+			release,
+			["jobs", "tag-images"],
+			"Verify the maintainer's release check",
+		);
+		assert.equal(gate.get("if"), "needs.release.outputs.tag_name == 'v1.0.0'");
+		const script = asString(gate.get("run"), "release check script");
+		const unsigned = await runStep(script, { CANDIDATE: "v1.0.0-rc.2" });
+		assert.ok(unsigned.failed);
+		assert.match(
+			script,
+			/verify-release-check\.ts[\s\S]+candidate\/release-\$\{CANDIDATE\}\.chart\.json/u,
+		);
+
+		const signingJob = job(release.toString(), "tag-images");
+		assert.ok(
+			signingJob.indexOf("Capture release image digests") <
+				signingJob.indexOf("Verify the maintainer's release check"),
+		);
+		assert.ok(
+			signingJob.indexOf("Verify the maintainer's release check") <
+				signingJob.indexOf("Create the draft release"),
+		);
+		assert.ok(needsOf(release, "publish-release").includes("tag-images"));
+		const publication = namedStep(
+			release,
+			["jobs", "publish-release"],
+			"Verify durable assets from a clean environment",
+		);
+		assert.match(
+			asString(publication.get("run"), "publication verifier"),
+			/cmp evidence\/release-plan\.json\.sig/u,
+		);
+	});
+
 	void test("every shipped-code quality leg admits owned source into the release generator", async () => {
 		const tasks = await loadTasks();
 		for (const leg of [

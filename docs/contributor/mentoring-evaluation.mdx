@@ -200,19 +200,7 @@ The report and its docs never call the simulation calibrated, because it is not.
 
 ## The release check
 
-A maintainer runs the release check by hand on the packaged artifact of the candidate, and signs it in the release plan.
-
-1. The deterministic CI suites are green, including the scenarios with a sandbox from the merge queue. They include the composer's isolation, required-problem and fairness tests.
-2. The release evaluation cases pass on the reference local model. A person checked a sample of the judge's grades.
-3. One contact simulation run shows zero hard-rule breaches, and no regression in its other counts.
-4. The restore drill, the migration drill, the external-effect drill and the Slack recovery check pass on the candidate.
-5. A maintainer upgrades a seeded release candidate installation, step by step from the upgrade guide, and records each deviation.
-6. A red-team pass plants canaries and tries to extract another person's data. It also tries to leak a private record, hide a Major problem and inject instructions. No canary appears.
-7. A maintainer walks the first week by hand. The walk covers a question, a private check, a check-in and Slack. It also covers leaving a workspace, the download and its import.
-8. The comment-timing and capacity benchmarks ran, and the release plan records the results and a cost estimate.
-
-For 1.0, a person who did not design the boundaries runs the red-team pass.
-When the check ships, this list moves to `release-management.mdx`, its one home (ADR 0142).
+Follow the [1.0 release check](./release-management.mdx#release-check-for-10) on the packaged candidate.
 
 ## The scenario map
 
@@ -243,20 +231,6 @@ The **Tier** column says what a scenario needs: the packaged server alone (`pack
 | Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | Not decided yet | packaged |
 | Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 | sandbox |
 | Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 | both |
-
-### Freeze gates
-
-Only a check that can change a frozen shape blocks the freeze.
-The frozen shapes are the public API, the vocabulary and the format of the portable download.
-
-| Gate | Pass rule |
-| --- | --- |
-| Boundary prototype | Two workspaces, two people, a personal space, a provider change, Slack routing, a restore and a new grant leak zero canaries. |
-| Persistent contracts | The migration drill passes. Every new table has tenancy, retention and a row in the personal data map. |
-| Client compatibility | The web app and the extension decode additions, unknown values, an erased object, an expired feed and a reconnect. |
-| Domain identity | Work with mixed roles, and an item kind with no draft state, pass every path. |
-| Scenario map | All 20 scenarios pass with a scripted model on the packaged artifact. |
-| The maintainer's decision | The release milestone, and the scope of the promise to employers and operators, are recorded. |
 
 ## Research datasets and consent
 
