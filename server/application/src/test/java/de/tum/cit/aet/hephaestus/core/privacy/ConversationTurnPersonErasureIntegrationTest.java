@@ -263,7 +263,7 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
         assertThat(requests.findById(erasure.requestId()).orElseThrow().getState())
                 .isEqualTo(PersonDataRequest.State.COMPLETE);
-        // The workspace's turns may read less: every server drops its partial answers and revokes its sandboxes.
+        // The workspace's turns may read less: the context change revokes its sandboxes.
         assertThat(events.of(
                         ConversationLedgerEvents.ContextChanged.class,
                         ConversationLedgerEvents.ContextChanged::workspaceId,
@@ -284,9 +284,9 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
     }
 
-    /** The developer's own erasure: a turn that runs meanwhile stores nothing, and the pending Slack reply goes. */
+    /** The developer's own erasure: a turn that runs meanwhile stores nothing, and the conversation goes. */
     @Test
-    void shouldDiscardTheRunningTurnAndThePendingSlackReplyOfADeveloperWhoseErasureRuns() {
+    void shouldDiscardTheRunningTurnOfADeveloperWhoseErasureRuns() {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-erasure.example.test"));
@@ -296,13 +296,6 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
         membership(workspace, developer);
         Conversation main = conversations.findOrCreateMain(workspace.getId(), developerId);
         ConversationTurn running = ask(workspace, main, "Who merges?");
-        UUID reply = UUID.randomUUID();
-        jdbc.update("""
-            INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
-              max_attempts,next_attempt_at,created_at,updated_at)
-            VALUES (?,?,'SLACK_POST','slack:' || ?,'slack_reply:' || ?,'ADMITTED',jsonb_build_object('turnId',?::text),
-              ?,8,CURRENT_TIMESTAMP + INTERVAL '1 day',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-            """, reply, workspace.getId(), reply, reply, running.getId(), developerId);
         var administrator = new Account("Administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         long adminId =
@@ -329,8 +322,6 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
         personData.run(requestId);
 
         assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_action WHERE id = ?", Long.class, reply))
-                .isZero();
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM conversation_entry WHERE workspace_id = ?",
                         Long.class,

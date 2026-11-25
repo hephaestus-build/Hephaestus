@@ -107,13 +107,15 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String COPY_ERASURE_PROOF =
             PERSON_ERASURE + "shouldEraseTheSummaryInAnotherPersonsConversationThatCoversACopyOfTheErasedPersonsData";
     private static final String OWN_ERASURE_PROOF =
-            PERSON_ERASURE + "shouldDiscardTheRunningTurnAndThePendingSlackReplyOfADeveloperWhoseErasureRuns";
+            PERSON_ERASURE + "shouldDiscardTheRunningTurnOfADeveloperWhoseErasureRuns";
     private static final String WITHDRAW_PROOF =
             SLACK + "shouldWithdrawThePendingReplyAndSendNothingWhenItsQuestionIsRemoved";
     private static final String REVOCATION_PROOF =
             SANDBOX_RUNS + "shouldRevokeTheWorkspacesConversationSandboxInTheAccessChangeTransaction";
     private static final String NARROWING_PROOF =
             CONTEXT + "shouldTellTheWorkersOfTheWorkspaceWhenWhatItsTurnsMayReadChanges";
+    private static final String WIRED_REVOCATION_PROOF =
+            SANDBOX_RUNS + "shouldRevokeTheSandboxAndRefuseTheRunningAttemptWhenAnAccessChangeIsAnnounced";
 
     /** How each source erasure changes the context, which revokes the workspace's conversation sandboxes. */
     private static final String CONTEXT_CHANGING_ERASURES = "A disconnect of an active connection deactivates it"
@@ -134,15 +136,17 @@ class CascadeTableTest extends BaseUnitTest {
             "integration.scm.domain.item.ScmRepositoryItemLifecycleIntegrationTest#"
                     + "shouldRemoveTheItemBeforeDeletingTheLastMonitoredRepository",
             NARROWING_PROOF,
-            REVOCATION_PROOF);
+            REVOCATION_PROOF,
+            WIRED_REVOCATION_PROOF);
 
     /** The source erasure that reaches no sandbox. */
     private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended connection publishes"
             + " no context change, so it reaches no sandbox.";
 
-    /** The partial answer of a turn stays in memory until the turn ends. */
-    private static final String PARTIAL_GAP = "Gap, owned by #5141: a server keeps a running turn's partial answer in"
-            + " memory until the turn ends, and serves it meanwhile.";
+    /** A partial answer is Hephaestus's own words, which a revoked turn keeps until it ends. */
+    private static final String PARTIAL_REVOKED = "A partial answer holds Hephaestus's own words, as an answer does."
+            + " The revocation ends the turn at its next write, and a server drops the snapshot when the turn ends."
+            + " Gap, owned by #5141: until then, a server serves it.";
 
     /** The gap of every stored dependent under a narrowing: #4907 owns the authorization generations of ADR 0134. */
     private static final String NARROWING_GAP =
@@ -152,11 +156,14 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String PROVIDER = "A completed request to the model provider cannot be retracted. The"
             + " provider's terms bound its copy (personal-data map, configured LLM provider).";
 
-    private static final String BACKUPS = "A backup keeps its copy until the backup expires. A restore reapplies every"
-            + " journaled erasure before it serves data (ADR 0128 decision 9, #4968).";
+    private static final String BACKUPS = "A backup keeps its copy until the backup expires. A restore reapplies the"
+            + " message deletions and person erasures that its recovery manifest names before it serves data (ADR 0128"
+            + " decision 9).";
 
-    private static final String EXPORT_GAP = "Gap, owned by #5090: a ready export keeps the words that it was built"
-            + " with until its download window ends, 48 hours after it was ready.";
+    /** What a ready export holds, and how long. */
+    private static final String EXPORT = "A ready export holds the account's visible conversation messages: its"
+            + " questions, and Hephaestus's replies and digests, without tool results. It keeps them until its download"
+            + " window ends, 48 hours after it was ready.";
 
     private static final String POSTED = "Hephaestus deletes no message that it posted in Slack. The provider keeps its"
             + " copy, and removal goes through the operator path (personal-data map, delivery destination).";
@@ -172,9 +179,7 @@ class CascadeTableTest extends BaseUnitTest {
                             LEDGER
                                     + "shouldEraseWhatAnEndingTurnStoresWhenTheDeveloperDeletesTheQuotedMessageMeanwhile",
                             ENTRIES
-                                    + "shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst",
-                            RETENTION
-                                    + "shouldEraseEveryEntryDueByTheDatabaseClockInTheTwoWeeksBeforeTheRetentionAndKeepTheRest"),
+                                    + "shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst"),
                     ""),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
@@ -187,12 +192,15 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.CONVERSATION_COPY,
-                    Action.ERASE,
+                    Action.KEEP,
                     List.of(
                             COPY_ERASURE_PROOF,
                             PERSON_ERASURE + "shouldEraseTheToolResultsOfTurnsThatRanWhileTheErasureFailedAndResumed",
                             PERSON_ERASURE + "shouldDeleteTheSummaryAndSearchResultOfTheErasedDevelopersConversation"),
-                    ""),
+                    "The erasure redacts every copying tool result of the person's workspaces, with the summaries that"
+                            + " cover one, and deletes the person's own conversations. Gap, owned by #4979: a result"
+                            + " that the Slack copy retention erased earlier leaves its answer, and a later summary over"
+                            + " that answer stays."),
             new Cell(CascadeCause.NARROWING, CascadeDependent.CONVERSATION_COPY, Action.KEEP, List.of(), NARROWING_GAP),
             // ANSWERING_TURN
             new Cell(
@@ -227,13 +235,31 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.NARROWING,
                     CascadeDependent.ANSWERING_TURN,
                     Action.DISCARD,
-                    List.of(NARROWING_PROOF, REVOCATION_PROOF),
+                    List.of(NARROWING_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
                     "The sandbox revocation is the fence: the attempt's next write is refused."),
             // PARTIAL_ANSWER
-            new Cell(CascadeCause.REMOVAL, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_GAP),
-            new Cell(CascadeCause.SOURCE_ERASURE, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_GAP),
-            new Cell(CascadeCause.ERASURE, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_GAP),
-            new Cell(CascadeCause.NARROWING, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_GAP),
+            new Cell(
+                    CascadeCause.REMOVAL,
+                    CascadeDependent.PARTIAL_ANSWER,
+                    Action.KEEP,
+                    List.of(),
+                    "A removed question stops its turn, and a stopped turn's partial answer is not served. Gap, owned"
+                            + " by #5141: a running turn that read another removed entry serves its partial answer until"
+                            + " it ends."),
+            new Cell(
+                    CascadeCause.SOURCE_ERASURE,
+                    CascadeDependent.PARTIAL_ANSWER,
+                    Action.KEEP,
+                    List.of(),
+                    PARTIAL_REVOKED),
+            new Cell(
+                    CascadeCause.ERASURE,
+                    CascadeDependent.PARTIAL_ANSWER,
+                    Action.KEEP,
+                    List.of(),
+                    "No partial frame of an attempt is accepted after the erasure starts. Gap, owned by #5141: the last"
+                            + " frame is served until the turn ends."),
+            new Cell(CascadeCause.NARROWING, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_REVOKED),
             // DERIVED_ANSWER
             new Cell(
                     CascadeCause.REMOVAL,
@@ -250,9 +276,9 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
                     Action.KEEP,
-                    List.of(SLACK_ENTRIES_PROOF),
+                    List.of(),
                     "An app answer that repeats an erased source keeps the conversation retention (personal-data map,"
-                            + " conversations). A disconnect also erases every answer written in Slack."),
+                            + " conversations). A Slack disconnect also erases every entry written in Slack."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
@@ -287,7 +313,7 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.ERASURE,
                     CascadeDependent.SLACK_POST,
                     Action.KEEP,
-                    List.of(OWN_ERASURE_PROOF, SLACK + "shouldEraseThePendingPayloadAndSendNothingAfterErasure"),
+                    List.of(SLACK + "shouldEraseThePendingPayloadAndSendNothingAfterErasure"),
                     "The erased person's own pending posts are deleted. Gap, owned by #5146: a pending reply in another"
                             + " person's Slack conversation, whose answer the erasure redacts, posts a false failure."),
             new Cell(
@@ -295,8 +321,7 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeDependent.SLACK_POST,
                     Action.KEEP,
                     List.of(),
-                    "No narrowing path changes a pending post: a narrowing revokes sandboxes and drops partial answers"
-                            + " only."),
+                    "No narrowing path changes a pending post: a narrowing revokes sandboxes only."),
             // POSTED_SLACK_MESSAGE
             new Cell(CascadeCause.REMOVAL, CascadeDependent.POSTED_SLACK_MESSAGE, Action.KEEP, List.of(), POSTED),
             new Cell(
@@ -328,7 +353,7 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.NARROWING,
                     CascadeDependent.SANDBOX,
                     Action.REVOKE,
-                    List.of(NARROWING_PROOF, REVOCATION_PROOF),
+                    List.of(NARROWING_PROOF, REVOCATION_PROOF, WIRED_REVOCATION_PROOF),
                     ""),
             // MODEL_PROVIDER_COPY
             new Cell(CascadeCause.REMOVAL, CascadeDependent.MODEL_PROVIDER_COPY, Action.KEEP, List.of(), PROVIDER),
@@ -353,21 +378,31 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(CascadeCause.ERASURE, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             new Cell(CascadeCause.NARROWING, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             // EXPORT
-            new Cell(CascadeCause.REMOVAL, CascadeDependent.EXPORT, Action.KEEP, List.of(), EXPORT_GAP),
-            new Cell(CascadeCause.SOURCE_ERASURE, CascadeDependent.EXPORT, Action.KEEP, List.of(), EXPORT_GAP),
+            new Cell(
+                    CascadeCause.REMOVAL,
+                    CascadeDependent.EXPORT,
+                    Action.KEEP,
+                    List.of(),
+                    EXPORT + " The account built it for itself before it removed the message."),
+            new Cell(
+                    CascadeCause.SOURCE_ERASURE,
+                    CascadeDependent.EXPORT,
+                    Action.KEEP,
+                    List.of(),
+                    EXPORT + " A reply that repeats an erased source stays in it, as it stays in the conversation."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.EXPORT,
                     Action.KEEP,
                     List.of(),
-                    "The erased person's own exports go with the account. " + EXPORT_GAP
-                            + " That holds for another account's export that copied the erased person's words."),
+                    "The erased person's own exports go with the account. " + EXPORT + " Gap, owned by #5090: another"
+                            + " account's ready export keeps a reply that the erasure redacts in its conversation."),
             new Cell(
                     CascadeCause.NARROWING,
                     CascadeDependent.EXPORT,
                     Action.KEEP,
                     List.of(),
-                    "An export holds the account's own messages, which a narrowing does not change."));
+                    EXPORT + " A narrowing changes no message."));
 
     /**
      * The rows of the person-data map's main table that name no store of its inventory, such as a copy outside
@@ -393,6 +428,7 @@ class CascadeTableTest extends BaseUnitTest {
             Map.entry("External avatar hosts and browser caches", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Container logs and support bundles", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL and filesystem backups", EnumSet.of(CascadeDependent.BACKUP)),
+            Map.entry("S3 privacy journal objects", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Conversation sandboxes", EnumSet.of(CascadeDependent.SANDBOX)));
 
     /**

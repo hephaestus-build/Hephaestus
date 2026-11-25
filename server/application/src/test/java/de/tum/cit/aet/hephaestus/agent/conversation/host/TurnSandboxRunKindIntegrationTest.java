@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -494,6 +495,23 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isTrue();
         assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
         assertThat(runs.find(run.fence().run()).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+    }
+
+    /**
+     * An access change that a cause announces reaches the sandbox through the application's own listeners: the
+     * revocation commits with it, and the running attempt's next write is refused.
+     */
+    @Test
+    void shouldRevokeTheSandboxAndRefuseTheRunningAttemptWhenAnAccessChangeIsAnnounced() {
+        ask("Question");
+        SandboxRun run = claim();
+
+        transactions.executeWithoutResult(
+                status -> beans.publishEvent(new AgentContextChangedEvent(workspace.getId())));
+
+        assertThat(sandboxes.hasLive(workspace.getId(), run.sandbox().subjectKey()))
+                .isFalse();
+        assertThatThrownBy(() -> held.write(run, true, turn -> turn.turnId())).isInstanceOf(StaleRunException.class);
     }
 
     @Test
