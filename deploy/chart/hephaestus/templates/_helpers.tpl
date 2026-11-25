@@ -1163,6 +1163,13 @@ switch.
 {{- $exporter := .Values.postgresql.metrics.enabled -}}
 {{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups -}}
 {{- if and (or (ne .name "hephaestus-backups") (eq $backups "true")) (or (ne .name "hephaestus-postgresql-exporter") $exporter) -}}
+{{- if eq .name "hephaestus-postgresql-exporter" -}}
+{{- /* absent() keeps no labels of a series, so the release's own namespace scopes it: on a shared Prometheus,
+another release's exporter cannot hide this one's, and the alert names the namespace. */ -}}
+{{- range .rules -}}
+{{- $_ := set . "expr" (replace "up{job=\"postgresql\"}" (printf "up{job=\"postgresql\",namespace=%q}" $.Release.Namespace) .expr) -}}
+{{- end -}}
+{{- end -}}
 {{- $groups = append $groups . -}}
 {{- end -}}
 {{- end -}}

@@ -979,7 +979,8 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # The exporter target itself. When its Pod cannot be created, discovery drops the target and no up series
   # remains, so the rules below stay silent. The chart renders this group only with postgresql.metrics.enabled,
-  # where the target must exist; load it yourself only where you scrape the exporter as job="postgresql".
+  # where the target must exist, and adds the release's namespace to the selector. Load it yourself only where
+  # you scrape the exporter as job="postgresql", and add your namespace there too.
   - name: hephaestus-postgresql-exporter
     rules:
       - alert: HephaestusPostgresExporterMissing

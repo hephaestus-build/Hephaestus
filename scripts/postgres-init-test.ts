@@ -39,7 +39,10 @@ function docker(...args: string[]): string {
 		...bounded(args[0] === "build" ? 900_000 : 120_000),
 	});
 	if (result.status !== 0) {
-		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		// A call that ran out of time has no status, only the signal that ended it.
+		const ended =
+			result.signal === null ? `exit ${String(result.status)}` : `timed out (${result.signal})`;
+		throw new Error(`docker ${args.join(" ")} ${ended}:\n${result.stdout}${result.stderr}`);
 	}
 	return result.stdout.trim();
 }

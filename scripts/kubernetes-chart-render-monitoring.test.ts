@@ -141,6 +141,17 @@ await test("the exporter's absence alerts only where the chart runs the exporter
 				metrics,
 				`${destination} with the exporter ${metrics ? "on" : "off"}`,
 			);
+			// absent() keeps no labels, so the chart scopes it to the release: another release cannot hide it.
+			const exporter = groups.find(
+				(group) => get(group, "name") === "hephaestus-postgresql-exporter",
+			);
+			if (exporter !== undefined) {
+				assert.deepEqual(
+					list(get(exporter, "rules")).map((rule) => get(rule, "expr")),
+					['absent(up{job="postgresql",namespace="hephaestus"})'],
+					destination,
+				);
+			}
 		}
 	}
 });

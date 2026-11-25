@@ -314,6 +314,8 @@ To turn it on:
 4. Scrape the exporter's port `metrics` (9187) on the path `/metrics`.
    The [monitoring stack](#run-the-monitoring-stack) does this as the job `postgresql`.
    Another scraper needs the namespace and labels of `networkPolicy.metrics`.
+   Set `job` to `postgresql` with a relabeling, and keep the `namespace` label: the rules read both.
+   Without that job, `HephaestusPostgresExporterMissing` stays critical.
 
 The exporter reports the default collectors, the oldest open transaction, the transaction ID age of each database, and the statement statistics.
 The statement statistics hold the `postgresql.metrics.statementLimit` statements with the most total execution time, 20 by default.
