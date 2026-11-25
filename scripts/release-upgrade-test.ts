@@ -33,6 +33,16 @@ import {
 	prefixChangelog,
 	prefixHistorySql,
 } from "./lib/release-upgrade-prefix.ts";
+import { plantWrite, writeProviderCertificates } from "./lib/release-upgrade-recorder.ts";
+import {
+	type AttributedCall,
+	attribute,
+	parseCalls,
+	PLANTED_SOURCE,
+	PROVIDER_HOSTS,
+	type ProviderCall,
+	repeatedWrites,
+} from "./lib/release-upgrade-writes.ts";
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
@@ -82,6 +92,18 @@ const READINESS_TIMEOUT_MS = 2000;
 const runId = `upgrade-${randomUUID().slice(0, 8)}`;
 const network = runId;
 const postgres = `${runId}-postgres`;
+// The provider recorder runs the drill's own TypeScript (`scripts/lib`) on the Node image of the capacity fixture.
+const recorder = `${runId}-providers`;
+const RECORDER_IMAGE =
+	"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d";
+const recorderFiles = mkdtempSync(nodePath.join(tmpdir(), "hephaestus-upgrade-providers-"));
+const providerCertificates = writeProviderCertificates(recorderFiles);
+const RECORDER_CA = "/etc/hephaestus/upgrade-drill-ca.crt";
+/** Each running release by container name: its address on the drill's network and its database. */
+const liveReleases = new Map<string, { address: string; database: string }>();
+const providerCalls: AttributedCall[] = [];
+const unattributedCalls: ProviderCall[] = [];
+let lastProviderCall = 0;
 const credentials = databaseRolePasswords();
 let application = `${runId}-previous`;
 
@@ -237,9 +259,167 @@ function startApplication(
 		`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
 		"--env",
 		`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
+		// Each provider host resolves to the recorder, and the release trusts the recorder's CA as the chart's
+		// config.privateCa does. The SCM egress guard admits the hosts at the recorder's private address.
+		"--mount",
+		`type=bind,source=${providerCertificates.ca},target=${RECORDER_CA},readonly`,
+		"--env",
+		`SSL_CERT_FILE=${RECORDER_CA}`,
+		"--env",
+		`HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS=${PROVIDER_HOSTS.join(",")}`,
 		image,
 	);
+	registerRelease(name, database);
 	return publishedPort(name);
+}
+
+function registerRelease(name: string, database: string): void {
+	const address = docker(
+		"inspect",
+		"--format",
+		`{{(index .NetworkSettings.Networks "${network}").IPAddress}}`,
+		name,
+	);
+	liveReleases.set(name, { address, database });
+}
+
+/** Moves the recorder's new calls into the ledger, each under the database of the live release that sent it. */
+async function collectProviderCalls(): Promise<void> {
+	const port = publishedPort(recorder, "8080/tcp");
+	const response = await fetchWithTimeout(
+		`http://127.0.0.1:${port}/calls?after=${lastProviderCall}`,
+	);
+	const calls = parseCalls(await response.text());
+	const live = new Map(
+		[...liveReleases.values()].map(({ address, database }) => [address, database]),
+	);
+	const { attributed, unknown } = attribute(calls, live);
+	providerCalls.push(...attributed);
+	unattributedCalls.push(...unknown);
+	lastProviderCall = Math.max(lastProviderCall, ...calls.map(({ sequence }) => sequence));
+}
+
+/**
+ * Collects the calls of a release before it stops: a later container can take its address. Call it before every stop,
+ * restart and removal of a release.
+ */
+async function releaseStops(name: string): Promise<void> {
+	if (liveReleases.has(name)) {
+		await collectProviderCalls();
+		liveReleases.delete(name);
+	}
+}
+
+function startRecorder(): void {
+	docker(
+		"run",
+		"--detach",
+		"--name",
+		recorder,
+		"--network",
+		network,
+		...PROVIDER_HOSTS.flatMap((host) => ["--network-alias", host]),
+		"--mount",
+		`type=bind,source=${nodePath.join(import.meta.dirname, "lib")},target=/drill,readonly`,
+		"--mount",
+		`type=bind,source=${recorderFiles},target=/tls,readonly`,
+		"--publish",
+		"127.0.0.1::443",
+		"--publish",
+		"127.0.0.1::8080",
+		RECORDER_IMAGE,
+		"node",
+		"/drill/release-upgrade-recorder.ts",
+		"/tls/key.pem",
+		"/tls/cert.pem",
+	);
+}
+
+/** Posts one provider write to the recorder from the drill itself, under the planted label. */
+async function plantSlackWrite(): Promise<void> {
+	await plantWrite(
+		publishedPort(recorder, "443/tcp"),
+		readFileSync(providerCertificates.ca, "utf8"),
+		"slack.com",
+		"/api/chat.postMessage",
+		"channel=D0UPGRADE&text=planted",
+	);
+}
+
+/** Proves on the drill's own recorder that the check catches a write that reaches a provider twice. */
+async function assertRecorderCatchesARepeat(): Promise<void> {
+	for (let attempt = 0; ; attempt += 1) {
+		try {
+			await plantSlackWrite();
+			break;
+		} catch (error) {
+			if (attempt === 30) {
+				throw new Error("The provider recorder did not answer", { cause: error });
+			}
+			await sleep(1000);
+		}
+	}
+	await plantSlackWrite();
+	await collectProviderCalls();
+	const caught = repeatedWrites(
+		providerCalls.filter(({ database }) => database === PLANTED_SOURCE),
+	);
+	if (caught.length !== 1) {
+		throw new Error(
+			`The repeated-write check missed the planted double write: ${caught.join("; ")}`,
+		);
+	}
+	console.log("The repeated-write check caught the planted double write.");
+}
+
+/**
+ * Proves that the packaged release reaches the recorder, and no real provider: a GitLab token check of the candidate
+ * calls gitlab.com from its JVM, through the drill's DNS and the recorder's CA.
+ */
+async function assertCandidateReachesRecorder(api: string, session: Session): Promise<void> {
+	const response = await fetchWithTimeout(`${api}/workspaces/gitlab/preflight`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			cookie: session.cookie,
+			...session.writeHeaders,
+		},
+		body: JSON.stringify({
+			personalAccessToken: "upgrade-fixture-token",
+			serverUrl: "https://gitlab.com",
+			groupFullPath: WORKSPACE_SLUG,
+		}),
+	});
+	await response.body?.cancel();
+	await collectProviderCalls();
+	if (
+		!providerCalls.some(
+			({ database, call }) => database === "hephaestus" && call.host === "gitlab.com",
+		)
+	) {
+		throw new Error(
+			`The candidate's GitLab token check (status ${response.status}) did not reach the provider recorder`,
+		);
+	}
+	console.log("The candidate reaches the provider recorder over TLS.");
+}
+
+/** No write reached one database's providers twice, and no call came from outside a release. */
+async function assertNoRepeatedWrites(): Promise<void> {
+	for (const name of liveReleases.keys()) {
+		await releaseStops(name);
+	}
+	if (unattributedCalls.length > 0) {
+		throw new Error(
+			`Provider calls from no running release: ${unattributedCalls.map(({ source, method, host, path }) => `${source} ${method} ${host}${path}`).join("; ")}`,
+		);
+	}
+	const calls = providerCalls.filter(({ database }) => database !== PLANTED_SOURCE);
+	const repeated = repeatedWrites(calls);
+	if (repeated.length > 0) {
+		throw new Error(`A provider write repeated across the upgrade:\n${repeated.join("\n")}`);
+	}
+	console.log(`Provider calls recorded: ${calls.length}. No write repeated against one database.`);
 }
 
 function publishedPort(name: string, containerPort = "8080/tcp"): number {
@@ -665,6 +845,7 @@ async function assertFreshSchemaEqualsUpgraded(image: string): Promise<void> {
 		migrateRelease(image, "hephaestus_fresh");
 		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh"));
 	} finally {
+		await releaseStops(fresh);
 		spawnSync("docker", ["rm", "--force", fresh], { stdio: "ignore" });
 	}
 	const upgraded = schemaFingerprint("hephaestus");
@@ -763,6 +944,7 @@ async function assertPreviousReleaseRuns(database: string, schema: string): Prom
 		printLogs(name);
 		throw error;
 	} finally {
+		await releaseStops(name);
 		spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
 	}
 	console.log(`The previous release runs on ${schema}.`);
@@ -930,11 +1112,23 @@ async function assertPartialMigration(
 	if (completed !== pending) {
 		throw new Error(`The repeated migration applied ${completed} of ${pending} new change sets`);
 	}
-	console.log("The candidate's migration completed when it ran again.");
+	// The candidate then serves the resumed database, so a write that both releases send on it counts as a repeat.
+	const resumed = `${runId}-candidate-on-${database}`;
+	try {
+		await waitUntilReady(resumed, startApplication(resumed, candidateImage, database));
+	} finally {
+		await releaseStops(resumed);
+		spawnSync("docker", ["rm", "--force", resumed], { stdio: "ignore" });
+	}
+	console.log(
+		"The candidate's migration completed when it ran again, and the candidate serves it.",
+	);
 }
 
 try {
 	docker("network", "create", network);
+	startRecorder();
+	await assertRecorderCatchesARepeat();
 	docker(
 		"run",
 		"--detach",
@@ -966,6 +1160,7 @@ try {
 	linkWorkspaceIdentity();
 	await seedWorkspace(api, previousSession, WORKSPACE_SLUG);
 	await assertCoreReads(api, previousSession);
+	await releaseStops(application);
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
 	// The legacy rows that each conversion seed writes on the previous release's schema.
@@ -1033,11 +1228,14 @@ try {
 	const candidateSession = await login(api, "alice");
 	await completeTransparencyNotice(api, candidateSession);
 	await assertCoreReads(api, candidateSession);
+	await assertCandidateReachesRecorder(api, candidateSession);
 
 	await seedWorkspace(api, candidateSession, ADOPTION_WORKSPACE_SLUG);
 	await assertInstalledCatalog(api, candidateSession);
 	const installedPractices = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
+	await releaseStops(application);
 	docker("restart", "--time", "30", application);
+	registerRelease(application, "hephaestus");
 	port = publishedPort(application);
 	await waitUntilReady(application, port);
 	api = await apiOf(port);
@@ -1064,16 +1262,18 @@ try {
 		candidateChanges - previousChanges,
 	);
 	await assertFreshSchemaEqualsUpgraded(candidateImage);
+	await assertNoRepeatedWrites();
 	console.log("Seeded release upgrade passed.");
 } catch (error) {
-	for (const name of [application, postgres]) {
+	for (const name of [application, postgres, recorder]) {
 		printLogs(name);
 	}
 	throw error;
 } finally {
 	// --volumes removes only these containers' anonymous volumes, such as PostgreSQL's data.
-	spawnSync("docker", ["rm", "--force", "--volumes", application, postgres], {
+	spawnSync("docker", ["rm", "--force", "--volumes", application, postgres, recorder], {
 		stdio: "ignore",
 	});
+	rmSync(recorderFiles, { recursive: true, force: true });
 	spawnSync("docker", ["network", "rm", network], { stdio: "ignore" });
 }
