@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -143,6 +144,7 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                         mock(ProviderEventStore.class),
                         threads,
                         channels,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messages,
                         mock(ConversationEntryService.class),

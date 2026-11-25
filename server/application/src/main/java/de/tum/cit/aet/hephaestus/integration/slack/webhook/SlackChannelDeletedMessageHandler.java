@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingExceptio
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
 import java.time.Instant;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -19,9 +20,15 @@ import tools.jackson.databind.JsonNode;
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class SlackChannelDeletedMessageHandler extends SlackChannelLifecycleMessageHandler {
 
+    @Autowired
     public SlackChannelDeletedMessageHandler(
             SlackChannelLifecycleService lifecycleService, EventPayloadDeserializer deserializer) {
-        super("channel_deleted", lifecycleService, deserializer);
+        this("channel_deleted", lifecycleService, deserializer);
+    }
+
+    SlackChannelDeletedMessageHandler(
+            String eventType, SlackChannelLifecycleService lifecycleService, EventPayloadDeserializer deserializer) {
+        super(eventType, lifecycleService, deserializer);
     }
 
     @Override

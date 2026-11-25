@@ -319,8 +319,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     @Test
     void shouldEraseAgainASlackChannelThatARestoreBroughtBack() throws Exception {
         jdbc.update(
-                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)"
-                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')",
+                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state, created_at)"
+                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE', '2025-12-31T00:00:00Z')",
                 workspace.getId());
         long kept = slackMessage("1700000003.000300", "Words in a channel that is later erased");
         jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", kept);
@@ -352,6 +352,48 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         // The same manifest is safe after a restart.
         recover(manifest);
         assertThat(slackRows("C-erased")).isZero();
+    }
+
+    @Test
+    void shouldPreserveTheNewConsentPeriodWhenTheSameChannelErasureReplays() throws Exception {
+        jdbc.update("""
+                INSERT INTO slack_monitored_channel
+                    (workspace_id, slack_team_id, slack_channel_id, consent_state, created_at)
+                VALUES (?, 'T-restore', 'C-erased', 'ACTIVE', '2025-12-31T00:00:00Z')
+                """, workspace.getId());
+        long earlier = slackMessage("1700000003.000300", "Earlier consent");
+        jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", earlier);
+        String manifest = """
+                {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackMessageChanges":[],
+                 "slackChannelErasures":[{"workspaceId":%d,"channelId":"C-erased","erasedAt":"2026-01-02T00:00:00Z"}]}
+                """.formatted(workspace.getId());
+
+        recover(manifest);
+        assertThat(consent("C-erased")).isEqualTo("REVOKED");
+        assertThat(slackRows("C-erased")).isZero();
+
+        // Re-adding a channel reuses its row and records a new PENDING transition.
+        jdbc.update("""
+                INSERT INTO slack_channel_consent_event
+                    (workspace_id, slack_channel_id, from_state, to_state, created_at)
+                VALUES (?, 'C-erased', 'REVOKED', 'PENDING', '2026-01-03T00:00:00Z')
+                """, workspace.getId());
+        jdbc.update("""
+                UPDATE slack_monitored_channel SET consent_state = 'ACTIVE'
+                WHERE workspace_id = ? AND slack_channel_id = 'C-erased'
+                """, workspace.getId());
+        long later = slackMessage("1767484800.000001", "New consent");
+        jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", later);
+        new SlackThreadTestSupport(jdbc)
+                .seedThread(workspace.getId(), "C-erased", "1767484800.000001", "1767484800.000001", 1, "{}");
+
+        recover(manifest);
+
+        assertThat(consent("C-erased")).isEqualTo("ACTIVE");
+        assertThat(slackText(later)).isEqualTo("New consent");
+        assertThat(slackThreads("C-erased")).isOne();
     }
 
     @Test
@@ -492,8 +534,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         long edited = slackMessage("1700000001.000100", "Words before the edit");
         long deleted = slackMessage("1700000002.000200", "Words before the delete");
         jdbc.update(
-                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)"
-                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')",
+                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state, created_at)"
+                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE', '2025-12-31T00:00:00Z')",
                 workspace.getId());
         long inChannel = slackMessage("1700000003.000300", "Words in a channel that is later erased");
         jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", inChannel);

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.slack.api.model.Message;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -118,6 +119,7 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                         mock(ProviderEventStore.class),
                         threads,
                         channels,
+                        mock(SlackChannelConsentEventRepository.class),
                         feedbackErasure,
                         messages,
                         mock(ConversationEntryService.class),

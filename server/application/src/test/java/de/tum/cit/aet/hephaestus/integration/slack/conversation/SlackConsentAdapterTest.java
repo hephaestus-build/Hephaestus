@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
+import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,25 +70,37 @@ class SlackConsentAdapterTest extends BaseUnitTest {
 
     @Test
     void confirmedPostCarriesItsTimestampToDomainSettlement() {
-        when(client.isConnected(WS)).thenReturn(true);
-        when(client.postMessage(eq(WS), eq(CHANNEL), any(), anyList(), any(), any()))
-                .thenReturn(new SlackMessageService.Posted(CHANNEL, "101.123456"));
+        when(client.postMessage(
+                        eq(WS),
+                        argThat(destination -> CHANNEL.equals(destination.channelId())),
+                        anyList(),
+                        any(),
+                        any(),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted(CHANNEL, "101.123456")));
         assertThat(adapter.execute(attempt(false, false))).isEqualTo(new ActionResult.Done("101123456"));
         verify(client)
                 .postMessage(
                         eq(WS),
-                        eq(CHANNEL),
-                        any(),
+                        argThat(destination -> CHANNEL.equals(destination.channelId())),
                         anyList(),
                         any(),
-                        eq(SlackConversationPosts.noticeMetadata(MARKER)));
+                        eq(SlackConversationPosts.noticeMetadata(MARKER)),
+                        any());
     }
 
     @Test
     void unknownTransportKeepsTheFenceAndReadsBackBeforeAnyFurtherWrite() {
-        when(client.isConnected(WS)).thenReturn(true);
-        when(client.postMessage(eq(WS), eq(CHANNEL), any(), anyList(), any(), any()))
-                .thenThrow(new SlackSendException(WS, CHANNEL, "transport_failure"));
+        when(client.postMessage(
+                        eq(WS),
+                        argThat(destination -> CHANNEL.equals(destination.channelId())),
+                        anyList(),
+                        any(),
+                        any(),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(WS, CHANNEL, "transport_failure");
+                }));
         assertThat(adapter.execute(attempt(false, false))).isInstanceOf(ActionResult.Reread.class);
     }
 
@@ -102,14 +116,21 @@ class SlackConsentAdapterTest extends BaseUnitTest {
                     return new SlackMessageService.Matches(List.of("101.123456"), false);
                 });
         assertThat(adapter.execute(attempt(true, false))).isEqualTo(new ActionResult.Done("101123456"));
-        verify(client, never()).postMessage(eq(WS), any(), any(), anyList(), any(), any());
+        verify(client, never()).postMessage(eq(WS), any(), anyList(), any(), any(), any());
     }
 
     @Test
     void rateLimitDefersThroughTheSharedPostTransport() {
-        when(client.isConnected(WS)).thenReturn(true);
-        when(client.postMessage(eq(WS), eq(CHANNEL), any(), anyList(), any(), any()))
-                .thenThrow(new SlackSendException(WS, CHANNEL, "ratelimited", 120_000));
+        when(client.postMessage(
+                        eq(WS),
+                        argThat(destination -> CHANNEL.equals(destination.channelId())),
+                        anyList(),
+                        any(),
+                        any(),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(WS, CHANNEL, "ratelimited", 120_000);
+                }));
         assertThat(adapter.execute(attempt(false, false))).isEqualTo(new ActionResult.Defer(Duration.ofMinutes(2)));
     }
 
@@ -119,7 +140,7 @@ class SlackConsentAdapterTest extends BaseUnitTest {
         when(client.readWorkspaceMessages(eq(WS), eq(CHANNEL), any(), eq("100.0"), any(), eq(20)))
                 .thenReturn(new SlackMessageService.Matches(List.of("101.123456"), false));
         assertThat(adapter.execute(attempt(false, true))).isEqualTo(new ActionResult.Done("101123456"));
-        verify(client, never()).postMessage(eq(WS), any(), any(), anyList(), any(), any());
+        verify(client, never()).postMessage(eq(WS), any(), anyList(), any(), any(), any());
     }
 
     @Test
@@ -128,7 +149,7 @@ class SlackConsentAdapterTest extends BaseUnitTest {
         when(client.readWorkspaceMessages(eq(WS), eq(CHANNEL), any(), eq("100.0"), any(), eq(20)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
         assertThat(adapter.execute(attempt(false, true))).isInstanceOf(ActionResult.Reread.class);
-        verify(client, never()).postMessage(eq(WS), any(), any(), anyList(), any(), any());
+        verify(client, never()).postMessage(eq(WS), any(), anyList(), any(), any(), any());
     }
 
     @Test
@@ -136,8 +157,14 @@ class SlackConsentAdapterTest extends BaseUnitTest {
         when(client.isConnected(WS)).thenReturn(true);
         when(client.readWorkspaceMessages(eq(WS), eq(CHANNEL), any(), eq("100.0"), any(), eq(20)))
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
-        when(client.postMessage(eq(WS), eq(CHANNEL), any(), anyList(), any(), any()))
-                .thenReturn(new SlackMessageService.Posted(CHANNEL, "102.0"));
+        when(client.postMessage(
+                        eq(WS),
+                        argThat(destination -> CHANNEL.equals(destination.channelId())),
+                        anyList(),
+                        any(),
+                        any(),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted(CHANNEL, "102.0")));
         assertThat(adapter.execute(attempt(false, true))).isEqualTo(new ActionResult.Done("102000000"));
     }
 

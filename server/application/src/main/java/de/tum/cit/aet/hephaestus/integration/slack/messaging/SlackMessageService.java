@@ -151,6 +151,8 @@ public class SlackMessageService implements AutoCloseable {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
         config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
+        // SDK statistics can issue auth.test before a method call. An admitted post must make only its own request.
+        config.getMethodsConfig().setStatsEnabled(false);
         return config;
     }
 
@@ -171,16 +173,22 @@ public class SlackMessageService implements AutoCloseable {
      */
     public record Posted(String channelId, String ts) {}
 
+    public record PostDestination(
+            String channelId, @Nullable String threadTs) {}
+
     /**
-     * Posts a message without link or media unfurls. {@code text} is what notifications and screen readers show.
+     * Posts once, after resolving credentials and admitting the write. A 429 returns to the outbox for a fresh
+     * attempt. Returns null when the outbox refuses admission.
      */
-    public Posted postMessage(
+    public @Nullable Posted postMessage(
             long workspaceId,
-            String channelId,
-            @Nullable String threadTs,
+            PostDestination destination,
             List<LayoutBlock> blocks,
             String text,
-            Message.@Nullable Metadata metadata) {
+            Message.@Nullable Metadata metadata,
+            BooleanSupplier admit) {
+        String channelId = destination.channelId();
+        String threadTs = destination.threadTs();
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
                 .channel(channelId)
                 .blocks(blocks)
@@ -193,7 +201,8 @@ public class SlackMessageService implements AutoCloseable {
         }
         ChatPostMessageRequest built = request.build();
         ChatPostMessageResponse response =
-                callWrite(workspaceId, null, channelId, () -> true, methods -> methods.chatPostMessage(built));
+                callWrite(workspaceId, null, channelId, () -> true, admit, methods -> methods.chatPostMessage(built));
+        if (response == null) return null;
         String postedTo = response.getChannel();
         String ts = response.getTs();
         if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channelId, "invalid_receipt");
@@ -233,7 +242,7 @@ public class SlackMessageService implements AutoCloseable {
                 .blocks(message.blocks())
                 .text(message.fallback())
                 .build();
-        callWrite(workspaceId, teamId, channelId, eligible, methods -> methods.chatPostEphemeral(request));
+        callWrite(workspaceId, teamId, channelId, eligible, null, methods -> methods.chatPostEphemeral(request));
     }
 
     public record EphemeralMessage(List<LayoutBlock> blocks, String fallback) {}
@@ -304,8 +313,13 @@ public class SlackMessageService implements AutoCloseable {
      * retried after its {@code Retry-After} within the interactive budget; one that outlives the budget is
      * {@code ratelimited} and carries its wait. A failed transport is {@code transport_failure}.
      */
-    private <T extends SlackApiTextResponse> T callWrite(
-            long workspaceId, @Nullable String teamId, String channel, BooleanSupplier eligible, WriteCall<T> call) {
+    private <T extends SlackApiTextResponse> @Nullable T callWrite(
+            long workspaceId,
+            @Nullable String teamId,
+            String channel,
+            BooleanSupplier eligible,
+            @Nullable BooleanSupplier admit,
+            WriteCall<T> call) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
         }
@@ -317,25 +331,32 @@ public class SlackMessageService implements AutoCloseable {
         String token = credential.orElseThrow(
                 () -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
-            T response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
-                try {
+            MethodsClient methods = slack.methods(token);
+            T response;
+            if (admit == null) {
+                response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
                     egressGuard.requireDeliveryAllowed("slack.write");
-                    return call.call(slack.methods(token));
-                } catch (OutboundEgressSuppressedException e) {
-                    throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
-                }
-            });
+                    return call.call(methods);
+                });
+            } else {
+                egressGuard.requireDeliveryAllowed("slack.write");
+                if (!admit.getAsBoolean()) return null;
+                response = call.call(methods);
+            }
             if (!response.isOk()) {
                 String error = response.getError();
                 throw new SlackSendException(workspaceId, channel, error == null ? "unknown" : error);
             }
             return response;
+        } catch (OutboundEgressSuppressedException e) {
+            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
         } catch (SlackApiException e) {
             Response refused = e.getResponse();
             long retryAfterMs = refused == null
                     ? SlackSendException.NOT_RATE_LIMITED
                     : SlackBackoff.retryAfterMillis(refused.code(), refused.header("Retry-After"));
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
+                if (admit != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
@@ -464,6 +485,7 @@ public class SlackMessageService implements AutoCloseable {
                     teamId,
                     slackUserId,
                     eligible,
+                    null,
                     methods -> methods.viewsPublish(
                             req -> req.userId(slackUserId).view(view).hash(homeViewHash)));
         } catch (SlackSendException e) {
@@ -817,6 +839,7 @@ public class SlackMessageService implements AutoCloseable {
                 null,
                 channelId,
                 () -> true,
+                null,
                 methods -> methods.conversationsJoin(req -> req.channel(channelId)));
     }
 

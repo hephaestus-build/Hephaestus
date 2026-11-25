@@ -166,7 +166,7 @@ class SlackPostAdapter implements ActionAdapter {
             int readbackPages) {
         var client = slack.getIfAvailable();
         long workspace = Objects.requireNonNull(attempt.workspaceId());
-        if (client == null || !client.isConnected(workspace))
+        if (client == null || ((attempt.writeStarted() || readBeforeWrite) && !client.isConnected(workspace)))
             return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
         if (attempt.writeStarted()) {
             if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
@@ -177,12 +177,20 @@ class SlackPostAdapter implements ActionAdapter {
             var found = readback(client, workspace, post, matches, readbackPages);
             if (found != null) return found;
         }
-        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
         try {
             var posted = client.postMessage(
-                    workspace, post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata);
-            return done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
+                    workspace,
+                    new SlackMessageService.PostDestination(post.channelId(), post.threadTs()),
+                    post.blocks(),
+                    post.text(),
+                    metadata,
+                    attempt.fence()::beginWrite);
+            return posted == null
+                    ? new ActionResult.Abandoned()
+                    : done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
         } catch (SlackSendException failed) {
+            if ("no_active_slack_connection".equals(failed.slackError()))
+                return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
             if ("silent_mode_engaged".equals(failed.slackError()))
                 return new ActionResult.Cancelled(ActionStopReason.SILENCED);
             // A 429 proves no post was accepted; transport and invalid receipts prove no absence.

@@ -46,6 +46,7 @@ Restrict access to the recovery log and keep it while the oldest retained backup
    Give its workspace ID, Slack channel ID and original erasure time as `erasedAt`.
    The log event `slack.channel_erased` carries these fields as `workspace.id`, `slack.channel.id` and `slack.channel.erased_at`.
    Recovery erases copying tool results up to and including that time.
+   If an admin registered the channel again after that time, recovery preserves its new consent and channel data.
    A manifest without `erasedAt` uses the recovery point as the cutoff for those results.
 7. List each stored Slack message that its author edited or deleted in Slack under `slackMessageChanges`.
    Give its workspace ID, its message ID, and the change: `EDITED` or `DELETED`.

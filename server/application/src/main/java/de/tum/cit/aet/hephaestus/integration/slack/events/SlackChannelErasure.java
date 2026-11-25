@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
@@ -33,6 +35,7 @@ public class SlackChannelErasure {
     private final ProviderEventStore providerEvents;
     private final SlackThreadRepository threads;
     private final SlackMonitoredChannelRepository channels;
+    private final SlackChannelConsentEventRepository consentEvents;
     private final ConversationFeedbackErasure conversationFeedback;
     private final SlackMessageRepository messages;
 
@@ -43,6 +46,7 @@ public class SlackChannelErasure {
             ProviderEventStore providerEvents,
             SlackThreadRepository threads,
             SlackMonitoredChannelRepository channels,
+            SlackChannelConsentEventRepository consentEvents,
             ConversationFeedbackErasure conversationFeedback,
             SlackMessageRepository messages,
             ConversationEntryService conversationEntries,
@@ -51,6 +55,7 @@ public class SlackChannelErasure {
         this.providerEvents = providerEvents;
         this.threads = threads;
         this.channels = channels;
+        this.consentEvents = consentEvents;
         this.conversationFeedback = conversationFeedback;
         this.messages = messages;
         this.conversationEntries = conversationEntries;
@@ -58,7 +63,8 @@ public class SlackChannelErasure {
 
     @Transactional
     public void erase(long workspaceId, String channelId, Instant erasedAt) {
-        eraseContent(workspaceId, channelId, erasedAt);
+        eraseChannelRows(workspaceId, channelId);
+        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
         journal.record(
                 PrivacyJournalKind.SLACK_CHANNEL_ERASED,
                 Map.of("workspaceId", workspaceId, "channelId", new NativeId(channelId), "erasedAt", erasedAt));
@@ -73,16 +79,22 @@ public class SlackChannelErasure {
 
     @Transactional
     public void replay(long workspaceId, String channelId, Instant erasedAt) {
-        eraseContent(workspaceId, channelId, erasedAt);
+        var channel = channels.findForUpdate(workspaceId, channelId);
+        // A registration after the cutoff starts a new period. The prior revoke or disconnect erased the old rows.
+        boolean registeredAgain = channel.isPresent()
+                && (channel.get().getCreatedAt().isAfter(erasedAt)
+                        || consentEvents.existsByWorkspaceIdAndSlackChannelIdAndToStateAndCreatedAtAfter(
+                                workspaceId, channelId, ConsentState.PENDING, erasedAt));
+        if (!registeredAgain) eraseChannelRows(workspaceId, channelId);
+        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
     }
 
-    private void eraseContent(long workspaceId, String channelId, Instant erasedAt) {
+    private void eraseChannelRows(long workspaceId, String channelId) {
         providerEvents.deleteResource(workspaceId, "slack", channelId);
         List<Long> threadIds = threads.findIdsByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         channels.revokeConsent(workspaceId, channelId);
         conversationFeedback.eraseForThreads(workspaceId, threadIds);
         messages.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         threads.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
-        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
     }
 }

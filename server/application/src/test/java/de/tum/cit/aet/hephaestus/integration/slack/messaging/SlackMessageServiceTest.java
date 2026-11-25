@@ -94,8 +94,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
         return Stream.of(
                 Arguments.of("sendEphemeralForWorkspace", (ThrowingSend)
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
-                Arguments.of("postMessage", (ThrowingSend)
-                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)),
+                Arguments.of("postMessage", (ThrowingSend) s -> s.postMessage(
+                        7L,
+                        new SlackMessageService.PostDestination("D1ABCDEFGH", null),
+                        List.of(),
+                        "hi",
+                        null,
+                        () -> true)),
                 Arguments.of("joinPublicChannel", (ThrowingSend) s -> s.joinPublicChannel(7L, "C1ABCDEFGH")));
     }
 
@@ -192,7 +197,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
     void postMessage_noToken_throwsSlackSendException() {
         when(credentialProvider.resolve(any(IntegrationRef.class))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.postMessage(7L, "C1ABCDEFGH", null, List.of(), "fallback", null))
+        assertThatThrownBy(() -> service.postMessage(
+                        7L,
+                        new SlackMessageService.PostDestination("C1ABCDEFGH", null),
+                        List.of(),
+                        "fallback",
+                        null,
+                        () -> true))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(ex -> {
                     SlackSendException sse = (SlackSendException) ex;
@@ -209,7 +220,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
             return Optional.of(new BearerToken("token", null));
         });
 
-        assertThatThrownBy(() -> service.postMessage(7L, "C1ABCDEFGH", null, List.of(), "message", null))
+        assertThatThrownBy(() -> service.postMessage(
+                        7L,
+                        new SlackMessageService.PostDestination("C1ABCDEFGH", null),
+                        List.of(),
+                        "message",
+                        null,
+                        () -> true))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(
                         ex -> assertThat(((SlackSendException) ex).slackError()).isEqualTo("silent_mode_engaged"));
@@ -257,7 +274,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
             config.getMethodsConfig().setStatsEnabled(false);
             SlackMessageService local = localService(config);
             try {
-                assertThatThrownBy(() -> local.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null))
+                assertThatThrownBy(() -> local.postMessage(
+                                7L,
+                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
+                                List.of(),
+                                "hi",
+                                null,
+                                () -> true))
                         .isInstanceOfSatisfying(
                                 SlackSendException.class,
                                 e -> assertThat(e.slackError()).isEqualTo("transport_failure"));
@@ -273,29 +296,28 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPostAThrottledWriteOnceAfterTheWholeWait() throws Exception {
-        // Slack's 429 here asks for no wait (Retry-After: 0), so the budget waits its fallback of at least a second.
+    void shouldReturnTheFirstPostThrottleToTheOutbox() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
             slackApi.enqueue(throttled());
-            slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
-            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            SlackMessageService.Posted posted;
-            try {
-                posted = local.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null);
-            } finally {
-                local.close();
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+            try (SlackMessageService local = localService(config)) {
+                assertThatThrownBy(() -> local.postMessage(
+                                7L,
+                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
+                                List.of(),
+                                "hi",
+                                null,
+                                () -> true))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.isRateLimited()).isTrue());
             }
 
-            assertThat(posted).isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
-            assertThat(time.waits())
-                    .singleElement()
-                    .satisfies(wait -> assertThat(wait).isGreaterThanOrEqualTo(1_000L));
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
+            assertThat(time.waits()).isEmpty();
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
-            assertThat(slackApi.getRequestCount()).isEqualTo(3);
+            assertThat(slackApi.getRequestCount()).isOne();
         }
     }
 
@@ -318,7 +340,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
             slackApi.start();
             SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
             try {
-                assertThatThrownBy(() -> local.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null))
+                assertThatThrownBy(() -> local.sendEphemeralForWorkspace(7L, "D1ABCDEFGH", "U1", List.of(), "hi"))
                         .isInstanceOfSatisfying(
                                 SlackSendException.class,
                                 e -> assertThat(e.slackError()).isEqualTo("silent_mode_engaged"));
@@ -326,7 +348,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 local.close();
             }
 
-            assertThat(paths).containsExactly("/api/auth.test", "/api/chat.postMessage");
+            assertThat(paths).containsExactly("/api/auth.test", "/api/chat.postEphemeral");
         }
     }
 

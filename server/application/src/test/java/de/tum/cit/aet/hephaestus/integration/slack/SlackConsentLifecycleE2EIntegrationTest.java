@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.slack;
 
+import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -241,8 +241,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         new SlackMessageService.ConversationLookup.Found(new SlackMessageService.SlackConversationInfo(
                                 inv.getArgument(1), "channel", false, true, false)));
         when(slackMessageService.postMessage(eq(workspaceId), any(), any(), any(), any(), any()))
-                .thenAnswer(inv -> new SlackMessageService.Posted(
-                        inv.getArgument(1), Instant.now().getEpochSecond() + ".123456"));
+                .thenAnswer(admittedPost(inv -> new SlackMessageService.Posted(
+                        inv.getArgument(1, SlackMessageService.PostDestination.class)
+                                .channelId(),
+                        Instant.now().getEpochSecond() + ".123456")));
         ConnectionService connectionService = mock(ConnectionService.class);
         when(connectionService.findSlackConfig(workspaceId))
                 .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(TEAM, null, null, Set.of())));
@@ -259,6 +261,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         mock(ProviderEventStore.class),
                         threadRepository,
                         monitoredChannelRepository,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messageRepository,
                         mock(ConversationEntryService.class),
@@ -335,7 +338,13 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
 
         var fallbackText = ArgumentCaptor.forClass(String.class);
         verify(slackMessageService)
-                .postMessage(eq(workspaceId), eq(C1), isNull(), any(), fallbackText.capture(), any());
+                .postMessage(
+                        eq(workspaceId),
+                        eq(new SlackMessageService.PostDestination(C1, null)),
+                        any(),
+                        fallbackText.capture(),
+                        any(),
+                        any());
         assertThat(fallbackText.getValue())
                 .contains("Hephaestus is now active in this channel")
                 .contains("does not read earlier history");

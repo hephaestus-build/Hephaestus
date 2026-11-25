@@ -207,6 +207,19 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseWriteWhenTheLeaseLosesItsMarginDuringSourceAdmission() {
+        UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+
+        assertThat(store.beginWrite(id, claim.epoch(), MARGIN, () -> {
+                    jdbc.update("UPDATE agent_action SET leased_until = clock_timestamp() WHERE id = ?", id);
+                    return true;
+                }))
+                .isFalse();
+        assertThat(row(id)).containsEntry("write_started_at", null);
+    }
+
+    @Test
     void shouldRefuseEveryWriteOfAnAttemptWhoseLeaseWasTakenAgain() {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
         var stale = claimOwn(List.of(id)).getFirst();

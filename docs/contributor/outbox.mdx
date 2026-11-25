@@ -99,8 +99,11 @@ It sets `write_started_at` in its own short transaction.
 It refuses when another claim took the action, when an erasure deleted it, or when less than 60 seconds of the lease are left.
 The provider call must end within those 60 seconds.
 If the lease check refuses, the adapter must not call the provider and returns `Abandoned`.
-For a new Slack reply, the same transaction locks the question and checks that it is still present and unredacted.
-If the source check refuses, the executor rolls back the write marker and ends the action as `CANCELLED` with `WITHDRAWN`.
+For a new Slack reply, admission runs after credential lookup.
+The write transaction locks the question and checks that it is still present and unredacted.
+It checks the remaining lease again before it sets the write marker.
+If the source check refuses, the executor ends the action as `CANCELLED` with `WITHDRAWN`.
+A Slack 429 defers the action so the next attempt checks its source again.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.mdx)).
 
 ## What an adapter returns

@@ -322,6 +322,16 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("atMostOnce") Collection<String> atMostOnceKinds,
             @Param("decodable") String decodable);
 
+    /** Locks the action before taking any source locks. Admission checks the margin again before committing. */
+    @WorkspaceAgnostic("Locks one claimed action by its id and epoch")
+    @Query(value = """
+            SELECT id FROM agent_action
+             WHERE id = :id AND lease_epoch = :epoch AND state = 'EXECUTING'
+               AND leased_until > clock_timestamp() + make_interval(secs => :margin)
+             FOR UPDATE
+            """, nativeQuery = true)
+    Optional<UUID> lockForWrite(@Param("id") UUID id, @Param("epoch") long epoch, @Param("margin") long marginSeconds);
+
     /**
      * Records that the provider call starts now. Refused when another claim took the action, when an erasure deleted
      * it, or when less than {@code margin} of the lease is left: a reclaim must never overlap a call.

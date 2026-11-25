@@ -83,15 +83,15 @@ class SlackMessageServiceLiveTest {
         try {
             assertThatCode(() -> service.postMessage(
                             workspaceId,
-                            channelId,
-                            null,
+                            new SlackMessageService.PostDestination(channelId, null),
                             asBlocks(
                                     section(
                                             s -> s.text(
                                                     markdownText(
                                                             ":white_check_mark: Hephaestus #1198 Slack E2E — posted via the app's SlackMessageService (encrypted Connection → decrypt → chat.postMessage).")))),
                             "Hephaestus #1198 Slack E2E",
-                            null))
+                            null,
+                            () -> true))
                     .doesNotThrowAnyException();
         } finally {
             service.close();

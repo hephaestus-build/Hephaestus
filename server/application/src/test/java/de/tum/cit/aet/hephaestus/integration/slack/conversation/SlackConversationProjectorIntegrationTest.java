@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
+import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,8 +37,14 @@ import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
+import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
@@ -47,13 +54,17 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -132,7 +143,12 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         main = conversations.findOrCreateMain(workspace.getId(), account);
         conversations.bindSlackIdentity(workspace.getId(), main.getId(), "T1", "U1", "D9");
         when(slack.isConnected(workspace.getId())).thenReturn(true);
-        var beans = new StaticListableBeanFactory(Map.of("slack", slack));
+        executor = executorFor(slack);
+        projector = new SlackConversationProjector(messages, replies, executor, owners, transactionManager);
+    }
+
+    private ActionExecutor executorFor(SlackMessageService transport) {
+        var beans = new StaticListableBeanFactory(Map.of("slack", transport));
         var adapter = new SlackPostAdapter(
                 beans.getBeanProvider(SlackMessageService.class),
                 beans.getBeanProvider(SlackWeeklyDigestPointer.class),
@@ -142,8 +158,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                 linkHosts,
                 mapper,
                 workspaceSummaries);
-        executor = ActionTestSupport.withAdapter(context, adapter);
-        projector = new SlackConversationProjector(messages, replies, executor, owners, transactionManager);
+        return ActionTestSupport.withAdapter(context, adapter);
     }
 
     private ConversationTurnService.Submission ask(Conversation conversation, ConversationTurn.Surface surface) {
@@ -204,8 +219,8 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private void posts() {
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenReturn(new SlackMessageService.Posted("D9", "200.1"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted("D9", "200.1")));
     }
 
     /**
@@ -295,11 +310,11 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         verify(slack, times(1))
                 .postMessage(
                         eq(workspace.getId()),
-                        eq("D9"),
-                        isNull(),
+                        eq(new SlackMessageService.PostDestination("D9", null)),
                         anyList(),
                         contains("Your reviews"),
-                        eq(SlackConversationPosts.metadata(asked.question().getId())));
+                        eq(SlackConversationPosts.metadata(asked.question().getId())),
+                        any());
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
         assertThat(jdbc.queryForObject(
@@ -312,13 +327,15 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete answer");
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "transport_failure"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "transport_failure");
+                }));
         changed(running);
         when(slack.readWorkspaceMessages(anyLong(), eq("D9"), isNull(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of("200.1"), false));
         attempt(asked);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
         assertThat(jdbc.queryForObject(
@@ -343,7 +360,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Matches(List.of("200.1"), false));
         attempt(asked);
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
     }
@@ -354,8 +371,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete");
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "transport_failure"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "transport_failure");
+                }));
         changed(running);
         if (more)
             when(slack.readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any()))
@@ -367,7 +386,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         attempt(asked);
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.UNCERTAIN);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test
@@ -395,27 +414,80 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                                 "SELECT count(*) FROM agent_action WHERE idempotency_key=?", Long.class, key(asked)))
                         .isZero());
         changed(running);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test
-    void shouldWithdrawTheReplyWhenItsQuestionIsDeletedAfterTheAdapterReadsIt() {
+    void shouldWithdrawTheReplyWhenItsQuestionIsDeletedDuringCredentialLookup() throws Exception {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
-        var running = claims.claim(asked.turn());
-        end(running, "Complete reply to the deleted question");
-        posts();
-        when(slack.isConnected(workspace.getId())).thenAnswer(invocation -> {
-            // The adapter has built the reply. Commit the deletion before it asks to begin the write.
+        end(claims.claim(asked.turn()), "Complete reply to the deleted question");
+        var credentials = mock(SlackCredentialProvider.class);
+        when(credentials.resolve(any())).thenAnswer(invocation -> {
+            // The adapter has built the reply. Commit deletion before the gateway authorizes its write.
             entries.deleteMessage(workspace.getId(), asked.question().getId());
-            return true;
+            return Optional.of(new BearerToken("xoxb-test", null));
         });
 
-        var result = ActionTestSupport.runLane(executor, jdbc, key(asked));
-
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
-        assertThat(result).contains(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
+        try (var slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(acceptedPost());
+            try (var gateway = gateway(slackApi, credentials)) {
+                assertThat(ActionTestSupport.runLane(executorFor(gateway), jdbc, key(asked)))
+                        .contains(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
+            }
+            assertThat(slackApi.getRequestCount()).isZero();
+        }
         assertThat(replies.forQuestion(workspace.getId(), asked.question().getId()))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldWithdrawTheReplyWhenItsQuestionIsDeletedDuringSlackBackoff() throws Exception {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        end(claims.claim(asked.turn()), "Complete reply to the deleted question");
+        var credentials = mock(SlackCredentialProvider.class);
+        when(credentials.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
+
+        try (var slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(new MockResponse.Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "1")
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                    .build());
+            slackApi.enqueue(acceptedPost());
+            try (var gateway = gateway(slackApi, credentials)) {
+                var outbox = executorFor(gateway);
+                assertThat(ActionTestSupport.runLane(outbox, jdbc, key(asked)))
+                        .contains(new ActionResult.Defer(ConversationSlackReplies.REREAD));
+                assertThat(slackApi.getRequestCount()).isOne();
+                assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
+
+                entries.deleteMessage(workspace.getId(), asked.question().getId());
+                ActionTestSupport.due(jdbc, key(asked));
+                assertThat(ActionTestSupport.runLane(outbox, jdbc, key(asked)))
+                        .contains(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
+            }
+            assertThat(slackApi.getRequestCount()).isOne();
+        }
+    }
+
+    private static SlackMessageService gateway(MockWebServer slackApi, SlackCredentialProvider credentials) {
+        var metrics = new SimpleMeterRegistry();
+        return new SlackMessageService(
+                credentials,
+                new SlackRateLimitTracker(metrics),
+                new OutboundEgressGuard(() -> false),
+                new SlackMetrics(metrics),
+                new SlackProperties(slackApi.url("/").toString()));
+    }
+
+    private static MockResponse acceptedPost() {
+        return new MockResponse.Builder()
+                .addHeader("Content-Type", "application/json")
+                .body("{\"ok\":true,\"channel\":\"D9\",\"ts\":\"200.1\"}")
+                .build();
     }
 
     @Test
@@ -519,8 +591,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         UUID feedback = endWithFeedback(running);
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "transport_failure"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "transport_failure");
+                }));
         changed(running);
         ConversationReceipts.awaitSettled(jdbc);
         assertThat(jdbc.queryForObject("SELECT state FROM feedback WHERE id=?", String.class, feedback))
@@ -531,7 +605,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         ConversationReceipts.awaitSettled(jdbc);
         assertThat(jdbc.queryForObject("SELECT state FROM feedback WHERE id=?", String.class, feedback))
                 .isEqualTo("DELIVERED");
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test
@@ -539,14 +613,16 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete");
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "transport_failure"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "transport_failure");
+                }));
         changed(running);
         when(slack.isConnected(workspace.getId())).thenReturn(false);
         attempt(asked);
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.UNCERTAIN);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test
@@ -594,10 +670,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         verify(slack)
                 .postMessage(
                         anyLong(),
-                        anyString(),
                         any(),
                         anyList(),
                         contains(SlackConversationPosts.aiLabel(workspace.getDisplayName())),
+                        any(),
                         any());
     }
 
@@ -606,16 +682,18 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete");
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "ratelimited", 5000L))
-                .thenReturn(new SlackMessageService.Posted("D9", "200.1"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "ratelimited", 5000L);
+                }))
+                .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted("D9", "200.1")));
         changed(running);
         changed(running);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
         attempt(asked);
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
-        verify(slack, times(2)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(2)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test
@@ -623,8 +701,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         UUID feedback = endWithFeedback(running);
-        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
-                .thenThrow(new SlackSendException(workspace.getId(), "D9", "silent_mode_engaged"));
+        when(slack.postMessage(anyLong(), any(), anyList(), anyString(), any(), any()))
+                .thenAnswer(admittedPost(invocation -> {
+                    throw new SlackSendException(workspace.getId(), "D9", "silent_mode_engaged");
+                }));
         changed(running);
         ConversationReceipts.awaitSettled(jdbc);
         assertThat(jdbc.queryForObject("SELECT state FROM feedback WHERE id=?", String.class, feedback))
@@ -637,7 +717,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                         running.getId()))
                 .isZero();
         attempt(asked);
-        verify(slack, times(1)).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, times(1)).postMessage(anyLong(), any(), anyList(), anyString(), any(), any());
     }
 
     @Test

@@ -164,7 +164,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                         Long.class,
                         workspace.getId()))
                 .isEqualTo(1L);
-        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
+        verify(slackMessageService, never()).postMessage(anyLong(), any(), anyList(), any(), any(), any());
 
         // Audit row: the admin requested activation; the action must confirm it separately.
         var events = consentEventRepository.findByWorkspaceIdAndSlackChannelIdOrderByCreatedAtAscIdAsc(
@@ -194,7 +194,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                         .orElseThrow()
                         .getConsentState())
                 .isEqualTo(ConsentState.PENDING);
-        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
+        verify(slackMessageService, never()).postMessage(anyLong(), any(), anyList(), any(), any(), any());
     }
 
     @Test

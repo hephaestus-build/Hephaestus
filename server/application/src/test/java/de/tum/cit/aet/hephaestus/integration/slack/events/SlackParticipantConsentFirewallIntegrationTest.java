@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
@@ -171,6 +172,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         eventStore,
                         threadRepository,
                         monitoredChannelRepository,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messages,
                         mock(ConversationEntryService.class),

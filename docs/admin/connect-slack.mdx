@@ -37,6 +37,8 @@ The manifest sets these addresses:
 | `settings.event_subscriptions.request_url` | `https://<host>/webhooks/slack` | Slack sends messages and app events. |
 | `settings.interactivity.request_url` | `https://<host>/webhooks/slack/interactivity` | Slack sends the buttons that members press in the App Home tab. |
 
+If you already installed the app, add `group_deleted` to its bot event subscriptions to receive private channel deletions.
+
 ## Set the Helm values and Secret keys
 
 1. Type the client secret, then the signing secret. The shell does not show them:

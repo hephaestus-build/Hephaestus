@@ -49,6 +49,11 @@ class SlackChannelLifecycleMessageHandlerTest {
                         (Verifier) svc -> verify(svc)
                                 .onDeleted(eq("T1"), any(JsonNode.class), eq(Instant.ofEpochSecond(1_700_000_000L)))),
                 Arguments.of(
+                        "group_deleted",
+                        (Builder) (svc, de) -> new SlackGroupDeletedMessageHandler(svc, de),
+                        (Verifier) svc -> verify(svc)
+                                .onDeleted(eq("T1"), any(JsonNode.class), eq(Instant.ofEpochSecond(1_700_000_000L)))),
+                Arguments.of(
                         "channel_rename",
                         (Builder) (svc, de) -> new SlackChannelRenameMessageHandler(svc, de),
                         (Verifier) svc -> verify(svc).onRenamed(eq("T1"), any(JsonNode.class))),

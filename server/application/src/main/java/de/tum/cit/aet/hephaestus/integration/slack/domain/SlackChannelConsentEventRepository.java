@@ -41,6 +41,9 @@ public interface SlackChannelConsentEventRepository extends Repository<SlackChan
     @Nullable
     Long findLatestSetupRevision(@Param("workspaceId") long workspaceId, @Param("channelId") String channelId);
 
+    boolean existsByWorkspaceIdAndSlackChannelIdAndToStateAndCreatedAtAfter(
+            long workspaceId, String slackChannelId, SlackMonitoredChannel.ConsentState toState, Instant cutoff);
+
     /** Append one consent transition. Insert-only: the entity is {@code @Immutable}, so this never updates. */
     SlackChannelConsentEvent save(SlackChannelConsentEvent event);
 
