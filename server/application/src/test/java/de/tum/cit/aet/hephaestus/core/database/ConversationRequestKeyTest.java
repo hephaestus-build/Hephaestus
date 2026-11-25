@@ -85,6 +85,7 @@ class ConversationRequestKeyTest extends BaseIntegrationTest {
     }
 
     private long account() {
-        return Objects.requireNonNull(accounts.save(new Account("Request owner")).getId());
+        return Objects.requireNonNull(
+                accounts.save(new Account("Request owner")).getId());
     }
 }

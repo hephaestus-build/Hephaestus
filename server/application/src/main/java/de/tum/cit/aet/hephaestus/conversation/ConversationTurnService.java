@@ -141,7 +141,8 @@ public class ConversationTurnService {
                 .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
         ConversationService.holdWrite(writeFence, owner);
         Conversation conversation = entryService.lock(workspaceId, conversationId);
-        Optional<ConversationTurn> earlier = turns.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId);
+        Optional<ConversationTurn> earlier =
+                turns.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId);
         if (earlier.isPresent()) {
             ConversationTurn turn = earlier.get();
             if (!turn.getConversationId().equals(conversationId)) {
@@ -149,7 +150,8 @@ public class ConversationTurnService {
             }
             return new Submission(turn, entries.findStimulus(turn.getWorkspaceId(), turn.getId()), false);
         }
-        if (entries.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId).isPresent()) {
+        if (entries.findByWorkspaceIdAndAccountIdAndRequestId(workspaceId, owner, requestId)
+                .isPresent()) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.REQUEST_ID_REUSED);
         }
         if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {

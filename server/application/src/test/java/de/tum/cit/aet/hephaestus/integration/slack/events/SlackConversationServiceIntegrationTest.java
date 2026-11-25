@@ -302,7 +302,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     private Optional<ConversationEntry> maybeQuestion(String ts) {
-        return entryRepository.findByWorkspaceIdAndAccountIdAndRequestId(workspace.getId(), developerId, "slack:T1:D9:" + ts);
+        return entryRepository.findByWorkspaceIdAndAccountIdAndRequestId(
+                workspace.getId(), developerId, "slack:T1:D9:" + ts);
     }
 
     /** Nothing of the DM reached the ledger: no conversation, no question. */
@@ -368,7 +369,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
 
         ConversationEntry question = question("100.1");
-        assertThat(turnRepository.findByWorkspaceIdAndAccountIdAndRequestId(workspace.getId(), developerId, "slack:T1:D9:100.1"))
+        assertThat(turnRepository.findByWorkspaceIdAndAccountIdAndRequestId(
+                        workspace.getId(), developerId, "slack:T1:D9:100.1"))
                 .hasValueSatisfying(turn -> assertThat(turn.getId()).isEqualTo(question.getTurnId()));
         assertThat(entryRepository.findMaxSeqByWorkspaceIdAndConversationId(workspace.getId(), main().getId()))
                 .isEqualTo(question.getSeq());
@@ -786,7 +788,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
         service.handleDm(TEAM, "D8", SLACK_USER, "From another DM", "100.7", "100.1");
 
-        assertThat(entryRepository.findByWorkspaceIdAndAccountIdAndRequestId(workspace.getId(), developerId, "slack:T1:D8:100.7"))
+        assertThat(entryRepository.findByWorkspaceIdAndAccountIdAndRequestId(
+                        workspace.getId(), developerId, "slack:T1:D8:100.7"))
                 .isEmpty();
     }
 
@@ -926,7 +929,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertNotice("100.1", inThread ? threadTs : null, ConversationRefusal.UNAVAILABLE.userMessage(), false);
         verifyNoInteractions(identities, admission);
         assertNothingStored("100.1");
-        assertThat(turnRepository.findByWorkspaceIdAndAccountIdAndRequestId(workspace.getId(), developerId, "slack:T1:D9:100.1"))
+        assertThat(turnRepository.findByWorkspaceIdAndAccountIdAndRequestId(
+                        workspace.getId(), developerId, "slack:T1:D9:100.1"))
                 .isEmpty();
     }
 
