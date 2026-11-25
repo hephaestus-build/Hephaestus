@@ -5,7 +5,6 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -16,9 +15,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReade
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubMemberEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -40,7 +39,7 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
     private final RepositoryCollaboratorRepository collaboratorRepository;
     private final ScopeIdResolver scopeIdResolver;
     private final GitHubAccessReader accessReader;
-    private final RepositoryReadersProvider readers;
+    private final GitHubReaderRemovals readerRemovals;
 
     GitHubMemberMessageHandler(
             ProcessingContextFactory contextFactory,
@@ -48,7 +47,7 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
             RepositoryCollaboratorRepository collaboratorRepository,
             ScopeIdResolver scopeIdResolver,
             GitHubAccessReader accessReader,
-            RepositoryReadersProvider readers,
+            GitHubReaderRemovals readerRemovals,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -62,7 +61,7 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
         this.collaboratorRepository = collaboratorRepository;
         this.scopeIdResolver = scopeIdResolver;
         this.accessReader = accessReader;
-        this.readers = readers;
+        this.readerRemovals = readerRemovals;
     }
 
     /**
@@ -156,14 +155,10 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
         } else {
             handleCollaboratorRemoved(repository, user);
             // Also when the mirror holds no row for the person: a listing that found them may not have stored it yet.
-            Long repositoryNativeId =
-                    event.repository() == null ? null : event.repository().id();
-            if (memberDto.getDatabaseId() != null && repositoryNativeId != null) {
-                readers.recordReaderRemoved(
-                        Objects.requireNonNull(context.providerId()),
-                        memberDto.getDatabaseId(),
-                        List.of(repositoryNativeId));
-            }
+            readerRemovals.removedFromRepository(
+                    Objects.requireNonNull(context.providerId()),
+                    memberDto.getDatabaseId(),
+                    event.repository() == null ? null : event.repository().id());
         }
     }
 

@@ -815,6 +815,32 @@ final class PersonErasureAllStoresFixture {
         row("commit_file_change", "commit_id", base + 9, "filename", CANARY, "change_type", "MODIFIED");
     }
 
+    /** A monitored repository of the workspace whose last listing names the person as a reader. */
+    void seedResourceReader(long workspace, long provider, long readerNativeId, long base) {
+        row(
+                "repository_to_monitor",
+                "id",
+                base,
+                "workspace_id",
+                workspace,
+                "name_with_owner",
+                "readers/repository-" + base,
+                "native_id",
+                base,
+                "generated_paths",
+                "[]");
+        row(
+                "resource_reader",
+                "workspace_id",
+                workspace,
+                "repository_to_monitor_id",
+                base,
+                "provider_id",
+                provider,
+                "reader_native_id",
+                readerNativeId);
+    }
+
     /** A dead GitHub delivery whose sender is the person with {@code githubUserId}. */
     void seedProviderEvent(long workspace, long githubUserId, String login) {
         row(

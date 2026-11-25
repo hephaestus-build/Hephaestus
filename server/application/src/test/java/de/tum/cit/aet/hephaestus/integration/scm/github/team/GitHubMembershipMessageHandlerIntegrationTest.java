@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -106,8 +107,7 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
                 teamMembershipRepository,
                 scopeIdResolver,
                 accessReader,
-                readers,
-                repositories,
+                new GitHubReaderRemovals(readers, repositories),
                 deserializer,
                 transactionTemplate);
         githubReportsTeamMember(true);

@@ -7,19 +7,18 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.MembershipChangedEvent;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.util.List;
 import java.util.Locale;
@@ -50,8 +49,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
     private final OrganizationMembershipListener membershipListener;
     private final ScopeIdResolver scopeIdResolver;
     private final GitHubAccessReader accessReader;
-    private final RepositoryReadersProvider readers;
-    private final RepositoryRepository repositories;
+    private final GitHubReaderRemovals readerRemovals;
 
     GitHubOrganizationMessageHandler(
             GitHubOrganizationProcessor organizationProcessor,
@@ -63,8 +61,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
             OrganizationMembershipListener membershipListener,
             ScopeIdResolver scopeIdResolver,
             GitHubAccessReader accessReader,
-            RepositoryReadersProvider readers,
-            RepositoryRepository repositories,
+            GitHubReaderRemovals readerRemovals,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -82,8 +79,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         this.membershipListener = membershipListener;
         this.scopeIdResolver = scopeIdResolver;
         this.accessReader = accessReader;
-        this.readers = readers;
-        this.repositories = repositories;
+        this.readerRemovals = readerRemovals;
     }
 
     /**
@@ -202,10 +198,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
             return;
         }
         // Also when the mirror knows no such user: a listing that found the person may not have stored them yet.
-        readers.recordReaderRemoved(
-                providerId,
-                Objects.requireNonNull(userDto.id()),
-                repositories.findNativeIdsByOrganizationLogin(orgDto.login(), providerId));
+        readerRemovals.removedFromOrganization(providerId, userDto.id(), orgDto.login());
         var user = userRepository.findByNativeIdAndProviderId(Objects.requireNonNull(userDto.id()), providerId);
         if (user.isEmpty()) {
             log.debug(

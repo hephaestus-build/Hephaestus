@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubMemberEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -108,7 +109,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 collaboratorRepository,
                 scopeIdResolver,
                 accessReader,
-                readers,
+                new GitHubReaderRemovals(readers, repositoryRepository),
                 deserializer,
                 transactionTemplate);
         githubReportsCollaborator("write");
@@ -211,8 +212,9 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
             userRepository.save(member);
         }
 
-        // Load remove event
+        // Load remove event; GitHub reports the person without access
         GitHubMemberEventDTO removeEvent = loadPayload("member.removed");
+        githubReportsCollaborator(null);
 
         handler.dispatchEvent(removeEvent);
 

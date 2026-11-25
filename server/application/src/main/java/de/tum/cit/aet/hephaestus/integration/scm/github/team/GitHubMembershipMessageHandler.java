@@ -7,9 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
@@ -18,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.util.Optional;
@@ -43,8 +42,7 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
     private final TeamMembershipRepository teamMembershipRepository;
     private final ScopeIdResolver scopeIdResolver;
     private final GitHubAccessReader accessReader;
-    private final RepositoryReadersProvider readers;
-    private final RepositoryRepository repositories;
+    private final GitHubReaderRemovals readerRemovals;
 
     GitHubMembershipMessageHandler(
             GitHubUserProcessor userProcessor,
@@ -53,8 +51,7 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             TeamMembershipRepository teamMembershipRepository,
             ScopeIdResolver scopeIdResolver,
             GitHubAccessReader accessReader,
-            RepositoryReadersProvider readers,
-            RepositoryRepository repositories,
+            GitHubReaderRemovals readerRemovals,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -69,8 +66,7 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         this.teamMembershipRepository = teamMembershipRepository;
         this.scopeIdResolver = scopeIdResolver;
         this.accessReader = accessReader;
-        this.readers = readers;
-        this.repositories = repositories;
+        this.readerRemovals = readerRemovals;
     }
 
     /**
@@ -165,7 +161,11 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         }
 
         if (current.role() == null) {
-            forgetReaderInOrganization(event, providerId, memberDto.getDatabaseId());
+            // Also when the mirror holds no membership: a listing may have found the person through the team.
+            readerRemovals.removedFromOrganization(
+                    providerId,
+                    memberDto.getDatabaseId(),
+                    event.organization() == null ? null : event.organization().login());
         }
 
         // Get the team
@@ -210,24 +210,5 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
 
         teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId());
         log.info("Removed team membership: userId={}, teamName={}", user.getId(), sanitizeForLog(team.getName()));
-    }
-
-    /**
-     * The person left a team, so they may have lost access to any repository that the team reaches, through a parent
-     * team as well. The mirror cannot show which, so the person stops counting as a reader of every repository of the
-     * organization. That only narrows: the next listing names them again where they still read.
-     */
-    private void forgetReaderInOrganization(
-            GitHubMembershipEventDTO event, Long providerId, @Nullable Long readerNativeId) {
-        if (readerNativeId == null
-                || event.organization() == null
-                || event.organization().login() == null) {
-            return;
-        }
-        readers.recordReaderRemoved(
-                providerId,
-                readerNativeId,
-                repositories.findNativeIdsByOrganizationLogin(
-                        event.organization().login(), providerId));
     }
 }

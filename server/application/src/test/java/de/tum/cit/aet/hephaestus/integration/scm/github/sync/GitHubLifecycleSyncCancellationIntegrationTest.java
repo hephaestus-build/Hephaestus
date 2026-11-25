@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrgan
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService.CollaboratorListing;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceDataSyncTrigger;
@@ -340,7 +341,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 teams,
                 mock(GitHubOrganizationSyncService.class),
                 metadata,
-                mock(GitHubCollaboratorSyncService.class),
+                collaboratorsThatListNoOne(),
                 mock(GitHubCommitBackfillService.class),
                 mock(CommitAuthorEnrichmentService.class),
                 mock(CommitMetadataEnrichmentService.class),
@@ -527,5 +528,13 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 .filter(candidate -> candidate.getNameWithOwner().equals(repository.getNameWithOwner()))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    /** The collaborator service as a sync of a repository with no collaborators finds it: a complete, empty listing. */
+    private static GitHubCollaboratorSyncService collaboratorsThatListNoOne() {
+        GitHubCollaboratorSyncService collaborators = mock(GitHubCollaboratorSyncService.class);
+        when(collaborators.listCollaborators(any(), any(), anyLong()))
+                .thenReturn(new CollaboratorListing(CollaboratorListing.Outcome.COMPLETE, List.of()));
+        return collaborators;
     }
 }
