@@ -271,6 +271,25 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain(refused.getId());
     }
 
+    /**
+     * The Practice page asks whether later work closed each card. Only work that the change itself occasioned can
+     * close one, never a review the developer asked for, so the page reads the work behind none of those. Every result
+     * here comes from a requested review on its own piece of work, so a read of each later result would ask about
+     * nearly all 24.
+     */
+    @Test
+    void shouldReadTheWorkBehindNoRequestedReviewWhenThePracticePageLooksForWorkThatClosesACard() {
+        works = IntStream.range(0, 24).mapToObj(index -> onNewWork()).toList();
+        seed(works.size());
+
+        clearInvocations(sourceFingerprints);
+        var cards = practicePageFeedback.getOwnPracticePageFeedback(
+                scenario.workspace().getId());
+
+        assertThat(cards).isNotEmpty();
+        assertThat(fingerprintReads()).isLessThanOrEqualTo(cards.size());
+    }
+
     @Test
     void shouldReadTheDevelopersResultHistoryOnceForTheOverview() {
         seed(2 * works.size());
@@ -410,12 +429,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         reads.forEach((name, read) -> {
             clearInvocations(sourceFingerprints);
             read.run();
-            counts.put(
-                    name,
-                    mockingDetails(sourceFingerprints).getInvocations().stream()
-                            .filter(invocation ->
-                                    invocation.getMethod().getName().equals("fingerprints"))
-                            .count());
+            counts.put(name, fingerprintReads());
         });
         return counts;
     }
@@ -443,6 +457,12 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                                 scenario.workspace().getId(), shown),
                         read -> assertThat(read).hasSize(1)));
         return costs;
+    }
+
+    private long fingerprintReads() {
+        return mockingDetails(sourceFingerprints).getInvocations().stream()
+                .filter(invocation -> invocation.getMethod().getName().equals("fingerprints"))
+                .count();
     }
 
     private <T> long cost(Supplier<T> read, Consumer<T> check) {

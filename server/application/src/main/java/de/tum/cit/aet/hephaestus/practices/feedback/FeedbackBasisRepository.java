@@ -93,14 +93,21 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
     List<FeedbackBasis> findByWorkspaceIdAndFeedbackIdInOrderByOrdinalAsc(
             long workspaceId, Collection<UUID> feedbackIds);
 
+    /**
+     * The later results that can close feedback on these practices: live, not migrated history, and from a review that
+     * the work itself occasioned. {@code OpportunityBundler.opportunities} drops every other result, and checking one
+     * reads the work behind it, so the query leaves them out.
+     */
     @Query(value = """
-        SELECT r.* FROM result r WHERE r.workspace_id = :workspaceId AND r.person_account_id IN (:developerIds)
-           AND r.recorded_at > :from AND r.recorded_at < :to AND r.ended_at IS NULL
-        ORDER BY r.recorded_at, r.id
-        """, nativeQuery = true)
-    List<Result> findLaterResults(
+        SELECT r.* FROM result r JOIN review v ON v.workspace_id = r.workspace_id AND v.id = r.review_id
+        WHERE r.workspace_id = :workspaceId AND r.person_account_id = ANY(:developerIds)
+           AND r.practice_id = ANY(:practiceIds) AND r.recorded_at > :from AND r.recorded_at < :to
+           AND r.ended_at IS NULL AND v.origin NOT IN ('REQUEST','BACKFILL') AND r.evidence_version <>
+        """ + Result.MIGRATED_EVIDENCE_VERSION + " ORDER BY r.recorded_at, r.id", nativeQuery = true)
+    List<Result> findLaterOpportunities(
             @Param("workspaceId") long workspaceId,
-            @Param("developerIds") Collection<Long> developerIds,
+            @Param("developerIds") Long[] developerIds,
+            @Param("practiceIds") Long[] practiceIds,
             @Param("from") Instant from,
             @Param("to") Instant to);
 

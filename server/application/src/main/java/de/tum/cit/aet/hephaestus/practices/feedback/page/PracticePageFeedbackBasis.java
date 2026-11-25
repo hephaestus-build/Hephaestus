@@ -167,11 +167,8 @@ public class PracticePageFeedbackBasis {
                 .filter(support -> !support.isEmpty())
                 .map(support -> support.getFirst().getPracticeId())
                 .collect(Collectors.toSet());
-        // Only later results of the feedback's practices can resolve it. Checking a result reads the work behind it,
-        // so results of other practices are left out before the check, not after it.
-        var later = basis.findLaterResults(workspaceId, developers, oldest.get(), now).stream()
-                .filter(row -> practiceIds.contains(row.getPracticeId()))
-                .toList();
+        var later = basis.findLaterOpportunities(
+                workspaceId, developers.toArray(Long[]::new), practiceIds.toArray(Long[]::new), oldest.get(), now);
         var allowed = visibility.permitsAll(
                 workspaceId, later.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         // The check above already required current sources; the resolution reads no freshness of its own.
