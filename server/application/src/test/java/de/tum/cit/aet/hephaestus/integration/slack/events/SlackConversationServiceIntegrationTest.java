@@ -497,6 +497,20 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertLookup("unconfirmed", reason, 1);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"internal_error", "fatal_error", "service_unavailable", "request_timeout"})
+    void shouldRetryWithoutSpendingAnAttemptWhenTheSlackBodyReportsAnOutage(String error) {
+        membership.set(slackJson("""
+                {"ok":false,"error":"%s"}
+                """.formatted(error)));
+        var claimed = claimedDm();
+
+        failMembershipLookup(claimed);
+
+        assertQueuedForRetry(claimed, 0);
+        assertLookup("unconfirmed", "provider", 1);
+    }
+
     @Test
     void shouldAnswerTheOriginalQuestionWhenSlackRecovers() {
         lookupResponses.add(new MockResponse.Builder().code(503).build());

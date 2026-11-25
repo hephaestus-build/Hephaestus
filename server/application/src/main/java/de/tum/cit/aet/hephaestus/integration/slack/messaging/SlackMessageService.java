@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
@@ -460,10 +461,11 @@ public class SlackMessageService implements AutoCloseable {
                     ? MembershipStatus.RATE_LIMITED
                     : MembershipStatus.PROVIDER;
             if (response != null) {
-                // The inbox classifies HTTP outages by status. Keep the provider body and headers out of the failure.
-                cause = new RestClientResponseException(
-                        "Slack membership HTTP failure", HttpStatusCode.valueOf(response.code()), "", null, null, null);
+                cause = membershipHttpFailure(HttpStatusCode.valueOf(response.code()));
             }
+        } catch (RestClientResponseException unavailable) {
+            status = MembershipStatus.PROVIDER;
+            cause = unavailable;
         } catch (IOException unavailable) {
             status = MembershipStatus.TRANSPORT;
             cause = unavailable;
@@ -478,11 +480,18 @@ public class SlackMessageService implements AutoCloseable {
         return status == MembershipStatus.CONFIRMED;
     }
 
+    private static RestClientResponseException membershipHttpFailure(HttpStatusCode status) {
+        // The inbox uses the status to classify the failure. Keep provider response data out of the exception.
+        return new RestClientResponseException("Slack membership lookup failed", status, "", null, null, null);
+    }
+
     private static MembershipStatus membershipStatus(JsonNode response, String teamId, String subject) {
         if (BooleanNode.FALSE.equals(response.path("ok"))) {
-            return "user_not_found".equals(response.path("error").asString(""))
-                    ? MembershipStatus.INELIGIBLE
-                    : MembershipStatus.PROVIDER;
+            String error = response.path("error").asString("");
+            if (SlackSendException.isProviderUnavailable(error)) {
+                throw membershipHttpFailure(HttpStatus.SERVICE_UNAVAILABLE);
+            }
+            return "user_not_found".equals(error) ? MembershipStatus.INELIGIBLE : MembershipStatus.PROVIDER;
         }
         var user = response.path("user");
         var userTeam = user.path("team_id").asString("");
