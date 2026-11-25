@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -167,6 +168,45 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
             assertThat(Objects.requireNonNull(actors.get(SHA)).getFirst().answered())
                     .isFalse();
+        }
+
+        @Test
+        void shouldAnswerTheOtherCommitsWhenOneCommitsAliasCarriesAnError() {
+            String other = "b".repeat(40);
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class);
+            var response = mock(ClientGraphQlResponse.class);
+            var readable = mock(ClientResponseField.class);
+            var error = mock(ResponseError.class);
+            when(error.getParsedPath()).thenReturn(List.of("repository", "commit1"));
+            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(client.document(anyString())).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.just(response));
+            when(response.isValid()).thenReturn(true);
+            when(response.getErrors()).thenReturn(List.of(error));
+            when(response.field("repository.commit0")).thenReturn(readable);
+            Map<String, Object> commit = Map.of("author", actor("a@example.com", noUser()));
+            doReturn(commit).when(readable).getValue();
+            doReturn(commit)
+                    .when(readable)
+                    .toEntity(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any());
+
+            var actors = service.fetchCommitActors("owner/repo", 1L, List.of(SHA, other));
+
+            assertThat(actors)
+                    .as("the commit that GitHub could not read has no answer")
+                    .containsOnlyKeys(SHA);
+            assertThat(Objects.requireNonNull(actors.get(SHA)).getFirst().answered())
+                    .isTrue();
+        }
+
+        @Test
+        void shouldDropTheBatchWhenAnErrorNamesNoCommit() {
+            var error = mock(ResponseError.class);
+            when(error.getParsedPath()).thenReturn(List.of("repository"));
+
+            assertThat(read(Map.of("author", actor("a@example.com", noUser())), List.of(error)))
+                    .isEmpty();
         }
 
         @Test
