@@ -703,7 +703,7 @@ When the run leaves that lease, a trigger on `agent_run` clears it.
 The gateway forwards a model request of the claim only if the request continues that conversation as the composer does.
 The request has the session's instructions, tools and settings, and then the session's input.
 After that, each served reply follows the conversation that it answered.
-The answers to the reply's calls come next, with the session's nudge at most once.
+The answers to the reply's calls come next, with the final-call prompt from `session.nudge()` at most once.
 A reply without calls gets the session's finish, at most once.
 
 A conversation that already got its answer gets that answer again, from the transcript and with no model call.

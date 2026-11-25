@@ -29,6 +29,9 @@ import {
 	issueFormProse,
 	skillMetadataAlerts,
 	issueFormAlerts,
+	productCopyFindings,
+	productCopyPaths,
+	matchAllowedText,
 } from "./check-prose.ts";
 import type { ToolSource } from "./lib/ci-tool-resolver.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -786,5 +789,89 @@ await test("an exact-source exception affects only its named rule and span", asy
 		assert.equal(list.find(({ Check }) => Check === "STE.Words")?.Line, 7);
 	} finally {
 		await vale.dispose();
+	}
+});
+
+void test("retired terms fail on shipped docs, UI text, and server messages", async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "product-copy-test-"));
+	const vale = await prepareVale("product-copy");
+	try {
+		const docs = "docs/user/getting-started.mdx";
+		const ui = "webapp/src/components/FeedbackActions.tsx";
+		const server = "server/application/src/main/java/example/FeedbackController.java";
+		const catalog = "server/application/src/main/resources/messages.properties";
+		const sources = {
+			[docs]: [
+				"---",
+				"title: Feedback",
+				"description: View as user",
+				"---",
+				"",
+				"## Per-person results for admins",
+				"",
+				"Send a nudge.",
+				"",
+				"Open your AI mentor.",
+				"",
+				"Read about your mentorship.",
+			].join("\n"),
+			[ui]: [
+				"// View as user",
+				"export const actions = () => <>",
+				"  <button>View as user</button>",
+				'  <button aria-label={"Per-person " + "results for admins"} />',
+				"  <button>Send nudges</button>",
+				'  <button title="Open your AI mentor" />',
+				"</>;",
+			].join("\n"),
+			[server]: [
+				"class FeedbackController {",
+				"    // View as user",
+				"    void nudge() {}",
+				'    String title = "View " + "as user";',
+				'    String detail = "Per-person results for admins are off."; ',
+				'    String reason = "This nudge expired."; ',
+				'    String help = "Open your AI mentor."; ',
+				"}",
+			].join("\n"),
+			[catalog]: "nudge.key=Get feedback.\ncontact.notice=Send a \\u006eudge.\n",
+			"docs/decisions/0001-example.md": "View as user",
+			"webapp/src/components/FeedbackActions.test.tsx": 'const label = "View as user";',
+			"extension/src/api/types.gen.ts": 'const label = "View as user";',
+		};
+		for (const [file, source] of Object.entries(sources)) {
+			await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+			await writeFile(path.join(root, file), source);
+		}
+		const findings = productCopyFindings(vale, root, productCopyPaths(root));
+		const expected = {
+			[docs]: [3, 6, 8, 10],
+			[ui]: [3, 4, 5, 6],
+			[server]: [4, 5, 6, 7],
+			[catalog]: ["contact.notice"],
+		};
+		assert.deepEqual(
+			findings.map(({ file, line }) => `${file}:${line}`).toSorted(),
+			Object.entries(expected)
+				.flatMap(([file, lines]) => lines.map((line) => `${file}:${line}`))
+				.toSorted(),
+		);
+
+		const [first, second] = findings.filter(({ file }) => file === ui);
+		assert.ok(first);
+		assert.ok(second);
+		const firstLabel = `${first.file}: ${first.source}`;
+		const secondLabel = `${second.file}: ${second.source}`;
+		assert.deepEqual(matchAllowedText([first, second, first], [firstLabel]), {
+			unexpected: [second, first],
+			unused: [],
+		});
+		assert.deepEqual(matchAllowedText([first], [firstLabel, secondLabel]), {
+			unexpected: [],
+			unused: [[secondLabel, 1]],
+		});
+	} finally {
+		await vale.dispose();
+		await rm(root, { recursive: true, force: true });
 	}
 });

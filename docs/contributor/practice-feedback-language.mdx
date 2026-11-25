@@ -17,16 +17,16 @@ Use item only in contributor documentation, code and API contracts.
 
 ## Tagline and lead
 
-This section is the one home of the tagline, the category line and the lead paragraph.
-Other surfaces reuse these words exactly.
-Do not paraphrase them.
+Hephaestus gives people feedback on how they apply practices in their work.
+Software engineering is the first domain.
+This section owns the tagline, the category line, and the lead.
 
 | Name | Text |
 | --- | --- |
 | **Tagline** | Put good practice to work. |
 | **Category line** | Open-source practice feedback for software teams |
 
-The lead paragraph:
+**Lead for the current release**
 
 > Hephaestus helps software teams put good engineering practices into their everyday work.
 > It reviews pull requests, issues, code reviews and team discussions as the work happens.
@@ -35,7 +35,16 @@ The lead paragraph:
 > The profile shows how each practice develops over time.
 > Work drafted with a coding agent gets the same feedback.
 
-A surface with a length limit, such as a meta description, starts with the first sentence of the lead.
+**Lead for 1.0**
+
+> Hephaestus knows your goals, gives feedback grounded in your own work and comes back when it said it would.
+> What you learn stays yours from team to team.
+> Your admins and managers cannot see your conversations or what Hephaestus keeps about you.
+
+Use this lead when the release provides these controls.
+The [user guide](/user/privacy) describes the access controls in the current release.
+
+A surface with a length limit starts with the first sentence of the lead for the current release.
 Display text keeps the full stop of the tagline.
 A browser title drops it.
 
@@ -76,6 +85,13 @@ A commit subject or pull request title that contains it fails too.
 Its allowlist keeps two kinds of line, each by its exact text.
 The conversation prompt tells the model that the old name means it.
 This page names the word to forbid it.
+
+The same gate runs the product copy rule in [Vale](./simplified-technical-english.mdx#machine-checks-and-human-review).
+It checks docs, UI text, and server strings.
+For agreed contact, write check-in instead of “nudge”.
+For unsolicited contact, write unprompted update.
+The current version still uses “View as user” and “Per-person results for admins” under the access rules in the [user guide](/user/privacy).
+Exact text from these controls remains valid until [their removal](https://github.com/hephaestus-build/Hephaestus/issues/4966).
 
 *Habit* is retired for a practice or a repeated pattern in someone's work.
 *Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for activity.
@@ -290,8 +306,8 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
 | **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | `Heph`, Mentor, Conversations (as the area), chat, AI assistant |
 | **Mentor** | A person who guides a less experienced person, such as a reviewer or an experienced colleague. Use it only for people. “Mentor” alone never names Hephaestus. |  |
-| **Hephaestus** | The application. It also answers in a person's conversation. It is an AI mentor. | agent, `Heph`, mentor, the mentor, your mentor, assistant |
-| **AI mentor** | The product category of Hephaestus: Hephaestus is an AI mentor. Always write it with “AI”. | mentor (alone, for the product), coach, companion |
+| **Hephaestus** | The application. It also answers in a person's conversation. | agent, `Heph`, mentor, the mentor, your mentor, assistant |
+| **AI mentor** | The product category of Hephaestus. Use Hephaestus as the name in product text. | mentor (alone, for the product), coach, companion |
 | **Guided tour** | The chapters on the Practice profile that explain how work becomes feedback and how to read the page. It never opens by itself: a person starts it from the page or from a step of Get started. | product tour, walkthrough, onboarding wizard |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
@@ -354,9 +370,9 @@ A destination matches a delivery strategy only by the place where feedback appea
 
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
-| **Conversation** | The one conversation that an account has with Hephaestus in a workspace. The app shows all of it. A Slack direct message shows the part that the developer asked in Slack. | chat, session, chat history |
+| **Conversation** | The exchange of messages between an account and Hephaestus in a workspace. The app shows all of it. A Slack direct message shows the part that the developer asked in Slack. | chat, session, chat history |
 | **Thread** | A conversation that starts at one top-level message of the conversation. It is one level deep. Each message has at most one. A thread started in Slack also appears in Slack. UI and user docs say thread. | fork, branch, sub-chat |
-| **Message** (conversation) | One question, answer or weekly digest in a conversation. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
+| **Message** (conversation) | One contribution to a conversation. It can be a question, an answer, or a weekly digest. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
 
 The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox, the context folder, the context document and the context loader.
@@ -373,6 +389,7 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 
 | Term | Meaning | Avoid for this concept | Decided in |
 | --- | --- | --- | --- |
+| **Domain pack** | The vocabulary, practices, and instructions for one domain. Software engineering is the first domain. | plugin, provider | — |
 | **Copy on the work** | The copy of one piece of feedback that Hephaestus posts on the pull request or merge request. | comment on the work, feedback on the work (for the copy) | ADR 0121 |
 | **Personal space** | A workspace that only its owner can enter. Records that travel with the person live here. | private workspace, home | ADR 0126 |
 | **Item card** | The projection of rows about one item, for its owner. It shows the problems with their cited lines, the delivery state of each copy, the task status and "Could not check". No model writes it. | live card, result card, PR card | ADR 0150 |
@@ -380,12 +397,12 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Mute card notifications** | The person's action that stops messages and notifications about one item card | Mute (alone) | ADR 0150 |
 | **Request a new copy** | The item card's action after the copy on the work was withheld. It starts a new composition with a new deadline. | retry, fallback | ADR 0122 |
 | **Task status card** | The state of one task, with its estimate and **Cancel** | progress line, job line | ADR 0120 |
-| **Message from Hephaestus** | A message that Hephaestus writes without a person's question: a requested result, a check-in or an unprompted update. It is written complete and never streamed. | proactive message, nudge | ADR 0131 |
+| **Message from Hephaestus** | A message that Hephaestus writes without a person's question: a requested result, a check-in or an unprompted update. It is written complete and never streamed. | proactive message | ADR 0131 |
 | **Private check** | A task that checks the person's own draft against its practices and returns a private check outcome, which only that person reads. It writes no observation and no copy on the work. | rehearsal, pre-review | ADR 0120 |
 | **Private check outcome** | Defined in the [review glossary](./practice-review-glossary.mdx#assessment-records). | private observation, rehearsal result | ADR 0124 |
 | **Self-report** | Defined in the [review glossary](./practice-review-glossary.mdx#assessment-records). | self-assessment, claim | ADR 0124 |
 | **Piece of work** | One item, counted once for a person and a practice, however often it is reviewed. Mirrors of one item are one piece of work. Growth counts pieces of work. | contribution, submission | ADR 0130 |
-| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder, nudge | ADR 0133 |
+| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder | ADR 0133 |
 | **Pause until …** | The person's dated pause of the contact that Hephaestus starts. **Resume** ends it. [Mentoring behaviour](./mentoring-behaviour.mdx#controls-the-person-has) owns its effect on each kind of contact. | snooze, do not disturb | ADR 0139 |
 | **Weekly reflection** | A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary | ADR 0133 |
 | **Goal** | A personal record of what the person wants to get better at, in their own words | objective, target | ADR 0132 |

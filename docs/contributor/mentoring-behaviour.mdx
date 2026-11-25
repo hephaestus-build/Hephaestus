@@ -1,12 +1,12 @@
 ---
 title: Mentoring behavior
-description: How Hephaestus as an AI mentor reaches out, keeps check-ins and goals, adapts its help and tone, and what it never does.
+description: How Hephaestus reaches out, keeps check-ins and goals, adapts its help and tone, and what it never does.
 page_type: explanation
 ---
 
 Hephaestus reaches out only when it helps, at a moment that fits, and the person stays in control of every contact.
 This page gives the rules for contact, notifications, check-ins, goals, help settings and tone.
-Read it if you build a part that talks to a person, or if you review how the AI mentor behaves.
+Read it if you build a part that talks to a person, or if you review how Hephaestus behaves.
 Each rule has an ID, such as `C3` or `N2`, so that an issue, a test or a review comment can cite it.
 
 The **Decided in** column names the proposed ADR that owns each rule.
@@ -18,8 +18,8 @@ This page describes an accepted design. The current release has the weekly diges
 
 ## The constraint
 
-An AI mentor that interrupts too often teaches people to ignore it.
-An AI mentor that never reaches out cannot keep an agreement.
+When Hephaestus interrupts too often, people learn to ignore it.
+Hephaestus must reach out to keep an agreement.
 The design solves this with one distinction: an entry in the app does not interrupt, and a notification does.
 So Hephaestus is present in the app at all times, and it limits only notifications.
 Silence never changes what Hephaestus does. Only the person's explicit controls do.
@@ -257,7 +257,7 @@ Each hard case has fixed behavior and a scenario test.
 | X7 | Asks for consent in a conversation or a notification, or recruits for research. The one follow-up notice of ADR 0149, from the steward to the people of one experiment, is not recruiting. | ADR 0149 |
 | X8 | Writes an outcome or a delivery state as free text. [Observations render as item cards](./practice-review-glossary.mdx#shared-rules-planned), and a citation token renders the outcome and the current delivery state from rows. | ADR 0150 |
 | X9 | Puts personal context in a place that other people read, such as a Slack channel. The one exception is a Slack direct message at the Full detail level, which the person chooses. | ADR 0121, ADR 0123 |
-| X10 | Calls itself an assistant, an agent, a coach, or "your mentor". It is Hephaestus, an AI mentor. | ADR 0124 |
+| X10 | Calls itself an assistant, an agent, a coach, or "your mentor". Use Hephaestus. | ADR 0124 |
 | X11 | Tunes its behavior on in-the-moment ratings. **Helpful** and **Not helpful** are never a target. | ADR 0131, ADR 0142 |
 | X12 | Fetches, unfurls or shows as an image a URL that a model wrote. | ADR 0135 |
 

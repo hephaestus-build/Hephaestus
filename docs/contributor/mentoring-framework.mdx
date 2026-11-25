@@ -1,13 +1,14 @@
 ---
 title: Mentoring framework
-description: The accepted design of Hephaestus as an AI mentor, from the person's first week to the rules that make it trustworthy, with a map of its decisions.
+description: The accepted design of Hephaestus, from the person’s first week to the rules that protect their data and guide feedback.
 page_type: explanation
 ---
 
 > **Code decides when Hephaestus speaks and who may read it. A model only chooses the words.**
 
 That is the thesis of the design.
-Hephaestus is an AI mentor: it gives each developer practice feedback on their real work, and a private conversation about that work.
+Hephaestus gives each developer practice feedback on their real work.
+They can discuss that work in a private conversation.
 
 Code decides when Hephaestus speaks. It decides whether a result, a check-in or a withheld copy becomes a message, and when a notification may interrupt.
 Code also decides who may read it. A turn reads only what every reader of its output may read, so private context never reaches the work or a channel.
@@ -16,7 +17,7 @@ The one stated exception is the person's own choice. At the **Full** Slack detai
 The model writes the words inside those decisions. It never states a result that the rows do not hold.
 A model also judges work in a review, and it can propose a noted record from the person's own words. Code admits each judgement and each record before anyone reads it, and a model never decides dispatch, routing or readers.
 
-This page explains the design of that AI mentor from end to end.
+This page explains how the design helps a person develop practices.
 Read it first if you review the design or build a part of it.
 [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) (proposed in #4864) gives the threads, turns and writes that carry these rules.
 [Mentoring behavior](./mentoring-behaviour.mdx) and [mentoring evaluation](./mentoring-evaluation.mdx) give the detail of contact, tone and quality.
@@ -60,7 +61,7 @@ Look for the two writers. The composer writes on the work, and the conversation 
 
 ```mermaid
 flowchart LR
-  accTitle: The core loop of the AI mentor
+  accTitle: The core loop of Hephaestus
   accDescr: A review returns observations. The server seals them and updates the item card. The composer writes the copy on the work. The conversation agent tells the person. The person replies or asks.
   W[Work: a pull request or a draft] -->|review| S[Server admits and seals observations]
   S -->|no model| C[Item card]
@@ -155,7 +156,7 @@ The story column groups them: **A** who speaks and when, **B** who owns and read
 
 Pull request #4869 holds ADRs 0136, 0143, 0144, 0148 and 0152 for after 1.0. No ADR of this set depends on them.
 
-## What an AI mentor is
+## What mentoring contributes
 
 A mentor is a more experienced person who helps another person grow in their work over time.
 Kram found two groups of functions (Kram 1983, 1985).
@@ -177,7 +178,7 @@ It cannot sponsor or protect anyone inside an organization, so it names a person
 | Separation | Help fades as a practice holds. Hephaestus says once, with evidence, that it steps back, and offers to raise the bar. |
 | Next phase | A periodic review asks what comes next. The person leaves a team and keeps goals, lessons and growth. |
 
-### Why an AI mentor and not a coach
+### Mentoring across tasks
 
 A coach, a tutor, an assistant or a reviewer bot helps with the task in front of the person.
 Five parts of the design reach past one task, and together they make the relationship that a mentor has:
@@ -218,7 +219,7 @@ These principles come from the research above. The design keeps each one with a 
 - **Not a friend, a therapist, a companion or an HR channel.**
 - **Not a ghostwriter.** It never writes what the person submits as their own work.
 - **Not an agent.** The sandboxed runtime is the agent. Hephaestus and its answers are not.
-- **Not a mentor in the bare sense.** "Mentor" alone means a person. The product is an AI mentor ([product vocabulary](./practice-feedback-language.mdx#people-and-product-surfaces)).
+- **Not a mentor in the bare sense.** "Mentor" alone means a person. Use [Hephaestus](./practice-feedback-language.mdx#people-and-product-surfaces) for the product.
 
 ## The person's experience
 
@@ -471,7 +472,8 @@ Hephaestus has no path from one person to the employer, so that it stays outside
 | The person | Everything about themselves: conversation, memory, goals, check-ins, private checks and feedback | Planned |
 | Workspace admins | Each month, one practice outcome for each practice, from observations on the work only | Planned |
 | Workspace admins | Items inside an approval or a correction, with exact fields and an expiry | Planned |
-| Workspace admins | Per-person results, and View as user | Exists. The design deletes both at the cutover, the one stopped upgrade to 1.0 ([ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md)). |
+| Workspace admins | Results with names when the workspace enables **Per-person results for admins** | The 1.0 cutover removes this setting. |
+| Instance admins | Read-only access to permitted member pages through **View as user** | The [1.0 cutover](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) removes this access. |
 | Support | Only a support snapshot that the person shares with a named recipient and can revoke | Planned |
 | Readers of the work | The copy on the work, which names the work and its author | Exists |
 | The instance operator | Whatever its servers, database, backups and model endpoints hold | A fact that no application can change |
@@ -508,7 +510,7 @@ These items go to the operator's counsel. This page is not legal advice.
 
 ## Research use
 
-Hephaestus is also the reference implementation of an AI mentor that research studies.
+Hephaestus is also the implementation that the research studies use.
 A delivery experiment compares a delivery rule by random assignment, for each enrolled person and each unprompted decision.
 It can draw a copy on the work or an unprompted message silent, never a Critical problem. The item card and the practice page still show the result.
 ADR 0149 (proposed in #4868) owns its rules: enrollment, the draw, the held result, the steward and the key.
