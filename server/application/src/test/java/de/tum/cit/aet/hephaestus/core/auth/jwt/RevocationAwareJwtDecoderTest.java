@@ -201,6 +201,31 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         verifyNoInteractions(repo);
     }
 
+    /** An MCP client token never reaches the REST API, even where its audience is the web app's. */
+    @Test
+    void shouldRejectAnMcpClientTokenWhoseAudienceIsTheWebApps() {
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        var claims = JwtClaimsSet.builder()
+                .issuer(ISSUER.toString())
+                .subject("42")
+                .audience(List.of(AUDIENCE))
+                .id(UUID.randomUUID().toString())
+                .issuedAt(NOW.minusSeconds(60))
+                .expiresAt(NOW.plusSeconds(600))
+                .claim("scope", "practices:read")
+                .build();
+        var header = JwsHeader.with(SignatureAlgorithm.ES256)
+                .keyId(signingKey.getKeyID())
+                .build();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+
+        assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(token)).isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> RevocationAwareJwtDecoder.localSignatureDecoder(keyService(jwkSource), properties)
+                        .decode(token))
+                .isInstanceOf(BadJwtException.class);
+        verifyNoInteractions(repo);
+    }
+
     @Test
     void rejectsTokenWithMissingJti() {
         // A signature-valid token with no jti is a client error → 401 (BadJwtException), not a 500.

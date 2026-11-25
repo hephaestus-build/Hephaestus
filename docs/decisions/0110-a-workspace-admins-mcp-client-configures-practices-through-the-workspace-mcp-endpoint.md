@@ -378,9 +378,9 @@ An MCP grant never reaches instance administration, so the refusal protected not
 3. **A refresh asks the same question.** An instance admin's refresh keeps the grant. A refresh still ends the grant when the account is no longer an admin of the workspace, when its passkey recovery is pending, or when the policy asks for a passkey that the grant lacks.
 4. **The refusal is gone.** `INSTANCE_ADMIN_PASSKEY_REQUIRED` leaves the consent read and the consent page. `PASSKEY_RECOVERY_PENDING` and `NOT_ADMIN` stay.
 
-Three facts that this update does not change keep the grant away from instance administration:
+Three facts keep the grant away from instance administration:
 
-- The REST API refuses MCP tokens, because their only audience is the workspace MCP endpoint (decision 11).
+- The REST API refuses MCP tokens in every configuration. An MCP token is the only token with a `scope` claim, and `RevocationAwareJwtDecoder` refuses that claim, whatever audiences the deployment configures. The audience check of decision 11 stays as a second check.
 - An MCP token carries no `roles` claim, so `WorkspaceContextFilter` cannot elevate it, and the workspace role of each call is the real membership (decision 11).
 - No tool maps to an operation that needs the instance-admin role (decision 15), and catalog include and exclude are never offered (§ Tools).
 
@@ -396,5 +396,7 @@ Three facts that this update does not change keep the grant away from instance a
 - the grant's token reaches an instance-admin endpoint, as a bearer header or as the session cookie;
 - the grant's token still calls after the membership is removed;
 - an instance admin without an admin membership of the workspace is not refused with `NOT_ADMIN`.
+
+`McpTokenRestRefusalIntegrationTest` runs with a web-app audience that is equal to one workspace's MCP resource. It fails when that workspace's MCP token reaches an instance-admin endpoint or a workspace REST endpoint, as a bearer header or as the session cookie. `RevocationAwareJwtDecoderTest` fails when a token with a `scope` claim and the web-app audience passes the REST decoder.
 
 `PasskeyAssurancePolicyTest` fails when an instance admin's passkey-backed grant does not satisfy the workspace admin requirement, or when a grant's proof satisfies the instance-admin requirement or an elevated call.
