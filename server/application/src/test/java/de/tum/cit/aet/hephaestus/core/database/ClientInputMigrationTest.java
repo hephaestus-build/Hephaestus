@@ -18,7 +18,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The create receipts and their expiry rule: the change sets install the table, its purge trigger and the sweep
- * branch, and their rollback leaves the owner function exactly as the owner sweep admission change set left it.
+ * branch, and their rollback leaves the owner function exactly as the change set before them left it.
  */
 @Tag("database")
 class ClientInputMigrationTest {
@@ -62,7 +62,7 @@ class ClientInputMigrationTest {
                     .as("the table, its purge trigger and the trigger function are gone")
                     .containsExactly("true");
             assertThat(PracticeMigrationFixture.column(database, SWEEP))
-                    .as("the owner function is the one the owner sweep admission change set installed")
+                    .as("the owner function is the one the change set before them installed")
                     .containsExactlyElementsOf(sweepBefore);
             assertThatThrownBy(() -> PracticeMigrationFixture.column(database, EXPIRY))
                     .hasMessageContaining("unknown rule CLIENT_INPUT_EXPIRY");

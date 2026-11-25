@@ -81,8 +81,10 @@ BEGIN
             RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
                 USING ERRCODE = 'object_not_in_prerequisite_state';
         END IF;
+        -- A personal space is purged only by its owner's erasure, which suspends it first.
         PERFORM FROM public.workspace w
-        WHERE w.id = subject_id AND w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')
+        WHERE w.id = subject_id
+          AND ((w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')) OR (w.kind = 'PERSONAL' AND w.status = 'SUSPENDED'))
         FOR UPDATE;
         IF NOT FOUND THEN
             RAISE EXCEPTION 'person_row_sweep: workspace is unavailable for purge'
@@ -214,7 +216,7 @@ BEGIN
 END
 $$;
         ]]></sql>
-        <rollback changeSetId="1795540920000-3" changeSetAuthor="hephaestus"
-                  changeSetPath="db/changelog/next/20261125010758-admit-owner-sweeps.xml"/>
+        <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125071529-fix-personal-space-audit-erasure.xml"/>
     </changeSet>
 </databaseChangeLog>
