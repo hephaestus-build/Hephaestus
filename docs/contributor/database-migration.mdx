@@ -448,6 +448,20 @@ This release can be the 1.0 baseline (`v1.0.0-rc.1`) or a later release, so a se
 A seed also runs on the releases that already contain its change set, until the seed is removed.
 A focused migration test runs the seed and its expected disposition from both schemas.
 
+#### Provider writes during the upgrade
+
+The release upgrade test answers every provider host in `PROVIDER_HOSTS` (`scripts/lib/release-upgrade-writes.ts`) with a recorder (`scripts/lib/release-upgrade-recorder.ts`).
+Each release in the test resolves these hosts to the recorder and trusts the recorder's CA, so no call leaves the test.
+A migration run does not trust the CA, so a provider call from a migration fails.
+A seed that writes a connection uses one of these hosts. `outline.upgrade.test` stands for an Outline server.
+
+The test fails when a provider write reaches one database more than once.
+It counts the previous release, the candidate after the upgrade and after its restart, and the releases on the partly migrated copy.
+A copy of the seeded database is another installation, so the same write on two databases is no repeat.
+A write is a call other than `GET`, `HEAD` or `OPTIONS`, except a GraphQL query, a credential exchange, and a Slack or Outline method that reads.
+Before the upgrade, the test sends a planted write twice and fails unless the check reports it.
+After the upgrade, a GitLab token check of the candidate must reach the recorder.
+
 The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
 `readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.
 

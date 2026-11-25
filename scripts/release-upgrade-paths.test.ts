@@ -192,7 +192,8 @@ for (const scenario of ["rolling", "stopped"] as const) {
 			const preload = path.join(directory, "stubs.mjs");
 			writeFileSync(
 				preload,
-				`import { appendFileSync } from "node:fs";
+				`import { appendFileSync, writeFileSync } from "node:fs";
+import nodePath from "node:path";
 import { mock } from "node:test";
 import { stubChildProcesses } from ${JSON.stringify(childProcessFixture)};
 const commands = ${JSON.stringify(commands)};
@@ -203,8 +204,19 @@ const stopped = ${JSON.stringify(stopped)};
     exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }
   });
 }
+// The provider recorder: the planted write twice, then the candidate's GitLab token check once it ran. The stubbed
+// \`docker inspect\` names every release's address "running".
+const recorded = [1, 2].map((sequence) => ({
+  sequence, source: "planted", method: "POST", host: "slack.com", path: "/api/chat.postMessage", body: "planted"
+}));
 globalThis.fetch = async (input, init) => {
   const url = String(input);
+  const after = /\\/calls\\?after=(\\d+)$/u.exec(url)?.[1];
+  if (after !== undefined) return Response.json(recorded.filter(({ sequence }) => sequence > Number(after)));
+  if (url.endsWith("/workspaces/gitlab/preflight") && init?.method === "POST") {
+    recorded.push({ sequence: 3, source: "running", method: "POST", host: "gitlab.com", path: "/api/graphql", body: "{}" });
+    return Response.json({ valid: false });
+  }
   if (url.endsWith("/auth/dev-login")) {
     return new Response(null, { status: 204, headers: { "set-cookie": "HEPHAESTUS_AT=fixture; Path=/" } });
   }
@@ -225,6 +237,14 @@ globalThis.fetch = async (input, init) => {
   throw new Error("Unexpected HTTP request: " + url);
 };
 stubChildProcesses((executable, args, options) => {
+  if (executable === "openssl") {
+    // The recorder's certificates: each file that a step writes, with no content.
+    for (const flag of ["-keyout", "-out"]) {
+      const index = args.indexOf(flag);
+      if (index >= 0) writeFileSync(nodePath.join(String(options.cwd), args[index + 1]), "");
+    }
+    return { status: 0, stdout: "", stderr: "" };
+  }
   if (executable !== "docker") throw new Error("Unexpected command: " + executable);
   appendFileSync(commands, JSON.stringify(args) + "\\n");
   if (args.includes("--file=-")) appendFileSync(fixtures, options.input + "\\n");
