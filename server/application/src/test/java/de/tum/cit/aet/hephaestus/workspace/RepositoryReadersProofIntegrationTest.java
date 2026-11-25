@@ -269,10 +269,32 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         meter.measure();
 
         assertThat(meterRegistry
-                        .get(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_PENDING)
+                        .get(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_WAITING)
                         .gauge()
                         .value())
                 .isGreaterThanOrEqualTo((double) Duration.ofDays(2).toSeconds());
+    }
+
+    /**
+     * A proof that no sync renewed waits as much as a pending one: it stays proven in the table, and readers treat it as
+     * unproven once it is too old. The gauge counts it from its last renewal.
+     */
+    @Test
+    void shouldShowAProvenProofThatNoSyncRenewedAsWaiting() {
+        var monitor = monitor("meter-unrenewed");
+        provider.recordRepositoryPublic(read(monitor));
+        jdbc.update(
+                "UPDATE repository_to_monitor SET readers_synced_at = now() - interval '400 days' WHERE id = ?",
+                monitor.getId());
+
+        meter.measure();
+
+        assertThat(proof(monitor)).isEqualTo("WORKSPACE PROVEN PUBLIC_ON_PROVIDER");
+        assertThat(meterRegistry
+                        .get(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_WAITING)
+                        .gauge()
+                        .value())
+                .isGreaterThanOrEqualTo((double) Duration.ofDays(400).toSeconds());
     }
 
     /**
@@ -293,7 +315,7 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
                         "proofState:ProofState",
                         "proofReason:ProofReason",
                         "monitors:long",
-                        "oldestActiveChange:Instant");
+                        "oldestActiveWait:Instant");
         var gauges = meterRegistry
                 .find(WorkspaceMetrics.MONITORED_REPOSITORY_READERS)
                 .gauges();

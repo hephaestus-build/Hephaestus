@@ -18,12 +18,14 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     @WorkspaceAgnostic(
             "Bounded by the at most nine combinations of class, proof state and reason; returns counts and the oldest time"
-                    + " that an active workspace's proof changed, for the instance-wide operator gauges")
+                    + " that an active workspace's proof was current, for the instance-wide operator gauges")
     @Query("""
             SELECT new de.tum.cit.aet.hephaestus.workspace.RepositoryReadersCount(
                 m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason, COUNT(m),
                 MIN(CASE WHEN w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
-                         THEN m.readers.proofChangedAt END))
+                         THEN (CASE WHEN m.readers.proofState
+                                         = de.tum.cit.aet.hephaestus.integration.core.spi.ProofState.PROVEN
+                                    THEN m.readers.readersSyncedAt ELSE m.readers.proofChangedAt END) END))
             FROM RepositoryToMonitor m JOIN m.workspace w
             GROUP BY m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason
             """)

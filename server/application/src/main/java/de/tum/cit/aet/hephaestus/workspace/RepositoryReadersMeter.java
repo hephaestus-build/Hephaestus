@@ -39,16 +39,17 @@ public class RepositoryReadersMeter {
     private final RepositoryToMonitorRepository monitors;
     private final MultiGauge readers;
 
-    /** Seconds since the longest-waiting proof began to wait; NaN when none waits. */
-    private final AtomicReference<Double> pendingSeconds = new AtomicReference<>(Double.NaN);
+    /** Seconds since the longest-waiting proof was last current; NaN when no proof exists. */
+    private final AtomicReference<Double> waitingSeconds = new AtomicReference<>(Double.NaN);
 
     public RepositoryReadersMeter(RepositoryToMonitorRepository monitors, MeterRegistry meterRegistry) {
         this.monitors = monitors;
         this.readers = MultiGauge.builder(WorkspaceMetrics.MONITORED_REPOSITORY_READERS)
                 .description("Monitored repositories by visibility class, proof state and proof reason")
                 .register(meterRegistry);
-        Gauge.builder(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_PENDING, pendingSeconds, AtomicReference::get)
-                .description("How long the longest-waiting proof of a monitored repository's readers has waited")
+        Gauge.builder(WorkspaceMetrics.MONITORED_REPOSITORY_READERS_WAITING, waitingSeconds, AtomicReference::get)
+                .description(
+                        "How long the longest-waiting proof of a monitored repository's readers has waited for its listing or renewal")
                 .baseUnit("seconds")
                 .register(meterRegistry);
     }
@@ -77,9 +78,11 @@ public class RepositoryReadersMeter {
                         .toList(),
                 true);
         Instant now = Instant.now();
-        pendingSeconds.set(counts.stream()
-                .filter(count -> count.proofState() == ProofState.PENDING)
-                .map(RepositoryReadersCount::oldestActiveChange)
+        waitingSeconds.set(counts.stream()
+                // A failed proof waits for an operator, not for a sync. A proven one that no sync renewed waits as
+                // much as a pending one: once its age passes the maximum, readers treat it as unproven.
+                .filter(count -> count.proofState() != ProofState.FAILED)
+                .map(RepositoryReadersCount::oldestActiveWait)
                 .filter(Objects::nonNull)
                 .min(Comparator.naturalOrder())
                 .map(waitingSince ->

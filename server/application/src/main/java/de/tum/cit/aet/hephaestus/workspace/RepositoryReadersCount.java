@@ -8,11 +8,12 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * How many monitored repositories hold one visibility class and proof, instance-wide, and since when the oldest of them
- * in an active workspace has held it.
+ * in an active workspace has waited: a proven one since the provider read that last renewed it, any other one since it
+ * last changed.
  */
 public record RepositoryReadersCount(
         VisibilityClass visibilityClass,
         ProofState proofState,
         ProofReason proofReason,
         long monitors,
-        @Nullable Instant oldestActiveChange) {}
+        @Nullable Instant oldestActiveWait) {}

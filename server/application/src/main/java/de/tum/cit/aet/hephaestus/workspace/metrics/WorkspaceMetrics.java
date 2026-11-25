@@ -7,8 +7,11 @@ public final class WorkspaceMetrics {
     /** Monitored repositories by visibility class, proof state and proof reason. */
     public static final String MONITORED_REPOSITORY_READERS = "monitored.repository.readers";
 
-    /** How long the monitored repository whose readers have waited longest has waited for their proof. */
-    public static final String MONITORED_REPOSITORY_READERS_PENDING = "monitored.repository.readers.pending.seconds";
+    /**
+     * How long the monitored repository whose proof has waited longest has waited: for a listing or a public answer
+     * that is still pending, or for the renewal of a proven one.
+     */
+    public static final String MONITORED_REPOSITORY_READERS_WAITING = "monitored.repository.readers.waiting.seconds";
 
     private WorkspaceMetrics() {}
 }

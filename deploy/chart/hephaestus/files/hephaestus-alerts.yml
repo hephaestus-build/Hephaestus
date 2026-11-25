@@ -100,14 +100,14 @@ groups:
         annotations:
           summary: The product feedback private repository could not be taken out of the workspaces; their members can still see what they hold of it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # The daily sync proves each private repository's readers; a proof that still waits after 26 hours missed a sync.
+      # The daily sync proves and renews each repository's readers; a proof that waits 26 hours missed a sync.
       - alert: HephaestusRepositoryReadersWaiting
-        expr: max(monitored_repository_readers_pending_seconds{job="hephaestus"}) > 93600
+        expr: max(monitored_repository_readers_waiting_seconds{job="hephaestus"}) > 93600
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: A monitored repository has waited more than 26 hours for proof of who can see it; mentoring waits on it
+          summary: A monitored repository has waited more than 26 hours for proof, or renewed proof, of who can see it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerPoison
         expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
