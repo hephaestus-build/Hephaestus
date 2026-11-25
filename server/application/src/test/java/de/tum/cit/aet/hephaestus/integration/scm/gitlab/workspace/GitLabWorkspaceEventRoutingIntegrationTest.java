@@ -55,7 +55,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.ConnectionHealth;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncJobDTO;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
-import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -263,7 +262,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private SyncStatusService syncStatusService;
 
     @Autowired
-    private ProviderEventReceiver eventReceiver;
+    private WebhookIngestPipeline webhookPipeline;
 
     @Autowired
     private ProviderEventConsumer eventConsumer;
@@ -450,10 +449,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                     hooks.removeIf(hook -> hook.id() == (long) invocation.getArgument(3));
                     return true;
                 });
-        ingress = new GitLabConnectionWebhookController(
-                new WebhookIngestPipeline(List.of(), List.of(), eventReceiver, objectMapper),
-                routeCredential,
-                subjectKeyDeriver);
+        ingress = new GitLabConnectionWebhookController(webhookPipeline, routeCredential, subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
                 .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
     }

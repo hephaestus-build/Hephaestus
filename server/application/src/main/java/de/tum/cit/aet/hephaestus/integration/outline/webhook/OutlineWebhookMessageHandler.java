@@ -84,14 +84,14 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
         }
         long workspaceId = subscription.get().workspaceId();
         String event = delivery.event();
-        if (event.startsWith("documents.")) {
+        if (event.startsWith(OutlineWebhookEvents.DOCUMENT_PREFIX)) {
             if (delivery.payloadId().isBlank()) {
                 // Cannot target without a document id — fall back to the authoritative reconcile.
                 syncScheduler.syncWorkspaceNow(workspaceId);
             } else {
                 syncScheduler.refreshDocumentNow(workspaceId, event, delivery.payloadId(), delivery.model());
             }
-        } else if (event.startsWith("collections.")) {
+        } else if (event.startsWith(OutlineWebhookEvents.COLLECTION_PREFIX)) {
             syncScheduler.refreshCollectionCatalogNow(
                     workspaceId, event, delivery.payloadId().isBlank() ? null : delivery.payloadId());
         } else {
@@ -125,7 +125,10 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
      * failure or an incomplete model, so the sync path falls back to a {@code documents.info} call.
      */
     private @Nullable OutlineDocumentModel parseModel(String event, JsonNode modelNode) {
-        if (!event.startsWith("documents.") || modelNode == null || modelNode.isMissingNode() || modelNode.isNull()) {
+        if (!event.startsWith(OutlineWebhookEvents.DOCUMENT_PREFIX)
+                || modelNode == null
+                || modelNode.isMissingNode()
+                || modelNode.isNull()) {
             return null;
         }
         if (modelNode.path("id").asString("").isBlank()

@@ -35,6 +35,11 @@ public class GitHubSubjectParser implements SubjectParser {
     }
 
     @Override
+    public String unhandledEventLabel(String eventToken) {
+        return GitHubWebhookEventNames.metricLabel(eventToken);
+    }
+
+    @Override
     public EventTypeKey parse(@Nullable String fullSubject) {
         if (fullSubject == null || fullSubject.isBlank()) {
             throw new IllegalArgumentException("subject must not be blank");

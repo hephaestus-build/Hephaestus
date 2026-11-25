@@ -60,11 +60,9 @@ public class OutlineSubjectKeyDeriver implements SubjectKeyDeriver {
         if (subscriptionId.isEmpty()) {
             subscriptionId = UNKNOWN_TOKEN;
         }
-        String event = sanitize(textOrEmpty(payload, "event"));
-        if (event.isEmpty()) {
-            event = UNKNOWN_TOKEN;
-        }
-        return SUBJECT_PREFIX + subscriptionId + "." + event;
+        String event = textOrEmpty(payload, "event");
+        String eventToken = OutlineWebhookEvents.hasHandler(event) ? sanitize(event) : UNKNOWN_TOKEN;
+        return SUBJECT_PREFIX + subscriptionId + "." + eventToken;
     }
 
     @Override

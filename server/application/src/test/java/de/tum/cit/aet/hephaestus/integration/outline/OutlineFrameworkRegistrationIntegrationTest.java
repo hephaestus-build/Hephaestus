@@ -113,8 +113,8 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("inactiveConnections")
-    void signedWorkEventStoresNoPayloadAndRecordsWhyUntilItsConnectionIsActive(
-            IntegrationKind kind, IntegrationState state) throws Exception {
+    void shouldStoreOnlyAuthenticatedHandledDeliveriesOnAnActiveConnection(IntegrationKind kind, IntegrationState state)
+            throws Exception {
         var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("admission-" + UUID.randomUUID()));
         workspace.setAccountLogin("gate-" + workspace.getId());
         workspace = workspaces.save(workspace);
@@ -169,7 +169,7 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                     """.formatted(delivery);
             case SLACK -> """
                     {"type":"event_callback","team_id":"%s","event_id":"%s",
-                     "event":{"type":"app_mention","channel":"C1","text":"private work"}}
+                     "event":{"type":"app_home_opened","channel":"C1","text":"private work"}}
                     """.formatted(team, delivery);
             case OUTLINE -> """
                     {"id":"%s","webhookSubscriptionId":"%s","event":"documents.update",
@@ -283,6 +283,8 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
             ConnectionFixtures.reachState(resumed, IntegrationState.ACTIVE);
             connections.saveAndFlush(resumed);
         });
+        assertUnhandledDeliveries(kind, workspaceId, path, headers, body, outlineRoute.signingSecret());
+
         // The same signed delivery must be accepted after resume: rejection created no dedupe or payload row.
         signedPost(path, headers, body);
         assertThat(jdbc.queryForList(
@@ -318,6 +320,72 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                             "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
                     .isEqualTo(1);
         }
+    }
+
+    private void assertUnhandledDeliveries(
+            IntegrationKind kind,
+            long workspaceId,
+            String path,
+            Map<String, String> headers,
+            String body,
+            String outlineSecret)
+            throws Exception {
+        var changedHeaders = new LinkedHashMap<>(headers);
+        String changedBody = switch (kind) {
+            case GITHUB -> {
+                changedHeaders.put("X-GitHub-Event", "workflow_job");
+                var invalidHeaders = new LinkedHashMap<>(changedHeaders);
+                invalidHeaders.put("X-Hub-Signature-256", "sha256=" + "0".repeat(64));
+                post(path, invalidHeaders, body).expectStatus().isUnauthorized().expectBody(Void.class);
+                yield body;
+            }
+            case GITLAB -> body.replace("\"push\"", "\"tag_push\"");
+            case SLACK -> {
+                String changed = body.replace("app_home_opened", "app_mention");
+                String time = Long.toString(Instant.now().getEpochSecond());
+                changedHeaders.put("X-Slack-Request-Timestamp", time);
+                changedHeaders.put(
+                        "X-Slack-Signature",
+                        "v0=" + hmac("test-slack-signing-secret-not-real", "v0:" + time + ":", changed));
+                yield changed;
+            }
+            case OUTLINE -> {
+                String changed = body.replace("documents.update", "groups.update");
+                String time = Long.toString(Instant.now().toEpochMilli());
+                changedHeaders.put("Outline-Signature", "t=" + time + ",s=" + hmac(outlineSecret, time + ".", changed));
+                yield changed;
+            }
+        };
+        String provider = kind.name().toLowerCase(Locale.ROOT);
+        String event = switch (kind) {
+            case GITHUB -> "workflow_job";
+            case GITLAB -> "tag_push";
+            case SLACK, OUTLINE -> "other";
+        };
+        assertIgnoredDelivery(workspaceId, path, changedHeaders, changedBody, provider, event);
+
+        if (kind == IntegrationKind.GITHUB) {
+            changedHeaders.put("X-GitHub-Event", "future_event");
+            assertIgnoredDelivery(workspaceId, path, changedHeaders, changedBody, provider, "other");
+        }
+    }
+
+    private void assertIgnoredDelivery(
+            long workspaceId, String path, Map<String, String> headers, String body, String provider, String event) {
+        var ignored = meters.counter("webhook.unhandled", "provider", provider, "event_type", event);
+        var published =
+                meters.counter(IntegrationCoreMetrics.WEBHOOK_PUBLISH, "stream", provider, "outcome", "success");
+        double ignoredBefore = ignored.count();
+        double publishedBefore = published.count();
+
+        signedPost(path, headers, body);
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
+                .as("unhandled %s delivery must not write to the inbox", provider)
+                .isZero();
+        assertThat(published.count()).isEqualTo(publishedBefore);
+        assertThat(ignored.count()).isEqualTo(ignoredBefore + 1);
     }
 
     @Test
