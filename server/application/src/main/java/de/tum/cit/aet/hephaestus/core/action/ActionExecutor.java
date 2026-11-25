@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -83,6 +86,7 @@ public class ActionExecutor implements SmartLifecycle {
     private final ObjectMapper mapper;
     private final Map<ActionKind, ActionAdapter> adapters = new EnumMap<>(ActionKind.class);
     private final MeterRegistry meters;
+    private final AuthorityGenerations generations;
     private final ActionAdmission admission;
     private final Duration lease;
 
@@ -96,8 +100,13 @@ public class ActionExecutor implements SmartLifecycle {
     private volatile boolean running = true;
 
     @Autowired
-    public ActionExecutor(ActionStore store, ObjectMapper mapper, List<ActionAdapter> adapters, MeterRegistry meters) {
-        this(store, mapper, adapters, meters, LEASE);
+    public ActionExecutor(
+            ActionStore store,
+            ObjectMapper mapper,
+            List<ActionAdapter> adapters,
+            MeterRegistry meters,
+            AuthorityGenerations generations) {
+        this(store, mapper, adapters, meters, generations, LEASE);
     }
 
     /** @param lease how long a claim holds its action, and so the longest an attempt holds its slot */
@@ -106,9 +115,11 @@ public class ActionExecutor implements SmartLifecycle {
             ObjectMapper mapper,
             List<ActionAdapter> adapters,
             MeterRegistry meters,
+            AuthorityGenerations generations,
             Duration lease) {
         this.lease = lease;
         this.store = store;
+        this.generations = generations;
         this.mapper = mapper;
         this.meters = meters;
         for (ActionAdapter adapter : adapters)
@@ -123,6 +134,7 @@ public class ActionExecutor implements SmartLifecycle {
             for (ActionStopReason reason : ActionStopReason.values()) endCounter(kind, ActionState.UNCERTAIN, reason);
         recordFailures("end");
         recordFailures("settle");
+        AuthorityRefusal.register(meters);
     }
 
     /** Ends what can no longer run, then starts due actions in the free slots. The next run starts a second later. */
@@ -315,6 +327,7 @@ public class ActionExecutor implements SmartLifecycle {
 
     private ActionResult attempt(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
+        var narrowed = new AtomicBoolean();
         var attempt = new ActionAttempt(
                 claim.id(),
                 claim.workspaceId(),
@@ -326,6 +339,12 @@ public class ActionExecutor implements SmartLifecycle {
                 claim.writeStarted(),
                 claim.readbackRef(),
                 () -> {
+                    // The send boundary (ADR 0134): no write starts under authority that narrowed since the action was
+                    // queued. The adapter answers abandoned, and the action ends below, outside the adapter's work.
+                    if (narrowed(claim)) {
+                        narrowed.set(true);
+                        return false;
+                    }
                     boolean begun = store.beginWrite(claim.id(), claim.epoch(), WRITE_MARGIN);
                     if (begun) fenced.set(true);
                     return begun;
@@ -346,6 +365,14 @@ public class ActionExecutor implements SmartLifecycle {
             if (!fenced.get() && !claim.writeStarted()) result = new ActionResult.Retry(backoff(claim.attempts()));
             else if (claim.kind().atMostOnce()) result = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
             else result = new ActionResult.Reread(backoff(claim.attempts()));
+        }
+        if (narrowed.get()) {
+            event(log.atInfo(), "action.authority_refused", claim.id(), claim.workspaceId(), claim.kind())
+                    .log("Action refused before its write because its workspace's authority narrowed");
+            // After a write of this action started, part of its effect may exist.
+            result = fenced.get() || claim.writeStarted()
+                    ? new ActionResult.Uncertain(ActionStopReason.AUTHORITY_CHANGED)
+                    : new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED);
         }
         if (evaluation != null) {
             String providerObjectId = result instanceof ActionResult.Done done ? done.providerObjectId() : null;
@@ -377,6 +404,18 @@ public class ActionExecutor implements SmartLifecycle {
                 .increment();
         settled.ifPresent(this::recordEnd);
         return result;
+    }
+
+    /**
+     * Whether the workspace's authority narrowed since the action was queued, counting the refusal. An instance-level
+     * action has no workspace authority.
+     */
+    private boolean narrowed(ActionStore.Claim claim) {
+        Long workspace = claim.workspaceId();
+        if (workspace == null) return false;
+        var refusal = generations.check(claim.stamp(), workspace, AuthorityBoundary.SEND);
+        refusal.ifPresent(refused -> refused.count(meters));
+        return refusal.isPresent();
     }
 
     /** Hands an action that ended to its adapter, in the transaction that ended it. */

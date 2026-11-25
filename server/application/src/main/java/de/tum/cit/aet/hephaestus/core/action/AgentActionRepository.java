@@ -42,7 +42,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     String CLAIMED = """
             SELECT a.id AS "id", a.workspace_id AS "workspaceId", a.kind AS "kind", a.idempotency_key AS "idempotencyKey",
             a.payload::text AS "payload", a.native_recipient::text AS "nativeRecipient", a.attempts AS "attempts", a.lease_epoch AS "epoch",
-            a.write_started_at IS NOT NULL AS "writeStarted", a.readback_ref AS "readbackRef"
+            a.write_started_at IS NOT NULL AS "writeStarted", a.readback_ref AS "readbackRef",
+            (a.authorization_stamp ->> 'workspace')::bigint AS "stampedGeneration"
             """;
 
     /** An action as its owner reads it ({@link LaneRow}). A reread waits with its next attempt after its last update. */
@@ -81,6 +82,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
 
         @Nullable
         String getReadbackRef();
+
+        long getStampedGeneration();
     }
 
     interface SettledRow {
@@ -106,10 +109,12 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Query(value = """
             WITH inserted AS (
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
-                subject_account_id, native_recipient, max_attempts, next_attempt_at, expires_at, created_at, updated_at)
+                subject_account_id, native_recipient, max_attempts, next_attempt_at, expires_at, created_at, updated_at,
+                authorization_stamp)
               VALUES (:id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'ADMITTED', CAST(:payload AS jsonb),
                 CAST(:subject AS bigint), CAST(:nativeRecipient AS jsonb), :maxAttempts, clock_timestamp() + make_interval(secs => :delay),
-                CAST(:expiresAt AS timestamptz), clock_timestamp(), clock_timestamp())
+                CAST(:expiresAt AS timestamptz), clock_timestamp(), clock_timestamp(),
+                CAST(:stamp AS jsonb))
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING id)
             SELECT id FROM inserted
@@ -125,7 +130,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("nativeRecipient") @Nullable String nativeRecipient,
             @Param("maxAttempts") int maxAttempts,
             @Param("expiresAt") @Nullable Instant expiresAt,
-            @Param("delay") long delaySeconds);
+            @Param("delay") long delaySeconds,
+            @Param("stamp") String authorizationStamp);
 
     /**
      * Takes one admitted action under a new lease when it is due and heads its lane: the caller that
@@ -228,10 +234,11 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             WITH a AS (
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
                 subject_account_id, native_recipient, attempts, max_attempts, next_attempt_at, expires_at, lease_epoch, leased_until,
-                created_at, updated_at)
+                created_at, updated_at, authorization_stamp)
               SELECT :id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'EXECUTING', CAST(:payload AS jsonb),
                 CAST(:subject AS bigint), CAST(:nativeRecipient AS jsonb), 1, :maxAttempts, clock_timestamp(), CAST(:expiresAt AS timestamptz), 1,
-                clock_timestamp() + make_interval(secs => :lease), clock_timestamp(), clock_timestamp()
+                clock_timestamp() + make_interval(secs => :lease), clock_timestamp(), clock_timestamp(),
+                CAST(:stamp AS jsonb)
                WHERE\s""" + MaintenanceBarrier.LIFTED + """
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING *)
@@ -247,7 +254,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("nativeRecipient") @Nullable String nativeRecipient,
             @Param("maxAttempts") int maxAttempts,
             @Param("expiresAt") @Nullable Instant expiresAt,
-            @Param("lease") long leaseSeconds);
+            @Param("lease") long leaseSeconds,
+            @Param("stamp") String authorizationStamp);
 
     /** The actions that have not ended, of one kind in one state, and how long the oldest due one has waited. */
     interface BacklogRow {

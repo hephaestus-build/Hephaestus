@@ -9,8 +9,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -37,7 +42,10 @@ import tools.jackson.databind.json.JsonMapper;
 /** The executor's last guard: an adapter that throws never turns a write that may exist into a retry. */
 class ActionExecutorTest extends BaseUnitTest {
     private static final UUID ID = UUID.randomUUID();
+    private static final AuthorizationStamp STAMP = new AuthorizationStamp(0);
+
     private final ActionStore store = mock(ActionStore.class);
+    private final AuthorityGenerations generations = mock(AuthorityGenerations.class);
 
     @Test
     void shouldEndUncertainWhenTheAdapterThrowsAfterTheFence() {
@@ -105,7 +113,11 @@ class ActionExecutorTest extends BaseUnitTest {
     void shouldShowEveryUncertainEndAtZeroFromTheStartSoItsFirstCountIsAnIncrease() {
         var meters = new SimpleMeterRegistry();
         new ActionExecutor(
-                store, JsonMapper.builder().build(), adapters(attempt -> new ActionResult.Done(null)), meters);
+                store,
+                JsonMapper.builder().build(),
+                adapters(attempt -> new ActionResult.Done(null)),
+                meters,
+                generations);
 
         for (ActionStopReason reason : ActionStopReason.values())
             assertThat(meters.get(CoreMetrics.ACTION_ENDED)
@@ -115,6 +127,47 @@ class ActionExecutorTest extends BaseUnitTest {
                             .counter()
                             .count())
                     .isZero();
+    }
+
+    @Test
+    void shouldCancelAnActionWhoseAuthorityNarrowedBeforeItsWriteWithoutReachingTheProvider() {
+        refuseWorkspace(42L);
+        var provider = new AtomicInteger();
+
+        ActionResult result = executor(attempt -> {
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    provider.incrementAndGet();
+                    return new ActionResult.Done(null);
+                })
+                .run(workspaceClaim(false));
+
+        assertThat(result).isEqualTo(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(provider).hasValue(0);
+        verify(store, never()).beginWrite(any(), anyLong(), any());
+        verify(store).settle(eq(ID), eq(7L), eq(result), any());
+    }
+
+    @Test
+    void shouldEndUncertainWhenAuthorityNarrowedAfterAWriteOfTheActionStarted() {
+        refuseWorkspace(42L);
+
+        ActionResult result = executor(attempt ->
+                        attempt.fence().beginWrite() ? new ActionResult.Done(null) : new ActionResult.Abandoned())
+                .run(workspaceClaim(true));
+
+        assertThat(result).isEqualTo(new ActionResult.Uncertain(ActionStopReason.AUTHORITY_CHANGED));
+    }
+
+    @Test
+    void shouldCheckNoWorkspaceAuthorityForAnInstanceLevelAction() {
+        when(store.beginWrite(any(), anyLong(), any())).thenReturn(true);
+
+        ActionResult result = executor(attempt ->
+                        attempt.fence().beginWrite() ? new ActionResult.Done(null) : new ActionResult.Abandoned())
+                .run(claim(false));
+
+        assertThat(result).isEqualTo(new ActionResult.Done(null));
+        verifyNoInteractions(generations);
     }
 
     @Test
@@ -132,7 +185,8 @@ class ActionExecutorTest extends BaseUnitTest {
         ActionResult result = executor(attempt -> {
                     throw new IllegalStateException("socket closed");
                 })
-                .run(new ActionStore.Claim(ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null, null));
+                .run(new ActionStore.Claim(
+                        ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null, null, STAMP));
 
         assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
     }
@@ -274,7 +328,8 @@ class ActionExecutorTest extends BaseUnitTest {
                         if (failure) throw new IllegalStateException("adapter failed");
                         return new ActionResult.Done(null);
                     })
-                    .run(new ActionStore.Claim(ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null, null));
+                    .run(new ActionStore.Claim(
+                            ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null, null, STAMP));
 
             assertThat(during.get())
                     .containsEntry("action.id", ID.toString())
@@ -315,7 +370,7 @@ class ActionExecutorTest extends BaseUnitTest {
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute, Duration lease) {
         when(store.settle(any(), anyLong(), any(), any())).thenReturn(Optional.empty());
         return new ActionExecutor(
-                store, JsonMapper.builder().build(), adapters(execute), new SimpleMeterRegistry(), lease);
+                store, JsonMapper.builder().build(), adapters(execute), new SimpleMeterRegistry(), generations, lease);
     }
 
     private static List<ActionStore.Claim> claims(int count) {
@@ -323,7 +378,7 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     private static ActionStore.Claim claim(ActionKind kind) {
-        return new ActionStore.Claim(UUID.randomUUID(), null, kind, "key", "{}", 1, 7L, false, null, null);
+        return new ActionStore.Claim(UUID.randomUUID(), null, kind, "key", "{}", 1, 7L, false, null, null, STAMP);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
@@ -338,7 +393,18 @@ class ActionExecutorTest extends BaseUnitTest {
         return ActionTestSupport.adapters(execute);
     }
 
+    private void refuseWorkspace(long workspace) {
+        when(generations.check(STAMP, workspace, AuthorityBoundary.SEND))
+                .thenReturn(Optional.of(new AuthorityRefusal(
+                        AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
+    }
+
+    private static ActionStore.Claim workspaceClaim(boolean writeStarted) {
+        return new ActionStore.Claim(
+                ID, 42L, ActionKind.SLACK_POST, "key", "{}", 1, 7L, writeStarted, null, null, STAMP);
+    }
+
     private static ActionStore.Claim claim(boolean writeStarted) {
-        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null, null);
+        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null, null, STAMP);
     }
 }

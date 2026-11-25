@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
@@ -43,7 +45,8 @@ class ActionStore {
             long epoch,
             boolean writeStarted,
             @Nullable String readbackRef,
-            @Nullable String nativeRecipient) {}
+            @Nullable String nativeRecipient,
+            AuthorizationStamp stamp) {}
 
     /** The state an action moved to, with its reason once it ended. */
     record Settled(
@@ -71,6 +74,7 @@ class ActionStore {
 
     private final AgentActionRepository actions;
     private final ObjectMapper mapper;
+    private final AuthorityGenerations generations;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -118,11 +122,21 @@ class ActionStore {
                         request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                         request.maxAttempts(),
                         request.expiresAt(),
-                        delay.toSeconds())
+                        delay.toSeconds(),
+                        stamp(request))
                 .map(id -> {
                     queued(request, id);
                     return id;
                 });
+    }
+
+    /**
+     * The authorization stamp of an action queued now, in the queueing transaction (ADR 0134). An instance-level action
+     * has no workspace authority and carries generation 0.
+     */
+    private String stamp(ActionRequest request) {
+        Long workspace = request.workspaceId();
+        return mapper.writeValueAsString(workspace == null ? new AuthorizationStamp(0) : generations.stamp(workspace));
     }
 
     private void queued(ActionRequest request, UUID id) {
@@ -170,7 +184,8 @@ class ActionStore {
                         request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                         request.maxAttempts(),
                         request.expiresAt(),
-                        lease.toSeconds())
+                        lease.toSeconds(),
+                        stamp(request))
                 .map(row -> {
                     queued(request, row.getId());
                     return claim(row);
@@ -323,6 +338,7 @@ class ActionStore {
                 row.getEpoch(),
                 row.getWriteStarted(),
                 row.getReadbackRef(),
-                row.getNativeRecipient());
+                row.getNativeRecipient(),
+                new AuthorizationStamp(row.getStampedGeneration()));
     }
 }

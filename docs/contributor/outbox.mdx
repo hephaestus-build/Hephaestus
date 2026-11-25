@@ -101,6 +101,12 @@ The provider call must end within those 60 seconds.
 If it refuses, the adapter must not call the provider and returns `Abandoned`.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.mdx)).
 
+The fence is also the send boundary of the authorization recheck (ADR 0134).
+Each action stores its workspace's authorization generation when it is queued (`agent_action.authorization_stamp`), and a trigger refuses a change of it.
+When the generation moved on, such as when a member left, `beginWrite` refuses before it sets `write_started_at`.
+The executor then ends the action `CANCELLED` with `AUTHORITY_CHANGED`, or `UNCERTAIN` with `AUTHORITY_CHANGED` when a write of the action started earlier.
+An instance-level action has no workspace and skips the check.
+
 ## What an adapter returns
 
 | Result | Use it when | Then |

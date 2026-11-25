@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795600266276-1" author="hephaestus">
+        <comment>Every action carries the authorization generation of its workspace when it was queued, and keeps it (KR-10, ADR 0134). An action whose write the send boundary refuses ends AUTHORITY_CHANGED. Existing actions were queued at generation 0. The column keeps the default of generation 0 for a writer of the previous release: such an action is refused once any narrowing happened, never allowed. The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action ADD COLUMN authorization_stamp jsonb DEFAULT jsonb_build_object('workspace', 0) NOT NULL,
+    ADD CONSTRAINT ck_agent_action_authorization_stamp CHECK ((jsonb_typeof(authorization_stamp) = 'object'
+        AND jsonb_typeof(authorization_stamp -> 'workspace') = 'number'
+        AND (authorization_stamp ->> 'workspace') ~ '^[0-9]{1,19}$'
+        AND (authorization_stamp ->> 'workspace')::numeric <= 9223372036854775807) IS TRUE) NOT VALID;
+CREATE TRIGGER agent_action_authorization_stamp_fixed AFTER UPDATE OF authorization_stamp ON agent_action
+    FOR EACH ROW EXECUTE FUNCTION guard_authorization_stamp();
+ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_stop_reason;
+ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN
+    ('COMPLETED','REJECTED','RECIPIENT_UNAVAILABLE','NOT_CONFIGURED','WITHDRAWN','SILENCED','ATTEMPTS_EXHAUSTED','EXPIRED',
+     'ABSENT','WRITE_UNCONFIRMED','LEASE_LOST_AFTER_WRITE','AUTHORITY_CHANGED')) NOT VALID;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_stop_reason;
+ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN
+    ('COMPLETED','REJECTED','RECIPIENT_UNAVAILABLE','NOT_CONFIGURED','WITHDRAWN','SILENCED','ATTEMPTS_EXHAUSTED','EXPIRED',
+     'ABSENT','WRITE_UNCONFIRMED','LEASE_LOST_AFTER_WRITE'));
+DROP TRIGGER agent_action_authorization_stamp_fixed ON agent_action;
+ALTER TABLE agent_action DROP COLUMN authorization_stamp;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795600266276-2" author="hephaestus">
+        <comment>Validate the action checks while ordinary row writes can continue. A rollback starts here, so it refuses before it changes anything while an action records that its access changed.</comment>
+        <sql>ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_stop_reason;
+ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_authorization_stamp;</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM public.agent_action WHERE stop_reason = 'AUTHORITY_CHANGED') THEN
+  RAISE EXCEPTION 'Restore the verified pre-upgrade backup: actions record that their access changed';
+ END IF;
+END $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

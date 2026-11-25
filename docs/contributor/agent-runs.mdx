@@ -536,6 +536,7 @@ This section gives the mechanism for runs.
 - The model proxy checks again with the boundary `MODEL_DISPATCH` just before each request leaves for the provider, after every wait for capacity or budget (`ProxyRoutingService.dispatchRefusal`).
   A refused call answers `409` with the refusal `AUTHORITY_CHANGED` and the text of an ended attempt, so each runner stops as it does for a lost lease.
   A capability probe and a report draft carry no workspace authority, and skip the check.
+- Every send to someone other than the owner is an outbox action, so the send boundary sits in the outbox's write fence ([Outbox](./outbox.mdx#the-lease-and-the-fence)).
 - `authority_refused_total` counts each refusal by boundary and reason.
 
 ## Reaper

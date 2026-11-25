@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.hibernate.SessionFactory;
@@ -356,7 +357,10 @@ class ActionUnknownKindIntegrationTest extends BaseIntegrationTest {
                     // WorkspaceAgnostic methods opens in production.
                     try (var ignored = TenancyBypass.open("outbox statements of an unknown kind")) {
                         body.accept(new Outbox(
-                                sql, repository, new ActionStore(repository, mapper), ActionAdmission.of(adapters)));
+                                sql,
+                                repository,
+                                new ActionStore(repository, mapper, workspace -> OptionalLong.of(0)),
+                                ActionAdmission.of(adapters)));
                     }
                 } finally {
                     transaction.rollback();

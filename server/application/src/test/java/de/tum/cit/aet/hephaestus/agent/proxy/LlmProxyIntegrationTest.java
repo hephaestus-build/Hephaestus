@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
@@ -82,11 +83,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
+import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -1399,15 +1402,20 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    @AuthorityFenceCase(setting = Membership.class, boundary = AuthorityBoundary.MODEL_DISPATCH)
     void shouldRefuseAReviewsModelCallBeforeItLeavesWhenTheWorkspacesAuthorityNarrowed() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
+            User member = persistUser(
+                    "dispatch-member-" + UUID.randomUUID().toString().substring(0, 8));
+            ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
-            // A narrowing after the review was requested, such as a member who left the workspace.
+            // A narrowing after the review was requested: a member leaves the workspace.
             jdbc.update(
-                    "UPDATE workspace SET authority_generation = authority_generation + 1 WHERE id = ?",
-                    workspace.getId());
+                    "DELETE FROM membership WHERE workspace_id = ? AND account_id = ?",
+                    workspace.getId(),
+                    accountId(member));
             var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
             request.setRemoteAddr("127.0.0.1");
             request.addHeader("Authorization", "Bearer " + tokenFor(job));

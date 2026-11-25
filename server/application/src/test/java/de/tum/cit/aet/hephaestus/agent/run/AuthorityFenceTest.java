@@ -12,23 +12,35 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * The authorization recheck (ADR 0134): a narrowing of a workspace's authority refuses a run's next boundary with its
@@ -54,6 +66,12 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private AgentActions actions;
+
+    @Autowired
+    private ApplicationContext context;
+
     private Workspace workspace;
     private long asker;
     private Conversation conversation;
@@ -70,6 +88,7 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    @AuthorityFenceCase(setting = Membership.class, boundary = AuthorityBoundary.CONTEXT_READ)
     void shouldRefuseTheNextContextReadWhenTheAskerLostTheirMembership() {
         ConversationTurn turn = runningTurn();
         AgentRunFence fence = fence(turn);
@@ -90,6 +109,36 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
         ConversationTurn ended = turnRepository.findById(turn.getId()).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(ConversationTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(ConversationTurnCompletion.ACCESS_CHANGED);
+    }
+
+    @Test
+    @AuthorityFenceCase(setting = Membership.class, boundary = AuthorityBoundary.SEND)
+    void shouldRefuseAQueuedSendWithoutReachingTheProviderWhenTheMemberLostTheirMembership() {
+        var provider = new CopyOnWriteArrayList<UUID>();
+        var executor = sendingTo(provider);
+        UUID action = actions.enqueue(notice());
+
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+
+        assertThat(executor.runNow(action)).contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(provider).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state || '/' || stop_reason FROM agent_action WHERE id = ? AND workspace_id = ?",
+                        String.class,
+                        action,
+                        workspace.getId()))
+                .isEqualTo("CANCELLED/AUTHORITY_CHANGED");
+    }
+
+    @Test
+    void shouldSendAnActionQueuedAfterTheNarrowing() {
+        var provider = new CopyOnWriteArrayList<UUID>();
+        var executor = sendingTo(provider);
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+        UUID action = actions.enqueue(notice());
+
+        assertThat(executor.runNow(action)).contains(new ActionResult.Done(null));
+        assertThat(provider).containsExactly(action);
     }
 
     @Test
@@ -198,6 +247,29 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
                         workspace.getId(),
                         "conversation:" + UUID.randomUUID()))
                 .doesNotThrowAnyException();
+    }
+
+    /** The executor with a recording fake in place of the Slack notice adapter: it records each write it starts. */
+    private ActionExecutor sendingTo(List<UUID> provider) {
+        return ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_NOTICE, attempt -> {
+            if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            provider.add(attempt.id());
+            return new ActionResult.Done(null);
+        }));
+    }
+
+    private ActionRequest notice() {
+        String key = "authority-fence:" + UUID.randomUUID();
+        return new ActionRequest(
+                ActionKind.SLACK_NOTICE,
+                workspace.getId(),
+                key,
+                key,
+                JsonNodeFactory.instance.objectNode().put("n", 1),
+                asker,
+                3,
+                null,
+                null);
     }
 
     private long generation() {

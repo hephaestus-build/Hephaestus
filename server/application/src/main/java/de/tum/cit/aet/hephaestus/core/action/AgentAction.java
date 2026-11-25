@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -109,6 +110,16 @@ public class AgentAction {
     /** The provider's name for the effect, such as a Message-ID or a comment id. */
     @Column(name = "readback_ref", length = 998)
     private @Nullable String readbackRef;
+
+    /**
+     * The authorization generations of the action's workspace when it was queued (ADR 0134 decision 8). It never
+     * changes, and the send boundary refuses the write once a generation moved on. An instance-level action carries
+     * generation 0 and no workspace authority.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnDefault("jsonb_build_object('workspace', 0)")
+    @Column(name = "authorization_stamp", nullable = false, updatable = false, columnDefinition = "jsonb")
+    private AuthorizationStamp authorizationStamp;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 32)

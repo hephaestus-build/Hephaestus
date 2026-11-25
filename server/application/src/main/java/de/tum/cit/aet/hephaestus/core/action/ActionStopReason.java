@@ -26,5 +26,10 @@ public enum ActionStopReason {
     /** A write may have reached the provider, and the outcome is unknown. */
     WRITE_UNCONFIRMED,
     /** The lease expired after a write may have started, and no attempt may follow. */
-    LEASE_LOST_AFTER_WRITE
+    LEASE_LOST_AFTER_WRITE,
+    /**
+     * The workspace's authority narrowed after the action was queued, such as a member who left, so its write never
+     * started (ADR 0134). After a write of the same action started, the action ends uncertain with this reason.
+     */
+    AUTHORITY_CHANGED
 }

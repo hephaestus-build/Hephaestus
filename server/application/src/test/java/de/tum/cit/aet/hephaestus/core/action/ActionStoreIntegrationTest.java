@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -70,7 +71,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 store,
                 context.getBean(ObjectMapper.class),
                 List.copyOf(context.getBeansOfType(ActionAdapter.class).values()),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                context.getBean(AuthorityGenerations.class));
     }
 
     @Test
