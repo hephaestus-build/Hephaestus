@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renameOnly } from "./detect-rename-only.ts";
+import { passedSkippedSuites, renameOnly } from "./detect-rename-only.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 
 const next = (name: string) => `${NEXT_CHANGELOG_DIRECTORY}/${name}`;
@@ -129,4 +129,35 @@ void test("a move to an earlier name, a new slug or an edit in place runs the fu
 
 void test("an unchanged own diff is not a rename", () => {
 	assert.equal(renameOnly(before, new Map(before), read).renameOnly, false);
+});
+
+const shard = (index: number, conclusion: string | null = "success") => ({
+	name: `Server tests / Integration (${index} of 3)`,
+	conclusion,
+});
+const database = (conclusion: string | null = "success") => ({
+	name: "Build / Database migrations",
+	conclusion,
+});
+
+void test("a baseline counts only when every numbered shard and the database tests passed", () => {
+	assert.equal(passedSkippedSuites([shard(1), shard(2), shard(3), database()]), true);
+	// A draft or a stack layer: the shards and the database tests skipped, yet the run is green.
+	assert.equal(
+		passedSkippedSuites([
+			shard(1, "skipped"),
+			shard(2, "skipped"),
+			shard(3, "skipped"),
+			database("skipped"),
+		]),
+		false,
+	);
+	assert.equal(
+		passedSkippedSuites([{ name: "Server tests / Integration (review)", conclusion: "success" }]),
+		false,
+	);
+	assert.equal(passedSkippedSuites([shard(1), shard(2), database()]), false, "a missing shard");
+	assert.equal(passedSkippedSuites([shard(1), shard(2), shard(3)]), false, "no database tests");
+	assert.equal(passedSkippedSuites([shard(1), shard(2), shard(3), database("cancelled")]), false);
+	assert.equal(passedSkippedSuites([]), false);
 });

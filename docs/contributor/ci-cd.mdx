@@ -1109,6 +1109,8 @@ Such a push changes no content, so the pull request does not run its whole fast 
 
 `Changes` runs `scripts/detect-rename-only.ts` on each push to a same-repository pull request.
 The script finds the newest other head of the pull request whose CI/CD run succeeded.
+That run must also pass every numbered integration shard and the database tests.
+A green run of a draft or of a stack layer skipped those suites, so it is not a baseline.
 It compares each head's own diff, from its merge base with the pull request's base, as paths and blob ids.
 The head is rename-only only if both of these are true:
 

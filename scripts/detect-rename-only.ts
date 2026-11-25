@@ -126,7 +126,47 @@ export function ownDiff(head: string, base: string): Map<string, string> {
 	return diff;
 }
 
-/** The newest other head of this same-repository pull request whose CI/CD run succeeded. */
+/**
+ * Whether a run passed the suites that a rename-only head skips: every numbered integration shard and
+ * the database tests. A green run of a draft or a stack layer skipped them, so it proves nothing about
+ * the migrations that the rename moves.
+ */
+export function passedSkippedSuites(
+	jobs: readonly { readonly name: string; readonly conclusion: string | null }[],
+): boolean {
+	const shards = jobs.filter((job) =>
+		/^Server tests \/ Integration \(\d+ of \d+\)$/u.test(job.name),
+	);
+	const count = Number(/ of (?<count>\d+)\)$/u.exec(shards[0]?.name ?? "")?.groups?.count ?? 0);
+	const database = jobs.filter((job) => job.name === "Build / Database migrations");
+	return (
+		count > 0 &&
+		shards.length === count &&
+		database.length === 1 &&
+		[...shards, ...database].every((job) => job.conclusion === "success")
+	);
+}
+
+async function runJobs(repository: string, runId: number) {
+	const pages = asArray(
+		await ghApi(`repos/${repository}/actions/runs/${runId}/jobs?filter=latest&per_page=100`),
+		"job pages",
+	);
+	return pages.flatMap((page) =>
+		asArray(asRecord(page, "job page").jobs, "jobs").map((value) => {
+			const job = asRecord(value, "job");
+			return {
+				name: asString(job.name, "job name"),
+				conclusion: typeof job.conclusion === "string" ? job.conclusion : null,
+			};
+		}),
+	);
+}
+
+/**
+ * The newest other head of this same-repository pull request whose CI/CD run succeeded and passed the
+ * suites that a rename-only head skips.
+ */
 async function previousHead(
 	repository: string,
 	pullRequest: number,
@@ -150,7 +190,7 @@ async function previousHead(
 				asString(asRecord(pull.base, "base").ref, "base ref") === defaultBranch
 			);
 		});
-		if (sha !== head && ours) {
+		if (sha !== head && ours && passedSkippedSuites(await runJobs(repository, Number(run.id)))) {
 			return sha;
 		}
 	}
@@ -168,7 +208,9 @@ async function decide(): Promise<Verdict> {
 		requiredEnv(process.env, "DEFAULT_BRANCH"),
 	);
 	if (previous === undefined) {
-		return no("no earlier head of this pull request has a successful CI/CD run");
+		return no(
+			"no earlier head of this pull request has a successful CI/CD run that passed the integration shards and the database tests",
+		);
 	}
 	git("fetch", "--no-tags", "--quiet", "origin", previous);
 	const verdict = renameOnly(ownDiff(previous, base), ownDiff(head, base), (blob) =>
