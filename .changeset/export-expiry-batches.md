@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Expired data exports now lose their download even while one of them is in use. The hourly expiry works in small batches and retries a busy export on its next run, so one busy export no longer keeps the downloads of every other account.
+The hourly cleanup of expired data exports now clears their data in small batches and retries a busy export on its next run. One busy export no longer keeps the expired data of every other account.

@@ -32,8 +32,14 @@ public class ExportRetentionSweeper {
     /** The exports that one call of the owner function expires at most: its {@code LIMIT}. */
     static final int BATCH = 100;
 
-    /** A run starts no batch after this, so it ends inside {@code lockAtMostFor} and no other replica overlaps it. */
+    /**
+     * A run starts no batch after this. With {@link #BATCH_TIMEOUT_SECONDS} for the last batch, it ends inside {@code
+     * lockAtMostFor}, so no other replica overlaps it.
+     */
     static final Duration BUDGET = Duration.ofMinutes(4);
+
+    /** The longest one batch's transaction may take. */
+    static final int BATCH_TIMEOUT_SECONDS = 30;
 
     private final AccountExportService accountExportService;
     private final PrivacyJobMetrics metrics;

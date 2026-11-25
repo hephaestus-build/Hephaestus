@@ -140,8 +140,12 @@ public class AccountExportService {
                 .filter(payload -> payload.length > 0);
     }
 
-    /** Expires, in its own transaction, one batch of READY exports whose download window has ended. */
-    @Transactional
+    /**
+     * Expires, in its own transaction, one batch of READY exports whose download window has ended. A batch that has not
+     * finished after {@link ExportRetentionSweeper#BATCH_TIMEOUT_SECONDS} rolls back, so a run ends inside its scheduler
+     * lock.
+     */
+    @Transactional(timeout = ExportRetentionSweeper.BATCH_TIMEOUT_SECONDS)
     public int expireRetention() {
         return accountExportRepository.expireReadyBefore(Instant.now(clock));
     }
