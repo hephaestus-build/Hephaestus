@@ -404,6 +404,19 @@ final class PersonErasureAllStoresFixture {
         UUID problemId = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT id FROM problem WHERE result_id=? AND workspace_id=?", UUID.class, person.result(), workspace));
         seeded.add(new SeededRow("problem", Map.of("id", problemId)));
+        // The capture of the person's review copied the person's own words: a copied identity of its review item.
+        Long copiedIdentity = jdbc.queryForObject("""
+                INSERT INTO review_item_copied_identity (workspace_id, review_id, practice_id, item_id, provider_type,
+                    provider_origin, subject, team_id)
+                SELECT m.workspace_id, m.review_id, m.practice_id, m.item_id, p.type, p.server_url, i.provider_user_key,
+                    NULL
+                FROM review_item m, identity i JOIN identity_provider p ON p.id=i.provider_id
+                WHERE m.review_id=(SELECT review_id FROM result WHERE id=? AND workspace_id=?) AND m.workspace_id=?
+                  AND i.account_id=? AND p.type IN ('GITHUB','GITLAB')
+                ORDER BY m.practice_id, m.item_id, i.id LIMIT 1
+                RETURNING id
+                """, Long.class, person.result(), workspace, workspace, account);
+        seeded.add(new SeededRow("review_item_copied_identity", Map.of("id", Objects.requireNonNull(copiedIdentity))));
         // Lineage compares two results of the person: an ended copy of the subject's result stands for the earlier one.
         // A review admits one claim per practice, item and developer, so the earlier result has a review of its own.
         UUID priorReview = UUID.randomUUID();
@@ -971,6 +984,9 @@ final class PersonErasureAllStoresFixture {
     void assertNoPersonalContentOrReferences(Subject person, ObjectMapper mapper) {
         for (var row : seeded) {
             var remaining = read(row);
+            // A copied identity holds only a provider identity, so no canary or reference finds a kept one.
+            if (row.table().equals("review_item_copied_identity"))
+                assertThat(remaining).as("erased copied identity").isEmpty();
             for (String json : remaining) {
                 assertThat(json)
                         .as("personal content in seeded %s", row.table())

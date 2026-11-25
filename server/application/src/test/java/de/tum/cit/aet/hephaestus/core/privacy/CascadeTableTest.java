@@ -645,6 +645,7 @@ class CascadeTableTest extends BaseUnitTest {
             "review_attempt_input",
             "review_batch",
             "review_composition_basis",
+            "review_item_copied_identity",
             "review_job",
             "review_schedule",
             "slack_channel_consent_event",

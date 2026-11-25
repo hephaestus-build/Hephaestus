@@ -98,7 +98,8 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.cost().statements())
                 .as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements());
-        assertThat(larger.cost().statements()).isLessThanOrEqualTo(17);
+        // One read per page loads the copied identities of every retained review item.
+        assertThat(larger.cost().statements()).isLessThanOrEqualTo(18);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
@@ -144,7 +145,8 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.statements())
                 .as("small=%s, larger=%s", small.statements(), larger.statements())
                 .isEqualTo(small.statements());
-        assertThat(larger.statements()).isLessThanOrEqualTo(22);
+        // One read per page loads the copied identities of every retained review item.
+        assertThat(larger.statements()).isLessThanOrEqualTo(23);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }

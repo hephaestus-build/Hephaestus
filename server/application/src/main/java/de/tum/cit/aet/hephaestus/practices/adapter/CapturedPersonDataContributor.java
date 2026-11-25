@@ -115,29 +115,35 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
         return store.externalDeliveries(selection);
     }
 
-    @Override
-    public PersonDataSelection select(PersonScope person) {
-        if (person.identities().isEmpty()) return store.select(person);
+    /** The exact provider identities under which a capture copied this person's words. */
+    static List<PersonCopyIdentity> copiedIdentities(PersonScope person, PersonIdentityResolver identities) {
+        if (person.identities().isEmpty()) return List.of();
         var providers = identities.providers();
-        var copied = person.identities().stream()
+        return person.identities().stream()
                 .flatMap(identity -> providers.stream()
                         .filter(provider -> provider.id() == identity.providerId())
                         .map(provider -> new PersonCopyIdentity(
                                 provider.type(), provider.serverUrl(), identity.subject(), identity.teamId())))
                 .distinct()
                 .toList();
+    }
+
+    @Override
+    public PersonDataSelection select(PersonScope person) {
+        if (person.identities().isEmpty()) return store.select(person);
+        var copied = copiedIdentities(person, identities);
         if (copied.isEmpty()) return store.select(person);
         var jobs = new LinkedHashSet<>(person.derivedJobIds());
         jobs.addAll(jdbc.query(
-                "SELECT DISTINCT captured.job_id FROM review_item member CROSS JOIN LATERAL (SELECT member.job_id"
-                        + " UNION ALL SELECT source.value::uuid FROM"
+                // The person's copies are found by their own index.
+                "SELECT DISTINCT captured.job_id FROM jsonb_array_elements(CAST(:copies AS jsonb)) person"
+                        + " JOIN review_item_copied_identity copy ON " + CopiedIdentityMatch.PERSON
+                        + " JOIN review_item member ON member.review_id=copy.review_id"
+                        + " AND member.practice_id=copy.practice_id AND member.item_id=copy.item_id"
+                        + " AND member.workspace_id=copy.workspace_id"
+                        + " CROSS JOIN LATERAL (SELECT member.job_id UNION ALL SELECT source.value::uuid FROM"
                         + " jsonb_array_elements_text(COALESCE(member.detail->'custody'->'sourceJobIds','[]'::jsonb))"
-                        + " source(value)) captured WHERE captured.job_id IS NOT NULL AND EXISTS(SELECT 1 FROM"
-                        + " jsonb_array_elements(COALESCE(member.detail->'custody'->'copiedIdentities','[]'::jsonb)) copy,"
-                        + " jsonb_array_elements(CAST(:copies AS jsonb)) person WHERE"
-                        + " copy->>'providerType'=person->>'providerType' AND"
-                        + " copy->>'providerOrigin'=person->>'providerOrigin' AND copy->>'subject'=person->>'subject' AND"
-                        + " copy->>'teamId' IS NOT DISTINCT FROM person->>'teamId')",
+                        + " source(value)) captured WHERE captured.job_id IS NOT NULL",
                 Map.of("copies", mapper.writeValueAsString(copied)),
                 (rs, n) -> Objects.requireNonNull(rs.getObject(1, UUID.class))));
         return store.select(new PersonScope(

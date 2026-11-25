@@ -31,7 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
@@ -46,10 +46,10 @@ public class ReviewScanStoreService implements ReviewScanStore {
     private final ResultRepository results;
     private final ItemIndexService writer;
     private final ProductItemRepository itemRows;
-    private final JsonMapper json;
     private final Clock clock;
     private final ReviewSnapshotQuery snapshots;
     private final ReviewRuntimeQuery runtime;
+    private final ReviewItemCustody custodies;
 
     @Override
     @Transactional(readOnly = true)
@@ -132,7 +132,8 @@ public class ReviewScanStoreService implements ReviewScanStore {
                         : missing.size() * 5L >= previous.size()
                                 ? RemovalGuardState.SUSPECT_LISTING
                                 : RemovalGuardState.APPLIED;
-        var receipt = json.createObjectNode()
+        var receipt = JsonNodeFactory.instance
+                .objectNode()
                 .put("complete", complete)
                 .put("files", present.size())
                 .put("previousFiles", previous.size())
@@ -153,7 +154,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         var review = active(workspaceId, reviewId);
         var inventory = review.getInventoryReceipt();
         if (inventory == null) throw new IllegalStateException("Capture the inventory before its exclusions.");
-        var recorded = json.createArrayNode();
+        var recorded = JsonNodeFactory.instance.arrayNode();
         for (var excluded : exclusions) {
             var item = excluded.item();
             if (item.workspaceId() != workspaceId
@@ -207,7 +208,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
                     .practiceId(practiceId)
                     .itemId(member.item().itemId())
                     .itemVersion(member.version().value())
-                    .detail(json.createObjectNode().putNull("developerId"))
+                    .detail(JsonNodeFactory.instance.objectNode().putNull("developerId"))
                     .build());
         }
         practice.setItemsListed(
@@ -225,7 +226,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         if (member.getState() == ReviewItemState.REUSED) return Optional.ofNullable(member.getResultId());
         if (member.getState() != ReviewItemState.LISTED || member.getJobId() != null) return Optional.empty();
         var detail = member.getDetail() == null
-                ? json.createObjectNode()
+                ? JsonNodeFactory.instance.objectNode()
                 : (ObjectNode) member.getDetail().deepCopy();
         if (detail.path("reuseAttempted").asBoolean()) return Optional.empty();
         detail.put("reuseAttempted", true);
@@ -235,7 +236,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         if (candidate.isEmpty()) return Optional.empty();
         var result = candidate.orElseThrow().result();
         var captured = candidate.orElseThrow().custody();
-        detail.set("custody", json.valueToTree(captured));
+        custodies.record(member, detail, captured);
         member.setDetail(detail);
         member.reuse(result.getId());
         return Optional.of(result.getId());
