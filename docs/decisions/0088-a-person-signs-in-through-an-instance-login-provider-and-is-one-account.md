@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
-**Amended by:** [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md)
+**Amended by:** [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md), [ADR 0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md)
 
 **Supersedes:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md), [ADR 0019](0019-workspace-membership-keyed-on-account.md)
 
@@ -132,3 +132,11 @@ Each line links the section that priced the option.
 - [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md#considered-options): the options for installed clients.
 - [ADR 0019](0019-workspace-membership-keyed-on-account.md#context): membership keyed on the SCM `user`, and an auto-heal that makes the first visitor ADMIN.
 - [ADR 0016](0016-unified-identity-keycloak-as-truth.md#considered-options): a wired `integration.identity` layer, and `keycloak_subject` on the SCM `user`.
+
+## Update — 2026-11-25: rule 10, one app origin
+
+[ADR 0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md) supersedes ADR 0053.
+The signed-in web app and the API run only on the instance host, and a workspace is `/w/<slug>` there.
+A workspace host, where an instance turns it on, serves only the signed-out public page of the workspace.
+Rule 10 now reads: a workspace address is `/w/<slug>` on the instance host.
+The reason is in ADR 0155: a signed-in app on each workspace host made every workspace switch load a new page.

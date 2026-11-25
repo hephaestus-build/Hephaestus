@@ -56,7 +56,7 @@ We choose option 1.
 - Every page is an `.mdx` file in `docs/user`, `docs/admin` or `docs/contributor`. Each guide is a content collection with its own sidebar in `meta.json`.
 - A partial starts with `_`. The collection schema lets a partial load without a title, and `getCollection()` leaves it out of the site.
 - The callouts, the guard against an unparsed callout and the text of unused directives are Sätteri plugins. A test runs each one on a fixture page.
-- The theme imports `webapp/src/styles/theme-tokens.css` with the Fumadocs shadcn preset. The `hephaestus-theme` cookie of ADR 0053 stays.
+- The theme imports `webapp/src/styles/theme-tokens.css` with the Fumadocs shadcn preset. The `hephaestus-theme` cookie of [ADR 0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md) stays.
 - Pagefind indexes the built HTML. `llms()` from `fumadocs-core` writes `llms.txt`, `llms-full.txt` and a `.md` twin of each page.
 - The islands import the sidebar's page tree from one module, so the browser loads the tree once.
 - Each docs script starts Astro through `scripts/docs-astro.ts`, which turns off Astro's telemetry.
