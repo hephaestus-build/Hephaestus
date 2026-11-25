@@ -5,7 +5,6 @@ on:
     workflows:
       - "Cache / Mirror pinned CI tools"
       - "CI / Kubernetes nightly"
-      - "Security / Public host ports"
       - "Security / Rescan images"
       - "Security / Java runtime watch"
       - "CI / Extension provider slots"

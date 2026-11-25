@@ -40,7 +40,11 @@ Remove any source-only inbound rules for the Pod and Service networks (`10.42.0.
 Enforce the public port policy for IPv4 and IPv6.
 Set the host and provider firewalls to drop packets sent to blocked ports.
 Container port forwarding can bypass host input rules.
-Verify the public ports from a network outside the admin VPN and the hosting provider's private network.
+
+Check the policy on the host itself.
+Compare the live ruleset (`nft list ruleset`) and the listening sockets (`ss -tulpn`) with the ports that this policy allows.
+For UFW, [the firewall script](#check-the-policy-with-ufw) checks the saved and live rules.
+Do not scan public addresses from outside unless the owner of the network approves the scan.
 
 ### Set reverse-path filtering
 
