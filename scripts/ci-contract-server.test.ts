@@ -141,6 +141,37 @@ void describe("ci-contract: server", () => {
 			[[".github/workflows/cicd.yml"], "pull_request", "false", "false", false, false, false],
 			// It selects the server suites through test-config, without a contract change.
 			[[".github/workflows/ci-tests.yml"], "pull_request", "false", "false", false, false, false],
+			// What the drills read selects them on a pull request, without a migration change.
+			[["docker/postgres/Dockerfile"], "pull_request", "false", "false", false, false, false],
+			[
+				["deploy/postgresql/pgbackrest.conf"],
+				"pull_request",
+				"false",
+				"false",
+				false,
+				false,
+				false,
+			],
+			[
+				["deploy/chart/hephaestus/files/restore-clone-lockdown.sql"],
+				"pull_request",
+				"false",
+				"false",
+				false,
+				false,
+				false,
+			],
+			[["scripts/lib/restore-probe.ts"], "pull_request", "false", "false", false, false, false],
+			// A chart template does not reach the drills; the cluster legs test it.
+			[
+				["deploy/chart/hephaestus/templates/postgresql.yaml"],
+				"pull_request",
+				"false",
+				"false",
+				false,
+				false,
+				false,
+			],
 			[["webapp/e2e/review.spec.ts"], "pull_request", "false", "false", false, false, false],
 			[[migrate], "pull_request", "true", "false", false, true, true],
 			[[migrate], "pull_request", undefined, "false", false, true, true],
@@ -216,6 +247,18 @@ void describe("ci-contract: server", () => {
 					},
 				},
 			);
+			const drillInputs = expandExpressions(
+				caller.getIn(["jobs", "Build", "with", "drill_inputs_changed"]),
+				{
+					github: { event_name: event, event: { pull_request: { draft: false } } },
+					needs: {
+						"detect-changes": {
+							outputs: { "rename-only": "false", "postgres-drill": selected["postgres-drill"] },
+						},
+					},
+				},
+			);
+			const readsDrillInputs = event === "pull_request" && selected["postgres-drill"] === "true";
 			for (const name of ["server-database", "postgres-drill"]) {
 				assert.equal(
 					jobRuns(build, name, event, {}, false, {
@@ -223,12 +266,25 @@ void describe("ci-contract: server", () => {
 						queue_tier: output("queue-tier"),
 						migrations_changed: output("migrations-changed"),
 						database_tier: databaseTier,
+						drill_inputs_changed: drillInputs,
 					}),
 					// The contract checks gate both jobs; within them, a server change selects the database tests.
-					contracts === "true" && (name === "server-database" ? database || server : database),
+					contracts === "true" &&
+						(name === "server-database" ? database || server : database || readsDrillInputs),
 					`${name}: ${label}`,
 				);
 			}
+			// A draft waits for its ready run, which runs the drills.
+			assert.equal(
+				expandExpressions(caller.getIn(["jobs", "Build", "with", "drill_inputs_changed"]), {
+					github: { event_name: event, event: { pull_request: { draft: true } } },
+					needs: {
+						"detect-changes": { outputs: { "rename-only": "false", "postgres-drill": "true" } },
+					},
+				}),
+				"false",
+				"a draft does not run the drills for their inputs",
+			);
 			assert.equal(
 				expandExpressions(caller.getIn(["jobs", "Build", "with", "database_tier"]), {
 					needs: {
@@ -691,6 +747,27 @@ void describe("ci-contract: server", () => {
 			"scripts/lib/database-migration.ts",
 		]) {
 			assert.ok(drillInputs.includes(file), `${file} must select the recovery drills`);
+		}
+		// Each file that the drills read selects them on a pull request (the postgres-drill filter).
+		const drillFilter = asArray(filters["postgres-drill"], "postgres-drill paths").map((pattern) =>
+			asString(pattern, "path pattern"),
+		);
+		for (const file of [
+			"docker/postgres/Dockerfile",
+			"docker/postgres/initdb/10-roles.sh",
+			"deploy/postgresql/pgbackrest.conf",
+			"deploy/chart/hephaestus/files/restore-clone-lockdown.sql",
+			"scripts/postgres-backup-restore-test.ts",
+			"scripts/postgres-pitr-test.ts",
+			"scripts/lib/database-migration.ts",
+			"scripts/lib/database-roles.ts",
+			"scripts/lib/restore-probe.ts",
+			".github/actions/postgres-image/action.yml",
+		]) {
+			assert.ok(
+				drillFilter.some((pattern) => minimatch(file, pattern, { dot: true })),
+				`${file} must select the PostgreSQL drills on a pull request`,
+			);
 		}
 		// docs/contributor/ci-cd.mdx § Parallelism and concurrency owns action-context setup ordering.
 		for (const [file, names] of [

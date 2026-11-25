@@ -419,12 +419,13 @@ void describe("ci-contract: merge-queue", () => {
 		] as const) {
 			const workflow = parseDocument(await readFile(file, "utf8"));
 			assert.equal(workflow.getIn(["on", "workflow_call", "inputs", input, "required"]), true);
-			// The database tests also run on every server pull request; the drills follow the migrations.
+			// The database tests also run on every server pull request; the drills follow the migrations
+			// and the files that the drills read.
 			const conditions: Record<string, RegExp> = {
 				"server-database":
 					/&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true' \|\| inputs\.database_tier == 'true'\)$/u,
 				"postgres-drill":
-					/&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true'\)$/u,
+					/&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true' \|\| inputs\.drill_inputs_changed == 'true'\)$/u,
 			};
 			for (const name of queue) {
 				assert.match(
