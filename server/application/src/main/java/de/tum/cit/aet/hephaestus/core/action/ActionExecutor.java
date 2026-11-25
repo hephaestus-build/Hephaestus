@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
@@ -70,6 +71,13 @@ public class ActionExecutor implements SmartLifecycle {
 
     /** Actions one replica claims and runs at the same time. */
     static final int SLOTS = 16;
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final ActionStore store;
     private final ObjectMapper mapper;
@@ -286,6 +294,7 @@ public class ActionExecutor implements SmartLifecycle {
      * #runNow} runs on a request thread. The keys are the observability contract's names, written here because {@code
      * core} cannot depend on the observability module.
      */
+    @SuppressWarnings("try") // The scope follows the attempt through its provider call and commit.
     ActionResult run(ActionStore.Claim claim, ActionAdapter adapter) {
         Map<String, String> caller = MDC.getCopyOfContextMap();
         MDC.put("action.id", claim.id().toString());
@@ -293,7 +302,10 @@ public class ActionExecutor implements SmartLifecycle {
         MDC.put("action.attempt", Integer.toString(claim.attempts()));
         if (claim.workspaceId() == null) MDC.remove("workspace.id");
         else MDC.put("workspace.id", claim.workspaceId().toString());
-        try {
+        try (var evaluationCall = evaluation == null
+                ? null
+                : evaluation.beginCall(
+                        EvaluationObservations.CallKind.OUTBOX, claim.id().toString())) {
             return attempt(claim, adapter);
         } finally {
             if (caller == null) MDC.clear();
@@ -334,6 +346,11 @@ public class ActionExecutor implements SmartLifecycle {
             if (!fenced.get() && !claim.writeStarted()) result = new ActionResult.Retry(backoff(claim.attempts()));
             else if (claim.kind().atMostOnce()) result = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
             else result = new ActionResult.Reread(backoff(claim.attempts()));
+        }
+        if (evaluation != null) {
+            String providerObjectId = result instanceof ActionResult.Done done ? done.providerObjectId() : null;
+            evaluation.record(new EvaluationObservations.DeliveryAttempt(
+                    claim.id(), claim.workspaceId(), claim.attempts(), providerObjectId));
         }
         Optional<ActionStore.Settled> settled;
         try {

@@ -374,6 +374,7 @@ ScanProgressDTO.queuedJobs
 ScanProgressDTO.terminalPairs
 ScanSummaryDTO.practiceCount
 Session.calls
+Settled.watermark  # last acknowledged evaluation observation sequence
 SlackUserWorkspacePreferencesDTO.activeMonitoredChannelCount  # channels
 SupportOccurrenceDTO.evidence  # opaque: the evidence of one observation
 SyncJobDTO.id  # identifier

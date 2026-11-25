@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
@@ -15,6 +17,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +72,13 @@ class ActionStore {
     private final AgentActionRepository actions;
     private final ObjectMapper mapper;
 
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public int eraseRecipient(long workspaceId, PersonIdentity recipient) {
         return actions.eraseRecipient(workspaceId, mapper.writeValueAsString(recipient));
@@ -98,17 +108,29 @@ class ActionStore {
 
     private Optional<UUID> add(ActionRequest request, Duration delay) {
         return actions.insertAdmitted(
-                TimeOrderedIds.next(),
-                request.workspaceId(),
-                request.kind().name(),
-                request.laneKey(),
-                request.idempotencyKey(),
-                mapper.writeValueAsString(request.payload()),
-                request.subjectAccountId(),
-                request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
-                request.maxAttempts(),
-                request.expiresAt(),
-                delay.toSeconds());
+                        TimeOrderedIds.next(),
+                        request.workspaceId(),
+                        request.kind().name(),
+                        request.laneKey(),
+                        request.idempotencyKey(),
+                        mapper.writeValueAsString(request.payload()),
+                        request.subjectAccountId(),
+                        request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
+                        request.maxAttempts(),
+                        request.expiresAt(),
+                        delay.toSeconds())
+                .map(id -> {
+                    queued(request, id);
+                    return id;
+                });
+    }
+
+    private void queued(ActionRequest request, UUID id) {
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.ActionQueued(
+                    id,
+                    request.kind(),
+                    new EvaluationObservations.Authority(request.workspaceId(), request.subjectAccountId())));
     }
 
     /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
@@ -149,7 +171,10 @@ class ActionStore {
                         request.maxAttempts(),
                         request.expiresAt(),
                         lease.toSeconds())
-                .map(ActionStore::claim);
+                .map(row -> {
+                    queued(request, row.getId());
+                    return claim(row);
+                });
     }
 
     /** Takes up to {@code limit} due lane heads under a new lease ({@link AgentActionRepository#claim}). */
@@ -191,6 +216,12 @@ class ActionStore {
         };
         Optional<Settled> settled = row.map(ActionStore::settled);
         settled.flatMap(Settled::ended).ifPresent(onEnd);
+        if (evaluation != null && settled.isPresent()) {
+            Settled outcome = settled.get();
+            if (outcome.state() == ActionState.CANCELLED && outcome.reason() != null)
+                evaluation.record(new EvaluationObservations.Silence(outcome.workspaceId(), id, outcome.reason()));
+            else TransactionCallbacks.afterCommit(evaluation::changed);
+        }
         return settled;
     }
 
@@ -246,6 +277,12 @@ class ActionStore {
                 .or(() -> actions.endLost(id, AT_MOST_ONCE, admission.json()))
                 .map(ActionStore::settled);
         settled.flatMap(Settled::ended).ifPresent(onEnd);
+        if (evaluation != null && settled.isPresent()) {
+            Settled outcome = settled.get();
+            if (outcome.state() == ActionState.CANCELLED && outcome.reason() != null)
+                evaluation.record(new EvaluationObservations.Silence(outcome.workspaceId(), id, outcome.reason()));
+            else TransactionCallbacks.afterCommit(evaluation::changed);
+        }
         return settled;
     }
 

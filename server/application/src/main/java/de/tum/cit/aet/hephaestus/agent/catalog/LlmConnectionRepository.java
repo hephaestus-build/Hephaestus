@@ -30,4 +30,6 @@ public interface LlmConnectionRepository extends JpaRepository<LlmConnection, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT x FROM LlmConnection x ORDER BY x.id")
     List<LlmConnection> lockAllForKeyRotation();
+
+    boolean existsBySealedApiKeyIsNotNull();
 }

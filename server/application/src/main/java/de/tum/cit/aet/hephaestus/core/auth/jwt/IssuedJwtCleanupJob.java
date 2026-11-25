@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -36,7 +37,7 @@ public class IssuedJwtCleanupJob {
 
     public IssuedJwtCleanupJob(IssuedJwtRepository repository, Clock clock, MeterRegistry meterRegistry) {
         this.repository = repository;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
         this.prunedCounter = Counter.builder(CoreMetrics.AUTH_ISSUED_JWT_PRUNED)
                 .description("Expired issued_jwt revocation rows physically removed by the daily sweep")
                 .register(meterRegistry);

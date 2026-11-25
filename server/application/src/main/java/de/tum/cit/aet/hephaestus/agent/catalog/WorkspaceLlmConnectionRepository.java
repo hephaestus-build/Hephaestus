@@ -42,4 +42,6 @@ public interface WorkspaceLlmConnectionRepository extends JpaRepository<Workspac
     @WorkspaceAgnostic("Seals the AI provider keys of every workspace again during a system key rotation")
     @Query("SELECT x FROM WorkspaceLlmConnection x ORDER BY x.id")
     List<WorkspaceLlmConnection> lockAllForKeyRotation();
+
+    boolean existsByWorkspaceIdInAndSealedApiKeyIsNotNull(List<Long> workspaceIds);
 }

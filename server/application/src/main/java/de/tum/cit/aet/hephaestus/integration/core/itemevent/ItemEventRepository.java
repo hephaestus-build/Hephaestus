@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.itemevent;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationWork;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -315,4 +316,19 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
             nativeQuery = true)
     @WorkspaceAgnostic("Background reaper removes only retained terminal events without a review reference")
     int deleteUnreferenced(@Param("before") Instant before, @Param("limit") int limit);
+
+    @Query(value = """
+        SELECT CAST(id AS text) AS id, COALESCE(reason, state) AS state, CASE
+            WHEN NOT :reviewsEnabled OR item_version IS NULL
+            THEN occurred_at + make_interval(secs => :lapseSeconds)
+            WHEN retry_at IS NOT NULL
+            THEN LEAST(retry_at, occurred_at + make_interval(secs => :lapseSeconds))
+            END AS "futureDueAt"
+          FROM item_event WHERE state IN ('RECORDED', 'WAITING')
+           AND workspace_id IN (:workspaceIds)
+        """, nativeQuery = true)
+    List<EvaluationWork.Row> findEvaluationWork(
+            @Param("workspaceIds") List<Long> workspaceIds,
+            @Param("lapseSeconds") long lapseSeconds,
+            @Param("reviewsEnabled") boolean reviewsEnabled);
 }

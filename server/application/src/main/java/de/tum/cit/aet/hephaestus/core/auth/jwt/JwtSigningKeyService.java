@@ -9,6 +9,7 @@ import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -78,7 +79,7 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
         this.repository = repository;
         this.secrets = secrets;
         this.properties = properties;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
     }
 
     /**
@@ -121,7 +122,8 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
                 throw new IllegalStateException(
                         "hephaestus.security.encryption-key does not open the stored JWT signing"
                                 + " key " + row.getKid() + ": " + row.sealingMismatch(secrets)
-                                + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
+                                + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx"
+                                + " describes.",
                         mismatch);
             }
         }

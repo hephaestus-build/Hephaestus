@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -16,9 +17,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.spi.LoggingEventBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionStatus;
@@ -38,6 +41,13 @@ public class AgentRunReaper {
     private static final Logger log = LoggerFactory.getLogger(AgentRunReaper.class);
     /** The most runs one tick takes back, so a backlog cannot hold a scheduler thread for long. */
     static final int BATCH = 200;
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final AgentRunRepository runs;
     private final TransactionTemplate transactions;
@@ -127,6 +137,7 @@ public class AgentRunReaper {
                     if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
                         return;
                     settle(lost);
+                    observe(row, EvaluationObservations.RunState.REQUEUED, null);
                     runs.notifyQueued(AgentRunNotifications.CHANNEL, kind.name());
                     count(kind, "requeued");
                     event(log.atInfo(), "agent.run.requeued", row).log("Run lease expired; the run is queued again");
@@ -138,6 +149,7 @@ public class AgentRunReaper {
             }
             if (!taken(status, runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name()))) return;
             settle(lost);
+            observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
                     .addKeyValue("run.stop_reason", reason.name())
@@ -154,11 +166,21 @@ public class AgentRunReaper {
             handler.ended(run, row.getLeaseEpoch(), reason);
             if (!taken(status, runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), reason.name())))
                 return;
+            observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
                     .addKeyValue("run.stop_reason", reason.name())
                     .log("Queued run waited past its start window; the run ended");
         });
+    }
+
+    private void observe(
+            AgentRunRepository.ExpiredRow row,
+            EvaluationObservations.RunState state,
+            @Nullable AgentRunStopReason reason) {
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.Run(
+                    row.getWorkspaceId(), row.getId(), row.getLeaseEpoch(), state, reason));
     }
 
     /** Settles the model calls that the lost claim left open, in the transaction that takes its run back. */

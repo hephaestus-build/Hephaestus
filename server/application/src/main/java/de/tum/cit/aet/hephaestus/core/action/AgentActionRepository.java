@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationWork;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
@@ -502,4 +503,17 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Modifying
     @Query(value = "DELETE FROM agent_action WHERE workspace_id=:workspace AND kind IN (:kinds)", nativeQuery = true)
     int eraseKinds(@Param("workspace") long workspaceId, @Param("kinds") List<String> kinds);
+
+    @Query(value = """
+        SELECT CAST(id AS text) AS id, state, CASE
+            WHEN state = 'ADMITTED' AND next_attempt_at > clock_timestamp()
+                AND (expires_at IS NULL OR expires_at > clock_timestamp())
+            THEN LEAST(next_attempt_at, expires_at)
+            WHEN state = 'EXECUTING' AND next_attempt_at > updated_at
+                AND leased_until > clock_timestamp()
+            THEN leased_until END AS "futureDueAt"
+          FROM agent_action WHERE state IN ('ADMITTED', 'EXECUTING')
+           AND (workspace_id IN (:workspaceIds) OR workspace_id IS NULL)
+        """, nativeQuery = true)
+    List<EvaluationWork.Row> findEvaluationWork(@Param("workspaceIds") List<Long> workspaceIds);
 }

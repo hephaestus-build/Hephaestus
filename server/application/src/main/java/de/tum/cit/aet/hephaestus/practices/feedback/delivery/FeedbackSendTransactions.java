@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
@@ -33,6 +34,7 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackSendTransactions {
     /** How long an unresolved send waits before it reads the provider back again. */
     private static final Duration REREAD = Duration.ofSeconds(30);
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final FeedbackStoreService store;
     private final FeedbackOutcomes outcomes;
@@ -149,6 +158,13 @@ public class FeedbackSendTransactions {
         var row = store.lock(workspaceId, feedbackId);
         if (owns(owner)) {
             record(row, receipts);
+            if (evaluation != null) {
+                for (CopyReceipt receipt : receipts) {
+                    if (receipt.externalRef() != null)
+                        evaluation.record(new EvaluationObservations.DeliveryAttempt(
+                                owner.id(), workspaceId, owner.attempt(), receipt.externalRef()));
+                }
+            }
             var projection = FeedbackSendStateMachine.project(
                     row, copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId));
             outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
@@ -218,7 +234,10 @@ public class FeedbackSendTransactions {
             long workspaceId, UUID feedbackId, ActionAttempt owner, List<UUID> copyIds, FeedbackStopReason reason) {
         store.lock(workspaceId, feedbackId);
         if (!owns(owner)) return;
-        for (UUID copyId : copyIds) copies.withholdCopy(workspaceId, feedbackId, copyId, reason.name());
+        for (UUID copyId : copyIds) {
+            copies.withholdCopy(workspaceId, feedbackId, copyId, reason.name());
+            if (evaluation != null) evaluation.record(new EvaluationObservations.Silence(workspaceId, copyId, reason));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

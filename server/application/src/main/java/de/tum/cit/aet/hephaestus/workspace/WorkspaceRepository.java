@@ -201,6 +201,9 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     List<Workspace> findByStatus(Workspace.WorkspaceStatus status);
 
+    @Query("SELECT w.id FROM Workspace w")
+    List<Long> findEvaluationWorkspaceIds();
+
     @Query("SELECT w.id FROM Workspace w WHERE w.status = :status ORDER BY w.id")
     List<Long> findIdsByStatus(@Param("status") Workspace.WorkspaceStatus status);
 

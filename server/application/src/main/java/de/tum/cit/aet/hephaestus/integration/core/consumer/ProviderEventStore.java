@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -31,6 +34,13 @@ public class ProviderEventStore {
     private final ObjectMapper mapper;
     private final ProviderEventNotifications notifications;
     private final PersonDataCopyFence copyFence;
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     public ProviderEventStore(
             ProviderEventRepository events,
@@ -131,7 +141,7 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     public boolean complete(long id, int leaseEpoch) {
-        return events.complete(id, leaseEpoch) == 1;
+        return changed(events.complete(id, leaseEpoch));
     }
 
     /** Returns a leased event to its scope's head, due after {@code delay}. */
@@ -145,7 +155,8 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     public boolean dead(long id, int leaseEpoch, String errorClass) {
-        return events.dead(id, leaseEpoch, errorClass.length() <= 255 ? errorClass : errorClass.substring(0, 255)) == 1;
+        return changed(
+                events.dead(id, leaseEpoch, errorClass.length() <= 255 ? errorClass : errorClass.substring(0, 255)));
     }
 
     /** Extends a matching lease without waiting on a write fence; false when the row is locked or the lease changed. */
@@ -159,7 +170,12 @@ public class ProviderEventStore {
     @Transactional
     @WorkspaceAgnostic("The event id and its lease epoch identify the claimed row")
     public boolean release(long id, int leaseEpoch) {
-        return events.release(id, leaseEpoch) == 1;
+        return changed(events.release(id, leaseEpoch));
+    }
+
+    private boolean changed(int rows) {
+        if (rows != 0 && evaluation != null) TransactionCallbacks.afterCommit(evaluation::changed);
+        return rows == 1;
     }
 
     /**

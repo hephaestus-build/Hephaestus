@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationDispatchScope;
@@ -28,6 +29,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.LivenessState;
 import org.springframework.context.ApplicationEventPublisher;
@@ -63,6 +65,13 @@ public class ProviderEventConsumer {
      * How long a stopping server waits for an interrupted handler; it fits {@link ProviderEventClaimers#SHUTDOWN_RELEASE}.
      */
     private static final Duration SHUTDOWN_STOP_GRACE = Duration.ofSeconds(2);
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final ProviderEventStore store;
     private final IntegrationMessageDispatcher dispatcher;
@@ -169,6 +178,7 @@ public class ProviderEventConsumer {
      *
      * @return whether an event was claimed
      */
+    @SuppressWarnings("try") // A handler can still be talking to a provider when a lease is taken back.
     public boolean claimAndHandle() {
         Optional<ProviderEventStore.Claimed> claimed;
         try {
@@ -182,7 +192,11 @@ public class ProviderEventConsumer {
             return false;
         }
         if (claimed.isEmpty()) return false;
-        try {
+        try (var call = evaluation == null
+                ? null
+                : evaluation.beginCall(
+                        EvaluationObservations.CallKind.PROVIDER_EVENT,
+                        Long.toString(claimed.get().id()))) {
             handle(claimed.get());
         } catch (RuntimeException failure) {
             // The outcome could not be recorded; the lease expires and the reaper returns the event.

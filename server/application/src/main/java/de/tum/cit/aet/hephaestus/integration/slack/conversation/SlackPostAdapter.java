@@ -210,7 +210,7 @@ class SlackPostAdapter implements ActionAdapter {
     }
 
     private ActionResult.Done done(Receipt receipt) {
-        return new ActionResult.Done(mapper.writeValueAsString(receipt));
+        return new ActionResult.Done(mapper.writeValueAsString(receipt), receipt.ts());
     }
 
     private SlackConversationPosts.Reply reply(SlackTurn turn) {

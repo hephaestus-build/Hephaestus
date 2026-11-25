@@ -303,6 +303,10 @@ hephaestus:
         journal:
             retention: ${HEPHAESTUS_PRIVACY_JOURNAL_RETENTION:35d}
             backups-enabled: ${HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED:true}
+    evaluation:
+        controlled-clock:
+            enabled: ${HEPHAESTUS_EVALUATION_CONTROLLED_CLOCK_ENABLED:false}
+            collector-url: ${HEPHAESTUS_EVALUATION_CONTROLLED_CLOCK_COLLECTOR_URL:}
     commit-identity-resolution:
         enabled: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED:true}
         batch-size: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_BATCH_SIZE:50}

@@ -351,4 +351,6 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
                     """, nativeQuery = true)
     int markCredentialsReadable(
             @Param("id") Long id, @Param("workspaceId") Long workspaceId, @Param("ciphertext") byte[] ciphertext);
+
+    boolean existsByWorkspace_IdInAndCredentialsEncryptedIsNotNull(List<Long> workspaceIds);
 }

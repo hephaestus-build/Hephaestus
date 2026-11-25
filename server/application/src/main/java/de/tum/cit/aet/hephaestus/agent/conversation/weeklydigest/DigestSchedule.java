@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.ConditionalOnEvaluation;
+import de.tum.cit.aet.hephaestus.core.EvaluationClockStep;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -20,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -56,6 +60,12 @@ public class DigestSchedule {
         return local.getDayOfWeek() == DayOfWeek.MONDAY
                 && !local.toLocalTime().isBefore(DUE)
                 && local.toLocalTime().isBefore(TOO_LATE);
+    }
+
+    @Bean
+    @ConditionalOnEvaluation
+    EvaluationClockStep digestClockStep(ObjectProvider<DigestSchedule> schedule) {
+        return instant -> schedule.getObject().enqueueDue();
     }
 
     /**

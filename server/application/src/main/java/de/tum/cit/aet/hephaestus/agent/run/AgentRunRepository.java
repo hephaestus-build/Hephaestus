@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationWork;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
@@ -598,4 +599,14 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @WorkspaceAgnostic("Reads the database clock")
     @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
     Instant databaseClock();
+
+    @Query(value = """
+        SELECT CAST(id AS text) AS id, state, CASE WHEN state = 'QUEUED'
+            AND GREATEST(available_at, deferred_until) > transaction_timestamp()
+            AND (deadline IS NULL OR deadline > transaction_timestamp())
+            THEN GREATEST(available_at, deferred_until) END AS "futureDueAt"
+          FROM agent_run WHERE state IN ('QUEUED', 'LEASED')
+           AND workspace_id IN (:workspaceIds)
+        """, nativeQuery = true)
+    List<EvaluationWork.Row> findEvaluationWork(@Param("workspaceIds") List<Long> workspaceIds);
 }

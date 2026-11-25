@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionRepository;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInHandoffRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -54,7 +55,7 @@ public class SessionRevocation {
         this.handoffRepository = handoffRepository;
         this.issuedJwtRepository = issuedJwtRepository;
         this.grantRepository = grantRepository;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
     }
 
     /**

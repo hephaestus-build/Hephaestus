@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.item;
 
+import de.tum.cit.aet.hephaestus.core.ConditionalOnEvaluation;
+import de.tum.cit.aet.hephaestus.core.EvaluationClockStep;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.SweepRowFailures;
@@ -24,7 +26,9 @@ import java.time.temporal.ChronoUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.context.annotation.Bean;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -62,6 +66,12 @@ public class SlackThreadEventScheduler {
         this.reviews = reviews;
         this.transactions = transactions;
         this.clock = clock;
+    }
+
+    @Bean
+    @ConditionalOnEvaluation
+    EvaluationClockStep slackThreadClockStep(ObjectProvider<SlackThreadEventScheduler> schedule) {
+        return instant -> schedule.getObject().sweepNow();
     }
 
     @Scheduled(cron = "0 */5 * * * *")
