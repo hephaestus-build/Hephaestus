@@ -56,6 +56,8 @@ public final class ScriptedGitLabNotes {
     private final Map<Integer, String> heads = new ConcurrentHashMap<>();
     private final Map<Integer, String> branches = new ConcurrentHashMap<>();
     private boolean failDelete;
+    private int loseDraftAnswer;
+    private int gatewayTimeoutDraft;
     private boolean publishOnDraftRead;
     private boolean losePublish;
     private int bulkPublications;
@@ -79,6 +81,16 @@ public final class ScriptedGitLabNotes {
         failDraft = call;
     }
 
+    /** The draft creation of this call is saved, but a proxy answers it with a 504. */
+    void gatewayTimeoutOnDraft(int call) {
+        gatewayTimeoutDraft = call;
+    }
+
+    /** The draft creation of this call is saved, but its answer is lost. */
+    void loseDraftAnswer(int call) {
+        loseDraftAnswer = call;
+    }
+
     void failDelete(boolean fail) {
         failDelete = fail;
     }
@@ -98,6 +110,17 @@ public final class ScriptedGitLabNotes {
 
     int pendingDrafts() {
         return drafts.size();
+    }
+
+    /** A draft that a person wrote with the token's account. */
+    void personDraft(String body) {
+        var draft = new LinkedHashMap<String, Object>();
+        draft.put("id", 10_000L + drafts.size());
+        draft.put("author_id", 1L);
+        draft.put("note", body);
+        draft.put("discussion_id", null);
+        draft.put("position", null);
+        drafts.add(draft);
     }
 
     void foreignDraft() {
@@ -283,6 +306,10 @@ public final class ScriptedGitLabNotes {
             draft.put("discussion_id", null);
             draft.put("position", fields.get("position") == null ? UNPOSITIONED : fields.get("position"));
             drafts.add(draft);
+            if (draftCalls == gatewayTimeoutDraft)
+                return ScriptedGitLabRest.respond(504, Map.of("message", "Gateway Timeout"));
+            if (draftCalls == loseDraftAnswer)
+                return Mono.error(new IllegalStateException("Response lost after the draft was saved"));
             return ScriptedGitLabRest.respond(201, draft);
         }
         if (!endpoint.equals("draft_notes/bulk_publish")) return Mono.error(new IllegalArgumentException(endpoint));

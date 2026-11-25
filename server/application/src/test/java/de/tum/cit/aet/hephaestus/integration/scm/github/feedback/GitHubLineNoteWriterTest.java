@@ -230,27 +230,8 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
         failDelete = true;
         var refused = writer.postPackage(TARGET, publication(), (ids, done) -> threads.size() < 2);
         assertThat(refused.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(writes).endsWith("DeleteFeedbackReview").doesNotContain("SubmitFeedbackReview");
         assertThat(reviews.getFirst().get("state")).isEqualTo("PENDING");
-        assertThat(writes).doesNotContain("SubmitFeedbackReview");
-    }
-
-    @Test
-    void shouldDeleteAStrandedHephaestusDraftOnlyOnceTheFenceAdmitsTheNextPackage() {
-        failDelete = true;
-        writer.postPackage(TARGET, publication(), (ids, done) -> threads.size() < 2);
-        failDelete = false;
-        var stranded = reviews.getFirst();
-
-        writer.postPackage(TARGET, otherPublication(), (ids, done) -> false);
-        assertThat(reviews).containsExactly(stranded);
-
-        var next = writer.postPackage(TARGET, otherPublication(), (ids, done) -> true);
-        assertThat(next.receipts()).hasSize(3).allMatch(CopyReceipt::acknowledged);
-        assertThat(reviews).singleElement().satisfies(review -> {
-            assertThat(review.get("state")).isEqualTo("COMMENTED");
-            assertThat(review.get("body")).asString().contains(OTHER_MARKER);
-        });
-        assertThat(threads).hasSize(2);
     }
 
     @Test

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadback;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackCopyReader;
@@ -362,7 +363,13 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 privacy,
                 actions);
         var editor = new FeedbackOwnCopyEditor(
-                copies, feedback, List.of(reader), List.of(provider), List.of(provider), transactions);
+                copies,
+                feedback,
+                List.of(reader),
+                List.of(provider),
+                List.of(provider),
+                transactions,
+                Clock.systemUTC());
         var sender = new FeedbackSendService(
                 transactions,
                 targets,
@@ -372,7 +379,9 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 readback,
                 editor,
-                gate);
+                gate,
+                mock(SilentModeQuery.class),
+                Clock.systemUTC());
         return new Transport(sender(sender), readback);
     }
 }

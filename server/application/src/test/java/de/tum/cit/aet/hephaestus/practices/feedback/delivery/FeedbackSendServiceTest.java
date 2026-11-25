@@ -17,9 +17,12 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -44,9 +47,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -105,7 +112,9 @@ class FeedbackSendServiceTest {
                 new FeedbackReadbackMeters(meters),
                 mock(FeedbackProviderReadback.class),
                 mock(FeedbackOwnCopyEditor.class),
-                gate);
+                gate,
+                mock(SilentModeQuery.class),
+                Clock.systemUTC());
     }
 
     FeedbackCopy copy(FeedbackCopyState state) {
@@ -169,7 +178,7 @@ class FeedbackSendServiceTest {
         when(writer.findExistingSummary(eq(target), any())).thenReturn(new SummaryLookup(LookupPresence.UNKNOWN, null));
         sender.send(owner);
         verify(writer, never()).postSummary(any(), any());
-        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any());
+        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any(), any());
         assertThat(readbacks("unknown")).isEqualTo(1);
     }
 
@@ -178,7 +187,7 @@ class FeedbackSendServiceTest {
         attempt(FeedbackCopyState.WRITE_STARTED);
         when(writer.findExistingSummary(eq(target), any())).thenReturn(new SummaryLookup(LookupPresence.ABSENT, null));
         sender.send(owner);
-        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(copyId));
+        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(copyId), any());
         verify(writer, never()).postSummary(any(), any());
         assertThat(readbacks("absent")).isEqualTo(1);
     }
@@ -263,7 +272,9 @@ class FeedbackSendServiceTest {
                 new FeedbackReadbackMeters(meters),
                 mock(FeedbackProviderReadback.class),
                 mock(FeedbackOwnCopyEditor.class),
-                gate);
+                gate,
+                mock(SilentModeQuery.class),
+                Clock.systemUTC());
     }
 
     @Test
@@ -300,7 +311,7 @@ class FeedbackSendServiceTest {
         sender.send(owner);
         verify(transactions).refuseTarget(1L, id, owner, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
         verify(notes, never()).postPackage(any(), any(), any());
-        verify(transactions, never()).fence(anyLong(), any(), any(), anyList(), anyList());
+        verify(transactions, never()).fencePackage(anyLong(), any(), any(), anyList(), anyList());
     }
 
     @Test
@@ -310,8 +321,141 @@ class FeedbackSendServiceTest {
         assertThat(sender.send(owner)).isInstanceOf(ActionResult.Retry.class);
         verify(notes, never()).postPackage(any(), any(), any());
         verify(transactions, never()).refuseTarget(anyLong(), any(), any(), any());
-        verify(transactions, never()).fence(anyLong(), any(), any(), anyList(), anyList());
+        verify(transactions, never()).fencePackage(anyLong(), any(), any(), anyList(), anyList());
         verify(transactions, never()).finish(anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldWaitWithoutSpendingAnAttemptWhileSilentModeHoldsTheWritesThatReadbackMakes() {
+        var silent = mock(SilentModeQuery.class);
+        when(silent.isSilentModeEngaged()).thenReturn(true);
+        when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
+        when(notes.kind()).thenReturn(IntegrationKind.GITHUB);
+        when(transactions.claim(eq(1L), eq(id), eq(owner)))
+                .thenReturn(new FeedbackSendTransactions.Attempt(
+                        feedback,
+                        FeedbackSendAction.POST,
+                        List.of(copy(FeedbackCopyState.WRITE_STARTED), note(FeedbackCopyState.WRITE_STARTED)),
+                        1));
+        var sender = new FeedbackSendService(
+                transactions,
+                targets,
+                List.of(writer),
+                List.of(notes),
+                mock(PostedCopyCorrector.class),
+                new FeedbackReadbackMeters(meters),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class),
+                gate,
+                silent,
+                Clock.systemUTC());
+
+        assertThat(sender.send(owner)).isInstanceOf(ActionResult.Defer.class);
+        verify(notes, never()).findPosted(any(), any());
+        verify(transactions, never()).finish(anyLong(), any(), any());
+    }
+
+    /**
+     * The notifying write starts only with the write margin of the lease left, so it ends before a reclaim can read
+     * the package back and decide it absent while the request may still land.
+     */
+    @Test
+    void shouldNotSendTheNotifyingWriteOnceTheLeaseHasLessThanTheWriteMarginLeft() {
+        var margin = new AtomicInteger(1);
+        var leased = new ActionAttempt(
+                owner.id(),
+                1L,
+                ActionKind.DELIVER_FEEDBACK,
+                owner.idempotencyKey(),
+                JsonNodeFactory.instance.objectNode(),
+                1,
+                1,
+                false,
+                null,
+                () -> margin.getAndDecrement() > 0,
+                null);
+        when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
+        when(transactions.claim(eq(1L), eq(id), eq(leased)))
+                .thenReturn(new FeedbackSendTransactions.Attempt(
+                        feedback,
+                        FeedbackSendAction.POST,
+                        List.of(copy(FeedbackCopyState.PLANNED), note(FeedbackCopyState.PLANNED)),
+                        1));
+        when(transactions.fencePackage(anyLong(), any(), eq(leased), anyList(), anyList()))
+                .thenReturn(true);
+        var steps = new ArrayList<String>();
+        var staging = new StagingWriter(steps);
+        var sender = new FeedbackSendService(
+                transactions,
+                targets,
+                List.of(writer),
+                List.of(staging),
+                mock(PostedCopyCorrector.class),
+                new FeedbackReadbackMeters(meters),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class),
+                gate,
+                mock(SilentModeQuery.class),
+                Clock.systemUTC());
+
+        sender.send(leased);
+
+        assertThat(steps).containsExactly("fenced", "staged", "staged", "refused before notifying");
+    }
+
+    /** Stages each note behind a staging check, then sends one notifying write behind the notifying check. */
+    private static final class StagingWriter implements LineNoteWriter {
+        private final List<String> steps;
+
+        StagingWriter(List<String> steps) {
+            this.steps = steps;
+        }
+
+        @Override
+        public IntegrationKind kind() {
+            return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public LiveHead liveHead(FeedbackTarget target) {
+            return LiveHead.CURRENT;
+        }
+
+        @Override
+        public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
+            if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
+            steps.add("fenced");
+            for (int note = 0; note < 2; note++) {
+                if (!fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                steps.add("staged");
+            }
+            if (!fence.beforeNotify()) {
+                steps.add("refused before notifying");
+                return publication.notSent();
+            }
+            steps.add("notified");
+            return publication.attempted();
+        }
+
+        @Override
+        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+            return null;
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     @Test
@@ -321,8 +465,8 @@ class FeedbackSendServiceTest {
         sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
         verify(notes, never()).liveHead(any());
-        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(noteId));
-        verify(transactions, never()).absent(eq(1L), eq(id), eq(owner), eq(copyId));
+        verify(transactions).absent(eq(1L), eq(id), eq(owner), eq(noteId), any());
+        verify(transactions, never()).absent(eq(1L), eq(id), eq(owner), eq(copyId), any());
         assertThat(readbacks("absent")).isEqualTo(1);
         assertThat(readbacks("found") + readbacks("unknown")).isZero();
     }
@@ -348,7 +492,7 @@ class FeedbackSendServiceTest {
         sender.send(owner);
         verify(notes, never()).postPackage(any(), any(), any());
         verify(transactions, never()).receipt(anyLong(), any(), eq(owner), anyList());
-        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any());
+        verify(transactions, never()).absent(anyLong(), any(), eq(owner), any(), any());
         assertThat(readbacks("unknown")).isEqualTo(2);
     }
 

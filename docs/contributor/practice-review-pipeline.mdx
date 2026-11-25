@@ -879,9 +879,8 @@ No adapter falls back to separate public discussions after a refused position.
 
 A send that stops before its submission deletes its drafts, for example when the check before the final write refuses the piece.
 An interrupted attempt adopts only drafts with this package's exact words, markers and positions.
-After its own fence admits it, a later package deletes a Hephaestus draft that no send will submit.
-The fence proves that no other write on the work is unresolved.
-A draft that a person wrote prevents submission and is left untouched.
+A send deletes only its own drafts: a draft whose closing markers are one of its copies' marker and delivery tag.
+Any other draft prevents submission and is left untouched, also a draft that a person wrote under the same account.
 
 Each copy keeps its copy marker.
 After an uncertain submission, recovery reads the provider copies.
@@ -1054,8 +1053,8 @@ Readback records found copies and proved absence without guessing.
 An admin can retry a proved absent copy after all current gates pass.
 Confirmed historical copies are never posted again.
 
-A copy that the gate refuses while its write is unresolved keeps the reason.
-If readback then proves the copy absent, the copy ends Withheld for that reason, not Failed.
+When the provider proves a started copy absent, the gate decides at that moment.
+If the gate refuses, the copy ends Withheld for that reason. Otherwise it ends Failed, and an admin can retry it.
 
 Readback asks one question: did this write land?
 A copy is found when a comment by Hephaestus, at the copy's place, ends with the copy's marker.
@@ -1065,9 +1064,16 @@ Readback does not compare words, so a change to the posted text or to the footer
 A copy is absent only when no comment carries its marker: no submitted review, review comment, or pull or merge request comment.
 A marker that a comment carries without matching leaves the copy unknown, never absent.
 Thus, a copy that v1.0.0-rc.1 posted in its own shape and left in doubt stays Unconfirmed until an admin acts.
+
 A pending review or a draft note is a private draft, so its markers prove nothing.
-Readback deletes the package's draft before it records a copy absent.
-Thus, a submission that is still in flight cannot land after the copy is recorded absent.
+Readback deletes the package's own draft, so a draft that a crash left never blocks a later package.
+While Silent Mode is engaged, a send whose write started waits, because that deletion is a write.
+
+A send records when it sends each write of its package: each private draft and the one notifying write.
+The notifying write starts only while the send's lease has its write margin left.
+A provider can still complete a request after its answer was lost.
+Thus, readback proves a copy absent only from a read that starts one hour after the package's latest write.
+Until then the send waits without spending an attempt. A request that lands late is found and delivered once.
 
 Current source version, scope, consent, feedback mode, delivery pause and approval are checked at egress.
 A work-state refusal does not erase the result.

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -38,6 +39,7 @@ public class FeedbackOwnCopyEditor {
     private final List<SummaryWriter> summaries;
     private final List<LineNoteWriter> notes;
     private final FeedbackSendTransactions transactions;
+    private final Clock clock;
 
     public void edit(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
         var row = attempt.feedback();
@@ -63,6 +65,7 @@ public class FeedbackOwnCopyEditor {
             if (prior.getExternalRef() == null || prior.getWriteMarker() == null || prior.getWriteKey() == null)
                 continue;
             boolean started = copy.getState() == FeedbackCopyState.WRITE_STARTED;
+            var readAt = clock.instant();
             var proof = reader.read(
                     target,
                     List.of(new CopyReadRequest(
@@ -77,7 +80,7 @@ public class FeedbackOwnCopyEditor {
             if (started) {
                 if (observed.status() == CopyReadback.Status.FOUND) confirmed(copy, prior, owner);
                 else if (observed.status() == CopyReadback.Status.GONE)
-                    transactions.absent(workspace, feedbackId, owner, copy.getId());
+                    transactions.absent(workspace, feedbackId, owner, copy.getId(), readAt);
                 // The old marker cannot prove whether an ambiguous edit reached the provider. Never write again.
                 continue;
             }
@@ -97,7 +100,7 @@ public class FeedbackOwnCopyEditor {
                 throw new IllegalArgumentException("A quiet edit must keep its original provider reference.");
             if (update.kind() == CopyUpdateKind.EDITED) confirmed(copy, prior, owner);
             else if (update.kind() == CopyUpdateKind.GONE || update.kind() == CopyUpdateKind.UNSUPPORTED)
-                transactions.absent(workspace, feedbackId, owner, copy.getId());
+                transactions.absent(workspace, feedbackId, owner, copy.getId(), clock.instant());
         }
     }
 

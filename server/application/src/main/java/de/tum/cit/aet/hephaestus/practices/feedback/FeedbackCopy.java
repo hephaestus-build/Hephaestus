@@ -103,6 +103,14 @@ public class FeedbackCopy {
     @Column(name = "write_started_at", nullable = true)
     private @Nullable Instant writeStartedAt;
 
+    /**
+     * When the latest provider write of this copy's package was sent: a staged draft or the notifying write. A request
+     * may still land after its answer was lost, so readback proves the copy absent only from a read that starts once
+     * {@code FeedbackSendTransactions#WRITE_SETTLED} passed.
+     */
+    @Column(name = "write_sent_at", nullable = true)
+    private @Nullable Instant writeSentAt;
+
     @Column(name = "write_key", nullable = true, columnDefinition = "TEXT")
     private @Nullable String writeKey;
 

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyReadback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
@@ -102,6 +103,38 @@ class FeedbackSendTransactionsTest {
                 null);
     }
 
+    /**
+     * The clock has passed the settle time, but the provider read started before it: a write may have landed after
+     * that read, so its empty answer proves nothing.
+     */
+    @Test
+    void shouldNeverProveAbsenceFromAReadThatStartedBeforeTheWritesSettled() {
+        var sent = now.minus(FeedbackSendTransactions.WRITE_SETTLED).minusSeconds(60);
+        when(store.lock(1, id)).thenReturn(row);
+        when(copies.findByIdAndWorkspaceId(copyId, 1))
+                .thenReturn(Optional.of(FeedbackCopy.builder()
+                        .id(copyId)
+                        .feedbackId(id)
+                        .state(FeedbackCopyState.WRITE_STARTED)
+                        .writeSentAt(sent)
+                        .build()));
+        when(store.check(row, true))
+                .thenReturn(new FeedbackCheck(
+                        FeedbackCheckStage.EGRESS,
+                        true,
+                        null,
+                        now,
+                        new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
+
+        var early = sent.plus(FeedbackSendTransactions.WRITE_SETTLED).minusSeconds(1);
+        assertThat(transactions.absent(1, id, owner, copyId, early)).isFalse();
+        verify(copies, never()).recordAbsent(anyLong(), any(), any(), anyString());
+
+        var settled = sent.plus(FeedbackSendTransactions.WRITE_SETTLED);
+        assertThat(transactions.absent(1, id, owner, copyId, settled)).isTrue();
+        verify(copies).recordAbsent(anyLong(), any(), any(), anyString());
+    }
+
     @Test
     void shouldRefuseAnExpiredOwnerBeforeOpeningAnyFence() {
         assertThat(transactions.fence(1, id, expired, List.of(copyId), List.of()))
@@ -134,7 +167,14 @@ class FeedbackSendTransactionsTest {
         transactions.receipt(
                 1, id, owner, List.of(new CopyReceipt(copyId, CopyDisposition.FAILED, null, null, null, null)));
         verify(copies, never()).recordAbsent(anyLong(), any(), any(), anyString());
-        verify(copies).recordUnconfirmed(1, id, copyId, "Provider visibility is unknown.");
+        verify(copies)
+                .recordError(
+                        1,
+                        id,
+                        copyId,
+                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
+                        FeedbackCopyReadback.UNKNOWN.name(),
+                        "Provider visibility is unknown.");
     }
 
     @Test

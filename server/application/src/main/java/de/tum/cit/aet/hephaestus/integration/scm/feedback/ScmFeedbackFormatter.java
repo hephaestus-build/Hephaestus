@@ -210,13 +210,6 @@ public class ScmFeedbackFormatter {
     // such as one quoted in code, is not one of them.
     private static final Pattern MARKER_LINE = Pattern.compile("<!--[ ]*hephaestus[^<>]*-->");
 
-    /** Whether a body ends with a Hephaestus marker, so a Hephaestus writer wrote it, never a person. */
-    public static boolean marked(String body) {
-        List<String> lines = body.strip().lines().toList();
-        return lines.subList(markersFrom(lines), lines.size()).stream()
-                .anyMatch(line -> MARKER_LINE.matcher(line.strip()).matches());
-    }
-
     public static String withdrawnCopyBody(String original) {
         List<String> lines = original.stripTrailing().lines().toList();
         int first = lines.size();

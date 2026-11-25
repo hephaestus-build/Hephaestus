@@ -104,6 +104,27 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheDraftsForReadbackWhenAProxyAnswersADraftCreationWithAServerError() {
+        provider.gatewayTimeoutOnDraft(2);
+        var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(first.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(provider.bulkPublications()).isZero();
+    }
+
+    @Test
+    void shouldKeepTheDraftsForReadbackWhenADraftCreationLostItsAnswer() {
+        provider.loseDraftAnswer(2);
+        var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(first.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(provider.bulkPublications()).isZero();
+
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isZero();
+    }
+
+    @Test
     void shouldAdoptPartialDraftsThatCouldNotBeDeletedOnRetryWithoutPostingAPartialReview() {
         provider.failDraft(2);
         provider.failDelete(true);
@@ -173,20 +194,26 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDeleteStrandedHephaestusDraftsOnlyOnceTheFenceAdmitsTheNextPackage() {
+    void shouldLeaveAPersonsDraftThatQuotesTheMarkersWhenItDeletesTheLeftover() {
         provider.failDelete(true);
         writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
         provider.failDelete(false);
+        provider.personDraft("See this note:\n" + "<!-- hephaestus-feedback-copy:line -->\n"
+                + ScmFeedbackFormatter.deliveryTag("line") + "\nI disagree with it.");
 
-        writer.postPackage(TARGET, otherPublication(), (ids, done) -> false);
-        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isEqualTo(1);
+    }
 
-        var next = writer.postPackage(TARGET, otherPublication(), (ids, done) -> true);
-        assertThat(next.receipts()).hasSize(3).allMatch(CopyReceipt::acknowledged);
-        assertThat(provider.bulkPublications()).isEqualTo(1);
-        assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
-                .hasSize(3)
-                .allSatisfy(note -> assertThat(note.body()).contains("hephaestus-feedback-copy:other-"));
+    @Test
+    void shouldReadEveryDraftOnceWhenGitLabAnswersMoreThanOnePageOfThem() {
+        provider.failDelete(true);
+        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        provider.failDelete(false);
+        for (int draft = 0; draft < 120; draft++) provider.personDraft("A person's draft " + draft);
+
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isEqualTo(120);
     }
 
     @Test

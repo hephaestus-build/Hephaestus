@@ -23,8 +23,10 @@ public class FeedbackCopyCleanupCustody {
                 .toList()) {
             if (feedback.lockByIdAndWorkspaceId(id, workspaceId).isEmpty()) continue;
             for (var copy : copies.lockByFeedbackId(workspaceId, id)) {
-                boolean absent = copy.getState() == FeedbackCopyState.FAILED
-                        && copy.getReadback() == FeedbackCopyReadback.ABSENT;
+                // A copy that readback proved absent needs no cleanup, whether it failed or was then withheld.
+                boolean absent =
+                        (copy.getState() == FeedbackCopyState.FAILED || copy.getState() == FeedbackCopyState.WITHHELD)
+                                && copy.getReadback() == FeedbackCopyReadback.ABSENT;
                 if (!absent
                         && copy.getPostedAt() == null
                         && (copy.getWriteStartedAt() != null || copy.getState() == FeedbackCopyState.WRITE_STARTED))

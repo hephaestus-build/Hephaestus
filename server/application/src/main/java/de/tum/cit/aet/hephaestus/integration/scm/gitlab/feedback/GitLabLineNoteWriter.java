@@ -151,8 +151,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         long workspace = target.item().workspaceId();
         if (gitLabProvider.isRateLimitCritical(workspace)) return publication.notSent();
         boolean fenced = false;
-        boolean submitting = false;
-        Staging staging = null;
         try {
             var footer = formatter.footer(target.item());
             var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
@@ -189,17 +187,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 expected.put(note.writeKey(), fields);
             }
             String api = GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr);
-            staging = new Staging(api, expected.keySet());
-            var drafts = ownDrafts(workspace, api, scan.author(), expected);
+            var staging = Staging.of(api, publication);
+            var pending = ownDrafts(workspace, api, scan.author(), expected);
             egressGuard.requireDeliveryAllowed("gitlab.publish-feedback-package");
             // A refused fence started nothing: the copies stay as they were.
             if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
             fenced = true;
-            // Bulk publication would publish a Hephaestus draft that no send will publish: the admitted fence proves
-            // that no other write on this work is unresolved.
-            for (long stale : drafts.stale()) if (!delete(workspace, api, stale)) return publication.attempted();
             for (var entry : expected.entrySet()) {
-                if (drafts.adopted().contains(entry.getKey())) continue;
+                if (pending.contains(entry.getKey())) continue;
                 if (gitLabProvider.isRateLimitCritical(workspace)) return publication.attempted();
                 if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, staging, publication);
                 var created = http.exchange(
@@ -207,16 +202,17 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                         HttpMethod.POST,
                         http.authorized(workspace, URI.create(api + "/draft_notes")),
                         entry.getValue());
-                if (created.status() < 200 || created.status() >= 300)
-                    return discarded(workspace, staging, publication);
+                int status = created.status();
+                // Only a client error proves GitLab refused the draft. A server error or a timeout, such as a proxy's
+                // 504, can answer while GitLab still saves it: that draft is settled by a later readback.
+                if (status >= 400 && status < 500 && status != 408) return discarded(workspace, staging, publication);
+                if (status < 200 || status >= 300) return publication.attempted();
             }
             // Bulk publish includes every draft of this token. Refuse drafts outside this exact checked package.
-            var checked = ownDrafts(workspace, api, scan.author(), expected);
-            if (!checked.stale().isEmpty() || checked.adopted().size() != expected.size())
+            if (ownDrafts(workspace, api, scan.author(), expected).size() != expected.size())
                 return publication.attempted();
-            if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, staging, publication);
             egressGuard.requireDeliveryAllowed("gitlab.submit-feedback-package");
-            submitting = true;
+            if (!fence.beforeNotify()) return discarded(workspace, staging, publication);
             var summary = publication.summary();
             var fields = summary == null
                     ? Map.<String, Object>of()
@@ -234,43 +230,52 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         } catch (OutboundEgressSuppressedException suppressed) {
             throw suppressed;
         } catch (RuntimeException unknown) {
-            if (!fenced) return publication.notSent();
-            return submitting || staging == null ? publication.attempted() : discarded(workspace, staging, publication);
+            // A request without an answer, a draft creation too, may still land: only a later readback settles it.
+            return fenced ? publication.attempted() : publication.notSent();
         }
     }
 
-    /** Where a package stages its drafts: the merge request and the package's delivery keys. */
-    private record Staging(String api, Set<String> keys) {}
+    /** Where a package stages its drafts: the merge request, and each note's write marker by its delivery key. */
+    private record Staging(String api, Map<String, String> markers) {
+        static Staging of(String api, OnWorkPackage publication) {
+            return new Staging(
+                    api,
+                    publication.notes().stream().collect(Collectors.toMap(LineNote::writeKey, LineNote::writeMarker)));
+        }
+    }
 
-    /** The token's drafts: those of this package with exact bodies and positions, and stale Hephaestus drafts. */
-    private record Drafts(Set<String> adopted, List<Long> stale) {}
-
-    /**
-     * Reads all this token's drafts. It adopts only exact bodies and positions from this package. Any other draft that
-     * a Hephaestus writer wrote is stale; a draft that a person wrote prevents bulk publication.
-     */
-    private Drafts ownDrafts(long workspace, String api, long author, Map<String, Map<String, Object>> expected) {
+    /** Reads all this token's drafts, adopting only exact bodies and positions from this package. */
+    private Set<String> ownDrafts(long workspace, String api, long author, Map<String, Map<String, Object>> expected) {
         var found = new HashSet<String>();
-        var stale = new ArrayList<Long>();
-        for (var draft : pages(workspace, api + "/draft_notes")) {
+        for (var draft : drafts(workspace, api)) {
             String body = draft.path("note").asString("");
             String key = ScmFeedbackFormatter.lastDeliveryKey(body);
-            if (key == null
+            var fields = key == null ? null : expected.get(key);
+            if (fields == null
+                    || !(fields.get("note") instanceof String note)
+                    || !ScmFeedbackFormatter.sameCopy(body, note)
+                    || !found.add(key)
                     || !draft.path("author_id").isIntegralNumber()
                     || draft.path("author_id").longValue() != author
                     || !draft.path("id").isIntegralNumber()
                     || draft.path("id").longValue() <= 0
-                    || !draft.path("discussion_id").isNull())
-                throw new FeedbackDeliveryException("Unrelated draft notes prevent bulk publication");
-            var fields = expected.get(key);
-            if (fields != null
-                    && fields.get("note") instanceof String note
-                    && ScmFeedbackFormatter.sameCopy(body, note)
-                    && GitLabDiscussionNotes.sameDraftPosition(draft.path("position"), fields.get("position"))
-                    && found.add(key)) continue;
-            stale.add(draft.path("id").longValue());
+                    || !draft.path("discussion_id").isNull()
+                    || !GitLabDiscussionNotes.sameDraftPosition(draft.path("position"), fields.get("position")))
+                throw new FeedbackDeliveryException("Unrelated or changed draft notes prevent bulk publication");
         }
-        return new Drafts(Set.copyOf(found), List.copyOf(stale));
+        return found;
+    }
+
+    /** The token's drafts on the merge request. GitLab answers the whole list, unpaginated. */
+    private List<JsonNode> drafts(long workspace, String api) {
+        var response = http.exchange(
+                workspace, HttpMethod.GET, http.authorized(workspace, URI.create(api + "/draft_notes")), null);
+        var rows = response.json();
+        if (response.status() != 200 || rows == null || !rows.isArray())
+            throw new FeedbackDeliveryException("GitLab pending notes were not read completely");
+        var result = new ArrayList<JsonNode>();
+        rows.forEach(result::add);
+        return List.copyOf(result);
     }
 
     /**
@@ -282,16 +287,20 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     /**
-     * Deletes the token's drafts that carry one of the package's delivery keys. GitLab lists and deletes only the
-     * token's own drafts.
+     * Deletes the token's drafts of this package: a draft whose closing markers are one of its notes' write marker and
+     * delivery tag. GitLab lists and deletes only the token's own drafts; one that a person wrote is left alone.
      */
     private boolean discard(long workspace, Staging staging) {
+        if (staging.markers().isEmpty()) return true;
         try {
-            for (var draft : pages(workspace, staging.api() + "/draft_notes")) {
-                String key =
-                        ScmFeedbackFormatter.lastDeliveryKey(draft.path("note").asString(""));
-                if (key != null
-                        && staging.keys().contains(key)
+            for (var draft : drafts(workspace, staging.api())) {
+                String body = draft.path("note").asString("");
+                String key = ScmFeedbackFormatter.lastDeliveryKey(body);
+                if (key == null) continue;
+                String marker = staging.markers().get(key);
+                if (marker != null
+                        && ScmFeedbackFormatter.carries(body, marker)
+                        && ScmFeedbackFormatter.carries(body, ScmFeedbackFormatter.deliveryTag(key))
                         && draft.path("id").isIntegralNumber()
                         && !delete(workspace, staging.api(), draft.path("id").longValue())) return false;
             }
@@ -371,13 +380,12 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         if (gitLabProvider.isRateLimitCritical(workspace)) return null;
         try {
             var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
-            // The package's drafts are private and nothing publishes them now. They are deleted before the notes are
-            // read: a publication still in flight then either lands before that read, which finds it, or has no
-            // drafts left to publish. Absence read before the deletion could miss a publication that lands between.
-            var staging = new Staging(
-                    GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr),
-                    publication.notes().stream().map(LineNote::writeKey).collect(Collectors.toSet()));
-            if (!staging.keys().isEmpty() && !discard(workspace, staging)) return null;
+            // The package's drafts are private: readback deletes them, so a draft that a stop or a crash left never
+            // blocks a later package. It deletes them before it reads the notes, so it reads a publication that
+            // consumed them instead of missing it.
+            var staging = Staging.of(
+                    GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr), publication);
+            if (!discard(workspace, staging)) return null;
             return packageReceipts(workspace, mr, publication, indexCopies(workspace, mr, publication.notes(), target));
         } catch (RuntimeException unknown) {
             return null;

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -28,6 +29,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -45,6 +47,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackSendTransactions {
     /** How long an unresolved send waits before it reads the provider back again. */
     private static final Duration REREAD = Duration.ofSeconds(30);
+
+    /**
+     * How long after a package's latest provider write was sent readback cannot prove its copies absent. A provider
+     * can complete a request long after its answer was lost: GitLab creates a draft or inserts a bulk publication's
+     * summary on its own, and a database lock can hold either. Its request and statement limits end any request well
+     * within this time.
+     */
+    public static final Duration WRITE_SETTLED = Duration.ofHours(1);
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -97,6 +107,16 @@ public class FeedbackSendTransactions {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fence(
+            long workspaceId,
+            UUID feedbackId,
+            ActionAttempt owner,
+            List<UUID> attempting,
+            List<CopyReceipt> completed) {
+        return admit(workspaceId, feedbackId, owner, attempting, completed);
+    }
+
+    /** {@link #fence}'s decision, in the caller's transaction. */
+    private boolean admit(
             long workspaceId,
             UUID feedbackId,
             ActionAttempt owner,
@@ -174,6 +194,7 @@ public class FeedbackSendTransactions {
     private void record(Feedback row, List<CopyReceipt> receipts) {
         long workspaceId = row.getWorkspaceId();
         UUID feedbackId = row.getId();
+        var absence = new Absence(row);
         for (CopyReceipt receipt : receipts) {
             var copy = copies.findByIdAndWorkspaceId(receipt.copyId(), workspaceId)
                     .filter(c -> c.getFeedbackId().equals(feedbackId))
@@ -208,8 +229,16 @@ public class FeedbackSendTransactions {
                         kind.name(),
                         receipt.threadRef());
             } else if (Boolean.FALSE.equals(receipt.writeMayHaveStarted())) {
-                copies.recordAbsent(workspaceId, feedbackId, copy.getId(), "Provider proved the copy was not created.");
-            } else copies.recordUnconfirmed(workspaceId, feedbackId, copy.getId(), "Provider visibility is unknown.");
+                // The writer proved it within its attempt: every request it sent was answered.
+                absence.settle(copy.getId(), "Provider proved the copy was not created.");
+            } else
+                copies.recordError(
+                        workspaceId,
+                        feedbackId,
+                        copy.getId(),
+                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
+                        FeedbackCopyReadback.UNKNOWN.name(),
+                        "Provider visibility is unknown.");
         }
         if (!receipts.isEmpty()
                 && row.getComposition().hasNonNull("editOf")
@@ -233,11 +262,72 @@ public class FeedbackSendTransactions {
         }
     }
 
+    /**
+     * The fence of each provider write of a staged package: {@link #fence}, and the record that the write is sent now.
+     * From then on readback proves a copy absent only from a read that starts once {@link #WRITE_SETTLED} passed.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void absent(long workspaceId, UUID feedbackId, ActionAttempt owner, UUID copyId) {
+    public boolean fencePackage(
+            long workspaceId,
+            UUID feedbackId,
+            ActionAttempt owner,
+            List<UUID> attempting,
+            List<CopyReceipt> completed) {
+        if (!admit(workspaceId, feedbackId, owner, attempting, completed)) return false;
+        copies.recordWriteSent(workspaceId, feedbackId, clock.instant());
+        return true;
+    }
+
+    /**
+     * Before a package is read back: a started copy with no recorded send time had its write sent by an earlier
+     * release, at a time nobody recorded. It counts as sent now, so readback waits a full {@link #WRITE_SETTLED}.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordUnrecordedWrites(long workspaceId, UUID feedbackId, ActionAttempt owner) {
         store.lock(workspaceId, feedbackId);
-        if (owns(owner))
-            copies.recordAbsent(workspaceId, feedbackId, copyId, "Provider readback proved the copy is absent.");
+        if (owns(owner)) copies.recordUnrecordedWriteSent(workspaceId, feedbackId, clock.instant());
+    }
+
+    /**
+     * Settles a copy that a provider read starting at {@code readAt} found absent. Returns false while a write of its
+     * package may still land after that read: the copy stays unresolved, and readback looks again later.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean absent(long workspaceId, UUID feedbackId, ActionAttempt owner, UUID copyId, Instant readAt) {
+        var row = store.lock(workspaceId, feedbackId);
+        if (!owns(owner)) return true;
+        var copy = copies.findByIdAndWorkspaceId(copyId, workspaceId)
+                .filter(c -> c.getFeedbackId().equals(feedbackId))
+                .orElseThrow();
+        var sent = copy.getWriteSentAt();
+        if (sent != null && readAt.isBefore(sent.plus(WRITE_SETTLED))) return false;
+        new Absence(row).settle(copy.getId(), "Provider readback proved the copy is absent.");
+        return true;
+    }
+
+    /**
+     * Settles started copies that the provider proved were never created. The gate decides once, when the absence is
+     * known: a piece it refuses now ends withheld for that reason, such as a check before the final write that refused
+     * after staging; any other copy failed and can be retried.
+     */
+    private final class Absence {
+        private final Feedback row;
+        private @Nullable FeedbackCheck check;
+
+        Absence(Feedback row) {
+            this.row = row;
+        }
+
+        void settle(UUID copyId, String error) {
+            if (check == null) check = store.check(row, true);
+            if (check.allowed()) copies.recordAbsent(row.getWorkspaceId(), row.getId(), copyId, error);
+            else
+                copies.withholdAbsent(
+                        row.getWorkspaceId(),
+                        row.getId(),
+                        copyId,
+                        Objects.requireNonNull(check.reason()).name());
+        }
     }
 
     /**
@@ -329,8 +419,13 @@ public class FeedbackSendTransactions {
         copies.failUnstarted(workspaceId, feedbackId);
         for (var copy : copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId))
             if (copy.getState() == FeedbackCopyState.WRITE_STARTED)
-                copies.recordUnconfirmed(
-                        workspaceId, feedbackId, copy.getId(), "Provider call did not produce a confirmed receipt.");
+                copies.recordError(
+                        workspaceId,
+                        feedbackId,
+                        copy.getId(),
+                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
+                        FeedbackCopyReadback.UNKNOWN.name(),
+                        "Provider call did not produce a confirmed receipt.");
     }
 
     private boolean owns(ActionAttempt owner) {

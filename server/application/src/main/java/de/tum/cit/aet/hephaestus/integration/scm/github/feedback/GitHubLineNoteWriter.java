@@ -138,9 +138,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             // A refused fence started nothing: the copies stay as they were.
             if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
             fenced = true;
-            // GitHub keeps one pending review per author. A Hephaestus draft that no send will submit would block
-            // this package: the admitted fence proves that no other write on this work is unresolved.
-            if (reviews.stale() != null && !discard(workspace, reviews.stale())) return publication.notSent();
             String pending = reviews.pending();
             staged = pending;
             if (pending == null) {
@@ -194,8 +191,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         var copy = complete.get(note.writeKey());
                         return copy == null || !copy.verified();
                     })) return publication.attempted();
-            if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, pending, publication);
             egressGuard.requireDeliveryAllowed("github.submit-feedback-package");
+            if (!fence.beforeNotify()) return discarded(workspace, pending, publication);
             submitting = true;
             execute(workspace, "SubmitFeedbackReview", Map.of("reviewId", pending));
             var found = findPosted(target, publication);
@@ -242,8 +239,9 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         publication, review.submitted(), indexCopies(workspace, pr, publication.notes(), commit));
             // No submitted review holds the package. A copy is absent only if no submitted review carries its marker.
             // A marker that is there but did not match leaves the copy unknown, never absent. The threads of submitted
-            // reviews are their comments. The package's pending review is a private draft that nothing submits now:
-            // absence holds only once it is deleted, so a submission still in flight can never land after it.
+            // reviews are their comments. The package's pending review is a private draft: readback deletes it, so a
+            // draft that a stop or a crash left never blocks a later package. GitHub deletes only a pending review, so
+            // a submission that landed first makes the deletion fail, and the copies stay unknown.
             if (!review.complete()) return null;
             if (review.pending() != null && !discard(workspace, review.pending())) return null;
             var seen = review.seen();
@@ -278,7 +276,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         String after = null;
         String pending = null;
         int pendingComments = 0;
-        String stale = null;
         SummaryHandle submitted = null;
         for (int page = 0; page < MAX_THREAD_PAGES; page++) {
             var variables = new HashMap<String, Object>();
@@ -307,11 +304,9 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                 boolean same = ScmFeedbackFormatter.carries(body, marker)
                         && review.get("commit") instanceof Map<?, ?> revision
                         && commit.equals(revision.get("oid"));
-                if (state.equals("PENDING") && !same) {
-                    if (stale != null || !staged(body, review.get("comments"))) return ReviewLookup.CONFLICT;
-                    stale = id;
-                } else if (state.equals("PENDING")) {
-                    if (pending != null
+                if (state.equals("PENDING")) {
+                    if (!same
+                            || pending != null
                             || !(review.get("comments") instanceof Map<?, ?> comments)
                             || !(comments.get("nodes") instanceof List<?> entries)
                             || !(comments.get("pageInfo") instanceof Map<?, ?> pageInfo)
@@ -327,16 +322,16 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                             .map(entry -> ((Map<?, ?>) entry).get("body"))
                                             .distinct()
                                             .count()
-                                    != entries.size()) return ReviewLookup.CONFLICT;
+                                    != entries.size()) return new ReviewLookup(null, 0, null, true, Set.of(), false);
                     pending = id;
                     pendingComments = entries.size();
                 } else if (same) {
-                    if (submitted != null) return ReviewLookup.CONFLICT;
+                    if (submitted != null) return new ReviewLookup(null, 0, null, true, Set.of(), false);
                     submitted = new SummaryHandle(id, review.get("url") instanceof String url ? url : null);
-                } else if (body.contains(marker)) return ReviewLookup.CONFLICT;
+                } else if (body.contains(marker)) return new ReviewLookup(null, 0, null, true, Set.of(), false);
             }
             if (Boolean.FALSE.equals(info.get("hasNextPage")))
-                return new ReviewLookup(pending, pendingComments, stale, submitted, false, Set.copyOf(seen), complete);
+                return new ReviewLookup(pending, pendingComments, submitted, false, Set.copyOf(seen), complete);
             if (!Boolean.TRUE.equals(info.get("hasNextPage"))
                     || !(info.get("endCursor") instanceof String next)
                     || next.isBlank()
@@ -365,37 +360,17 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     /**
-     * {@code pendingComments} counts the pending review's own comments, each a distinct expected note. {@code stale}
-     * is the viewer's pending review that another package staged. {@code seen} holds the package's markers that a
-     * submitted review or its comments carry; {@code complete} says whether every such comment was read.
+     * {@code pendingComments} counts the pending review's own comments, each a distinct expected note. {@code seen}
+     * holds the package's markers that a submitted review or its comments carry; {@code complete} says whether every
+     * such comment was read.
      */
     private record ReviewLookup(
             @Nullable String pending,
             int pendingComments,
-            @Nullable String stale,
             @Nullable SummaryHandle submitted,
             boolean conflict,
             Set<String> seen,
-            boolean complete) {
-        static final ReviewLookup CONFLICT = new ReviewLookup(null, 0, null, null, true, Set.of(), false);
-    }
-
-    /**
-     * Whether a pending review of the viewer is a Hephaestus draft: its body and every comment end with Hephaestus
-     * markers. A person's draft, even under the same account, is never deleted.
-     */
-    private static boolean staged(String body, @Nullable Object comments) {
-        return ScmFeedbackFormatter.marked(body)
-                && comments instanceof Map<?, ?> connection
-                && connection.get("nodes") instanceof List<?> entries
-                && connection.get("pageInfo") instanceof Map<?, ?> pageInfo
-                && Boolean.FALSE.equals(pageInfo.get("hasNextPage"))
-                && entries.stream()
-                        .allMatch(entry -> entry instanceof Map<?, ?> comment
-                                && Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                                && comment.get("body") instanceof String posted
-                                && ScmFeedbackFormatter.lastDeliveryKey(posted) != null);
-    }
+            boolean complete) {}
 
     private static boolean watch(Map<?, ?> review, String body, Set<String> watched, Set<String> seen) {
         watched.stream().filter(body::contains).forEach(seen::add);

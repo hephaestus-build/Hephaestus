@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
@@ -66,6 +67,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -182,7 +184,9 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),
                 mock(FeedbackOwnCopyEditor.class),
-                gate));
+                gate,
+                mock(SilentModeQuery.class),
+                Clock.systemUTC()));
     }
 
     protected Sender sender(FeedbackSendService service) {
@@ -296,6 +300,17 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     protected void finishSend(UUID id, ActionAttempt owner, boolean exhausted) {
         if (exhausted) jdbc.update("UPDATE agent_action SET attempts = max_attempts WHERE id = ?", owner.id());
         ActionTestSupport.record(context, owner, transactions.finish(workspace.getId(), id, owner));
+    }
+
+    /**
+     * Moves the feedback's package writes back past {@code WRITE_SETTLED}, as if no request of them could land any
+     * more, so readback may prove its copies absent.
+     */
+    protected void settledWrites() {
+        jdbc.update(
+                "UPDATE feedback_copy SET write_sent_at = write_sent_at - interval '2 hours'"
+                        + " WHERE feedback_id = ? AND write_sent_at IS NOT NULL",
+                feedbackId);
     }
 
     /** Ends the lease of the feedback's running send, as if its process stopped. */
