@@ -132,6 +132,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.review.feedbackmode.FeedbackModeReviewIntegrationTest", "review-feedbackmodereview"),
             assignment("practices.scan.ScanReportIntegrationTest", "review-scanreport"),
             assignment("observability.ScrapeContractIntegrationTest", "scrape-contract"),
+            assignment("performance.SignedInApiReadCostIntegrationTest", "signed-in-read-cost"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.AbstractProductFeedbackFilingIntegrationTest", "product-feedback-github"),
@@ -212,6 +213,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "practice-script-live",
                     "worker role with the real LLM proxy and mocked Kubernetes orchestration, calling live models"),
             Map.entry("real-auth", "real OAuth and authentication wiring without test security"),
+            Map.entry(
+                    "signed-in-read-cost",
+                    "real cookie authentication over seeded small and large workspaces, counting the SQL of each signed-in read"),
             Map.entry(
                     "test-instance-assurance",
                     "explicit operator-disabled assurance with real signed stale browser sessions, native role and CSRF enforcement, and saved workspace policies"),
@@ -374,6 +378,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "notification.RoleChangeEmailIntegrationTest",
             "notification.email.EmailAdminControllerIntegrationTest",
             "observability.ScrapeContractIntegrationTest",
+            "performance.SignedInApiReadCostIntegrationTest",
             "practices.research.ResearchDisclosureControllerIntegrationTest",
             "practices.review.DisabledIntegrationHistoryIntegrationTest",
             "practices.review.ScmEventReviewIntegrationTest$QuietWindow",

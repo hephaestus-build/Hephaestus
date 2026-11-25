@@ -32,8 +32,9 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * Run with HEPHAESTUS_API_READ_COST=true and :application:integrationTest --tests
- * '*SignedInApiReadCostIntegrationTest'. The test report's stdout contains one row per route and fixture size.
+ * The guards run in the integration tier. The sweep runs with HEPHAESTUS_API_READ_COST=true and
+ * :application:integrationTest --tests '*SignedInApiReadCostIntegrationTest'. The test report's stdout contains one row
+ * per route and fixture size.
  */
 @Import({
     SignedInApiReadCostData.class,
@@ -43,7 +44,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     StubInstallationRepositoryEnumerator.class
 })
 @TestPropertySource(properties = "hephaestus.llm.display-currency=")
-@EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
 class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private WebTestClient defaultHttp;
@@ -54,14 +54,25 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private SignedInApiReadCostData data;
 
+    /** The workspace pages read every member's results, so a large workspace looks up a long list of reviews. */
     @Test
+    void shouldServeTheWorkspacePracticePagesInALargeWorkspace() {
+        var http = http();
+        var large = data.seed(400, 40);
+        for (var route : List.of(
+                new Route("getPracticeWorkspaceOverview", "/workspaces/{workspaceSlug}/practices/workspace-overview"),
+                new Route("getPracticeWorkspaceTiles", "/workspaces/{workspaceSlug}/practices/tiles?window=DAYS_30"))) {
+            assertThat(sample(http, route, large).status())
+                    .as(route.operation())
+                    .isEqualTo(200);
+        }
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
     void shouldMeasureSignedInGetRoutesAtBothWorkspaceSizes() throws IOException {
         var routes = routes();
-        var http = defaultHttp
-                .mutate()
-                .responseTimeout(Duration.ofMinutes(2))
-                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
-                .build();
+        var http = http();
         var small = data.seed(12, 6);
         var smallCosts = measure(http, "small", routes, small);
         // Separate workspaces keep first-read side effects and warm state from passing between fixture sizes.
@@ -69,6 +80,14 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
         var largeCosts = measure(http, "large", routes, large);
         assertThat(largeCosts.keySet()).isEqualTo(smallCosts.keySet());
         assertThat(largeCosts).isNotEmpty();
+    }
+
+    private WebTestClient http() {
+        return defaultHttp
+                .mutate()
+                .responseTimeout(Duration.ofMinutes(2))
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+                .build();
     }
 
     private Map<Route, Long> measure(
