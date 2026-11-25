@@ -648,8 +648,10 @@ class OwnerFunctionsDatabaseTest {
             assertThat(app.queryForList("""
                             SELECT id FROM public.mentoring_due_work(
                                 'COPY_RETENTION', 2592000, 1,
-                                (SELECT created_at FROM conversation_entry WHERE id = ?::uuid), ?::uuid, '{}', '{}', 10)
-                            """, UUID.class, ADA_COPY, ADA_COPY))
+                                (SELECT due_at FROM public.mentoring_due_work(
+                                    'COPY_RETENTION', 2592000, 1, NULL, NULL, '{}', '{}', 1)),
+                                ?::uuid, '{}', '{}', 10)
+                            """, UUID.class, ADA_COPY))
                     .as("the next page starts after the cursor")
                     .containsExactly(BO_COPY);
             assertThat(app.queryForList(
