@@ -351,6 +351,38 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isEmpty();
     }
 
+    @Test
+    void shouldChargeAnAttemptWithTheInputItsModelReadAnewAndNotItsCacheReads() {
+        var workspace = workspace("charged-input");
+        var review = UUID.randomUUID();
+        review(workspace, review);
+        var job = UUID.randomUUID();
+        // A long practice session over one cached opening: most of its prompt is cache reads.
+        var call = event(
+                workspace,
+                review,
+                job,
+                UsageSourceType.REVIEW_JOB,
+                0,
+                1,
+                4_117,
+                972,
+                0,
+                BigDecimal.ZERO,
+                UsagePricingState.NO_CHARGE);
+        call.setCacheReadTokens(233_792);
+        call.setCacheWriteTokens(145_600);
+        ledger.saveAndFlush(call);
+
+        var counted = ledger.countReviewCalls(workspace.getId(), job, 0);
+
+        assertThat(counted.getCalls()).isEqualTo(1);
+        assertThat(counted.getOutputTokens()).isEqualTo(972);
+        assertThat(counted.getInputTokens())
+                .as("uncached input and cache writes, without the cache reads")
+                .isEqualTo(4_117 + 145_600);
+    }
+
     private void review(Workspace workspace, UUID id) {
         long item = Objects.requireNonNull(jdbc.queryForObject(
                 "INSERT INTO item(workspace_id,kind,source_id,created_at) VALUES (?,'scm.pull_request',?,now()) RETURNING id",

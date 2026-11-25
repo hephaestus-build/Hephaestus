@@ -904,3 +904,13 @@ A change to it does not change the method of a pinned review or the comparabilit
 5. A conversation keeps Pi's own compaction, which bounds a long turn.
 
 A later ADR can propose clearing again with a measured A/B result.
+
+## Update — 2026-11-25: the input-token budget counts what the model reads anew
+
+**The input-token budget no longer counts cache reads.** A practice's model calls now charge their uncached input and their cache writes. The model proxy's bound on an attempt counts the same way.
+
+The reason is a production measurement. A practice session sends its whole transcript again on each call. So a count that includes cache reads grows with the square of the number of calls. A practice that needed more than five to nine calls on a large opening was stopped as `budget`. In one such session, 150k of its 383k counted tokens were new.
+
+Over 24 hours, 41 of 134 reviews of three practices failed this way. None of those failures was a practice that kept rereading.
+
+The budget still does what the 2026-11-14 update decided. A practice that rereads large files puts them into the prompt again as new tokens, and it spends the budget. The default stays 342000. Its basis, the 99th percentile on staging, counted cache reads too. Thus, the same number now allows more calls over a cached opening, and not more new reading.

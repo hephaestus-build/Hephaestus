@@ -4,6 +4,7 @@ import test from "node:test";
 import {
 	type AssistantMessage,
 	addAssistantUsage,
+	callChargedInputTokens,
 	extractUsageFromSession,
 	newUsageLedger,
 	type SessionMessage,
@@ -184,4 +185,20 @@ void test("a session that never ran reports zero rather than throwing", () => {
 	assert.equal(reported.totalCalls, 0);
 	assert.equal(reported.inputTokens, 0);
 	assert.equal(reported.model, null);
+});
+
+void test("a call charges its practice's input budget with what the model read anew, not its cache reads", () => {
+	// A practice session of nine calls over one cached opening: 4,117 uncached, 145,600 written, 233,792 read again.
+	const { usage } = assistant("a", { input: 4117, cacheWrite: 145_600, cacheRead: 233_792 });
+
+	assert.equal(callChargedInputTokens(usage), 149_717);
+	assert.equal(callChargedInputTokens(undefined), 0);
+});
+
+void test("a practice that keeps rereading large files still spends its input budget", () => {
+	// Each reread puts the file into the prompt again as new tokens, which the model must read anew.
+	const { usage } = assistant("b", { input: 2000, cacheWrite: 40_000, cacheRead: 30_000 });
+	const tenRereads = 10 * callChargedInputTokens(usage);
+
+	assert.ok(tenRereads >= 342_000);
 });
