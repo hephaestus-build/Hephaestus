@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,6 +46,13 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @TestPropertySource(properties = "hephaestus.llm.display-currency=")
 @EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
 class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
+    /**
+     * The workspace pages read every member's results, so the large workspace looks up a long list of reviews. A route
+     * that fails at both sizes would leave the key sets equal, so these must answer.
+     */
+    private static final Set<String> LARGE_WORKSPACE_PAGES =
+            Set.of("getPracticeWorkspaceOverview", "getPracticeWorkspaceTiles");
+
     @Autowired
     private WebTestClient defaultHttp;
 
@@ -80,6 +88,9 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
                 continue;
             }
             var first = sample(http, route, fixture);
+            if (scale.equals("large") && LARGE_WORKSPACE_PAGES.contains(route.operation())) {
+                assertThat(first.status()).as(route.operation()).isEqualTo(200);
+            }
             if (first.status() < 200 || first.status() >= 300) {
                 System.out.printf(
                         "READ_COST_STATUS\t%s\t%s\t%d\t%d%n",

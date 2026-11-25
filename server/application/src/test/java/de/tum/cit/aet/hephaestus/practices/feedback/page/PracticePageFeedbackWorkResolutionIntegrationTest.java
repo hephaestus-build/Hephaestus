@@ -16,10 +16,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PracticePageFeedbackWorkResolutionIntegrationTest extends AbstractFeedbackIntegrationTest {
 
     @Test
-    void shouldNotTreatMissingLaterProofAsCleanWork() {
+    void shouldOfferNoResultRecordedAtTheCutoff() {
         var parent = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, null);
         var result = result();
         bind(parent, result);
+        occasionedByTheWork();
+        assertThat(later(AT.minusSeconds(1), AT.plusSeconds(3600), result.getPracticeId()))
+                .extracting(Result::getId)
+                .containsExactly(result.getId());
         assertThat(later(AT, AT.plusSeconds(3600), result.getPracticeId())).isEmpty();
     }
 
