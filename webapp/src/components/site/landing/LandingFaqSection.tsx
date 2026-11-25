@@ -7,6 +7,11 @@ import {
 
 const faqItems = [
 	{
+		key: "ai-mentor",
+		q: "What does an AI mentor do?",
+		a: "It gives one part of mentoring: feedback on how you apply engineering practices in your real work. Hephaestus checks your work against the practices your team chose. When your work gives it grounds, it says what to improve and why, and names a next step. When it does not, it stays silent or says that it could not check. It is software, not a person. It adds to your reviewers and mentors, and it can be wrong.",
+	},
+	{
 		key: "practice-feedback",
 		q: "What is practice feedback?",
 		a: "It is feedback on how developers apply engineering practices. A practice is a defined way of working. Examples are scoping a change, writing an issue someone can act on, answering a reviewer, testing, handling failure, and changing dependencies deliberately. Feedback can cite code when a practice concerns it, such as testing or handling failure. A curated set of practices ships with Hephaestus. Each piece of feedback names the practice it came from and points back to what it saw.",
@@ -20,6 +25,11 @@ const faqItems = [
 		key: "feedback-location",
 		q: "Where does feedback appear?",
 		a: "It can appear on the work itself, on each developer’s private practice page, or in your next conversation with Hephaestus. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+	},
+	{
+		key: "who-sees-feedback",
+		q: "Who sees my feedback?",
+		a: "Your feedback has no score, grade or rank. Workspace admins see practice results, each linked to the work it is about, and that feedback on your Practice profile exists, not what it says. They see no names unless a workspace owner turns that on, and each change is recorded. No workspace admin page shows your conversation with Hephaestus. Feedback on the work is visible to everyone who can see that work, like any review comment.",
 	},
 	{
 		key: "conversation",

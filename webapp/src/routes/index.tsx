@@ -12,7 +12,7 @@ import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 import { NoWorkspaceContainer } from "./-NoWorkspaceContainer";
 
 export const Route = createFileRoute("/")({
-	head: pageHead("Open-source practice feedback for software teams"),
+	head: pageHead("The open-source AI mentor for software engineering practices"),
 	staticData: { surface: "bleed" },
 	beforeLoad: async ({ context }) => {
 		const user = await resolveCurrentUser(context.queryClient);

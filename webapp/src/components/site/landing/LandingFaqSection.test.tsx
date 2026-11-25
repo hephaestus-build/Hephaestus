@@ -13,6 +13,16 @@ describe("LandingFaqSection", () => {
 		expect(answer.textContent).toContain("waits for a workspace admin’s approval by default");
 	});
 
+	it("says what workspace admins see and that feedback has no grade", async () => {
+		const user = userEvent.setup();
+		render(<LandingFaqSection />);
+		await user.click(screen.getByRole("button", { name: "Who sees my feedback?" }));
+		const answer = await screen.findByText(/Your feedback has no score, grade or rank/u);
+		expect(answer.textContent).toContain("No workspace admin page shows your conversation");
+		expect(answer.textContent).toContain("Feedback on the work is visible to everyone");
+		expect(answer.textContent).not.toMatch(/no admin/iu);
+	});
+
 	it("names the member AI choice and Slack permission", async () => {
 		const user = userEvent.setup();
 		render(<LandingFaqSection />);
