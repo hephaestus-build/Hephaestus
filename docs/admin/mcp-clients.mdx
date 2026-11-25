@@ -73,6 +73,10 @@ If the [admin passkey policy](./passkeys.mdx) requires a passkey for your admin 
 The client's access lasts as long as any other client's: until an admin disconnects it, or until it goes unused for 90 days.
 The grant records when you confirmed and which passkey you used.
 
+If you are an instance admin and the instance requires a passkey from its instance admins, you confirm with your passkey in every workspace, also where the workspace does not require one.
+The client then does your admin work in this workspace, with the scopes that you approved, as for any workspace admin.
+The client can never do instance administration, and your instance admin access does not count as a workspace membership.
+
 A client that you approved before the workspace turned on the passkey policy has no passkey confirmation.
 The policy refuses each of its calls, and the client must be approved again.
 
@@ -94,7 +98,6 @@ Each change that a client makes is recorded under your account, as a change in t
 |---|---|
 | You are not an admin of this workspace | Only an admin or owner can approve a client. |
 | Your passkey recovery is not finished | Your account is in passkey recovery. Finish recovery in your passkey settings, then connect the client again. |
-| This instance requires a passkey from its instance admins | The instance requires a passkey for instance admins, and an instance admin's passkey confirmation is never lent to a client. Connect the client with an account that is not an instance admin. |
 | Your passkey did not confirm | The browser prompt closed, timed out, or the passkey was refused. Select **Confirm with passkey and allow** again. |
 | This request has expired | A consent request waits 10 minutes. Start the client's sign-in again. |
 | This client cannot connect | The client's metadata document could not be read, or it lists a redirect that is not HTTPS or a loopback address. |

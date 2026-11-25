@@ -85,22 +85,6 @@ export const RecoveryPending: Story = {
 	},
 };
 
-/** The instance requires a passkey from its instance admins, and that proof is never lent to a client. */
-export const InstanceAdmin: Story = {
-	args: {
-		state: {
-			status: "ready",
-			request: { ...request, refusal: "INSTANCE_ADMIN_PASSKEY_REQUIRED" },
-			onApprove: fn(),
-			onRefuse: fn(),
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/never lent to a client/u)).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Allow" })).toBeDisabled();
-	},
-};
-
 /** The workspace requires an admin passkey: Allow runs the passkey confirmation first. */
 export const NeedsPasskey: Story = {
 	args: {

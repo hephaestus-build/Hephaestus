@@ -18,8 +18,6 @@ public interface AdminPasskeyAccess {
         PASSKEY,
         /** The account's passkey recovery is pending, so it cannot delegate admin work. */
         REFUSED_RECOVERY_PENDING,
-        /** The instance requires a passkey of its instance admins, and that proof is never delegated. */
-        REFUSED_INSTANCE_ADMIN,
     }
 
     McpConsentProof mcpConsentProof(long accountId, boolean workspaceRequired);

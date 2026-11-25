@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionPruner;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
@@ -38,9 +39,12 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Consent in a workspace that requires an admin passkey (ADR 0110 decision 8, update of 2026-11-17): the account
  * confirms with a passkey on the consent page, the grant records that proof, and its calls satisfy the policy only
- * within the grant's bound.
+ * within the grant's bound. The instance requires a passkey of its instance admins, as production does, so an instance
+ * admin's consent follows the same rule (update of 2026-11-25).
  */
-@TestPropertySource(properties = "hephaestus.auth.dev-login-enabled=true")
+@TestPropertySource(
+        properties = {"hephaestus.auth.dev-login-enabled=true", "hephaestus.auth.passkeys.instance-admin-required=true"
+        })
 class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -429,6 +433,139 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(409)
                 .expectBody(Void.class);
         assertThat(grantColumn(requestId, "status")).isEqualTo("PENDING");
+    }
+
+    /** An instance admin who administers the workspace approves exactly as a workspace admin does: with a fresh passkey. */
+    @Test
+    void shouldLetAnInstanceAdminApproveWithAFreshPasskeyWhenTheyAdministerTheWorkspace() {
+        becomeInstanceAdmin();
+        UUID requestId = request();
+
+        consent(cookie, requestId)
+                .jsonPath("$.passkeyRequired")
+                .isEqualTo(true)
+                .jsonPath("$.refusal")
+                .doesNotExist();
+        flow.approval(cookie, requestId).expectStatus().isEqualTo(409).expectBody(Void.class);
+        flow.approval(passkeyCookie(Instant.now().minus(Duration.ofMinutes(10))), requestId)
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        assertThat(grantColumn(requestId, "status")).isEqualTo("PENDING");
+
+        flow.approve(passkeyCookie(Instant.now()), requestId);
+        assertThat(grantColumn(requestId, "status")).isEqualTo("APPROVED");
+        assertThat(grantColumn(requestId, "passkey_credential_id")).isEqualTo(CREDENTIAL);
+    }
+
+    /**
+     * An instance admin's passkey-backed grant does the workspace admin work it was approved for, and a refresh keeps
+     * it. A pending passkey recovery still ends it on the next refresh.
+     */
+    @Test
+    void shouldLetAnInstanceAdminsClientCallToolsAndKeepItsGrantOnRefresh() {
+        becomeInstanceAdmin();
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+        UUID grant = grantOf(tokens);
+
+        JsonNode settings = structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
+        structured(call(
+                tokens.accessToken(),
+                tool(
+                        "set_feedback_delivery",
+                        Map.of("etag", settings.path("etag").asString(), "deliveryStatus", "PAUSED"))));
+
+        McpAuthorizationFlow.Tokens refreshed = flow.tokens(flow.token(flow.refreshForm(tokens.refreshToken())));
+        assertThat(grantColumn(grant, "status")).isEqualTo("ACTIVE");
+        structured(call(refreshed.accessToken(), GET_REVIEW_SETTINGS));
+
+        var account = accountRepository.findById(accountId).orElseThrow();
+        account.setPasskeyRecoveryRequired(true);
+        accountRepository.save(account);
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(refreshed.refreshToken()))))
+                .isEqualTo("invalid_grant");
+        assertThat(grantColumn(grant, "status")).isEqualTo("REVOKED");
+        assertThat(revokedReasonOf(grant)).isEqualTo("passkey_recovery_pending");
+    }
+
+    /**
+     * An instance admin's client token is a workspace admin's grant and nothing more: instance administration refuses
+     * it, and without the real membership no elevation lets it into the workspace.
+     */
+    @Test
+    void shouldNeverLetAnInstanceAdminsClientTokenActAsAnInstanceAdmin() {
+        becomeInstanceAdmin();
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+
+        // The same account's browser reaches the endpoint, so the refusal below is about the token.
+        webTestClient
+                .get()
+                .uri("/admin/settings")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + passkeyCookie(Instant.now()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/admin/settings")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.accessToken())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/admin/settings")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + tokens.accessToken())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+
+        membershipRepository.delete(membershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)
+                .orElseThrow());
+        flow.callTool(tokens.accessToken(), workspace.getWorkspaceSlug(), GET_REVIEW_SETTINGS)
+                .expectStatus()
+                .is4xxClientError()
+                .expectBody(Void.class);
+    }
+
+    /** Being an instance admin is not a workspace membership: without one, consent is refused as for anyone. */
+    @Test
+    void shouldRefuseConsentToAnInstanceAdminWhoDoesNotAdministerTheWorkspace() {
+        becomeInstanceAdmin();
+        Membership membership = membershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)
+                .orElseThrow();
+        membership.setRole(Membership.WorkspaceRole.MEMBER);
+        membershipRepository.save(membership);
+        UUID requestId = request();
+
+        consent(cookie, requestId)
+                .jsonPath("$.refusal")
+                .isEqualTo("NOT_ADMIN")
+                .jsonPath("$.passkeyRequired")
+                .isEqualTo(false);
+        flow.approval(passkeyCookie(Instant.now()), requestId)
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        assertThat(grantColumn(requestId, "status")).isEqualTo("PENDING");
+    }
+
+    /** Makes the account an instance admin and signs it in again, so its browser token carries the role. */
+    private void becomeInstanceAdmin() {
+        var account = accountRepository.findById(accountId).orElseThrow();
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        accountRepository.save(account);
+        Instant now = Instant.now();
+        cookie = jwtIssuer
+                .issue(accountId, TokenConstraints.browserSession(now.plus(Duration.ofHours(8)), now, null, null), null)
+                .value();
+        assertThat(McpAuthorizationFlow.payload(cookie).path("roles").toString())
+                .contains("app_admin");
     }
 
     /** A browser token whose passkey proof is of this time and names {@link #CREDENTIAL}, as a step-up leaves it. */

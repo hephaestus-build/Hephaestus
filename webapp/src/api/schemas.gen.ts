@@ -6733,7 +6733,7 @@ export const McpConsentRequestSchema = {
 
 export const McpConsentRequestMcpConsentRefusalSchema = {
 	type: "string",
-	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING", "INSTANCE_ADMIN_PASSKEY_REQUIRED"],
+	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING"],
 } as const;
 
 export const McpTokenErrorSchema = {

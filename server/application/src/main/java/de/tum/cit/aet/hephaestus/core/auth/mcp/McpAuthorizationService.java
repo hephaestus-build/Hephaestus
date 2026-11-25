@@ -84,8 +84,6 @@ public class McpAuthorizationService implements McpClientGrants {
         NOT_ADMIN,
         /** The account's passkey recovery is pending; it finishes recovery in the web app first. */
         PASSKEY_RECOVERY_PENDING,
-        /** The instance requires a passkey of its instance admins, and that proof is never handed to a client. */
-        INSTANCE_ADMIN_PASSKEY_REQUIRED,
     }
 
     /** What the consent page shows. */
@@ -508,7 +506,6 @@ public class McpAuthorizationService implements McpClientGrants {
             case NONE -> new Decision(null, false);
             case PASSKEY -> new Decision(null, true);
             case REFUSED_RECOVERY_PENDING -> new Decision(Refusal.PASSKEY_RECOVERY_PENDING, false);
-            case REFUSED_INSTANCE_ADMIN -> new Decision(Refusal.INSTANCE_ADMIN_PASSKEY_REQUIRED, false);
         };
     }
 

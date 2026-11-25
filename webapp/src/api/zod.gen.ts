@@ -2044,7 +2044,6 @@ export const zMcpConsentRedirect = z.object({
 export const zMcpConsentRequestMcpConsentRefusal = z.enum([
 	"NOT_ADMIN",
 	"PASSKEY_RECOVERY_PENDING",
-	"INSTANCE_ADMIN_PASSKEY_REQUIRED",
 ]);
 
 /**
