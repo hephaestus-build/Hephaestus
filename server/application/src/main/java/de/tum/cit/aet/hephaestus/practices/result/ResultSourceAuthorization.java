@@ -66,22 +66,10 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     private HistoryCustody custody(ResultFacts result, Lookups lookups) {
-        var producer = lookups.producer(result)
-                .filter(m -> produced(result, m)
-                        || (result.migratedHistory()
-                                && m.getState() == ReviewItemState.WITHHELD
-                                && ReviewItem.LEGACY_AMBIGUOUS_RESULTS.equals(m.getReason())));
-        var retained = lookups.retained(result).stream()
-                .map(m -> m.getDetail())
-                .filter(Objects::nonNull)
-                .map(detail -> detail.path("custody"))
-                .filter(node -> node.isObject())
-                .map(node -> json.convertValue(node, HistoryCustody.class))
-                .distinct()
-                .toList();
+        var retained = lookups.retainedCustody(result);
         if (retained.size() == 1) return retained.getFirst();
         if (retained.size() > 1) return new HistoryCustody(false, true, List.of(), List.of(), List.of());
-        var job = producer.map(m -> m.getJobId()).orElse(null);
+        var job = lookups.producingJob(result);
         if (job == null) return new HistoryCustody(false, false, List.of(), List.of(), List.of());
         return lookups.receipts.computeIfAbsent(job, ignored -> custody.find(result.workspaceId(), List.of(job)));
     }
@@ -196,6 +184,14 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     /** Each row's custody, read after the rows' assignments and problems and before what its checks read. */
     private Map<UUID, HistoryCustody> prefetchedCustody(long workspaceId, List<ResultFacts> owned, Lookups lookups) {
         lookups.prefetch(workspaceId, owned);
+        // Every producing job's receipt in one batch, not one fenced read per job.
+        var jobs = owned.stream()
+                .map(result -> lookups.receiptJob(result))
+                .filter(Objects::nonNull)
+                .filter(job -> !lookups.receipts.containsKey(job))
+                .distinct()
+                .toList();
+        if (!jobs.isEmpty()) lookups.receipts.putAll(this.custody.findEach(workspaceId, jobs));
         Map<UUID, HistoryCustody> custody = new HashMap<>();
         for (var result : owned) custody.put(result.id(), custody(result, lookups));
         lookups.prefetchChecks(workspaceId, owned, custody.values());
@@ -356,6 +352,34 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                 var suppressed = suppression.suppressedReviewJobs(chunk);
                 chunk.forEach(job -> suppressedJobs.put(job, suppressed.contains(job)));
             }
+        }
+
+        /** The job whose receipt decides {@link #custody} of {@code result}, absent when the result keeps its own. */
+        @Nullable
+        UUID receiptJob(ResultFacts result) {
+            return retainedCustody(result).isEmpty() ? producingJob(result) : null;
+        }
+
+        @Nullable
+        UUID producingJob(ResultFacts result) {
+            return producer(result)
+                    .filter(m -> produced(result, m)
+                            || (result.migratedHistory()
+                                    && m.getState() == ReviewItemState.WITHHELD
+                                    && ReviewItem.LEGACY_AMBIGUOUS_RESULTS.equals(m.getReason())))
+                    .map(m -> m.getJobId())
+                    .orElse(null);
+        }
+
+        List<HistoryCustody> retainedCustody(ResultFacts result) {
+            return retained(result).stream()
+                    .map(m -> m.getDetail())
+                    .filter(Objects::nonNull)
+                    .map(detail -> detail.path("custody"))
+                    .filter(node -> node.isObject())
+                    .map(node -> json.convertValue(node, HistoryCustody.class))
+                    .distinct()
+                    .toList();
         }
 
         Optional<ReviewItem> producer(ResultFacts result) {

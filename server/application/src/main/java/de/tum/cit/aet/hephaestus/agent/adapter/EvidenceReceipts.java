@@ -7,8 +7,11 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -70,7 +73,11 @@ public class EvidenceReceipts {
     Dependencies dependencies(JdbcOperations controls, long workspaceId, Collection<UUID> sources) {
         if (sources.isEmpty())
             return new Dependencies(true, List.of(), List.of(), List.of(), new DependencyCounts(0, 0, 0, 0, 0));
-        var receipts = controls.query(
+        return dependencies(sources, receipts(controls, workspaceId, sources));
+    }
+
+    private List<SourceReceipt> receipts(JdbcOperations controls, long workspaceId, Collection<UUID> sources) {
+        return controls.query(
                 """
                 SELECT job_id,state,payload::text FROM person_evidence_copy
                 WHERE workspace_id=? AND job_id=ANY(?)
@@ -81,7 +88,6 @@ public class EvidenceReceipts {
                         mapper.readTree(Objects.requireNonNull(rs.getString(3)))),
                 workspaceId,
                 new SqlArrayValue("uuid", sources.toArray()));
-        return dependencies(sources, receipts);
     }
 
     Dependencies dependencies(Collection<UUID> sources, List<SourceReceipt> receipts) {
@@ -118,24 +124,65 @@ public class EvidenceReceipts {
         if (producingJobs.isEmpty()) return new HistoryCustody(false, false, List.of(), List.of(), List.of());
         try (var admission = fence.capture()) {
             var retained = dependencies(admission.jdbc(), workspaceId, producingJobs);
-            var identities = retained.identities().stream()
-                    .map(identity -> mapper.convertValue(identity, PersonCopyIdentity.class))
-                    .toList();
-            boolean refused = retained.counts().notReadyReceipts() > 0 || isSuppressed(identities, admission.jdbc());
-            var sourceJobIds = new LinkedHashSet<>(producingJobs);
-            retained.sourceJobIds().stream()
-                    .map(node -> UUID.fromString(node.asString()))
-                    .forEach(sourceJobIds::add);
-            return new HistoryCustody(
-                    retained.complete() && !refused,
-                    refused,
-                    identities,
-                    retained.repositories().stream()
-                            .map(JsonNode::longValue)
+            var identities = identities(retained);
+            return custody(producingJobs, retained, identities, isSuppressed(identities, admission.jdbc()));
+        }
+    }
+
+    /**
+     * {@link #custody} of each producing job on its own, decided under one fence and in a fixed number of queries
+     * however many jobs a read checks: one for their receipts and one for the erasure controls of their identities.
+     */
+    public Map<UUID, HistoryCustody> custodyOfEach(long workspaceId, Collection<UUID> producingJobs) {
+        var jobs = List.copyOf(new LinkedHashSet<>(producingJobs));
+        if (jobs.isEmpty()) return Map.of();
+        try (var admission = fence.capture()) {
+            var receipts = receipts(admission.jdbc(), workspaceId, jobs).stream()
+                    .collect(Collectors.groupingBy(SourceReceipt::jobId));
+            Map<UUID, Dependencies> retained = new LinkedHashMap<>();
+            Map<UUID, List<PersonCopyIdentity>> identities = new HashMap<>();
+            for (var job : jobs) {
+                var dependencies = dependencies(List.of(job), receipts.getOrDefault(job, List.of()));
+                retained.put(job, dependencies);
+                identities.put(job, identities(dependencies));
+            }
+            var blocked = suppressionControls(
+                    identities.values().stream()
+                            .flatMap(List::stream)
                             .distinct()
                             .toList(),
-                    List.copyOf(sourceJobIds));
+                    admission.jdbc());
+            Map<UUID, HistoryCustody> custody = new LinkedHashMap<>();
+            retained.forEach((job, dependencies) -> {
+                var named = Objects.requireNonNull(identities.get(job));
+                custody.put(job, custody(List.of(job), dependencies, named, isSuppressed(named, blocked)));
+            });
+            return custody;
         }
+    }
+
+    private List<PersonCopyIdentity> identities(Dependencies retained) {
+        return retained.identities().stream()
+                .map(identity -> mapper.convertValue(identity, PersonCopyIdentity.class))
+                .toList();
+    }
+
+    private static HistoryCustody custody(
+            List<UUID> producingJobs, Dependencies retained, List<PersonCopyIdentity> identities, boolean suppressed) {
+        boolean refused = retained.counts().notReadyReceipts() > 0 || suppressed;
+        var sourceJobIds = new LinkedHashSet<>(producingJobs);
+        retained.sourceJobIds().stream()
+                .map(node -> UUID.fromString(node.asString()))
+                .forEach(sourceJobIds::add);
+        return new HistoryCustody(
+                retained.complete() && !refused,
+                refused,
+                identities,
+                retained.repositories().stream()
+                        .map(JsonNode::longValue)
+                        .distinct()
+                        .toList(),
+                List.copyOf(sourceJobIds));
     }
 
     record SourceReceipt(UUID jobId, String state, JsonNode payload) {}
