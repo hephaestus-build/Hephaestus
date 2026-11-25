@@ -399,6 +399,7 @@ Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
 The migration removes the database's `TEMPORARY` grant from `PUBLIC`, the owner, the application, the backup reporter, and the monitor.
 On a fresh install, older migrations that need temporary tables run before that change.
 If the migration reports a remaining grant, remove it from the role that grants access and run the migration again.
+The check also covers a role that a Hephaestus login can switch to with `SET ROLE`, and the roles that this role inherits.
 After a logical restore, run the database role setup again before you start the server.
 The setup reapplies these database grants using the restored migration history.
 

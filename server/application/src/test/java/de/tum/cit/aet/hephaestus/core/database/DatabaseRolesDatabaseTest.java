@@ -38,6 +38,7 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 class DatabaseRolesDatabaseTest {
 
     private static final String INVOKER_QUALIFICATION = "-fix-db-invoker-relation-qualification.xml";
+    private static final String TEMPORARY_ROLE_GRAPH = "-fix-db-temporary-role-graph.xml";
     private static final String QUALIFICATION_PROBE =
             "SELECT prosrc FROM pg_proc WHERE oid = 'public.guard_personal_membership()'::regprocedure";
     private static final String IDENTIFIER = "(?:\"[\\w$]+\"|[a-z_][\\w$]*)";
@@ -207,6 +208,68 @@ class DatabaseRolesDatabaseTest {
                 assertNoTemporaryGrants(grants);
                 assertThat(grants.queryForObject(QUALIFICATION_PROBE, String.class))
                         .contains("FROM public.workspace");
+            }
+        }
+    }
+
+    /**
+     * The application can SET ROLE to a role whose INHERIT membership holds TEMPORARY. Each kind of membership alone
+     * gives nothing, so only a walk that follows SET and then INHERIT finds the grant. The migration stops while the path
+     * remains, and runs once the grant is gone.
+     */
+    @Test
+    void shouldRefuseATemporaryGrantInheritedByARoleTheApplicationCanAssume() throws Exception {
+        String name = "hephaestus_roles_temp_inherited";
+        TestDatabase database = TestDatabaseCleanup.createDatabase(name);
+        PostgreSQLTestContainer.applyDatabaseRoles(name);
+        TestDatabase owner = PostgreSQLTestContainer.asOwner(database);
+        PracticeMigrationFixture.upgradeBefore(owner, "dev,prod", TEMPORARY_ROLE_GRAPH);
+
+        try (Connection administrator = connect(database)) {
+            var grants = jdbc(administrator);
+            grants.execute("CREATE ROLE roles_temp_switch");
+            grants.execute("CREATE ROLE roles_temp_inherited");
+            try {
+                grants.execute("GRANT TEMPORARY ON DATABASE hephaestus_roles_temp_inherited TO roles_temp_inherited");
+                grants.execute("GRANT roles_temp_inherited TO roles_temp_switch WITH INHERIT TRUE, SET FALSE");
+                grants.execute("GRANT roles_temp_switch TO hephaestus_app WITH INHERIT FALSE, SET TRUE");
+                try (Connection application = connect(PostgreSQLTestContainer.asApplication(database))) {
+                    var app = jdbc(application);
+                    assertThat(app.queryForObject(
+                                    "SELECT has_database_privilege(current_user, current_database(), 'TEMPORARY')",
+                                    Boolean.class))
+                            .as("the application itself inherits nothing")
+                            .isFalse();
+                    app.execute("SET ROLE roles_temp_switch");
+                    assertThat(app.queryForObject(
+                                    "SELECT has_database_privilege(current_user, current_database(), 'TEMPORARY')",
+                                    Boolean.class))
+                            .as("the role it can assume inherits TEMPORARY")
+                            .isTrue();
+                }
+                try (Connection connection = connect(owner);
+                        Liquibase liquibase = liquibase(connection)) {
+                    assertThatThrownBy(() ->
+                                    PracticeMigrationFixture.upgradeOnly(liquibase, "dev,prod", TEMPORARY_ROLE_GRAPH))
+                            .hasStackTraceContaining("Hephaestus database roles still have the TEMPORARY privilege");
+                }
+
+                grants.execute(
+                        "REVOKE TEMPORARY ON DATABASE hephaestus_roles_temp_inherited FROM roles_temp_inherited");
+                try (Connection connection = connect(owner);
+                        Liquibase liquibase = liquibase(connection)) {
+                    PracticeMigrationFixture.upgradeOnly(liquibase, "dev,prod", TEMPORARY_ROLE_GRAPH);
+                }
+                assertThat(grants.queryForObject(
+                                "SELECT count(*) FROM databasechangelog WHERE filename LIKE ?",
+                                Long.class,
+                                "%" + TEMPORARY_ROLE_GRAPH))
+                        .as("the migration runs once no path to TEMPORARY remains")
+                        .isEqualTo(1L);
+            } finally {
+                grants.execute(
+                        "REVOKE TEMPORARY ON DATABASE hephaestus_roles_temp_inherited FROM roles_temp_inherited");
+                grants.execute("DROP ROLE roles_temp_switch, roles_temp_inherited");
             }
         }
     }
