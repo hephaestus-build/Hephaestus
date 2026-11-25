@@ -52,6 +52,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
+            assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
+            assignment(
+                    "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest", "privacy-journal-configured-bucket"),
             assignment("core.privacy.S3PrivacyJournalStoreIntegrationTest", "privacy-journal-bucket"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -153,6 +156,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "privacy-journal-bucket",
                     "switches the journal bucket between a real MinIO endpoint and an outage"
                             + " while using the real database and erasure service"),
+            Map.entry(
+                    "privacy-journal-configured-bucket",
+                    "the journal bucket named by its documented settings, with the server's own S3 store behind a gate"
+                            + " that holds a write"),
             Map.entry(
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
@@ -340,6 +347,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.schema.ProductionSchemaContractIntegrationTest");
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
+            "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest",
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
@@ -398,6 +406,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     // Its context runs the worker's poller, which would claim the review jobs of later classes in an unsharded run.
     private static final Set<String> DIRTY_CONTEXT_TESTS = names(
+            // Its journal bucket closes with the class, so no later class may reuse its context.
+            "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest",
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
@@ -430,6 +440,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.privacy.PrivacyJournalOutageIntegrationTest",
+            "core.privacy.PrivacyJournalReplyIntegrationTest",
             "core.privacy.S3PrivacyJournalStoreIntegrationTest",
             "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.repository.PracticeRepositorySyncIntegrationTest",
