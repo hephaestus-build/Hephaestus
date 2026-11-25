@@ -38,6 +38,15 @@ class PersonalSpaceAuditErasureDatabaseTest {
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining("config_audit_event is append-only");
         execute(database, "UPDATE workspace SET status = 'SUSPENDED' WHERE id IN (995942, 995943)");
+        assertThatThrownBy(() -> execute(database, """
+                        CREATE TEMP TABLE workspace (id bigint, kind text, status text);
+                        INSERT INTO workspace VALUES (995942, 'PERSONAL', 'SUSPENDED');
+                        DELETE FROM config_audit_event WHERE id = 995944;
+                        """))
+                .as("a session's temporary table cannot pass a team off as a suspended personal space")
+                .rootCause()
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("config_audit_event is append-only");
         assertThatThrownBy(() -> execute(database, "DELETE FROM config_audit_event WHERE id = 995944"))
                 .as("a team keeps its trail, also when suspended")
                 .rootCause()

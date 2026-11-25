@@ -10,7 +10,9 @@ CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS tr
                 IF TG_OP = 'DELETE' THEN
                     -- The erasure of a person ends their personal space, and its trail with it: the space had one
                     -- member, so the trail is that person's alone. The erasure suspends the space first.
-                    IF EXISTS (SELECT 1 FROM workspace w WHERE w.id = OLD.workspace_id
+                    -- Schema-qualified: the trigger runs as the caller, so a session's temporary table must not
+                    -- stand in for the workspace and unlock a team's trail.
+                    IF EXISTS (SELECT 1 FROM public.workspace w WHERE w.id = OLD.workspace_id
                                  AND w.kind = 'PERSONAL' AND w.status = 'SUSPENDED') THEN
                         RETURN OLD;
                     END IF;

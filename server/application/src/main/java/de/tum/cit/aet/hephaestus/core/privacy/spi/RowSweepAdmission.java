@@ -29,7 +29,10 @@ public class RowSweepAdmission {
         this.secrets = secrets;
     }
 
-    /** Call after the workspace purge guards pass, or during erasure replay with writers stopped. */
+    /**
+     * Call after the workspace purge guards pass, during erasure replay with writers stopped, or when a person's
+     * erasure ends their personal space after it suspended the space.
+     */
     public void admitWorkspacePurge(long workspaceId) {
         admit(RowSweepRule.WORKSPACE_PURGE, workspaceId, null);
     }
