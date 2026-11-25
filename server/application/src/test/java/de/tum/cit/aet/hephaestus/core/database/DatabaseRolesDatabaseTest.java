@@ -219,7 +219,7 @@ class DatabaseRolesDatabaseTest {
     }
 
     @Test
-    void shouldQualifyRelationReferencesInInvokerRoutines() throws SQLException {
+    void shouldQualifyRelationReferencesInPublicRoutines() throws SQLException {
         try (Connection connection = connect(INSTALLED)) {
             var database = jdbc(connection);
             Set<String> relations =
@@ -231,7 +231,7 @@ class DatabaseRolesDatabaseTest {
                     .query("""
                 SELECT p.oid::regprocedure::text, p.prosrc
                 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-                WHERE n.nspname = 'public' AND NOT p.prosecdef AND p.prokind IN ('f', 'p')
+                WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
                   AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass
                                   AND d.objid = p.oid AND d.deptype = 'e')
                 ORDER BY 1
