@@ -74,7 +74,7 @@ public class ClientInputs {
     }
 
     @Scheduled(cron = "0 */5 * * * *")
-    @SchedulerLock(name = "client-input-cleanup", lockAtMostFor = "PT5M")
+    @SchedulerLock(name = "client-input-cleanup", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic("Expires create receipts of every owner through the owner function person_row_sweep")
     public void prune() {
         // Each batch commits on its own, so a failed batch keeps the batches before it.

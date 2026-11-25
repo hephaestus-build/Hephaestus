@@ -8466,7 +8466,10 @@ paths:
           maxLength: 51
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: header
+      - description: A version 7 UUID that the client makes once per message and sends
+          again unchanged on a retry. Its time may be at most 5 minutes ahead of the
+          server and at most 3 days old. Any other key is refused with 400.
+        in: header
         name: Idempotency-Key
         required: true
         schema:

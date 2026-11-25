@@ -16362,6 +16362,9 @@ export type MarkConversationReadResponse =
 export type SubmitConversationTurnData = {
 	body: ConversationTurnRequest;
 	headers: {
+		/**
+		 * A version 7 UUID that the client makes once per message and sends again unchanged on a retry. Its time may be at most 5 minutes ahead of the server and at most 3 days old. Any other key is refused with 400.
+		 */
 		"Idempotency-Key": string;
 	};
 	path: {

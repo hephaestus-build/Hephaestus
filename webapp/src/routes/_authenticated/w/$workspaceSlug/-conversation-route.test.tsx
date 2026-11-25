@@ -454,6 +454,45 @@ it("shows a sent message at once and keeps its idempotency key when a failed sen
 	expect(screen.getAllByText("Is my description clear?")).toHaveLength(1);
 });
 
+it("keeps a send unconfirmed when its first attempt may have arrived and the retry is refused", async () => {
+	const fake = new ConversationFake();
+	serve(fake);
+	const attempts: number[] = [];
+	// The first attempt may have stored the question; the automatic retry is then refused.
+	server.use(
+		http.post(
+			"*/workspaces/acme/conversation/turns",
+			() => {
+				attempts.push(503);
+				return HttpResponse.json({ status: 503 }, { status: 503 });
+			},
+			{ once: true },
+		),
+		http.post(
+			"*/workspaces/acme/conversation/turns",
+			() => {
+				attempts.push(422);
+				return HttpResponse.json({ status: 422 }, { status: 422 });
+			},
+			{ once: true },
+		),
+	);
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	await userEvent.type(
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT),
+		"Did this arrive?{Enter}",
+	);
+
+	await screen.findByText(
+		"We could not confirm your message. Retry to check if it arrived.",
+		{},
+		ROUTE_RENDER_WAIT,
+	);
+	expect(attempts).toStrictEqual([503, 422]);
+	expect(screen.queryByText(/Not sent/u)).toBeNull();
+});
+
 it("retries a lost response after the saved question arrives on the stream", async () => {
 	const fake = new ConversationFake();
 	serve(fake);

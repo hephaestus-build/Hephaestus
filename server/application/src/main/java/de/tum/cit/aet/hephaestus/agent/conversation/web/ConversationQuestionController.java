@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -69,7 +70,12 @@ public class ConversationQuestionController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ConversationSubmissionDTO submitConversationTurn(
             WorkspaceContext workspace,
-            @RequestHeader(ClientInputs.HEADER) UUID key,
+            @Parameter(
+                            description = "A version 7 UUID that the client makes once per message and sends again"
+                                    + " unchanged on a retry. Its time may be at most 5 minutes ahead of the server"
+                                    + " and at most 3 days old. Any other key is refused with 400.")
+                    @RequestHeader(ClientInputs.HEADER)
+                    UUID key,
             @Valid @RequestBody ConversationTurnRequestDTO request) {
         long workspaceId = workspace.id();
         var person = PersonAct.fromPrincipal();

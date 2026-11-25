@@ -18,7 +18,12 @@ import {
 	submitConversationTurnMutation,
 	updateConversationTurnStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { ConversationEntry, ConversationTurnRequest } from "@/api/types.gen";
+import { submitConversationTurn, type Options } from "@/api/sdk.gen";
+import type {
+	ConversationEntry,
+	ConversationTurnRequest,
+	SubmitConversationTurnData,
+} from "@/api/types.gen";
 import type {
 	EarlierMessages,
 	ConversationThreadState,
@@ -65,6 +70,10 @@ const submitKey = (workspaceSlug: string) => ["submitConversationTurn", workspac
 
 // Keep the same row when the response confirms which stored question this tab sent.
 const confirmedSendKeys = new WeakMap<QueryClient, Map<string, string>>();
+
+// A send key whose earlier attempt may have stored the question stays unconfirmed until an attempt succeeds:
+// a later refusal, such as an expired session, refuses that retry, not the first attempt.
+const uncertainSendKeys = new WeakMap<QueryClient, Set<string>>();
 
 function earlierOf<TData, TError>(
 	query: Pick<
@@ -113,7 +122,9 @@ function useSends(workspaceSlug: string, parentEntryId: string | undefined) {
 			continue;
 		}
 		const base = { key, text, parentEntryId, createdAt: new Date(submittedAt) };
-		const unconfirmed = status === "error" && sendMayHaveSucceeded(error);
+		const unconfirmed =
+			status === "error" &&
+			(sendMayHaveSucceeded(error) || (uncertainSendKeys.get(queryClient)?.has(key) ?? false));
 		latest.set(
 			key,
 			status === "error"
@@ -261,6 +272,20 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 	};
 	const submit = useMutation({
 		...submitConversationTurnMutation(),
+		mutationFn: async (variables: Options<SubmitConversationTurnData>) => {
+			try {
+				const { data } = await submitConversationTurn({ ...variables, throwOnError: true });
+				return data;
+			} catch (error) {
+				const key = turnRequestOf(variables)?.headers["Idempotency-Key"];
+				if (key !== undefined && sendMayHaveSucceeded(error)) {
+					const keys = uncertainSendKeys.get(queryClient) ?? new Set<string>();
+					keys.add(key);
+					uncertainSendKeys.set(queryClient, keys);
+				}
+				throw error;
+			}
+		},
 		retry: (failures, error) => failures < 2 && sendMayHaveSucceeded(error),
 		mutationKey: submitKey(workspaceSlug),
 		// An unconfirmed or refused send stays on screen with Retry until it is discarded or the page reloads.
@@ -272,6 +297,7 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 					const keys = confirmedSendKeys.get(queryClient) ?? new Map<string, string>();
 					keys.set(submission.question.id, key);
 					confirmedSendKeys.set(queryClient, keys);
+					uncertainSendKeys.get(queryClient)?.delete(key);
 				}
 				applySubmission(queryClient, workspaceSlug, submission);
 				// The stored copy is in the pages now, so the send is not kept for a later read to miss.

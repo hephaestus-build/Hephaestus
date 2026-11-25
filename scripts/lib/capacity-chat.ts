@@ -22,6 +22,10 @@ interface Turn {
 	completion: ReturnType<typeof Promise.withResolvers<string>>;
 }
 
+function isTerminal(status: unknown): status is string {
+	return typeof status === "string" && ["DONE", "FAILED", "STOPPED"].includes(status);
+}
+
 export function createKey() {
 	const time = Date.now().toString(16).padStart(12, "0");
 	return `${time.slice(0, 8)}-${time.slice(8)}-7${crypto.randomUUID().slice(15)}`;
@@ -134,11 +138,7 @@ export async function runCapacityChat(options: {
 			turn.firstText = at;
 			log({ phase: "first_text", requestId: turn.requestId, at });
 		}
-		if (
-			typeof row.status === "string" &&
-			["DONE", "FAILED", "STOPPED"].includes(row.status) &&
-			turn.ended === undefined
-		) {
+		if (isTerminal(row.status) && turn.ended === undefined) {
 			turn.ended = at;
 			turn.status = row.status;
 			log({ phase: "turn_end", requestId: turn.requestId, status: row.status, at });
@@ -186,7 +186,8 @@ export async function runCapacityChat(options: {
 			const turn = pending.get(user);
 			if (turn !== undefined && turn.id === undefined) {
 				const frames = earlyTurns.get(user) ?? [];
-				if (frames.length < 64) {
+				// A full buffer still keeps a terminal frame: no later event would end the turn.
+				if (frames.length < 64 || isTerminal(row.status)) {
 					frames.push({ row, at: Date.now() });
 					earlyTurns.set(user, frames);
 				}

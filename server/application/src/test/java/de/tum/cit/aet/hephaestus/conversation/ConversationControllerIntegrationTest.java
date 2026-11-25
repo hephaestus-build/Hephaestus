@@ -300,7 +300,10 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(turnId)
                 .jsonPath("$.question.id")
                 .isEqualTo(entryId);
-        ask(requestId, "A different message", null).expectStatus().isEqualTo(422);
+        ask(requestId, "A different message", null)
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody(Void.class);
 
         ConversationTurn turn = turnRepository.findById(UUID.fromString(turnId)).orElseThrow();
         assertThat(turn.getPageContext()).isEqualTo("Pull request #421 in acme/web");
@@ -334,7 +337,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                     .jsonPath("$.label.code")
                     .isEqualTo("problem.idempotency-key-in-flight");
         });
-        ask(key, "A message", null).expectStatus().isOk();
+        ask(key, "A message", null).expectStatus().isOk().expectBody(Void.class);
         get("/entries").jsonPath("$.content.length()").isEqualTo(1);
     }
 
@@ -350,7 +353,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .readTree(Objects.requireNonNull(created.getResponseBody()))
                 .path("question");
         String id = message.path("id").asString();
-        write("DELETE", "/entries/" + id, null).expectStatus().isNoContent();
+        write("DELETE", "/entries/" + id, null).expectStatus().isNoContent().expectBody(Void.class);
         ask(key, "Remove these words", null)
                 .expectStatus()
                 .isOk()
@@ -386,7 +389,10 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         long expired = Instant.now().minus(Duration.ofHours(73)).toEpochMilli();
         var expiredKey =
                 new UUID((expired << 16) | (key.getMostSignificantBits() & 0xffff), key.getLeastSignificantBits());
-        ask(expiredKey, "An expired submission", null).expectStatus().isBadRequest();
+        ask(expiredKey, "An expired submission", null)
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
         get("/entries").jsonPath("$.content.length()").isEqualTo(0);
     }
 
@@ -404,19 +410,25 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         ensureMembership(otherSpace, developer, WorkspaceRole.MEMBER);
         bindings.save(LlmCatalogTestFixtures.conversationBinding(
                 otherSpace, Objects.requireNonNull(binding.getInstanceModel())));
-        ask(key, "First message", null).expectStatus().isOk();
+        ask(key, "First message", null).expectStatus().isOk().expectBody(Void.class);
         ask(workspace.getWorkspaceSlug(), "mock-jwt-token-for-test-user", key, "Second message", null)
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
         ask(otherSpace.getWorkspaceSlug(), MEMBER, key, "Third message", null)
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
         assertThat(JdbcClient.create(PostgreSQLTestContainer.ownerJdbc())
-                        .sql("SELECT count(*) FROM client_input WHERE idem_key=:key")
+                        .sql("SELECT workspace_id || ':' || account_id FROM client_input WHERE idem_key=:key")
                         .param("key", key)
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(3);
+                        .query(String.class)
+                        .list())
+                .as("one receipt per actor and workspace, each owned by its own pair")
+                .containsExactlyInAnyOrder(
+                        workspace.getId() + ":" + accountId(developer),
+                        workspace.getId() + ":" + accountId(other),
+                        otherSpace.getId() + ":" + accountId(developer));
     }
 
     /** A turn as the API sends it, so a test can tell an absent property from a null one. */
