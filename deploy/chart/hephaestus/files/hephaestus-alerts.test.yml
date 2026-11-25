@@ -1525,6 +1525,27 @@ tests:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: Slack lookup failures alert and eligibility refusals stay quiet
+    interval: 1m
+    input_series:
+      - series: 'slack_dm_membership_lookups_total{job="hephaestus",namespace="unavailable",runtime_role="server",outcome="unconfirmed",reason="provider"}'
+        values: "0+1x20"
+      - series: 'slack_dm_membership_lookups_total{job="hephaestus",namespace="ineligible",runtime_role="server",outcome="ineligible",reason="none"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusSlackDmMembershipUnconfirmed
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HephaestusSlackDmMembershipUnconfirmed
+        exp_alerts:
+          - exp_labels:
+              namespace: unavailable
+              severity: warning
+            exp_annotations:
+              summary: Slack could not confirm membership for several direct messages
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   # Ten redelivery requests in one hour on both instances: 60 and 6,000 received GitHub deliveries.
   - name: a quiet instance with a high redelivery ratio fires, a busy one with the same count does not
     interval: 1m

@@ -190,14 +190,14 @@ await test("the fake lists a posted message with its channel, its text and wheth
 
 await test("the fake refuses another method, and lists it", async () => {
 	await withFake(async (base, token) => {
-		const answer = await fetch(`${base}/api/users.info`, {
+		const answer = await fetch(`${base}/api/users.list`, {
 			method: "POST",
 			headers: { authorization: `Bearer ${token}` },
 			body: "user=U1",
 		});
 		assert.deepEqual(await json(answer), { ok: false, error: "unknown_method" });
 		const calls = await received(base);
-		assert.equal(calls[0]?.method, "users.info");
+		assert.equal(calls[0]?.method, "users.list");
 		const health = await fetch(`${base}/health`);
 		assert.equal(health.status, 200);
 		const nothing = await fetch(`${base}/nothing`);

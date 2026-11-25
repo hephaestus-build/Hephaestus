@@ -81,7 +81,7 @@ import {
 } from "./lib/slack-turn.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 import { isolationGate, type Target } from "./sandbox-isolation.ts";
-import { FAKE_INSTALL_CODE, FAKE_TEAM } from "./slack-fake.ts";
+import { FAKE_INSTALL_CODE, FAKE_MEMBER, FAKE_TEAM } from "./slack-fake.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
@@ -2043,7 +2043,6 @@ async function sandboxClaimIdentity(name: string, sandboxId: string): Promise<st
  * The fake is the Service `slack` of the provider's namespace, on the port that `networkPolicy.modelEndpoints` opens.
  */
 const SLACK_API_BASE = `http://slack.${ROLL_PROVIDER}.svc.cluster.local:8080`;
-const SLACK_USER = "U0TURNROLL";
 const SLACK_DM = "D0TURNROLL";
 const SLACK_API_BASE_ENV = "HEPHAESTUS_INTEGRATION_SLACK_API_BASE";
 /** What the fake model says once the drill released it and no `bash` result is left to repeat. */
@@ -2102,7 +2101,7 @@ async function installSlack(base: string, token: string): Promise<void> {
 		},
 	]);
 	await psql(
-		`INSERT INTO identity (account_id, provider_id, provider_user_key, team_key, linked_via, linked_at, last_login_at) SELECT a.id, p.id, '${SLACK_USER}', '${FAKE_TEAM.id}', 'MANUAL', now(), now() FROM account a JOIN identity_provider p ON p.type = 'SLACK' AND p.server_url = 'https://slack.com' WHERE a.display_name = '${ROLL_ADMIN}' ON CONFLICT DO NOTHING`,
+		`INSERT INTO identity (account_id, provider_id, provider_user_key, team_key, linked_via, linked_at, last_login_at) SELECT a.id, p.id, '${FAKE_MEMBER}', '${FAKE_TEAM.id}', 'MANUAL', now(), now() FROM account a JOIN identity_provider p ON p.type = 'SLACK' AND p.server_url = 'https://slack.com' WHERE a.display_name = '${ROLL_ADMIN}' ON CONFLICT DO NOTHING`,
 	);
 }
 
@@ -2111,7 +2110,7 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<st
 	const sent = Math.floor(Date.now() / 1000);
 	const event = directMessageEvent({
 		team: FAKE_TEAM.id,
-		user: SLACK_USER,
+		user: FAKE_MEMBER,
 		channel: SLACK_DM,
 		text: "Which commands did you run?",
 		ts: `${sent}.000100`,

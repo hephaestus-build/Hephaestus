@@ -6,17 +6,16 @@ import java.util.Set;
 /** Raised by {@link SlackMessageService} when Slack refuses a call or cannot be reached; carries the Slack error code. */
 public class SlackSendException extends RuntimeException {
 
-    private static final Set<String> UNKNOWN_OUTCOME = Set.of(
-            "transport_failure",
-            "invalid_receipt",
-            "internal_error",
-            "fatal_error",
-            "service_unavailable",
-            "request_timeout",
-            "unknown");
+    private static final Set<String> PROVIDER_UNAVAILABLE =
+            Set.of("internal_error", "fatal_error", "service_unavailable", "request_timeout");
+    private static final Set<String> UNKNOWN_OUTCOME = Set.of("transport_failure", "invalid_receipt", "unknown");
+
+    static boolean isProviderUnavailable(String slackError) {
+        return PROVIDER_UNAVAILABLE.contains(slackError);
+    }
 
     public boolean isOutcomeUnknown() {
-        return UNKNOWN_OUTCOME.contains(slackError);
+        return isProviderUnavailable(slackError) || UNKNOWN_OUTCOME.contains(slackError);
     }
 
     @Serial

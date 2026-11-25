@@ -17,7 +17,8 @@ public final class RejectedInboxWrite {
     public static void during(RuntimeException rejected, Runnable handler) {
         var store = mock(ProviderEventStore.class);
         when(store.claimStep(anyLong(), anyInt(), anyString())).thenThrow(rejected);
-        var inbox = new DeliveryInbox(store, new PassThroughTransactionTemplate());
+        var inbox = new DeliveryInbox(
+                store, new PassThroughTransactionTemplate(), mock(ProviderEventConsumerProperties.class));
         inbox.dispatch(1, 1, Instant.EPOCH, () -> {
             boolean previous = TransactionSynchronizationManager.isActualTransactionActive();
             TransactionSynchronizationManager.setActualTransactionActive(true);

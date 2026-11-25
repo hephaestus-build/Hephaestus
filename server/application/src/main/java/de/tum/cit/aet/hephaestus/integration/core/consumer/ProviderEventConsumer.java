@@ -275,7 +275,7 @@ public class ProviderEventConsumer {
                     .filter(candidate -> candidate.owns(event.subject()))
                     .findFirst();
             boolean[] admitted = {true};
-            erasedByHandler.set(inbox.dispatch(claimed.id(), claimed.leaseEpoch(), event.receivedAt(), () -> {
+            erasedByHandler.set(inbox.dispatch(claimed, () -> {
                 if (admission.isEmpty()) resolved.onMessage(event);
                 else admitted[0] = admission.get().admit(claimed.workspaceId(), event, () -> resolved.onMessage(event));
             }));

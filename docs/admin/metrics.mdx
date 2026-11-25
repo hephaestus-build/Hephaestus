@@ -248,6 +248,11 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 Slack delivery uses the [outbox metrics](#outbox-metrics). The kinds are `SLACK_POST` for answers and digests, `SLACK_NOTICE` for direct-message notices, `SLACK_JOIN` for channel joins, and `SLACK_CONSENT` for consent announcements.
 [Slack replies](/contributor/unified-pi-runtime#slack-replies) describes its metadata readback and unknown outcomes.
 
+The counter `slack_dm_membership_lookups_total` counts each completed check at admission.
+Its `outcome` is `confirmed`, `ineligible`, or `unconfirmed`.
+Its `reason` is `none` when Slack confirms eligibility or ineligibility.
+An unconfirmed result has reason `credential`, `provider`, `rate_limited`, `transport`, or `payload`.
+
 Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.
 

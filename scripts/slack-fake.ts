@@ -14,6 +14,8 @@ import type { ReceivedCall } from "./lib/slack-turn.ts";
 export const FAKE_TEAM = { id: "T0TURNROLL", name: "Turn roll" } as const;
 /** The bot user of the installed app: `oauth.v2.access` and `auth.test` name the same one, as Slack does. */
 export const FAKE_BOT_USER = "U0TURNROLLBOT";
+/** The full Slack member who asks the question in the drill. */
+export const FAKE_MEMBER = "U0TURNROLL";
 /** The code that the drill hands to the server's OAuth callback, as Slack would. */
 export const FAKE_INSTALL_CODE = "turn-roll-install-code";
 
@@ -415,6 +417,30 @@ function handle(
 						bot_id: "B0TURNROLL",
 					}
 				: { ok: false, error: call.error },
+		};
+	}
+	if (method === "users.info") {
+		call.error = authorized ? null : "invalid_auth";
+		if (authorized && fields.get("user") !== FAKE_MEMBER) {
+			call.error = "user_not_found";
+		}
+		return {
+			call,
+			body:
+				call.error === null
+					? {
+							ok: true,
+							user: {
+								id: FAKE_MEMBER,
+								team_id: FAKE_TEAM.id,
+								deleted: false,
+								is_restricted: false,
+								is_ultra_restricted: false,
+								is_bot: false,
+								is_app_user: false,
+							},
+						}
+					: { ok: false, error: call.error },
 		};
 	}
 	if (method === "chat.postMessage") {

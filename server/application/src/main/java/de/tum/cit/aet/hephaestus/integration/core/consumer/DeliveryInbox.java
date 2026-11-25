@@ -23,7 +23,12 @@ public class DeliveryInbox {
     private static final ThreadLocal<Context> CURRENT = new ThreadLocal<>();
 
     private record Context(
-            DeliveryInbox inbox, long eventId, int leaseEpoch, Instant receivedAt, DispatchStatus status) {}
+            DeliveryInbox inbox,
+            long eventId,
+            int leaseEpoch,
+            Instant receivedAt,
+            boolean lastCountedAttempt,
+            DispatchStatus status) {}
 
     private static final class DispatchStatus {
         private @Nullable RuntimeException rejectedWrite;
@@ -32,10 +37,13 @@ public class DeliveryInbox {
 
     private final ProviderEventStore store;
     private final TransactionTemplate transactions;
+    private final ProviderEventConsumerProperties properties;
 
-    public DeliveryInbox(ProviderEventStore store, TransactionTemplate transactions) {
+    public DeliveryInbox(
+            ProviderEventStore store, TransactionTemplate transactions, ProviderEventConsumerProperties properties) {
         this.store = store;
         this.transactions = transactions;
+        this.properties = properties;
     }
 
     /** Returns false only for a step already committed by this event. Sync calls have no event to claim. */
@@ -134,13 +142,33 @@ public class DeliveryInbox {
         return context == null ? fallback : context.receivedAt();
     }
 
+    /** Whether another failure that spends the retry budget will leave this event for operator replay. */
+    public static boolean isLastCountedAttempt() {
+        Context context = CURRENT.get();
+        return context != null && context.lastCountedAttempt();
+    }
+
     /** Runs one claimed event and returns whether its handler committed the deletion of its own event row. */
+    public boolean dispatch(ProviderEventStore.Claimed claimed, Runnable work) {
+        return dispatch(
+                claimed.id(),
+                claimed.leaseEpoch(),
+                claimed.event().receivedAt(),
+                properties.poison().isLastCountedAttempt(claimed.failures()),
+                work);
+    }
+
     public boolean dispatch(long eventId, int leaseEpoch, Instant receivedAt, Runnable work) {
+        return dispatch(eventId, leaseEpoch, receivedAt, false, work);
+    }
+
+    private boolean dispatch(
+            long eventId, int leaseEpoch, Instant receivedAt, boolean lastCountedAttempt, Runnable work) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("An event cannot hold a transaction across handler preparation");
         }
         Context previous = CURRENT.get();
-        Context context = new Context(this, eventId, leaseEpoch, receivedAt, new DispatchStatus());
+        Context context = new Context(this, eventId, leaseEpoch, receivedAt, lastCountedAttempt, new DispatchStatus());
         CURRENT.set(context);
         try {
             work.run();

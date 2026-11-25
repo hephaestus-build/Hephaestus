@@ -242,6 +242,15 @@ groups:
         annotations:
           summary: GitHub events failed every delivery attempt and were not received
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusSlackDmMembershipUnconfirmed
+        expr: >-
+          sum by (namespace) (increase(slack_dm_membership_lookups_total{job="hephaestus",outcome="unconfirmed"}[15m])) >= 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Slack could not confirm membership for several direct messages
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusBudgetExhausted
         expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
         labels:

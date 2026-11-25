@@ -62,8 +62,7 @@ public class IntegrationPoisonHandler {
         String subject = claimed.event().subject();
         FailureKind kind = classify(failure);
         if (kind == FailureKind.PERMANENT
-                || (kind == FailureKind.UNKNOWN
-                        && claimed.failures() + 1 >= properties.poison().maxAttempts())) {
+                || (kind == FailureKind.UNKNOWN && properties.poison().isLastCountedAttempt(claimed.failures()))) {
             Throwable diagnostic = diagnosticCause(failure);
             if (store.dead(
                     claimed.id(), claimed.leaseEpoch(), diagnostic.getClass().getName())) {
