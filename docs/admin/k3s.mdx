@@ -57,6 +57,7 @@ Compare each saved rule with the live rules and identify which rules UFW and k3s
 Move the required host rules to UFW, then disable `netfilter-persistent` and archive its snapshots.
 
 Remove the conflicting rules that remain loaded in the kernel by their full rule specification.
+Use `iptables -D` for IPv4 rules or `ip6tables -D` for IPv6 rules.
 Verify the UFW policy and check that k3s remains healthy.
 
 Store `host-firewall.json` in `/etc/hephaestus`. Give it root ownership and mode `0600`.
@@ -81,8 +82,10 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    It makes no changes.
 2. From the admin VPN, connect over SSH on port 22 with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
    Make sure you have console access before changing the firewall.
-   During a change, the script uses UFW reset and rebuilds the declared rules.
-   Input and forwarding stay restricted to preserve VPN SSH during the reset.
+   During a change, the script uses UFW reset and rebuilds the policy.
+   The temporary filter permits declared input and lets k3s handle forwarding for its networks and web ingress.
+   UFW reset backs up and replaces its before and after rules with package defaults.
+   Move any required custom rules before you apply the policy.
    Run this command from the trusted checkout:
 
    ```bash
@@ -98,10 +101,13 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    ```
 
    The script records the checked policy in the root-owned `host-firewall-confirmed.json` file in `/etc/hephaestus`.
-   Applying a policy that already matches the host also records it as confirmed.
+   Run `--apply` once while the current policy matches the host to record a confirmed policy.
    If you do not confirm a change, the timer reapplies and verifies the last confirmed policy.
-   If recovery cannot apply a confirmed policy, it drops incoming and routed traffic and permits SSH from the configured VPN.
-   The emergency policy interrupts public web traffic and Pod forwarding.
+   The first change uses the emergency policy if you miss confirmation before recording any policy.
+
+   In an emergency, recovery drops incoming and routed traffic and permits VPN SSH.
+   It uses the VPN ranges from both the pending and confirmed policies when available.
+   The emergency policy interrupts public web traffic and can interrupt Pod forwarding.
    Recovery also saves the emergency policy for the next boot.
 
    If the apply fails, correct the problem and retry before the timer expires.
@@ -113,7 +119,9 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    Connect from the admin VPN to apply and confirm the corrected policy.
 
    Keep the host running until you confirm the change or recover the saved policy.
-   A reboot clears the pending timer. The last confirmed policy remains available on disk.
+   A reboot interrupts automatic recovery and clears the pending timer.
+   UFW loads the rules on disk at the time of the reboot.
+   The last confirmed declaration stays available on disk.
 
 To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 

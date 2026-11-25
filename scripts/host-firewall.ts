@@ -51,6 +51,7 @@ const confirmed = "/etc/hephaestus/host-firewall-confirmed.json";
 const rollback = "hephaestus-host-firewall-rollback";
 const recoveryDirectory = "/run/hephaestus-host-firewall-recovery";
 const recoveryChain = "HEPHAESTUS-RECOVERY";
+const auxiliaryInputChains = ["before-logging", "after-logging", "reject", "track"] as const;
 const ufw = "/usr/sbin/ufw";
 const systemctl = "/usr/bin/systemctl";
 const ufwDefaults = "/etc/default/ufw";
@@ -316,20 +317,25 @@ export function liveDrift(
 	}
 	if (
 		deniesBefore(lines, "INPUT", `${prefix}-before-input`) ||
-		deniesBefore(lines, `${prefix}-before-input`, input)
+		deniesBefore(lines, `${prefix}-before-input`, input) ||
+		(lines
+			.slice(0, Math.max(lines.indexOf(`-A INPUT -j ${prefix}-before-input`), 0))
+			.includes(`-A INPUT -j ${prefix}-before-logging-input`) &&
+			deniesBefore(lines, `${prefix}-before-logging-input`))
 	) {
 		problems.push(`IPv${family} has an input deny before the required UFW rules.`);
 	}
 	return problems;
 }
 
-function deniesBefore(lines: string[], chain: string, next: string) {
-	const hook = lines.indexOf(`-A ${chain} -j ${next}`);
+function deniesBefore(lines: string[], chain: string, next?: string) {
+	const hook = next === undefined ? lines.length : lines.indexOf(`-A ${chain} -j ${next}`);
 	return lines.slice(0, Math.max(hook, 0)).some((line) => {
 		const rule = withoutComment(line);
 		return (
 			rule.startsWith(`-A ${chain} `) &&
-			/ -[jg] (?:DROP|REJECT|RETURN)(?: |$)/u.test(rule) &&
+			(/ -[jg] (?:DROP|REJECT)(?: |$)/u.test(rule) ||
+				(next !== undefined && / -j RETURN(?: |$)/u.test(rule))) &&
 			rule !== `-A ${chain} -m conntrack --ctstate INVALID -j DROP` &&
 			rule !== `-A ${chain} -m rt --rt-type 0 -j DROP`
 		);
@@ -381,7 +387,10 @@ function unmanagedInputRule(line: string, prefix: string, family: Family) {
 			)
 		);
 	}
-	return chain === `${prefix}-after-input` && target !== `${prefix}-skip-to-policy-input`;
+	return (
+		(chain === `${prefix}-after-input` && target !== `${prefix}-skip-to-policy-input`) ||
+		auxiliaryInputChains.some((name) => chain === `${prefix}-${name}-input`)
+	);
 }
 
 function standardBeforeInputAccept(rule: string, family: Family) {
@@ -563,13 +572,24 @@ interface RecoveryRuntime {
 	drift: (rules: Rule[], guarded?: boolean) => Problem[];
 }
 
-const hostRecovery: RecoveryRuntime = {
+interface ChangeRuntime extends RecoveryRuntime {
+	unitState: typeof unitState;
+	snapshotDrift: typeof snapshotDrift;
+	sshConnection: typeof sshConnection;
+	uptime: () => number;
+}
+
+const hostRecovery: ChangeRuntime = {
 	directory: recoveryDirectory,
 	pending,
 	confirmed,
 	defaultsPath: ufwDefaults,
 	execute: run,
 	drift,
+	unitState,
+	snapshotDrift,
+	sshConnection,
+	uptime: () => Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]),
 };
 
 function readChange(file: string): Change | undefined {
@@ -614,7 +634,7 @@ export function recoveryCommand(directory: string): string[] {
 	];
 }
 
-export function recoveryFilter(family: Family, vpn: Rule[], existing: string) {
+export function recoveryFilter(family: Family, rules: Rule[], existing: string) {
 	const forwardChain = `${recoveryChain}-FORWARD`;
 	const inputHook = `INPUT -j ${recoveryChain}`;
 	const forwardHook = `FORWARD -j ${forwardChain}`;
@@ -623,6 +643,9 @@ export function recoveryFilter(family: Family, vpn: Rule[], existing: string) {
 		.split("\n")
 		.filter((line) => line.startsWith("-A ") && hooks.has(line.slice(3)))
 		.map((line) => `-D ${line.slice(3)}`);
+	const inputRules = rules.filter((rule) => rule.family === undefined || rule.family === family);
+	const devices = inputRules.flatMap(({ device }) => (device === undefined ? [] : [device]));
+	const established = "-m conntrack --ctstate RELATED,ESTABLISHED";
 	return [
 		"*filter",
 		`:${recoveryChain} - [0:0]`,
@@ -631,18 +654,29 @@ export function recoveryFilter(family: Family, vpn: Rule[], existing: string) {
 		"-P FORWARD DROP",
 		...previousHooks,
 		`-A ${recoveryChain} -i lo -j ACCEPT`,
+		`-A ${recoveryChain} ${established}${rules.every(({ port }) => port === 22) ? " --ctdir REPLY" : ""} -j ACCEPT`,
 		// Router advertisements, neighbor discovery and packet-too-big keep IPv6 SSH usable.
 		...(family === 6
 			? [2, 134, 135, 136].map(
 					(type) => `-A ${recoveryChain} -p ipv6-icmp --icmpv6-type ${type} -j ACCEPT`,
 				)
 			: []),
-		...vpn.flatMap(({ family: ruleFamily, source }) =>
-			ruleFamily === family && source !== undefined
-				? [`-A ${recoveryChain} -s ${source} -p tcp --dport 22 -j ACCEPT`]
-				: [],
-		),
+		...inputRules.map((rule) => liveRule(rule, recoveryChain)),
 		`-A ${recoveryChain} -j DROP`,
+		// Leave admitted forwarding with k3s so its network policies still apply.
+		...(devices.length === 0
+			? []
+			: [
+					`-A ${forwardChain} ${established} -j RETURN`,
+					...devices.map((device) => `-A ${forwardChain} -i ${device} -j RETURN`),
+					...inputRules.flatMap(({ port, protocol }) =>
+						protocol !== undefined && (port === 80 || port === 443)
+							? [
+									`-A ${forwardChain} -p ${protocol} -m conntrack --ctstate DNAT --ctdir ORIGINAL --ctorigdstport ${port} -j RETURN`,
+								]
+							: [],
+					),
+				]),
 		`-A ${forwardChain} -j DROP`,
 		`-I INPUT 1 -j ${recoveryChain}`,
 		`-I FORWARD 1 -j ${forwardChain}`,
@@ -668,7 +702,7 @@ function removeRecoveryFilter(execute: typeof run) {
 	}
 }
 
-function installRecoveryFilters(vpn: Rule[], execute: typeof run) {
+function installRecoveryFilters(rules: Rule[], execute: typeof run) {
 	const failures: unknown[] = [];
 	for (const family of families) {
 		const command = packetFilter[family];
@@ -677,14 +711,14 @@ function installRecoveryFilters(vpn: Rule[], execute: typeof run) {
 			execute(
 				`${command}-restore`,
 				["--noflush", "--wait", "5"],
-				recoveryFilter(family, vpn, existing),
+				recoveryFilter(family, rules, existing),
 			);
-			const rules = execute(command, ["-w", "5", "-S"]).split("\n");
+			const live = execute(command, ["-w", "5", "-S"]).split("\n");
 			if (
-				!rules.includes("-P INPUT DROP") ||
-				!rules.includes("-P FORWARD DROP") ||
-				rules.find((line) => line.startsWith("-A INPUT ")) !== `-A INPUT -j ${recoveryChain}` ||
-				rules.find((line) => line.startsWith("-A FORWARD ")) !==
+				!live.includes("-P INPUT DROP") ||
+				!live.includes("-P FORWARD DROP") ||
+				live.find((line) => line.startsWith("-A INPUT ")) !== `-A INPUT -j ${recoveryChain}` ||
+				live.find((line) => line.startsWith("-A FORWARD ")) !==
 					`-A FORWARD -j ${recoveryChain}-FORWARD`
 			) {
 				throw new Error(`IPv${family} emergency firewall guards differ.`);
@@ -720,6 +754,12 @@ function vpnRules(rules: Rule[]) {
 	return rules.filter(({ port }) => port === 22);
 }
 
+function recoveryVpn(candidate: Rule[], previous: Rule[]) {
+	return [
+		...new Map(vpnRules([...candidate, ...previous]).map((rule) => [rule.source, rule])).values(),
+	];
+}
+
 function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, guarded = false) {
 	const problems = runtime.drift(rules, guarded);
 	if (problems.length > 0) {
@@ -727,14 +767,34 @@ function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, guarded = false) 
 	}
 }
 
-function rebuildPolicy(rules: Rule[], runtime: RecoveryRuntime, emergency = false) {
+function resetUfw(execute: typeof run) {
+	try {
+		execute(ufw, ["--force", "reset"]);
+	} catch (error) {
+		// UFW uses a one-second timestamp for its own reset backups.
+		if (
+			!(error instanceof Error) ||
+			!/\.rules\.\d{8}_\d{6}' already exists\. Aborting/u.test(error.message)
+		) {
+			throw error;
+		}
+		execute("/usr/bin/sleep", ["1"]);
+		execute(ufw, ["--force", "reset"]);
+	}
+}
+
+function rebuildPolicy(
+	rules: Rule[],
+	runtime: RecoveryRuntime,
+	fallback = vpnRules(rules),
+	emergency = false,
+) {
 	const { execute, defaultsPath } = runtime;
-	const vpn = vpnRules(rules);
-	// UFW reset disables UFW temporarily. Keep blocking input and forwarding through the reset.
-	installRecoveryFilters(vpn, execute);
+	// UFW reset disables UFW temporarily. Guard the declared traffic while rebuilding.
+	installRecoveryFilters(rules, execute);
 	try {
 		setUfwDefault(defaultsPath, "MANAGE_BUILTINS", "no");
-		execute(ufw, ["--force", "reset"]);
+		resetUfw(execute);
 		setUfwDefault(defaultsPath, "IPV6", "yes");
 		for (const { direction, ufw: action } of defaults) {
 			execute(ufw, ["default", action, direction]);
@@ -746,22 +806,31 @@ function rebuildPolicy(rules: Rule[], runtime: RecoveryRuntime, emergency = fals
 		execute(systemctl, ["enable", "ufw.service"]);
 		verifyPolicy(rules, runtime, true);
 		if (emergency) {
-			installRecoveryFilters(vpn, execute);
+			installRecoveryFilters(rules, execute);
 		} else {
 			removeRecoveryFilter(execute);
+			verifyPolicy(rules, runtime);
 		}
 	} catch (error) {
-		installRecoveryFilters(vpn, execute);
+		installRecoveryFilters(fallback, execute);
 		throw error;
 	}
 }
 
 export function restoreUfw(runtime = hostRecovery) {
 	let change: Change | undefined;
+	let last: Change | undefined;
+	let confirmedError: unknown;
+	try {
+		last = readChange(runtime.confirmed);
+	} catch (error) {
+		confirmedError = error;
+	}
+	const previous = last === undefined ? [] : rulesFor(last.policy);
 	try {
 		change = readChange(runtime.pending);
 	} catch (error) {
-		installRecoveryFilters([], runtime.execute);
+		installRecoveryFilters(vpnRules(previous), runtime.execute);
 		throw new Error("Cannot read the unconfirmed policy. The emergency guards are active.", {
 			cause: error,
 		});
@@ -769,18 +838,18 @@ export function restoreUfw(runtime = hostRecovery) {
 	if (change === undefined || change.started !== true) {
 		return;
 	}
+	const vpn = recoveryVpn(rulesFor(change.policy), previous);
 	try {
-		const last = readChange(runtime.confirmed);
 		if (last === undefined) {
-			throw new Error("No previous firewall policy has been confirmed.");
+			throw new Error("Cannot read a last confirmed firewall policy.", { cause: confirmedError });
 		}
 		if (last.id !== change.id) {
-			rebuildPolicy(rulesFor(last.policy), runtime);
+			rebuildPolicy(previous, runtime, vpn);
 			console.log("Restored the last confirmed UFW policy.");
 		}
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : "Could not restore UFW.");
-		rebuildPolicy(vpnRules(rulesFor(change.policy)), runtime, true);
+		rebuildPolicy(vpn, runtime, vpn, true);
 		throw new Error("UFW recovery applied a VPN-only emergency policy. Use the host console.", {
 			cause: error,
 		});
@@ -819,52 +888,63 @@ export function applyAction(
 	return policyMatches() ? "unchanged" : "arm";
 }
 
-function apply(policy: unknown, rules: Rule[]) {
-	const snapshot = snapshotDrift();
+export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
+	const snapshot = runtime.snapshotDrift();
 	if (snapshot !== null) {
 		throw new Error(snapshot);
 	}
-	sshConnection(rules);
-	const waiting = unitState(`${rollback}.timer`, "SubState") === "waiting";
-	const previous = waiting ? readChange(pending) : undefined;
+	runtime.sshConnection(rules);
+	const waiting = runtime.unitState(`${rollback}.timer`, "SubState") === "waiting";
+	const previous = waiting ? readChange(runtime.pending) : undefined;
 	const recoveryAction = applyAction(
 		waiting,
 		previous?.changedAt !== undefined,
-		unitState(`${rollback}.service`, "ActiveState"),
-		() => drift(rules).length === 0,
+		runtime.unitState(`${rollback}.service`, "ActiveState"),
+		() => runtime.drift(rules).length === 0,
 	);
 	const change = { id: previous?.id ?? randomUUID(), policy };
 	if (recoveryAction === "unchanged") {
-		saveChange(confirmed, change);
+		saveConfirmed(runtime, change);
 		console.log("UFW matches the host policy. Recorded the confirmed policy.");
 		return;
 	}
 	if (recoveryAction === "arm") {
-		armRecovery(change);
+		armRecovery(change, runtime);
 	} else if (previous === undefined) {
 		throw new Error("The waiting recovery unit has no policy declaration.");
 	}
-	saveChange(pending, { ...change, started: true });
+	saveChange(runtime.pending, { ...change, started: true });
 	console.log("The recovery timer will reapply the last confirmed UFW policy at its next run:");
-	console.log(run(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
-	rebuildPolicy(rules, hostRecovery);
-	if (unitState(`${rollback}.timer`, "SubState") !== "waiting") {
+	console.log(runtime.execute(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
+	rebuildPolicy(rules, runtime);
+	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("The recovery timer has expired.");
 	}
-	const changedAt = Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]);
+	const changedAt = runtime.uptime();
 	if (!Number.isFinite(changedAt) || changedAt <= 0) {
 		throw new Error("Cannot record when the firewall changed.");
 	}
-	saveChange(pending, { ...change, started: true, changedAt });
+	saveChange(runtime.pending, { ...change, started: true, changedAt });
 	console.log("Open a new SSH connection and run --confirm before the recovery timer expires.");
+}
+
+function saveConfirmed(runtime: RecoveryRuntime, change: Change) {
+	mkdirSync(nodePath.dirname(runtime.confirmed), { recursive: true, mode: 0o700 });
+	saveChange(runtime.confirmed, { id: change.id, policy: change.policy });
 }
 
 export function commitPolicy(change: Change, runtime = hostRecovery) {
 	// Publish the confirmation before trying to stop either unit. A queued unit then does no work.
-	saveChange(runtime.confirmed, { id: change.id, policy: change.policy });
+	saveConfirmed(runtime, change);
 	try {
 		runtime.execute(systemctl, ["stop", `${rollback}.timer`]);
-		runtime.execute(systemctl, ["stop", `${rollback}.service`]);
+		try {
+			runtime.execute(systemctl, ["stop", `${rollback}.service`]);
+		} catch (error) {
+			if (runtime.unitState(`${rollback}.service`, "LoadState") !== "not-found") {
+				throw error;
+			}
+		}
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : "Could not stop the recovery units.");
 		return;
@@ -872,20 +952,20 @@ export function commitPolicy(change: Change, runtime = hostRecovery) {
 	rmSync(runtime.pending, { force: true });
 }
 
-function confirm(rules: Rule[]) {
-	const change = readChange(pending);
+export function confirm(rules: Rule[], runtime = hostRecovery) {
+	const change = readChange(runtime.pending);
 	if (
 		change?.changedAt === undefined ||
 		JSON.stringify(rulesFor(change.policy)) !== JSON.stringify(rules)
 	) {
 		throw new Error("There is no matching firewall change to confirm. Run --check or --apply.");
 	}
-	requireFreshSshConnection(change.changedAt, () => sshConnection(rules));
-	verifyPolicy(rules, hostRecovery);
-	if (unitState(`${rollback}.timer`, "SubState") !== "waiting") {
+	requireFreshSshConnection(change.changedAt, () => runtime.sshConnection(rules));
+	verifyPolicy(rules, runtime);
+	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("Cannot confirm the firewall change after the recovery timer expires.");
 	}
-	commitPolicy(change);
+	commitPolicy(change, runtime);
 	console.log("UFW matches the host policy. The new SSH connection confirmed the change.");
 }
 
