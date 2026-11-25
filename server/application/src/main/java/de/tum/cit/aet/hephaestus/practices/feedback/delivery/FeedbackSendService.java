@@ -164,9 +164,8 @@ public class FeedbackSendService {
                 transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId(), readAt);
             return;
         }
-        if (!owner.fence().beginWrite()
-                || !transactions.fence(
-                        copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of())) return;
+        if (!transactions.fence(copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of()))
+            return;
         var handle = writer.postSummary(target, content);
         transactions.receipt(
                 copy.getWorkspaceId(),
@@ -271,22 +270,20 @@ public class FeedbackSendService {
     }
 
     /**
-     * The checks a package passes before its provider writes. A private staging write needs no lease margin; only the
-     * notifying write can reach the developer, so it starts only with the margin left, and is recorded as sent.
+     * The checks a package passes before its provider writes. Each one, also a private staging write, ends with the send
+     * boundary in its last transaction, after the waits for the item and feedback rows.
      */
     private record PackageFence(
             FeedbackSendTransactions transactions, long workspaceId, UUID feedbackId, ActionAttempt owner)
             implements CopyWriteFence {
         @Override
         public boolean beforeCreate(List<UUID> attempting, List<CopyReceipt> completed) {
-            return (attempting.isEmpty() || owner.fence().beginWrite())
-                    && transactions.fencePackage(workspaceId, feedbackId, owner, attempting, completed);
+            return transactions.fencePackage(workspaceId, feedbackId, owner, attempting, completed);
         }
 
         @Override
         public boolean beforeNotify() {
-            return owner.fence().beginWrite()
-                    && transactions.fencePackage(workspaceId, feedbackId, owner, List.of(), List.of());
+            return transactions.fencePackage(workspaceId, feedbackId, owner, List.of(), List.of());
         }
     }
 

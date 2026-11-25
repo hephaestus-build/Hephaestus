@@ -51,7 +51,8 @@ final class ConversationTurnFixtures {
                 beans.getBean(AgentRuns.class),
                 beans.getBean(ConversationTurnService.class),
                 sandboxes,
-                beans.getBean(TransactionTemplate.class));
+                beans.getBean(TransactionTemplate.class),
+                beans.getBean(AgentRunAuthority.class));
     }
 
     static ConversationTurnContexts contexts(ApplicationContext beans) {

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -73,7 +74,8 @@ class DigestScheduleLockTest extends BaseUnitTest {
                     mock(PersonDataWriteFence.class),
                     mock(ObjectMapper.class),
                     mock(TransactionTemplate.class),
-                    Clock.systemUTC());
+                    Clock.systemUTC(),
+                    mock(AuthorityGenerations.class));
         }
     }
 }

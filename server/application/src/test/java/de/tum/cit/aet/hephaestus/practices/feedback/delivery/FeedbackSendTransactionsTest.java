@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,6 +14,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -35,6 +39,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -44,6 +49,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -57,6 +63,7 @@ class FeedbackSendTransactionsTest {
     final FeedbackCopyRepository copies = mock(FeedbackCopyRepository.class);
     final AgentActions actions = mock(AgentActions.class);
     final FeedbackVisibilityService visibility = mock(FeedbackVisibilityService.class);
+    final FeedbackSendQueue sendQueue = mock(FeedbackSendQueue.class);
     final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
     final Instant now = Instant.EPOCH;
     final UUID id = UUID.randomUUID(), copyId = UUID.randomUUID();
@@ -74,7 +81,7 @@ class FeedbackSendTransactionsTest {
             visibility,
             Clock.fixed(now, ZoneOffset.UTC),
             privacy,
-            mock(FeedbackSendQueue.class),
+            sendQueue,
             mock(ItemIndexService.class),
             mock(FeedbackPublicationContext.class),
             parents);
@@ -133,6 +140,81 @@ class FeedbackSendTransactionsTest {
         var settled = sent.plus(FeedbackSendTransactions.WRITE_SETTLED);
         assertThat(transactions.absent(1, id, owner, copyId, settled)).isTrue();
         verify(copies).recordAbsent(anyLong(), any(), any(), anyString());
+    }
+
+    @Test
+    void shouldPassTheSendBoundaryLastAlsoForAPackageWithNoCopyToStart() {
+        var boundary = new AtomicInteger();
+        var refused = new ActionAttempt(
+                UUID.randomUUID(),
+                1L,
+                ActionKind.DELIVER_FEEDBACK,
+                "feedback:" + id + ":1:POST",
+                JsonNodeFactory.instance.objectNode(),
+                1,
+                1,
+                false,
+                null,
+                () -> {
+                    boundary.incrementAndGet();
+                    return false;
+                },
+                null);
+        when(actions.holds(refused)).thenReturn(true);
+        when(store.check(row, true))
+                .thenReturn(new FeedbackCheck(
+                        FeedbackCheckStage.EGRESS,
+                        true,
+                        null,
+                        now,
+                        new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
+
+        // A draft that GitHub or GitLab stages has no copy to start, and its authority narrowed while it waited.
+        assertThat(transactions.fencePackage(1, id, refused, List.of(), List.of()))
+                .isFalse();
+        assertThat(boundary).hasValue(1);
+        var order = inOrder(store);
+        order.verify(store).lock(1, id);
+        order.verify(store).check(row, true);
+        verify(copies, never()).recordWriteSent(anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldFollowASendThatTheSendBoundaryRefusedOnlyWithARemoval() {
+        when(parents.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
+        when(store.check(row, true))
+                .thenReturn(new FeedbackCheck(
+                        FeedbackCheckStage.EGRESS,
+                        true,
+                        null,
+                        now,
+                        new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
+        var retracted = FeedbackCopy.builder()
+                .id(copyId)
+                .feedbackId(id)
+                .state(FeedbackCopyState.RETRACTED)
+                .postedAt(now)
+                .build();
+        when(copies.lockByFeedbackId(1, id)).thenReturn(List.of(retracted));
+
+        // The copy asks to be restored: a refused send leaves it for a new authorized request.
+        transactions.ended(1, id, ActionState.CANCELLED, ActionStopReason.AUTHORITY_CHANGED);
+        verify(sendQueue, never()).follow(any(), any());
+        transactions.ended(1, id, ActionState.CANCELLED, ActionStopReason.WITHDRAWN);
+        verify(sendQueue).follow(row, FeedbackSendAction.RETRACT);
+
+        // A withdrawn copy still on the work is removed, also after a refusal.
+        clearInvocations(sendQueue);
+        when(visibility.withdrawn(1, id)).thenReturn(true);
+        var posted = FeedbackCopy.builder()
+                .id(copyId)
+                .feedbackId(id)
+                .state(FeedbackCopyState.POSTED)
+                .postedAt(now)
+                .build();
+        when(copies.lockByFeedbackId(1, id)).thenReturn(List.of(posted));
+        transactions.ended(1, id, ActionState.CANCELLED, ActionStopReason.AUTHORITY_CHANGED);
+        verify(sendQueue).follow(row, FeedbackSendAction.RETRACT);
     }
 
     @Test
@@ -241,15 +323,15 @@ class FeedbackSendTransactionsTest {
     @Test
     void shouldWithholdACorrectionWhenItCannotHoldTheRecipient() {
         when(privacy.holdForAccountWrite(2)).thenReturn(false);
-        assertThat(transactions.admitCorrection(1, id, owner)).isFalse();
+        assertThat(transactions.admitCorrection(1, id, owner, true)).isFalse();
         verify(store).withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
     }
 
     @Test
     void shouldAdmitACorrectionOnlyForTheCurrentLeaseHolder() {
         when(privacy.holdForAccountWrite(2)).thenReturn(true);
-        assertThat(transactions.admitCorrection(1, id, owner)).isTrue();
-        assertThat(transactions.admitCorrection(1, id, expired)).isFalse();
+        assertThat(transactions.admitCorrection(1, id, owner, true)).isTrue();
+        assertThat(transactions.admitCorrection(1, id, expired, true)).isFalse();
         verify(store, never()).withhold(any(), any());
     }
 }

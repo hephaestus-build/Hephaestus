@@ -18,6 +18,8 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -52,10 +54,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -73,6 +79,7 @@ class FeedbackDecisionServiceTest {
     final FeedbackPublicationContext publication = mock(FeedbackPublicationContext.class);
     final AuthorityGenerations generations = spy(new UnchangedAuthority());
     final WorkspaceMemberships memberships = mock(WorkspaceMemberships.class);
+    final AccountDirectory accounts = mock(AccountDirectory.class);
     final Instant now = Instant.EPOCH;
     final UUID id = UUID.randomUUID();
     final FeedbackDecisionService service = new FeedbackDecisionService(
@@ -89,6 +96,7 @@ class FeedbackDecisionServiceTest {
                     actions,
                     generations,
                     memberships,
+                    accounts,
                     new ObjectMapper(),
                     copies,
                     mock(FeedbackVisibilityService.class),
@@ -164,6 +172,44 @@ class FeedbackDecisionServiceTest {
                 .isInstanceOf(AccessForbiddenException.class);
         verify(actions, never()).enqueue(any());
         verify(decisions, never()).save(any());
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldHoldTheActorAndTheWorkspaceBeforeTheStampSoADemotionCannotCommitBeforeTheDecision() {
+        service.decide(1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+
+        // Held until the decision commits: a demotion either committed before the role check saw it, or waits.
+        var order = inOrder(generations, memberships);
+        order.verify(generations).accountHeld(3);
+        order.verify(generations).workspaceHeld(1);
+        order.verify(generations).workspace(1);
+        order.verify(memberships).activeRole(1, 3);
+    }
+
+    @Test
+    void shouldAcceptAnInstanceAdminsDecisionOnlyWhileTheAccountIsStillAnInstanceAdmin() {
+        when(memberships.activeRole(1, 3)).thenReturn(Optional.empty());
+        SecurityContextHolder.getContext()
+                .setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("token")
+                        .header("alg", "none")
+                        .subject("3")
+                        .claim("roles", List.of("app_admin"))
+                        .build()));
+        when(accounts.activeInstanceAdmin(3)).thenReturn(true);
+
+        service.decide(1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+        verify(actions).enqueue(any());
+
+        // The token still names the instance role, but an admin removed it before this decision.
+        when(accounts.activeInstanceAdmin(3)).thenReturn(false);
+        assertThatThrownBy(() -> service.decide(
+                        1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest())))
+                .isInstanceOf(AccessForbiddenException.class);
     }
 
     @Test
@@ -283,7 +329,8 @@ class FeedbackDecisionServiceTest {
                         now,
                         null,
                         now,
-                        now)));
+                        now,
+                        new AuthorizationStamp(0))));
         when(copies.lockByFeedbackId(1, id))
                 .thenReturn(List.of(
                         FeedbackCopy.builder().state(FeedbackCopyState.POSTED).build()));

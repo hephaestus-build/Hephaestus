@@ -47,8 +47,9 @@ public class ConversationTurnConfiguration {
             AgentRuns runs,
             ConversationTurnService turns,
             AgentSandboxes sandboxes,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            AgentRunAuthority authority) {
         return new ConversationTurns(
-                rows, conversations, writeFence, copyFence, clock, runs, turns, sandboxes, transactions);
+                rows, conversations, writeFence, copyFence, clock, runs, turns, sandboxes, transactions, authority);
     }
 }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -172,7 +173,7 @@ public class ConversationTurnService {
 
     /** A digest is a system stimulus on the same conversation ledger, with no invented user question. */
     @Transactional
-    public boolean submitDigest(long workspaceId, UUID conversationId, DigestRequest request) {
+    public boolean submitDigest(long workspaceId, UUID conversationId, DigestRequest request, CheckedAuthority reader) {
         ConversationService.holdWrite(
                 writeFence,
                 conversations
@@ -182,7 +183,7 @@ public class ConversationTurnService {
         if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
                         .isPresent()
                 || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
-        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startWithin());
+        UUID runId = runs.enqueueDigest(reader, conversationId, request.startWithin());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));
         ConversationEntry stimulus = entryService.insert(

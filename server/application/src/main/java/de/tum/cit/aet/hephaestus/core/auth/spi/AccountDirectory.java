@@ -15,6 +15,9 @@ public interface AccountDirectory {
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
 
+    /** Whether the account is an active instance admin as committed now, never as a session's token says. */
+    boolean activeInstanceAdmin(long accountId);
+
     /** Locks an account eligible for retention in the caller's transaction. */
     boolean holdForRetention(long accountId);
 

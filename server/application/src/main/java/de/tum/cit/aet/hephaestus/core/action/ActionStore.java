@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
@@ -199,13 +200,21 @@ class ActionStore {
                 .toList();
     }
 
-    /** Whether a write may start: the claim still holds the action, and the action's authority still holds. */
-    enum WriteAdmission {
-        ADMITTED,
+    /**
+     * Whether a write may start: the claim still holds the action, and the action's authority still holds. A refused
+     * admission names the refusal, so its reason reaches the metric.
+     */
+    record WriteAdmission(boolean admitted, @Nullable AuthorityRefusal refusal) {
+        /** The claim holds the action, and a write may start. */
+        static final WriteAdmission ADMITTED = new WriteAdmission(true, null);
+
         /** Another claim took the action, an erasure deleted it, or too little of the lease is left. */
-        LOST,
-        /** The workspace's authority narrowed since the action was queued (ADR 0134). */
-        AUTHORITY_CHANGED
+        static final WriteAdmission LOST = new WriteAdmission(false, null);
+
+        /** The authority that the action was queued under narrowed since (ADR 0134). */
+        static WriteAdmission refused(AuthorityRefusal refusal) {
+            return new WriteAdmission(false, refusal);
+        }
     }
 
     /**
@@ -228,9 +237,8 @@ class ActionStore {
     private WriteAdmission admit(Claim claim, Duration margin, boolean checkAuthority) {
         Long workspace = claim.workspaceId();
         if (checkAuthority && workspace != null) {
-            if (generations
-                    .checkHeld(claim.stamp(), workspace, AuthorityBoundary.SEND)
-                    .isPresent()) return WriteAdmission.AUTHORITY_CHANGED;
+            var refusal = generations.checkHeld(claim.stamp(), workspace, AuthorityBoundary.SEND);
+            if (refusal.isPresent()) return WriteAdmission.refused(refusal.get());
         }
         return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1
                 ? WriteAdmission.ADMITTED
@@ -278,10 +286,10 @@ class ActionStore {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<LaneAction> newestInLane(long workspaceId, String laneKey) {
-        return actions.newestInLane(workspaceId, laneKey).map(ActionStore::lane);
+        return actions.newestInLane(workspaceId, laneKey).map(this::lane);
     }
 
-    private static LaneAction lane(AgentActionRepository.LaneRow row) {
+    private LaneAction lane(AgentActionRepository.LaneRow row) {
         String reason = row.getStopReason();
         return new LaneAction(
                 row.getId(),
@@ -293,7 +301,8 @@ class ActionStore {
                 row.getNextAttemptAt(),
                 reason == null ? null : ActionStopReason.valueOf(reason),
                 row.getCreatedAt(),
-                row.getUpdatedAt());
+                row.getUpdatedAt(),
+                mapper.readValue(row.getAuthorizationStamp(), AuthorizationStamp.class));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

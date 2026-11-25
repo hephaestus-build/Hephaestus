@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -13,6 +14,8 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.io.Serial;
@@ -64,6 +67,7 @@ public class ConversationTurns {
     private final ConversationTurnService turns;
     private final AgentSandboxes sandboxes;
     private final TransactionTemplate transactions;
+    private final AgentRunAuthority authority;
 
     /** An erasure holds this fence exclusively while it changes the account and revokes the sandbox. */
     public void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {
@@ -105,23 +109,34 @@ public class ConversationTurns {
     /**
      * Reads for the run's attempt without holding the sandbox, turn or run row while the read runs, as {@code GET
      * …/context} requires ({@link de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind#context}). A context build can
-     * take longer than the run's lease, and the renewal and the reaper lock the run's row. The fences and the lease are
-     * checked in a short transaction before the read and again after it. The read runs outside any transaction, so each
+     * take longer than the run's lease, and the renewal and the reaper lock the run's row. The fences, the lease and the
+     * run's authority (ADR 0134) are checked in a short transaction before the read and again after it. The read runs outside any transaction, so each
      * part opens its own and holds its locks only as long as that part reads. A person erasure that completed after the attempt started fails the attempt, as its next partial answer
      * would ({@code ConversationTurnService#updatePartial}), so no read that an erasure overtook is answered.
      */
     public <T> T read(SandboxRun run, Function<TurnAttempt, T> reader) {
-        TurnAttempt turn = write(run, false, held -> held);
-        T value = reader.apply(turn);
-        write(run, false, held -> {
-            // write() holds capture admission in this transaction, so the answer holds until it commits.
-            Instant startedAt = attemptOf(run).startedAt();
-            if (startedAt == null
-                    || copyFence.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt))
-                throw new StaleRunException(run.fence());
-            return held;
-        });
-        return value;
+        try {
+            // The route checked authority before it waited for these locks: check again once they are held.
+            TurnAttempt turn = write(run, false, held -> {
+                runs.requireCurrentUnder(run.fence(), AuthorityBoundary.CONTEXT_READ);
+                return held;
+            });
+            T value = reader.apply(turn);
+            write(run, false, held -> {
+                // write() holds capture admission in this transaction, so the answer holds until it commits.
+                Instant startedAt = attemptOf(run).startedAt();
+                if (startedAt == null
+                        || copyFence.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt))
+                    throw new StaleRunException(run.fence());
+                runs.requireCurrentUnder(run.fence(), AuthorityBoundary.CONTEXT_READ);
+                return held;
+            });
+            return value;
+        } catch (AuthorityRefusedException refused) {
+            // Refused under the run's locks: the run ends now that they unwound.
+            authority.endRefused(run.fence(), refused);
+            throw refused;
+        }
     }
 
     /**

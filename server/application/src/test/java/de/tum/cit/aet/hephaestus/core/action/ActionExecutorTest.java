@@ -11,6 +11,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
@@ -122,7 +124,9 @@ class ActionExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldCancelAnActionWhoseAuthorityNarrowedBeforeItsWriteWithoutReachingTheProvider() {
-        when(store.beginWrite(any(), any())).thenReturn(ActionStore.WriteAdmission.AUTHORITY_CHANGED);
+        when(store.beginWrite(any(), any()))
+                .thenReturn(ActionStore.WriteAdmission.refused(new AuthorityRefusal(
+                        AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
         var provider = new AtomicInteger();
 
         ActionResult result = executor(attempt -> {
@@ -138,8 +142,42 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCountTheRefusalUnderTheReasonThatTheSendBoundaryGave() {
+        when(store.beginWrite(any(), any()))
+                .thenReturn(ActionStore.WriteAdmission.refused(new AuthorityRefusal(
+                        AuthorityBoundary.SEND, AuthorityRefusal.Reason.ACCOUNT_AUTHORITY_NARROWED)));
+        when(store.settle(any(), anyLong(), any(), any())).thenReturn(Optional.empty());
+        var meters = new SimpleMeterRegistry();
+
+        new ActionExecutor(
+                        store,
+                        JsonMapper.builder().build(),
+                        adapters(attempt -> attempt.fence().beginWrite()
+                                ? new ActionResult.Done(null)
+                                : new ActionResult.Abandoned()),
+                        meters,
+                        ActionExecutor.LEASE)
+                .run(workspaceClaim(false));
+
+        assertThat(meters.get(CoreMetrics.AUTHORITY_REFUSED)
+                        .tag("boundary", "send")
+                        .tag("reason", "account_authority_narrowed")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(meters.get(CoreMetrics.AUTHORITY_REFUSED)
+                        .tag("boundary", "send")
+                        .tag("reason", "workspace_authority_narrowed")
+                        .counter()
+                        .count())
+                .isZero();
+    }
+
+    @Test
     void shouldEndUncertainWhenAuthorityNarrowedAfterAWriteOfTheActionStarted() {
-        when(store.beginWrite(any(), any())).thenReturn(ActionStore.WriteAdmission.AUTHORITY_CHANGED);
+        when(store.beginWrite(any(), any()))
+                .thenReturn(ActionStore.WriteAdmission.refused(new AuthorityRefusal(
+                        AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
 
         ActionResult result = executor(attempt ->
                         attempt.fence().beginWrite() ? new ActionResult.Done(null) : new ActionResult.Abandoned())

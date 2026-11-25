@@ -35,8 +35,18 @@ public class PostedCopyCorrector {
     private final List<LineNoteWriter> notes;
     private final FeedbackSendTransactions transactions;
 
-    /** Brings each posted copy to what its marks and the piece's withdrawal now ask. Other copies stay untouched. */
+    /**
+     * Brings each posted copy to what its marks and the piece's withdrawal now ask. Other copies stay untouched. Every
+     * removal goes first, so a restore that the send boundary refuses leaves no removal of the same attempt undone.
+     */
     public void correct(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
+        if (!correct(attempt, target, owner, true)) return;
+        correct(attempt, target, owner, false);
+    }
+
+    /** @return whether the attempt still holds its action, so the next pass may run */
+    private boolean correct(
+            FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner, boolean removals) {
         var feedback = attempt.feedback();
         long workspaceId = feedback.getWorkspaceId();
         UUID feedbackId = feedback.getId();
@@ -47,10 +57,8 @@ public class PostedCopyCorrector {
             boolean remove = visibility.withdrawn(workspaceId, feedbackId)
                     || copies.incorrectCopyIds(workspaceId, feedbackId).contains(copy.getId());
             if (remove == (copy.getState() == FeedbackCopyState.RETRACTED)) continue;
-            // A removal goes out whatever happened to the workspace's access; a restore adds content back.
-            boolean begun =
-                    remove ? owner.fence().beginRemoval() : owner.fence().beginWrite();
-            if (!begun || !transactions.admitCorrection(workspaceId, feedbackId, owner)) return;
+            if (remove != removals) continue;
+            if (!transactions.admitCorrection(workspaceId, feedbackId, owner, remove)) return false;
             if (!remove) {
                 if (restoreAllowed == null) restoreAllowed = transactions.mayRestore(workspaceId, feedbackId, owner);
                 if (!restoreAllowed) continue;
@@ -69,6 +77,7 @@ public class PostedCopyCorrector {
             if (copy.getKind() == FeedbackCopyKind.SUMMARY) correctSummary(feedback, copy, target, remove, owner);
             else correctNote(copy, target, remove, owner);
         }
+        return true;
     }
 
     private void correctSummary(

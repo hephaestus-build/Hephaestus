@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.TreeMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongFunction;
 
@@ -65,7 +66,7 @@ public interface AuthorityGenerations {
 
     /** The refusal for work that carries {@code stamp} at {@code boundary}; empty while its authority holds. */
     default Optional<AuthorityRefusal> check(AuthorizationStamp stamp, long workspaceId, AuthorityBoundary boundary) {
-        return refusal(stamp, workspace(workspaceId), this::account, boundary);
+        return refusal(stamp, workspaceId, this::workspace, this::account, boundary);
     }
 
     /**
@@ -74,21 +75,29 @@ public interface AuthorityGenerations {
      */
     default Optional<AuthorityRefusal> checkHeld(
             AuthorizationStamp stamp, long workspaceId, AuthorityBoundary boundary) {
-        return refusal(stamp, workspaceHeld(workspaceId), this::accountHeld, boundary);
+        return refusal(stamp, workspaceId, this::workspaceHeld, this::accountHeld, boundary);
     }
 
+    /**
+     * Reads the people's generations in account id order, then the workspace's. Holding them takes their locks in the
+     * order that an account absorption takes them: its two accounts in id order, then its memberships' workspace.
+     */
     private static Optional<AuthorityRefusal> refusal(
             AuthorizationStamp stamp,
-            OptionalLong workspace,
+            long workspaceId,
+            LongFunction<OptionalLong> workspace,
             LongFunction<OptionalLong> accounts,
             AuthorityBoundary boundary) {
-        if (workspace.isEmpty() || workspace.getAsLong() != stamp.workspace())
-            return Optional.of(new AuthorityRefusal(boundary, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
-        for (Map.Entry<Long, Long> person : stamp.accounts().entrySet()) {
+        boolean personNarrowed = false;
+        for (Map.Entry<Long, Long> person : new TreeMap<>(stamp.accounts()).entrySet()) {
             OptionalLong current = accounts.apply(person.getKey());
-            if (current.isEmpty() || current.getAsLong() != person.getValue())
-                return Optional.of(new AuthorityRefusal(boundary, AuthorityRefusal.Reason.ACCOUNT_AUTHORITY_NARROWED));
+            personNarrowed |= current.isEmpty() || current.getAsLong() != person.getValue();
         }
+        OptionalLong current = workspace.apply(workspaceId);
+        if (current.isEmpty() || current.getAsLong() != stamp.workspace())
+            return Optional.of(new AuthorityRefusal(boundary, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        if (personNarrowed)
+            return Optional.of(new AuthorityRefusal(boundary, AuthorityRefusal.Reason.ACCOUNT_AUTHORITY_NARROWED));
         return Optional.empty();
     }
 }

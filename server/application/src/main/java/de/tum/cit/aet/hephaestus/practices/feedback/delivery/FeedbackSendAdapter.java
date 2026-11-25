@@ -36,6 +36,7 @@ public record FeedbackSendAdapter(ActionKind kind, FeedbackSendService sender, F
         transactions.ended(
                 Objects.requireNonNull(ended.workspaceId()),
                 FeedbackSendQueue.feedbackOf(ended.idempotencyKey()),
-                ended.state());
+                ended.state(),
+                ended.reason());
     }
 }

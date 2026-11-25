@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.conversation.spi;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -22,8 +23,11 @@ public interface TurnRuns {
      */
     UUID enqueue(long workspaceId, UUID conversationId, long ownerAccountId);
 
-    /** Queues proactive digest work behind this conversation's current holder, in the background band. */
-    UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin);
+    /**
+     * Queues proactive digest work behind this conversation's current holder, in the background band, under the
+     * authority that the caller checked its reader under.
+     */
+    UUID enqueueDigest(CheckedAuthority reader, UUID conversationId, Duration startWithin);
 
     /**
      * Holds the run under {@code epoch} until the caller's transaction ends.

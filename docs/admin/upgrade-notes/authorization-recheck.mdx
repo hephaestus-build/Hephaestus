@@ -26,6 +26,9 @@ So old and new servers cannot run together.
 - Each queued message, email or comment on the work also keeps the generation of its workspace.
   If the generation rose after it was queued, Hephaestus does not send it, and it ends with the stop reason `AUTHORITY_CHANGED`.
 - A person's AI choice also has a generation. Turning AI off, or narrowing it to in-house models, stops the work that depends on that person at its next check, with the stop reason `AUTHORITY_CHANGED`.
+  Every person starts at generation 0.
+  Work that is still queued at the upgrade gets the person it names: a feedback send its developer, a Slack reply its asker, and a turn or digest its conversation's owner.
+  A running review keeps checking each developer's current AI choice before each model call.
 - A narrowing stops every run of its workspace, also the runs that the change did not concern.
   The person asks again for the answer. A later review runs under the new access.
 

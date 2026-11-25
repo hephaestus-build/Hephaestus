@@ -28,11 +28,13 @@ import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentNextWaitsFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.RunLockProbe;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -53,6 +55,8 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -149,7 +153,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(AgentRunAuthority.class));
         kind = new TurnSandboxRunKind(
                 ConversationTurnStarts.admitting(beans, meters, digests),
                 beans.getBean(TurnRunsAdapter.class),
@@ -213,7 +218,9 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 request,
                                 "Write the opted-in weekly recap.",
                                 mapper.createObjectNode(),
-                                Duration.ofHours(1))))
+                                Duration.ofHours(1)),
+                        beans.getBean(AuthorityGenerations.class)
+                                .requestedNow(workspace.getId(), List.of(conversation.getAccountId()))))
                 .isTrue();
         return turnRows.findByWorkspaceIdAndRequestId(workspace.getId(), request)
                 .orElseThrow();
@@ -431,6 +438,24 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldRefuseTheContextAndEndTheRunWhenTheOwnerLeftWhileItWasBuilt() {
+        ask("Question");
+        SandboxRun run = claim();
+
+        assertThatThrownBy(() -> held.read(run, turn -> {
+                    // The membership ends while the context is built, after the route's check.
+                    jdbc.update(
+                            "DELETE FROM membership WHERE workspace_id = ? AND account_id = ?",
+                            workspace.getId(),
+                            turn.accountId());
+                    return turn.turnId();
+                }))
+                .isInstanceOf(AuthorityRefusedException.class);
+        assertThat(runs.find(run.fence().run()).orElseThrow().getStopReason())
+                .isEqualTo(AgentRunStopReason.AUTHORITY_CHANGED);
+    }
+
+    @Test
     void shouldAnswerNoContextThatAPersonErasureOvertook() {
         ask("Question");
         SandboxRun run = claim();
@@ -445,7 +470,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(AgentRunAuthority.class));
         var read = new AtomicBoolean();
         doAnswer(call -> read.get()).when(copyFence).erasedSince(any(), any());
         assertThatThrownBy(() -> observed.read(run, turn -> {
@@ -570,7 +596,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(AgentRunAuthority.class));
         var captured = new AtomicBoolean();
         try (var erasure = copyFence.erase()) {
             assertThat(erasure).isNotNull();
@@ -620,7 +647,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 turns,
                 sandboxes,
-                transactions);
+                transactions,
+                beans.getBean(AgentRunAuthority.class));
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var claimed = Objects.requireNonNull(transactions.execute(status -> {
                 fence.holdForErasure(identities);

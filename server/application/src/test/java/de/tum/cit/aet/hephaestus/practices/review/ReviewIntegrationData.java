@@ -153,12 +153,21 @@ public class ReviewIntegrationData {
 
     @Transactional
     public Account member(long workspaceId) {
+        return member(workspaceId, Membership.WorkspaceRole.MEMBER);
+    }
+
+    @Transactional
+    public Account admin(long workspaceId) {
+        return member(workspaceId, Membership.WorkspaceRole.ADMIN);
+    }
+
+    private Account member(long workspaceId, Membership.WorkspaceRole role) {
         var workspace = workspaces.findById(workspaceId).orElseThrow();
         var account = accounts.saveAndFlush(new Account("Another developer"));
         var membership = new Membership();
         membership.setId(new Membership.Id(workspaceId, account.getId()));
         membership.setWorkspace(workspace);
-        membership.setRole(Membership.WorkspaceRole.MEMBER);
+        membership.setRole(role);
         memberships.saveAndFlush(membership);
         return account;
     }

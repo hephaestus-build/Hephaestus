@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
@@ -121,6 +122,9 @@ import tools.jackson.databind.ObjectMapper;
  * result of the workspace, as in the other review-evidence tests.
  */
 class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private AuthorityGenerations generations;
+
     @Autowired
     private SharedEventRecorder observedEvents;
 
@@ -334,6 +338,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(run.getKind()).isEqualTo(AgentRunKind.DIGEST);
         assertThat(run.getBand()).isEqualTo(AgentRunBand.BACKGROUND);
         assertThat(run.getConcurrencyKey()).isEqualTo("conversation:" + digest.getConversationId());
+        // The digest depends on its reader: an AI choice that narrows refuses it at its next boundary.
+        assertThat(run.getAuthorizationStamp().accounts()).containsOnlyKeys(accountId);
         assertThat(written()).isEmpty();
         assertThat(timeline.liveEntry(workspaceId, accountId, digest.getId())).isEmpty();
         assertThat(timeline.entries(workspaceId, accountId, null, 50).content()).isEmpty();
@@ -665,7 +671,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 writeFence,
                 objectMapper,
                 transactionTemplate,
-                clock);
+                clock,
+                generations);
     }
 
     private DigestAdmission eligibility() {

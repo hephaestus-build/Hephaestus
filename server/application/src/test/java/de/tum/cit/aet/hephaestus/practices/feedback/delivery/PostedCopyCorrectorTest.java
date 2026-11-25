@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -78,7 +79,8 @@ class PostedCopyCorrectorTest {
                 .build();
         var repository = mock(FeedbackCopyRepository.class);
         when(repository.incorrectCopyIds(1, id)).thenReturn(Set.of(copyId));
-        when(transactions.admitCorrection(1, id, OWNER)).thenReturn(true);
+        when(transactions.admitCorrection(eq(1L), eq(id), eq(OWNER), anyBoolean()))
+                .thenReturn(true);
         when(writer.updateSummary(eq(target), any(), any()))
                 .thenReturn(new CopyUpdateReceipt(copyId, CopyUpdateKind.EDITED, "note-17", null, null));
         new PostedCopyCorrector(repository, visibility, List.of(writer), List.of(), transactions)

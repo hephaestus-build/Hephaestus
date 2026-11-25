@@ -8,10 +8,12 @@ import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -46,6 +48,7 @@ public class FeedbackSendQueue {
     private final AgentActions actions;
     private final AuthorityGenerations generations;
     private final WorkspaceMemberships memberships;
+    private final AccountDirectory accounts;
     private final ObjectMapper mapper;
     private final FeedbackCopyRepository copies;
     private final FeedbackVisibilityService visibility;
@@ -85,24 +88,40 @@ public class FeedbackSendQueue {
     }
 
     /**
+     * Holds the actor's account until the caller's transaction ends. A caller takes it before it locks the feedback, so
+     * its locks follow the order of an account absorption: accounts, then feedback, then the workspace.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void holdActor(long actorAccountId) {
+        generations.accountHeld(actorAccountId);
+    }
+
+    /**
      * The authority of a workspace admin's decision: it reads the stamp, then checks that the actor is still at least an
-     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction. The
-     * send also depends on the feedback's developer, whose AI choice can narrow it.
+     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction. An
+     * instance admin counts as a workspace admin, as {@code WorkspaceAccessService} grants it, while the account is
+     * still an active instance admin. It holds the actor's account and the workspace's generation before it reads the
+     * stamp, until the decision commits: a demotion either committed before and refuses, or waits for the decision. The
+     * send also depends on the feedback's developer, whose AI choice can narrow it; its own boundary checks that.
      *
      * @throws AccessForbiddenException when the actor is no longer an admin of the workspace
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public CheckedAuthority asAdmin(Feedback row, long actorAccountId) {
         long workspaceId = row.getWorkspaceId();
+        generations.accountHeld(actorAccountId);
+        generations.workspaceHeld(workspaceId);
         return generations
-                .authorize(
-                        workspaceId,
-                        List.of(row.getDeveloperId()),
-                        () -> memberships
-                                .activeRole(workspaceId, actorAccountId)
-                                .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
-                                .isPresent())
+                .authorize(workspaceId, List.of(row.getDeveloperId()), () -> isAdmin(workspaceId, actorAccountId))
                 .orElseThrow(() -> new AccessForbiddenException("Only a workspace admin can decide on feedback."));
+    }
+
+    private boolean isAdmin(long workspaceId, long actorAccountId) {
+        return memberships
+                        .activeRole(workspaceId, actorAccountId)
+                        .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
+                        .isPresent()
+                || (SecurityUtils.isSuperAdmin() && accounts.activeInstanceAdmin(actorAccountId));
     }
 
     /**
@@ -127,13 +146,16 @@ public class FeedbackSendQueue {
 
     /**
      * Queues the correction that follows a send that ends now; the end of that send calls it, in its transaction. It
-     * never keeps the ended send's stamp: an authorized decision, recorded while that send ran, asked for the
-     * correction, and a removal goes out whatever happened to the workspace's access since ({@link
+     * keeps the ended send's stamp, so a restore goes out only under the authority that the decision behind it was
+     * checked under. A removal goes out whatever happened to that authority since ({@link
      * ActionAttempt.Fence#beginRemoval}).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void follow(Feedback row, FeedbackSendAction action) {
-        next(row, action, actions.newestInLane(row.getWorkspaceId(), lane(row.getId())), requestedNow(row));
+        var ended = actions.newestInLane(row.getWorkspaceId(), lane(row.getId()));
+        CheckedAuthority authority =
+                ended.map(send -> send.authority(row.getWorkspaceId())).orElseGet(() -> requestedNow(row));
+        next(row, action, ended, authority);
     }
 
     private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior, CheckedAuthority authority) {

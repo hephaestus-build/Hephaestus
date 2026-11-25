@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -161,6 +162,9 @@ public class FeedbackSendTransactions {
                 return false;
             }
         }
+        // The send boundary (ADR 0134) comes last, after every wait for the item and feedback rows:
+        // no write starts under authority that narrowed while this transaction waited.
+        if (!owner.fence().beginWrite()) return false;
         for (UUID id : attempting) {
             if (copies.beginWrite(workspaceId, feedbackId, id, clock.instant()) != 1)
                 throw new IllegalStateException("A copy is no longer eligible for a write.");
@@ -356,14 +360,25 @@ public class FeedbackSendTransactions {
      * copies.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void ended(long workspaceId, UUID feedbackId, ActionState state) {
+    public void ended(long workspaceId, UUID feedbackId, ActionState state, @Nullable ActionStopReason reason) {
         var row = feedback.lockByIdAndWorkspaceId(feedbackId, workspaceId);
         if (row.isEmpty()) return;
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
         boolean unresolved = children.stream().anyMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED);
         if (state != ActionState.DONE) project(row.get(), children, unresolved);
-        if (!unresolved && asksForCorrection(row.get(), copies.lockByFeedbackId(workspaceId, feedbackId)))
+        if (unresolved) return;
+        var correction = correction(row.get(), copies.lockByFeedbackId(workspaceId, feedbackId));
+        // After the send boundary refused a send, only a removal follows: a restore waits for a new authorized
+        // request, so a refused restore never reaches the provider through its successor.
+        if (correction == Correction.REMOVE
+                || (correction == Correction.RESTORE && reason != ActionStopReason.AUTHORITY_CHANGED))
             sendQueue.follow(row.get(), FeedbackSendAction.RETRACT);
+    }
+
+    private enum Correction {
+        NONE,
+        REMOVE,
+        RESTORE
     }
 
     private void project(Feedback row, List<FeedbackCopy> children, boolean unresolved) {
@@ -379,10 +394,10 @@ public class FeedbackSendTransactions {
     }
 
     /**
-     * Whether a mark changed under this send. A copy with a recorded error had its correction tried, so it asks no
-     * more, which ends the sequence of sends.
+     * The correction that a mark changed under this send asks for; a removal before a restore. A copy with a recorded
+     * error had its correction tried, so it asks no more, which ends the sequence of sends.
      */
-    private boolean asksForCorrection(Feedback row, List<FeedbackCopy> children) {
+    private Correction correction(Feedback row, List<FeedbackCopy> children) {
         long workspaceId = row.getWorkspaceId();
         boolean withdrawn = visibility.withdrawn(workspaceId, row.getId());
         var incorrect = copies.incorrectCopyIds(workspaceId, row.getId());
@@ -390,13 +405,15 @@ public class FeedbackSendTransactions {
                 .anyMatch(c -> c.getState() == FeedbackCopyState.POSTED
                         && c.getLastError() == null
                         && (withdrawn || incorrect.contains(c.getId())));
-        if (remove) return true;
+        if (remove) return Correction.REMOVE;
         return !withdrawn
-                && children.stream()
-                        .anyMatch(c -> c.getState() == FeedbackCopyState.RETRACTED
-                                && c.getLastError() == null
-                                && !incorrect.contains(c.getId()))
-                && store.check(row, true).allowed();
+                        && children.stream()
+                                .anyMatch(c -> c.getState() == FeedbackCopyState.RETRACTED
+                                        && c.getLastError() == null
+                                        && !incorrect.contains(c.getId()))
+                        && store.check(row, true).allowed()
+                ? Correction.RESTORE
+                : Correction.NONE;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -461,10 +478,11 @@ public class FeedbackSendTransactions {
 
     /**
      * Admits one provider correction: holds the developer's person-data write fence in this transaction, which commits
-     * before the provider call. A refused hold withholds the feedback with {@code PERSON_SUPPRESSED}.
+     * before the provider call, and admits the write at the send boundary. A refused hold withholds the feedback with
+     * {@code PERSON_SUPPRESSED}.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean admitCorrection(long workspaceId, UUID feedbackId, ActionAttempt owner) {
+    public boolean admitCorrection(long workspaceId, UUID feedbackId, ActionAttempt owner, boolean removal) {
         var recipient = feedback.developerOf(feedbackId, workspaceId);
         if (recipient.isEmpty()) return false;
         boolean admitted = privacy.holdForAccountWrite(recipient.get());
@@ -476,7 +494,9 @@ public class FeedbackSendTransactions {
             store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
             return false;
         }
-        return true;
+        // The send boundary comes last, after the waits: a removal goes out whatever happened to the access since, a
+        // restore adds content back and needs authority that still holds.
+        return removal ? owner.fence().beginRemoval() : owner.fence().beginWrite();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

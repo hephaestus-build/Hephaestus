@@ -67,9 +67,8 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin) {
-        return runs.enqueue(
-                        workspaceId, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
+    public UUID enqueueDigest(CheckedAuthority reader, UUID conversationId, Duration startWithin) {
+        return runs.enqueue(reader, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
                 .id();
     }
 

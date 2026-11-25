@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -22,16 +23,19 @@ public final class ActionTestSupport {
 
     /** Uses the real executor and store with one test-owned provider adapter, including its end callback. */
     public static ActionExecutor withAdapter(ApplicationContext context, ActionAdapter replacement) {
+        return withAdapter(context, replacement, new SimpleMeterRegistry());
+    }
+
+    /** {@link #withAdapter(ApplicationContext, ActionAdapter)}, counting into {@code meters}. */
+    public static ActionExecutor withAdapter(
+            ApplicationContext context, ActionAdapter replacement, MeterRegistry meters) {
         var adapters = Stream.concat(
                         context.getBeansOfType(ActionAdapter.class).values().stream()
                                 .filter(adapter -> adapter.kind() != replacement.kind()),
                         Stream.of(replacement))
                 .toList();
         return new ActionExecutor(
-                context.getBean(ActionStore.class),
-                context.getBean(ObjectMapper.class),
-                adapters,
-                new SimpleMeterRegistry());
+                context.getBean(ActionStore.class), context.getBean(ObjectMapper.class), adapters, meters);
     }
 
     /** Applies the real terminal-outcome retention policy. */

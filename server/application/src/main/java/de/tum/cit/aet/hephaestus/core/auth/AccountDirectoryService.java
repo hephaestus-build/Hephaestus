@@ -42,6 +42,12 @@ public class AccountDirectoryService implements AccountDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean activeInstanceAdmin(long accountId) {
+        return accounts.isActiveInstanceAdmin(accountId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, AccountView> findAll(Collection<Long> accountIds) {
         return accounts.findAllById(accountIds).stream()
                 .map(AccountDirectoryService::view)

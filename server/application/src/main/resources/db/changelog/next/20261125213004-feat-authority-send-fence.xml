@@ -27,18 +27,10 @@ ALTER TABLE agent_action DROP COLUMN authorization_stamp;
         </rollback>
     </changeSet>
     <changeSet id="1795600266276-2" author="hephaestus">
-        <comment>Validate the action checks while ordinary row writes can continue. A rollback starts here, so it refuses before it changes anything while an action records that its access changed.</comment>
+        <comment>Validate the action checks while ordinary row writes can continue.</comment>
         <sql>ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_stop_reason;
 ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_authorization_stamp;</sql>
-        <rollback>
-            <sql splitStatements="false"><![CDATA[
-DO $$ BEGIN
- IF EXISTS (SELECT 1 FROM public.agent_action WHERE stop_reason = 'AUTHORITY_CHANGED') THEN
-  RAISE EXCEPTION 'Restore the verified pre-upgrade backup: actions record that their access changed';
- END IF;
-END $$;
-]]></sql>
-        </rollback>
+        <rollback><sql>SELECT 1;</sql></rollback>
     </changeSet>
     <changeSet id="1795633800000-1" author="hephaestus">
         <comment>A person has an authorization generation on their account, which only a narrowing of their AI choice raises (KR-10, ADR 0134 decision 1). Every account starts at generation 0. A narrowing is a change to NO_AI, from CLOUD to IN_HOUSE_ONLY, or a cleared choice, which a workspace that requires a choice refuses. The trigger is installed with the column, whoever writes the choice.</comment>
@@ -47,16 +39,17 @@ ALTER TABLE account ADD COLUMN authority_generation bigint DEFAULT 0 NOT NULL,
     ADD CONSTRAINT ck_account_authority_generation CHECK (authority_generation >= 0);
 CREATE FUNCTION ai_choice_narrows_authority() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF NEW.ai_choice IS DISTINCT FROM OLD.ai_choice
-       AND (NEW.ai_choice IS NULL
-            OR NEW.ai_choice = 'NO_AI'
-            OR (NEW.ai_choice = 'IN_HOUSE_ONLY' AND OLD.ai_choice = 'CLOUD')) THEN
-        NEW.authority_generation := OLD.authority_generation + 1;
-    END IF;
-    RETURN NEW;
+    UPDATE public.account SET authority_generation = authority_generation + 1 WHERE id = NEW.id;
+    RETURN NULL;
 END $$;
-CREATE TRIGGER account_ai_choice_narrows_authority BEFORE UPDATE OF ai_choice ON account
-    FOR EACH ROW EXECUTE FUNCTION ai_choice_narrows_authority();
+-- AFTER, not BEFORE: a BEFORE row trigger makes PostgreSQL lock the row FOR UPDATE whenever an UPDATE lists a key
+-- column, as an entity flush does, and that lock blocks every foreign key check on the account until commit.
+CREATE TRIGGER account_ai_choice_narrows_authority AFTER UPDATE OF ai_choice ON public.account
+    FOR EACH ROW WHEN (NEW.ai_choice IS DISTINCT FROM OLD.ai_choice
+        AND (NEW.ai_choice IS NULL
+             OR NEW.ai_choice = 'NO_AI'
+             OR (NEW.ai_choice = 'IN_HOUSE_ONLY' AND OLD.ai_choice = 'CLOUD')))
+    EXECUTE FUNCTION ai_choice_narrows_authority();
 ]]></sql>
         <rollback>
             <sql splitStatements="false"><![CDATA[
@@ -67,7 +60,7 @@ ALTER TABLE account DROP COLUMN authority_generation;
         </rollback>
     </changeSet>
     <changeSet id="1795633800000-2" author="hephaestus">
-        <comment>A stamp also holds the generation of each person whose authority the work depends on, such as a review's developers or a turn's owner, under "accounts". The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
+        <comment>A stamp also holds the generation of each person whose authority the work depends on, such as a review's developers or a turn's owner, under "accounts". Unfinished work from before the upgrade gets the person it names at generation 0, where every person starts: a feedback send its developer, a Slack reply its asker, and a turn or digest its conversation's owner. A review's developers are not stored with its run; its model calls still check each developer's current AI choice, and its feedback is stamped when it is queued. The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
         <sql splitStatements="false"><![CDATA[
 CREATE FUNCTION public.authorization_stamp_valid(stamp jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
     SELECT jsonb_typeof(stamp) = 'object'
@@ -85,10 +78,24 @@ CREATE FUNCTION public.authorization_stamp_valid(stamp jsonb) RETURNS boolean LA
 $$;
 ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_authorization_stamp;
 ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_authorization_stamp
-    CHECK (public.authorization_stamp_valid(authorization_stamp) IS TRUE) NOT VALID;
+    CHECK ((jsonb_typeof(authorization_stamp) = 'object' AND public.authorization_stamp_valid(authorization_stamp)) IS TRUE) NOT VALID;
 ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_authorization_stamp;
 ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_authorization_stamp
-    CHECK (public.authorization_stamp_valid(authorization_stamp) IS TRUE) NOT VALID;
+    CHECK ((jsonb_typeof(authorization_stamp) = 'object' AND public.authorization_stamp_valid(authorization_stamp)) IS TRUE) NOT VALID;
+ALTER TABLE agent_action DISABLE TRIGGER agent_action_authorization_stamp_fixed;
+UPDATE agent_action SET authorization_stamp = authorization_stamp
+        || jsonb_build_object('accounts', jsonb_build_object(subject_account_id::text, 0))
+    WHERE kind IN ('DELIVER_FEEDBACK', 'EDIT_FEEDBACK', 'RETRACT_FEEDBACK', 'SLACK_POST')
+      AND workspace_id IS NOT NULL AND subject_account_id IS NOT NULL
+      AND state IN ('PROPOSED', 'ADMITTED', 'EXECUTING');
+ALTER TABLE agent_action ENABLE TRIGGER agent_action_authorization_stamp_fixed;
+ALTER TABLE agent_run DISABLE TRIGGER agent_run_authorization_stamp_fixed;
+UPDATE agent_run AS run SET authorization_stamp = run.authorization_stamp
+        || jsonb_build_object('accounts', jsonb_build_object(owner.account_id::text, 0))
+    FROM conversation AS owner
+    WHERE run.kind IN ('TURN', 'DIGEST') AND run.state <> 'ENDED'
+      AND owner.workspace_id = run.workspace_id AND run.concurrency_key = 'conversation:' || owner.id::text;
+ALTER TABLE agent_run ENABLE TRIGGER agent_run_authorization_stamp_fixed;
 ]]></sql>
         <rollback>
             <sql splitStatements="false"><![CDATA[
@@ -107,9 +114,17 @@ DROP FUNCTION public.authorization_stamp_valid(jsonb);
         </rollback>
     </changeSet>
     <changeSet id="1795633800000-3" author="hephaestus">
-        <comment>Validate the stamp checks while ordinary row writes can continue.</comment>
+        <comment>Validate the stamp checks while ordinary row writes can continue. A rollback runs the change sets of this file newest first and starts here, so it refuses before it changes anything while an action records that its access changed.</comment>
         <sql>ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_authorization_stamp;
 ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_authorization_stamp;</sql>
-        <rollback><sql>SELECT 1;</sql></rollback>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM public.agent_action WHERE stop_reason = 'AUTHORITY_CHANGED') THEN
+  RAISE EXCEPTION 'Restore the verified pre-upgrade backup: actions record that their access changed';
+ END IF;
+END $$;
+]]></sql>
+        </rollback>
     </changeSet>
 </databaseChangeLog>

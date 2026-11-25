@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
@@ -359,7 +358,7 @@ public class ActionExecutor implements SmartLifecycle {
         }
         if (narrowed.get()) {
             event(log.atInfo(), "action.authority_refused", claim.id(), claim.workspaceId(), claim.kind())
-                    .log("Action refused before its write because its workspace's authority narrowed");
+                    .log("Action refused before its write because the authority it was queued under narrowed");
             // After a write of this action started, part of its effect may exist.
             result = fenced.get() || claim.writeStarted()
                     ? new ActionResult.Uncertain(ActionStopReason.AUTHORITY_CHANGED)
@@ -399,20 +398,15 @@ public class ActionExecutor implements SmartLifecycle {
 
     /** Whether the write may start; a refusal at the send boundary (ADR 0134) is counted and ends the action later. */
     private boolean admitted(ActionStore.WriteAdmission admission, AtomicBoolean fenced, AtomicBoolean narrowed) {
-        return switch (admission) {
-            case ADMITTED -> {
-                fenced.set(true);
-                yield true;
-            }
-            case LOST -> false;
+        var refusal = admission.refusal();
+        if (refusal != null) {
             // The adapter answers abandoned, and the action ends after it, outside the adapter's work.
-            case AUTHORITY_CHANGED -> {
-                narrowed.set(true);
-                new AuthorityRefusal(AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)
-                        .count(meters);
-                yield false;
-            }
-        };
+            narrowed.set(true);
+            refusal.count(meters);
+            return false;
+        }
+        fenced.set(admission.admitted());
+        return admission.admitted();
     }
 
     /** Hands an action that ended to its adapter, in the transaction that ended it. */

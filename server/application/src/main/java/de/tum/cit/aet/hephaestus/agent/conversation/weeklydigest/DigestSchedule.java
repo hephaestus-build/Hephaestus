@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.ConditionalOnEvaluation;
 import de.tum.cit.aet.hephaestus.core.EvaluationClockStep;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -50,6 +52,7 @@ public class DigestSchedule {
     private final ObjectMapper mapper;
     private final TransactionTemplate transactions;
     private final Clock clock;
+    private final AuthorityGenerations generations;
 
     public static String requestId(long workspaceId, long accountId, WeeklyDigestWindow window) {
         return "weekly-digest:" + workspaceId + ":" + accountId + ":" + window.weekStart();
@@ -112,8 +115,12 @@ public class DigestSchedule {
                 || !facts.anythingIn(workspaceId, accountId, window)) return false;
         return Boolean.TRUE.equals(transactions.execute(status -> {
             if (!writeFence.holdForAccountWrite(accountId)
-                    || subscriptions.enabledSince(accountId).isEmpty()
-                    || !availability.available(workspaceId, accountId)) return false;
+                    || subscriptions.enabledSince(accountId).isEmpty()) return false;
+            // The digest depends on its reader: the stamp holds their generation, read before the check that they can
+            // still receive it (ADR 0134).
+            var reader = generations.authorize(
+                    workspaceId, List.of(accountId), () -> availability.available(workspaceId, accountId));
+            if (reader.isEmpty()) return false;
             var payload = facts.compose(workspaceId, accountId, window);
             if (payload.isEmpty()) return false;
             var main = conversations.findOrCreateMain(workspaceId, accountId);
@@ -126,7 +133,8 @@ public class DigestSchedule {
                                     + " from inputs/context/weekly_digest.json. Summarize only its visible facts."
                                     + " Do not add assessments or deliver new feedback. Invite a reply if useful.",
                             payload.get().toJson(mapper),
-                            startWithin));
+                            startWithin),
+                    reader.get());
         }));
     }
 }

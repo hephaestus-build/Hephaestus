@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -35,6 +36,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -224,6 +226,36 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldLetAnAccountAbsorptionFinishWhileAnAdmissionWaitsForItsAccount() throws Exception {
+        // The work depends on the asker, as a turn's Slack reply does.
+        var stamp = generations.requestedNow(workspace.getId(), List.of(asker)).stamp();
+
+        try (var absorption = dataSource.getConnection()) {
+            // An absorption locks its accounts first, then deletes the absorbed account's memberships, whose trigger
+            // raises the workspace's generation (PeopleRegistryService.absorbUnclaimed).
+            absorption.setAutoCommit(false);
+            try (var lock = absorption.prepareStatement("SELECT 1 FROM account WHERE id = ? FOR UPDATE")) {
+                lock.setLong(1, asker);
+                lock.executeQuery().close();
+            }
+            var admission = CompletableFuture.supplyAsync(() -> new TransactionTemplate(transactions)
+                    .execute(status -> generations.checkHeld(stamp, workspace.getId(), AuthorityBoundary.SEND)));
+            awaitLockWaiter();
+            try (var leave =
+                    absorption.prepareStatement("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?")) {
+                leave.setLong(1, workspace.getId());
+                leave.setLong(2, asker);
+                assertThat(leave.executeUpdate()).isEqualTo(1);
+            }
+            absorption.commit();
+
+            assertThat(admission.get(10, TimeUnit.SECONDS))
+                    .contains(new AuthorityRefusal(
+                            AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        }
+    }
+
+    @Test
     void shouldRefuseTheSlackReplyOfATurnWhoseMemberLeftDuringTheTurn() {
         ConversationTurn turn = runningTurn();
         UUID question = entries.findStimulus(workspace.getId(), turn.getId()).getId();
@@ -352,18 +384,27 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
         UUID question = entries.findStimulus(workspace.getId(), turn.getId()).getId();
         chooseAi("NO_AI");
         var posted = new CopyOnWriteArrayList<UUID>();
-        var executor =
-                ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_POST, attempt -> {
+        var meters = new SimpleMeterRegistry();
+        var executor = ActionTestSupport.withAdapter(
+                context,
+                ActionTestSupport.adapter(ActionKind.SLACK_POST, attempt -> {
                     if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
                     posted.add(attempt.id());
                     return new ActionResult.Done(null);
-                }));
+                }),
+                meters);
 
         new TransactionTemplate(transactions).executeWithoutResult(status -> slackReplies.ended(turn, asker, question));
         UUID reply = slackReplies.forQuestion(workspace.getId(), question).orElseThrow();
 
         assertThat(executor.runNow(reply)).contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
         assertThat(posted).isEmpty();
+        assertThat(meters.get(CoreMetrics.AUTHORITY_REFUSED)
+                        .tag("boundary", "send")
+                        .tag("reason", "account_authority_narrowed")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test

@@ -273,7 +273,7 @@ class OwnWithdrawnFeedbackIntegrationTest extends BaseIntegrationTest {
 
     /** The decision's actor: the controller, not the store, checks that it is an admin. */
     private long admin() {
-        var actor = data.member(scenario.workspace().getId());
+        var actor = data.admin(scenario.workspace().getId());
         identify(actor);
         return Objects.requireNonNull(actor.getId());
     }
