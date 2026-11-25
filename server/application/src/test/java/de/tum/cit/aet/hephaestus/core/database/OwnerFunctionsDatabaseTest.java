@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
+import de.tum.cit.aet.hephaestus.workspace.PersonalSpaceFixtures;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -317,6 +318,78 @@ class OwnerFunctionsDatabaseTest {
                             ADA_MAIN))
                     .as("the Slack DM moves to the claiming main, which had none")
                     .isEqualTo("T1 U12 D12");
+        }
+    }
+
+    /**
+     * Several change sets replace {@code person_row_sweep} whole, each on top of the one before, so a replacement built
+     * on an older body drops a later branch's clause without any conflict. Each rule here shows the effect of its newest
+     * clause; a new rule has to add its own.
+     */
+    @ParameterizedTest
+    @EnumSource(RowSweepRule.class)
+    void shouldKeepTheNewestEffectOfEveryRule(RowSweepRule rule) throws Exception {
+        TestDatabase database =
+                TestDatabaseCleanup.copyDatabase("sweep_newest_" + rule.name().toLowerCase(Locale.ROOT), SEEDED);
+        switch (rule) {
+            case WORKSPACE_PURGE -> {
+                // The approved purge also takes a personal space once its erasure has suspended it.
+                long space;
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    JdbcTemplate owner = jdbc(connection);
+                    space = PersonalSpaceFixtures.insert(owner, 13);
+                    owner.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", space);
+                    owner.update(
+                            "INSERT INTO conversation (id, created_at, last_activity_at, account_id, workspace_id)"
+                                    + " VALUES ('00000000-0000-0000-0000-00000000c001', now(), now(), 13, ?)",
+                            space);
+                }
+                sweepAsApplication(database, rule, space, null);
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    assertThat(jdbc(connection)
+                                    .queryForList(
+                                            "SELECT id FROM conversation WHERE workspace_id = ?", UUID.class, space))
+                            .isEmpty();
+                }
+            }
+            case EXPIRED_EXPORTS -> {
+                // One call expires at most a batch, and an account in erasure keeps its export for the erasure.
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    jdbc(connection).execute("""
+                            BEGIN;
+                            SELECT pg_advisory_xact_lock(hashtext('account-export-sources'), hashtext('13') & 63);
+                            INSERT INTO account_export (account_id, status, expires_at, payload)
+                            SELECT 13, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second', '\\x01'
+                            FROM generate_series(1, 101) n;
+                            COMMIT;
+                            UPDATE account SET status = 'DELETING' WHERE id = 12;
+                            """);
+                }
+                try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+                    assertThat(sweep(jdbc(connection), rule, null, null)).isEqualTo(100);
+                }
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    JdbcTemplate owner = jdbc(connection);
+                    assertThat(owner.queryForObject(
+                                    "SELECT count(*) FROM account_export WHERE status = 'READY' AND expires_at < now()"
+                                            + " AND account_id IN (11, 13)",
+                                    Long.class))
+                            .as("the account in erasure is skipped, and the batch leaves two of the 103 due exports")
+                            .isEqualTo(2);
+                    assertThat(owner.queryForObject("SELECT status FROM account_export WHERE id = 22", String.class))
+                            .isEqualTo("READY");
+                }
+            }
+            case ACCOUNT_ABSORB -> {
+                // The claiming account takes every conversation of the absorbed one.
+                sweepAsApplication(database, rule, 12, 11L);
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    assertThat(jdbc(connection)
+                                    .queryForObject(
+                                            "SELECT count(*) FROM conversation WHERE account_id = 12", Long.class))
+                            .isZero();
+                }
+            }
         }
     }
 
