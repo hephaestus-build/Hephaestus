@@ -220,7 +220,7 @@ public class SlackAppHomeService {
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return "*Put good practice to work.* In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. The replies stay in DMs.";
+        return "*Get better at the work you already do.* Hephaestus is an AI mentor for software engineering practices. In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. The replies stay in DMs.";
     }
 
     private static String stateIcon(boolean ok) {

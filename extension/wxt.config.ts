@@ -61,7 +61,7 @@ export default defineConfig({
 		return {
 			name: "Hephaestus",
 			description:
-				"See the Hephaestus practice review of the pull request, merge request or issue you are viewing on GitHub or GitLab.",
+				"See what Hephaestus, the AI mentor for engineering practices, found on the pull request, merge request or issue you are viewing.",
 			// WXT derives the numeric `version` that Chrome requires from `version_name`, and drops the name when they are equal.
 			version_name: development ? `${rootPackage.version}-${mode}` : rootPackage.version,
 			// Chrome 130 serves `use_dynamic_url` resources through `runtime.getURL`.

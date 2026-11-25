@@ -1,6 +1,6 @@
 display_information:
   name: Hephaestus
-  description: Hephaestus is an AI system that answers about your practice feedback and recent work.
+  description: Hephaestus is an AI mentor for software engineering practices. It answers about your practice feedback and recent work.
 
 features:
   app_home:
@@ -8,7 +8,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: Hephaestus is an AI system. It answers about your practice feedback and recent work in private Slack DMs.
+    agent_description: Hephaestus is an AI mentor for software engineering practices. In private DMs, it answers about your practice feedback and recent work.
     suggested_prompts:
       - title: What needs attention?
         message: What software project practice should I focus on next?
