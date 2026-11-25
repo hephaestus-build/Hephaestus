@@ -63,6 +63,9 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private WorkspaceNamespaceReservation namespaceReservation;
 
     @Autowired
+    private WorkspaceSlugService slugs;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     private long ownerId;
@@ -228,10 +231,12 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldEndThePersonalSpaceAndKeepOnlyATokenOfItsAddressWhenTheAccountIsErased() {
         UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, spaceId, ownerId);
-        String teamSlug = workspaces
-                .save(WorkspaceTestFixtures.activeWorkspace("team-beside-the-space"))
-                .getWorkspaceSlug();
+        var team = workspaces.save(WorkspaceTestFixtures.activeWorkspace("team-beside-the-space"));
+        String teamSlug = team.getWorkspaceSlug();
         assertThat(reserved(slug)).isTrue();
+        // An audit row holds its workspace: its key has no delete action, so the teardown must remove it.
+        long spaceTrail = auditRow(spaceId);
+        long teamTrail = auditRow(team.getId());
 
         personDataService.eraseForAccount(ownerId);
 
@@ -246,7 +251,25 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isZero();
         assertThat(reserved(slug)).isFalse();
         assertThat(reserved(namespaceReservation.slugToken(slug))).isTrue();
+        assertThat(slugs.isReserved(slug))
+                .as("a new personal space never draws the address")
+                .isTrue();
         assertThat(reserved(teamSlug)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM config_audit_event WHERE id = ?", Long.class, spaceTrail))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM config_audit_event WHERE id = ?", Long.class, teamTrail))
+                .isOne();
+        assertRefused(
+                () -> jdbc.update("DELETE FROM config_audit_event WHERE id = ?", teamTrail),
+                "config_audit_event is append-only");
+    }
+
+    private long auditRow(long workspaceId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "INSERT INTO config_audit_event (workspace_id, actor_kind, entity_type, entity_id, action, changed_keys)"
+                        + " VALUES (?, 'SYSTEM', 'WORKSPACE_ROLE', 'member', 'CREATED', '{role}') RETURNING id",
+                Long.class,
+                workspaceId));
     }
 
     private boolean reserved(String reservation) {

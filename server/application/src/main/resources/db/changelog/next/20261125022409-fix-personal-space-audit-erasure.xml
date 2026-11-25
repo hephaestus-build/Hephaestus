@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795573450000-1" author="hephaestus">
+        <comment>The erasure of a person ends their personal space with its configuration trail (KR-06, #5094). The append-only trigger lets a suspended personal space's rows go; a team workspace's rows still go only after the retention window.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- The erasure of a person ends their personal space, and its trail with it: the space had one
+                    -- member, so the trail is that person's alone. The erasure suspends the space first.
+                    IF EXISTS (SELECT 1 FROM workspace w WHERE w.id = OLD.workspace_id
+                                 AND w.kind = 'PERSONAL' AND w.status = 'SUSPENDED') THEN
+                        RETURN OLD;
+                    END IF;
+                    -- Retention is the other sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (NEW.mcp_client_grant_id IS NULL OR NEW.mcp_client_grant_id = OLD.mcp_client_grant_id)
+                   AND (NEW.entity_id IS NOT DISTINCT FROM OLD.entity_id
+                        OR (OLD.entity_type = 'WORKSPACE_ROLE' AND NEW.entity_id = 'ERASED'))
+                   AND (to_jsonb(NEW) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value' - 'mcp_client_grant_id')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value' - 'mcp_client_grant_id')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL, or erasing a membership subject) is permitted';
+            END;
+            $$;
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- Retention is the ONLY sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (NEW.mcp_client_grant_id IS NULL OR NEW.mcp_client_grant_id = OLD.mcp_client_grant_id)
+                   AND (NEW.entity_id IS NOT DISTINCT FROM OLD.entity_id
+                        OR (OLD.entity_type = 'WORKSPACE_ROLE' AND NEW.entity_id = 'ERASED'))
+                   AND (to_jsonb(NEW) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value' - 'mcp_client_grant_id')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value' - 'mcp_client_grant_id')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL, or erasing a membership subject) is permitted';
+            END;
+            $$;
+        ]]></sql></rollback>
+    </changeSet>
+</databaseChangeLog>

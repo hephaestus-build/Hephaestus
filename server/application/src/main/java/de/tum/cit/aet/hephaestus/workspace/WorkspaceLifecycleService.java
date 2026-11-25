@@ -233,8 +233,9 @@ public class WorkspaceLifecycleService {
 
     /**
      * Ends the account's personal space, in the transaction of the account's erasure. The cleanup owners of a workspace
-     * purge remove what lives in the space, then the space itself goes. Its address stays reserved only as a keyed
-     * token, so the database keeps no plaintext of it and nobody can take it.
+     * purge remove what lives in the space, with the space's configuration trail, then the space itself goes. Its address
+     * stays reserved only as a keyed token, so the database keeps no plaintext of it, and a new personal space never
+     * draws it ({@link WorkspaceSlugService#isReserved}).
      *
      * <p>No purge guard runs: the erasure has already closed admission, as the account is {@code DELETING} and its
      * tokens are revoked. The row lock makes a writer that still names the space wait, then fail on its absence. The
@@ -246,7 +247,11 @@ public class WorkspaceLifecycleService {
     public void erasePersonalSpace(long accountId) {
         var space = workspaceRepository.lockPersonalSpace(accountId).orElse(null);
         if (space == null) return;
+        // Suspended here too, for a path that skipped suspendPersonalSpaceForErasure, such as a restore's recovery.
+        workspaceRepository.suspendPersonalSpace(space.getId());
         deleteWorkspaceData(space.getId());
+        // Its trail would hold the space's row: config_audit_event's workspace key has no delete action.
+        configAudit.erasePersonalSpaceTrail(space.getId());
         workspaceRepository.deletePersonalSpace(space.getId());
         slugReservations.release(space.getSlug());
         slugReservations.reserve(namespaceReservation.slugToken(space.getSlug()));
@@ -255,7 +260,8 @@ public class WorkspaceLifecycleService {
     /**
      * Closes a personal space before its erasure removes anything (ADR 0126): the space is {@code SUSPENDED}, so no
      * request enters it and no queued run is claimed, and no new sandbox starts between the deletion of the space's
-     * sandboxes and {@link #erasePersonalSpace}. It writes no status-change audit row, which would outlive the space.
+     * sandboxes and {@link #erasePersonalSpace}. It writes no status-change audit row: the teardown deletes the space's
+     * trail, and a row written now would only be deleted with it.
      * A repeated call changes nothing.
      */
     @Transactional
