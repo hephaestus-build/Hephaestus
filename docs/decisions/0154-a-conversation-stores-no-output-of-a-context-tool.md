@@ -41,10 +41,12 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
 ## Decision
 
 1. A stored context-tool result holds no output.
-   Its message is exactly `{role, toolCallId, toolName, content, isError, timestamp}`, with no `details`.
+   Its message is exactly `{role, toolCallId, toolName, content, isError, timestamp}` and an optional numeric `durationMs`, with no `details`.
    Its `content` is one text block, which the server writes.
 2. At `turn/end` the agent sends each context-tool result with empty `content` and no `details`.
    The server refuses an end that holds any other content or `details` for such a result, with a clear error.
+   It also refuses an end with a `context_edit` whose `replacement` is not null, because Pi replays a replacement as the result's content.
+   After `staleContextResults` goes, Pi writes only null replacements.
    It never truncates or rewrites output into a note.
 3. The server derives the note from the one call of the attempt with the result's `toolCallId`.
    An end with no such call, or with two, is refused.
@@ -60,12 +62,19 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
    Only the server derives notes, so the agent's `staleContextResults` and `withContextNotes` go.
 4. A summary that the attempt appends after its question is an overflow summary, and can quote an output.
    The server does not store it.
-   The next stored entry takes the dropped summary's `parentId`, so the replay path stays whole.
+   The path builder links the stored entries itself, so a dropped summary leaves no gap in the replay path.
    A summary that the attempt appends before its question reads only stored entries, and is stored.
 5. One migration converts the stored rows, in batches by id:
    - It rewrites each unredacted context-tool result, `fetch_context` included, to its note, and removes its `details`. It matches the call by `toolCallId` within the same turn. A redacted row stays as it is.
-   - It redacts each unredacted summary whose range covers such a result, payload and `text` both.
-     The next turn then compacts again from the notes.
+   - Each unredacted summary that can quote such a result gets a marker as its text, in the payload and in `text`.
+     The marker is ``[This summary quoted tool outputs that are no longer stored. Read the sources again for current data.]``
+     The summary keeps its `firstKeptEntryId`, and the row stays unredacted.
+     So the replay still starts at that summary, and its size stays bounded.
+     The next compaction updates the summary from the marker.
+   - A summary can quote such a result when its range covers the result.
+     A thread reads its main conversation up to its parent entry.
+     So a thread summary can quote any result of its main conversation.
+     This matches the rule of `ConversationRedaction`.
    - It runs in the stopped cutover of ADR 0096, so no old writer stores output after it.
    - A restored database runs it again before the server serves, because the migrator applies every changeset that the database lacks.
    - It cannot be undone: the old outputs are the copies that this decision removes.
@@ -78,7 +87,10 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
 ## Consequences
 
 - Good: a source erasure has no stored tool output to erase. The context change revokes the sandboxes, which hold the only live output.
-- Good: after the migration, the Slack copy retention and the person erasure find no tool output to redact.
+- Good: no stored row holds tool output after the migration.
+  So #5158 removes the redaction of copying tool results (`COPIES_PERSON_DATA`).
+  Three paths use it: the Slack copy retention, the Slack disconnect and the person erasure.
+  That step selects rows by tool name. If it stays, it redacts each note and the summaries that cover it.
 - Good: an answer that needs a file reads its current version.
 - Bad: a turn reads a file again when the previous turn read it. This costs one tool call and its tokens.
   Every later turn already pays this cost today.
@@ -90,8 +102,11 @@ Each design for it on #5118 opened a new interleaving. [#5158](https://github.co
 Not enforced yet: the #5158 pull request adds these checks, and its review confirms each one.
 
 - A server test: `turn/end` refuses a context-tool result with output, one with `details`, and one with a note that carries extra text.
+  It also refuses a `context_edit` with a replacement, and it accepts a result with `durationMs`.
 - A server test: `turn/end` drops an overflow summary and keeps a pre-prompt summary. The next turn's context holds the question, and a turn forced over its threshold compacts again.
-- A database test: on seeded rows, each context-tool output, a truncated `read` with `details` and a `fetch_context` result become notes. A covering summary is redacted, a redacted row stays, and no other row changes.
+- A database test: on seeded rows, each context-tool output, a truncated `read` with `details` and a `fetch_context` result become notes. A covering summary and a thread summary hold the marker and keep their `firstKeptEntryId`.
+  The next turn's context starts at the covering summary.
+  A redacted row stays, and no other row changes.
 - `CascadeTableTest`: the `SOURCE_ERASURE × CONVERSATION_COPY` cell cites these tests for the scope that they prove.
 
 ## Revisit trigger
