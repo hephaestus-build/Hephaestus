@@ -32,8 +32,9 @@ import org.springframework.modulith.events.ApplicationModuleListener;
  *
  * <p>For each {@code @ApplicationModuleListener}, the test collects the project's runtime exceptions that the code it
  * calls can construct, and leaves out those that a {@code catch} in the listener's own class encloses, and the
- * transient ones that {@link TransientFailures} names. What remains must match {@link #ESCAPES} exactly, so a new
- * escape fails here, and a settled one must leave the inventory.
+ * transient ones that {@link TransientFailures} names. Each remaining exception must be in {@link #ESCAPES}, so a new
+ * escape fails here, and a listener that no longer lets one escape must leave the inventory. The walk can find fewer of
+ * the deepest calls in one build than in another, so an exception that a run does not find is no failure.
  *
  * <p>Limits: the walk follows direct calls, and an interface call to each production implementation, up to {@link
  * #DEPTH} calls deep. It cannot see a {@code catch} that rethrows, so it counts such a catch as settling.
@@ -125,14 +126,25 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
             if (!escaping.isEmpty()) found.put(id(listener), escaping);
         }
 
-        Map<String, Set<String>> inventoried = new TreeMap<>();
-        ESCAPES.forEach((listener, escape) -> inventoried.put(listener, new TreeSet<>(escape.exceptions())));
         ESCAPES.forEach(
                 (listener, escape) -> assertThat(escape.reason()).as(listener).isNotBlank());
-        assertThat(found).as("""
-                        The domain failures that escape durable listeners differ from ESCAPES. Settle a new one in its \
-                        listener: record its stop reason and complete the publication. Remove a settled one from \
-                        ESCAPES. Add one only for a failure that is transient by design, and say why.""").isEqualTo(inventoried);
+        Map<String, Set<String>> unlisted = new TreeMap<>();
+        found.forEach((listener, escaping) -> {
+            var listed = ESCAPES.containsKey(listener) ? ESCAPES.get(listener).exceptions() : Set.<String>of();
+            var extra = escaping.stream()
+                    .filter(type -> !listed.contains(type))
+                    .collect(Collectors.toCollection(TreeSet::new));
+            if (!extra.isEmpty()) unlisted.put(listener, extra);
+        });
+        assertThat(unlisted).as("""
+                        These domain failures escape durable listeners, and ESCAPES does not list them. Settle each one \
+                        in its listener: record its stop reason and complete the publication. List one only for a \
+                        failure that is transient by design, and say why.""").isEmpty();
+        assertThat(ESCAPES.keySet().stream()
+                        .filter(listener -> !found.containsKey(listener))
+                        .toList())
+                .as("These listeners let no domain failure escape any more: remove them from ESCAPES")
+                .isEmpty();
     }
 
     private static List<JavaMethod> durableListeners() {
