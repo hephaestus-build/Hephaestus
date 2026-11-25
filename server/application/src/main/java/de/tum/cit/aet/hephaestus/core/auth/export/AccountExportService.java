@@ -141,9 +141,8 @@ public class AccountExportService {
     }
 
     /**
-     * Expires, in its own transaction, one batch of READY exports whose download window has ended. A batch that has not
-     * finished after {@link ExportRetentionSweeper#BATCH_TIMEOUT_SECONDS} rolls back, so a run ends inside its scheduler
-     * lock.
+     * Expires, in its own transaction, one batch of READY exports whose download window has ended. A batch statement that
+     * has not finished after {@link ExportRetentionSweeper#BATCH_TIMEOUT_SECONDS} is cancelled and rolls back.
      */
     @Transactional(timeout = ExportRetentionSweeper.BATCH_TIMEOUT_SECONDS)
     public int expireRetention() {

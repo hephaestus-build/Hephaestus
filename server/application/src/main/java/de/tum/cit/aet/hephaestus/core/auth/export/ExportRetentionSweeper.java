@@ -33,8 +33,8 @@ public class ExportRetentionSweeper {
     static final int BATCH = 100;
 
     /**
-     * A run starts no batch after this. With {@link #BATCH_TIMEOUT_SECONDS} for the last batch, it ends inside {@code
-     * lockAtMostFor}, so no other replica overlaps it.
+     * A run starts no batch after this. With {@link #BATCH_TIMEOUT_SECONDS} for the last batch, it normally ends inside
+     * {@code lockAtMostFor}. If a run outlives the lease, {@code SKIP LOCKED} keeps an overlapping run's rows apart.
      */
     static final Duration BUDGET = Duration.ofMinutes(4);
 
