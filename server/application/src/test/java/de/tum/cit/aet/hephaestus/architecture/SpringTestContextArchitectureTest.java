@@ -53,7 +53,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
             assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
-            assignment("core.privacy.PrivacyJournalWithoutBucketIntegrationTest", "privacy-journal-local"),
+            assignment(
+                    "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest", "privacy-journal-configured-bucket"),
             assignment("core.privacy.S3PrivacyJournalStoreIntegrationTest", "privacy-journal-bucket"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -154,8 +155,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "switches the journal bucket between a real MinIO endpoint and an outage"
                             + " while using the real database and erasure service"),
             Map.entry(
-                    "privacy-journal-local",
-                    "no journal bucket, with the shipping service spied to prove that no reply waits for a copy"),
+                    "privacy-journal-configured-bucket",
+                    "the journal bucket named by its documented settings, with the server's own S3 store behind a gate"
+                            + " that holds a write"),
             Map.entry(
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
@@ -335,6 +337,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.schema.ProductionSchemaContractIntegrationTest");
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
+            "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest",
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",

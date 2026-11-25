@@ -1,14 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -17,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /** With no journal bucket configured, the journal stays in the database and no reply waits for a copy. */
@@ -27,9 +24,8 @@ class PrivacyJournalWithoutBucketIntegrationTest extends AbstractWorkspaceIntegr
     @Autowired
     private ObjectProvider<PrivacyJournalObjectStore> bucket;
 
-    // The reply calls confirm for each fact that must ship. Without a bucket, no fact must, so no reply waits.
-    @MockitoSpyBean
-    private PrivacyJournalShipping shipping;
+    @Autowired
+    private SqlRequestTrace requests;
 
     @Autowired
     private WebTestClient client;
@@ -63,15 +59,25 @@ class PrivacyJournalWithoutBucketIntegrationTest extends AbstractWorkspaceIntegr
                         null,
                         null));
 
-        client.delete()
-                .uri("/workspaces/{slug}/conversation/entries/{entryId}", workspace.getWorkspaceSlug(), entry.getId())
-                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
-                .exchange()
-                .expectStatus()
-                .isNoContent()
-                .expectBody(Void.class);
-        verify(shipping, never()).confirm(any());
+        var request = requests.measure(
+                client,
+                http -> http.delete()
+                        .uri(
+                                "/workspaces/{slug}/conversation/entries/{entryId}",
+                                workspace.getWorkspaceSlug(),
+                                entry.getId())
+                        .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
+                        .exchange()
+                        .expectStatus()
+                        .isNoContent()
+                        .expectBody(Void.class)
+                        .returnResult());
 
+        // The request writes its fact and reads the journal for nothing: a reply that confirms a fact reads its row.
+        var journal = request.sql().stream()
+                .filter(sql -> sql.contains("privacy_journal"))
+                .toList();
+        assertThat(journal).singleElement().asString().startsWith("INSERT INTO privacy_journal");
         // The fact is recorded for a later restore, but it needs no copy and nothing ships it.
         assertThat(jdbc.queryForList("""
                 SELECT requires_shipping OR shipped_at IS NOT NULL FROM privacy_journal

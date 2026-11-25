@@ -17,8 +17,8 @@ final class JournalMinio implements AutoCloseable {
 
     static final String BUCKET = "test-archive";
     static final String PREFIX = "privacy-journal/";
-    private static final String JOURNAL_USER = "journal-user";
-    private static final String JOURNAL_PASSWORD = "journal-password-fixture";
+    static final String JOURNAL_USER = "journal-user";
+    static final String JOURNAL_PASSWORD = "journal-password-fixture";
 
     // The legacy Bitnami distribution ships the MinIO server and its administration client in one image.
     private final GenericContainer<?> minio = new GenericContainer<>(
@@ -50,9 +50,14 @@ final class JournalMinio implements AutoCloseable {
         mc("admin", "policy", "attach", "test", "journal-prefix", "--user", JOURNAL_USER);
     }
 
+    /** The bucket's S3 endpoint on this host. */
+    URI endpoint() {
+        return URI.create("http://" + minio.getHost() + ":" + minio.getMappedPort(9000));
+    }
+
     /** A store with the journal credential under {@code prefix}. */
     S3PrivacyJournalStore store(String prefix) {
-        return store(URI.create("http://" + minio.getHost() + ":" + minio.getMappedPort(9000)), prefix);
+        return store(endpoint(), prefix);
     }
 
     static S3PrivacyJournalStore store(URI endpoint, String prefix) {
