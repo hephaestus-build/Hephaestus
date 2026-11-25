@@ -136,3 +136,59 @@ void test("the shared reporter covers timeouts but leaves successful specific no
 	]);
 	assert.equal(failedNotice.length, 1);
 });
+
+const byName = (a: string | undefined, b: string | undefined) => (a ?? "").localeCompare(b ?? "");
+
+void test("the shared reporter knows every failure reporter of the workflows that report their own", async () => {
+	const named = /const reporters = \[(?<names>[^\]]*)\]/u.exec(script)?.groups?.names;
+	assert.ok(named !== undefined && named !== "", "the reporters list");
+	const reporters = [...named.matchAll(/'(?<name>[^']+)'/gu)].map((match) => match.groups?.name);
+	const own: string[] = [];
+	for (const file of [
+		".github/workflows/rescan-images.yml",
+		".github/workflows/kubernetes-nightly.yml",
+	]) {
+		const workflow = asRecord(parse(await readFile(file, "utf8")), file);
+		for (const job of Object.values(asRecord(workflow.jobs, `${file}.jobs`))) {
+			for (const each of asArray(asRecord(job, "job").steps ?? [], "steps")) {
+				const entry = asRecord(each, "step");
+				if (typeof entry.if === "string" && /\bfailure\(\)/u.test(entry.if)) {
+					own.push(asString(entry.name, "step.name"));
+				}
+			}
+		}
+	}
+	// A reporter outside the list makes a second issue for a failure its own step already reported.
+	assert.deepEqual(own.toSorted(byName), reporters.toSorted(byName));
+	assert.deepEqual(
+		await notify([], [], false, [
+			{
+				conclusion: "failure",
+				steps: [{ name: "Report a failed deployed rescan", conclusion: "success" }],
+			},
+		]),
+		[],
+	);
+});
+
+void test("a failed Host watch run whose own report succeeded files nothing more", async () => {
+	const checksFailed = { conclusion: "failure", steps: [] };
+	assert.deepEqual(
+		await notify(
+			[],
+			[],
+			false,
+			[checksFailed, { name: "Report a failure", conclusion: "success", steps: [] }],
+			"Release / Host watch",
+		),
+		[],
+	);
+	const unreported = await notify(
+		[],
+		[],
+		false,
+		[checksFailed, { name: "Report a failure", conclusion: "failure", steps: [] }],
+		"Release / Host watch",
+	);
+	assert.equal(unreported.length, 1);
+});

@@ -1047,10 +1047,36 @@ groups:
         annotations:
           summary: Feedback on the work has waited more than two hours for its first posted copy
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+  # The exporter target itself. When its Pod cannot be created, discovery drops the target and no up series
+  # remains, so the rules below stay silent. The chart renders this group only with postgresql.metrics.enabled,
+  # where the target must exist, and adds the release's namespace to the selector. Load it yourself only where
+  # you scrape the exporter as job="postgresql", and add your namespace there too.
+  - name: hephaestus-postgresql-exporter
+    rules:
+      - alert: HephaestusPostgresExporterMissing
+        expr: absent(up{job="postgresql"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The PostgreSQL exporter has had no scrape target for 5 minutes, so nothing watches the database
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # postgres_exporter of postgresql.metrics (docs/admin/observability.mdx, Database metrics). Without the
   # exporter these series do not exist, and the rules stay silent.
   - name: hephaestus-postgresql
     rules:
+      # PostgreSQL refuses or does not answer the exporter. A database that hangs past the scrape timeout leaves
+      # no pg_up sample at all, so a failed scrape of the exporter counts too.
+      - alert: HephaestusPostgresDown
+        expr: >-
+          max by (namespace) (pg_up{job="postgresql"}) == 0
+          or max by (namespace) (up{job="postgresql"}) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL or its exporter has not answered for 5 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # PostgreSQL broke a deadlock by cancelling one of the transactions, which the role then retried or failed.
       - alert: HephaestusDatabaseDeadlocks
         expr: sum by (namespace, datname) (increase(pg_stat_database_deadlocks{job="postgresql"}[15m])) > 0

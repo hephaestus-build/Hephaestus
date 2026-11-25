@@ -38,22 +38,67 @@ export async function automaticPromotion(
 	throw new Error(`cannot automatically promote divergent or unknown history: ${status}`);
 }
 
+/** A hold older than this alerts: Release / Host watch fails, and its failure reaches the maintainers. */
+export const freezeAlertHours = 24;
+
+/**
+ * When a channel file last changed on deploy-state. Automatic promotion leaves a frozen channel alone,
+ * so for a frozen channel this is when the hold began. Undefined when the history cannot be read.
+ */
+export async function channelChangedAt(
+	listCommits: () => Promise<unknown>,
+): Promise<Date | undefined> {
+	try {
+		const [latest] = asArray(await listCommits(), "channel commits");
+		const { date } = asRecord(
+			asRecord(asRecord(latest, "commit").commit, "commit").committer,
+			"committer",
+		);
+		const changed = typeof date === "string" ? new Date(date) : undefined;
+		return changed !== undefined && !Number.isNaN(changed.getTime()) ? changed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** The deploy-state history of one channel file, newest first. */
+export const channelCommits = (repository: string, file: string) => async () =>
+	parseJson(
+		await output(
+			"gh",
+			["api", `repos/${repository}/commits?sha=deploy-state&path=${file}&per_page=1`],
+			{ signal: AbortSignal.timeout(30_000) },
+		),
+	);
+
+/** How long a hold has lasted, in whole hours, or undefined without a start. */
+export const heldHours = (since: Date | undefined, now: Date) =>
+	since === undefined ? undefined : Math.floor((now.getTime() - since.getTime()) / 3_600_000);
+
 /** The run's summary of a request that leaves the channel where it is. */
 export function unchangedSummary(
 	decision: Exclude<AutomaticDecision, { outcome: "promote" }>,
 	channel: string,
 	commit: string,
+	heldSince?: Date,
+	now = new Date(),
 ): { title: string; text: string } {
 	const build = commit.slice(0, 10);
-	return decision.outcome === "held"
-		? {
-				title: `${channel} is held`,
-				text: `The ${channel} channel is frozen on ${decision.release}, so ${build} was not promoted. Nothing was published or deployed. A promotion without freeze lifts the hold.`,
-			}
-		: {
-				title: `${channel} already carries this build`,
-				text: `The ${channel} channel is on ${decision.release}, which already includes ${build}. Nothing was published or deployed.`,
-			};
+	if (decision.outcome === "current") {
+		return {
+			title: `${channel} already carries this build`,
+			text: `The ${channel} channel is on ${decision.release}, which already includes ${build}. Nothing was published or deployed.`,
+		};
+	}
+	const hours = heldHours(heldSince, now);
+	const since =
+		heldSince === undefined || hours === undefined
+			? "since a time that deploy-state did not report"
+			: `since ${heldSince.toISOString()} (${hours} h)`;
+	return {
+		title: `${channel} is held`,
+		text: `The ${channel} channel is frozen on ${decision.release} ${since}, so ${build} was not promoted. Nothing was published or deployed. A promotion without freeze lifts the hold.`,
+	};
 }
 
 /** The head commit of a listed run, if it is a successful CI/CD build of a push to this repository's main. */
@@ -139,8 +184,13 @@ if (import.meta.main) {
 	// from it and is therefore ahead of the channel too, so no build is left unpromoted.
 	const target = superseding ?? commit;
 	if (decision.outcome !== "promote") {
-		const { title, text } = unchangedSummary(decision, channel, commit);
-		console.log(`::notice title=${title}::${text}`);
+		const heldSince =
+			decision.outcome === "held"
+				? await channelChangedAt(channelCommits(repository, "channels/staging.json"))
+				: undefined;
+		const { title, text } = unchangedSummary(decision, channel, commit, heldSince);
+		// A hold is a state, not a failure, but it must stand out: continuous staging changes nothing.
+		console.log(`::${decision.outcome === "held" ? "warning" : "notice"} title=${title}::${text}`);
 		const summary = process.env.GITHUB_STEP_SUMMARY;
 		if (summary !== undefined && summary !== "") {
 			await appendFile(summary, `### ${title}\n\n${text}\n`);

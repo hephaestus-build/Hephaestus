@@ -1,0 +1,85 @@
+name: Release / Host watch
+
+# Checks from outside what users and continuous staging depend on: the server of each host is ready, and
+# Staging is not frozen for longer than a day. Each host and the freeze keep one issue: the first failing
+# verdict opens it and notifies the maintainers, and the next passing verdict closes it. docs/contributor/release-management.mdx
+# § Host watch has the response.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: The server of each host is ready
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      verdicts: ${{ steps.check.outputs.verdicts }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Probe each host's server readiness
+        id: check
+        env:
+          HOSTS: hephaestus.build staging.hephaestus.build
+        run: node scripts/watch-hosts.ts api
+
+  freeze:
+    name: Staging follows main
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      verdict: ${{ steps.check.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Check how long the Staging channel is frozen
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/watch-hosts.ts freeze
+
+  # CI / Scheduled failures leaves a run alone when this job succeeds, so a long outage notifies once.
+  # A check that ended without a verdict makes this job fail, and then that workflow reports the run.
+  report:
+    name: "Report a failure"
+    needs: [api, freeze]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Open or close each check's issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_VERDICTS: ${{ needs.api.outputs.verdicts }}
+          FREEZE_VERDICT: ${{ needs.freeze.outputs.verdict }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/watch-hosts.ts report

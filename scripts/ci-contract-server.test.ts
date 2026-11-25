@@ -782,6 +782,7 @@ void describe("ci-contract: server", () => {
 		for (const file of [
 			"scripts/postgres-backup-restore-test.ts",
 			"scripts/postgres-pitr-test.ts",
+			"scripts/postgres-init-test.ts",
 			"scripts/lib/database-migration.ts",
 		]) {
 			assert.ok(drillInputs.includes(file), `${file} must select the recovery drills`);

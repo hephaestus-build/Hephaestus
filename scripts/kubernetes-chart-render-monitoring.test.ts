@@ -35,7 +35,7 @@ import {
 	type Resource,
 	reviews,
 	ruleGroups,
-	ruleGroupsWithoutBackups,
+	defaultRuleGroups,
 	ruleResources,
 	stackComponents,
 	stackOn,
@@ -75,9 +75,9 @@ await test("the alert rules render as the tested file's groups, and only when as
 	const [configMap, prometheusRule] = resources;
 	assert.deepEqual(
 		ruleGroups(get(configMap, "data", "hephaestus-alerts.yml")),
-		ruleGroupsWithoutBackups(),
+		defaultRuleGroups(),
 	);
-	assert.deepEqual(get(prometheusRule, "spec", "groups"), ruleGroupsWithoutBackups());
+	assert.deepEqual(get(prometheusRule, "spec", "groups"), defaultRuleGroups());
 });
 
 await test("the backup alert renders on the switch that gives the server the backup schedules", () => {
@@ -115,6 +115,47 @@ await test("the backup alert renders on the switch that gives the server the bac
 		ruleGroups(alertRules).some((group) => get(group, "name") === "hephaestus-backups"),
 		"the tested file holds the backup group",
 	);
+});
+
+await test("the exporter's absence alerts only where the chart runs the exporter", () => {
+	// absent(up{job="postgresql"}) fires for ever where no exporter is scraped, so the group follows the switch
+	// that deploys it.
+	for (const [metrics, namespace] of [
+		[false, "hephaestus"],
+		[true, "hephaestus"],
+		[true, "team-b"],
+	] as const) {
+		const resources = rendered(
+			[...layersFor("small"), alertRulesOn, stackOn, ...(metrics ? [metricsOn] : [])],
+			{ namespace },
+		);
+		const [configMap, prometheusRule] = ruleResources(resources);
+		const vmalert = resources.find(
+			(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "vmalert",
+		);
+		for (const [destination, groups] of Object.entries({
+			configMap: ruleGroups(get(configMap, "data", "hephaestus-alerts.yml")),
+			prometheusRule: list(get(prometheusRule, "spec", "groups")),
+			stack: ruleGroups(get(vmalert, "data", "hephaestus-alerts.yml")),
+		})) {
+			assert.equal(
+				groups.some((group) => get(group, "name") === "hephaestus-postgresql-exporter"),
+				metrics,
+				`${destination} with the exporter ${metrics ? "on" : "off"}`,
+			);
+			// absent() keeps no labels, so the chart scopes it to the release: another release cannot hide it.
+			const exporter = groups.find(
+				(group) => get(group, "name") === "hephaestus-postgresql-exporter",
+			);
+			if (exporter !== undefined) {
+				assert.deepEqual(
+					list(get(exporter, "rules")).map((rule) => get(rule, "expr")),
+					[`absent(up{job="postgresql",namespace="${namespace}"})`],
+					destination,
+				);
+			}
+		}
+	}
 });
 
 const dashboardConfig = (resources: Resource[]) =>
@@ -273,7 +314,7 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	);
 	assert.ok(ruleMap);
 	assert.equal(get(podSpec(vmalert), "volumes", 0, "configMap", "name"), nameOf(ruleMap));
-	const tested = ruleGroupsWithoutBackups();
+	const tested = defaultRuleGroups();
 	const loaded = list(
 		get(
 			parseAllDocuments(String(get(ruleMap, "data", "hephaestus-alerts.yml")))[0]?.toJS(),
@@ -392,8 +433,12 @@ const stackFor = (values: Layer) => {
 await test("the monitoring stack loads every shipped alert group whose exporter it scrapes", () => {
 	const nodeExporters = ["192.168.5.21:9100", "192.168.5.22:9101"];
 	const shipped = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
-	// With backups, so that the stack loads every group that reads the server's metrics.
-	const scraped = stackFor({ ...backupsOn, observability: { stack: { nodeExporters } } });
+	// With backups and the PostgreSQL exporter, so that the stack loads every group that it can scrape.
+	const scraped = stackFor({
+		...backupsOn,
+		postgresql: { ...backupsOn.postgresql, ...metricsOn.postgresql },
+		observability: { stack: { nodeExporters } },
+	});
 	for (const group of shipped) {
 		const name = String(get(group, "name"));
 		assert.equal(
@@ -506,7 +551,7 @@ await test("a release package ships the alert rules without their promtool cases
 	});
 	assert.deepEqual(
 		ruleGroups(get(ruleResources(resources)[0], "data", "hephaestus-alerts.yml")),
-		ruleGroupsWithoutBackups(),
+		defaultRuleGroups(),
 	);
 });
 

@@ -273,10 +273,15 @@ Turn on one of two values, in the release's namespace:
 
 Both are off by default.
 Both leave out the group `hephaestus-backups` without backups: the server then reports no backup age.
+Both leave out the group `hephaestus-postgresql-exporter` without `postgresql.metrics.enabled`: its `absent()` rule would fire where no exporter is scraped.
 `observability.alertRules.labels` adds labels to both, so that the rule selector of your Prometheus finds them.
 For kube-prometheus-stack, set the `release` label of your monitoring release, or set its `ruleSelector`.
 Mount the ConfigMap into your Prometheus or vmalert, and let its rule loader read the mounted file.
-Without the chart, load the file from the release that you run, without the group `hephaestus-backups` if you run no backups: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
+
+Without the chart, load the file from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
+Leave out the group `hephaestus-backups` if you run no backups.
+Leave out the group `hephaestus-postgresql-exporter` if you scrape no PostgreSQL exporter as `job="postgresql"`.
+If you load that group, add `namespace="<release namespace>"` to the selector of its `absent()` rule, as the chart does, and set that label in the scrape.
 
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
@@ -355,6 +360,8 @@ To turn it on:
 4. Scrape the exporter's port `metrics` (9187) on the path `/metrics`.
    The [monitoring stack](#run-the-monitoring-stack) does this as the job `postgresql`.
    Another scraper needs the namespace and labels of `networkPolicy.metrics`.
+   Set `job` to `postgresql` with a relabeling, and set `namespace` to the release's namespace: the rules read both.
+   Without both labels, `HephaestusPostgresExporterMissing` stays critical.
 
 The exporter reports the default collectors, the oldest open transaction, the transaction ID age of each database, and the statement statistics.
 The statement statistics hold the `postgresql.metrics.statementLimit` statements with the most total execution time, 20 by default.
@@ -366,6 +373,8 @@ The rule group `hephaestus-postgresql` alerts on these metrics:
 
 | Alert | Fires when |
 | --- | --- |
+| `HephaestusPostgresDown` | PostgreSQL has not answered its exporter (`pg_up` is 0), or the exporter has not answered its scrape (`up` is 0), for 5 minutes |
+| `HephaestusPostgresExporterMissing` | The PostgreSQL exporter has had no scrape target (`up` absent) for 5 minutes. Rendered only with `postgresql.metrics.enabled` |
 | `HephaestusDatabaseDeadlocks` | PostgreSQL broke a deadlock in the last 15 minutes |
 | `HephaestusDatabaseTransactionOpenLong` | A transaction has been open for more than 5 minutes, for 5 minutes |
 | `HephaestusDatabaseDeadRowsHigh` | A table has more than 10,000 dead rows and more than 20 % of its live rows, for an hour |

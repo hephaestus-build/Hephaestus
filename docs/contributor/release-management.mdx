@@ -895,6 +895,44 @@ The release manager owns the action of each fragment on the project's hosts:
 A host whose values the chart refuses keeps its last release.
 Each later promotion then fails, so do not wait for the next release candidate.
 
+### Host watch
+
+**Release / Host watch** checks the project's hosts from outside, every 10 minutes.
+Each host's server and the Staging freeze keep one issue each.
+The first failing verdict opens the issue and notifies the maintainer team.
+Later failing verdicts add nothing, and the next passing verdict closes the issue.
+
+A check that ends without a verdict, for example after a GitHub API error or a timeout, concludes nothing about the hosts.
+The report then fails, and **CI / Scheduled failures** reports the run.
+A host that you remove from the watch sends no more verdicts, so close its open issue by hand.
+The hosts' own Alertmanager notifies no one unless its site configuration names a receiver.
+
+| Check | Fails when | Response |
+| --- | --- | --- |
+| The server of each host is ready | `https://<host>/readyz` does not answer the server's `{"status":"UP"}` in three tries over 40 seconds | Read the server and PostgreSQL Pods (`kubectl -n hephaestus get pods`) and the [alert response](../admin/production-operations-runbook#alert-response). A server stopped on purpose also fails this check: record why in the issue. The issue closes when the server is ready again. |
+| Staging follows main | The Staging channel has been frozen for 24 hours or more | Promote Staging without **freeze** when the hold is over. Otherwise record in the issue why the hold continues. Continuous staging shows each held run as a warning with the freeze age. A freeze that deploy-state cannot date shows only that warning and leaves the issue as it is. |
+
+### Kernel updates on the project's hosts
+
+A new kernel becomes active at the next reboot, whatever its cause.
+Thus, a kernel reaches production only after staging ran the same kernel, on the same Ubuntu release, healthy for 24 hours.
+Production holds its kernel meta packages (`apt-mark hold linux-generic linux-image-generic linux-headers-generic`), so unattended-upgrades does not install a new kernel there.
+Unattended-upgrades never reboots a host (`Unattended-Upgrade::Automatic-Reboot` stays `false`).
+
+To move production to a kernel that staging qualified:
+
+1. Unhold the meta packages, install the kernel, and hold them again.
+2. Boot it once with `grub-reboot '<submenu id>><entry id>'`. If the host fails, the next reboot returns to the default kernel.
+3. Verify the boot before you make the kernel the default:
+   - `journalctl -k -b | grep -c 'apparmor="DENIED" operation="signal"'` prints 0.
+   - PostgreSQL is ready within a minute and stays ready for 15 minutes.
+   - Release / Host watch passes.
+
+A kernel that denies signals between the processes of a container breaks PostgreSQL.
+Its latches wake through `SIGURG`, so every wake-up waits for a timeout.
+The end-of-recovery checkpoint then waits for `checkpoint_timeout`, and backends hang in `authentication`.
+The first sign is `checkpoint starting: end-of-recovery immediate wait time`, with the `time` flag, five minutes after `redo done`.
+
 ### Deployment history
 
 Each promotion that moves an environment records one GitHub deployment of the release or commit that its channel names.

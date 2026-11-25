@@ -92,6 +92,28 @@ void test("a memory change together with any other template change still fails",
 	);
 });
 
+const startupProbe = (probe: object) => ({
+	startupProbe: { exec: { command: ["pg_isready"] }, periodSeconds: 5, ...probe },
+});
+
+void test("a probe's timeout may change, but not its command or schedule", () => {
+	assert.deepEqual(
+		changedPostgresql(
+			chart(statefulSet(startupProbe({}))),
+			chart(statefulSet(startupProbe({ timeoutSeconds: 10 }))),
+		),
+		[".spec.containers[postgresql].startupProbe.timeoutSeconds"],
+	);
+	assert.throws(
+		() =>
+			changedPostgresql(
+				chart(statefulSet(startupProbe({}))),
+				chart(statefulSet(startupProbe({ periodSeconds: 1 }))),
+			),
+		/startupProbe\.periodSeconds/u,
+	);
+});
+
 void test("any other change to the Pod template fails, because it would cut the database on every upgrade", () => {
 	assert.throws(
 		() =>
@@ -99,7 +121,7 @@ void test("any other change to the Pod template fails, because it would cut the 
 				chart(statefulSet({})),
 				chart(statefulSet({}, { annotations: { version: "1.0.0" } })),
 			),
-		/beyond its image, arguments and memory: \.metadata\.annotations/u,
+		/beyond its image, arguments, memory and probe timeouts: \.metadata\.annotations/u,
 	);
 	assert.throws(
 		() => changedPostgresql(chart(service), chart(service)),
