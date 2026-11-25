@@ -58,8 +58,10 @@ export interface ReadyTimeline {
 	status: "ready";
 	/** Stored messages of this scope, oldest first. */
 	entries: ConversationEntry[];
-	/** The developer's messages the server has not stored yet. */
+	/** Sends for which this tab has yet to receive a saved entry ID. */
 	pending: PendingMessage[];
+	/** The send keys of questions this tab received confirmation for. */
+	confirmedSendKeys?: ReadonlyMap<string, string>;
 	/** Queued and running turns of this scope, oldest first. */
 	turns: ConversationTurn[];
 	earlier: EarlierMessages;
@@ -88,13 +90,13 @@ export interface TimelineActions {
 	onDelete: (entry: ConversationEntry) => void;
 	onStop: (turnId: string) => void;
 	/** Removes a message that the server did not store from this device. */
-	onDiscardSend: (requestId: string) => void;
+	onDiscardSend: (key: string) => void;
 	/**
 	 * Asking Hephaestus again. Absent while the developer cannot ask, such as when their AI choice keeps
 	 * Hephaestus from answering: then no message offers Reply in thread, Try again or Retry.
 	 */
 	ask?: {
-		onRetrySend: (requestId: string) => void;
+		onRetrySend: (key: string) => void;
 		/** Asks a question again whose turn failed. */
 		onTryAgain: (question: ConversationEntry) => void;
 	};

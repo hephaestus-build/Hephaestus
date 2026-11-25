@@ -20,7 +20,7 @@ export type MessageState =
 	/** Hephaestus's answer to a question asked in Slack did not fully reach Slack: Slack may show part of it or none. */
 	| { kind: "notFullyInSlack" }
 	| { kind: "failed"; reason: string; onTryAgain?: () => void }
-	| { kind: "notSent"; reason: string; onRetry?: () => void };
+	| { kind: "notSent"; reason: string; unconfirmed?: boolean; onRetry?: () => void };
 
 /**
  * The states that leave the developer something to do: an answer that failed, or a message that was
@@ -148,7 +148,8 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 						)
 					}
 				>
-					Not sent. {state.reason}
+					{state.unconfirmed !== true && "Not sent. "}
+					{state.reason}
 				</Line>
 			);
 		}

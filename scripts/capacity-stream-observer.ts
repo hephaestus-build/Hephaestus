@@ -51,14 +51,14 @@ try {
 						return;
 					}
 					const turn = asRecord(parseJson(raw), "turn");
-					if (typeof turn.requestId !== "string" || !/^[a-f0-9-]{36}$/u.test(turn.requestId)) {
+					if (typeof turn.id !== "string" || !/^[a-f0-9-]{36}$/u.test(turn.id)) {
 						return;
 					}
-					const phases = seen.get(turn.requestId) ?? new Set<string>();
+					const phases = seen.get(turn.id) ?? new Set<string>();
 					const record = (phase: string) => {
 						if (!phases.has(phase)) {
 							phases.add(phase);
-							log({ phase, requestId: turn.requestId, status: turn.status });
+							log({ phase, turnId: turn.id, status: turn.status });
 						}
 					};
 					record("first_turn_event");
@@ -77,7 +77,7 @@ try {
 					) {
 						record("end");
 					}
-					seen.set(turn.requestId, phases);
+					seen.set(turn.id, phases);
 				});
 			}
 			if (!abort.signal.aborted) {

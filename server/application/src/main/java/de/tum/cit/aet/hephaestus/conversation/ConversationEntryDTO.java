@@ -36,10 +36,6 @@ public record ConversationEntryDTO(
         @NonNull
         String text,
 
-        @Schema(description = "The submission that wrote the message; the app matches its own optimistic message by it")
-        @Nullable
-        String requestId,
-
         @Schema(description = "The turn the message asked or answered") @Nullable
         UUID turnId,
 

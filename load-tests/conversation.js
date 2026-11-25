@@ -2,7 +2,7 @@ import { check, sleep } from "k6";
 import http from "k6/http";
 import { Counter, Rate, Trend } from "k6/metrics";
 
-import { apiBaseUrl, integer, jsonField, required } from "./lib/config.js";
+import { apiBaseUrl, createKey, integer, jsonField, required } from "./lib/config.js";
 
 export { handleSummary } from "./lib/summary.js";
 
@@ -168,16 +168,15 @@ function observe(turn, seen, startedAt) {
  * @param {string} [requestId] - an optional synthetic correlation ID
  * @returns {string | null} the question's entry id when Hephaestus answered
  */
-export function ask(parentEntryId, text = question, requestId = crypto.randomUUID()) {
+export function ask(parentEntryId, text = question, requestId = createKey()) {
 	const startedAt = Date.now();
 	const deadline = startedAt + turnTimeoutSeconds * 1000;
 	const body = JSON.stringify({
-		requestId,
 		text,
 		...(parentEntryId === null ? {} : { parentEntryId }),
 	});
 	const submitted = http.post(url(conversationPaths.turns), body, {
-		headers,
+		headers: { ...headers, "Idempotency-Key": requestId },
 		tags: { operation: "conversation_turn" },
 		responseCallback: http.expectedStatuses(200, 409),
 	});

@@ -14,11 +14,10 @@
  * least one model call was recorded for it, its holder renewed the run's lease at least once, and the server's longest
  * context read stayed within 20 s. The last two catch a holder that loses its lease even when a later attempt ends.
  */
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-import { submitTurn } from "./lib/capacity-chat.ts";
+import { createKey, submitTurn } from "./lib/capacity-chat.ts";
 import { COMMON, commitOf, commonFrom, sleep } from "./lib/qual-args.ts";
 import { Evidence, RULES } from "./lib/qual-evidence.ts";
 import { type RowOf, scrapeAll, type Shape, sqlRows } from "./lib/qual-state.ts";
@@ -231,7 +230,7 @@ async function turnToJudge(errors: string[]): Promise<{ id: string } | { refused
 			conversationUrl ?? "",
 			readFileSync(tokenFile ?? "", "utf8").trim(),
 			{
-				requestId: randomUUID(),
+				requestId: createKey(),
 				text: values.question,
 			},
 		);

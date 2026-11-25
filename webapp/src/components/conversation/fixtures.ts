@@ -100,7 +100,6 @@ export const FOLLOW_UP = entry({
 	kind: "USER",
 	text: "And my latest one?",
 	turnId: "t1000000-0000-4000-8000-000000000005",
-	requestId: "r1000000-0000-4000-8000-000000000005",
 	createdAt: earlierToday(5),
 });
 
@@ -286,7 +285,6 @@ export function turn(
 ): ConversationTurn {
 	return {
 		conversationId: CONVERSATION_ID,
-		requestId: `request-${overrides.id}`,
 		surface: "APP",
 		createdAt: minutesBefore(1),
 		attempt: overrides.status === "QUEUED" ? 0 : 1,

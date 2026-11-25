@@ -409,16 +409,16 @@ it("brings a linked reply into view inside its thread, reading older replies unt
 	expect(reads).toStrictEqual([null, "3", "2"]);
 });
 
-it("shows a sent message at once and keeps its request id when a failed send is retried", async () => {
+it("shows a sent message at once and keeps its idempotency key when a failed send is retried", async () => {
 	const fake = new ConversationFake();
 	serve(fake);
 	const held = deferred();
-	const attempts: ConversationTurnRequest[] = [];
+	const attempts: (string | null)[] = [];
 	server.use(
 		http.post<PathParams, ConversationTurnRequest>(
 			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
-				attempts.push(await request.json());
+				attempts.push(request.headers.get("Idempotency-Key"));
 				await held.promise;
 				return HttpResponse.json(
 					{
@@ -448,9 +448,71 @@ it("shows a sent message at once and keeps its request id when a failed send is 
 	);
 	await userEvent.click(screen.getByRole("button", { name: /^Retry \(/u }));
 	await waitFor(() => expect(fake.submissions).toHaveLength(1));
-	expect(fake.submissions[0]?.requestId).toBe(attempts[0]?.requestId);
+	expect(attempts[0]).toMatch(/^[0-9a-f-]{14}7/u);
+	expect(fake.submissionKeys[0]).toBe(attempts[0]);
 	await waitFor(() => expect(screen.queryByText(/Not sent/u)).toBeNull());
 	expect(screen.getAllByText("Is my description clear?")).toHaveLength(1);
+});
+
+it("retries a lost response after the saved question arrives on the stream", async () => {
+	const fake = new ConversationFake();
+	serve(fake);
+	const attempts: (string | null)[] = [];
+	type Turn = ReturnType<ConversationFake["addTurn"]>;
+	type Entry = ReturnType<ConversationFake["add"]>;
+	const saved = deferred<{ turn: Turn; question: Entry }>();
+	const acknowledge = deferred();
+	server.use(
+		http.post<PathParams, ConversationTurnRequest>(
+			"*/workspaces/acme/conversation/turns",
+			async ({ request }) => {
+				attempts.push(request.headers.get("Idempotency-Key"));
+				const body = await request.json();
+				const turn = fake.addTurn({ status: "QUEUED" });
+				const question = fake.add({ kind: "USER", text: body.text, turnId: turn.id });
+				saved.resolve({ turn, question });
+				return HttpResponse.error();
+			},
+			{ once: true },
+		),
+		http.post("*/workspaces/acme/conversation/turns", async ({ request }) => {
+			attempts.push(request.headers.get("Idempotency-Key"));
+			await acknowledge.promise;
+			return HttpResponse.json(await saved.promise);
+		}),
+	);
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	const composer = await screen.findByRole(
+		"textbox",
+		{ name: "Message Hephaestus" },
+		ROUTE_RENDER_WAIT,
+	);
+	const stream = await liveStream();
+	act(() => {
+		stream.open();
+		stream.emit("snapshot", fake.conversation());
+	});
+	const text = "Can you check this?";
+	await userEvent.type(composer, `${text}{Enter}`);
+	const { question } = await saved.promise;
+	act(() => stream.emit("entry", question));
+	const messageIds = () =>
+		screen
+			.getAllByText(text)
+			.map((message) => message.closest<HTMLElement>("[data-message-id]")?.dataset.messageId);
+	try {
+		await waitFor(() => expect(messageIds()).toContain(question.id));
+	} finally {
+		acknowledge.resolve();
+	}
+
+	await waitFor(() => expect(attempts).toHaveLength(2), { timeout: 5000 });
+	expect(attempts[0]).toMatch(/^[0-9a-f-]{14}7/u);
+	expect(attempts[1]).toBe(attempts[0]);
+	await waitFor(() => expect(messageIds()).toStrictEqual([question.id]));
+	expect(screen.queryByText(/Not sent/u)).toBeNull();
+	expect(fake.entries.map(({ id }) => id)).toStrictEqual([question.id]);
 });
 
 it("keeps a successful send visible until an in-flight read lets its stored copy land", async () => {
@@ -467,11 +529,10 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 			async ({ request }) => {
 				const body = await request.json();
 				fake.submissions.push(body);
-				const turn = fake.addTurn({ status: "QUEUED", requestId: body.requestId });
+				const turn = fake.addTurn({ status: "QUEUED" });
 				const question = fake.add({
 					kind: "USER",
 					text: body.text,
-					requestId: body.requestId,
 					turnId: turn.id,
 				});
 				postStarted.resolve();
@@ -548,8 +609,8 @@ it("copies and discards only one failed send without deleting stored messages or
 			async ({ request }) => {
 				attempts.push(await request.json());
 				return HttpResponse.json(
-					{ status: 503, detail: "The server could not store this message." },
-					{ status: 503 },
+					{ status: 422, detail: "The server could not store this message." },
+					{ status: 422 },
 				);
 			},
 		),
@@ -1062,7 +1123,6 @@ it("shows what the live stream reports: Hephaestus's answer as it arrives and a 
 	const turn = {
 		id: "a9000000-0000-4000-8000-000000000001",
 		conversationId: question.conversationId,
-		requestId: "b9000000-0000-4000-8000-000000000001",
 		surface: "APP",
 		createdAt: "2026-10-09T09:10:00Z",
 		attempt: 1,
@@ -1323,11 +1383,10 @@ it("shows no phantom turn when a send's answer lands after Hephaestus already an
 			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
 				const body = await request.json();
-				const turn = fake.addTurn({ status: "QUEUED", requestId: body.requestId });
+				const turn = fake.addTurn({ status: "QUEUED" });
 				const question = fake.add({
 					kind: "USER",
 					text: body.text,
-					requestId: body.requestId,
 					turnId: turn.id,
 				});
 				// The answer as the server wrote it at submit time.

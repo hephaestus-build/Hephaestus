@@ -37,6 +37,7 @@ export const PROBLEM_TYPE_SLUGS = [
 	"account-erasure-accepted",
 	"csrf-token-rejected",
 	"feedback-withheld",
+	"idempotency-key-in-flight",
 	"journal-pending",
 	"passkey-required",
 	"step-up-required",

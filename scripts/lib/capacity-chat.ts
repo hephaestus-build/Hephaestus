@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -21,6 +20,11 @@ interface Turn {
 	status?: string;
 	needsResync?: boolean;
 	completion: ReturnType<typeof Promise.withResolvers<string>>;
+}
+
+export function createKey() {
+	const time = Date.now().toString(16).padStart(12, "0");
+	return `${time.slice(0, 8)}-${time.slice(8)}-7${crypto.randomUUID().slice(15)}`;
 }
 
 function trend(values: number[]) {
@@ -46,11 +50,16 @@ export async function submitTurn(
 	question: { requestId: string; text: string; parentEntryId?: string },
 	signal?: AbortSignal,
 ): Promise<{ id: string; questionId: string } | { status: string }> {
+	const { requestId, ...input } = question;
 	const response = await fetch(`${base}/turns`, {
 		method: "POST",
-		headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+		headers: {
+			authorization: `Bearer ${token}`,
+			"content-type": "application/json",
+			"Idempotency-Key": requestId,
+		},
 		signal,
-		body: JSON.stringify(question),
+		body: JSON.stringify(input),
 	});
 	if (!response.ok) {
 		await response.arrayBuffer();
@@ -86,7 +95,8 @@ export async function runCapacityChat(options: {
 		"content-type": "application/json",
 	});
 	const ready = tokens.map(() => Promise.withResolvers<boolean>());
-	const pending = new Map<string, Turn>();
+	const pending = new Map<number, Turn>();
+	const earlyTurns = new Map<number, { row: Record<string, unknown>; at: number }[]>();
 	const measurements: Turn[] = [];
 	const arrivals: number[] = [];
 	const failures: string[] = [];
@@ -106,14 +116,14 @@ export async function runCapacityChat(options: {
 	if (signal.aborted) {
 		stop();
 	}
-	function observe(turn: Turn, row: Record<string, unknown>) {
+	function observe(turn: Turn, row: Record<string, unknown>, at = Date.now()) {
 		if (turn.firstEvent === undefined) {
-			turn.firstEvent = Date.now();
-			log({ phase: "first_turn_event", requestId: turn.requestId });
+			turn.firstEvent = at;
+			log({ phase: "first_turn_event", requestId: turn.requestId, at });
 		}
 		if (row.status === "RUNNING" && turn.running === undefined) {
-			turn.running = Date.now();
-			log({ phase: "running", requestId: turn.requestId });
+			turn.running = at;
+			log({ phase: "running", requestId: turn.requestId, at });
 		}
 		if (
 			isRecord(row.partial) &&
@@ -121,18 +131,27 @@ export async function runCapacityChat(options: {
 			row.partial.text !== "" &&
 			turn.firstText === undefined
 		) {
-			turn.firstText = Date.now();
-			log({ phase: "first_text", requestId: turn.requestId });
+			turn.firstText = at;
+			log({ phase: "first_text", requestId: turn.requestId, at });
 		}
 		if (
 			typeof row.status === "string" &&
 			["DONE", "FAILED", "STOPPED"].includes(row.status) &&
 			turn.ended === undefined
 		) {
-			turn.ended = Date.now();
+			turn.ended = at;
 			turn.status = row.status;
-			log({ phase: "turn_end", requestId: turn.requestId, status: row.status });
+			log({ phase: "turn_end", requestId: turn.requestId, status: row.status, at });
 			turn.completion.resolve(row.status);
+		}
+	}
+	function observeEarlyFrames(turn: Turn, id: string) {
+		const frames = earlyTurns.get(turn.user) ?? [];
+		earlyTurns.delete(turn.user);
+		for (const { row, at } of frames) {
+			if (row.id === id) {
+				observe(turn, row, at);
+			}
 		}
 	}
 	async function resync(turn: Turn) {
@@ -164,8 +183,14 @@ export async function runCapacityChat(options: {
 	async function receive(event: string, raw: string, user: number) {
 		if (event === "turn") {
 			const row = asRecord(parseJson(raw), "turn event");
-			const turn = typeof row.requestId === "string" ? pending.get(row.requestId) : undefined;
-			if (turn !== undefined && turn.user === user) {
+			const turn = pending.get(user);
+			if (turn !== undefined && turn.id === undefined) {
+				const frames = earlyTurns.get(user) ?? [];
+				if (frames.length < 64) {
+					frames.push({ row, at: Date.now() });
+					earlyTurns.set(user, frames);
+				}
+			} else if (turn !== undefined && row.id === turn.id) {
 				observe(turn, row);
 			}
 			return;
@@ -181,7 +206,7 @@ export async function runCapacityChat(options: {
 			if (turn.user !== user) {
 				continue;
 			}
-			const row = active.find((candidate) => candidate.requestId === turn.requestId);
+			const row = active.find((candidate) => candidate.id === turn.id);
 			if (row === undefined) {
 				await resync(turn);
 			} else {
@@ -244,13 +269,13 @@ export async function runCapacityChat(options: {
 						let parent: string | null = null;
 						for (let index = 0; index < 3; index += 1) {
 							const turn: Turn = {
-								requestId: randomUUID(),
+								requestId: createKey(),
 								user,
 								sent: Date.now(),
 								parent,
 								completion: Promise.withResolvers<string>(),
 							};
-							pending.set(turn.requestId, turn);
+							pending.set(user, turn);
 							measurements.push(turn);
 							log({ phase: "turn_sent", requestId: turn.requestId, user, index });
 							const timer = setTimeout(() => {
@@ -277,6 +302,7 @@ export async function runCapacityChat(options: {
 								const { id, questionId } = submitted;
 								turn.id = id;
 								turn.questionId = questionId;
+								observeEarlyFrames(turn, id);
 								parent ??= questionId;
 								if (turn.needsResync === true) {
 									await resync(turn);
@@ -288,7 +314,8 @@ export async function runCapacityChat(options: {
 								}
 							} finally {
 								clearTimeout(timer);
-								pending.delete(turn.requestId);
+								pending.delete(user);
+								earlyTurns.delete(user);
 							}
 							if (index < 2) {
 								await sleep(options.thinkMs ?? 30_000, undefined, { signal: abort.signal });

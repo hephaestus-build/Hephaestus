@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.conversation.web;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -10,13 +9,6 @@ import org.jspecify.annotations.Nullable;
 
 @Schema(description = "A question to Hephaestus from the app")
 public record ConversationTurnRequestDTO(
-        @NotNull
-        @Schema(
-                description = "Chosen by the app for each message. Sending the same id again returns the first "
-                        + "submission, so a retried request never asks twice.")
-        @NonNull
-        UUID requestId,
-
         @NotBlank @Schema(description = "The developer's words") @NonNull
         String text,
 

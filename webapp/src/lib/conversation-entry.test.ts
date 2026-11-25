@@ -90,7 +90,6 @@ describe("parseLiveEvent", () => {
 			JSON.stringify({
 				id: T1,
 				conversationId: C1,
-				requestId: R1,
 				status: "RUNNING",
 				attempt: 1,
 				maxAttempts: 2,
@@ -128,8 +127,12 @@ describe("parseLiveEvent", () => {
 describe("turnRequestOf", () => {
 	it("reads the body of a submission from the mutation cache", () => {
 		expect(
-			turnRequestOf({ path: { workspaceSlug: "acme" }, body: { requestId: R1, text: "Hi" } }),
-		).toStrictEqual({ requestId: R1, text: "Hi" });
+			turnRequestOf({
+				path: { workspaceSlug: "acme" },
+				headers: { "Idempotency-Key": R1 },
+				body: { text: "Hi" },
+			}),
+		).toStrictEqual({ headers: { "Idempotency-Key": R1 }, body: { text: "Hi" } });
 		expect(turnRequestOf({ path: { workspaceSlug: "acme" } })).toBeUndefined();
 	});
 });

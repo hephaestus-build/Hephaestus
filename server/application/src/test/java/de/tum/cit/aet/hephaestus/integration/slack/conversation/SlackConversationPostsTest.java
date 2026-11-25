@@ -69,7 +69,6 @@ class SlackConversationPostsTest extends BaseUnitTest {
                 ConversationEntryDTO.Kind.ANSWER,
                 ConversationEntry.Surface.SLACK,
                 text,
-                null,
                 UUID.randomUUID(),
                 null,
                 null,

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -71,7 +72,8 @@ class ConversationAccessIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .uri("/workspaces/{slug}/conversation/turns", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(bearer))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("requestId", UUID.randomUUID(), "text", "hi"))
+                .header("Idempotency-Key", TimeOrderedIds.next().toString())
+                .bodyValue(Map.of("text", "hi"))
                 .exchange();
     }
 

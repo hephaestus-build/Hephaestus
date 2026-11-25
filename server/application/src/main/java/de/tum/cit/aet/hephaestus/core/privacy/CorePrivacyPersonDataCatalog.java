@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.LiveJdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -34,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
     "identity",
     "issued_jwt",
     "client_session",
+    "client_input",
     "client_sign_in_handoff",
     "mcp_client_grant",
     "account_export",
@@ -240,6 +242,16 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "code_hash",
                         "",
                         910),
+                new LiveJdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "client_input",
+                        "client_input",
+                        "t.account_id = :account",
+                        "workspace_id,account_id,result_id,related_id,created_at",
+                        "workspace_id,account_id,idem_key",
+                        "",
+                        900),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

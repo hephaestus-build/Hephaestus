@@ -61,22 +61,36 @@ export function parseLiveEvent(type: string, data: string): ConversationLiveEven
 }
 
 /** The mutation cache types every mutation's variables as `unknown`, so a pending message is read back here. */
-export function turnRequestOf(variables: unknown): ConversationTurnRequest | undefined {
-	const parsed = z.object({ body: zConversationTurnRequest }).safeParse(variables);
-	return parsed.success ? parsed.data.body : undefined;
+export function turnRequestOf(
+	variables: unknown,
+): { body: ConversationTurnRequest; headers: { "Idempotency-Key": string } } | undefined {
+	const parsed = z
+		.object({
+			body: zConversationTurnRequest,
+			headers: z.object({ "Idempotency-Key": z.uuid() }),
+		})
+		.safeParse(variables);
+	return parsed.success ? parsed.data : undefined;
+}
+
+/** Make a UUIDv7 for a new send. Retries keep the value from the first attempt. */
+export function newCreateKey(): string {
+	// oxlint-disable-next-line no-restricted-properties -- Record when the client creates the key for this send.
+	const time = Date.now().toString(16).padStart(12, "0");
+	return `${time.slice(0, 8)}-${time.slice(8)}-7${crypto.randomUUID().slice(15)}`;
 }
 
 /**
  * A message the developer sent that the server has not stored yet. `failed` keeps the words on
- * screen with the reason, so a retry sends them again under the same `requestId` and never asks
+ * screen with the reason, so a retry sends them again under the same key and never asks
  * twice.
  */
 export type PendingMessage = {
-	requestId: string;
+	key: string;
 	text: string;
 	parentEntryId?: string;
 	createdAt: Date;
-} & ({ status: "sending" } | { status: "failed"; reason: string });
+} & ({ status: "sending" } | { status: "failed"; reason: string; unconfirmed?: boolean });
 
 /** Hephaestus's own deleted messages leave the conversation; the developer's stay as a placeholder. */
 export function isRemovedEntry(entry: Pick<ConversationEntry, "kind" | "deleted">): boolean {

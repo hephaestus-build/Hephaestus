@@ -236,7 +236,6 @@ class ConversationEntryViews {
                 },
                 entry.getSurface(),
                 entry.getText(),
-                entry.getRequestId(),
                 entry.getTurnId(),
                 questionTurn == null ? null : questionTurn.getStatus(),
                 questionTurn == null ? null : questionTurn.getError(),

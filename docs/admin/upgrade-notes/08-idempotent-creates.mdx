@@ -1,0 +1,16 @@
+---
+title: Send an idempotency key with a conversation turn
+description: Update clients to retry a submitted turn safely during the 1.0 upgrade.
+page_type: reference
+---
+
+Before the upgrade, update clients to send a UUIDv7 in the `Idempotency-Key` request header.
+Keep `requestId` in the request body until the upgrade finishes.
+Let pending sends finish on the old server before you start the upgrade.
+
+After the upgrade, remove `requestId` from the request body.
+Reload any open Ask Hephaestus tabs before you send a message.
+
+After a lost response, repeat the same key and body within 72 hours.
+Use the question or turn ID from the response to match stored records.
+See the [mutation matrix](../../contributor/mentoring-framework#mutation-matrix) for retry rules.

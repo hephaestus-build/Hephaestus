@@ -4,7 +4,7 @@ import { Counter } from "k6/metrics";
 
 import { ask, options as conversationOptions } from "./conversation.js";
 import { detection, setup as reviewSetup } from "./detection-conversation.js";
-import { integer, required } from "./lib/config.js";
+import { createKey, integer, required } from "./lib/config.js";
 import webhookBurst from "./webhook-burst.js";
 
 export { handleSummary } from "./lib/summary.js";
@@ -125,7 +125,7 @@ export function conversation() {
 	console.log(JSON.stringify({ phase: "session_sent", correlation, at: started, scenario }));
 	let parent = null;
 	for (let index = 0; index < integer("COURSE_TURNS", 3); index += 1) {
-		const requestId = crypto.randomUUID();
+		const requestId = createKey();
 		console.log(JSON.stringify({ phase: "turn_sent", requestId, correlation, at: Date.now() }));
 		const questionId = ask(
 			parent,

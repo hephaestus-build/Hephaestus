@@ -30,7 +30,8 @@ class AppConversationQuestions {
     private final ConversationTimeline timeline;
     private final ConversationTurnService turns;
 
-    ConversationTurnService.Submission ask(long workspaceId, long account, ConversationTurnRequestDTO request) {
+    ConversationTurnService.Submission ask(
+            long workspaceId, long account, ConversationTurnRequestDTO request, UUID internalId) {
         if (request.text().length() > properties.maxPromptChars()) {
             throw new InvalidInputException(
                     "Your message is too long. The maximum is " + properties.maxPromptChars() + " characters.");
@@ -52,7 +53,7 @@ class AppConversationQuestions {
                 new ConversationTurnService.Question(
                         ConversationTurn.Surface.APP,
                         request.text(),
-                        request.requestId().toString(),
+                        internalId.toString(),
                         null,
                         request.pageContext()));
     }

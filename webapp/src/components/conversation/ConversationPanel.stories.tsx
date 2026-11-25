@@ -26,7 +26,6 @@ const LONG_CONVERSATION = [
 		id: `earlier-${entry.id}`,
 		seq: entry.seq - 100,
 		...(entry.turnId === undefined ? {} : { turnId: `earlier-${entry.turnId}` }),
-		...(entry.requestId === undefined ? {} : { requestId: `earlier-${entry.requestId}` }),
 	})),
 	...CONVERSATION,
 ];

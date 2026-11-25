@@ -6,6 +6,7 @@ import { Counter, Rate, Trend } from "k6/metrics";
 import {
 	apiBaseUrl,
 	authHeaders,
+	createKey,
 	integer,
 	jsonField,
 	required,
@@ -108,11 +109,10 @@ function conversationUrl(path, entryId = null) {
 
 /**
  * @param {string | null} parentEntryId - the top-level message whose thread this turn replies in
- * @returns {string} the submission body; a fresh `requestId` makes every iteration a new question
+ * @returns {string} the submission body
  */
 function conversationTurn(parentEntryId) {
 	return JSON.stringify({
-		requestId: crypto.randomUUID(),
 		text: "Summarize my current practice priorities.",
 		...(parentEntryId === null ? {} : { parentEntryId }),
 	});
@@ -142,7 +142,7 @@ function ask(parentEntryId) {
 	const deadline = startedAt + conversationTimeoutSeconds * 1000;
 	// A full queue answers 409 and is waited out below, so it is not a failed request.
 	const submit = {
-		headers,
+		headers: { ...headers, "Idempotency-Key": createKey() },
 		tags: { operation: "conversation_turn" },
 		responseCallback: http.expectedStatuses(200, 409),
 	};

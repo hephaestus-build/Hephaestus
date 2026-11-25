@@ -212,14 +212,14 @@ export function ConversationTimelineRow({
 		case "pending": {
 			const { message } = row;
 			const ask = actions?.ask;
-			// A message the server did not store keeps its words: Copy them, or Delete it from this device.
+			// An unconfirmed or refused send keeps its words: Copy them, or Delete it from this device.
 			const failedActions =
 				message.status === "failed" ? (
 					<MessageActions
 						subject={subject}
 						text={message.text}
 						onCopy={onCopy}
-						onDelete={actions ? () => actions.onDiscardSend(message.requestId) : undefined}
+						onDelete={actions ? () => actions.onDiscardSend(message.key) : undefined}
 					/>
 				) : undefined;
 			return (
@@ -243,7 +243,8 @@ export function ConversationTimelineRow({
 								state={{
 									kind: "notSent",
 									reason: message.reason,
-									onRetry: ask ? () => ask.onRetrySend(message.requestId) : undefined,
+									unconfirmed: message.unconfirmed,
+									onRetry: ask ? () => ask.onRetrySend(message.key) : undefined,
 								}}
 							/>
 						)}

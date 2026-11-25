@@ -104,7 +104,7 @@ export const FailedDark: Story = {
 
 const onRetry = fn();
 
-/** The server never stored it. Retry sends it again under the same request id, so it is never asked twice. */
+/** Hephaestus refused the message. Retry sends it with the same key. */
 export const NotSent: Story = {
 	args: {
 		state: { kind: "notSent", reason: FOLLOW_UPS_FULL, onRetry },
@@ -116,5 +116,23 @@ export const NotSent: Story = {
 		await expectTargetSize(retry);
 		await userEvent.click(retry);
 		await expect(onRetry).toHaveBeenCalledOnce();
+	},
+};
+
+/** The connection stopped before Hephaestus confirmed receipt. */
+export const SendUnconfirmed: Story = {
+	args: {
+		state: {
+			kind: "notSent",
+			unconfirmed: true,
+			reason: "We could not confirm your message. Retry to check if it arrived.",
+			onRetry: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("We could not confirm your message. Retry to check if it arrived."),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry (Ada Lovelace, 10:42)" })).toBeVisible();
 	},
 };

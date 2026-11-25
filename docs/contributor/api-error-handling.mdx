@@ -255,3 +255,8 @@ The sandbox workspace is larger than its byte budget. `workspaceBytes` and `work
 ### workspace-owner-required
 
 The change would leave the workspace without an owner: a removal, a demotion, or the leave of its last owner.
+
+### idempotency-key-in-flight
+
+A create with this key is still running for the same account and workspace.
+Wait, then send the same `Idempotency-Key` and body.

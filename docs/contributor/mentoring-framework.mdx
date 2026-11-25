@@ -458,6 +458,25 @@ Each kind of run declares its untrusted input, its personal records and its exte
 The core page has the full table of runs.
 A retry within 72 hours never creates a second object. ADR 0135 (proposed in #4867) owns client retries. ADR 0151 (proposed in #4862) owns writes to other systems, and ADR 0145 (proposed in #4867) owns model retries.
 
+### Conversation mutation matrix
+
+This table lists the operations that write to a conversation.
+Paths are relative to `/workspaces/{workspaceSlug}`.
+
+| Method | Path | Required headers | Retry | Success |
+| --- | --- | --- | --- | --- |
+| POST | `/conversation/turns` | `Idempotency-Key` | Repeat the same key and body within 72 hours | 200 with the question and turn |
+| PATCH | `/conversation/turns/{turnId}/status` | — | Read the turn and stop it again if it still runs | 200 with the current turn |
+| PUT | `/conversation/read` | — | Repeat the read marker. The server keeps the later time. | 200 with the current read marker |
+| PUT | `/conversation/entries/{entryId}/vote` | — | Repeat the vote | 200 with the entry |
+| DELETE | `/conversation/entries/{entryId}/vote` | — | Repeat the removal | 200 with the entry |
+| DELETE | `/conversation/entries/{entryId}` | — | Repeat the deletion | 204 |
+
+Use a new UUIDv7 for each create. If its response is lost, send the same key and body.
+The server returns 422 if the body differs, or 409 with [`idempotency-key-in-flight`](./api-error-handling#idempotency-key-in-flight)
+while the first attempt runs. A replay returns the result as the caller can read it now.
+Erased text stays erased. The same key in another workspace or for another account has its own result.
+
 ## Privacy
 
 ### Never a performance instrument

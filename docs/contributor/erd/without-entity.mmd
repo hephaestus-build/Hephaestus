@@ -19,6 +19,16 @@ erDiagram
         BIGINT expires_at
     }
 
+    ClientInput {
+        BIGINT workspace_id PK,FK
+        BIGINT account_id PK,FK
+        UUID idem_key PK
+        BYTEA fingerprint "NOT NULL"
+        UUID result_id "NOT NULL"
+        UUID related_id "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
     EventPublication {
         UUID id PK
         TEXT listener_id "NOT NULL"
@@ -39,10 +49,15 @@ erDiagram
     }
 
     Account["Account · Core"]
+    Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
     %% One-to-One relationships
     Account ||--|| AccountPublicActivityHiddenByDefault : has
+
+    %% One-to-Many relationships
+    Account ||--o{ ClientInput : has
+    Workspace ||--o{ ClientInput : has
 
     %% Styling
     classDef primaryEntity stroke-width:2px
@@ -51,3 +66,4 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
+    class Workspace referenceEntity

@@ -51,7 +51,6 @@ const OLDER_PAGE: ConversationEntry[] = CONVERSATION.map((message, index) => ({
 	seq: message.seq - 100,
 	createdAt: new Date(QUESTION.createdAt.getTime() - (CONVERSATION.length - index) * 60_000),
 	...(message.turnId === undefined ? {} : { turnId: `older-${message.turnId}` }),
-	...(message.requestId === undefined ? {} : { requestId: `older-${message.requestId}` }),
 	...(index === 0 ? { text: "The message the link points to" } : {}),
 }));
 const LINKED_ID = OLDER_PAGE[0]?.id ?? "";
@@ -69,7 +68,7 @@ const RUNNING = turn({
 const NEWEST = "Can you check my newest one too?";
 
 const SENDING: PendingMessage = {
-	requestId: "r-newest",
+	key: "r-newest",
 	text: NEWEST,
 	createdAt: minutesBefore(1),
 	status: "sending",
@@ -79,7 +78,6 @@ const STORED = entry({
 	id: "e1000000-0000-4000-8000-000000000008",
 	kind: "USER",
 	text: NEWEST,
-	requestId: SENDING.requestId,
 	createdAt: SENDING.createdAt,
 });
 
@@ -363,7 +361,6 @@ const SECOND_FOLLOW_UP = entry({
 	kind: "USER",
 	text: "And the one before it?",
 	turnId: "t1000000-0000-4000-8000-000000000011",
-	requestId: "r1000000-0000-4000-8000-000000000011",
 	createdAt: earlierToday(3),
 });
 
@@ -372,7 +369,6 @@ const THIRD_FOLLOW_UP = entry({
 	kind: "USER",
 	text: "Which one needs the most work?",
 	turnId: "t1000000-0000-4000-8000-000000000012",
-	requestId: "r1000000-0000-4000-8000-000000000012",
 	createdAt: earlierToday(2),
 });
 
@@ -493,7 +489,10 @@ export const SentMessageStored: Story = {
 		<Transition
 			{...args}
 			before={ready({ pending: [SENDING] })}
-			after={ready({ entries: [...CONVERSATION, STORED] })}
+			after={ready({
+				entries: [...CONVERSATION, STORED],
+				confirmedSendKeys: new Map([[STORED.id, SENDING.key]]),
+			})}
 		/>
 	),
 	decorators: SHORT_VIEW,
@@ -696,7 +695,7 @@ const sentQuestion = (send: number) => `Question number ${send}`;
 
 /** One send of {@link SendsInARow} at `phase`, after every earlier send was answered. */
 function sendsUpTo(send: number, phase: number): ConversationTimelineState {
-	const requestId = `r-send-${send}`;
+	const key = `r-send-${send}`;
 	const turnId = `t-send-${send}`;
 	const createdAt = minutesBefore(1);
 	const answered = Array.from({ length: send }, (_, earlier) => [
@@ -704,7 +703,6 @@ function sendsUpTo(send: number, phase: number): ConversationTimelineState {
 			id: `q-send-${earlier}`,
 			kind: "USER",
 			text: sentQuestion(earlier),
-			requestId: `r-send-${earlier}`,
 			turnId: `t-send-${earlier}`,
 			createdAt,
 		}),
@@ -719,18 +717,17 @@ function sendsUpTo(send: number, phase: number): ConversationTimelineState {
 	if (phase === 0) {
 		return ready({
 			entries: [...CONVERSATION, ...answered],
-			pending: [{ requestId, text: sentQuestion(send), createdAt, status: "sending" }],
+			pending: [{ key, text: sentQuestion(send), createdAt, status: "sending" }],
 		});
 	}
 	const question = entry({
 		id: `q-send-${send}`,
 		kind: "USER",
 		text: sentQuestion(send),
-		requestId,
 		turnId,
 		createdAt,
 	});
-	const queued = turn({ id: turnId, requestId, status: "QUEUED" });
+	const queued = turn({ id: turnId, status: "QUEUED" });
 	if (phase === 1) {
 		return ready({ entries: [...CONVERSATION, ...answered, question], turns: [queued] });
 	}
@@ -1042,7 +1039,8 @@ export const FollowUpQueued: Story = {
 			})}
 			after={ready({
 				entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP, { ...STORED, turnId: "t-next" }],
-				turns: [RUNNING, turn({ id: "t-next", status: "QUEUED", requestId: SENDING.requestId })],
+				confirmedSendKeys: new Map([[STORED.id, SENDING.key]]),
+				turns: [RUNNING, turn({ id: "t-next", status: "QUEUED" })],
 			})}
 		/>
 	),
@@ -1174,7 +1172,7 @@ export const NotSent: Story = {
 		state: ready({
 			pending: [
 				{
-					requestId: "r-unsent",
+					key: "r-unsent",
 					text: "Can you check my newest one?",
 					createdAt: minutesBefore(1),
 					status: "failed",

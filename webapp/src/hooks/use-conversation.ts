@@ -4,6 +4,7 @@ import {
 	useMutationState,
 	useQuery,
 	useQueryClient,
+	type QueryClient,
 	type UseInfiniteQueryResult,
 } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
@@ -41,15 +42,29 @@ import {
 } from "@/hooks/conversation-cache";
 import { usePageVisible } from "@/hooks/use-page-visible";
 
-import { type PendingMessage, readAtOf, turnRequestOf } from "@/lib/conversation-entry";
-import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import {
+	newCreateKey,
+	type PendingMessage,
+	readAtOf,
+	turnRequestOf,
+} from "@/lib/conversation-entry";
+import { isProblemType, problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 /** Attempts after the first for a read marker the server did not take. */
 const READ_RETRIES = 3;
 
 const NOT_SENT = "Hephaestus did not get this message.";
+const NOT_CONFIRMED = "We could not confirm your message. Retry to check if it arrived.";
+
+function sendMayHaveSucceeded(error: unknown) {
+	const status = problemStatusOf(error);
+	return status === undefined || status >= 500 || isProblemType(error, "idempotency-key-in-flight");
+}
 
 const submitKey = (workspaceSlug: string) => ["submitConversationTurn", workspaceSlug] as const;
+
+// Keep the same row when the response confirms which stored question this tab sent.
+const confirmedSendKeys = new WeakMap<QueryClient, Map<string, string>>();
 
 function earlierOf<TData, TError>(
 	query: Pick<
@@ -72,16 +87,11 @@ function earlierOf<TData, TError>(
 }
 
 /**
- * The messages the developer sent in this scope that the server has not stored yet, read from the
- * mutation cache, so the Hephaestus panel and the conversation page show the same ones. A send the server stored
- * leaves this list as its stored message arrives in the pages, not when its request ends: the stored
- * copy is written in order and can wait behind a read, and the question must not vanish meanwhile.
+ * The sends that still appear separately from stored messages, read from the
+ * mutation cache, so the panel and page show the same ones until the response is applied.
  */
-function usePendingMessages(
-	workspaceSlug: string,
-	parentEntryId: string | undefined,
-	stored: ConversationEntry[],
-): PendingMessage[] {
+function useSends(workspaceSlug: string, parentEntryId: string | undefined) {
+	const queryClient = useQueryClient();
 	const sends = useMutationState({
 		filters: { mutationKey: submitKey(workspaceSlug) },
 		select: ({ state }) => ({
@@ -91,26 +101,32 @@ function usePendingMessages(
 			submittedAt: state.submittedAt,
 		}),
 	});
-	const storedRequests = new Set(stored.map(({ requestId }) => requestId));
 	const latest = new Map<string, PendingMessage>();
 	for (const { request, status, error, submittedAt } of sends) {
-		if (request === undefined || request.parentEntryId !== parentEntryId) {
+		if (request === undefined || request.body.parentEntryId !== parentEntryId) {
 			continue;
 		}
-		const { requestId, text } = request;
-		if (status === "idle" || storedRequests.has(requestId)) {
-			latest.delete(requestId);
+		const key = request.headers["Idempotency-Key"];
+		const { text } = request.body;
+		if (status === "idle") {
+			latest.delete(key);
 			continue;
 		}
-		const base = { requestId, text, parentEntryId, createdAt: new Date(submittedAt) };
+		const base = { key, text, parentEntryId, createdAt: new Date(submittedAt) };
+		const unconfirmed = status === "error" && sendMayHaveSucceeded(error);
 		latest.set(
-			requestId,
+			key,
 			status === "error"
-				? { ...base, status: "failed", reason: problemDetailOf(error, NOT_SENT) }
+				? {
+						...base,
+						status: "failed",
+						unconfirmed,
+						reason: unconfirmed ? NOT_CONFIRMED : problemDetailOf(error, NOT_SENT),
+					}
 				: { ...base, status: "sending" },
 		);
 	}
-	return [...latest.values()];
+	return { pending: [...latest.values()], confirmedSendKeys: confirmedSendKeys.get(queryClient) };
 }
 
 /** The developer's top-level messages, newest page first read, older pages above it on demand. */
@@ -121,7 +137,7 @@ export function useConversationTimeline(workspaceSlug: string): ConversationTime
 	const turns = (conversation.data?.activeTurns ?? []).filter(
 		(turn) => turn.parentEntryId === undefined,
 	);
-	const pending = usePendingMessages(workspaceSlug, undefined, entries);
+	const sends = useSends(workspaceSlug, undefined);
 
 	// Only a first read that failed replaces the timeline: a failed older page or a failed refetch
 	// keeps the messages already shown.
@@ -140,7 +156,7 @@ export function useConversationTimeline(workspaceSlug: string): ConversationTime
 	if (pages.data === undefined || conversation.data === undefined) {
 		return { status: "loading" };
 	}
-	return { status: "ready", entries, pending, turns, earlier: earlierOf(pages) };
+	return { status: "ready", entries, ...sends, turns, earlier: earlierOf(pages) };
 }
 
 /** One thread: the message it replies to and its replies. */
@@ -154,7 +170,7 @@ export function useConversationThread(
 	const turns = (conversation.data?.activeTurns ?? []).filter(
 		(turn) => turn.parentEntryId === parentEntryId,
 	);
-	const pending = usePendingMessages(workspaceSlug, parentEntryId, entries);
+	const sends = useSends(workspaceSlug, parentEntryId);
 
 	const parent = pages.data?.pages[0]?.parent;
 	// Retries only the reads that failed: the thread, the conversation's state, or both.
@@ -182,7 +198,7 @@ export function useConversationThread(
 	return {
 		status: "ready",
 		parent,
-		timeline: { status: "ready", entries, pending, turns, earlier: earlierOf(pages) },
+		timeline: { status: "ready", entries, ...sends, turns, earlier: earlierOf(pages) },
 	};
 }
 
@@ -235,28 +251,33 @@ function useVote(workspaceSlug: string) {
 export function useConversationActions(workspaceSlug: string): ConversationActions {
 	const queryClient = useQueryClient();
 	/** Removes every attempt to send one message from the unsent ones. */
-	const forgetSend = (requestId: string) => {
+	const forgetSend = (key: string) => {
 		const sends = queryClient.getMutationCache();
 		for (const mutation of sends.findAll({ mutationKey: submitKey(workspaceSlug) })) {
-			if (turnRequestOf(mutation.state.variables)?.requestId === requestId) {
+			if (turnRequestOf(mutation.state.variables)?.headers["Idempotency-Key"] === key) {
 				sends.remove(mutation);
 			}
 		}
 	};
 	const submit = useMutation({
 		...submitConversationTurnMutation(),
+		retry: (failures, error) => failures < 2 && sendMayHaveSucceeded(error),
 		mutationKey: submitKey(workspaceSlug),
-		// A message the server did not store, unreachable or refused, stays on screen with Retry until
-		// the developer deletes it or the page reloads.
+		// An unconfirmed or refused send stays on screen with Retry until it is discarded or the page reloads.
 		gcTime: Infinity,
 		onSuccess: (submission, variables) => {
-			const requestId = turnRequestOf(variables)?.requestId;
+			const key = turnRequestOf(variables)?.headers["Idempotency-Key"];
 			inOrder(queryClient, workspaceSlug, () => {
+				if (key !== undefined) {
+					const keys = confirmedSendKeys.get(queryClient) ?? new Map<string, string>();
+					keys.set(submission.question.id, key);
+					confirmedSendKeys.set(queryClient, keys);
+				}
 				applySubmission(queryClient, workspaceSlug, submission);
 				// The stored copy is in the pages now, so the send is not kept for a later read to miss.
 				// A write that throws leaves it, so the accepted question stays on screen.
-				if (requestId !== undefined) {
-					forgetSend(requestId);
+				if (key !== undefined) {
+					forgetSend(key);
 				}
 			});
 		},
@@ -274,26 +295,26 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 	});
 	const vote = useVote(workspaceSlug);
 
-	const submitRequest = (body: ConversationTurnRequest) => {
-		submit.mutate({ path: { workspaceSlug }, body });
+	const submitRequest = (key: string, body: ConversationTurnRequest) => {
+		submit.mutate({ path: { workspaceSlug }, headers: { "Idempotency-Key": key }, body });
 	};
 
 	const send = (text: string, options: SendOptions = {}) => {
-		submitRequest({ requestId: crypto.randomUUID(), text, ...options });
+		submitRequest(newCreateKey(), { text, ...options });
 	};
 
 	return {
 		send,
 		ask: {
 			onTryAgain: (question) => send(question.text, { parentEntryId: question.parentEntryId }),
-			onRetrySend: (requestId) => {
+			onRetrySend: (key) => {
 				const request = queryClient
 					.getMutationCache()
 					.findAll({ mutationKey: submitKey(workspaceSlug) })
 					.map(({ state }) => turnRequestOf(state.variables))
-					.find((candidate) => candidate?.requestId === requestId);
+					.find((candidate) => candidate?.headers["Idempotency-Key"] === key);
 				if (request !== undefined) {
-					submitRequest(request);
+					submitRequest(key, request.body);
 				}
 			},
 		},

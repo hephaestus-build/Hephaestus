@@ -4,7 +4,10 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
+import de.tum.cit.aet.hephaestus.core.web.ClientInputs;
 import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -14,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /** The developer's questions to Hephaestus in a workspace: asking, and stopping a turn. */
@@ -35,6 +40,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class ConversationQuestionController {
 
     private final AppConversationQuestions questions;
+    private final ClientInputs inputs;
     private final ConversationTimeline timeline;
     private final ConversationTurnService turns;
     private final ConversationRequestScope scope;
@@ -42,26 +48,40 @@ public class ConversationQuestionController {
     @PostMapping("/turns")
     @Operation(
             summary = "Ask Hephaestus",
-            description = "Stores the question before anything is shown and queues a turn. A question while Hephaestus "
-                    + "answers waits as a follow-up. Repeating a requestId returns the first submission.")
+            description =
+                    "Stores the question before anything is shown and queues a turn. A question while Hephaestus "
+                            + "answers waits as a follow-up. Repeat the original body and Idempotency-Key after a lost response.")
     @ApiResponse(responseCode = "200", description = "The stored question and its turn")
     @ApiResponse(
+            responseCode = "422",
+            description = "The key was already used with a different body",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
             responseCode = "409",
-            description =
-                    "Hephaestus declines the developer (conversation-refused), too many follow-ups wait, the requestId was "
-                            + "used for another message, or the parent cannot have a thread (conversation-rejected)",
+            description = "The request is still running (idempotency-key-in-flight), Hephaestus declines the person "
+                    + "(conversation-refused), or the conversation cannot accept the question (conversation-rejected)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ConversationSubmissionDTO submitConversationTurn(
-            WorkspaceContext workspace, @Valid @RequestBody ConversationTurnRequestDTO request) {
+            WorkspaceContext workspace,
+            @RequestHeader(ClientInputs.HEADER) UUID key,
+            @Valid @RequestBody ConversationTurnRequestDTO request) {
         long workspaceId = workspace.id();
+        var person = PersonAct.fromPrincipal();
         return scope.write(account -> {
-            ConversationTurnService.Submission submission = questions.ask(workspaceId, account, request);
+            var result = inputs.create(workspaceId, person, key, "submitConversationTurn", request, List.of(), () -> {
+                var submission = questions.ask(workspaceId, account, request, TimeOrderedIds.next());
+                return new ClientInputs.Result(
+                        submission.turn().getId(), submission.question().getId());
+            });
             return new ConversationSubmissionDTO(
-                    timeline.turn(workspaceId, account, submission.turn().getId()),
-                    timeline.entry(workspaceId, account, submission.question().getId()));
+                    timeline.turn(workspaceId, account, result.id()),
+                    timeline.entry(workspaceId, account, result.relatedId()));
         });
     }
 

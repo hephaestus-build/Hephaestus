@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -427,20 +428,13 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @WithMentorUser
         void shouldOpenNoThreadOnTheOtherWorkspacesMessageWhenTheDeveloperAsksThroughThisWorkspace() {
             enableConversation(workspaceA);
-            String ownRequest = UUID.randomUUID().toString();
-            String foreignRequest = UUID.randomUUID().toString();
-
-            ask(ownRequest, tenantA.entryId()).isOk().expectBody(Void.class);
-            ask(foreignRequest, tenantB.entryId()).isNotFound().expectBody(Void.class);
+            ask(tenantA.entryId()).isOk().expectBody(Void.class);
+            ask(tenantB.entryId()).isNotFound().expectBody(Void.class);
 
             assertThat(conversations.findThread(workspaceA.getId(), tenantA.entryId()))
                     .isPresent();
             assertThat(conversations.findThread(workspaceB.getId(), tenantB.entryId()))
                     .isEmpty();
-            assertThat(conversationEntries.exists(workspaceA.getId(), foreignRequest))
-                    .isFalse();
-            assertThat(conversationEntries.exists(workspaceB.getId(), foreignRequest))
-                    .isFalse();
         }
 
         @Test
@@ -494,13 +488,14 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         return sent.exchange().expectStatus();
     }
 
-    private StatusAssertions ask(String requestId, UUID parentEntryId) {
+    private StatusAssertions ask(UUID parentEntryId) {
         return webTestClient
                 .post()
                 .uri("/workspaces/{slug}/conversation/turns", workspaceA.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("requestId", requestId, "text", "Follow-up question", "parentEntryId", parentEntryId))
+                .header("Idempotency-Key", TimeOrderedIds.next().toString())
+                .bodyValue(Map.of("text", "Follow-up question", "parentEntryId", parentEntryId))
                 .exchange()
                 .expectStatus();
     }

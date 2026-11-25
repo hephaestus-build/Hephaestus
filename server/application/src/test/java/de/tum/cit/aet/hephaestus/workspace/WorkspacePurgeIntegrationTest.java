@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles.LateFailingWorkspacePurgeContributor;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -255,6 +256,31 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Nested
     class DataCleanup {
+
+        @Test
+        void purgeDeletesOnlyTheWorkspacesCreateReceipts() {
+            var owner = persistUser("receipt-owner");
+            var erased = createWorkspace("receipt-purge", "Receipt purge", "receipt-purge", AccountType.ORG, owner);
+            var retained = createWorkspace("receipt-keep", "Receipt keep", "receipt-keep", AccountType.ORG, owner);
+            long account = accountId(owner);
+            UUID key = UUID.randomUUID();
+            String seed = """
+                INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id)
+                VALUES(?,?,?,sha256('fixture'::bytea),uuidv7(),uuidv7())
+                """;
+            var receipts = PostgreSQLTestContainer.ownerJdbc();
+            receipts.update(seed, erased.getId(), account, key);
+            receipts.update(seed, retained.getId(), account, key);
+
+            workspaceLifecycleService.purgeWorkspace(erased.getWorkspaceSlug());
+
+            assertThat(receipts.queryForList(
+                            "SELECT workspace_id FROM client_input WHERE account_id=? AND idem_key=?",
+                            Long.class,
+                            account,
+                            key))
+                    .containsExactly(retained.getId());
+        }
 
         @Test
         void purgeRemovesProductFeedbackFromTheWorkspace() {

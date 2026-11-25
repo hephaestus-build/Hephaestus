@@ -16,9 +16,6 @@ public record ConversationTurnDTO(
         @Nullable
         UUID parentEntryId,
 
-        @Schema(description = "The submission or schedule key; the stimulus entry carries the same value") @NonNull
-        String requestId,
-
         ConversationTurn.@NonNull Status status,
 
         @Schema(

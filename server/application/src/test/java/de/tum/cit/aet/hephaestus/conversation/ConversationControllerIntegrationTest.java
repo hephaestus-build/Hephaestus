@@ -7,13 +7,16 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -29,7 +32,10 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -80,6 +86,12 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     @Autowired
     private ConversationRedaction redaction;
 
+    @Autowired
+    private JdbcClient jdbc;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
     private User developer;
     private Workspace workspace;
     private WorkspaceModelAssignment binding;
@@ -94,15 +106,24 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         binding = bindings.save(LlmCatalogTestFixtures.conversationBinding(workspace, model));
     }
 
-    private WebTestClient.ResponseSpec ask(UUID requestId, String text, @Nullable UUID parentEntryId) {
+    private WebTestClient.ResponseSpec ask(UUID key, String text, @Nullable UUID parentEntryId) {
+        return ask(workspace.getWorkspaceSlug(), MEMBER, key, text, parentEntryId);
+    }
+
+    private WebTestClient.ResponseSpec ask(
+            String slug, String bearer, UUID key, String text, @Nullable UUID parentEntryId) {
         Map<String, Object> body = new HashMap<>();
-        body.put("requestId", requestId);
         body.put("text", text);
         body.put("parentEntryId", parentEntryId);
         body.put("pageContext", "Pull request #421 in acme/web");
+        return ask(slug, bearer, key, body);
+    }
+
+    private WebTestClient.ResponseSpec ask(String slug, String bearer, UUID key, Map<String, Object> body) {
         return client.post()
-                .uri("/workspaces/ask-api/conversation/turns")
-                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .uri("/workspaces/{slug}/conversation/turns", slug)
+                .header("Idempotency-Key", key.toString())
+                .headers(headers -> headers.setBearerAuth(bearer))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .exchange();
@@ -240,9 +261,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     void shouldStoreTheQuestionOnceWithItsPageContextWhenTheSameRequestIsSentTwice() {
-        UUID requestId = UUID.randomUUID();
+        UUID requestId = TimeOrderedIds.next();
 
-        ask(requestId, "How did my last review go?", null)
+        var created = ask(requestId, "How did my last review go?", null)
                 .expectStatus()
                 .isOk()
                 .expectBody()
@@ -251,7 +272,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.turn.attempt")
                 .isEqualTo(0)
                 .jsonPath("$.turn.requestId")
-                .isEqualTo(requestId.toString())
+                .doesNotExist()
                 .jsonPath("$.question.kind")
                 .isEqualTo("USER")
                 .jsonPath("$.question.surface")
@@ -259,12 +280,29 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.question.text")
                 .isEqualTo("How did my last review go?")
                 .jsonPath("$.question.requestId")
-                .isEqualTo(requestId.toString());
-        ask(requestId, "How did my last review go?", null).expectStatus().isOk().expectBody(Void.class);
+                .doesNotExist()
+                .returnResult();
+        JsonNode response = JsonMapper.shared().readTree(Objects.requireNonNull(created.getResponseBody()));
+        String turnId = response.path("turn").path("id").asString();
+        String entryId = response.path("question").path("id").asString();
+        ask(
+                        workspace.getWorkspaceSlug(),
+                        MEMBER,
+                        requestId,
+                        Map.of(
+                                "requestId", requestId.toString(),
+                                "text", "How did my last review go?",
+                                "pageContext", "Pull request #421 in acme/web"))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.turn.id")
+                .isEqualTo(turnId)
+                .jsonPath("$.question.id")
+                .isEqualTo(entryId);
+        ask(requestId, "A different message", null).expectStatus().isEqualTo(422);
 
-        ConversationTurn turn = turnRepository
-                .findByWorkspaceIdAndRequestId(workspace.getId(), requestId.toString())
-                .orElseThrow();
+        ConversationTurn turn = turnRepository.findById(UUID.fromString(turnId)).orElseThrow();
         assertThat(turn.getPageContext()).isEqualTo("Pull request #421 in acme/web");
         assertThat(situation.render(workspace.getId(), turn.getId(), ZoneOffset.UTC))
                 .contains("They asked from this page in Hephaestus: Pull request #421 in acme/web.");
@@ -279,6 +317,106 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(turn.getId().toString());
     }
 
+    @Test
+    void shouldRefuseAnInFlightCreateAndAcceptTheKeyAfterTheTransactionEnds() {
+        var key = TimeOrderedIds.next();
+        new TransactionTemplate(transactions).executeWithoutResult(transaction -> {
+            jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
+                    .param("lock", "client-input:" + workspace.getId() + ":" + accountId(developer) + ":" + key)
+                    .query((row, index) -> true)
+                    .single();
+            ask(key, "A message", null)
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody()
+                    .jsonPath("$.type")
+                    .isEqualTo(ProblemType.IDEMPOTENCY_KEY_IN_FLIGHT.uri().toString());
+        });
+        ask(key, "A message", null).expectStatus().isOk();
+        get("/entries").jsonPath("$.content.length()").isEqualTo(1);
+    }
+
+    @Test
+    void shouldReplayOnlyTheCurrentQuestionAfterForgetAndRefuseAfterMembershipLoss() {
+        var key = TimeOrderedIds.next();
+        var created = ask(key, "Remove these words", null)
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .returnResult();
+        var message = JsonMapper.shared()
+                .readTree(Objects.requireNonNull(created.getResponseBody()))
+                .path("question");
+        String id = message.path("id").asString();
+        write("DELETE", "/entries/" + id, null).expectStatus().isNoContent();
+        ask(key, "Remove these words", null)
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.question.id")
+                .isEqualTo(id)
+                .jsonPath("$.question.deleted")
+                .isEqualTo(true)
+                .jsonPath("$.question.text")
+                .isEqualTo("");
+        get("/entries").jsonPath("$.content.length()").isEqualTo(1);
+
+        jdbc.sql("UPDATE membership SET left_at=now() WHERE workspace_id=:workspace AND account_id=:account")
+                .param("workspace", workspace.getId())
+                .param("account", accountId(developer))
+                .update();
+        ask(key, "Remove these words", null)
+                .expectStatus()
+                .isNotFound()
+                .expectBody()
+                .jsonPath("$.question")
+                .doesNotExist();
+        assertThat(jdbc.sql("SELECT count(*) FROM conversation_entry WHERE workspace_id=:workspace AND kind='USER'")
+                        .param("workspace", workspace.getId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldRefuseAnExpiredKeyWithoutStoringAQuestion() {
+        var key = TimeOrderedIds.next();
+        long expired = Instant.now().minus(Duration.ofHours(73)).toEpochMilli();
+        var expiredKey =
+                new UUID((expired << 16) | (key.getMostSignificantBits() & 0xffff), key.getLeastSignificantBits());
+        ask(expiredKey, "An expired submission", null).expectStatus().isBadRequest();
+        get("/entries").jsonPath("$.content.length()").isEqualTo(0);
+    }
+
+    @Test
+    void shouldScopeAKeyToItsActorAndWorkspace() {
+        var key = TimeOrderedIds.next();
+        var other = persistUser("testuser");
+        ensureMembership(workspace, other, WorkspaceRole.MEMBER);
+        var otherSpace = createWorkspace(
+                "client-input-other",
+                "Other workspace",
+                "client-input-other",
+                AccountType.ORG,
+                persistUser("other-owner"));
+        ensureMembership(otherSpace, developer, WorkspaceRole.MEMBER);
+        bindings.save(LlmCatalogTestFixtures.conversationBinding(
+                otherSpace, Objects.requireNonNull(binding.getInstanceModel())));
+        ask(key, "First message", null).expectStatus().isOk();
+        ask(workspace.getWorkspaceSlug(), "mock-jwt-token-for-test-user", key, "Second message", null)
+                .expectStatus()
+                .isOk();
+        ask(otherSpace.getWorkspaceSlug(), MEMBER, key, "Third message", null)
+                .expectStatus()
+                .isOk();
+        assertThat(JdbcClient.create(PostgreSQLTestContainer.ownerJdbc())
+                        .sql("SELECT count(*) FROM client_input WHERE idem_key=:key")
+                        .param("key", key)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(3);
+    }
+
     /** A turn as the API sends it, so a test can tell an absent property from a null one. */
     private static final ParameterizedTypeReference<Map<String, Object>> TURN_JSON =
             new ParameterizedTypeReference<>() {};
@@ -289,16 +427,17 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         ConversationTurnService.Submission first = submit(main(), "What did the review say?");
         assertThat(claims.claimNext()).isPresent();
         UUID parent = first.question().getId();
-        UUID waits = UUID.randomUUID();
-        UUID followsUp = UUID.randomUUID();
+        UUID waits = TimeOrderedIds.next();
+        UUID followsUp = TimeOrderedIds.next();
 
-        ask(waits, "And this one?", parent)
+        var waitingResponse = ask(waits, "And this one?", parent)
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.turn.waitingFor")
-                .isEqualTo("CAPACITY");
-        ask(followsUp, "And after that?", parent)
+                .isEqualTo("CAPACITY")
+                .returnResult();
+        var followUpResponse = ask(followsUp, "And after that?", parent)
                 .expectStatus()
                 .isOk()
                 .expectBody()
@@ -309,18 +448,19 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                         TURN_JSON,
                         turn -> assertThat(turn)
                                 .as("it waits for the question before it, and zod refuses a null")
-                                .doesNotContainKey("waitingFor"));
-        UUID waiting = turnRepository
-                .findByWorkspaceIdAndRequestId(workspace.getId(), waits.toString())
-                .orElseThrow()
-                .getId();
-        UUID followUp = turnRepository
-                .findByWorkspaceIdAndRequestId(workspace.getId(), followsUp.toString())
-                .orElseThrow()
-                .getId();
+                                .doesNotContainKey("waitingFor"))
+                .returnResult();
+        String waiting = JsonMapper.shared()
+                .readTree(Objects.requireNonNull(waitingResponse.getResponseBody()))
+                .at("/turn/id")
+                .asString();
+        String followUp = JsonMapper.shared()
+                .readTree(Objects.requireNonNull(followUpResponse.getResponseBody()))
+                .at("/turn/id")
+                .asString();
 
         get("").jsonPath("$.activeTurns[?(@.waitingFor == 'CAPACITY')].id")
-                .isEqualTo(waiting.toString())
+                .isEqualTo(waiting)
                 .jsonPath("$.activeTurns[?(@.id == '" + followUp + "')]")
                 .value(
                         new ParameterizedTypeReference<List<Map<String, Object>>>() {},
@@ -366,7 +506,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         ConversationTurnService.Submission question = submit(main(), "What is a good pull request description?");
         UUID parent = question.question().getId();
 
-        ask(UUID.randomUUID(), "And for a small fix?", parent)
+        ask(TimeOrderedIds.next(), "And for a small fix?", parent)
                 .expectStatus()
                 .isOk()
                 .expectBody()
@@ -682,7 +822,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     void shouldRefuseTheQuestionAndStoreNothingWhenHephaestusIsOffInTheWorkspace() {
         binding.setEnabled(false);
         bindings.save(binding);
-        UUID requestId = UUID.randomUUID();
+        UUID requestId = TimeOrderedIds.next();
 
         ask(requestId, "Are you there?", null)
                 .expectStatus()
@@ -697,8 +837,13 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.label.text")
                 .isEqualTo(ConversationRefusal.UNAVAILABLE.userMessage());
 
-        assertThat(turnRepository.findByWorkspaceIdAndRequestId(workspace.getId(), requestId.toString()))
-                .isEmpty();
+        assertThat(JdbcClient.create(PostgreSQLTestContainer.ownerJdbc())
+                        .sql("SELECT count(*) FROM client_input WHERE workspace_id=:workspace AND idem_key=:key")
+                        .param("workspace", workspace.getId())
+                        .param("key", requestId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
         assertThat(conversationRepository.findMain(workspace.getId(), accountId(developer)))
                 .isEmpty();
     }
@@ -751,7 +896,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private ProblemDetail parentEntryProblem(UUID entryId) {
-        ProblemDetail problem = Objects.requireNonNull(ask(UUID.randomUUID(), "Reply in a thread", entryId)
+        ProblemDetail problem = Objects.requireNonNull(ask(TimeOrderedIds.next(), "Reply in a thread", entryId)
                 .expectStatus()
                 .isNotFound()
                 .expectBody(ProblemDetail.class)

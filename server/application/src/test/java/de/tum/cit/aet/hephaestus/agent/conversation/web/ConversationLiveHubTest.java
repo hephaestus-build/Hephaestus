@@ -102,7 +102,6 @@ class ConversationLiveHubTest extends BaseUnitTest {
                 ConversationEntryDTO.Kind.ANSWER,
                 ConversationEntry.Surface.APP,
                 "Your reviews are quick.",
-                null,
                 UUID.randomUUID(),
                 null,
                 null,

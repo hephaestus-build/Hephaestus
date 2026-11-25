@@ -76,7 +76,6 @@ function turn(
 	return {
 		id: "a0000000-0000-4000-8000-000000000001",
 		conversationId: MAIN,
-		requestId: "b0000000-0000-4000-8000-000000000001",
 		status,
 		attempt: status === "QUEUED" ? 0 : 1,
 		maxAttempts: 2,

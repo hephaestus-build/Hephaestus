@@ -15,6 +15,9 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -35,6 +38,8 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
@@ -71,6 +76,15 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AccountService accountService;
+
+    @Autowired
+    private PersonDataRegistry personData;
+
+    @Autowired
+    private OwnerScope owners;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
 
     @BeforeEach
     void cleanState() {
@@ -263,6 +277,55 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(retainedFeedback);
         assertThat(accountRepository.findById(erasedId).orElseThrow().getStatus())
                 .isEqualTo(Account.Status.DELETED);
+    }
+
+    @Test
+    void shouldExportAndEraseOnlyTheAccountsCreateReceipts() {
+        Long erasedId =
+                persistedId(newAccount("Erased", "erased-input@example.com").getId());
+        Long retainedId =
+                persistedId(newAccount("Retained", "retained-input@example.com").getId());
+        long workspace = 87210L;
+        jdbcTemplate.update("""
+            INSERT INTO workspace(id,slug,display_name,account_login,account_type,status)
+            VALUES(?,'create-receipts','Create receipts','create-receipts','ORG','ACTIVE')
+            """, workspace);
+        String seed = """
+            INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id)
+            VALUES(?,?,?,sha256('fixture'::bytea),uuidv7(),uuidv7())
+            """;
+        UUID erased = UUID.randomUUID();
+        UUID retained = UUID.randomUUID();
+        var receipts = PostgreSQLTestContainer.ownerJdbc();
+        receipts.update(seed, workspace, erasedId, erased);
+        receipts.update(seed, workspace, retainedId, retained);
+
+        var scope = new PersonScope(erasedId, List.of(), List.of());
+        var store = personData.stores().stream()
+                .filter(candidate -> candidate.store().equals("client_input"))
+                .findFirst()
+                .orElseThrow();
+        var exported = new TransactionTemplate(transactions).execute(status -> {
+            owners.ofJob(erasedId);
+            return store.export(store.select(scope), scope);
+        });
+        assertThat(exported).singleElement().satisfies(row -> {
+            assertThat(row.path("account_id").asLong()).isEqualTo(erasedId);
+            assertThat(row.path("workspace_id").asLong()).isEqualTo(workspace);
+            assertThat(row.has("fingerprint")).isFalse();
+            assertThat(row.has("idem_key")).isFalse();
+        });
+        markDeleting(erasedId, clock.instant());
+
+        sweeper.sweepNow();
+
+        assertThat(receipts.queryForList(
+                        "SELECT idem_key FROM client_input WHERE workspace_id=? AND idem_key IN (?,?)",
+                        UUID.class,
+                        workspace,
+                        erased,
+                        retained))
+                .containsExactly(retained);
     }
 
     private UUID seedProductFeedback(Long accountId) {

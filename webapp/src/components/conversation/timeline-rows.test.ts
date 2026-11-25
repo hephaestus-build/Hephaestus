@@ -23,15 +23,11 @@ function entry(
 	};
 }
 
-function turn(
-	id: string,
-	status: ConversationTurn["status"],
-	requestId = `request-${id}`,
-): ConversationTurn {
+function turn(id: string, status: ConversationTurn["status"]): ConversationTurn {
 	return {
 		id,
 		conversationId: "main",
-		requestId,
+
 		status,
 		attempt: status === "QUEUED" ? 0 : 1,
 		maxAttempts: 2,
@@ -60,7 +56,7 @@ const shape = (rows: ReturnType<typeof timelineRows>) =>
 				return [...day, line];
 			}
 			case "pending": {
-				return [...day, `pending ${row.message.requestId}`];
+				return [...day, `pending ${row.message.key}`];
 			}
 			case "live": {
 				return [`live ${row.turn.id}`];
@@ -146,7 +142,7 @@ describe("timelineRows", () => {
 			],
 			pending: [
 				{
-					requestId: "r3",
+					key: "r3",
 					text: "unsent",
 					createdAt: new Date(`${DAY}T09:01:00`),
 					status: "sending",
@@ -184,45 +180,45 @@ describe("timelineRows", () => {
 
 	it("shows a queued turn as starting when nothing else runs", () => {
 		const rows = timelineRows({
-			entries: [entry("e1", { kind: "USER", requestId: "r1" })],
+			entries: [entry("e1", { kind: "USER" })],
 			pending: [],
-			turns: [turn("t1", "QUEUED", "r1")],
+			turns: [turn("t1", "QUEUED")],
 		});
 		expect(shape(rows)).toStrictEqual(["day Thu Oct 08 2026", "e1", "live t1"]);
 	});
 
-	it("keeps one key per message from sent to stored, and from Hephaestus's live answer to the stored one", () => {
+	it("keeps the live answer's row key when the stored answer arrives", () => {
 		const sending = {
-			requestId: "r2",
+			key: "r2",
 			text: "And my latest one?",
 			createdAt: new Date(`${DAY}T09:01:00`),
 			status: "sending",
 		} as const;
 		const before = keys({
-			entries: [entry("e1", { kind: "USER", requestId: "r1", turnId: "t1" })],
+			entries: [entry("e1", { kind: "USER", turnId: "t1" })],
 			pending: [sending],
-			turns: [turn("t1", "RUNNING", "r1")],
+			turns: [turn("t1", "RUNNING")],
 		});
 		// The answer arrives before the turn's end: the stored answer stands in for the live row.
 		const after = keys({
 			entries: [
-				entry("e1", { kind: "USER", requestId: "r1", turnId: "t1" }),
-				entry("e2", { kind: "USER", requestId: "r2" }),
+				entry("e1", { kind: "USER", turnId: "t1" }),
+				entry("e2", { kind: "USER" }),
 				entry("e3", { kind: "ANSWER", turnId: "t1" }),
 				entry("e4", { kind: "ANSWER", turnId: "t1" }),
 			],
 			pending: [],
-			turns: [turn("t1", "RUNNING", "r1")],
+			turns: [turn("t1", "RUNNING")],
 		});
 
 		expect(before).toStrictEqual([
-			{ key: "request:r1", messageId: "e1" },
+			{ key: "e1", messageId: "e1" },
 			{ key: "request:r2", messageId: "request:r2" },
 			{ key: "turn:t1", messageId: "turn:t1" },
 		]);
 		expect(after).toStrictEqual([
-			{ key: "request:r1", messageId: "e1" },
-			{ key: "request:r2", messageId: "e2" },
+			{ key: "e1", messageId: "e1" },
+			{ key: "e2", messageId: "e2" },
 			{ key: "turn:t1", messageId: "e3" },
 			{ key: "e4", messageId: "e4" },
 		]);

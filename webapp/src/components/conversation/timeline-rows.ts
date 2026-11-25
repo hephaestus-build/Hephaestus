@@ -10,8 +10,7 @@ import { hasText } from "@/lib/text";
 const GROUP_WINDOW_MS = 5 * 60_000;
 
 /**
- * `key` stays the same while a message moves from sent to stored, or from Hephaestus's live answer to the
- * stored one, so the row keeps its element. `messageId` is what a link and the scroller find it by.
+ * `key` stays the same when a send or live answer becomes stored. `messageId` is what a link and the scroller find it by.
  */
 interface RowIdentity {
 	key: string;
@@ -36,7 +35,7 @@ export type TimelineRow =
 	| (RowIdentity & { kind: "pending"; day?: Date; message: PendingMessage; grouped: boolean })
 	| (RowIdentity & { kind: "live"; turn: ConversationTurn });
 
-const requestKey = (requestId: string) => `request:${requestId}`;
+const requestKey = (key: string) => `request:${key}`;
 const turnKey = (turnId: string) => `turn:${turnId}`;
 
 /** A turn that ended without its full answer, as its question carries it. */
@@ -51,6 +50,7 @@ export interface TurnOutcome {
 interface TimelineInput {
 	entries: ConversationEntry[];
 	pending: PendingMessage[];
+	confirmedSendKeys?: ReadonlyMap<string, string>;
 	turns: ConversationTurn[];
 }
 
@@ -111,11 +111,8 @@ export function liveTurnOf(turns: ConversationTurn[]): ConversationTurn | undefi
 	return turns.find(({ status }) => status === "RUNNING") ?? turns[0];
 }
 
-/** The key a message keeps from the moment it shows: its request, or the turn Hephaestus answers in. */
+/** The first answer uses its turn's key so the live row becomes the stored answer. */
 function keyOf(entry: ConversationEntry, firstAnswer: Map<string, string>): string {
-	if (entry.kind === "USER" && entry.requestId !== undefined) {
-		return requestKey(entry.requestId);
-	}
 	if (entry.turnId !== undefined && firstAnswer.get(entry.turnId) === entry.id) {
 		return turnKey(entry.turnId);
 	}
@@ -127,7 +124,12 @@ function keyOf(entry: ConversationEntry, firstAnswer: Map<string, string>): stri
  * `seq`, then the developer's unsent ones, then Hephaestus's answer in progress. The first message of each
  * local day carries the day.
  */
-export function timelineRows({ entries, pending, turns }: TimelineInput): TimelineRow[] {
+export function timelineRows({
+	entries,
+	pending,
+	confirmedSendKeys,
+	turns,
+}: TimelineInput): TimelineRow[] {
 	const outcomes = outcomesOf(entries);
 	const firstAnswer = new Map<string, string>();
 	const lastOfTurn = new Map<string, string>();
@@ -165,13 +167,16 @@ export function timelineRows({ entries, pending, turns }: TimelineInput): Timeli
 		previous = undefined;
 		return { day: date };
 	};
+	const storedSendKeys = new Set<string>();
 
 	for (const entry of entries) {
+		const sent = confirmedSendKeys?.get(entry.id);
+		if (sent !== undefined) {
+			storedSendKeys.add(sent);
+		}
 		const speaker = speakerOf(entry);
 		const day = openDay(entry.createdAt);
-		const queued = waiting.findIndex(
-			(turn) => turn.id === entry.turnId || turn.requestId === entry.requestId,
-		);
+		const queued = waiting.findIndex((turn) => turn.id === entry.turnId);
 		const queuedTurn = waiting[queued];
 		const outcome =
 			entry.turnId !== undefined && lastOfTurn.get(entry.turnId) === entry.id
@@ -179,7 +184,7 @@ export function timelineRows({ entries, pending, turns }: TimelineInput): Timeli
 				: undefined;
 		rows.push({
 			kind: "entry",
-			key: keyOf(entry, firstAnswer),
+			key: sent === undefined ? keyOf(entry, firstAnswer) : requestKey(sent),
 			messageId: entry.id,
 			...day,
 			entry,
@@ -198,12 +203,15 @@ export function timelineRows({ entries, pending, turns }: TimelineInput): Timeli
 	}
 
 	for (const message of pending) {
+		if (storedSendKeys.has(message.key)) {
+			continue;
+		}
 		const speaker: Speaker = {
 			author: "developer",
 			surface: "APP",
 			createdAt: message.createdAt,
 		};
-		const key = requestKey(message.requestId);
+		const key = requestKey(message.key);
 		rows.push({
 			kind: "pending",
 			key,

@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import de.tum.cit.aet.hephaestus.core.web.ClientInputs;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
@@ -224,8 +226,9 @@ class TwoPeopleOneWorkspaceRouteTest extends AbstractWorkspaceIntegrationTest {
                                         ? Map.of("at", Instant.now().toString())
                                         : Map.of("vote", "HELPFUL"));
             case POST ->
-                request.contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of("requestId", UUID.randomUUID().toString(), "text", "One more question"));
+                request.header(ClientInputs.HEADER, TimeOrderedIds.next().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(Map.of("text", "One more question"));
             default -> request;
         };
     }

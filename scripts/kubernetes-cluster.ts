@@ -54,7 +54,7 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
-import { submitTurn } from "./lib/capacity-chat.ts";
+import { createKey, submitTurn } from "./lib/capacity-chat.ts";
 import { rollOutput } from "./lib/capacity-replay.ts";
 import {
 	bindReplayModel,
@@ -2420,7 +2420,7 @@ export async function turnRoll(
 			900,
 		);
 		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/conversation`, token, {
-			requestId: randomUUID(),
+			requestId: createKey(),
 			text: "Run the turn-roll command.",
 		});
 		if ("status" in submitted || !UUID.test(submitted.id)) {

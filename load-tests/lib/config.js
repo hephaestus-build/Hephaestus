@@ -71,3 +71,9 @@ export function jsonField(response, field) {
 export const sharedThresholds = {
 	http_req_failed: ["rate<0.01"],
 };
+
+/** A new UUIDv7 for a create request. Keep it for retries. */
+export function createKey() {
+	const time = Date.now().toString(16).padStart(12, "0");
+	return `${time.slice(0, 8)}-${time.slice(8)}-7${crypto.randomUUID().slice(15)}`;
+}

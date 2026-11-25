@@ -33,8 +33,9 @@ function beforeOf(request: Request): number | undefined {
 export class ConversationFake {
 	readonly entries: WireEntry[] = [];
 	readonly turns: WireTurn[] = [];
-	/** Every `POST /conversation/turns` body, a repeated `requestId` included. */
+	/** Every `POST /conversation/turns` body and its header key. */
 	readonly submissions: ConversationTurnRequest[] = [];
+	readonly submissionKeys: (string | null)[] = [];
 	readonly stops: string[] = [];
 	readonly votes: { entryId: string; vote: ConversationVoteRequest["vote"] | null }[] = [];
 	readonly deletes: string[] = [];
@@ -96,7 +97,6 @@ export class ConversationFake {
 		const turn: WireTurn = {
 			id: this.nextId("a"),
 			conversationId: MAIN_CONVERSATION_ID,
-			requestId: this.nextId("b"),
 			surface: "APP",
 			createdAt: new Date(BASE_TIME).toISOString(),
 			attempt: fields.status === "QUEUED" ? 0 : 1,
@@ -169,15 +169,14 @@ export class ConversationFake {
 			http.post<PathParams, ConversationTurnRequest>(`${base}/turns`, async ({ request }) => {
 				const body = await request.json();
 				this.submissions.push(body);
+				this.submissionKeys.push(request.headers.get("Idempotency-Key"));
 				const turn = this.addTurn({
 					status: "QUEUED",
-					requestId: body.requestId,
 					...(body.parentEntryId === undefined ? {} : { parentEntryId: body.parentEntryId }),
 				});
 				const stored = this.add({
 					kind: "USER",
 					text: body.text,
-					requestId: body.requestId,
 					turnId: turn.id,
 					...(body.parentEntryId === undefined ? {} : { parentEntryId: body.parentEntryId }),
 				});

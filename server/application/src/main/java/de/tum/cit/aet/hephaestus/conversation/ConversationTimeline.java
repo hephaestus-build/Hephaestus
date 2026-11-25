@@ -283,7 +283,6 @@ public class ConversationTimeline {
                 turn.getId(),
                 turn.getConversationId(),
                 parentEntryId,
-                turn.getRequestId(),
                 turn.getStatus(),
                 waitingFor,
                 turn.getAttempt(),

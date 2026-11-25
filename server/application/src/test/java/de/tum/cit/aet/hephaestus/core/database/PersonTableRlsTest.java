@@ -7,8 +7,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
@@ -79,6 +81,72 @@ class PersonTableRlsTest extends BaseIntegrationTest {
                 .isInstanceOf(DataAccessException.class)
                 .rootCause()
                 .hasMessageContaining("row-level security");
+    }
+
+    @Test
+    void shouldHideReceiptsAndRejectWritesForAnotherOwner() {
+        long first = account();
+        long second = account();
+        long workspace = receiptWorkspace("receipt-owner-policy");
+        UUID key = UUID.randomUUID();
+        var transaction = new TransactionTemplate(transactions);
+        transaction.executeWithoutResult(status -> {
+            owners.ofJob(second);
+            assertThat(insertReceipt(jdbc, workspace, second, key, false)).isEqualTo(1);
+        });
+
+        assertThat(jdbc.queryForList("SELECT idem_key FROM client_input WHERE idem_key = ?", UUID.class, key))
+                .isEmpty();
+        transaction.executeWithoutResult(status -> {
+            owners.ofJob(first);
+            assertThat(jdbc.queryForList("SELECT idem_key FROM client_input WHERE idem_key = ?", UUID.class, key))
+                    .isEmpty();
+            assertThat(jdbc.update("DELETE FROM client_input WHERE idem_key = ?", key))
+                    .isZero();
+            assertThat(insertReceipt(jdbc, workspace, first, key, false)).isEqualTo(1);
+        });
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+                    owners.ofJob(first);
+                    insertReceipt(jdbc, workspace, second, UUID.randomUUID(), false);
+                }))
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .hasMessageContaining("row-level security");
+        assertThat(PostgreSQLTestContainer.ownerJdbc()
+                        .queryForList("SELECT account_id FROM client_input WHERE idem_key = ?", Long.class, key))
+                .containsExactlyInAnyOrder(first, second);
+    }
+
+    @Test
+    void shouldPruneOnlyExpiredReceiptsWithoutAnOwnerBinding() {
+        long first = account();
+        long second = account();
+        long workspace = receiptWorkspace("receipt-expiration");
+        UUID expired = UUID.randomUUID();
+        UUID fresh = UUID.randomUUID();
+        var owner = PostgreSQLTestContainer.ownerJdbc();
+        insertReceipt(owner, workspace, first, expired, true);
+        insertReceipt(owner, workspace, second, fresh, false);
+
+        assertThat(jdbc.queryForObject("SELECT public.prune_client_inputs()", Integer.class))
+                .isPositive();
+        assertThat(owner.queryForList(
+                        "SELECT idem_key FROM client_input WHERE workspace_id = ?", UUID.class, workspace))
+                .containsExactly(fresh);
+    }
+
+    private long receiptWorkspace(String slug) {
+        return Objects.requireNonNull(jdbc.queryForObject("""
+            INSERT INTO workspace(slug,display_name,account_login,account_type,status)
+            VALUES(?,?,?,'ORG','ACTIVE') RETURNING id
+            """, Long.class, slug, slug, slug));
+    }
+
+    private static int insertReceipt(JdbcTemplate rows, long workspace, long account, UUID key, boolean expired) {
+        return rows.update("""
+            INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id,created_at)
+            VALUES(?,?,?,sha256('fixture'::bytea),uuidv7(),uuidv7(),now() - (? * interval '1 day'))
+            """, workspace, account, key, expired ? 9 : 0);
     }
 
     private long account() {
