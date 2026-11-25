@@ -63,7 +63,7 @@ It is not designed to grade, appraise or rank people, or to set allocation or pa
   They see that your feedback exists, not what it says.
   They see no names unless a workspace owner turns that on.
   The setting is off by default, and each change is recorded.
-- Workspace admins cannot read your conversation with Hephaestus.
+- No workspace admin page shows your conversation with Hephaestus.
 - Feedback on the work is visible to everyone who can see that work, like any review comment.
 
 [Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) lists every reader, including the audited support access of instance admins.
