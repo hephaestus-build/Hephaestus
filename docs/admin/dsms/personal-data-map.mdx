@@ -652,7 +652,7 @@ The [restore procedure](../erasure-recovery.mdx) owns the manifest, sequence and
 Person erasure clears copying tool results, later Hephaestus answers in those conversations, and answers in their child conversations.
 It also clears summaries and search results that could copy those words.
 The ledger reports each changed message to open conversations.
-A context change revokes a running turn's sandbox, so the turn's next write is refused. A server serves the turn's last partial answer until the turn ends.
+A context change revokes a running turn's sandbox, so the attempt's next write is refused. A server serves the turn's last partial answer until the turn ends.
 A reconnected server checks the durable erasure receipts before keeping an older attempt.
 
 Partial-answer writes and attempt completion share the erasure fence, so a late callback cannot restore copied content.

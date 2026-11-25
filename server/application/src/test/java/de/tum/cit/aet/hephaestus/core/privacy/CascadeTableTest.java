@@ -400,7 +400,7 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.KEEP,
                     List.of(),
                     EXPORT + " A Slack disconnect redacts the entries written in Slack in the conversation, not in a"
-                            + " ready export. A reply that repeats an erased source stays in both."),
+                            + " ready export. An app reply that repeats an erased source stays in both."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.EXPORT,
