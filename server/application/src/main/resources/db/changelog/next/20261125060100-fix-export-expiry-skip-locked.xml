@@ -156,6 +156,6 @@ END
 $$;
                 ]]></sql>
         <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
-                  changeSetPath="db/changelog/next/20261125030255-fix-personal-space-audit-erasure.xml"/>
+                  changeSetPath="db/changelog/next/20261125050812-fix-personal-space-audit-erasure.xml"/>
     </changeSet>
 </databaseChangeLog>
