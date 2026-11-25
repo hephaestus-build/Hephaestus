@@ -12,6 +12,8 @@ public enum ProxyRefusal {
     WORK_TIME,
     /** The attempt was ended while the call waited. */
     ATTEMPT_ENDED,
+    /** The workspace's authority narrowed after the work was requested, so its run ended before the call (ADR 0134). */
+    AUTHORITY_CHANGED,
     /** The endpoint could not grant capacity before the attempt ended. */
     CAPACITY,
     /** The attempt already had its most model calls in flight, or the gateway its most request bodies: ask again. */

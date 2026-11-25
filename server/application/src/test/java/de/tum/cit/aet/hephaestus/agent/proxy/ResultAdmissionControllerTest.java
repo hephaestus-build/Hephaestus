@@ -114,20 +114,23 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotRecordARefusalDuringTheAdmissionAsAServerError() {
+    void shouldEndTheRunAndRecordNoServerErrorWhenTheAdmissionRefusedForNarrowedAuthority() {
         var admission = mock(ResultAdmissionService.class);
         var serverErrors = mock(AttemptServerErrors.class);
+        var authority = mock(AgentRunAuthority.class);
         var jwt = reviewToken(UUID.randomUUID());
-        when(admission.admit(any(), any(), any()))
-                .thenThrow(new AuthorityRefusedException(new AuthorityRefusal(
-                        AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
-        var controller = new ResultAdmissionController(
-                admission, mock(AttemptCaptureFailures.class), serverErrors, mock(AgentRunAuthority.class));
+        // The admission's read-only recheck refused under its locks, so it could not end the run there.
+        var refused = new AuthorityRefusedException(new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        when(admission.admit(any(), any(), any())).thenThrow(refused);
+        var controller =
+                new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class), serverErrors, authority);
 
         assertThatThrownBy(() -> controller.admitResults(
                         new SealResultsRequestDTO(3, UUID.randomUUID(), jwt.id(), 0),
                         new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes())))
-                .isInstanceOf(AuthorityRefusedException.class);
+                .isSameAs(refused);
+        verify(authority).endRefused(new AgentRunFence(LEASE, 1L, 1), refused);
         verifyNoInteractions(serverErrors);
     }
 

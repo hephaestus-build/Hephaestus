@@ -530,7 +530,12 @@ This section gives the mechanism for runs.
   The route answers `409` with the boundary and the reason, so the loop stops.
 - Code that waits or reads again after that check checks again before it reads or answers: a folder rebuild or resume once it holds the folder, a turn's load in its worker, and the answer of `/admit-results`.
   Where ending the run would take a lock that the caller already holds, it uses `AgentRunAuthority.check`, which refuses without ending the run, and the route ends the run once nothing is held.
-  A review's preparation and its folder resume hold the copy fence, which ending a review run takes, so they use `check`. Elsewhere `require` ends the run at once.
+  A review's preparation runs under the preparation lock and the evidence custody.
+  Its folder resume also runs under the copy fence, which ending a review run takes.
+  Both use `check`, and the route ends the run once they unwound. Elsewhere `require` ends the run at once.
+- The model proxy checks again with the boundary `MODEL_DISPATCH` just before each request leaves for the provider, after every wait for capacity or budget (`ProxyRoutingService.dispatchRefusal`).
+  A refused call answers `409` with the refusal `AUTHORITY_CHANGED` and the text of an ended attempt, so each runner stops as it does for a lost lease.
+  A capability probe and a report draft carry no workspace authority, and skip the check.
 - `authority_refused_total` counts each refusal by boundary and reason.
 
 ## Reaper

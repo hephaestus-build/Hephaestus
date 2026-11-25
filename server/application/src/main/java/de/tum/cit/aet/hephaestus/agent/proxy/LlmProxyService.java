@@ -591,6 +591,14 @@ class LlmProxyService {
                     permit.released();
                     return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
                 }
+                // The authorization recheck, after every wait: the body is the text of an ended attempt, so every
+                // runner
+                // stops as it does for a lost lease.
+                ProxyRefusal narrowed = routingService.dispatchRefusal(routing);
+                if (narrowed != null) {
+                    permit.released();
+                    return refusal(HttpStatus.CONFLICT, narrowed, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                }
                 row.sending(credential.upstreamModelId());
             } catch (ProxyCallLedger.ClaimLost lost) {
                 permit.released();
@@ -643,6 +651,14 @@ class LlmProxyService {
                     if (!requestPolicy.allows(routing)) {
                         permit.released();
                         return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                    }
+                    // The authorization recheck, after every wait: the body is the text of an ended attempt, so every
+                    // runner
+                    // stops as it does for a lost lease.
+                    ProxyRefusal narrowed = routingService.dispatchRefusal(routing);
+                    if (narrowed != null) {
+                        permit.released();
+                        return refusal(HttpStatus.CONFLICT, narrowed, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
                     }
                     row.sending(credential.upstreamModelId());
                     upstream = callUpstream(

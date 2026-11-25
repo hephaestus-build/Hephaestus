@@ -84,8 +84,10 @@ existing execution metric.
 | `sandbox` | The launch of the sandbox that runs the practice sessions | Its result |
 | `composition` | The claim of the `review_compose` run in the review's sandbox | The run's end, or its hand-on to another attempt |
 
-Its `outcome` is `ok`, `failed`, `partial` or `handed_on`.
+Its `outcome` is `ok`, `failed`, `partial`, `handed_on` or `authority_changed`.
 `handed_on` means that composition stopped for a passing cause, and another attempt continues it.
+`authority_changed` means that access to the workspace narrowed while the stage ran, and a recheck stopped it.
+
 A sandbox that exits with any other code than 0 or the partial-review code 78 is `failed`, also when it admitted results.
 A sandbox that left a practice without a result and staged the rest is `partial`. Another attempt can continue the review.
 A sandbox that had no room is not a sample: the attempt waits in the queue.
@@ -376,9 +378,10 @@ Claim reservations do not add a second wait observation when the model call uses
 
 `refused` is the model's own decision.
 A call that the proxy refuses never reaches a provider, so it has no outcome.
-`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `draft_quota`, `work_time`, `attempt_ended`, `ai_choice`, or `not_composer_request`.
+`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `draft_quota`, `work_time`, `attempt_ended`, `authority_changed`, `ai_choice`, or `not_composer_request`.
 
 `draft_quota` counts a draft call refused at the instance or per-account daily limit.
+`authority_changed` counts a call whose workspace access narrowed after the work was requested. Its run has ended, and `authority_refused_total` counts it with `boundary="model_dispatch"`.
 `not_composer_request` counts a request of a composition run that does not continue that composition's conversation.
 The composer never sends one, so any count is worth a look in the server log.
 A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surface="model_call"` and its `cap`.

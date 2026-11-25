@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,9 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -79,6 +83,39 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
             return Optional.of(prepare.get());
         });
         return locks;
+    }
+
+    @Test
+    void shouldEndTheRunWhenItsPreparationRefusedBecauseAuthorityNarrowed() {
+        var measurements = mock(ReviewAttemptMeasurements.class);
+        var authority = mock(AgentRunAuthority.class);
+        var runs = mock(AgentRuns.class);
+        var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
+        var run = new SandboxRun(
+                new AgentSandboxes.LiveSandbox(
+                        UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW),
+                fence,
+                AgentRunKind.REVIEW,
+                0);
+        // The preparation refused under its lock, so it could not end the run there.
+        var refused = new AuthorityRefusedException(new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        when(measurements.get(run)).thenThrow(refused);
+        var runtime = new ReviewSandboxRuns(
+                mock(ReviewJobClaimService.class),
+                new ReviewAttemptCustody(runs),
+                mock(ReviewJobRepository.class),
+                new SandboxGatewaySessions(),
+                JsonMapper.builder().build(),
+                mock(ReviewAttemptResults.class),
+                mock(ReviewRunKind.class),
+                runs,
+                mock(AttemptCopyReceipts.class),
+                measurements,
+                authority);
+
+        assertThatThrownBy(() -> runtime.context(run)).isSameAs(refused);
+        verify(authority).endRefused(fence, refused);
     }
 
     @ParameterizedTest

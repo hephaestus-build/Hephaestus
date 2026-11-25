@@ -67,6 +67,19 @@ public class AgentRunAuthority {
     }
 
     /**
+     * Ends the run after {@link #check} refused under a lease, a lock or a transaction that has since unwound. A recheck
+     * further in, such as the evidence folder's, may have ended the run already: the answer is still the refusal, not
+     * a lost claim, so the caller throws {@code refused} afterwards.
+     */
+    public void endRefused(AgentRunFence fence, AuthorityRefusedException refused) {
+        try {
+            require(fence, refused.refusal().boundary());
+        } catch (AuthorityRefusedException | StaleRunException alreadyEnded) {
+            // The refusal that the caller holds names the same boundary and reason.
+        }
+    }
+
+    /**
      * Lets the claim go on past {@code boundary} while the run's authority holds. Otherwise it ends the run and its
      * domain row, and throws.
      *
