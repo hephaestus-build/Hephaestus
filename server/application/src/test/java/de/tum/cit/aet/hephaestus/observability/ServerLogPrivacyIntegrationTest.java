@@ -7,6 +7,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -44,26 +45,29 @@ class ServerLogPrivacyIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepRejectedRowValuesOutOfTheDriverMessage() {
-        Rejection rejection = Objects.requireNonNull(jdbc.execute((ConnectionCallback<Rejection>) connection -> {
-            try (Statement statement = connection.createStatement()) {
-                statement.execute("CREATE TEMPORARY TABLE log_privacy_canary (email text"
-                        + " CONSTRAINT uq_log_privacy_canary UNIQUE)");
-                try {
-                    statement.execute("INSERT INTO log_privacy_canary VALUES ('private-row-canary@example.test')");
-                    statement.execute("INSERT INTO log_privacy_canary VALUES ('private-row-canary@example.test')");
-                    throw new IllegalStateException("the second insert was not rejected");
-                } catch (SQLException duplicate) {
-                    return new Rejection(
-                            Objects.requireNonNull(duplicate.getSQLState()),
-                            Objects.requireNonNull(duplicate.getMessage()));
-                } finally {
-                    statement.execute("DROP TABLE log_privacy_canary");
+        var owner = PostgreSQLTestContainer.ownerJdbc();
+        owner.execute("CREATE TABLE public.log_privacy_canary (email text CONSTRAINT uq_log_privacy_canary UNIQUE)");
+        try {
+            Rejection rejection = Objects.requireNonNull(jdbc.execute((ConnectionCallback<Rejection>) connection -> {
+                try (Statement statement = connection.createStatement()) {
+                    String insert = "INSERT INTO public.log_privacy_canary VALUES ('private-row-canary@example.test')";
+                    statement.execute(insert);
+                    try {
+                        statement.execute(insert);
+                        throw new IllegalStateException("the second insert was not rejected");
+                    } catch (SQLException duplicate) {
+                        return new Rejection(
+                                Objects.requireNonNull(duplicate.getSQLState()),
+                                Objects.requireNonNull(duplicate.getMessage()));
+                    }
                 }
-            }
-        }));
+            }));
 
-        assertThat(rejection.sqlState()).isEqualTo("23505");
-        assertThat(rejection.message()).contains("uq_log_privacy_canary").doesNotContain("private-row-canary");
+            assertThat(rejection.sqlState()).isEqualTo("23505");
+            assertThat(rejection.message()).contains("uq_log_privacy_canary").doesNotContain("private-row-canary");
+        } finally {
+            owner.execute("DROP TABLE public.log_privacy_canary");
+        }
     }
 
     @Test

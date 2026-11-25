@@ -86,15 +86,21 @@ class BoundedLockWaitIntegrationTest extends BaseIntegrationTest {
     void shouldKeepRowValuesOutOfAMigrationErrorMessage() throws Exception {
         try (var migration = liquibase.getDataSource().getConnection();
                 var statement = migration.createStatement()) {
-            statement.execute("CREATE TEMPORARY TABLE migration_detail (id bigint PRIMARY KEY)");
-            statement.execute("INSERT INTO migration_detail VALUES (" + LOCK_KEY + ")");
+            migration.setAutoCommit(false);
+            try {
+                statement.execute("CREATE TABLE public.migration_detail (id bigint PRIMARY KEY)");
+                statement.execute("INSERT INTO public.migration_detail VALUES (" + LOCK_KEY + ")");
 
-            assertThatExceptionOfType(SQLException.class)
-                    .isThrownBy(() -> statement.execute("INSERT INTO migration_detail VALUES (" + LOCK_KEY + ")"))
-                    .satisfies(failure -> {
-                        assertThat(failure.getSQLState()).isEqualTo("23505");
-                        assertThat(failure.getMessage()).doesNotContain(Long.toString(LOCK_KEY));
-                    });
+                assertThatExceptionOfType(SQLException.class)
+                        .isThrownBy(() ->
+                                statement.execute("INSERT INTO public.migration_detail VALUES (" + LOCK_KEY + ")"))
+                        .satisfies(failure -> {
+                            assertThat(failure.getSQLState()).isEqualTo("23505");
+                            assertThat(failure.getMessage()).doesNotContain(Long.toString(LOCK_KEY));
+                        });
+            } finally {
+                migration.rollback();
+            }
         }
     }
 

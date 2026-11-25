@@ -5,14 +5,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import liquibase.Liquibase;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.DatabaseException;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -28,12 +37,30 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 @Tag("database")
 class DatabaseRolesDatabaseTest {
 
+    private static final String INVOKER_QUALIFICATION = "-fix-db-invoker-relation-qualification.xml";
+    private static final String QUALIFICATION_PROBE =
+            "SELECT prosrc FROM pg_proc WHERE oid = 'public.guard_personal_membership()'::regprocedure";
+    private static final String IDENTIFIER = "(?:\"[\\w$]+\"|[a-z_][\\w$]*)";
+    private static final Pattern COMMENTS_AND_STRINGS =
+            Pattern.compile("--[^\\n]*|/\\*.*?\\*/|'(?:''|[^'])*'", Pattern.DOTALL);
+    private static final Pattern RELATION_REFERENCE =
+            Pattern.compile("(?i)(?:\\b(?:FROM|JOIN|INTO|UPDATE|USING|TRUNCATE|TABLE)\\s+|,\\s*)"
+                    + "(?:ONLY\\s+)?(?:\\(\\s*)*(" + IDENTIFIER + ")(?![\\w$\"]|\\s*\\.)"
+                    + "|(?<![.\\w$\"])(" + IDENTIFIER + ")\\s*%\\s*ROWTYPE\\b");
+
     /** A fresh install: the roles first, then the owner migrates the empty database. */
     private static final TestDatabase INSTALLED = install();
 
     private static TestDatabase install() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_roles_installed");
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+        // Model the old database grants so the migration must revoke them even without another role setup.
+        try (Connection connection = connect(database)) {
+            jdbc(connection)
+                    .execute("GRANT TEMPORARY ON DATABASE hephaestus_roles_installed TO PUBLIC, hephaestus_app");
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Failed to set up the database role grants", failure);
+        }
         PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
         return database;
     }
@@ -59,6 +86,7 @@ class DatabaseRolesDatabaseTest {
     @ValueSource(
             strings = {
                 "CREATE TABLE public.role_probe (id bigint)",
+                "CREATE TEMPORARY TABLE role_probe (id bigint)",
                 "CREATE SCHEMA role_probe",
                 "ALTER TABLE public.workspace ADD COLUMN role_probe bigint",
                 "CREATE INDEX role_probe ON public.workspace (id)",
@@ -104,6 +132,149 @@ class DatabaseRolesDatabaseTest {
     }
 
     @Test
+    void shouldRevokeTemporaryTableCreationFromPublicAndTheHephaestusRoles() throws SQLException {
+        try (Connection connection = connect(INSTALLED)) {
+            assertNoTemporaryGrants(jdbc(connection));
+        }
+    }
+
+    private static void assertNoTemporaryGrants(JdbcTemplate database) {
+        assertThat(database.queryForList("""
+                SELECT r.rolname FROM pg_roles r
+                WHERE r.rolname IN ('hephaestus_owner', 'hephaestus_app', 'hephaestus_backup_reporter', 'hephaestus_monitor')
+                  AND has_database_privilege(r.oid, current_database(), 'TEMPORARY')
+                """, String.class)).isEmpty();
+        assertNoPublicTemporaryGrant(database);
+    }
+
+    private static void assertNoPublicTemporaryGrant(JdbcTemplate database) {
+        assertThat(database.queryForObject("""
+                SELECT EXISTS (
+                    SELECT FROM pg_database d, LATERAL aclexplode(coalesce(d.datacl, acldefault('d', d.datdba))) a
+                    WHERE d.datname = current_database() AND a.grantee = 0 AND a.privilege_type = 'TEMPORARY'
+                )
+                """, Boolean.class)).isFalse();
+    }
+
+    @Test
+    void shouldRefuseATemporaryGrantReachableThroughSetRoleAndSupportRollback() throws Exception {
+        String name = "hephaestus_roles_temp_upgrade";
+        TestDatabase database = TestDatabaseCleanup.createDatabase(name);
+        PostgreSQLTestContainer.applyDatabaseRoles(name);
+        TestDatabase owner = PostgreSQLTestContainer.asOwner(database);
+        PracticeMigrationFixture.upgradeBefore(owner, "dev,prod", INVOKER_QUALIFICATION);
+
+        try (Connection administrator = connect(database)) {
+            var grants = jdbc(administrator);
+            grants.execute("CREATE ROLE roles_temp_group");
+            try {
+                grants.execute("GRANT TEMPORARY ON DATABASE hephaestus_roles_temp_upgrade TO roles_temp_group");
+                grants.execute("GRANT roles_temp_group TO hephaestus_app WITH INHERIT FALSE, SET TRUE");
+                try (Connection connection = connect(owner);
+                        Liquibase liquibase = liquibase(connection)) {
+                    assertThatThrownBy(() ->
+                                    PracticeMigrationFixture.upgradeOnly(liquibase, "dev,prod", INVOKER_QUALIFICATION))
+                            .hasStackTraceContaining("Hephaestus database roles still have the TEMPORARY privilege");
+                }
+                assertThat(grants.queryForObject(QUALIFICATION_PROBE, String.class))
+                        .contains("FROM workspace");
+            } finally {
+                grants.execute("REVOKE TEMPORARY ON DATABASE hephaestus_roles_temp_upgrade FROM roles_temp_group");
+                grants.execute("DROP ROLE roles_temp_group");
+            }
+
+            try (Connection connection = connect(owner);
+                    Liquibase liquibase = liquibase(connection)) {
+                PracticeMigrationFixture.upgradeOnly(liquibase, "dev,prod", INVOKER_QUALIFICATION);
+                assertNoTemporaryGrants(grants);
+                assertThat(grants.queryForObject(QUALIFICATION_PROBE, String.class))
+                        .contains("FROM public.workspace");
+
+                PracticeMigrationFixture.rollbackOnly(liquibase, "dev,prod", INVOKER_QUALIFICATION);
+                assertThat(grants.queryForObject(QUALIFICATION_PROBE, String.class))
+                        .contains("FROM workspace");
+                assertThat(grants.queryForObject(
+                                "SELECT has_database_privilege('hephaestus_owner', current_database(), 'TEMPORARY')",
+                                Boolean.class))
+                        .isTrue();
+                assertThat(grants.queryForObject(
+                                "SELECT has_database_privilege('hephaestus_app', current_database(), 'TEMPORARY')",
+                                Boolean.class))
+                        .isFalse();
+                assertNoPublicTemporaryGrant(grants);
+
+                PracticeMigrationFixture.upgradeOnly(liquibase, "dev,prod", INVOKER_QUALIFICATION);
+                assertNoTemporaryGrants(grants);
+                assertThat(grants.queryForObject(QUALIFICATION_PROBE, String.class))
+                        .contains("FROM public.workspace");
+            }
+        }
+    }
+
+    private static Liquibase liquibase(Connection connection) throws DatabaseException {
+        return new Liquibase(
+                "db/master.xml",
+                new ClassLoaderResourceAccessor(),
+                DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)));
+    }
+
+    @Test
+    void shouldQualifyRelationReferencesInInvokerRoutines() throws SQLException {
+        try (Connection connection = connect(INSTALLED)) {
+            var database = jdbc(connection);
+            Set<String> relations =
+                    Set.copyOf(database.query("""
+                SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname IN ('public', 'pg_catalog', 'partman') AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+                """, (row, _) -> Objects.requireNonNull(row.getString(1))));
+            var unqualified = database
+                    .query("""
+                SELECT p.oid::regprocedure::text, p.prosrc
+                FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND NOT p.prosecdef AND p.prokind IN ('f', 'p')
+                  AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass
+                                  AND d.objid = p.oid AND d.deptype = 'e')
+                ORDER BY 1
+                """, (row, _) -> {
+                        String routine = row.getString(1);
+                        return unqualifiedRelations(Objects.requireNonNull(row.getString(2)), relations).stream()
+                                .map(relation -> routine + ": " + relation)
+                                .toList();
+                    })
+                    .stream()
+                    .flatMap(List::stream)
+                    .toList();
+            assertThat(unqualified).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRecognizeUnqualifiedRelationsThroughAliasesAndRowTypes() {
+        assertThat(unqualifiedRelations("""
+            DECLARE selected review%ROWTYPE; existing public.workspace%ROWTYPE;
+            BEGIN
+                SELECT * FROM ONLY /* comment */ "workspace" w, account a JOIN public.review r ON true;
+                RAISE NOTICE 'from workspace';
+            END
+            """, Set.of("workspace", "account", "review")))
+                .containsExactly("review", "workspace", "account");
+    }
+
+    private static List<String> unqualifiedRelations(String body, Set<String> relations) {
+        // Compare SQL relation tokens to the migrated catalog so CTEs and set-returning functions are not tables.
+        return RELATION_REFERENCE
+                .matcher(COMMENTS_AND_STRINGS.matcher(body).replaceAll(" "))
+                .results()
+                .map(match -> match.group(1) == null ? match.group(2) : match.group(1))
+                .map(identifier -> identifier.startsWith("\"")
+                        ? identifier.substring(1, identifier.length() - 1)
+                        : identifier.toLowerCase(Locale.ROOT))
+                .filter(relations::contains)
+                .distinct()
+                .toList();
+    }
+
+    @Test
     void shouldLetTheApplicationRoleUseRowsAndKeepPartitionsWhenTheOwnerMigrated() throws SQLException {
         assertApplicationWorks(INSTALLED);
     }
@@ -116,6 +287,8 @@ class DatabaseRolesDatabaseTest {
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_moved");
 
         try (Connection connection = connect(database)) {
+            // CREATE DATABASE ... TEMPLATE restores the schema and history with the target database's default ACL.
+            assertNoTemporaryGrants(jdbc(connection));
             List<@Nullable String> elsewhere = jdbc(connection).queryForList("""
                             SELECT c.oid::regclass::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                             WHERE n.nspname IN ('public', 'partman') AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
