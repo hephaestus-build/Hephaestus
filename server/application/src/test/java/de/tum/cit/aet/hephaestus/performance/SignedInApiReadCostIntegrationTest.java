@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -47,11 +47,21 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @EnabledIfEnvironmentVariable(named = "HEPHAESTUS_API_READ_COST", matches = "true")
 class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     /**
-     * The workspace pages read every member's results, so the large workspace looks up a long list of reviews. A route
-     * that fails at both sizes would leave the key sets equal, so these must answer.
+     * The routes that answer this fixture with another status than 200 by design: it connects no Outline, Slack or
+     * GitLab account, sets no practice repository, has no exportable scan or public onboarding, and opens no user view.
+     * Every other route must answer 200, so a route that fails at both sizes cannot drop out of both measurements.
      */
-    private static final Set<String> LARGE_WORKSPACE_PAGES =
-            Set.of("getPracticeWorkspaceOverview", "getPracticeWorkspaceTiles");
+    private static final Map<String, Integer> NOT_OK = Map.of(
+            "exportScanSarif", 409,
+            "getGitLabRepositorySelection", 409,
+            "getOutlineTokenStatus", 404,
+            "getPracticeRepository", 204,
+            "getPublicActivityOnboarding", 404,
+            "getSlackScopes", 412,
+            "getUserViewUser", 403,
+            "listOutlineCollectionCandidates", 404,
+            "listOutlineCollections", 404,
+            "listUserViewUsers", 403);
 
     @Autowired
     private WebTestClient defaultHttp;
@@ -82,15 +92,16 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     private Map<Route, Long> measure(
             WebTestClient http, String scale, List<Route> routes, SignedInApiReadCostData.Fixture fixture) {
         Map<Route, Long> costs = new HashMap<>();
+        Map<String, Integer> statuses = new TreeMap<>();
+        Map<String, Integer> expected = new TreeMap<>();
         for (var route : routes) {
             if (!fixture.supports(route.path())) {
                 System.out.printf("READ_COST_UNAVAILABLE\t%s\t%s%n", scale, route.operation());
                 continue;
             }
             var first = sample(http, route, fixture);
-            if (scale.equals("large") && LARGE_WORKSPACE_PAGES.contains(route.operation())) {
-                assertThat(first.status()).as(route.operation()).isEqualTo(200);
-            }
+            statuses.put(route.operation(), first.status());
+            expected.put(route.operation(), NOT_OK.getOrDefault(route.operation(), 200));
             if (first.status() < 200 || first.status() >= 300) {
                 System.out.printf(
                         "READ_COST_STATUS\t%s\t%s\t%d\t%d%n",
@@ -126,6 +137,9 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
                                 .orElseThrow());
             }
         }
+        assertThat(statuses)
+                .as("first status of each route at the %s size", scale)
+                .isEqualTo(expected);
         for (String bootstrap :
                 List.of("getCurrentUser", "listWorkspaces", "getMemberOnboarding", "getOwnMembership")) {
             assertThat(costs.entrySet())
