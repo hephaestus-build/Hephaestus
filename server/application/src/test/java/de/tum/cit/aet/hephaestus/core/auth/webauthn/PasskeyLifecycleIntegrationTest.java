@@ -38,7 +38,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@TestPropertySource(properties = "hephaestus.auth.passkeys.instance-admin-required=true")
+// The same declaration as McpPasskeyConsentIntegrationTest, so both share one context.
+@TestPropertySource(
+        properties = {"hephaestus.auth.dev-login-enabled=true", "hephaestus.auth.passkeys.instance-admin-required=true"
+        })
 class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private JwtDecoder decoder;
