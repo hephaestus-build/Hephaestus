@@ -704,7 +704,7 @@ groups:
       # These sweeps run at least each hour, and an empty backlog also counts as a run.
       - alert: HephaestusPrivacyJobNotRunning
         expr: >-
-          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|conversation_retention|export_retention"}[4h])) == 0
+          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|conversation_copy_retention|conversation_retention|export_retention"}[4h])) == 0
         for: 90m
         labels:
           severity: warning
@@ -718,7 +718,7 @@ groups:
       # a reused address cannot lend its fresh read to an old margin. Unsampled starts where this cutoff ends (>= 900).
       - alert: HephaestusConversationRetentionBehind
         expr: >-
-          min(
+          min by (rule) (
             last_over_time(conversation_retention_deadline_margin_seconds{job="hephaestus"}[5m])
             and (time() - last_over_time(conversation_retention_margin_read_timestamp_seconds{job="hephaestus"}[5m]) < 900)
           ) < 7 * 86400
@@ -732,8 +732,8 @@ groups:
       # so the time of the last good read is checked too. Each replica reads every minute.
       - alert: HephaestusConversationRetentionUnsampled
         expr: >-
-          sum(increase(conversation_retention_sampler_failures_total{job="hephaestus"}[15m])) > 5
-          or max(time() - last_over_time(conversation_retention_margin_read_timestamp_seconds{job="hephaestus"}[5m])) >= 900
+          sum by (rule) (increase(conversation_retention_sampler_failures_total{job="hephaestus"}[15m])) > 5
+          or max by (rule) (time() - last_over_time(conversation_retention_margin_read_timestamp_seconds{job="hephaestus"}[5m])) >= 900
         labels:
           severity: warning
         annotations:

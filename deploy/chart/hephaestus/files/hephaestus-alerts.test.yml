@@ -3528,9 +3528,9 @@ tests:
     interval: 1m
     input_series:
       # A failed read keeps the last margin and the time of the last good read.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1740 1740 1740 1740 1740 1740 2160 2220 2280 2340 2400 2460 2520 2580 2640 2700 2760 2820 2880 2940 3000 3060 3120 3180 3240 3300 3360 3420 3480 3540 3600 3660 3720 3780 3840 3900 3960 4020 4080 4140 4200 4260 4320 4380 4440 4440 4440 4440 4440 4440 4440 4860 4920 4980 5040 5100 5160 5220 5280 5340 5400 5460 5520 5580 5640 5700 5760 5820 5880 5940 6000 6060 6120 6180 6240 6300 6360 6420 6480 6540 6600 6660 6720 6780 6840 6900 6960 7020 7080 7140 7140 7140 7140 7140 7140 7140 7560 7620 7680 7740 7800"
     alert_rule_test:
       - eval_time: 61m
@@ -3538,6 +3538,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3546,6 +3547,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3557,9 +3559,9 @@ tests:
     interval: 30s
     input_series:
       # The server reads each minute; the scrapes at minutes 30, 75 and 120 fail and leave stale markers.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 stale 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 stale 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 stale 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 30 60 90 120 150 180 210 240 270 300 330 360 390 420 450 480 510 540 570 600 630 660 690 720 750 780 810 840 870 900 930 960 990 1020 1050 1080 1110 1140 1170 1200 1230 1260 1290 1320 1350 1380 1410 1440 1470 1500 1530 1560 1590 1620 1650 1680 1710 1740 1770 stale 1830 1860 1890 1920 1950 1980 2010 2040 2070 2100 2130 2160 2190 2220 2250 2280 2310 2340 2370 2400 2430 2460 2490 2520 2550 2580 2610 2640 2670 2700 2730 2760 2790 2820 2850 2880 2910 2940 2970 3000 3030 3060 3090 3120 3150 3180 3210 3240 3270 3300 3330 3360 3390 3420 3450 3480 3510 3540 3570 3600 3630 3660 3690 3720 3750 3780 3810 3840 3870 3900 3930 3960 3990 4020 4050 4080 4110 4140 4170 4200 4230 4260 4290 4320 4350 4380 4410 4440 4470 stale 4530 4560 4590 4620 4650 4680 4710 4740 4770 4800 4830 4860 4890 4920 4950 4980 5010 5040 5070 5100 5130 5160 5190 5220 5250 5280 5310 5340 5370 5400 5430 5460 5490 5520 5550 5580 5610 5640 5670 5700 5730 5760 5790 5820 5850 5880 5910 5940 5970 6000 6030 6060 6090 6120 6150 6180 6210 6240 6270 6300 6330 6360 6390 6420 6450 6480 6510 6540 6570 6600 6630 6660 6690 6720 6750 6780 6810 6840 6870 6900 6930 6960 6990 7020 7050 7080 7110 7140 7170 stale 7230 7260 7290 7320 7350 7380 7410 7440 7470 7500 7530 7560 7590 7620 7650 7680 7710 7740 7770 7800"
     alert_rule_test:
       - eval_time: 61m
@@ -3567,6 +3569,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3575,6 +3578,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3586,18 +3590,18 @@ tests:
     interval: 30s
     input_series:
       # Pod a last read a low margin at minute 44 and leaves at minute 59; pod c takes its address at minute 59:30.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-a"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-a"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 stale _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-a"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-a"}'
         values: "0 30 60 90 120 150 180 210 240 270 300 330 360 390 420 450 480 510 540 570 600 630 660 690 720 750 780 810 840 870 900 930 960 990 1020 1050 1080 1110 1140 1170 1200 1230 1260 1290 1320 1350 1380 1410 1440 1470 1500 1530 1560 1590 1620 1650 1680 1710 1740 1770 1800 1830 1860 1890 1920 1950 1980 2010 2040 2070 2100 2130 2160 2190 2220 2250 2280 2310 2340 2370 2400 2430 2460 2490 2520 2550 2580 2610 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 2640 stale _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _"
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-c"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-c"}'
         values: "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-c"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="10.0.0.5:9090",pod="hephaestus-server-c"}'
         values: "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 3570 3600 3630 3660 3690 3720 3750 3780 3810 3840 3870 3900 3930 3960 3990 4020 4050 4080 4110 4140 4170 4200"
       # Pod b reads each minute and finds the backlog drained at minute 59:30.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="10.0.0.6:9090",pod="hephaestus-server-b"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="10.0.0.6:9090",pod="hephaestus-server-b"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="10.0.0.6:9090",pod="hephaestus-server-b"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="10.0.0.6:9090",pod="hephaestus-server-b"}'
         values: "0 30 60 90 120 150 180 210 240 270 300 330 360 390 420 450 480 510 540 570 600 630 660 690 720 750 780 810 840 870 900 930 960 990 1020 1050 1080 1110 1140 1170 1200 1230 1260 1290 1320 1350 1380 1410 1440 1470 1500 1530 1560 1590 1620 1650 1680 1710 1740 1770 1800 1830 1860 1890 1920 1950 1980 2010 2040 2070 2100 2130 2160 2190 2220 2250 2280 2310 2340 2370 2400 2430 2460 2490 2520 2550 2580 2610 2640 2670 2700 2730 2760 2790 2820 2850 2880 2910 2940 2970 3000 3030 3060 3090 3120 3150 3180 3210 3240 3270 3300 3330 3360 3390 3420 3450 3480 3510 3540 3570 3600 3630 3660 3690 3720 3750 3780 3810 3840 3870 3900 3930 3960 3990 4020 4050 4080 4110 4140 4170 4200"
     alert_rule_test:
       - eval_time: 60m
@@ -3611,9 +3615,9 @@ tests:
     interval: 30s
     input_series:
       # The last good read before the gap is at minute 60; reads resume at minute 75:30.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090",pod="hephaestus-server-0"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090",pod="hephaestus-server-0"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090",pod="hephaestus-server-0"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090",pod="hephaestus-server-0"}'
         values: "0 30 60 90 120 150 180 210 240 270 300 330 360 390 420 450 480 510 540 570 600 630 660 690 720 750 780 810 840 870 900 930 960 990 1020 1050 1080 1110 1140 1170 1200 1230 1260 1290 1320 1350 1380 1410 1440 1470 1500 1530 1560 1590 1620 1650 1680 1710 1740 1770 1800 1830 1860 1890 1920 1950 1980 2010 2040 2070 2100 2130 2160 2190 2220 2250 2280 2310 2340 2370 2400 2430 2460 2490 2520 2550 2580 2610 2640 2670 2700 2730 2760 2790 2820 2850 2880 2910 2940 2970 3000 3030 3060 3090 3120 3150 3180 3210 3240 3270 3300 3330 3360 3390 3420 3450 3480 3510 3540 3570 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 3600 4530 4560 4590 4620 4650 4680 4710 4740 4770 4800 4830 4860 4890 4920 4950 4980 5010 5040 5070 5100 5130 5160 5190 5220 5250 5280 5310 5340 5370 5400 5430 5460 5490 5520 5550 5580 5610 5640 5670 5700 5730 5760 5790 5820 5850 5880 5910 5940 5970 6000 6030 6060 6090 6120 6150 6180 6210 6240 6270 6300 6330 6360 6390 6420 6450 6480 6510 6540 6570 6600 6630 6660 6690 6720 6750 6780 6810 6840 6870 6900 6930 6960 6990 7020 7050 7080 7110 7140 7170 7200 7230 7260 7290 7320 7350 7380 7410 7440 7470 7500 7530 7560 7590 7620 7650 7680 7710 7740 7770 7800 7830 7860 7890 7920 7950 7980 8010 8040 8070 8100 8130 8160 8190 8220 8250 8280 8310 8340 8370 8400 8430 8460 8490 8520 8550 8580 8610 8640 8670 8700 8730 8760 8790 8820 8850 8880 8910 8940 8970 9000"
     alert_rule_test:
       - eval_time: 74m30s
@@ -3621,6 +3625,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3635,16 +3640,39 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: copies that fall behind fire the margin alert for the copy rule, while the entries are drained
+    interval: 1m
+    input_series:
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
+        values: "+Inf+0x90"
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
+        values: "0+60x90"
+      - series: 'conversation_retention_deadline_margin_seconds{rule="copies",job="hephaestus",instance="server-0:9090"}'
+        values: "500000x90"
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="copies",job="hephaestus",instance="server-0:9090"}'
+        values: "0+60x90"
+    alert_rule_test:
+      - eval_time: 61m
+        alertname: HephaestusConversationRetentionBehind
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              rule: copies
+            exp_annotations:
+              summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a backlog that drains before the hour ends stops the pending margin alert
     interval: 1m
     input_series:
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1860 1920 1980 2040 2100 2160 2220 2280 2340 2400 2460 2520 2580 2640 2700 2760 2820 2880 2940 3000 3060 3120 3180 3240 3300 3360 3420 3480 3540 3600 3660 3720 3780 3840 3900 3960 4020 4080 4140 4200 4260 4320 4380 4440 4500 4560 4620 4680 4740 4800 4860 4920 4980 5040 5100 5160 5220 5280 5340 5400"
     alert_rule_test:
       - eval_time: 60m
@@ -3658,14 +3686,14 @@ tests:
     interval: 1m
     input_series:
       # server-0 stops reading after minute 30 and keeps showing its last margin.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800 1800"
       # server-1 reads each minute and finds the backlog drained from minute 33.
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-1:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-1:9090"}'
         values: "500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 500000 +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-1:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-1:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1860 1920 1980 2040 2100 2160 2220 2280 2340 2400 2460 2520 2580 2640 2700 2760 2820 2880 2940 3000 3060 3120 3180 3240 3300 3360 3420 3480 3540 3600 3660 3720 3780 3840 3900 3960 4020 4080 4140 4200 4260 4320 4380 4440 4500 4560 4620 4680 4740 4800 4860 4920 4980 5040 5100 5160 5220 5280 5340 5400 5460 5520 5580 5640 5700 5760 5820 5880 5940 6000 6060 6120 6180 6240 6300 6360 6420 6480 6540 6600 6660 6720 6780 6840 6900 6960 7020 7080 7140 7200 7260 7320 7380 7440 7500 7560 7620 7680 7740 7800"
     alert_rule_test:
       - eval_time: 46m
@@ -3673,6 +3701,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3686,9 +3715,9 @@ tests:
   - name: a server that has read no margin for 15 minutes fires, one that reads each minute does not
     interval: 1m
     input_series:
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-1:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-1:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1860 1920 1980 2040 2100 2160 2220 2280 2340 2400"
     alert_rule_test:
       - eval_time: 14m
@@ -3699,6 +3728,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3706,13 +3736,13 @@ tests:
   - name: conversation retention under seven days of margin for an hour fires, a replica with a drained backlog does not hide it
     interval: 1m
     input_series:
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 700000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000 604000"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-0:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-0:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1860 1920 1980 2040 2100 2160 2220 2280 2340 2400 2460 2520 2580 2640 2700 2760 2820 2880 2940 3000 3060 3120 3180 3240 3300 3360 3420 3480 3540 3600 3660 3720 3780 3840 3900 3960 4020 4080 4140 4200 4260 4320 4380 4440 4500 4560 4620 4680 4740 4800 4860 4920 4980 5040 5100 5160 5220 5280 5340 5400 5460 5520 5580 5640 5700 5760 5820 5880 5940 6000"
-      - series: 'conversation_retention_deadline_margin_seconds{job="hephaestus",instance="server-1:9090"}'
+      - series: 'conversation_retention_deadline_margin_seconds{rule="entries",job="hephaestus",instance="server-1:9090"}'
         values: "+Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf +Inf"
-      - series: 'conversation_retention_margin_read_timestamp_seconds{job="hephaestus",instance="server-1:9090"}'
+      - series: 'conversation_retention_margin_read_timestamp_seconds{rule="entries",job="hephaestus",instance="server-1:9090"}'
         values: "0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140 1200 1260 1320 1380 1440 1500 1560 1620 1680 1740 1800 1860 1920 1980 2040 2100 2160 2220 2280 2340 2400 2460 2520 2580 2640 2700 2760 2820 2880 2940 3000 3060 3120 3180 3240 3300 3360 3420 3480 3540 3600 3660 3720 3780 3840 3900 3960 4020 4080 4140 4200 4260 4320 4380 4440 4500 4560 4620 4680 4740 4800 4860 4920 4980 5040 5100 5160 5220 5280 5340 5400 5460 5520 5580 5640 5700 5760 5820 5880 5940 6000"
     alert_rule_test:
       - eval_time: 60m
@@ -3723,6 +3753,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The oldest due conversation entry has less than seven days left before its retention limit
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
@@ -3730,10 +3761,10 @@ tests:
   - name: a conversation retention margin that keeps failing to refresh fires, four failures in 15 minutes do not
     interval: 1m
     input_series:
-      - series: 'conversation_retention_sampler_failures_total{job="hephaestus",instance="server-a:9090"}'
+      - series: 'conversation_retention_sampler_failures_total{rule="entries",job="hephaestus",instance="server-a:9090"}'
         values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0+1x20"
       # About four failures in 15 minutes stay below the threshold.
-      - series: 'conversation_retention_sampler_failures_total{job="hephaestus",instance="server-b:9090"}'
+      - series: 'conversation_retention_sampler_failures_total{rule="entries",job="hephaestus",instance="server-b:9090"}'
         values: "0+0.3x40"
     alert_rule_test:
       - eval_time: 15m
@@ -3744,6 +3775,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: warning
+              rule: entries
             exp_annotations:
               summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

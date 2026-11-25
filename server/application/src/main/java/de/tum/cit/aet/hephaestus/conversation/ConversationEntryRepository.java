@@ -420,17 +420,12 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
-    /** The tool results of a workspace not erased yet that can copy anyone's data, written before the cutoff. */
+    /** The tool results of a workspace not erased yet that can copy anyone's data. */
     @Query(value = """
             SELECT e.id FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND e.created_at < :cutoff AND
-            """ + COPIES_PERSON_DATA + """
-
-            ORDER BY e.created_at
-            LIMIT :limit
-            """, nativeQuery = true)
-    List<UUID> findUnredactedCopyingToolResultIdsWrittenBefore(
-            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND
+            """ + COPIES_PERSON_DATA, nativeQuery = true)
+    List<UUID> findUnredactedCopyingToolResultIds(@Param("workspaceId") long workspaceId);
 
     /** The messages of the account's conversations as the app shows them, in every workspace, oldest first. */
     @WorkspaceAgnostic("The self-service export reads the account's own messages in every workspace")
@@ -480,40 +475,39 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     }
 
     /**
-     * A page of the entries of every person older than {@code maxAgeSeconds} at the start of the database's current
-     * retention week and not erased yet, oldest first, as {@link DuePage} describes. The owner function
-     * {@code mentoring_due_work} finds them whoever owns them, and returns no content.
+     * A page of due entries, oldest first, as {@link DuePage} describes: every workspace's entries older than
+     * {@code maxAgeSeconds} at the start of the database's current retention week for the entry kinds, or one
+     * {@code workspaceId}'s copying tool results for the copy kinds. The sweep kinds ({@link DueWorkKind#ENTRY_RETENTION},
+     * {@link DueWorkKind#COPY_RETENTION}) pass over the accounts that another transaction holds; the deadline kinds read
+     * them. The owner function {@code mentoring_due_work} finds them whoever owns them, and returns no content.
      */
     @WorkspaceAgnostic("The retention sweep finds the due entries of every workspace, then erases each as its owner")
     @Query(value = """
             SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt", now() AS "readAt"
-            FROM public.mentoring_due_work(CAST(:#{#page.kind().name()} AS text), CAST(:maxAgeSeconds AS bigint),
+            FROM public.mentoring_due_work(CAST(:#{#kind.name()} AS text), CAST(:maxAgeSeconds AS bigint),
+                                           CAST(:workspaceId AS bigint),
                                            CAST(:#{#page.afterDue()} AS timestamptz), CAST(:#{#page.afterId()} AS uuid),
                                            CAST(:#{#page.skipWorkspaces()} AS bigint[]),
                                            CAST(:#{#page.skipAccounts()} AS bigint[]), :limit)
             ORDER BY due_at, id
             """, nativeQuery = true)
     List<DueEntry> findDueForRetention(
-            @Param("maxAgeSeconds") long maxAgeSeconds, @Param("page") DuePage page, @Param("limit") int limit);
+            @Param("maxAgeSeconds") long maxAgeSeconds,
+            @Param("kind") DueWorkKind kind,
+            @Param("workspaceId") @Nullable Long workspaceId,
+            @Param("page") DuePage page,
+            @Param("limit") int limit);
 
     /**
-     * Which due entries a page asks for.
+     * Where a page of due entries starts and whom it passes over.
      *
-     * @param kind {@link DueWorkKind#ENTRY_RETENTION} for a sweep page, which passes over the accounts that another
-     *     transaction holds, or {@link DueWorkKind#ENTRY_RETENTION_DEADLINE} for the deadline margin, which reads them
      * @param afterDue with {@code afterId}, the last entry of the previous page; both null for the first page
      * @param skip the people passed over, as (workspace, account)
      */
-    record DuePage(
-            DueWorkKind kind,
-            @Nullable Instant afterDue,
-            @Nullable UUID afterId,
-            List<SkippedOwner> skip) {
+    record DuePage(@Nullable Instant afterDue, @Nullable UUID afterId, List<SkippedOwner> skip) {
 
-        /** The first page of {@code kind}, passing over nobody. */
-        static DuePage first(DueWorkKind kind) {
-            return new DuePage(kind, null, null, List.of());
-        }
+        /** The first page, passing over nobody. */
+        static final DuePage FIRST = new DuePage(null, null, List.of());
 
         public Long[] skipWorkspaces() {
             return skip.stream().map(SkippedOwner::workspaceId).toArray(Long[]::new);

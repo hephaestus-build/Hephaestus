@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -57,6 +58,11 @@ class OwnerFunctionsDatabaseTest {
     private static final UUID BO_ELSEWHERE_OLD = UUID.fromString("00000000-0000-0000-0000-0000000e0004");
     private static final UUID BO_TIE = UUID.fromString("00000000-0000-0000-0000-0000000e0005");
     private static final UUID BO_REDACTED = UUID.fromString("00000000-0000-0000-0000-0000000e0006");
+    private static final UUID ADA_COPY = UUID.fromString("00000000-0000-0000-0000-0000000e0021");
+    private static final UUID ADA_OWN_TOOL = UUID.fromString("00000000-0000-0000-0000-0000000e0022");
+    private static final UUID BO_COPY = UUID.fromString("00000000-0000-0000-0000-0000000e0023");
+    private static final UUID BO_COPY_ELSEWHERE = UUID.fromString("00000000-0000-0000-0000-0000000e0024");
+    private static final UUID ADA_NEW_COPY = UUID.fromString("00000000-0000-0000-0000-0000000e0025");
 
     /**
      * Ada (11) and Bo (12, unclaimed) both have a main conversation in workspace 1, and Bo has one in workspace 2. Bo's
@@ -101,6 +107,28 @@ class OwnerFunctionsDatabaseTest {
 
     private static final TestDatabase SEEDED = seed();
 
+    /**
+     * Tool results on top of the seed. Ada's {@code read} and Bo's {@code bash} in the first workspace and Bo's
+     * {@code fetch_context} in the second are a year old and can copy anyone's data. Ada's {@code search_conversation}
+     * result is as old but quotes only her own conversation, and her {@code load_context} result is new.
+     */
+    private static final String COPIES = """
+            INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id,
+                                            account_id, payload)
+            VALUES ('00000000-0000-0000-0000-0000000e0021', '00000000-0000-0000-0000-00000000a001',
+                    now() - interval '366 days', 'TOOL_RESULT', 11, 'APP', '', 1, 11, '{"message": {"toolName": "read"}}'),
+                   ('00000000-0000-0000-0000-0000000e0022', '00000000-0000-0000-0000-00000000a001',
+                    now() - interval '366 days', 'TOOL_RESULT', 12, 'APP', '', 1, 11,
+                    '{"message": {"toolName": "search_conversation"}}'),
+                   ('00000000-0000-0000-0000-0000000e0023', '00000000-0000-0000-0000-00000000b001',
+                    now() - interval '365 days', 'TOOL_RESULT', 11, 'APP', '', 1, 12, '{"message": {"toolName": "bash"}}'),
+                   ('00000000-0000-0000-0000-0000000e0024', '00000000-0000-0000-0000-00000000b002',
+                    now() - interval '365 days', 'TOOL_RESULT', 11, 'APP', '', 2, 12,
+                    '{"message": {"toolName": "fetch_context"}}'),
+                   ('00000000-0000-0000-0000-0000000e0025', '00000000-0000-0000-0000-00000000a001',
+                    now(), 'TOOL_RESULT', 13, 'APP', '', 1, 11, '{"message": {"toolName": "load_context"}}');
+            """;
+
     private static final String REFUSAL = "needs a positive age, a limit, a whole cursor or none, and whole owners";
 
     /** The start of the database's current retention week: 03:45 UTC on the last Sunday. */
@@ -131,7 +159,7 @@ class OwnerFunctionsDatabaseTest {
                     .as("entries the application role reads itself")
                     .isZero();
             String page = "SELECT * FROM public.mentoring_due_work("
-                    + "'ENTRY_RETENTION', 2592000, ?::timestamptz, ?::uuid, '{}', '{}', 1)";
+                    + "'ENTRY_RETENTION', 2592000, NULL, ?::timestamptz, ?::uuid, '{}', '{}', 1)";
             List<Map<String, @Nullable Object>> rows = new ArrayList<>();
             @Nullable Object[] cursor = {null, null};
             for (int i = 0; i < 10; i++) {
@@ -176,7 +204,7 @@ class OwnerFunctionsDatabaseTest {
             assertThat(jdbc(connection)
                             .queryForList(
                                     "SELECT id FROM public.mentoring_due_work("
-                                            + "'ENTRY_RETENTION', 2592000, NULL, NULL, '{1, 2}', '{11, 12}', 10)",
+                                            + "'ENTRY_RETENTION', 2592000, NULL, NULL, NULL, '{1, 2}', '{11, 12}', 10)",
                                     UUID.class))
                     .as("Ada in the first workspace and Bo in the second are passed over, Bo in the first is not")
                     .containsExactly(BO_OLD);
@@ -213,7 +241,7 @@ class OwnerFunctionsDatabaseTest {
             due = jdbc(connection)
                     .queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 10)",
+                                    + "'ENTRY_RETENTION', 2592000, NULL, NULL, NULL, '{}', '{}', 10)",
                             UUID.class);
         }
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
@@ -397,7 +425,7 @@ class OwnerFunctionsDatabaseTest {
             ownerConnection.setAutoCommit(false);
             owner.update("UPDATE account SET display_name = 'Ada Lovelace' WHERE id = 11");
 
-            String page = "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, '{}', '{}', 10)";
+            String page = "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, NULL, '{}', '{}', 10)";
             assertThat(app.queryForList(page, UUID.class, DueWorkKind.ENTRY_RETENTION.name()))
                     .as("a sweep page passes over the held account")
                     .doesNotContain(ADA_OLD)
@@ -425,6 +453,9 @@ class OwnerFunctionsDatabaseTest {
             ownerConnection.commit();
 
             assertThat(dueEntries(app)).containsExactly(ADA_OLD);
+            assertThat(deadlineEntries(app))
+                    .as("the deadline margin also leaves out an account in erasure: erasure removes its entries")
+                    .containsExactly(ADA_OLD);
             assertThat(sweep(app, RowSweepRule.EXPIRED_EXPORTS, null, null)).isZero();
             owner.update("UPDATE account SET status = 'DELETED' WHERE id = 12");
             ownerConnection.commit();
@@ -470,15 +501,21 @@ class OwnerFunctionsDatabaseTest {
 
     private static List<@Nullable UUID> dueEntries(JdbcTemplate app) {
         return app.queryForList(
-                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 10)",
+                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, NULL, '{}', '{}', 10)",
+                UUID.class);
+    }
+
+    private static List<@Nullable UUID> deadlineEntries(JdbcTemplate app) {
+        return app.queryForList(
+                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION_DEADLINE', 2592000, NULL, NULL, NULL, '{}', '{}', 10)",
                 UUID.class);
     }
 
     private static List<@Nullable UUID> dueEntriesAfter(JdbcTemplate app, UUID cursor) {
         return app.queryForList("""
                 SELECT id FROM public.mentoring_due_work(
-                    'ENTRY_RETENTION', 2592000,
-                    (SELECT due_at FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, '{}', '{}', 1)),
+                    'ENTRY_RETENTION', 2592000, NULL,
+                    (SELECT due_at FROM public.mentoring_due_work('ENTRY_RETENTION', 2592000, NULL, NULL, NULL, '{}', '{}', 1)),
                     ?::uuid, '{}', '{}', 10)
                 """, UUID.class, cursor);
     }
@@ -498,7 +535,7 @@ class OwnerFunctionsDatabaseTest {
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
             JdbcTemplate app = jdbc(connection);
             assertThatThrownBy(() -> app.queryForList(
-                            "SELECT id FROM public.mentoring_due_work('SOMETHING_ELSE', 86400, NULL, NULL, '{}', '{}', 1)",
+                            "SELECT id FROM public.mentoring_due_work('SOMETHING_ELSE', 86400, NULL, NULL, NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
@@ -510,21 +547,21 @@ class OwnerFunctionsDatabaseTest {
                     .hasMessageContaining("unknown rule SOMETHING_ELSE");
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{}', '{}', NULL)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, '{}', '{}', NULL)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
                     .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, now(), NULL, '{}', '{}', 1)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, now(), NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
                     .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 0, NULL, NULL, '{}', '{}', 1)",
+                                    + "'ENTRY_RETENTION', 0, NULL, NULL, NULL, '{}', '{}', 1)",
                             UUID.class))
                     .as("an age of nothing would make every entry due")
                     .isInstanceOf(DataAccessException.class)
@@ -532,7 +569,7 @@ class OwnerFunctionsDatabaseTest {
                     .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{1}', '{}', 1)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, '{1}', '{}', 1)",
                             UUID.class))
                     .as("an owner is a workspace and an account")
                     .isInstanceOf(DataAccessException.class)
@@ -540,7 +577,7 @@ class OwnerFunctionsDatabaseTest {
                     .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{1}', '{NULL}', 1)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, '{1}', '{NULL}', 1)",
                             UUID.class))
                     .as("an owner without an account")
                     .isInstanceOf(DataAccessException.class)
@@ -548,12 +585,28 @@ class OwnerFunctionsDatabaseTest {
                     .hasMessageContaining(REFUSAL);
             assertThatThrownBy(() -> app.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, NULL, 1)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, NULL, NULL, 1)",
                             UUID.class))
                     .as("no list of owners")
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()
                     .hasMessageContaining(REFUSAL);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'COPY_RETENTION', 86400, NULL, NULL, NULL, '{}', '{}', 1)",
+                            UUID.class))
+                    .as("the copies of every workspace at one age")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("a copy kind needs its workspace");
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work("
+                                    + "'ENTRY_RETENTION', 86400, 1, NULL, NULL, '{}', '{}', 1)",
+                            UUID.class))
+                    .as("the entries of one workspace")
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("only a copy kind takes one");
         }
     }
 
@@ -561,17 +614,134 @@ class OwnerFunctionsDatabaseTest {
     @ParameterizedTest
     @EnumSource(DueWorkKind.class)
     void shouldAnswerEveryRegisteredKindThroughItsOwnBranch(DueWorkKind kind) throws SQLException {
-        List<UUID> expected = switch (kind) {
-            case ENTRY_RETENTION, ENTRY_RETENTION_DEADLINE -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+        boolean copy = switch (kind) {
+            case ENTRY_RETENTION, ENTRY_RETENTION_DEADLINE -> false;
+            case COPY_RETENTION, COPY_RETENTION_DEADLINE -> true;
         };
-        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+        TestDatabase database =
+                copy ? withCopies("hephaestus_owner_functions_" + kind.name().toLowerCase(Locale.ROOT)) : SEEDED;
+        List<UUID> expected = copy ? List.of(ADA_COPY, BO_COPY) : List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
             assertThat(jdbc(connection)
                             .queryForList(
-                                    "SELECT id FROM public.mentoring_due_work(?, 2592000, NULL, NULL, '{}', '{}', 10)",
+                                    "SELECT id FROM public.mentoring_due_work(?, 2592000, ?::bigint, NULL, NULL, '{}', '{}', 10)",
                                     UUID.class,
-                                    kind.name()))
+                                    kind.name(),
+                                    copy ? 1L : null))
                     .containsExactlyElementsOf(expected);
         }
+    }
+
+    /**
+     * A copy kind names the due tool results that can copy anyone's data in one workspace, a page at a time, without the
+     * passed-over people. A tool result that quotes the person's own conversation, or that is not due yet, is not one.
+     */
+    @Test
+    void shouldNameTheDueCopiesOfOneWorkspaceAPageAtATime() throws SQLException {
+        TestDatabase database = withCopies("hephaestus_owner_functions_copies");
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            JdbcTemplate app = jdbc(connection);
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION, 1))
+                    .doesNotContain(ADA_OWN_TOOL, ADA_NEW_COPY, BO_COPY_ELSEWHERE)
+                    .containsExactly(ADA_COPY, BO_COPY);
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION, 2)).containsExactly(BO_COPY_ELSEWHERE);
+            assertThat(app.queryForList("""
+                            SELECT id FROM public.mentoring_due_work(
+                                'COPY_RETENTION', 2592000, 1,
+                                (SELECT due_at FROM public.mentoring_due_work(
+                                    'COPY_RETENTION', 2592000, 1, NULL, NULL, '{}', '{}', 1)),
+                                ?::uuid, '{}', '{}', 10)
+                            """, UUID.class, ADA_COPY))
+                    .as("the next page starts after the cursor")
+                    .containsExactly(BO_COPY);
+            assertThat(app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work('COPY_RETENTION', 2592000, 1, NULL, NULL, '{1, 2}', '{12, 11}', 10)",
+                            UUID.class))
+                    .as("Bo in the first workspace is passed over, Ada in the second has no copy")
+                    .containsExactly(ADA_COPY);
+        }
+    }
+
+    /**
+     * A copy page passes over an account that a short write holds, and the copy deadline still sees it. Neither names
+     * the copies of an account in erasure: erasure removes them.
+     */
+    @Test
+    void shouldLeaveTheCopiesOfAnAccountInErasureToTheErasure() throws SQLException {
+        TestDatabase database = withCopies("hephaestus_owner_functions_copies_erasure");
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            JdbcTemplate owner = jdbc(ownerConnection);
+            JdbcTemplate app = jdbc(appConnection);
+            ownerConnection.setAutoCommit(false);
+            owner.update("UPDATE account SET display_name = 'Ada Lovelace' WHERE id = 11");
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION, 1))
+                    .as("a sweep page passes over the held account")
+                    .containsExactly(BO_COPY);
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION_DEADLINE, 1))
+                    .as("the deadline margin reads it")
+                    .containsExactly(ADA_COPY, BO_COPY);
+            ownerConnection.rollback();
+
+            owner.update("UPDATE account SET status = 'DELETING', deleted_at = now() WHERE id = 12");
+            ownerConnection.commit();
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION, 1)).containsExactly(ADA_COPY);
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION_DEADLINE, 1)).containsExactly(ADA_COPY);
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION, 2)).isEmpty();
+            assertThat(copies(app, DueWorkKind.COPY_RETENTION_DEADLINE, 2)).isEmpty();
+        }
+    }
+
+    /**
+     * The copy kinds test the tool results with the repository's own predicate, word for word, and the partial index
+     * on that predicate serves a workspace's page in order.
+     */
+    @Test
+    void shouldServeACopyPageFromItsIndexWithTheRepositoryPredicate() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(SEEDED))) {
+            JdbcTemplate owner = jdbc(connection);
+            String source = Objects.requireNonNull(owner.queryForObject(
+                    "SELECT prosrc FROM pg_proc WHERE proname = 'mentoring_due_work' AND pronamespace = 'public'::regnamespace",
+                    String.class));
+            assertThat(source.split(Pattern.quote(ConversationEntryRepository.COPIES_PERSON_DATA), -1))
+                    .as("each copy query tests the repository predicate")
+                    .hasSize(4);
+
+            connection.setAutoCommit(false);
+            try {
+                owner.execute("SET LOCAL enable_seqscan = off");
+                String plan = String.join(
+                        "\n",
+                        owner.queryForList("""
+                        EXPLAIN SELECT e.id FROM public.conversation_entry e
+                        WHERE e.workspace_id = 1 AND e.redacted_at IS NULL AND e.created_at < now() AND
+                        """ + ConversationEntryRepository.COPIES_PERSON_DATA + """
+
+                        ORDER BY e.created_at, e.id LIMIT 500
+                        """, String.class));
+                assertThat(plan)
+                        .contains("ix_conversation_entry_unredacted_copies")
+                        .doesNotContain("Sort");
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    private static TestDatabase withCopies(String name) throws SQLException {
+        TestDatabase database = TestDatabaseCleanup.copyDatabase(name, SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(connection).execute(COPIES);
+        }
+        return database;
+    }
+
+    private static List<@Nullable UUID> copies(JdbcTemplate app, DueWorkKind kind, long workspaceId) {
+        return app.queryForList(
+                "SELECT id FROM public.mentoring_due_work(?, 2592000, ?, NULL, NULL, '{}', '{}', 10)",
+                UUID.class,
+                kind.name(),
+                workspaceId);
     }
 
     /**
@@ -778,7 +948,7 @@ class OwnerFunctionsDatabaseTest {
             stranger.execute("SET ROLE owner_function_stranger");
             assertThatThrownBy(() -> stranger.queryForList(
                             "SELECT id FROM public.mentoring_due_work("
-                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, '{}', '{}', 1)",
+                                    + "'ENTRY_RETENTION', 86400, NULL, NULL, NULL, '{}', '{}', 1)",
                             UUID.class))
                     .isInstanceOf(DataAccessException.class)
                     .rootCause()

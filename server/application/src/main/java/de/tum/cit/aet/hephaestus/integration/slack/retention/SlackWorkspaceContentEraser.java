@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
-import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -46,7 +45,7 @@ public class SlackWorkspaceContentEraser {
         slackMonitoredChannelRepository.deleteByWorkspaceId(workspaceId);
         conversationEntries.redactSlackEntries(workspaceId);
         // The tool results that could have copied a channel message go with the messages they copied.
-        conversationEntries.redactCopyingToolResultsWrittenBefore(workspaceId, Instant.now(), Integer.MAX_VALUE);
+        conversationEntries.redactCopyingToolResults(workspaceId);
         conversations.clearSlackIdentities(workspaceId);
         slackParticipantConsentRepository.deleteByWorkspaceId(workspaceId);
     }

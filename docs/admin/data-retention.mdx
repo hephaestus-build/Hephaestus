@@ -73,7 +73,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Raw proof of scans | 400 days after the scan ends | `HEPHAESTUS_FEEDBACK_RETENTION` (Helm `config.feedbackRetention`) | The same job |
 | LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
 | Conversations with Hephaestus: messages, answers, digests and summaries | 400 days after each entry is written, erased in the two weeks before. At least 15 days. | `HEPHAESTUS_FEEDBACK_RETENTION` (Helm `config.feedbackRetention`) | A server job every 15 minutes. The entries due grow once a week, at 03:45 UTC every Sunday. Also workspace purge, person erasure, or Slack disconnection |
-| Tool results in conversations that can copy another source | The Slack retention of the workspace, 30 days by default, erased in the two weeks before, while a Slack connection exists. Otherwise, as the conversation. | None | A server job at 03:40 every Sunday. Slack disconnection erases all of them |
+| Tool results in conversations that can copy another source | The Slack retention of the workspace, 30 days by default, erased in the two weeks before, while a Slack connection exists. Otherwise, as the conversation. | None | The conversation copy retention job, every 15 minutes. The tool results due grow once a week, at 03:45 UTC every Sunday. Slack disconnection erases all of them |
 | Slack messages and threads | 30 days for each connection, at most 180 days. A message deleted in Slack goes earlier, as [Messages deleted or edited in Slack](#messages-deleted-or-edited-in-slack) says. | None | A server job at 03:30 every day |
 | Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `hephaestus.integration.outline.cache.max-size-mb` | Outline sync |
 | GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |
@@ -159,7 +159,10 @@ A run starts no new work after 10 minutes.
 Thus, a large backlog usually goes within hours.
 If the erasure of one person's entries fails, the job continues with the other people.
 It tries that person again after everyone else.
-A weekly run erases at most 20,000 tool results for each workspace, and a larger backlog takes more weeks.
+
+A second job, the conversation copy retention, runs every 15 minutes in the same way. It erases the tool results that can copy another source at the Slack retention.
+Each run erases up to 20,000 of them, the tool results nearest their limit first, in all workspaces together.
+If the tool results of one workspace cannot be read, the run continues with the other workspaces.
 
 ## Logs and traces
 

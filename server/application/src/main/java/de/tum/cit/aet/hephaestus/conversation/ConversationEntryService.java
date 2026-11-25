@@ -249,17 +249,13 @@ public class ConversationEntryService {
     }
 
     /**
-     * Erases up to {@code limit} tool results of a workspace written before the cutoff that can copy anyone's data
-     * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them. No record says which source a
-     * result copied, so each one goes with the shortest retention of a source that it could have read.
-     *
-     * @return how many tool results it erased
+     * Erases every tool result of a workspace that can copy anyone's data
+     * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them, when a source that they could
+     * have read leaves the workspace. No record says which source a result copied.
      */
     @Transactional
-    public int redactCopyingToolResultsWrittenBefore(long workspaceId, Instant cutoff, int limit) {
-        List<UUID> ids = entries.findUnredactedCopyingToolResultIdsWrittenBefore(workspaceId, cutoff, limit);
-        redaction.redact(ids);
-        return ids.size();
+    public void redactCopyingToolResults(long workspaceId) {
+        redaction.redact(entries.findUnredactedCopyingToolResultIds(workspaceId));
     }
 
     /** Full-text search over a conversation tree ({@link ConversationEntryRepository#searchByWorkspaceId}). */

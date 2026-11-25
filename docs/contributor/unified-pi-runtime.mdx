@@ -337,15 +337,26 @@ It uses the same sandbox runner, admission and epoch fence as a requested answer
 The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.
 
-`ConversationRetentionSweeper` (server role, every 15 minutes) and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `ConversationRedaction`.
-They erase an entry up to two weeks before its limit, so a short outage keeps the limit.
-The first erases every entry that reaches `hephaestus.feedback-retention`, the window that feedback and results share.
-The second erases each tool result of `COPIES_PERSON_DATA` that reaches the Slack retention, because no record says which source it copied.
+`ConversationRetentionSweeper` (server role, every 15 minutes) erases entries through `ConversationRedaction`, by two rules with one sweep.
+It erases an entry up to two weeks before its limit, so a short outage keeps the limit.
+The `entries` rule erases every entry that reaches `hephaestus.feedback-retention`, the window that feedback and results share.
+The `copies` rule erases each tool result of `COPIES_PERSON_DATA` at the shortest retention of a source in its workspace.
+No record says which source a tool result copied.
+Each such source declares its retention by workspace as a `CopyingSourceRetention`: today Slack, through `SlackRetentionSweeper`.
+
 An erased entry erases each summary that covers it, and coverage starts at the first entry of a conversation.
 Thus a long conversation loses its summary after each run and pays for one compaction on its next turn.
-
 Entries become due once a week, so that this cost comes about once a week.
-`mentoring_due_work` decides by the database clock which entries are due: those older than the retention less two weeks at 03:45 UTC on the last Sunday.
+The database clock decides which entries are due.
+An entry is due when it is older than its limit less two weeks at 03:45 UTC on the last Sunday.
+
+`mentoring_due_work` names the due entries of both rules.
+The `entries` kinds read every workspace at one age.
+The `copies` kinds read one workspace at its own age, through a partial index on the copies of each workspace.
+The sweep merges the pages of the workspaces by when each copy reaches its limit, then in the `uuid` order of PostgreSQL.
+A workspace whose copies cannot be read is passed over for the rest of the run, and the run is `incomplete`.
+Both read only accounts outside erasure, and a sweep page skips an account that another transaction holds.
+
 Each run of `ConversationRetentionSweeper` reads a bounded number of pages and starts no new work after 10 minutes.
 An erased entry is no longer due, so a crash or another replica starts again at the oldest entry still due.
 A person whose erasure fails is passed over for the rest of the run.

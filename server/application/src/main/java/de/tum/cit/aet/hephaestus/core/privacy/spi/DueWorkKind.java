@@ -18,5 +18,18 @@ public enum DueWorkKind {
      * KR-08: the same conversation entries as {@link #ENTRY_RETENTION}, read without locking an account, for the
      * retention deadline margin. Reads {@code conversation_entry}, {@code account}.
      */
-    ENTRY_RETENTION_DEADLINE
+    ENTRY_RETENTION_DEADLINE,
+
+    /**
+     * KR-08: the conversation tool results of one workspace that can copy anyone's data, of accounts outside erasure,
+     * written before the cutoff of that workspace's shortest copying-source retention and not erased yet. A page skips
+     * the accounts that another transaction holds locked. Reads {@code conversation_entry}, {@code account}.
+     */
+    COPY_RETENTION,
+
+    /**
+     * KR-08: the same tool results as {@link #COPY_RETENTION}, read without locking an account, for the copy deadline
+     * margin. Reads {@code conversation_entry}, {@code account}.
+     */
+    COPY_RETENTION_DEADLINE
 }
