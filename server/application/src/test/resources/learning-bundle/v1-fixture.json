@@ -1,0 +1,91 @@
+{
+	"format": "hephaestus.learning-bundle",
+	"formatVersion": 1,
+	"bundleId": "6f1c2a9e-0b7d-4c3e-9a51-2d8f4e6b7c10",
+	"instanceId": "0c9e8d7f-6a5b-4c3d-8e2f-1a0b9c8d7e6f",
+	"generatedAt": "2026-11-24T21:30:00Z",
+	"records": [
+		{
+			"portableId": "b2f4c6d8-1a3e-4f5b-9c7d-0e2a4c6e8f01",
+			"revision": 3,
+			"kind": "LESSON",
+			"state": "ACTIVE",
+			"authorKind": "WRITTEN",
+			"text": "I split a large change into commits that each build on their own.",
+			"practiceKeys": [
+				"software-engineering/atomic-commits"
+			],
+			"goalIds": [
+				"c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02"
+			],
+			"createdAt": "2026-09-02T08:15:00Z",
+			"revisedAt": "2026-11-20T16:42:10.123Z"
+		},
+		{
+			"portableId": "c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02",
+			"revision": 2,
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "1d2c3b4a-5f6e-4d7c-9b8a-0f1e2d3c4b5a"
+			},
+			"kind": "GOAL",
+			"state": "CLOSED",
+			"closeReason": "ACHIEVED",
+			"authorKind": "CONFIRMED",
+			"text": "Write a test that fails before each bug fix.",
+			"practiceKeys": [],
+			"goalIds": [],
+			"helpPreference": "HINT",
+			"createdAt": "2026-10-01T10:00:00Z",
+			"revisedAt": "2026-11-02T10:00:00Z"
+		}
+	],
+	"growthPoints": [
+		{
+			"portableId": "d4b6f8a0-3c5e-4b7d-9f1a-2c4e6a8b0d03",
+			"revision": 1,
+			"practiceKey": "software-engineering/atomic-commits",
+			"outcome": "MET",
+			"madeBy": "REVIEW",
+			"occurredWeek": "2026-W47"
+		},
+		{
+			"portableId": "e5c7a9b1-4d6f-4c8e-8a2b-3d5f7b9c1e04",
+			"revision": 2,
+			"practiceKey": "software-engineering/descriptive-pull-requests",
+			"outcome": "NOT_MET",
+			"madeBy": "SELF_REPORT",
+			"occurredWeek": "2026-W01"
+		},
+		{
+			"portableId": "a7e9c1d3-6f8b-4e0a-8c4d-5f7b9d1e3a06",
+			"revision": 1,
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "2e3d4c5b-6a7f-4e8d-8c9b-1a2f3e4d5c6b"
+			},
+			"practiceKey": "software-engineering/atomic-commits",
+			"outcome": "MET",
+			"madeBy": "IMPORT",
+			"occurredWeek": "2025-W12"
+		}
+	],
+	"tombstones": [
+		{
+			"itemType": "RECORD",
+			"reason": "DELETED",
+			"portableId": "f6d8b0c2-5e7a-4d9f-9b3c-4e6a8c0d2f05",
+			"revision": 2
+		},
+		{
+			"itemType": "GROWTH_POINT",
+			"reason": "WITHDRAWN",
+			"portableId": "08f0d2e4-7a9c-4b1d-9e5f-6a8c0e2f4b07",
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "3f4e5d6c-7b8a-4f9e-9d0c-2b3a4f5e6d7c"
+			},
+			"revision": 4
+		}
+	]
+}
