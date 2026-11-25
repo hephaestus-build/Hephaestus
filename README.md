@@ -23,8 +23,8 @@
 
 Hephaestus is an AI mentor for software engineering practices.
 It reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose.
-When your work gives it grounds, it tells you what to improve and why, at the exact place, and names a next step.
-When it does not, it stays silent or says that it could not check.
+When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step.
+An observation can say when the evidence could not settle a question.
 You can talk it through, ask for an example, or disagree, in the app or in Slack.
 
 Hephaestus is software, and it can be wrong.
@@ -58,35 +58,36 @@ Hephaestus is built to help you grow, not to grade you.
 It is not designed to grade, appraise or rank people, or to set allocation or pay ([Intended purpose](./docs/admin/intended-purpose.mdx)).
 
 - Your feedback has no score, grade or rank.
-- Your Practice profile is yours.
+- Your Practice profile shows your own feedback.
   Workspace admins see practice results, each linked to the work it is about.
   They see that your feedback exists, not what it says.
-  They see no names unless a workspace owner turns that on.
-  The setting is off by default, and each change is recorded.
+  They can see who private feedback and results are about if a workspace owner turns on per-person results for admins.
+  Links to the work can still identify you when names are hidden.
+  The setting is off for new workspaces, and each change is recorded.
 - No workspace admin page shows your conversation with Hephaestus.
+  An instance admin can include it in an audited export of your data.
 - Feedback on the work is visible to everyone who can see that work, like any review comment.
 
-[Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) lists every reader, including the audited support access of instance admins.
+[Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) explains who can read your data, including the audited support access of instance admins.
 
 ## Features
 
 - **Practices Your Team Chose**: Start from the catalog or write your own.
   Each practice states what good work looks like.
   The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
-  For each practice, feedback is Off, waits for a workspace admin's approval, or goes out automatically.
-- **Feedback on the Work**: A note on the pull request, merge request, or issue while it is still open.
-  It cites the exact place, says why, and names a next step.
-  When a later review shows that you fixed every problem a line note named, Hephaestus resolves its thread.
+  For each practice, feedback can be off. Feedback on the work can wait for a workspace admin's approval or go out automatically.
+- **Feedback on the Work**: A note on the pull request, merge request, or issue. By default, it posts only while the work is open.
+  It points to the evidence, says why, and suggests a next step.
+  When a later review shows that you fixed every problem a line note named, Hephaestus can resolve its thread.
   Work drafted with a coding agent gets the same feedback.
-- **Speaks Only With Evidence**: When the evidence does not support a point, Hephaestus says nothing.
-  When it could not check a practice, it says so.
-  It never turns a missing check into a claim about your work.
-- **Practice Profile**: Your private page for each practice: patterns across your work, what is going well, and where you stand.
+- **Feedback Grounded in Your Work**: A review checks its evidence before feedback can go out.
+  If it cannot capture the evidence it needs, it records no observation for that practice.
+- **Practice Profile**: See patterns across your work, what is going well, and where you stand on each practice.
   No score, grade, or rank.
 - **Ask Hephaestus**: Ask why, ask for an example, or disagree, in the web app or in a Slack direct message.
-  A weekly digest you can turn on arrives there too.
+  You can turn on a weekly digest in your conversation in the app.
 - **Your Stack**: Works with GitHub, GitLab, Slack, and Outline.
-  Your own model provider: OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint.
+  Connect OpenAI, Azure OpenAI, Anthropic, or another provider that supports the required API.
   Helm on your Kubernetes.
   Each member chooses which models may handle their work: **In-house**, **Cloud**, or **No AI**.
 

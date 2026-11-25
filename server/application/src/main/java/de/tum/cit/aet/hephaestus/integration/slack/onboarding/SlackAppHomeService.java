@@ -185,7 +185,7 @@ public class SlackAppHomeService {
                 section(
                         s -> s.text(
                                 markdownText(
-                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. It replies only in your direct messages."))));
+                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. In Slack, Hephaestus replies in direct messages. You can also read those replies in the app."))));
     }
 
     record HomeOverviewState(
@@ -220,7 +220,7 @@ public class SlackAppHomeService {
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return "*Get better at the work you already do.* Hephaestus is an AI mentor for software engineering practices. In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. The replies stay in DMs.";
+        return "*Get better at the work you already do.* Hephaestus is an AI mentor for software engineering practices. In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. Hephaestus replies in Slack direct messages, and you can also read the replies in the app.";
     }
 
     private static String stateIcon(boolean ok) {

@@ -8,7 +8,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: Hephaestus is an AI mentor for software engineering practices. In private DMs, it answers about your practice feedback and recent work.
+    agent_description: Hephaestus is an AI mentor for software engineering practices. In direct messages, it answers about your practice feedback and recent work.
     suggested_prompts:
       - title: What needs attention?
         message: What software project practice should I focus on next?

@@ -54,21 +54,20 @@ An admin is a workspace admin or an instance admin, as [Two kinds of admin](#two
 
 </SystemDiagram>
 
-GitHub or GitLab is required: it supplies the work and the sign-in.
+Configure GitHub or GitLab for sign-in. Connect a source separately to supply work for review.
 Slack, Outline and email are optional.
-A model provider is required for reviews and conversations. Only Hephaestus holds its key.
+A model provider is required for reviews and conversations. The server keeps the provider key out of the sandbox.
 
 One application image runs the server.
 PostgreSQL stores the data of the deployment, including the provider events that wait for processing.
 A Gateway API controller in front of the release handles TLS.
-The server starts a sandboxed container in a separate namespace for each practice review.
-It does not keep that container between reviews.
+With sandboxes enabled, the server runs practice reviews in sandboxed containers in a separate namespace.
 [What the chart runs](./helm-chart#what-the-chart-runs) shows each Pod, its storage and its network policies.
 
 ## Two kinds of admin
 
-- **Instance admin** — operates the whole deployment. This includes AI providers, instance-wide settings, and the practice catalog that workspaces can adopt from.
-- **Workspace admin** — configures one workspace. This includes its repositories, practices, members, AI model, and cap on AI spend.
+- **Instance admin** — configures the instance. This includes AI providers, instance-wide settings, and the practice catalog that workspaces can adopt from.
+- **Workspace admin** — configures one workspace. This includes its repositories, practices, members, and AI models. If the workspace uses its own AI provider, the admin can set its monthly cap.
 
 A person can be both.
 [Instance administration](./instance-admin) covers the operator console.
@@ -81,7 +80,7 @@ A person can be both.
 2. Connect a source of repository activity: [GitHub](./github-integration) or [GitLab](./connect-gitlab).
    [Connect Slack](./connect-slack), [Connect Outline](./connect-outline) and [Set up email](./set-up-email) cover the other integrations.
 3. [Connect an AI provider](./ai-providers) with a supported API.
-4. [Set a cap on AI spend](./instance-admin#usage) for each workspace.
+4. Optional: [set a budget for shared models](./instance-admin#usage) for each workspace.
 5. [Choose practices](./practice-catalog) for the instance to include and the workspace to adopt.
    [Practice reviews and feedback mode](/user/practice-reviews) explains how a review runs.
    [Scans](/user/scans) explains default-branch review and SARIF export.

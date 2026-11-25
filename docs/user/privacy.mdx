@@ -19,7 +19,7 @@ If the notice or the contact is missing, ask the organization that runs your ins
 | Practice profile and its feedback | No | That feedback exists and its delivery state, not its text. They see whom it is about only if the workspace turned on **Per-person results for admins**. | Read-only view, with a recorded reason | No |
 | Practice observations | Only inside unnamed counts | With your name only if the workspace turned on **Per-person results for admins**. Otherwise with no name, but each result still shows the work it is about. | Read-only view, with a recorded reason. In a workspace that they open as an admin, the same as workspace admins. | No |
 | Your answers to feedback | No | Your current answer and the reason for a current **Disagree**. Not your rating or other notes. | Read-only view, with a recorded reason | No |
-| Your conversation with Hephaestus | No | No | No | No |
+| Your conversation with Hephaestus | No | No | Can include it in an audited person-data export | No |
 | Activity: your work in workspace repositories | Yes | Yes | Yes | Only if you choose to show on a public activity page |
 | Feedback posted on GitHub or GitLab | Everyone who can see that work | The same | The same | The same |
 
@@ -33,14 +33,14 @@ If the notice or the contact is missing, ask the organization that runs your ins
   They cannot filter them by person.
   Each result still shows the work it is about, and GitHub or GitLab shows who wrote that work.
   Feedback on the work still names you.
-  Hephaestus posts it to you on your work, and an admin approves it.
+  In **Approve first** mode, a workspace admin approves it before Hephaestus posts it.
   A workspace owner can turn the setting on, and the change is recorded.
   It then applies to earlier results too.
   Any workspace admin can turn it off.
   On your [Practice profile](./practice-profile), **Who can see this page** says whether the setting is on in your workspace.
   [Set up your workspace](./workspace#choose-whether-admins-see-results-per-person) gives the steps.
   A workspace that ran practice reviews before this setting existed keeps it on.
-- **Instance admins** read your private data only through **View as user**, also before your first sign-in. Each view records a reason. The view cannot act for you. Workspace admins do not have this access.
+- **Instance admins** can open permitted pages in a read-only support view, also before your first sign-in. Each view records a reason. Workspace admins do not have this access. Instance admins can also download an audited person-data export.
 - **Instance admins who are not members** can open any workspace as a workspace admin, never as its owner. Hephaestus records that they did. Instance admins also read your product feedback reports.
 - **Your instance operator** can reach stored data to run the instance and to answer privacy requests.
 - **A public activity page** shows only work in public repositories, and only for people who chose to show. [Public activity page](./public-activity) explains the choice.
@@ -168,7 +168,7 @@ The privacy contact handles requests for the records that the export leaves out:
 - Product feedback reports.
 - Other kept copies.
 
-An instance admin can then give you these records as one JSON file, without credentials or other people’s profiles.
+An instance admin can then give you these records as one JSON file, without credentials or other people’s profiles. This audited export can include your conversation.
 
 ## Delete your account or request wider erasure
 

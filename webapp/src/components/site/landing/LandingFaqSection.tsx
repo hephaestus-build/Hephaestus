@@ -9,7 +9,7 @@ const faqItems = [
 	{
 		key: "ai-mentor",
 		q: "What does an AI mentor do?",
-		a: "It gives one part of mentoring: feedback on how you apply engineering practices in your real work. Hephaestus checks your work against the practices your team chose. When your work gives it grounds, it says what to improve and why, and names a next step. When it does not, it stays silent or says that it could not check. It is software, not a person. It adds to your reviewers and mentors, and it can be wrong.",
+		a: "It gives one part of mentoring: feedback on how you apply engineering practices in your real work. Hephaestus checks your work against the practices your team chose. When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step. An observation can say when the evidence could not settle a question. It is software, not a person. It adds to your reviewers and mentors, and it can be wrong.",
 	},
 	{
 		key: "practice-feedback",
@@ -24,22 +24,22 @@ const faqItems = [
 	{
 		key: "feedback-location",
 		q: "Where does feedback appear?",
-		a: "It can appear on the work itself, on each developer’s private practice page, or in your next conversation with Hephaestus. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+		a: "It can appear on the work itself, on your Practice profile, or in a conversation with Hephaestus. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
 	},
 	{
 		key: "who-sees-feedback",
 		q: "Who sees my feedback?",
-		a: "Your feedback has no score, grade or rank. Workspace admins see practice results, each linked to the work it is about, and that feedback on your Practice profile exists, not what it says. They see no names unless a workspace owner turns that on, and each change is recorded. No workspace admin page shows your conversation with Hephaestus. Feedback on the work is visible to everyone who can see that work, like any review comment.",
+		a: "Your feedback has no score, grade or rank. Workspace admins see practice results, each linked to the work it is about, and that feedback on your Practice profile exists, not what it says. A workspace owner can let admins see who these records are about. Hephaestus records each change. Links to the work can still identify you when the setting is off. No workspace admin page shows your conversation with Hephaestus. An instance admin can include it in an audited export of your data. Feedback on the work is visible to everyone who can see that work, like any review comment.",
 	},
 	{
 		key: "conversation",
 		q: "What can I ask Hephaestus?",
-		a: "Why a suggestion matters, or for an example. You can also add context Hephaestus missed, or disagree. Hephaestus draws on your recent project activity, the feedback you have received, and selected Outline documents. Slack channel messages are used only when you allow it.",
+		a: "Why a suggestion matters, or for an example. You can also add context Hephaestus missed, or disagree. Hephaestus draws on your recent project activity, the feedback you have received, and selected Outline documents. Hephaestus can use new messages in monitored Slack channels, and you can turn off use of your channel messages.",
 	},
 	{
 		key: "project-data",
 		q: "What project data can Hephaestus use?",
-		a: "Only what workspace admins connect: specific repositories, and optionally selected Slack channels and Outline collections. Each member chooses In-house, Cloud or No AI for their work across their workspaces. That choice limits which configured models can process their work. Slack channel messages are used only with the member’s permission. Check the privacy information published by your instance operator for provider terms.",
+		a: "Workspace admins choose which repositories, Slack channels, and Outline collections to connect. Each member chooses In-house, Cloud or No AI for their work across their workspaces. That choice limits which configured models can process their work. You can turn off use of your Slack channel messages. Check the privacy information published by your instance operator for provider terms.",
 	},
 	{
 		key: "ai-limitations",
@@ -49,7 +49,7 @@ const faqItems = [
 	{
 		key: "cost",
 		q: "What does it cost?",
-		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin sets each workspace’s monthly cap for shared models. The workspace admin sets the cap for the workspace’s own provider.",
+		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin can set a monthly budget for shared models in each workspace. The workspace admin can set a cap for the workspace’s own provider.",
 	},
 	{
 		key: "access",
