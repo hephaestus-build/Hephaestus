@@ -337,6 +337,8 @@ class OwnerFunctionsDatabaseTest {
                 long space;
                 try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
                     JdbcTemplate owner = jdbc(connection);
+                    // The seed writes its workspaces with fixed ids, so the sequence starts past them.
+                    owner.execute("SELECT setval(pg_get_serial_sequence('workspace', 'id'), 100)");
                     space = PersonalSpaceFixtures.insert(owner, 13);
                     owner.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", space);
                     owner.update(
@@ -356,12 +358,10 @@ class OwnerFunctionsDatabaseTest {
                 // One call expires at most a batch, and an account in erasure keeps its export for the erasure.
                 try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
                     jdbc(connection).execute("""
-                            BEGIN;
-                            SELECT pg_advisory_xact_lock(hashtext('account-export-sources'), hashtext('13') & 63);
-                            INSERT INTO account_export (account_id, status, expires_at, payload)
-                            SELECT 13, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second', '\\x01'
+                            INSERT INTO account_export (id, account_id, status, expires_at, payload)
+                            SELECT 100 + n, 13, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second',
+                                   '\\x01'
                             FROM generate_series(1, 101) n;
-                            COMMIT;
                             UPDATE account SET status = 'DELETING' WHERE id = 12;
                             """);
                 }
