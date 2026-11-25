@@ -13,6 +13,7 @@ import { createServer as createHttpsServer, request as httpsRequest } from "node
 import nodePath from "node:path";
 import process from "node:process";
 
+import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import {
 	PLANTED_SOURCE,
 	PROVIDER_HOSTS,
@@ -49,7 +50,11 @@ function answerOf(host: string, path: string): string {
 }
 
 function openssl(directory: string, ...args: string[]): void {
-	const result = spawnSync("openssl", args, { cwd: directory, encoding: "utf8" });
+	const result = spawnSync("openssl", args, {
+		cwd: directory,
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+	});
 	if (result.status !== 0) {
 		throw new Error(`openssl ${args[0] ?? ""} failed:\n${result.stdout}${result.stderr}`);
 	}
