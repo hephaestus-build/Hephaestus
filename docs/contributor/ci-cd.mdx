@@ -1182,9 +1182,11 @@ Locally, these commands run the queue tier's suites:
 **Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
 groups in the last 14 days in which a queue-tier job failed.
 These jobs are the browser suites and the drills, which a server pull request can skip.
-A shard or database failure in a merge group counts with the fast tier.
-The pull request ran those suites, so the cause is the merged result or a flaky test.
 The report gives no share for fewer than 20 groups.
+
+A shard or database failure in a merge group counts with the fast tier.
+The pull request ran those suites, unless it was a stack layer in the light tier.
+So the cause is the merged result, a flaky test or such a layer.
 
 If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
 should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
