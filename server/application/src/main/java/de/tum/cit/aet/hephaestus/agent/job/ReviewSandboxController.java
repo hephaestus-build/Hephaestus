@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
@@ -61,14 +60,14 @@ public class ReviewSandboxController {
     @ReadsContext
     public Capabilities capabilities(SandboxRun run) {
         current(run);
-        return new Capabilities(3, session(run).inputBytes(), SandboxOutputArchive.MAX_OUTPUT_BYTES);
+        return new Capabilities(3, reviews.session(run).inputBytes(), SandboxOutputArchive.MAX_OUTPUT_BYTES);
     }
 
     @GetMapping("/workspace")
     @ReadsContext
     public void workspace(SandboxRun run, HttpServletResponse response) throws IOException {
         current(run);
-        var session = session(run);
+        var session = reviews.session(run);
         // Preparing the archive can wait: it is served only while the run's authority still holds.
         authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
         try (var input = session.download()) {
@@ -100,11 +99,6 @@ public class ReviewSandboxController {
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid result archive", exception);
         }
-    }
-
-    /** The attempt's session: its lookup ends a run whose authority narrowed while it was prepared. */
-    private SandboxGatewaySessions.Session session(SandboxRun run) {
-        return reviews.session(run);
     }
 
     private void current(SandboxRun run) {

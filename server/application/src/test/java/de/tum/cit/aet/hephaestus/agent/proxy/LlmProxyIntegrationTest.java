@@ -51,6 +51,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportRunFixture;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -192,6 +193,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private AgentRuns agentRuns;
+
+    @Autowired
+    private AgentRunAuthority runAuthority;
 
     @Autowired
     private ConversationTurnAccess turnAccess;
@@ -1395,6 +1399,52 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldRefuseAReviewsModelCallBeforeItLeavesWhenTheWorkspacesAuthorityNarrowed() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            // A narrowing after the review was requested, such as a member who left the workspace.
+            jdbc.update(
+                    "UPDATE workspace SET authority_generation = authority_generation + 1 WHERE id = ?",
+                    workspace.getId());
+            var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
+            request.setRemoteAddr("127.0.0.1");
+            request.addHeader("Authorization", "Bearer " + tokenFor(job));
+            var response = new MockHttpServletResponse();
+            byte[] body =
+                    "{\"model\":\"any\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}"
+                            .getBytes(StandardCharsets.UTF_8);
+            var service = proxyService();
+            AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
+
+            filter.doFilter(
+                    request,
+                    response,
+                    (filtered, ignored) -> served.set(service.proxy(request, response, new HttpHeaders(), body)));
+
+            var refused = Objects.requireNonNull(served.get());
+            assertThat(refused.getStatusCode().value()).isEqualTo(409);
+            assertThat(refused.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
+                    .isEqualTo(ProxyRefusal.AUTHORITY_CHANGED.name());
+            assertThat(refused.getBody()).isEqualTo(JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+            assertThat(upstream.getRequestCount()).isZero();
+            assertThat(jdbc.queryForObject(
+                            "SELECT state || '/' || stop_reason FROM agent_run WHERE id = ? AND workspace_id = ?",
+                            String.class,
+                            job.getRunId(),
+                            workspace.getId()))
+                    .isEqualTo("ENDED/AUTHORITY_CHANGED");
+            assertThat(meterRegistry
+                            .get(AgentMetrics.LLM_PROXY_REFUSED)
+                            .tag("refusal", "authority_changed")
+                            .counter()
+                            .count())
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
     void shouldRecordThePracticeThatTheSandboxNamesOnlyWhenTheJobMeasuresIt() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
@@ -1736,7 +1786,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
-                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls, modelResolver),
+                        jobRepository,
+                        turnAccess,
+                        objectMapper,
+                        reviewSnapshots,
+                        agentRuns,
+                        draftCalls,
+                        modelResolver,
+                        runAuthority),
                 new ProxyCallsInFlight(12),
                 health,
                 capacity,
@@ -1806,7 +1863,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
         return new ProxyRoutingService(
-                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls, modelResolver)
+                        jobRepository,
+                        turnAccess,
+                        objectMapper,
+                        reviewSnapshots,
+                        agentRuns,
+                        draftCalls,
+                        modelResolver,
+                        runAuthority)
                 .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 

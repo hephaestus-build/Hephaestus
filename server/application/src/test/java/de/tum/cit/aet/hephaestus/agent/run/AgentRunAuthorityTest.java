@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -46,6 +47,26 @@ class AgentRunAuthorityTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> authority.check(FENCE, AuthorityBoundary.CONTEXT_READ))
                 .isInstanceOf(AuthorityRefusedException.class);
+        verifyNoInteractions(transactions, handler);
+        verify(runs, never()).end(any(), any());
+    }
+
+    @Test
+    void shouldLeaveTheRefusalAsTheAnswerWhenAFurtherRecheckAlreadyEndedTheRun() {
+        var runs = mock(AgentRuns.class);
+        var run = mock(AgentRun.class);
+        when(runs.find(FENCE.run())).thenReturn(Optional.of(run));
+        // The evidence folder's recheck ended the run: this claim no longer holds it.
+        when(runs.isCurrent(FENCE.run(), FENCE.epoch())).thenReturn(false);
+        var generations = mock(AuthorityGenerations.class);
+        var handler = mock(AgentRunHandler.class);
+        var transactions = mock(TransactionTemplate.class);
+        var authority =
+                new AgentRunAuthority(runs, generations, transactions, new SimpleMeterRegistry(), List.of(handler));
+        var refused = new AuthorityRefusedException(new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+
+        assertThatCode(() -> authority.endRefused(FENCE, refused)).doesNotThrowAnyException();
         verifyNoInteractions(transactions, handler);
         verify(runs, never()).end(any(), any());
     }

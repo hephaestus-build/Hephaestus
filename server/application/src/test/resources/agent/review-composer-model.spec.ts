@@ -135,6 +135,7 @@ void test("a refusal of the proxy ends the call with its rule, and a lost lease 
 		["WORK_TIME", "WORK_TIME"],
 		["CAPACITY", "CAPACITY"],
 		["ATTEMPT_ENDED", "OWNERSHIP_LOST"],
+		["AUTHORITY_CHANGED", "OWNERSHIP_LOST"],
 		["CALLS_IN_FLIGHT", "PROVIDER"],
 	] as const) {
 		const { session } = scripted("openai-completions", [{ status: 429, body: "", refusal }]);

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -20,14 +21,20 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
@@ -56,6 +63,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final ConversationTurnAccess turns = mock(ConversationTurnAccess.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
+    private final AgentRunAuthority authority = mock(AgentRunAuthority.class);
     private final ProxyRoutingService routing = new ProxyRoutingService(
             jobs,
             turns,
@@ -63,7 +71,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
             reviews,
             runs,
             Mockito.mock(ProductFeedbackDraftCalls.class),
-            Mockito.mock(LlmModelResolver.class));
+            Mockito.mock(LlmModelResolver.class),
+            authority);
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;
@@ -237,5 +246,55 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 .isCurrent(
                         new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2));
         verifyNoMoreInteractions(jobs);
+    }
+
+    @Test
+    void shouldRecheckTheAuthorityOfAReviewAttemptsRunAtModelDispatch() {
+        assertThat(routing.dispatchRefusal(routed(
+                        new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, LEASE, 1L))))
+                .isNull();
+
+        verify(authority).require(new AgentRunFence(LEASE, 1, 1), AuthorityBoundary.MODEL_DISPATCH);
+    }
+
+    @Test
+    void shouldRefuseATurnsModelCallWithTheChangedAuthorityOrTheEndedAttempt() {
+        var turn =
+                routed(new ProxyRouting.BilledAttempt(UsageSourceType.CONVERSATION_TURN, UUID.randomUUID(), 2, LEASE));
+        var fence = new AgentRunFence(LEASE, 1, 2);
+        doThrow(new AuthorityRefusedException(new AuthorityRefusal(
+                        AuthorityBoundary.MODEL_DISPATCH, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)))
+                .doThrow(new StaleRunException(fence))
+                .when(authority)
+                .require(fence, AuthorityBoundary.MODEL_DISPATCH);
+
+        assertThat(routing.dispatchRefusal(turn)).isEqualTo(ProxyRefusal.AUTHORITY_CHANGED);
+        assertThat(routing.dispatchRefusal(turn)).isEqualTo(ProxyRefusal.ATTEMPT_ENDED);
+    }
+
+    @Test
+    void shouldRecheckNoAuthorityForAProbeOrAReportDraft() {
+        assertThat(routing.dispatchRefusal(
+                        routed(new ProxyRouting.BilledAttempt(UsageSourceType.PROBE, UUID.randomUUID(), 0, null))))
+                .isNull();
+        assertThat(routing.dispatchRefusal(routed(new ProxyRouting.BilledAttempt(
+                        UsageSourceType.PRODUCT_FEEDBACK_DRAFT, UUID.randomUUID(), 1, LEASE, null, 1))))
+                .isNull();
+
+        verifyNoInteractions(authority);
+    }
+
+    private static ProxyRouting routed(ProxyRouting.BilledAttempt attempt) {
+        return new ProxyRouting(
+                "test",
+                "openai-completions",
+                "https://model.invalid/v1",
+                UsageFundingSource.WORKSPACE,
+                1L,
+                1L,
+                1L,
+                attempt,
+                Instant.now().plusSeconds(60),
+                null);
     }
 }

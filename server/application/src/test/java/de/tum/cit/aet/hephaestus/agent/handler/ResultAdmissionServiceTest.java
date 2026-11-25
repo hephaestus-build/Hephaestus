@@ -57,6 +57,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStartCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
@@ -65,6 +66,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
@@ -352,6 +354,45 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
         assertThat(writes.get()).as("the seal committed before the recheck").isEqualTo(1);
         verify(proof, never()).forAttempt(anyLong(), any(), any(), anyInt());
+    }
+
+    @Test
+    void shouldReadNoPrivateFeedbackWhenTheRecheckUnderThePrivateReadsLocksRefuses() {
+        var assignment = RuntimeReviewTestData.assignment(5L, null);
+        when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, assignment));
+        when(assignments.load(job)).thenReturn(List.of(assignment));
+        var admitted = List.of(new AdmittedResultSnapshot(
+                UUID.randomUUID(),
+                new ResultCandidate(
+                        31,
+                        32,
+                        20,
+                        "docs:one",
+                        5L,
+                        ResultOutcome.NOT_MET,
+                        "Names hide intent",
+                        "The names do not say what they hold.",
+                        new ResultEvidence(List.of(), null, null, List.of()),
+                        null,
+                        new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
+                        List.of()),
+                List.of()));
+        when(proof.forAttempt(1, job.getReviewId(), job.getId(), 0)).thenReturn(admitted);
+        when(publicEligibility.publicResultIds(job, admitted)).thenReturn(Set.of());
+        when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
+        var request = new SealResultsRequestDTO(3, job.getReviewId(), job.getId(), 0);
+        var refused = new AuthorityRefusedException(new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        var rechecks = new AtomicInteger();
+
+        // The first recheck, after the seal, passes; authority narrows while the private read waits for its locks.
+        assertThatThrownBy(() -> service.admit(identity(), request, () -> {
+                    if (rechecks.incrementAndGet() > 1) throw refused;
+                }))
+                .isSameAs(refused);
+
+        assertThat(rechecks.get()).isEqualTo(2);
+        verify(feedback, never()).compositionContext(anyLong(), any(), any());
     }
 
     @Test

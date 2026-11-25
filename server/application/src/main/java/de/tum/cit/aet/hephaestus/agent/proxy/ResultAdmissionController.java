@@ -77,7 +77,7 @@ public class ResultAdmissionController {
                             identity, request, () -> authority.check(fence(identity), AuthorityBoundary.CONTEXT_READ)));
         } catch (AuthorityRefusedException refused) {
             // The read-only recheck refused under the admission's locks: the run ends now that they unwound.
-            requireAuthority(identity);
+            authority.endRefused(fence(identity), refused);
             throw refused;
         }
         requireAuthority(identity);

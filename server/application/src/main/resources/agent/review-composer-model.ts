@@ -200,7 +200,9 @@ export class ModelSession {
 			case "CAPACITY": {
 				return failed(answer.refusal);
 			}
-			case "ATTEMPT_ENDED": {
+			// A lost lease, or workspace access that narrowed: either way the server ended the run before the call.
+			case "ATTEMPT_ENDED":
+			case "AUTHORITY_CHANGED": {
 				return failed("OWNERSHIP_LOST");
 			}
 			// Transient, as a provider's rate limit is.

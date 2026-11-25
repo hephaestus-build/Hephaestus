@@ -252,6 +252,9 @@ public class ReviewAttemptPreparation {
                             job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
                     new SealResultsRequestDTO(
                             SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
+        } catch (AuthorityRefusedException refused) {
+            // The evidence folder's recheck refused: authority narrowed, and the preparation did not fail.
+            throw refused;
         } catch (RuntimeException failure) {
             throw new JobPreparationException("Could not complete the prepared review inputs", failure);
         }

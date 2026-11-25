@@ -7,17 +7,23 @@ import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmissi
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,6 +39,7 @@ class ProxyRoutingService {
     private final AgentRuns runs;
     private final ProductFeedbackDraftCalls drafts;
     private final LlmModelResolver models;
+    private final AgentRunAuthority authority;
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
@@ -41,8 +48,10 @@ class ProxyRoutingService {
             ReviewSnapshotQuery reviews,
             AgentRuns runs,
             ProductFeedbackDraftCalls drafts,
-            LlmModelResolver models) {
+            LlmModelResolver models,
+            AgentRunAuthority authority) {
         this.models = models;
+        this.authority = authority;
         this.drafts = drafts;
         this.agentJobRepository = jobs;
         this.runs = runs;
@@ -92,6 +101,31 @@ class ProxyRoutingService {
         return routing.conversationTurn()
                 ? conversationTurns.hasLiveLease(workspace, attempt.sourceId(), attempt.number(), lease)
                 : runs.isCurrent(new AgentRunRef(lease, workspace), ReviewRunKind.epoch(attempt.number()));
+    }
+
+    /**
+     * The authorization recheck at model dispatch (ADR 0134): the proxy's refusal when the run's authority narrowed
+     * since the work was requested, and the run ended, or when the claim no longer holds the run. {@code null} while
+     * both hold. A capability probe serves no one's request, and a report draft is instance work that carries no
+     * workspace authority. A call without a run or workspace never owns its attempt, so {@link #ownsAttempt} has
+     * refused it.
+     */
+    @Nullable
+    ProxyRefusal dispatchRefusal(ProxyRouting routing) {
+        var attempt = routing.attempt();
+        if (attempt.sourceType() == UsageSourceType.PROBE
+                || attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) return null;
+        UUID run = attempt.runId();
+        Long workspace = routing.workspaceId();
+        if (run == null || workspace == null) return null;
+        try {
+            authority.require(new AgentRunFence(run, workspace, attempt.epoch()), AuthorityBoundary.MODEL_DISPATCH);
+            return null;
+        } catch (AuthorityRefusedException narrowed) {
+            return ProxyRefusal.AUTHORITY_CHANGED;
+        } catch (StaleRunException ended) {
+            return ProxyRefusal.ATTEMPT_ENDED;
+        }
     }
 
     ProxyRouting resolve(ProxyIdentity identity) {

@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -150,7 +149,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         return context;
     }
 
-    /** The attempt's local archive, held while the replica serves its workspace. */
+    /** The attempt's local archive, held while the replica serves its workspace. Its lookup ends a run whose authority narrowed while it was prepared. */
     SandboxGatewaySessions.Session session(SandboxRun run) {
         return measured(run).session();
     }
@@ -163,7 +162,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         try {
             return measurements.get(run);
         } catch (AuthorityRefusedException refused) {
-            authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
+            authority.endRefused(run.fence(), refused);
             throw refused;
         }
     }
