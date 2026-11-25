@@ -13,9 +13,9 @@ export function LandingProjectOriginsSection() {
 					</h2>
 					<p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
 						Developed at the Technical University of Munich. There, Hephaestus is the research
-						platform for a study of how AI-generated feedback can improve developers’ application of
-						engineering practices. Applied Education Technologies maintains Hephaestus under the MIT
-						license.
+						platform for a study of whether and how AI-generated feedback improves developers’
+						application of engineering practices. Applied Education Technologies maintains
+						Hephaestus under the MIT license.
 					</p>
 				</div>
 				<div className="justify-self-center md:justify-self-auto">

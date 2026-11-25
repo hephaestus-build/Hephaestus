@@ -13,12 +13,14 @@ describe("LandingFaqSection", () => {
 		expect(answer.textContent).toContain("waits for a workspace admin’s approval by default");
 	});
 
-	it("says what workspace admins see and that feedback has no grade", async () => {
+	it("says what workspace admins see and that feedback carries no grade", async () => {
 		const user = userEvent.setup();
 		render(<LandingFaqSection />);
 		await user.click(screen.getByRole("button", { name: "Who sees my feedback?" }));
-		const answer = await screen.findByText(/Your feedback has no score, grade or rank/u);
-		expect(answer.textContent).toContain("No workspace admin page shows your conversation");
+		const answer = await screen.findByText(/without scores, grades or ranks/u);
+		expect(answer.textContent).toContain(
+			"Your conversation with Hephaestus stays out of workspace admin pages",
+		);
 		expect(answer.textContent).toContain("Feedback on the work is visible to everyone");
 		expect(answer.textContent).toContain("An instance admin can include it in an audited export");
 	});

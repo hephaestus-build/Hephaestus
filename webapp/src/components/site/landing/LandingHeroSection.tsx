@@ -245,12 +245,11 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						className="relative z-10 mt-6 max-w-2xl text-lg leading-relaxed text-pretty sm:text-xl"
 					>
 						<span className="font-semibold text-foreground">
-							Hephaestus reads your work where it happens and checks it against the practices that
-							your team chose.
+							Hephaestus gives you feedback alongside the people who help you grow.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							When a review finds a problem it can support, Hephaestus can explain what to improve
-							and why, and suggest a next step. Then you can talk it through. It never grades you.
+							It reads the work you already do, checks it against the practices your team chose, and
+							can suggest what to try next. Then you can ask about it.
 						</span>
 					</motion.p>
 
