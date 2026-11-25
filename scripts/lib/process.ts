@@ -22,6 +22,38 @@ export function exitStatus(code: number | null, signal: NodeJS.Signals | null): 
 	return code === null ? "no exit status" : `code ${code}`;
 }
 
+/**
+ * Spawn options that end a synchronous child by its deadline. A drill step that waits on a child without one can
+ * block until its CI job limit cancels the job, and a cancelled job keeps no log of which call hung. A call that runs
+ * out returns a null status, so every caller that decides on the status fails on it.
+ */
+export const bounded = (milliseconds: number) => ({
+	timeout: milliseconds,
+	killSignal: "SIGKILL" as const,
+});
+
+/** How a synchronous child ended: its exit code, its timeout, too much output, the signal that ended it, or why it could not start. */
+export function howItEnded(result: {
+	status: number | null;
+	signal: NodeJS.Signals | null;
+	error?: Error;
+}): string {
+	const code =
+		result.error !== undefined && "code" in result.error ? String(result.error.code) : undefined;
+	if (code === "ETIMEDOUT") {
+		return "timed out";
+	}
+	if (code === "ENOBUFS") {
+		return "wrote more output than the limit";
+	}
+	if (code !== undefined) {
+		return `failed to run (${code})`;
+	}
+	return result.status === null
+		? `ended by ${String(result.signal)}`
+		: `exit ${String(result.status)}`;
+}
+
 export interface RunOptions {
 	cwd?: string;
 	env?: Record<string, string | undefined>;

@@ -286,10 +286,14 @@ jobs:
       - uses: ./.github/actions/postgres-image
         with:
           phase: wait
+      # Each drill has its own deadline, a few times its usual run, so a hang fails that step by name and the
+      # later drills still run, instead of the job limit cancelling them without a log.
       - name: Check the PostgreSQL wait against the init server
+        timeout-minutes: 3
         run: node scripts/postgres-wait-test.ts --target-image hephaestus-postgres:ci
       - name: Run the PostgreSQL backup-restore drill
         id: backup_restore
+        timeout-minutes: 6
         env:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
@@ -297,11 +301,13 @@ jobs:
       # failed setup step.
       - name: Run the PostgreSQL pitr drill
         if: ${{ !cancelled() && (success() || steps.backup_restore.outcome == 'failure') }}
+        timeout-minutes: 8
         env:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
       - name: Run the PostgreSQL init drill
         if: ${{ !cancelled() && steps.backup_restore.outcome != 'skipped' }}
+        timeout-minutes: 6
         run: node scripts/postgres-init-test.ts --target-image hephaestus-postgres:ci
 
   fail-fast-server-api:

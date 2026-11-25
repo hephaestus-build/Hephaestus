@@ -6,6 +6,8 @@ import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
+import { finalServerAnswers } from "./lib/postgres-container.ts";
+import { bounded, howItEnded } from "./lib/process.ts";
 import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
@@ -24,9 +26,16 @@ const target = `${id}-target`;
 const volume = `${id}_postgresql-data`;
 
 function run(command: string, args: string[], input?: Buffer): string {
-	const result = spawnSync(command, args, { encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024 });
+	const result = spawnSync(command, args, {
+		encoding: "utf8",
+		input,
+		maxBuffer: 64 * 1024 * 1024,
+		...bounded(6 * 60 * 1000),
+	});
 	if (result.status !== 0) {
-		throw new Error(`${command} ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		throw new Error(
+			`${command} ${args.join(" ")} ${howItEnded(result)}:\n${result.stdout}${result.stderr}`,
+		);
 	}
 	return result.stdout.trim();
 }
@@ -53,18 +62,7 @@ function sql(container: string, query: string, user = "root"): string {
 
 function wait(container: string): void {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
-		const result = spawnSync("docker", [
-			"exec",
-			container,
-			"psql",
-			"-U",
-			"root",
-			"-d",
-			"hephaestus",
-			"-c",
-			"SELECT 1",
-		]);
-		if (result.status === 0) {
+		if (finalServerAnswers(container)) {
 			return;
 		}
 		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
@@ -151,10 +149,11 @@ try {
 		["exec", source, "pg_dump", "-U", "root", "-Fc", "hephaestus"],
 		{
 			maxBuffer: 64 * 1024 * 1024,
+			...bounded(6 * 60 * 1000),
 		},
 	);
 	if (capture.status !== 0) {
-		throw new Error(`backup failed:\n${capture.stderr.toString("utf8")}`);
+		throw new Error(`backup ${howItEnded(capture)}:\n${capture.stderr.toString("utf8")}`);
 	}
 	const dump = capture.stdout;
 	if (!(dump instanceof Buffer) || dump.length === 0) {
@@ -162,9 +161,10 @@ try {
 	}
 	const listing = spawnSync("docker", ["exec", "-i", source, "pg_restore", "--list"], {
 		input: dump,
+		...bounded(2 * 60 * 1000),
 	});
 	if (listing.status !== 0) {
-		throw new Error("source dump is unreadable");
+		throw new Error(`source dump is unreadable: pg_restore --list ${howItEnded(listing)}`);
 	}
 	docker("rm", "-f", source);
 
@@ -190,10 +190,10 @@ try {
 			"--no-acl",
 			"--single-transaction",
 		],
-		{ input: dump, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+		{ input: dump, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...bounded(6 * 60 * 1000) },
 	);
 	if (restore.status !== 0) {
-		throw new Error(`restore failed:\n${restore.stdout}${restore.stderr}`);
+		throw new Error(`restore ${howItEnded(restore)}:\n${restore.stdout}${restore.stderr}`);
 	}
 
 	// A dump without database ACLs can restore the change-set history without the revocation.
@@ -270,10 +270,10 @@ try {
 	}
 } finally {
 	for (const container of [source, target]) {
-		spawnSync("docker", ["rm", "-f", container]);
+		spawnSync("docker", ["rm", "-f", container], bounded(60_000));
 	}
-	spawnSync("docker", ["volume", "rm", "-f", volume]);
+	spawnSync("docker", ["volume", "rm", "-f", volume], bounded(60_000));
 	if (targetImage === undefined) {
-		spawnSync("docker", ["rmi", "-f", `${id}:18`]);
+		spawnSync("docker", ["rmi", "-f", `${id}:18`], bounded(60_000));
 	}
 }
