@@ -7,7 +7,9 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
@@ -94,6 +96,12 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private ConversationSlackReplies slackReplies;
+
+    @Autowired
+    private ConversationEntryRepository entries;
 
     private Workspace workspace;
     private long asker;
@@ -211,6 +219,27 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(sending.get(10, TimeUnit.SECONDS)).contains(new ActionResult.Done(null));
         assertThat(provider).containsExactly(action);
+    }
+
+    @Test
+    void shouldRefuseTheSlackReplyOfATurnWhoseMemberLeftDuringTheTurn() {
+        ConversationTurn turn = runningTurn();
+        UUID question = entries.findStimulus(workspace.getId(), turn.getId()).getId();
+        // The narrowing commits after the question was accepted and before the turn ends.
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+        var posted = new CopyOnWriteArrayList<UUID>();
+        var executor =
+                ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_POST, attempt -> {
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    posted.add(attempt.id());
+                    return new ActionResult.Done(null);
+                }));
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> slackReplies.ended(turn, asker, question));
+        UUID reply = slackReplies.forQuestion(workspace.getId(), question).orElseThrow();
+
+        assertThat(executor.runNow(reply)).contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(posted).isEmpty();
     }
 
     @Test
