@@ -22,6 +22,19 @@ public interface SlackParticipantConsentRepository
      */
     boolean existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(Long workspaceId, String slackUserId);
 
+    boolean existsByWorkspaceIdAndSlackUserIdAndDecidedAtAndIngestionOptedOutTrue(
+            Long workspaceId, String slackUserId, Instant decidedAt);
+
+    /** Holds the decision even when the person has no consent row yet. */
+    @Query(value = """
+        SELECT 1 FROM (
+            SELECT pg_advisory_xact_lock(hashtextextended(
+                jsonb_build_array('slack-ingestion-consent', CAST(:workspaceId AS bigint), CAST(:slackUserId AS text))::text,
+                0))
+        ) locked
+        """, nativeQuery = true)
+    int lockDecision(@Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
+
     /** Permanent person-erasure controls are separate from reversible workspace consent. */
     @Query(value = """
         SELECT EXISTS (
@@ -37,11 +50,11 @@ public interface SlackParticipantConsentRepository
             @Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
 
     /**
-     * Records a channel-message ingestion choice made at {@code decidedAt}, unless a later choice is already stored.
-     * Slack can deliver an action again after a later one, and an older choice must not undo it. An equal time is the
-     * same choice again. Research eligibility is determined by the native-account consent ledger, not this row.
+     * Records a channel-message ingestion choice made at {@code decidedAt}, unless the same or a later choice is already stored.
+     * Slack can deliver an action again after a later one, and an older choice must not undo it. An equal time identifies the
+     * same action. Research eligibility is determined by the native-account consent ledger, not this row.
      *
-     * @return 1 when the choice is now the stored one, 0 when a later choice kept it out
+     * @return 1 when this action changes the stored choice, 0 for the same or an older action
      */
     @Modifying
     @Transactional
@@ -51,7 +64,9 @@ public interface SlackParticipantConsentRepository
         ON CONFLICT (workspace_id, slack_user_id) DO UPDATE SET
             ingestion_opted_out = EXCLUDED.ingestion_opted_out,
             decided_at = EXCLUDED.decided_at
-        WHERE slack_participant_consent.decided_at <= EXCLUDED.decided_at
+        WHERE slack_participant_consent.decided_at < EXCLUDED.decided_at OR (
+            slack_participant_consent.decided_at = EXCLUDED.decided_at
+            AND EXCLUDED.ingestion_opted_out AND NOT slack_participant_consent.ingestion_opted_out)
         """, nativeQuery = true)
     int decide(
             @Param("workspaceId") long workspaceId,

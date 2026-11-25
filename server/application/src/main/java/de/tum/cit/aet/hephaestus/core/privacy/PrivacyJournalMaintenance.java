@@ -23,14 +23,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Journal retention applies to an instance-wide backup horizon")
-class PrivacyJournalRetention {
+@WorkspaceAgnostic("Journal maintenance applies to instance-wide recovery facts")
+class PrivacyJournalMaintenance {
 
     private static final Duration MAX_OBSERVATION_AGE = Duration.ofHours(30);
 
     private final JdbcTemplate jdbc;
     private final Clock clock;
     private final PrivacyJournalProperties properties;
+    private final PrivacyJournalShipping shipping;
     private final MeterRegistry meters;
     private final TransactionTemplate transactions;
 
@@ -39,7 +40,7 @@ class PrivacyJournalRetention {
         Gauge.builder(
                         CoreMetrics.PRIVACY_JOURNAL_BACKUP_HORIZON_UNAVAILABLE,
                         this,
-                        PrivacyJournalRetention::horizonUnavailable)
+                        PrivacyJournalMaintenance::horizonUnavailable)
                 .description("Whether backup recovery point metadata is missing or stale")
                 .register(meters);
     }
@@ -48,6 +49,12 @@ class PrivacyJournalRetention {
     @SchedulerLock(name = "privacyJournalRetention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1S")
     public void sweep() {
         prune(clock.instant());
+    }
+
+    @Scheduled(fixedDelay = 15000)
+    @SchedulerLock(name = "privacyJournalShipping", lockAtMostFor = "PT3M", lockAtLeastFor = "PT1S")
+    public void retryShipping() {
+        shipping.retry();
     }
 
     int prune(Instant now) {
@@ -69,15 +76,18 @@ class PrivacyJournalRetention {
                 "UPDATE privacy_journal SET retention_observed_at = clock_timestamp() WHERE retention_observed_at IS NULL");
         if (!properties.backupsEnabled()) {
             return jdbc.update(
-                    "DELETE FROM privacy_journal WHERE retention_observed_at < ?",
-                    Timestamp.from(now.minus(properties.retention())));
+                    "DELETE FROM privacy_journal WHERE retention_observed_at < ? AND (shipped_at IS NOT NULL OR (NOT requires_shipping AND NOT ?))",
+                    Timestamp.from(now.minus(properties.retention())),
+                    shipping.enabled());
         }
         // The shared lock keeps the verified report stable until the deletion commits.
-        return jdbc.update("""
+        return jdbc.update(
+                """
             DELETE FROM privacy_journal j USING privacy_journal_backup_horizon h
             WHERE h.id = 1 AND h.oldest_backup_at IS NOT NULL AND h.observed_at BETWEEN ? AND ?
               AND j.retention_observed_at < h.oldest_backup_at
-            """, Timestamp.from(now.minus(MAX_OBSERVATION_AGE)), Timestamp.from(now));
+              AND (j.shipped_at IS NOT NULL OR (NOT j.requires_shipping AND NOT ?))
+            """, Timestamp.from(now.minus(MAX_OBSERVATION_AGE)), Timestamp.from(now), shipping.enabled());
     }
 
     private double horizonUnavailable() {

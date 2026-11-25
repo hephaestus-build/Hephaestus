@@ -311,6 +311,10 @@ public class AuthSessionService {
             journal.record(
                     PrivacyJournalKind.SESSION_REVOKED,
                     Map.of("accountId", accountId, "through", now, "target", "TOKEN", "tokenId", jti));
+        } else {
+            journal.confirmPending(
+                    PrivacyJournalKind.SESSION_REVOKED,
+                    Map.of("accountId", accountId, "target", "TOKEN", "tokenId", jti));
         }
         return revoked;
     }

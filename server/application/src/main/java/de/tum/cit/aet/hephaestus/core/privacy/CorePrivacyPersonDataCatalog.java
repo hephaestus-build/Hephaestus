@@ -53,6 +53,13 @@ import tools.jackson.databind.ObjectMapper;
 public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
     static final String PRIVACY_JOURNAL = "privacy_journal";
 
+    private static final String PUBLICATION_SUBJECT = """
+        EXISTS (
+            SELECT 1 FROM jsonb_array_elements(CAST(:identities AS jsonb)) AS identity(value)
+            WHERE identity.value = t.serialized_event::jsonb -> 'subjectIdentity'
+        )
+        """;
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final PersonIdentityResolver identities;
@@ -330,7 +337,8 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "event_publication",
                         "(t.serialized_event::jsonb)->>'accountId' = CAST(:account AS text) OR"
                                 + " (t.serialized_event::jsonb)->>'recipientAccountId' = CAST(:account"
-                                + " AS text) OR"
+                                + " AS text) OR "
+                                + PUBLICATION_SUBJECT + " OR"
                                 + " (t.serialized_event::jsonb) #>> '{change,accountId}' = CAST(:account AS text) OR"
                                 + " (t.serialized_event::jsonb) #>> '{change,actorAccountId}' = CAST(:account AS text)",
                         "id,event_type,publication_date,completion_date,status",
@@ -344,7 +352,8 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                             DELETE FROM event_publication t
                             WHERE t.serialized_event::jsonb ->> 'accountId' = CAST(:account AS text)
                                OR t.serialized_event::jsonb ->> 'recipientAccountId' = CAST(:account AS text)
-                            """, bindings);
+                               OR
+                            """ + PUBLICATION_SUBJECT, bindings);
                         int anonymized = jdbc.update("""
                             UPDATE event_publication t SET serialized_event = jsonb_set(t.serialized_event::jsonb,
                                 '{change}', redact_role_change(t.serialized_event::jsonb -> 'change', :account))::text

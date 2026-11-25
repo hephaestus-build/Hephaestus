@@ -30,6 +30,8 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -90,7 +92,23 @@ public class SlackAppHomeService {
             return;
         }
         long ws = workspaceId.get();
-        messageService.publishHomeView(ws, slackUserId, buildHomeView(ws, teamId, slackUserId));
+        publishHome(ws, teamId, slackUserId, null, () -> true);
+    }
+
+    /** Slack rejects a deferred refresh once a newer view replaces the one that initiated the withdrawal. */
+    public void publishHome(
+            long workspaceId,
+            String teamId,
+            String slackUserId,
+            @Nullable String homeViewHash,
+            BooleanSupplier eligible) {
+        messageService.publishHomeView(
+                workspaceId,
+                teamId,
+                slackUserId,
+                buildHomeView(workspaceId, teamId, slackUserId),
+                homeViewHash,
+                eligible);
     }
 
     View buildHomeView(long workspaceId, String teamId, String slackUserId) {

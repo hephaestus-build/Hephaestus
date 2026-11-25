@@ -51,6 +51,16 @@ class PrivacyJournalRow {
     @Getter
     private @Nullable Instant shippedAt;
 
+    @Column(name = "shipping_attempted_at")
+    private @Nullable Instant shippingAttemptedAt;
+
+    @Getter
+    private @Nullable UUID erasureRequestId;
+
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private boolean requiresShipping;
+
     PrivacyJournalRow(UUID entryId, PrivacyJournalKind kind, JsonNode refs, Instant recordedAt) {
         this.entryId = entryId;
         this.kind = kind;

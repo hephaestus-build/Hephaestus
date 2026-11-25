@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,9 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -49,7 +53,9 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -68,6 +74,9 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     private static final String TEAM = "T1";
     private static final String CHANNEL = "C1";
     private static final String OPTING_OUT_SLACK_USER = "UME";
+
+    @Autowired
+    private PersonDataWriteFence personWriteFence;
 
     @Autowired
     private ReviewPracticeRepository assignments;
@@ -151,6 +160,9 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> identityProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        long slackProviderId = Objects.requireNonNull(identityProviderRepository
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"))
+                .getId());
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("slack-optout-erase"));
         workspaceId = workspace.getId();
         meMemberId =
@@ -168,6 +180,8 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(Optional.empty());
         when(identityResolver.resolveAccountId(workspaceId, TEAM, OPTING_OUT_SLACK_USER))
                 .thenReturn(Optional.of(meMemberId));
+        when(identityResolver.nativeSubject(eq(TEAM), anyString()))
+                .thenAnswer(invocation -> new PersonIdentity(slackProviderId, invocation.getArgument(1), TEAM));
         when(identityResolver.resolveActiveAccountId(any(Long.class), any(), any()))
                 .thenReturn(Optional.empty());
 
@@ -175,14 +189,21 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceResolver,
                 identityResolver,
                 mock(SlackAppHomeService.class),
-                new SlackParticipantConsentService(participantConsentRepository, journal),
-                new SlackPersonErasureService(
-                        messageRepository,
-                        threadRepository,
-                        conversationFeedbackErasure,
-                        mock(AgentActions.class),
-                        mock(ConnectionService.class),
-                        mock(GitProviderRegistry.class)),
+                new SlackParticipantConsentService(
+                        participantConsentRepository,
+                        journal,
+                        new SlackPersonErasureService(
+                                messageRepository,
+                                threadRepository,
+                                conversationFeedbackErasure,
+                                mock(AgentActions.class),
+                                mock(ConnectionService.class),
+                                mock(GitProviderRegistry.class)),
+                        personWriteFence,
+                        identityResolver),
+                journal,
+                mock(PersonDataCopyFence.class),
+                event -> {},
                 mock(SlackInteractiveReplyAdapter.class),
                 mock(SlackConversationService.class),
                 mock(WeeklyDigestSubscriptions.class));
@@ -234,7 +255,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         insertUnlinkedMessage("unlinked.1", unlinkedSlackUser);
         insertMessage("other.1", otherMemberId, "UOTHER");
 
-        handleBlockActions(optOut(unlinkedSlackUser));
+        var optOut =
+                action(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, unlinkedSlackUser, "1793000010.000100");
+        handleBlockActions(optOut);
+        transactions.executeWithoutResult(status -> handler.handleBlockActions(optOut, Instant.now(), true));
 
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "unlinked.1"))
                 .isFalse();
@@ -276,7 +300,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private void handleBlockActions(ObjectNode action) {
-        transactions.executeWithoutResult(status -> handler.handleBlockActions(action));
+        transactions.executeWithoutResult(status -> handler.handleBlockActions(action, Instant.now(), false));
     }
 
     private UUID seedOwnConversationDm() {

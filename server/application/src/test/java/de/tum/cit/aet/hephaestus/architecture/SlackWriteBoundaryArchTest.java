@@ -32,7 +32,9 @@ class SlackWriteBoundaryArchTest extends HephaestusArchitectureTest {
                 .doNotHaveFullyQualifiedName(SlackInteractiveReplyAdapter.class.getName())
                 .should()
                 .callMethodWhere(target(owner(assignableTo(SlackMessageService.class)))
-                        .and(target(name("sendEphemeralForWorkspace").or(name("publishHomeView")))))
+                        .and(target(name("sendEphemeralForWorkspace")
+                                .or(name("sendEphemeralForTeam"))
+                                .or(name("publishHomeView")))))
                 .because("the direct path is limited to replies to the acting user's own interaction")
                 .check(classes);
     }

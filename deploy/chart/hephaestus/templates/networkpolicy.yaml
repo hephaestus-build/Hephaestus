@@ -77,6 +77,21 @@ spec:
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
+    {{- $journal := include "hephaestus.privacyJournal.storage" . | fromJson }}
+    {{- if $journal.bucket }}
+    - to:
+        - ipBlock:
+            cidr: {{ $journal.cidr | default $policy.externalEgress.cidr }}
+            {{- if not $journal.cidr }}
+            {{- with $policy.externalEgress.except }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- end }}
+      ports:
+        - port: {{ $journal.port | int }}
+          protocol: TCP
+    {{- end }}
     {{- with .Values.networkPolicy.modelGatewayPorts }}
     # A model endpoint that this cluster's own Gateway serves: its public address translates to the
     # Gateway Pods, a private address that the external egress rule leaves out.

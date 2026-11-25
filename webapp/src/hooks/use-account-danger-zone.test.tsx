@@ -13,6 +13,10 @@ import { afterEach, assert, describe, expect, it, vi } from "vitest";
 import { problemType } from "@/lib/problem-detail";
 import { currentUser, exportReady } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
+import {
+	clearAccountDeletedNotice,
+	recentAccountDeletionNotice,
+} from "@/runtime/auth/account-deleted-notice";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
 import { DangerZoneSection } from "@/components/settings/DangerZoneSection";
@@ -133,7 +137,40 @@ function openDeleteDialog() {
 	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
 }
 
+async function submitDeleteWithResponse(status: number, type: string) {
+	clearAccountDeletedNotice();
+	const onAccountDeleted = vi.fn();
+	server.use(
+		http.delete("*/user", () =>
+			HttpResponse.json(
+				{ status, type },
+				{ status, headers: { "Content-Type": "application/problem+json" } },
+			),
+		),
+	);
+
+	renderWithClient(
+		<>
+			<DangerZone onAccountDeleted={onAccountDeleted} />
+			<Toaster />
+		</>,
+	);
+	openDeleteDialog();
+	const dialog = await screen.findByRole("alertdialog");
+	const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
+		name: "Delete account",
+	});
+	fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
+		target: { value: "delete my account" },
+	});
+	await waitFor(() => expect(confirmButton.disabled).toBe(false));
+	fireEvent.click(confirmButton);
+	return onAccountDeleted;
+}
+
 describe("useAccountDangerZone — account deletion", () => {
+	afterEach(clearAccountDeletedNotice);
+
 	it("keeps deletion disabled until the exact confirmation phrase is typed", async () => {
 		renderWithClient(<DangerZone onAccountDeleted={vi.fn()} />);
 		openDeleteDialog();
@@ -181,6 +218,35 @@ describe("useAccountDangerZone — account deletion", () => {
 
 		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
 		expect(sentHeader).toBe(String(currentUser.id));
+	});
+
+	it.each([
+		{
+			status: 409,
+			type: problemType("account-erasure-accepted"),
+			notice: "account-erasure-needs-admin",
+		},
+		{
+			status: 503,
+			type: problemType("account-erasure-accepted"),
+			notice: "account-erasure-pending",
+		},
+		{ status: 503, type: problemType("journal-pending"), notice: "account-erasure-pending" },
+	])(
+		"signs out after account erasure is accepted by $type with status $status",
+		async ({ status, type, notice }) => {
+			const onAccountDeleted = await submitDeleteWithResponse(status, type);
+			await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
+			expect(screen.queryByText("We could not delete your account. Try again.")).toBeNull();
+			expect(recentAccountDeletionNotice()).toBe(notice);
+		},
+	);
+
+	it("keeps the session when the server returns an unrelated 503", async () => {
+		const onAccountDeleted = await submitDeleteWithResponse(503, "about:blank");
+		await screen.findByText("We could not delete your account. Try again.");
+		expect(onAccountDeleted).not.toHaveBeenCalled();
+		expect(recentAccountDeletionNotice()).toBeUndefined();
 	});
 
 	it("asks for a recent sign-in instead of reporting a failure, and replaces the confirmation", async () => {

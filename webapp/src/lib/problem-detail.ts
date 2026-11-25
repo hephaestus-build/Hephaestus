@@ -34,8 +34,10 @@ export function problemDetailOf(
  * the server sends, and a test holds each slug here to that list.
  */
 export const PROBLEM_TYPE_SLUGS = [
+	"account-erasure-accepted",
 	"csrf-token-rejected",
 	"feedback-withheld",
+	"journal-pending",
 	"passkey-required",
 	"step-up-required",
 ] as const;

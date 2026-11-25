@@ -530,6 +530,23 @@ matchExpressions:
 {{- end -}}
 {{- end -}}
 
+{{/* The journal can share the backup bucket. It always has a separate credential. */}}
+{{- define "hephaestus.privacyJournal.storage" -}}
+{{- $journal := .Values.privacyJournal -}}
+{{- $storage := dict "bucket" $journal.bucket "endpoint" $journal.endpoint "region" $journal.region
+    "port" $journal.port "uriStyle" $journal.uriStyle "cidr" $journal.cidr "privateCa" $journal.privateCa -}}
+{{- if and (not $journal.bucket) .Values.postgresql.backup.enabled -}}
+  {{- $backup := .Values.postgresql.backup.s3 -}}
+  {{- $privateCa := $journal.privateCa -}}
+  {{- if and (not $privateCa) $backup.privateCa -}}
+    {{- $privateCa = include "hephaestus.postgresqlTlsSecret" . -}}
+  {{- end -}}
+  {{- $storage = dict "bucket" $backup.bucket "endpoint" $backup.endpoint "region" $backup.region
+      "port" $backup.port "uriStyle" $backup.uriStyle "cidr" $backup.cidr "privateCa" $privateCa -}}
+{{- end -}}
+{{- toJson $storage -}}
+{{- end -}}
+
 {{/* The pgBackRest repository, as deploy/postgresql/pgbackrest.conf has it, on the configured bucket. */}}
 {{- define "hephaestus.backup.repository" -}}
 {{- $s3 := .Values.postgresql.backup.s3 -}}

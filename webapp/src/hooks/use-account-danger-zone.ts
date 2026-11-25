@@ -13,7 +13,12 @@ import type {
 } from "@/components/settings/DangerZoneSection";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { saveBlobFile } from "@/lib/download";
-import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import {
+	isProblemType,
+	problemStatusOf,
+	type StepUpChallenge,
+	stepUpChallengeOf,
+} from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { recordAccountDeleted } from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -28,7 +33,7 @@ const MAX_EXPORT_WAIT_MS = 3 * 60 * 1000;
 export function useAccountDangerZone({
 	onAccountDeleted,
 }: {
-	/** Called after the server confirms the deletion (e.g. open the sign-in page). */
+	/** Called after the server accepts the deletion (e.g. open the sign-in page). */
 	onAccountDeleted: () => void | Promise<void>;
 }): DangerZoneSectionProps {
 	return { dataExport: useDataExport(), deletion: useAccountDeletion(onAccountDeleted) };
@@ -127,10 +132,23 @@ async function saveDataExport(exportId: number): Promise<void> {
 
 // The server requires the confirmation header to equal the caller's own account id
 // (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
-// The sign-in page notice is recorded only once the server confirms the deletion.
+// The sign-in page notice is recorded only when the server accepts the deletion.
 async function deleteOwnAccount(accountId: string): Promise<void> {
-	await deleteCurrentUser({ headers: { "X-Confirm-Delete": accountId }, throwOnError: true });
-	recordAccountDeleted(accountId);
+	try {
+		await deleteCurrentUser({ headers: { "X-Confirm-Delete": accountId }, throwOnError: true });
+		recordAccountDeleted(accountId, "account-erasure-pending");
+	} catch (error) {
+		if (isProblemType(error, "account-erasure-accepted")) {
+			recordAccountDeleted(
+				accountId,
+				problemStatusOf(error) === 409 ? "account-erasure-needs-admin" : "account-erasure-pending",
+			);
+		} else if (isProblemType(error, "journal-pending")) {
+			recordAccountDeleted(accountId, "account-erasure-pending");
+		} else {
+			throw error;
+		}
+	}
 }
 
 /** GDPR Art. 17 account deletion of the signed-in account. */

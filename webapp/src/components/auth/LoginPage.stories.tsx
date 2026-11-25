@@ -85,3 +85,19 @@ export const Narrow: Story = {
 };
 
 export const Dark: Story = { globals: { theme: "dark" } };
+
+export const AccountErasurePending: Story = {
+	args: { notice: "account-erasure-pending" },
+	play: async () => {
+		await expect(screen.getByRole("note")).toHaveTextContent("Your deletion request was accepted");
+	},
+};
+
+export const AccountErasureNeedsAdmin: Story = {
+	args: { notice: "account-erasure-needs-admin" },
+	play: async () => {
+		await expect(screen.getByRole("note")).toHaveTextContent(
+			"Your deletion request needs an administrator",
+		);
+	},
+};

@@ -22,9 +22,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Slack Interactivity Request URL. Consent state changes and erasure complete before Slack is acknowledged; the
- * remote follow-ups (confirmation message, App Home refresh) run asynchronously so the 3-second ack budget never
- * depends on Slack API latency.
+ * Slack Interactivity Request URL. The local change commits before the transport acknowledgement. The queued
+ * withdrawal confirmation waits for the journal copy, so Slack's transport deadline does not depend on the bucket.
  *
  * <p>Server role only: the consent and vote handling it commits synchronously lives there. The edge routes this one
  * path to the server, while every other {@code /webhooks/**} delivery, Slack Events included, stays on the webhook
@@ -78,12 +77,6 @@ public class SlackInteractivityController {
                     verification.driftSeconds());
             return ResponseEntity.status(401).build();
         }
-        // A verified signature is non-null. A copy gets the answer of the first request and changes nothing.
-        if (!replayGuard.claim(Objects.requireNonNull(signature))) {
-            log.info("Slack interactivity request handled before: status=duplicate");
-            return ResponseEntity.ok().build();
-        }
-
         String payloadJson = extractPayload(new String(rawBody, StandardCharsets.UTF_8));
         if (payloadJson.isEmpty()) {
             return ResponseEntity.badRequest().build();
@@ -96,8 +89,13 @@ public class SlackInteractivityController {
         }
 
         String type = payload.path("type").asString("");
+        boolean repeatedRequest = !replayGuard.claim(Objects.requireNonNull(signature));
         try {
-            dispatch(type, payload);
+            dispatch(
+                    type,
+                    payload,
+                    Instant.ofEpochSecond(Long.parseLong(Objects.requireNonNull(timestamp))),
+                    repeatedRequest);
         } catch (RuntimeException e) {
             // The class only: the message of a failure here can quote the member's payload or a provider response.
             log.warn(
@@ -117,9 +115,9 @@ public class SlackInteractivityController {
         return fallback;
     }
 
-    private void dispatch(String type, JsonNode payload) {
+    private void dispatch(String type, JsonNode payload, Instant signedAt, boolean repeatedRequest) {
         switch (type) {
-            case "block_actions" -> handler.handleBlockActions(payload);
+            case "block_actions" -> handler.handleBlockActions(payload, signedAt, repeatedRequest);
             default -> log.debug("slack.interactivity: ignoring payload type {}", type);
         }
     }

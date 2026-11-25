@@ -263,7 +263,10 @@ public class MembershipService {
         var workspace = lockForMembershipChange(workspaceId);
         var member = requireMembership(workspaceId, accountId);
         authorizeRoleChange(workspace, accountId, member, null);
-        if (member.getLeftAt() != null) return;
+        if (member.getLeftAt() != null) {
+            audit.confirmDeparture(workspaceId, accountId);
+            return;
+        }
         member.setLeftAt(clock.instant());
         // A removal is undone by the provider: the next sync adds back a person it still lists. An owner's role is
         // always a person's, so a removed owner stays out.
@@ -284,7 +287,10 @@ public class MembershipService {
     public void leave(Long workspaceId, Long accountId) {
         var workspace = lockForMembershipChange(workspaceId);
         var member = requireMembership(workspaceId, accountId);
-        if (member.getLeftAt() != null) return;
+        if (member.getLeftAt() != null) {
+            audit.confirmDeparture(workspaceId, accountId);
+            return;
+        }
         requireNotLastOwner(workspace, member);
         member.setLeftAt(clock.instant());
         member.setRoleSource(Membership.RoleSource.PERSON);

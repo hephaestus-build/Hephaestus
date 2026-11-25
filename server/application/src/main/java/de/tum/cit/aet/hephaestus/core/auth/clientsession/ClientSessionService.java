@@ -357,28 +357,34 @@ public class ClientSessionService {
         return endAndRecord(accountId, sessionId, reason, clock.instant());
     }
 
-    /**
-     * Revokes an MCP client grant from the workspace console, in the order account, session, grant. The
-     * session that the grant held when the revoke began ends with it.
-     *
-     * @return whether the grant was open
-     */
+    public enum GrantRevocation {
+        REVOKED,
+        ALREADY_REVOKED,
+        NOT_FOUND
+    }
+
+    /** Revokes the grant and its current session in account, session, grant order. */
     @Transactional
-    public boolean revokeMcpGrant(Long accountId, UUID grantId) {
+    public GrantRevocation revokeMcpGrant(Long accountId, UUID grantId) {
         accountRepository.lockStatusForShare(accountId);
         Instant now = clock.instant();
         UUID sessionId = grantRepository.findSessionId(grantId).orElse(null);
-        if (sessionId != null) {
-            sessionRepository.lockById(sessionId);
-        }
-        if (grantRepository.lockById(grantId).isEmpty()) {
-            return false;
-        }
+        if (sessionId != null) sessionRepository.lockById(sessionId);
+        if (grantRepository.lockById(grantId).isEmpty()) return GrantRevocation.NOT_FOUND;
+
         handoffRepository.consumeForGrant(grantId, now);
-        boolean open = grantRepository.revokeIfOpen(grantId, now) == 1;
-        if (open) recordGrantEnd(accountId, grantId, now);
+        boolean revoked = grantRepository.revokeIfOpen(grantId, now) == 1;
         endLockedSession(grantId, sessionId, IssuedJwt.RevokedReason.ADMIN_REVOKE, now);
-        return open;
+        if (revoked) {
+            recordGrantEnd(accountId, grantId, now);
+            return GrantRevocation.REVOKED;
+        }
+        return journal.confirmIfRecorded(
+                        null,
+                        PrivacyJournalKind.SESSION_REVOKED,
+                        Map.of("accountId", accountId, "target", "MCP_GRANT", "grantId", grantId))
+                ? GrantRevocation.ALREADY_REVOKED
+                : GrantRevocation.NOT_FOUND;
     }
 
     /** Sessions that can still refresh, including those whose access token lapsed while the client sat idle. */
@@ -460,6 +466,10 @@ public class ClientSessionService {
             journal.record(
                     PrivacyJournalKind.SESSION_REVOKED,
                     Map.of("accountId", accountId, "through", now, "target", "SESSION", "sessionId", sessionId));
+        } else {
+            journal.confirmPending(
+                    PrivacyJournalKind.SESSION_REVOKED,
+                    Map.of("accountId", accountId, "target", "SESSION", "sessionId", sessionId));
         }
         return ended;
     }

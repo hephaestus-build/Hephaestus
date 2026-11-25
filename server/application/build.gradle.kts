@@ -14,6 +14,12 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.aws.s3) {
+        exclude(group = "software.amazon.awssdk", module = "apache-client")
+        exclude(group = "software.amazon.awssdk", module = "apache5-client")
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+    }
+    implementation(libs.aws.url.connection.client)
     implementation(libs.commons.compress)
     implementation(libs.httpcore5)
     implementation(platform(libs.okhttp.bom))

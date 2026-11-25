@@ -412,7 +412,8 @@ public class McpAuthorizationService implements McpClientGrants {
         Decision decision = decision(grant.get().getAccountId(), workspace.get());
         Refusal refusal = decision.refusal();
         if (refusal != null || (decision.passkeyRequired() && grant.get().getPasskeyVerifiedAt() == null)) {
-            if (sessions.revokeMcpGrant(grant.get().getAccountId(), grant.get().getId())) {
+            if (sessions.revokeMcpGrant(grant.get().getAccountId(), grant.get().getId())
+                    == ClientSessionService.GrantRevocation.REVOKED) {
                 String reason =
                         refusal == null ? "passkey_required" : refusal.name().toLowerCase(Locale.ROOT);
                 audit(
@@ -470,11 +471,16 @@ public class McpAuthorizationService implements McpClientGrants {
     @Transactional
     public boolean revoke(Long workspaceId, UUID grantId, Long actingAccountId) {
         Long owner = grants.findAccountIdInWorkspace(workspaceId, grantId).orElse(null);
-        if (owner == null || !sessions.revokeMcpGrant(owner, grantId)) {
-            return false;
-        }
+        if (owner == null) return false;
+        var revocation = sessions.revokeMcpGrant(owner, grantId);
+        if (revocation == ClientSessionService.GrantRevocation.NOT_FOUND) return false;
+        // A new administrator request gets an audit receipt even if it confirms the committed revocation.
         grants.findById(grantId)
-                .ifPresent(grant -> audit(AuthEvent.EventType.MCP_CLIENT_REVOKED, grant, actingAccountId));
+                .ifPresent(grant -> audit(
+                        AuthEvent.EventType.MCP_CLIENT_REVOKED,
+                        grant,
+                        actingAccountId,
+                        revocation == ClientSessionService.GrantRevocation.ALREADY_REVOKED ? "already_revoked" : null));
         return true;
     }
 

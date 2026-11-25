@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -30,8 +31,18 @@ public class SlackParticipantConsentGate {
      * @return {@code true} iff this Slack user is allowed to be ingested in this workspace — i.e. has NOT opted out.
      *     An absent consent row means no opt-out; a permanent person-erasure control still denies ingestion.
      */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean admitIngestionWrite(long workspaceId, String slackUserId) {
+        participantConsentRepository.lockDecision(workspaceId, slackUserId);
+        return allowsIngestion(workspaceId, slackUserId);
+    }
+
     @Transactional(readOnly = true)
     public boolean ingestionAllowed(long workspaceId, String slackUserId) {
+        return allowsIngestion(workspaceId, slackUserId);
+    }
+
+    private boolean allowsIngestion(long workspaceId, String slackUserId) {
         return !participantConsentRepository.isPersonProcessingSuppressed(workspaceId, slackUserId)
                 && !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, slackUserId);

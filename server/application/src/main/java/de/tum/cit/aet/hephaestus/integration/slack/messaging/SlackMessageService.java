@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import okhttp3.FormBody;
 import okhttp3.Response;
@@ -191,7 +192,8 @@ public class SlackMessageService implements AutoCloseable {
             request.threadTs(threadTs);
         }
         ChatPostMessageRequest built = request.build();
-        ChatPostMessageResponse response = callWrite(workspaceId, channelId, methods -> methods.chatPostMessage(built));
+        ChatPostMessageResponse response =
+                callWrite(workspaceId, null, channelId, () -> true, methods -> methods.chatPostMessage(built));
         String postedTo = response.getChannel();
         String ts = response.getTs();
         if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channelId, "invalid_receipt");
@@ -205,14 +207,36 @@ public class SlackMessageService implements AutoCloseable {
      */
     public void sendEphemeralForWorkspace(
             long workspaceId, String channelId, String slackUserId, List<LayoutBlock> blocks, String fallback) {
+        sendEphemeral(workspaceId, null, channelId, slackUserId, new EphemeralMessage(blocks, fallback), () -> true);
+    }
+
+    public void sendEphemeralForTeam(
+            long workspaceId,
+            String teamId,
+            String channelId,
+            String slackUserId,
+            EphemeralMessage message,
+            BooleanSupplier eligible) {
+        sendEphemeral(workspaceId, teamId, channelId, slackUserId, message, eligible);
+    }
+
+    private void sendEphemeral(
+            long workspaceId,
+            @Nullable String teamId,
+            String channelId,
+            String slackUserId,
+            EphemeralMessage message,
+            BooleanSupplier eligible) {
         ChatPostEphemeralRequest request = ChatPostEphemeralRequest.builder()
                 .channel(channelId)
                 .user(slackUserId)
-                .blocks(blocks)
-                .text(fallback)
+                .blocks(message.blocks())
+                .text(message.fallback())
                 .build();
-        callWrite(workspaceId, channelId, methods -> methods.chatPostEphemeral(request));
+        callWrite(workspaceId, teamId, channelId, eligible, methods -> methods.chatPostEphemeral(request));
     }
+
+    public record EphemeralMessage(List<LayoutBlock> blocks, String fallback) {}
 
     /** Whether the workspace has an active Slack connection whose bot token Hephaestus can use. */
     public boolean isConnected(long workspaceId) {
@@ -280,12 +304,18 @@ public class SlackMessageService implements AutoCloseable {
      * retried after its {@code Retry-After} within the interactive budget; one that outlives the budget is
      * {@code ratelimited} and carries its wait. A failed transport is {@code transport_failure}.
      */
-    private <T extends SlackApiTextResponse> T callWrite(long workspaceId, String channel, WriteCall<T> call) {
+    private <T extends SlackApiTextResponse> T callWrite(
+            long workspaceId, @Nullable String teamId, String channel, BooleanSupplier eligible, WriteCall<T> call) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
         }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
+        Optional<String> credential = teamId == null
+                ? resolveToken(workspaceId)
+                : credentialProvider
+                        .resolveActiveTeam(workspaceId, teamId, eligible)
+                        .map(BearerToken::token);
+        String token = credential.orElseThrow(
+                () -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
             T response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
                 try {
@@ -421,13 +451,21 @@ public class SlackMessageService implements AutoCloseable {
      * {@link SlackSendException} carrying the Slack error so the caller can log-and-swallow (App Home render is
      * best-effort).
      */
-    public void publishHomeView(long workspaceId, String slackUserId, View view) {
+    public void publishHomeView(
+            long workspaceId,
+            String teamId,
+            String slackUserId,
+            View view,
+            @Nullable String homeViewHash,
+            BooleanSupplier eligible) {
         try {
             callWrite(
                     workspaceId,
+                    teamId,
                     slackUserId,
-                    methods ->
-                            methods.viewsPublish(req -> req.userId(slackUserId).view(view)));
+                    eligible,
+                    methods -> methods.viewsPublish(
+                            req -> req.userId(slackUserId).view(view).hash(homeViewHash)));
         } catch (SlackSendException e) {
             if (!"silent_mode_engaged".equals(e.slackError())) {
                 throw e;
@@ -774,7 +812,12 @@ public class SlackMessageService implements AutoCloseable {
     }
 
     public void joinPublicChannel(long workspaceId, String channelId) {
-        callWrite(workspaceId, channelId, methods -> methods.conversationsJoin(req -> req.channel(channelId)));
+        callWrite(
+                workspaceId,
+                null,
+                channelId,
+                () -> true,
+                methods -> methods.conversationsJoin(req -> req.channel(channelId)));
     }
 
     private static SlackConversationInfo toConversationInfo(Conversation conversation) {

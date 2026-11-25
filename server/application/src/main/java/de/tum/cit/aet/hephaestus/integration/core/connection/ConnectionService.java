@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -20,6 +21,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -620,8 +622,9 @@ public class ConnectionService {
         // lifecycle
         // lock, never the caller's possibly-stale instance.
         var credential = resourceRepairs.retainedCredential(requested);
-        var identities = new ArrayList<>(
-                resourceRepairs.resources(ProviderResourceRepairs.ref(requested), requested.getConfig(), credential));
+        var requestedRef = ProviderResourceRepairs.ref(requested);
+        long workspaceId = requestedRef.workspaceId();
+        var identities = new ArrayList<>(resourceRepairs.resources(requestedRef, requested.getConfig(), credential));
         if (req.next() == IntegrationState.ACTIVE) {
             ConnectionConfig next = requested.getConfig();
             if (requested.getState() != IntegrationState.ACTIVE) {
@@ -629,7 +632,7 @@ public class ConnectionService {
                 else if (next instanceof ConnectionConfig.OutlineConfig outline)
                     next = outline.withWebhookSubscription(null, null);
             }
-            identities.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(requested), next, credential));
+            identities.addAll(resourceRepairs.resources(requestedRef, next, credential));
             resourceRepairs.requireAdoptableChange(requested, next, credential);
         } else {
             resourceRepairs.coordinate(identities);
@@ -637,7 +640,6 @@ public class ConnectionService {
         Connection connection = requested;
         if (requested.getId() != null) {
             long connectionId = requested.getId();
-            long workspaceId = requested.getWorkspace().getId();
             connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
             Long persistedVersion = connectionRepository
                     .findLifecycleVersion(connectionId, workspaceId)
@@ -657,11 +659,20 @@ public class ConnectionService {
         }
         IntegrationState current = connection.getState();
         if (current == req.next()) {
+            if (req.next() == IntegrationState.UNINSTALLED && connection.getId() != null) {
+                journal.confirmPending(
+                        PrivacyJournalKind.CONNECTION_ERASED,
+                        Map.of("workspaceId", workspaceId, "connectionId", connection.getId()));
+            }
             log.debug("Connection {} already in state {}, no-op", connection.getId(), req.next());
             return connection;
         }
-        if (auditRepository.containsEvent(
-                connection.getId(), connection.getWorkspace().getId(), req.eventType(), req.correlationId())) {
+        if (auditRepository.containsEvent(connection.getId(), workspaceId, req.eventType(), req.correlationId())) {
+            if (req.next() == IntegrationState.UNINSTALLED && connection.getId() != null) {
+                journal.confirmPending(
+                        PrivacyJournalKind.CONNECTION_ERASED,
+                        Map.of("workspaceId", workspaceId, "connectionId", connection.getId()));
+            }
             log.info(
                     "Skipped recorded connection event: connectionId={}, current={}, requested={}, eventType={}, correlationId={}",
                     connection.getId(),

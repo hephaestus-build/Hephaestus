@@ -65,6 +65,14 @@ public class GlobalControllerAdvice extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.FORBIDDEN, "Access denied", "You do not have permission to do this.");
     }
 
+    @ExceptionHandler(JournalPendingException.class)
+    ProblemDetail handleJournalPending() {
+        return ProblemType.JOURNAL_PENDING.problem(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Privacy change pending",
+                "The change is in effect. Try again after we can store the recovery record.");
+    }
+
     @ExceptionHandler(InvalidInputException.class)
     ProblemDetail handleInvalidInput(InvalidInputException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage());
@@ -111,7 +119,8 @@ public class GlobalControllerAdvice extends ResponseEntityExceptionHandler {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Change not recorded",
-                "We could not record this change in the audit log, so the change was not saved. Try again in a moment.");
+                "We could not record this change in the audit log, so the change was not saved. Try again in a"
+                        + " moment.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

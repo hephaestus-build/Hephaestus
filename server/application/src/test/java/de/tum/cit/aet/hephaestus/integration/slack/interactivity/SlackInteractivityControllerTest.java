@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -77,7 +78,7 @@ class SlackInteractivityControllerTest extends BaseUnitTest {
         ResponseEntity<String> res = controller.interactivity(body, headers);
 
         assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
-        verify(handler).handleBlockActions(any());
+        verify(handler).handleBlockActions(any(), any(Instant.class), eq(false));
     }
 
     @Test
@@ -93,7 +94,7 @@ class SlackInteractivityControllerTest extends BaseUnitTest {
         ResponseEntity<String> res = controller.interactivity(new byte[0], headers, request);
 
         assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
-        verify(handler).handleBlockActions(any());
+        verify(handler).handleBlockActions(any(), any(Instant.class), eq(false));
     }
 
     @Test
@@ -126,7 +127,9 @@ class SlackInteractivityControllerTest extends BaseUnitTest {
 
     @Test
     void handlerFailure_returns500SoSlackCanRetryPrivacyAction() {
-        doThrow(new IllegalStateException("db down")).when(handler).handleBlockActions(any());
+        doThrow(new IllegalStateException("db down"))
+                .when(handler)
+                .handleBlockActions(any(), any(Instant.class), eq(false));
         byte[] body = formBody("{\"type\":\"block_actions\",\"actions\":[]}").getBytes(StandardCharsets.UTF_8);
         String ts = Long.toString(Instant.now().getEpochSecond());
         HttpHeaders headers = new HttpHeaders();
@@ -136,12 +139,12 @@ class SlackInteractivityControllerTest extends BaseUnitTest {
         ResponseEntity<String> res = controller.interactivity(body, headers);
 
         assertThat(res.getStatusCode().value()).isEqualTo(500);
-        verify(handler).handleBlockActions(any());
+        verify(handler).handleBlockActions(any(), any(Instant.class), eq(false));
     }
 
     /** Slack's signature stays valid for minutes, so a copy of a signed request must not repeat its action. */
     @Test
-    void shouldAcknowledgeACopyOfAHandledRequestWithoutDispatchingIt() {
+    void shouldDispatchACopyInRepeatedRequestMode() {
         byte[] body = formBody("{\"type\":\"block_actions\",\"actions\":[]}").getBytes(StandardCharsets.UTF_8);
         String ts = Long.toString(Instant.now().getEpochSecond());
         String signature = sign(ts, body);
@@ -153,6 +156,6 @@ class SlackInteractivityControllerTest extends BaseUnitTest {
         ResponseEntity<String> res = controller.interactivity(body, headers);
 
         assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
-        verifyNoInteractions(handler);
+        verify(handler).handleBlockActions(any(), eq(Instant.ofEpochSecond(Long.parseLong(ts))), eq(true));
     }
 }

@@ -280,6 +280,9 @@ erDiagram
         JSONB refs "NOT NULL"
         TIMESTAMPTZ shipped_at
         TIMESTAMPTZ retention_observed_at
+        BOOLEAN requires_shipping "NOT NULL"
+        UUID erasure_request_id
+        TIMESTAMPTZ shipping_attempted_at
     }
 
     PrivacyJournalBackupHorizon {

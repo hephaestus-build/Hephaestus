@@ -303,6 +303,16 @@ hephaestus:
         journal:
             retention: ${HEPHAESTUS_PRIVACY_JOURNAL_RETENTION:35d}
             backups-enabled: ${HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED:true}
+            s3:
+                bucket: ${HEPHAESTUS_PRIVACY_JOURNAL_BUCKET:}
+                prefix: ${HEPHAESTUS_PRIVACY_JOURNAL_PREFIX:privacy-journal/}
+                endpoint: ${HEPHAESTUS_PRIVACY_JOURNAL_ENDPOINT:}
+                region: ${HEPHAESTUS_PRIVACY_JOURNAL_REGION:us-east-1}
+                path-style: ${HEPHAESTUS_PRIVACY_JOURNAL_PATH_STYLE:false}
+                private-ca: ${HEPHAESTUS_PRIVACY_JOURNAL_PRIVATE_CA:}
+                access-key-id: ${HEPHAESTUS_PRIVACY_JOURNAL_ACCESS_KEY_ID:}
+                secret-access-key: ${HEPHAESTUS_PRIVACY_JOURNAL_SECRET_ACCESS_KEY:}
+                object-lock-days: ${HEPHAESTUS_PRIVACY_JOURNAL_OBJECT_LOCK_DAYS:0}
     evaluation:
         controlled-clock:
             enabled: ${HEPHAESTUS_EVALUATION_CONTROLLED_CLOCK_ENABLED:false}

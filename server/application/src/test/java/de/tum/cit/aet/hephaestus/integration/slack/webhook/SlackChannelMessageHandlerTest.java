@@ -165,6 +165,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(monitoredChannelRepository.readIngestAfter(WORKSPACE, "C1")).thenReturn(Optional.of(INGEST_AFTER_BEFORE));
         when(participantConsentGate.ingestionAllowed(WORKSPACE, "U1")).thenReturn(true);
         when(identityResolver.displayName(WORKSPACE, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(participantConsentGate.admitIngestionWrite(WORKSPACE, "U1")).thenReturn(true);
         when(identityResolver.humanAccountId(WORKSPACE, "T1", "U1", "A person")).thenReturn(Optional.of(7L));
     }
 

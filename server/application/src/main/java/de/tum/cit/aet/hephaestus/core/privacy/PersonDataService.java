@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.exception.JournalPendingException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -62,6 +63,7 @@ public class PersonDataService {
     private final JdbcTemplate jdbc;
     private final MeterRegistry meters;
     private final PrivacyJournal journal;
+    private final PrivacyJournalShipping shipping;
 
     @PostConstruct
     void registerFailureCounter() {
@@ -121,7 +123,10 @@ public class PersonDataService {
                 id);
         if (admission.isEmpty()) throw notFound();
         var initial = admission.getFirst();
-        if (initial.state().equals("COMPLETE") || initial.state().equals("ERASING")) return;
+        if (initial.state().equals("COMPLETE") || initial.state().equals("ERASING")) {
+            shipping.pendingErasureReply(id);
+            return;
+        }
         if (!initial.state().equals("PREVIEW") && !initial.state().equals("FAILED"))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available.");
         PersonScope person = mapper.readValue(Objects.requireNonNull(initial.scopeJson()), PersonScope.class);
@@ -131,16 +136,21 @@ public class PersonDataService {
         hold.acquire(person);
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
         PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
-        if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
+        if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) {
+            shipping.pendingErasureReply(id);
+            return;
+        }
         if (r.getState() != PersonDataRequest.State.FAILED) requirePreview(r);
         if (!scope(r).equals(person))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed. Create a new preview.");
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);
             if (externalCopiesRemoved && "EXTERNAL_COPIES_REQUIRE_REMOVAL".equals(r.getFailureCode())) {
-                journal.record(PrivacyJournalKind.PERSON_ERASED, erasureReferences(person, true));
+                ScopedValue.where(PrivacyJournalShipping.ERASURE_REQUEST, id)
+                        .run(() -> journal.record(PrivacyJournalKind.PERSON_ERASED, erasureReferences(person, true)));
             }
             r.startErasure(administratorId);
+            shipping.pendingErasureReply(id);
             return;
         }
         var selected = selections(r);
@@ -193,64 +203,102 @@ public class PersonDataService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "An active instance admin must authorize erasure.");
     }
 
-    /**
-     * Account deletion uses the same frozen store inventory and physical-copy custody as admin
-     * erasure.
-     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Nullable
+    public PersonDataRequest admitAccountErasure(long accountId) {
+        return admitAccount(accountId);
+    }
+
+    private @Nullable PersonDataRequest admitAccount(long accountId) {
+        PersonScope person = scopes.resolve(accountId, List.of());
+        hold.acquire(person);
+        var accountStatus =
+                jdbc.queryForObject("SELECT status FROM account WHERE id=? FOR NO KEY UPDATE", String.class, accountId);
+        var active = jdbc.query(
+                """
+                SELECT id FROM person_data_request WHERE state IN ('ERASING','FAILED')
+                AND scope_json IS NOT NULL AND (scope_json::jsonb)->>'accountId'=?
+                ORDER BY created_at FOR UPDATE
+                """, (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)), Long.toString(accountId));
+        if (!active.isEmpty()) {
+            var id = active.getFirst();
+            shipping.pendingErasureReply(id);
+            return require(id);
+        }
+        if ("DELETED".equals(accountStatus)) return null;
+
+        var request = new PersonDataRequest();
+        request.setScopeJson(mapper.writeValueAsString(person));
+        var selected = registry.select(person);
+        request.setSelectionsJson(mapper.writeValueAsString(selected));
+        request.setCountsJson(mapper.writeValueAsString(registry.counts(selected)));
+        request.startErasure(null);
+        requests.saveAndFlush(request);
+        hold.suppress(person, request.getId(), false);
+        if (!deliveries(selected).isEmpty()) {
+            request.fail("EXTERNAL_COPIES_REQUIRE_REMOVAL");
+            requests.saveAndFlush(request);
+        }
+        return request;
+    }
+
+    /** Resumes accepted deletion off the request thread. Older deletions may still need their first frozen request. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void eraseForAccount(long accountId) {
-        TransactionTemplate tx = new TransactionTemplate(transactions);
-        UUID requestId = tx.execute(status -> {
-            PersonScope person = scopes.resolve(accountId, List.of());
-            hold.acquire(person);
-            var accountStatus = jdbc.queryForObject(
-                    "SELECT status FROM account WHERE id=? FOR NO KEY UPDATE", String.class, accountId);
-            if ("DELETED".equals(accountStatus)) return null;
-            var active = jdbc.query(
-                    """
-                    SELECT id FROM person_data_request WHERE state IN ('ERASING','FAILED')
-                    AND scope_json IS NOT NULL AND (scope_json::jsonb)->>'accountId'=?
-                    ORDER BY created_at FOR UPDATE
-                    """, (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)), Long.toString(accountId));
-            if (!active.isEmpty()) return active.getFirst();
-            var request = new PersonDataRequest();
-            request.setScopeJson(mapper.writeValueAsString(person));
-            var selected = registry.select(person);
-            request.setSelectionsJson(mapper.writeValueAsString(selected));
-            request.setCountsJson(mapper.writeValueAsString(registry.counts(selected)));
-            request.startErasure(null);
-            requests.saveAndFlush(request);
-            hold.suppress(person, request.getId(), false);
-            jdbc.update(
-                    "UPDATE account SET status='DELETING',"
-                            + "deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),version=version+1 WHERE id=?",
-                    accountId);
-            issuedTokens.revokeAllForAccount(accountId, Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
-            if (!deliveries(selected).isEmpty()) {
-                request.fail("EXTERNAL_COPIES_REQUIRE_REMOVAL");
-                requests.saveAndFlush(request);
+        if (shipping.accountErasurePending(accountId)) throw new JournalPendingException();
+        var tx = new TransactionTemplate(transactions);
+        var request = tx.execute(status -> {
+            var admitted = admitAccount(accountId);
+            // A direct purge can admit an active account without going through the HTTP deletion admission.
+            if (admitted != null
+                    && jdbc.update(
+                                    "UPDATE account SET status='DELETING',"
+                                            + "deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),version=version+1"
+                                            + " WHERE id=? AND status NOT IN ('DELETING','DELETED')",
+                                    accountId)
+                            != 0) {
+                issuedTokens.revokeAllForAccount(accountId, Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
             }
-            return request.getId();
+            return admitted;
         });
-        if (requestId == null) return;
-        runSteps(requestId);
-        var state = Objects.requireNonNull(
-                tx.execute(status -> requests.findById(requestId).orElseThrow().getState()));
-        if (state != PersonDataRequest.State.COMPLETE)
-            throw new IllegalStateException("Account erasure has unfinished copy or store custody: " + requestId);
+        if (request == null) return;
+        var id = request.getId();
+        runSteps(id, false);
+        var state = Objects.requireNonNull(tx.execute(status -> require(id).getState()));
+        if (state != PersonDataRequest.State.COMPLETE) {
+            throw new IllegalStateException("Account erasure has not completed");
+        }
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void run(UUID id) {
-        runSteps(id);
+        try {
+            runSteps(id, false);
+        } catch (JournalPendingException pending) {
+            // The committed store receipt and its privacy facts will be retried independently.
+        }
     }
 
-    private void runSteps(UUID id) {
+    /** The recovery role replays as an isolated process with the shipment schedule disabled. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void runRecovery(UUID id) {
+        runSteps(id, true);
+    }
+
+    private void requireJournalProof(UUID id, boolean recovery) {
+        if (recovery) shipping.confirmRecoveryErasure(id);
+        else if (shipping.erasurePending(id)) throw new JournalPendingException();
+    }
+
+    private void runSteps(UUID id, boolean recovery) {
+        requireJournalProof(id, recovery);
         TransactionTemplate tx = new TransactionTemplate(transactions);
         String activeStore = "inventory";
         try {
             var admission = hold.erase();
             try (admission) {
+                // Another pass can commit a store receipt and a new fact while this pass waits for the lease.
+                requireJournalProof(id, recovery);
                 Map<String, PersonDataSelection> frozen = tx.execute(status -> {
                     PersonDataRequest r = lockAdmittedErasure(id);
                     return r == null ? Map.<String, PersonDataSelection>of() : selections(r);
@@ -274,7 +322,9 @@ public class PersonDataService {
                         if (!inventory.containsAll(completed.keySet()))
                             throw new IllegalStateException("Erasure contributor inventory changed");
                         if (!completed.containsKey(store.store()) || !store.selectionMustStayUnchanged()) {
-                            long count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
+                            long count = ScopedValue.where(PrivacyJournalShipping.ERASURE_REQUEST, id)
+                                    .call(() ->
+                                            store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r)));
                             // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince
                             // compares
                             // it with the start of a Hephaestus turn, which is on the database clock too.
@@ -292,6 +342,7 @@ public class PersonDataService {
                         return true;
                     });
                     if (!Boolean.TRUE.equals(proceed)) return;
+                    requireJournalProof(id, recovery);
                 }
                 tx.executeWithoutResult(status -> {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
@@ -301,6 +352,8 @@ public class PersonDataService {
                     requests.saveAndFlush(r);
                 });
             }
+        } catch (JournalPendingException pending) {
+            throw pending;
         } catch (RuntimeException exception) {
             boolean temporary = isTemporaryFailure(exception);
             PersonDataRequest.@Nullable State failureState = null;

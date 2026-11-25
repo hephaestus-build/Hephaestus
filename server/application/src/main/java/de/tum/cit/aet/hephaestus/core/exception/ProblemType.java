@@ -14,11 +14,13 @@ import org.springframework.http.ProblemDetail;
  * keeps {@code about:blank}, so its status is its kind. Renaming a slug breaks clients.
  */
 public enum ProblemType {
+    ACCOUNT_ERASURE_ACCEPTED,
     MODEL_ASSIGNMENT_SLOT_MISMATCH,
     AGENT_JOB_STATE_CONFLICT,
     CONCURRENT_MODIFICATION,
     CSRF_TOKEN_REJECTED,
     FEEDBACK_WITHHELD,
+    JOURNAL_PENDING,
     LLM_CALL_POOL_IN_USE,
     LLM_CALL_POOL_SLUG_CONFLICT,
     LLM_CONNECTION_IN_USE,

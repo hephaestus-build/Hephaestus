@@ -7,10 +7,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)
@@ -44,5 +47,12 @@ public class SlackCredentialProvider implements ApiCredentialProvider {
             return Optional.empty();
         }
         return credentialReader.credentialsOf(conn);
+    }
+
+    /** Resolve the active installation and its reply eligibility in one snapshot before any Slack call. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Optional<BearerToken> resolveActiveTeam(long workspaceId, String teamId, BooleanSupplier eligible) {
+        if (!eligible.getAsBoolean()) return Optional.empty();
+        return credentialReader.findActiveBearerToken(workspaceId, IntegrationKind.SLACK, teamId);
     }
 }

@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import type { AccountDeletionNotice } from "@/runtime/auth/account-deleted-notice";
 
 import { SignInButtons, type SignInButtonsProps } from "@/components/auth/SignInButtons";
 import { SignInNotice } from "@/components/auth/SignInNotice";
@@ -31,11 +32,29 @@ const GENERIC_ERROR = {
 	description: "Try again. If it keeps failing, contact your instance operator.",
 };
 
+const ACCOUNT_DELETION_COPY = {
+	"account-deleted": {
+		title: "Your account is deleted",
+		description:
+			"You’re signed out on all devices. Hephaestus is erasing your personal data, and nobody can sign in to this account again.",
+	},
+	"account-erasure-pending": {
+		title: "Your deletion request was accepted",
+		description:
+			"You’re signed out on all devices. Hephaestus will finish erasing your personal data when it can.",
+	},
+	"account-erasure-needs-admin": {
+		title: "Your deletion request needs an administrator",
+		description:
+			"You’re signed out on all devices. Contact your instance administrator to finish erasing your personal data.",
+	},
+} satisfies Record<AccountDeletionNotice, { title: string; description: string }>;
+
 export interface LoginPageProps extends SignInButtonsProps {
 	title?: string;
 	error?: string;
 	/** Something the reader must know before signing in, such as their own account deletion. */
-	notice?: "account-deleted";
+	notice?: AccountDeletionNotice;
 }
 
 /**
@@ -49,6 +68,7 @@ export function LoginPage({
 	notice,
 	...signIn
 }: LoginPageProps) {
+	const noticeCopy = notice === undefined ? undefined : ACCOUNT_DELETION_COPY[notice];
 	const errorCopy = hasText(error) ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
 
 	return (
@@ -72,13 +92,10 @@ export function LoginPage({
 				<CardContent>
 					{/* A note, not a live region: it is on the page from the first render, and it stays
 					    until the reader leaves, because a deletion notice must not leave on a timer. */}
-					{notice === "account-deleted" ? (
+					{noticeCopy ? (
 						<Alert role="note" className="mb-4">
-							<AlertTitle>Your account is deleted</AlertTitle>
-							<AlertDescription>
-								You’re signed out on all devices. Hephaestus is erasing your personal data, and
-								nobody can sign in to this account again.
-							</AlertDescription>
+							<AlertTitle>{noticeCopy.title}</AlertTitle>
+							<AlertDescription>{noticeCopy.description}</AlertDescription>
 						</Alert>
 					) : null}
 					<div aria-live="assertive" aria-atomic="true" className="not-empty:mb-4">

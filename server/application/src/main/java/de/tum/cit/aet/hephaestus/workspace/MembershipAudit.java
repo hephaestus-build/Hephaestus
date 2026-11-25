@@ -62,6 +62,11 @@ class MembershipAudit {
                 false));
     }
 
+    void confirmDeparture(long workspaceId, long accountId) {
+        journal.confirmPending(
+                PrivacyJournalKind.MEMBERSHIP_ENDED, Map.of("workspaceId", workspaceId, "accountId", accountId));
+    }
+
     private static RoleChangedEvent.@Nullable Role eventRole(Membership.@Nullable WorkspaceRole role) {
         return role == null
                 ? null

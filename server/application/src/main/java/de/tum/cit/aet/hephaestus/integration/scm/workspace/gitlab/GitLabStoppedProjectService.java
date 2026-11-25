@@ -64,10 +64,15 @@ public class GitLabStoppedProjectService {
     @Transactional
     public void removeStoppedProject(long workspaceId, long repositoryItemId, UUID stopReceipt, long actorAccountId) {
         // Taking the lock first: Stop rotates and Add clears the receipt while they hold it.
-        Connection connection = connectionService
-                .updateGitLabProjectExclusions(workspaceId, exclusions -> exclusions)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.CONFLICT, "This workspace has no GitLab connection to remove project work from."));
+        var current = connectionService.updateGitLabProjectExclusions(workspaceId, exclusions -> exclusions);
+        if (journal.confirmIfRecorded(
+                stopReceipt,
+                PrivacyJournalKind.REPOSITORY_REMOVED,
+                Map.of("workspaceId", workspaceId, "itemId", repositoryItemId))) {
+            return;
+        }
+        Connection connection = current.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT, "This workspace has no GitLab connection to remove project work from."));
         // The lock refreshed the connection. A paused one keeps its stops, but nothing is removed until it resumes.
         if (connection.getState() != IntegrationState.ACTIVE) {
             throw new ResponseStatusException(
@@ -91,7 +96,7 @@ public class GitLabStoppedProjectService {
         journal.record(
                 stopReceipt,
                 PrivacyJournalKind.REPOSITORY_REMOVED,
-                Map.of("workspaceId", workspaceId, "repositoryId", project.repositoryId()));
+                Map.of("workspaceId", workspaceId, "repositoryId", project.repositoryId(), "itemId", repositoryItemId));
         connectionCommands.recordAdministrativeChange(
                 connection,
                 "STOPPED_PROJECT_WORK_REMOVED",

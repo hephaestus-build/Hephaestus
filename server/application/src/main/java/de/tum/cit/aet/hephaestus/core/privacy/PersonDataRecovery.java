@@ -270,14 +270,14 @@ final class PersonDataRecovery implements SmartLifecycle {
                 requests.findInterruptedForPerson(person.accountId(), mapper.writeValueAsString(person.identities()));
         for (UUID id : interrupted) {
             service.requestErasure(id, administratorId, externalCopiesRemoved);
-            service.run(id);
+            service.runRecovery(id);
             requireRecoveryComplete(id);
         }
         UUID id = service.preview(administratorId, accountId, identities)
                 .request()
                 .getId();
         service.requestErasure(id, administratorId, externalCopiesRemoved);
-        service.run(id);
+        service.runRecovery(id);
         requireRecoveryComplete(id);
     }
 

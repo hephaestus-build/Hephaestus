@@ -1200,9 +1200,11 @@ function restorable(item: unknown): Record<string, unknown> {
 
 const STORAGE_NAMESPACE = "backup-storage";
 const BUCKET = "hephaestus-backups";
-/** An S3 server for the drill alone: rclone serves a directory, each subdirectory a bucket. */
+// The Service and Pod use the same port because NetworkPolicy can see the translated destination.
+const S3_PORT = 443;
+/** Use the same checksum-capable MinIO image as the journal integration test. */
 const S3_IMAGE =
-	"docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5";
+	"docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20";
 
 export async function psql(sql: string, signal?: AbortSignal): Promise<string> {
 	return kubectl(
@@ -1276,7 +1278,11 @@ export async function revision(): Promise<number> {
 }
 
 /** An S3-compatible endpoint with TLS from the work directory's CA, and its bucket, empty and with new keys. */
-async function s3Storage(work: string): Promise<{ key: string; secret: string }> {
+async function s3Storage(work: string): Promise<{
+	key: string;
+	secret: string;
+	journal: { accessKeyId: string; secretAccessKey: string };
+}> {
 	// A server of an earlier drill holds its own keys and backups.
 	await kubectl(["delete", "namespace", STORAGE_NAMESPACE, "--ignore-not-found", "--wait=true"]);
 	await namespace(STORAGE_NAMESPACE, {});
@@ -1286,19 +1292,29 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 		`/CN=s3.${STORAGE_NAMESPACE}.svc`,
 		`subjectAltName=DNS:s3.${STORAGE_NAMESPACE}.svc`,
 	);
-	const credentials = { key: secretValue(10), secret: secretValue(20) };
+	const credentials = {
+		key: secretValue(10),
+		secret: secretValue(20),
+		journal: { accessKeyId: secretValue(10), secretAccessKey: secretValue(20) },
+	};
+	const settings = {
+		MINIO_ROOT_USER: credentials.key,
+		MINIO_ROOT_PASSWORD: credentials.secret,
+		JOURNAL_KEY: credentials.journal.accessKeyId,
+		JOURNAL_SECRET: credentials.journal.secretAccessKey,
+	};
 	await secret("s3", STORAGE_NAMESPACE, {
 		"tls.crt": await readFile(path.join(work, "s3.crt"), "utf8"),
 		"tls.key": await readFile(path.join(work, "s3.key"), "utf8"),
-		S3_KEY: credentials.key,
-		S3_SECRET: credentials.secret,
+		"ca.crt": await readFile(path.join(work, "ca.crt"), "utf8"),
+		...settings,
 	});
 	const labels = { app: "s3" };
 	await apply({
 		apiVersion: "v1",
 		kind: "Service",
 		metadata: { name: "s3", namespace: STORAGE_NAMESPACE },
-		spec: { selector: labels, ports: [{ port: 443, targetPort: 443 }] },
+		spec: { selector: labels, ports: [{ port: S3_PORT, targetPort: S3_PORT }] },
 	});
 	await apply({
 		apiVersion: "apps/v1",
@@ -1310,37 +1326,25 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 				metadata: { labels },
 				spec: {
 					automountServiceAccountToken: false,
-					initContainers: [
-						{
-							name: "bucket",
-							image: S3_IMAGE,
-							command: ["mkdir", "-p", `/data/${BUCKET}`],
-							volumeMounts: [{ name: "data", mountPath: "/data" }],
-						},
-					],
+					securityContext: { runAsNonRoot: true, runAsUser: 1001, fsGroup: 1001 },
 					containers: [
 						{
 							name: "s3",
 							image: S3_IMAGE,
-							args: [
-								"serve",
-								"s3",
-								"/data",
-								"--addr",
-								":443",
-								"--cert",
-								"/tls/tls.crt",
-								"--key",
-								"/tls/tls.key",
-								"--auth-key",
-								"$(S3_KEY),$(S3_SECRET)",
-							],
-							env: ["S3_KEY", "S3_SECRET"].map((name) => ({
+							command: ["minio"],
+							args: ["server", "--address", `:${S3_PORT}`, "--certs-dir", "/tls", "/data"],
+							securityContext: {
+								capabilities: { drop: ["ALL"], add: ["NET_BIND_SERVICE"] },
+							},
+							env: Object.keys(settings).map((name) => ({
 								name,
 								valueFrom: { secretKeyRef: { name: "s3", key: name } },
 							})),
-							ports: [{ containerPort: 443 }],
-							readinessProbe: { tcpSocket: { port: 443 }, periodSeconds: 2 },
+							ports: [{ containerPort: S3_PORT }],
+							readinessProbe: {
+								httpGet: { path: "/minio/health/ready", port: S3_PORT, scheme: "HTTPS" },
+								periodSeconds: 2,
+							},
 							volumeMounts: [
 								{ name: "data", mountPath: "/data" },
 								{ name: "tls", mountPath: "/tls", readOnly: true },
@@ -1354,8 +1358,9 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 							secret: {
 								secretName: "s3",
 								items: [
-									{ key: "tls.crt", path: "tls.crt" },
-									{ key: "tls.key", path: "tls.key" },
+									{ key: "tls.crt", path: "public.crt" },
+									{ key: "tls.key", path: "private.key" },
+									{ key: "ca.crt", path: "ca.crt" },
 								],
 							},
 						},
@@ -1365,6 +1370,40 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 		},
 	});
 	await kubectl(["-n", STORAGE_NAMESPACE, "rollout", "status", "deployment/s3", "--timeout=5m"]);
+	await kubectl(
+		[
+			"-n",
+			STORAGE_NAMESPACE,
+			"exec",
+			"-i",
+			"deployment/s3",
+			"--",
+			"sh",
+			"-eu",
+			"-c",
+			`
+export MC_CONFIG_DIR=/tmp/drill-mc
+mkdir -p "$MC_CONFIG_DIR/certs/CAs"
+cp /tls/ca.crt "$MC_CONFIG_DIR/certs/CAs/ca.crt"
+cat > /tmp/journal-policy.json
+mc alias set drill "https://s3.${STORAGE_NAMESPACE}.svc" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+mc mb "drill/${BUCKET}"
+mc admin user add drill "$JOURNAL_KEY" "$JOURNAL_SECRET"
+mc admin policy create drill journal-prefix /tmp/journal-policy.json
+mc admin policy attach drill journal-prefix --user "$JOURNAL_KEY"
+`,
+		],
+		JSON.stringify({
+			Version: "2012-10-17",
+			Statement: [
+				{
+					Effect: "Allow",
+					Action: ["s3:PutObject", "s3:GetObject"],
+					Resource: [`arn:aws:s3:::${BUCKET}/privacy-journal/*`],
+				},
+			],
+		}),
+	);
 	return credentials;
 }
 
@@ -1441,6 +1480,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	await join(`${RELEASE}-postgresql-tls`, {
 		"s3-ca.crt": await readFile(path.join(work, "ca.crt"), "utf8"),
 	});
+	await join(`${RELEASE}-journal-s3`, credentials.journal);
 	// Manual backup Jobs exercise recovery. Future schedules keep CronJobs idle while Helm owns suspend.
 	const scheduled = new Date(Date.now() + 24 * 60 * 60 * 1000);
 	const schedule = [
@@ -1469,8 +1509,8 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 					region: "us-east-1",
 					uriStyle: "path",
 					cidr: podCidr,
-					// The default port: pgBackRest signs a request for the host name without a port.
-					port: 443,
+					// pgBackRest signs for the host name without a port when the port is 443.
+					port: S3_PORT,
 					privateCa: true,
 				},
 				restore,

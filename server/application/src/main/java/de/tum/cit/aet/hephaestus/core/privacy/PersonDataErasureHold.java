@@ -6,7 +6,10 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Coordinates the fences and durable processing restriction of a person's erasure. */
 @Component
@@ -19,7 +22,16 @@ class PersonDataErasureHold {
     private final PersonDataCopyFence copies;
 
     void acquire(PersonScope person) {
-        copies.holdForErasure();
+        if (PrivacyJournalReply.isBound()) {
+            try {
+                copies.holdForErasureInRequest();
+            } catch (CannotAcquireLockException timeout) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "A copy is being processed. Try the erasure request again.", timeout);
+            }
+        } else {
+            copies.holdForErasure();
+        }
         writes.holdForErasure(person.identities());
     }
 

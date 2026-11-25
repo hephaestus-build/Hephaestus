@@ -213,6 +213,8 @@ public class ConversationEntryService {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.NOT_DELETABLE);
         }
         if (entry.isRedacted()) {
+            journal.confirmPending(
+                    PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
             return;
         }
         UUID turnId = entry.getTurnId();

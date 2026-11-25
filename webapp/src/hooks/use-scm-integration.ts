@@ -32,7 +32,7 @@ import type { WorkspaceStoppedGitLabProjects } from "@/components/admin/integrat
 import { SCM_CLASS_KEYS } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { isProblemType, problemDetailOf } from "@/lib/problem-detail";
 import { scmProviderOf } from "@/lib/scm-provider";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
@@ -149,6 +149,11 @@ export function useScmIntegration(workspaceSlug: string) {
 		...removeRepositoryToMonitorMutation(),
 		onSuccess: invalidateRepositorySet,
 		onError: (e) => {
+			if (isProblemType(e, "journal-pending")) {
+				invalidateRepositorySet();
+				toast.info("Monitoring stopped. The recovery copy is pending.");
+				return;
+			}
 			toast.error("We could not stop monitoring the repository", {
 				description: problemDetailOf(e),
 			});

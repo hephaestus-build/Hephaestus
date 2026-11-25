@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.EphemeralMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
@@ -101,9 +103,89 @@ class SlackMessageServiceTest extends BaseUnitTest {
     @Test
     void shouldSkipTheDirectHomeReplyWhileSilentModeIsEngaged() {
         silentModeEngaged = true;
-        assertThatCode(() -> service.publishHomeView(7L, "U123", View.builder().build()))
+        assertThatCode(() -> service.publishHomeView(
+                        7L, "T123", "U123", View.builder().build(), null, () -> true))
                 .doesNotThrowAnyException();
         verifyNoInteractions(credentialProvider);
+    }
+
+    @Test
+    void shouldSendNeitherReplyWhenAReinstalledTeamDoesNotHaveTheRecordedDecision() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            var local = new SlackMessageService(
+                    Slack.getInstance(localConfig(slackApi, 1000)),
+                    credentialProvider,
+                    new SlackRateLimitTracker(new SimpleMeterRegistry()),
+                    new OutboundEgressGuard(() -> false),
+                    new SlackMetrics(new SimpleMeterRegistry()),
+                    time);
+            try {
+                BooleanSupplier eligible = () -> false;
+                when(credentialProvider.resolveActiveTeam(7L, "TOLD", eligible)).thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> local.sendEphemeralForTeam(
+                                7L, "TOLD", "C123", "U123", new EphemeralMessage(List.of(), "saved"), eligible))
+                        .isInstanceOf(SlackSendException.class);
+                assertThatThrownBy(() -> local.publishHomeView(
+                                7L, "TOLD", "U123", View.builder().build(), "original-view", eligible))
+                        .isInstanceOf(SlackSendException.class);
+                assertThat(slackApi.getRequestCount()).isZero();
+            } finally {
+                local.close();
+            }
+        }
+    }
+
+    @Test
+    void shouldKeepTheNewerHomeViewWhenSlackRejectsTheDeferredWithdrawalView() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            var acceptedViews = new CopyOnWriteArrayList<String>();
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    String body = bodyOf(request);
+                    if (body.contains("hash=original-view") && !acceptedViews.isEmpty()) {
+                        return json("{\"ok\":false,\"error\":\"hash_conflict\"}");
+                    }
+                    acceptedViews.add(body);
+                    return json("{\"ok\":true}");
+                }
+            });
+            slackApi.start();
+            SlackConfig config = localConfig(slackApi, 1000);
+            config.getMethodsConfig().setStatsEnabled(false);
+            BooleanSupplier eligible = () -> true;
+            when(credentialProvider.resolveActiveTeam(7L, "T123", eligible))
+                    .thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
+            var local = new SlackMessageService(
+                    Slack.getInstance(config),
+                    credentialProvider,
+                    new SlackRateLimitTracker(new SimpleMeterRegistry()),
+                    new OutboundEgressGuard(() -> false),
+                    new SlackMetrics(new SimpleMeterRegistry()),
+                    time);
+            try {
+                var allowed =
+                        View.builder().type("home").callbackId("allowed-view").build();
+                var withdrawn =
+                        View.builder().type("home").callbackId("withdrawn-view").build();
+                local.publishHomeView(7L, "T123", "U123", allowed, null, eligible);
+                assertThatThrownBy(
+                                () -> local.publishHomeView(7L, "T123", "U123", withdrawn, "original-view", eligible))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                refused -> assertThat(refused.slackError()).isEqualTo("hash_conflict"));
+                assertThat(acceptedViews)
+                        .singleElement()
+                        .asString()
+                        .contains("allowed-view")
+                        .doesNotContain("hash=");
+                assertThat(slackApi.getRequestCount()).isEqualTo(2);
+            } finally {
+                local.close();
+            }
+        }
     }
 
     @Test

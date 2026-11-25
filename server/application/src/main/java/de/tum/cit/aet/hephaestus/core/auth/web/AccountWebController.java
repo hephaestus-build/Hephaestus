@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.privacy.AccountDeletionAdmission;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -46,16 +48,19 @@ public class AccountWebController {
     private final ConsentService consentService;
     private final PasskeyAssurancePolicy passkeys;
     private final GitProviderRegistry gitProviderRegistry;
+    private final AccountDeletionAdmission erasure;
 
     public AccountWebController(
             AccountService accountService,
             ConsentService consentService,
             GitProviderRegistry gitProviderRegistry,
-            PasskeyAssurancePolicy passkeys) {
+            PasskeyAssurancePolicy passkeys,
+            AccountDeletionAdmission erasure) {
         this.accountService = accountService;
         this.consentService = consentService;
         this.passkeys = passkeys;
         this.gitProviderRegistry = gitProviderRegistry;
+        this.erasure = erasure;
     }
 
     public record CurrentUserViewDTO(
@@ -161,7 +166,15 @@ public class AccountWebController {
 
     @DeleteMapping
     @Operation(summary = "Delete the current account (GDPR Art. 17)", operationId = "deleteCurrentUser")
-    @ApiResponse(responseCode = "204", description = "Account deletion requested")
+    @ApiResponse(responseCode = "204", description = "Account erasure accepted and the account is on hold")
+    @ApiResponse(
+            responseCode = "409",
+            description = "The erasure needs an instance administrator or a copy is in progress",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The account is on hold and its journal copy is pending (journal-pending)",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "403",
             description = "The caller has not signed in recently (problem type step-up-required)",
@@ -175,7 +188,12 @@ public class AccountWebController {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "To confirm deletion, set the X-Confirm-Delete header to your account ID.");
         }
-        accountService.softDelete(accountId);
+        if (erasure.needsAdministrator(accountId)) {
+            var accepted = new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Your account is on hold. An instance admin must finish erasing its data.");
+            accepted.getBody().setType(ProblemType.ACCOUNT_ERASURE_ACCEPTED.uri());
+            throw accepted;
+        }
         return ResponseEntity.noContent().build();
     }
 

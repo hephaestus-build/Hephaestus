@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -64,9 +63,6 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
     private SlackParticipantConsentService participantConsentService;
 
     @Mock
-    private SlackPersonErasureService erasureService;
-
-    @Mock
     private WorkspaceSummaryQuery workspaceSummaryQuery;
 
     private SlackUserPreferencesService service;
@@ -81,7 +77,6 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
                 participantConsentRepository,
                 monitoredChannelRepository,
                 participantConsentService,
-                erasureService,
                 workspaceSummaryQuery);
         when(gitProviderRegistry.resolveProviderId("SLACK", SlackUserPreferencesService.SLACK_SERVER_URL))
                 .thenReturn(SLACK_PROVIDER_ID);
@@ -125,13 +120,14 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(1L, ConsentState.ACTIVE))
                 .thenReturn(1L);
 
-        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(
+                        eq(1L), eq("T1"), eq("U1"), eq(ACCOUNT_ID), any(Instant.class)))
                 .thenReturn(true);
 
         SlackUserWorkspacePreferencesDTO dto = service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, false);
 
-        verify(participantConsentService).recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class));
-        verify(erasureService).erasePerson(1L, ACCOUNT_ID, "U1");
+        verify(participantConsentService)
+                .recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), eq(ACCOUNT_ID), any(Instant.class));
         assertThat(dto.channelMessagesAllowed()).isFalse();
     }
 
@@ -142,14 +138,14 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(slackConnection(1L, "acme", "Hephaestus", "T1", "acme-slack")));
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(link(SLACK_PROVIDER_ID, "U1", "T1")));
-        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(
+                        eq(1L), eq("T1"), eq("U1"), eq(ACCOUNT_ID), any(Instant.class)))
                 .thenReturn(false);
         when(participantConsentService.channelMessagesAllowed(1L, "U1")).thenReturn(true);
 
         SlackUserWorkspacePreferencesDTO dto = service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, false);
 
         assertThat(dto.channelMessagesAllowed()).isTrue();
-        verify(erasureService, never()).erasePerson(anyLong(), anyLong(), anyString());
     }
 
     @Test
@@ -162,9 +158,9 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
 
         service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, true);
 
-        verify(participantConsentService).recordChannelMessageOptIn(eq(1L), eq("U1"), any(Instant.class));
-        // Opt-in must not erase anyone, not merely the current person.
-        verify(erasureService, never()).erasePerson(anyLong(), anyLong(), anyString());
+        verify(participantConsentService).recordChannelMessageOptIn(eq(1L), eq("T1"), eq("U1"), any(Instant.class));
+        verify(participantConsentService, never())
+                .recordChannelMessageOptOut(anyLong(), anyString(), anyString(), any(), any());
     }
 
     @Test

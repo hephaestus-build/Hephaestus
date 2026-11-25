@@ -216,6 +216,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(participantConsentGate.admitIngestionWrite(7L, "U1")).thenReturn(true);
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(7L, "T1", "C1", "300.000000", "100.000000", "U1", 42L, "late reply"))
                 .thenReturn(1);
@@ -294,6 +295,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(participantConsentGate.admitIngestionWrite(7L, "U1")).thenReturn(true);
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(7L, "T1", "C1", "100.1", "99.0", "U1", 42L, "hi"))
                 .thenReturn(1);
@@ -312,6 +314,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(participantConsentGate.admitIngestionWrite(7L, "U1")).thenReturn(true);
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(
                         eq(7L), eq("T1"), eq("C1"), eq("100.1"), isNull(), eq("U1"), eq(42L), eq("hi")))
@@ -383,6 +386,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(participantConsentGate.admitIngestionWrite(7L, "U1")).thenReturn(true);
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(7L, "T1", "C1", "100.1", null, "U1", 42L, "hi"))
                 .thenReturn(0);

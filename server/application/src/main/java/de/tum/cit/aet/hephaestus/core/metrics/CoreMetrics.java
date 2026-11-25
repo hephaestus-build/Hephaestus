@@ -33,6 +33,8 @@ public final class CoreMetrics {
     public static final String MCP_AUTH_REFUSALS = "mcp.auth.refusals";
     public static final String MCP_TOOL_CALLS = "mcp.tool.calls";
     public static final String PERSON_DATA_ERASURE_FAILURES = "person.data.erasure.failures";
+    public static final String PRIVACY_JOURNAL_BUCKET_VERIFIED = "privacy.journal.bucket.verified";
+    public static final String PRIVACY_JOURNAL_SHIPPING_LAG = "privacy.journal.shipping.lag";
     public static final String PRIVACY_JOB_AFFECTED = "privacy.job.affected";
     public static final String PRIVACY_JOB_COMPLETED = "privacy.job.completed";
     public static final String PRIVACY_JOURNAL_BACKUP_HORIZON_UNAVAILABLE =

@@ -72,8 +72,8 @@ public final class SlackConsentBlocks {
                     + "You can manage this at any time in App Home.";
 
     /** Ephemeral confirmation shown to a member right after they opt out via the in-message button. */
-    private static final String CONFIRMATION_TEXT = "Done. Hephaestus will not use your channel messages. "
-            + "Hephaestus deleted the channel-message data that it already collected from you.";
+    private static final String CONFIRMATION_TEXT =
+            "Your opt-out was recorded. Hephaestus deleted the channel-message data it had collected from you.";
 
     private SlackConsentBlocks() {}
 

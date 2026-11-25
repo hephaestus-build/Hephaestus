@@ -392,7 +392,17 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .header("X-XSRF-TOKEN", csrf)
                 .exchange()
                 .expectStatus()
-                .is2xxSuccessful()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/mcp-grants/{id}", workspace.getWorkspaceSlug(), grant)
+                .header(HttpHeaders.COOKIE, cookieName + "=" + admin, "__Host-XSRF-TOKEN=" + csrf)
+                .header("X-XSRF-TOKEN", csrf)
+                .exchange()
+                .expectStatus()
+                .isNoContent()
                 .expectBody(Void.class);
 
         assertThat(grantColumn(grant, "status")).isEqualTo("REVOKED");

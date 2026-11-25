@@ -305,6 +305,9 @@ public class ConsentService implements ResearchParticipationQuery {
             String organisation,
             ConsentDecision.Mechanism mechanism) {
         ConsentDecision current = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
+        if (!granted && current != null && !current.isGranted() && coversCurrentResearchScope(current)) {
+            journal.confirmPending(PrivacyJournalKind.CONSENT_WITHDRAWN, Map.of("accountId", accountId));
+        }
         if (current == null || !coversCurrentResearchScope(current) || current.isGranted() != granted) {
             decisionRepository.save(new ConsentDecision(
                     account,

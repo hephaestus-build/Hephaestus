@@ -165,6 +165,9 @@ public class WorkspaceLifecycleService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
+            var target = Map.<String, Object>of("workspaceId", workspace.getId());
+            journal.confirmPending(PrivacyJournalKind.CONNECTION_ERASED, target);
+            journal.confirmPending(PrivacyJournalKind.WORKSPACE_PURGED, target);
             log.debug("Skipped workspace purge: reason=alreadyPurged, workspaceId={}", workspace.getId());
             return workspace;
         }

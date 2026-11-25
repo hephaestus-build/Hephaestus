@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.credentials;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -8,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -56,5 +59,24 @@ class SlackCredentialProviderTest extends BaseUnitTest {
         Optional<CredentialBundle> resolved = provider.resolve(ref);
 
         assertThat(resolved).contains(new BearerToken("xoxb-secret-bot-token", null));
+    }
+
+    @Test
+    void shouldReadOnlyTheOriginalTeamsCredentialForAnEligibleReply() {
+        long workspaceId = 17L;
+        var reader = mock(CredentialReader.class);
+        var deferredProvider = new SlackCredentialProvider(connectionService, reader);
+        var originalToken = new BearerToken("old-installation-token", null);
+        assertThat(deferredProvider.resolveActiveTeam(workspaceId, "TOLD", () -> false))
+                .isEmpty();
+        verifyNoInteractions(connectionService, reader);
+
+        when(reader.findActiveBearerToken(workspaceId, IntegrationKind.SLACK, "TOLD"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(originalToken));
+        assertThat(deferredProvider.resolveActiveTeam(workspaceId, "TOLD", () -> true))
+                .isEmpty();
+        assertThat(deferredProvider.resolveActiveTeam(workspaceId, "TOLD", () -> true))
+                .contains(originalToken);
     }
 }

@@ -4,6 +4,10 @@ import static com.slack.api.model.block.Blocks.section;
 import static com.slack.api.model.block.composition.BlockCompositions.markdownText;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
@@ -12,9 +16,9 @@ import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackWeeklyDiges
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.EphemeralMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import jakarta.annotation.PreDestroy;
@@ -22,14 +26,20 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -52,7 +62,9 @@ public class SlackInteractivityHandler {
     private final SlackConversationIdentityResolver identityResolver;
     private final SlackAppHomeService appHomeService;
     private final SlackParticipantConsentService participantConsentService;
-    private final SlackPersonErasureService personErasureService;
+    private final PrivacyJournal journal;
+    private final PersonDataCopyFence copyFence;
+    private final ApplicationEventPublisher events;
     private final SlackInteractiveReplyAdapter messageService;
     private final SlackConversationService conversationService;
     private final WeeklyDigestSubscriptions weeklyDigests;
@@ -63,7 +75,9 @@ public class SlackInteractivityHandler {
             SlackConversationIdentityResolver identityResolver,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
-            SlackPersonErasureService personErasureService,
+            PrivacyJournal journal,
+            PersonDataCopyFence copyFence,
+            ApplicationEventPublisher events,
             SlackInteractiveReplyAdapter messageService,
             SlackConversationService conversationService,
             WeeklyDigestSubscriptions weeklyDigests) {
@@ -72,7 +86,9 @@ public class SlackInteractivityHandler {
                 identityResolver,
                 appHomeService,
                 participantConsentService,
-                personErasureService,
+                journal,
+                copyFence,
+                events,
                 messageService,
                 conversationService,
                 weeklyDigests,
@@ -84,7 +100,9 @@ public class SlackInteractivityHandler {
             SlackConversationIdentityResolver identityResolver,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
-            SlackPersonErasureService personErasureService,
+            PrivacyJournal journal,
+            PersonDataCopyFence copyFence,
+            ApplicationEventPublisher events,
             SlackInteractiveReplyAdapter messageService,
             SlackConversationService conversationService,
             WeeklyDigestSubscriptions weeklyDigests,
@@ -93,14 +111,16 @@ public class SlackInteractivityHandler {
         this.identityResolver = identityResolver;
         this.appHomeService = appHomeService;
         this.participantConsentService = participantConsentService;
-        this.personErasureService = personErasureService;
+        this.journal = journal;
+        this.copyFence = copyFence;
+        this.events = events;
         this.messageService = messageService;
         this.conversationService = conversationService;
         this.weeklyDigests = weeklyDigests;
         this.followUpExecutor = followUpExecutor;
     }
 
-    public void handleBlockActions(JsonNode payload) {
+    public void handleBlockActions(JsonNode payload, Instant signedAt, boolean repeatedRequest) {
         String teamId = payload.path("team").path("id").asString("");
         String slackUserId = payload.path("user").path("id").asString("");
         String channelId = payload.path("channel").path("id").asString("");
@@ -112,17 +132,28 @@ public class SlackInteractivityHandler {
 
         for (JsonNode action : payload.path("actions")) {
             String actionId = action.path("action_id").asString("");
+            if (repeatedRequest
+                    && !SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT.equals(actionId)
+                    && !SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT.equals(actionId)) {
+                continue;
+            }
             // Slack dates every block action. The date orders a consent choice against a later one that Slack
-            // delivered first; a payload without one is ordered by its arrival.
-            Instant decidedAt = Objects.requireNonNullElseGet(
-                    SlackTs.toInstant(action.path("action_ts").asString("")), Instant::now);
+            // delivered first. The signed timestamp keeps retries without an action timestamp at the same time.
+            Instant decidedAt = Objects.requireNonNullElse(
+                    SlackTs.toInstant(action.path("action_ts").asString("")), signedAt);
             switch (actionId) {
                 case SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT ->
-                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, decidedAt, true);
+                    handleChannelMessageOptOut(
+                            workspaceId,
+                            teamId,
+                            slackUserId,
+                            channelId,
+                            decidedAt,
+                            payload.path("view").path("hash").asString(null));
                 case SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN ->
                     handleChannelMessageOptIn(workspaceId, teamId, slackUserId, decidedAt);
                 case SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT ->
-                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, decidedAt, false);
+                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, decidedAt, null);
                 case SlackConversationPosts.FEEDBACK_ACTION ->
                     conversationService.handleFeedback(
                             teamId, channelId, slackUserId, action.path("value").asString(""));
@@ -139,37 +170,73 @@ public class SlackInteractivityHandler {
             String slackUserId,
             String channelId,
             Instant decidedAt,
-            boolean refreshHome) {
-        // An opt-out older than the stored choice would erase what the person allowed after it.
-        if (!participantConsentService.recordChannelMessageOptOut(workspaceId, teamId, slackUserId, decidedAt)) {
-            log.debug("slack.interactivity: opt-out not recorded for user {}", slackUserId);
-            return;
-        }
+            @Nullable String homeViewHash) {
         Long memberId = identityResolver
                 .resolveAccountId(workspaceId, teamId, slackUserId)
                 .orElse(null);
-        personErasureService.erasePerson(workspaceId, memberId, slackUserId);
-        followUpExecutor.execute(() -> {
-            if (channelId != null && !channelId.isBlank()) {
-                try {
-                    messageService.sendEphemeralForWorkspace(
-                            workspaceId,
-                            channelId,
-                            slackUserId,
-                            SlackConsentBlocks.optOutConfirmation(),
-                            SlackConsentBlocks.confirmationText());
-                } catch (SlackSendException e) {
-                    log.debug(
-                            "slack.interactivity: opt-out confirmation ephemeral failed for user {} in channel {}: {}",
-                            slackUserId,
-                            channelId,
-                            e.slackError());
-                }
+        participantConsentService.requestChannelMessageOptOut(
+                workspaceId,
+                teamId,
+                slackUserId,
+                memberId,
+                decidedAt,
+                fact -> events.publishEvent(new OptOutConfirmation(
+                        fact,
+                        workspaceId,
+                        memberId,
+                        identityResolver.nativeSubject(teamId, slackUserId),
+                        channelId,
+                        decidedAt,
+                        homeViewHash)));
+    }
+
+    /** Slack acknowledges transport after the local commit. This publication confirms consent after the bucket copy. */
+    public record OptOutConfirmation(
+            UUID fact,
+            long workspaceId,
+            @Nullable Long accountId,
+            @ContentFree PersonIdentity subjectIdentity,
+            @ContentFree String channelId,
+            Instant decidedAt,
+            @ContentFree @Nullable String homeViewHash) {}
+
+    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
+    public void onOptOutConfirmation(OptOutConfirmation event) {
+        journal.confirmStored(event.fact());
+        var subject = event.subjectIdentity();
+        String teamId = subject.teamKey();
+        String userId = subject.subject();
+        BooleanSupplier eligible =
+                () -> participantConsentService.isCurrentWithdrawal(event.workspaceId(), userId, event.decidedAt());
+        var capture = copyFence.capture();
+        try (capture) {
+            confirmSlackOptOut(event, teamId, userId, eligible);
+        }
+    }
+
+    private void confirmSlackOptOut(OptOutConfirmation event, String teamId, String userId, BooleanSupplier eligible) {
+        if (!event.channelId().isBlank()) {
+            try {
+                messageService.sendEphemeralForTeam(
+                        event.workspaceId(),
+                        teamId,
+                        event.channelId(),
+                        userId,
+                        new EphemeralMessage(
+                                SlackConsentBlocks.optOutConfirmation(), SlackConsentBlocks.confirmationText()),
+                        eligible);
+            } catch (SlackSendException failure) {
+                log.debug("Slack opt-out confirmation was unavailable: {}", failure.slackError());
             }
-            if (refreshHome) {
-                refreshHomeBestEffort(teamId, slackUserId);
+        }
+        String homeViewHash = event.homeViewHash();
+        if (homeViewHash != null && !homeViewHash.isBlank()) {
+            try {
+                appHomeService.publishHome(event.workspaceId(), teamId, userId, homeViewHash, eligible);
+            } catch (SlackSendException failure) {
+                log.debug("Slack opt-out App Home refresh was unavailable: {}", failure.slackError());
             }
-        });
+        }
     }
 
     /**
@@ -200,7 +267,7 @@ public class SlackInteractivityHandler {
     }
 
     private void handleChannelMessageOptIn(long workspaceId, String teamId, String slackUserId, Instant decidedAt) {
-        participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt);
+        participantConsentService.recordChannelMessageOptIn(workspaceId, teamId, slackUserId, decidedAt);
         followUpExecutor.execute(() -> refreshHomeBestEffort(teamId, slackUserId));
     }
 

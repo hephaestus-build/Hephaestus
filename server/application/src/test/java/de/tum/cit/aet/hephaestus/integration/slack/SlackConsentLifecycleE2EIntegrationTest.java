@@ -17,6 +17,9 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -103,6 +106,9 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     private static final String TEAM = "T1";
     private static final String C1 = "C1";
     private static final String C2 = "C2"; // sibling channel, must stay isolated from C1's erasures
+
+    @Autowired
+    private PersonDataWriteFence personWriteFence;
 
     @Autowired
     private ReviewPracticeRepository assignments;
@@ -200,6 +206,9 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> identityProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        long slackProviderId = Objects.requireNonNull(identityProviderRepository
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"))
+                .getId());
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("slack-e2e-lifecycle"));
         workspaceId = workspace.getId();
         u1MemberId = SlackThreadTestSupport.accountWithIdentity(accounts, identities, provider, 100L, "e2e-u1");
@@ -272,18 +281,28 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         slackMessageService,
                         new SlackChannelActivation(monitoredChannelRepository, consentEventRepository, event -> {}),
                         mapper));
+        when(identityResolver.nativeSubject(any(), any()))
+                .thenAnswer(invocation ->
+                        new PersonIdentity(slackProviderId, invocation.getArgument(1), invocation.getArgument(0)));
         handler = new SlackInteractivityHandler(
                 workspaceResolver,
                 identityResolver,
                 mock(SlackAppHomeService.class),
-                new SlackParticipantConsentService(participantConsentRepository, (kind, refs) -> {}),
-                new SlackPersonErasureService(
-                        messageRepository,
-                        threadRepository,
-                        conversationFeedbackErasure,
-                        mock(AgentActions.class),
-                        connectionService,
-                        mock(GitProviderRegistry.class)),
+                new SlackParticipantConsentService(
+                        participantConsentRepository,
+                        (kind, refs) -> {},
+                        new SlackPersonErasureService(
+                                messageRepository,
+                                threadRepository,
+                                conversationFeedbackErasure,
+                                mock(AgentActions.class),
+                                connectionService,
+                                mock(GitProviderRegistry.class)),
+                        personWriteFence,
+                        identityResolver),
+                (kind, refs) -> {},
+                mock(PersonDataCopyFence.class),
+                event -> {},
                 new SlackInteractiveReplyAdapter(slackMessageService),
                 mock(SlackConversationService.class),
                 mock(WeeklyDigestSubscriptions.class));
@@ -355,7 +374,8 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         assertThat(candidate.getWorkspaceId()).isEqualTo(workspaceId);
         assertThat(candidate.getParticipantAccountIds()).containsExactlyInAnyOrder(u1MemberId, u2MemberId);
 
-        handler.handleBlockActions(optOut("U1"));
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> handler.handleBlockActions(optOut("U1"), Instant.now(), false));
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, "U1"))
                 .isTrue();

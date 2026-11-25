@@ -1,6 +1,7 @@
 {{- include "hephaestus.databaseSecretCheck" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "server") }}
 {{- $config := .Values.config }}
+{{- $journal := include "hephaestus.privacyJournal.storage" . | fromJson }}
 {{- $sandbox := .Values.sandbox }}
 {{- $drain := int .Values.server.drainTimeoutSeconds }}
 {{- $connections := include "hephaestus.databaseConnectionCapacity" . | fromJson }}
@@ -275,6 +276,35 @@ spec:
             {{- end }}
             - name: HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED
               value: {{ .Values.privacyJournal.backupsEnabled | quote }}
+            {{- if $journal.bucket }}
+            {{- $credential := .Values.privacyJournal.credentialSecret | default (include "hephaestus.name" (dict "root" . "component" "journal-s3")) }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_BUCKET
+              value: {{ $journal.bucket | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_PREFIX
+              value: {{ .Values.privacyJournal.prefix | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_REGION
+              value: {{ $journal.region | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_PATH_STYLE
+              value: {{ eq $journal.uriStyle "path" | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_OBJECT_LOCK_DAYS
+              value: {{ .Values.privacyJournal.objectLockDays | quote }}
+            {{- if $journal.endpoint }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_ENDPOINT
+              value: {{ printf "https://%s:%d" $journal.endpoint (int $journal.port) | quote }}
+            {{- end }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_PRIVATE_CA
+              value: {{ ternary "/etc/hephaestus/journal-s3/ca.crt" "" (not (empty $journal.privateCa)) | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $credential | quote }}
+                  key: accessKeyId
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $credential | quote }}
+                  key: secretAccessKey
+            {{- end }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
             - name: HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED
@@ -304,6 +334,11 @@ spec:
               mountPath: /etc/hephaestus/legal
               readOnly: true
             {{- end }}
+            {{- if and $journal.bucket $journal.privateCa }}
+            - name: journal-s3-ca
+              mountPath: /etc/hephaestus/journal-s3
+              readOnly: true
+            {{- end }}
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
             {{- include "hephaestus.privateCaMount" . | nindent 12 }}
       volumes:
@@ -318,6 +353,15 @@ spec:
         - name: legal-overrides
           configMap:
             name: {{ . | quote }}
+        {{- end }}
+        {{- if and $journal.bucket $journal.privateCa }}
+        - name: journal-s3-ca
+          secret:
+            secretName: {{ $journal.privateCa | quote }}
+            items:
+              - key: s3-ca.crt
+                path: ca.crt
+            defaultMode: 292 # 0444
         {{- end }}
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
         {{- include "hephaestus.privateCaVolume" . | nindent 8 }}

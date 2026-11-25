@@ -245,7 +245,18 @@ A version 5 entry records a Slack participant withdrawal with the workspace ID, 
 Tests read the facts that a producer records from `RecordingPrivacyJournal`.
 It refuses a ref that is text.
 
-The server's journal stores no fact yet, so an operator still writes the manifest by hand.
+With a [journal bucket](../admin/backup-restore#keep-the-privacy-journal-outside-the-database), an acknowledgement waits for the external copy.
+The cause transaction commits the restriction and the journal row together.
+After commit, the server creates the object under the configured prefix. The key contains the UTC date and entry ID.
+
+The server verifies the SHA-256 checksum before it sets `shipped_at` and acknowledges the request.
+A background retry sends pending facts from every producer.
+It uses the same object key and verifies the checksum when a copy already exists.
+
+For an account erasure, the cause transaction also puts the account's data on hold.
+The erasure worker cannot remove the data before the journal copy is confirmed.
+The server acknowledges admission after the copy is confirmed. The erasure worker finishes independently of the request.
+If the bucket is unavailable, the hold stays in effect and the server retries the copy.
 
 ### Context map
 
