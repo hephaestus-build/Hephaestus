@@ -24,8 +24,9 @@ import org.jspecify.annotations.Nullable;
  * proves the class writes them in the same transaction, and every answer that ends that proof removes them. A removal
  * on the provider removes the person's rows through database triggers on the membership mirror tables.
  *
- * <p>The reader is the provider's native user id, not an account: a check maps an account to its provider identity, so a
- * login that the provider gives to someone else later never names this reader.
+ * <p>The reader is the provider and its native user id, not an account: a check maps an account to its provider
+ * identity, so a login that the provider gives to someone else later never names this reader, and the same number on
+ * another provider names someone else.
  */
 @Entity
 @Table(
@@ -34,8 +35,8 @@ import org.jspecify.annotations.Nullable;
                 @UniqueConstraint(
                         name = "uk_resource_reader_monitor_reader",
                         // The monitor's key leads, so the index also serves the foreign key to the monitor.
-                        columnNames = {"repository_to_monitor_id", "workspace_id", "reader_native_id"}),
-        indexes = @Index(name = "idx_resource_reader_reader_native_id", columnList = "reader_native_id"))
+                        columnNames = {"repository_to_monitor_id", "workspace_id", "provider_id", "reader_native_id"}),
+        indexes = @Index(name = "idx_resource_reader_provider_reader", columnList = "provider_id, reader_native_id"))
 @Getter
 public class ResourceReader {
 
@@ -66,6 +67,10 @@ public class ResourceReader {
             foreignKey = @ForeignKey(name = "fk_resource_reader_repository_to_monitor"))
     @OnDelete(action = OnDeleteAction.CASCADE)
     private @Nullable RepositoryToMonitor repositoryToMonitor;
+
+    /** The provider that the listing read; with the native user id it names one identity. */
+    @Column(name = "provider_id", nullable = false, updatable = false)
+    private long providerId;
 
     /** The provider's native user id, such as GitHub's {@code databaseId}. */
     @Column(name = "reader_native_id", nullable = false, updatable = false)

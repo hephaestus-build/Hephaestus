@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Set;
 
 /**
@@ -51,6 +52,14 @@ public interface RepositoryReadersProvider {
      * proves them only if no other answer applied since the read began; a stopped or impossible listing always applies.
      */
     void recordRepositoryReaders(ReadersRead read, ReaderListing listing);
+
+    /**
+     * The provider reported that it removed the person with {@code readerNativeId} from the repositories with these
+     * native ids: as a collaborator, from a team or from the organization. Every monitor of them on {@code providerId}
+     * drops the person and moves its generation on, also when the mirror held no row for the person, so a listing
+     * that began before the removal cannot name the person again.
+     */
+    void recordReaderRemoved(long providerId, long readerNativeId, Collection<Long> repositoryNativeIds);
 
     /**
      * The provider reported that the repository turned private or was deleted. That narrows every workspace's monitor of

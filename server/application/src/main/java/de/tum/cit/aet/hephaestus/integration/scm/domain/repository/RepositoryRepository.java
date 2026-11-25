@@ -118,6 +118,13 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      */
     List<Repository> findAllByOrganization_LoginIgnoreCaseAndProviderId(String login, Long providerId);
 
+    /** GitHub's ids of the repositories that an organization owns on one provider. */
+    @Query("""
+            SELECT r.nativeId FROM Repository r
+            WHERE LOWER(r.organization.login) = LOWER(:login) AND r.provider.id = :providerId
+            """)
+    List<Long> findNativeIdsByOrganizationLogin(@Param("login") String login, @Param("providerId") Long providerId);
+
     /**
      * Finds all repositories that match the workspace's monitored repo names.
      * Uses nameWithOwner to join with RepositoryToMonitor entries,

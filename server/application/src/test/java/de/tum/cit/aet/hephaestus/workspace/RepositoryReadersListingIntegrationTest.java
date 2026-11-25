@@ -3,11 +3,19 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProofReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReaderListing;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspacePersonDataCatalog;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,6 +23,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
@@ -51,6 +60,15 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private WorkspacePersonDataCatalog catalog;
+
+    @Autowired
+    private PersonDataWriteFence fence;
+
+    @Autowired
+    private IdentityProviderRepository providers;
 
     /** Each test reads its own repository, so a narrowing trigger in one test never touches another's monitors. */
     private long repositoryNativeId;
@@ -370,6 +388,234 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
         assertThat(readers(monitor)).isEmpty();
+    }
+
+    // --- The person-data fence and erasure ---
+
+    private JdbcPersonDataStore readerStore() {
+        return catalog.contributors().stream()
+                .filter(contributor -> contributor.store().equals("resource_reader"))
+                .map(JdbcPersonDataStore.class::cast)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static PersonScope person(long providerId, long nativeId) {
+        return new PersonScope(null, List.of(new PersonIdentity(providerId, Long.toString(nativeId), null)), List.of());
+    }
+
+    /** The same number on another provider names someone else: it neither exports nor erases this reader. */
+    @Test
+    void shouldSelectAReaderOnlyForTheProviderThatListedIt() {
+        var monitor = monitor("provider-bound");
+        long reader = readerNativeId();
+        listed(monitor, reader);
+        long gitLab = gitLab();
+
+        var otherProvider = readerStore().select(person(gitLab, reader));
+        long erasedElsewhere = readerStore().erase(otherProvider, person(gitLab, reader));
+        var sameProvider = readerStore().select(person(gitHub, reader));
+
+        assertThat(otherProvider.rows()).isEmpty();
+        assertThat(erasedElsewhere).isZero();
+        assertThat(readers(monitor)).containsExactly(reader);
+        assertThat(sameProvider.rows()).hasSize(1);
+    }
+
+    /** An erased person is never stored again, also when a later complete listing names them. */
+    @Test
+    void shouldNotStoreAReaderWhomErasureRemoved() {
+        var monitor = monitor("erased-reader");
+        long erased = readerNativeId();
+        long stays = readerNativeId();
+        jdbc.update(
+                "INSERT INTO identity_restriction(id,provider_id,provider_user_key,team_key,kind)"
+                        + " VALUES (?,?,?,'','ERASED')",
+                UUID.randomUUID(),
+                gitHub,
+                Long.toString(erased));
+
+        listed(monitor, erased, stays);
+
+        assertThat(readers(monitor)).containsExactly(stays);
+    }
+
+    /**
+     * Erasure froze the person's rows; a listing that names the person again before erasure deletes them keeps the
+     * rows' natural key, so erasure still deletes them.
+     */
+    @Test
+    void shouldEraseAReaderThatAListingNamedAgainAfterTheSelection() {
+        var monitor = monitor("erasure-relisted");
+        long reader = readerNativeId();
+        listed(monitor, reader);
+        var selection = readerStore().select(person(gitHub, reader));
+
+        listed(monitor, reader);
+        readerStore().erase(selection, person(gitHub, reader));
+
+        assertThat(readers(monitor)).isEmpty();
+    }
+
+    /** A listing waits for an erasure that holds the person's fence, and then honours what erasure decided. */
+    @Test
+    void shouldWaitForAnErasureThatHoldsTheReadersFence() throws Exception {
+        var monitor = monitor("erasure-fence");
+        long reader = readerNativeId();
+        ReadersRead listingRead = read(monitor);
+        var holderPid = new CompletableFuture<Integer>();
+        var release = new CountDownLatch(1);
+        var erasure = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            fence.holdForErasure(List.of(new PersonIdentity(gitHub, Long.toString(reader), null)));
+            jdbc.update(
+                    "INSERT INTO identity_restriction(id,provider_id,provider_user_key,team_key,kind)"
+                            + " VALUES (?,?,?,'','ERASED')",
+                    UUID.randomUUID(),
+                    gitHub,
+                    Long.toString(reader));
+            holderPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            awaitLatch(release);
+        }));
+        CompletableFuture<Void> listing;
+        try {
+            int holder = holderPid.get(30, TimeUnit.SECONDS);
+            listing = CompletableFuture.runAsync(
+                    () -> provider.recordRepositoryReaders(listingRead, new ReaderListing.Listed(Set.of(reader))));
+            awaitBlockedBy(holder, "the listing waits for the erasure's fence");
+        } finally {
+            release.countDown();
+        }
+        erasure.get(30, TimeUnit.SECONDS);
+        listing.get(30, TimeUnit.SECONDS);
+
+        assertThat(readers(monitor)).as("the erased person is not stored").isEmpty();
+        assertThat(proof(monitor)).isEqualTo("RESTRICTED PROVEN READERS_LISTED");
+    }
+
+    // --- Removals that the mirror holds no row for ---
+
+    /** A removal webhook for a person whom the mirror does not know yet still ends a listing that began earlier. */
+    @Test
+    void shouldNotLetAListingRestoreAReaderRemovedWithoutAMirrorRow() {
+        var monitor = monitor("removed-unmirrored");
+        long removed = readerNativeId();
+        long stays = readerNativeId();
+        ReadersRead slow = read(monitor);
+
+        provider.recordReaderRemoved(gitHub, removed, List.of(repositoryNativeId));
+        provider.recordRepositoryReaders(slow, new ReaderListing.Listed(Set.of(removed, stays)));
+
+        assertThat(readers(monitor)).isEmpty();
+        assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
+    }
+
+    /** The listing holds the monitor with its readers not committed; the removal waits and then deletes the person. */
+    @Test
+    void shouldRemoveAReaderWhoseRemovalArrivedWhileTheListingHeldTheMonitor() throws Exception {
+        var monitor = monitor("removed-during-listing");
+        long removed = readerNativeId();
+        long stays = readerNativeId();
+        ReadersRead listingRead = read(monitor);
+        var holderPid = new CompletableFuture<Integer>();
+        var release = new CountDownLatch(1);
+        var listing = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            provider.recordRepositoryReaders(listingRead, new ReaderListing.Listed(Set.of(removed, stays)));
+            holderPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            awaitLatch(release);
+        }));
+        CompletableFuture<Void> removal;
+        try {
+            int holder = holderPid.get(30, TimeUnit.SECONDS);
+            removal = CompletableFuture.runAsync(
+                    () -> provider.recordReaderRemoved(gitHub, removed, List.of(repositoryNativeId)));
+            awaitBlockedBy(holder, "the removal waits for the listing's monitor lock");
+        } finally {
+            release.countDown();
+        }
+        listing.get(30, TimeUnit.SECONDS);
+        removal.get(30, TimeUnit.SECONDS);
+
+        assertThat(readers(monitor)).containsExactly(stays);
+    }
+
+    /**
+     * The first listing holds the monitor with its readers not committed while the repository is deleted. The deletion
+     * waits for the monitor, then deletes the readers that the listing committed.
+     */
+    @Test
+    void shouldDropTheReadersOfAListingThatHeldTheMonitorWhileTheRepositoryWasDeleted() throws Exception {
+        var monitor = monitor("deleted-during-listing");
+        long reader = readerNativeId();
+        ReadersRead listingRead = read(monitor);
+        var holderPid = new CompletableFuture<Integer>();
+        var release = new CountDownLatch(1);
+        var listing = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            provider.recordRepositoryReaders(listingRead, new ReaderListing.Listed(Set.of(reader)));
+            holderPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            awaitLatch(release);
+        }));
+        CompletableFuture<Void> deletion;
+        try {
+            int holder = holderPid.get(30, TimeUnit.SECONDS);
+            deletion =
+                    CompletableFuture.runAsync(() -> jdbc.update("DELETE FROM repository WHERE id = ?", repositoryId));
+            awaitBlockedBy(holder, "the deletion waits for the listing's monitor lock");
+        } finally {
+            release.countDown();
+        }
+        listing.get(30, TimeUnit.SECONDS);
+        deletion.get(30, TimeUnit.SECONDS);
+
+        assertThat(readers(monitor)).isEmpty();
+        assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
+    }
+
+    /** A GitLab project with GitHub's repository number is another repository: its changes leave this proof alone. */
+    @Test
+    void shouldLeaveAGitHubMonitorAloneWhenAGitLabProjectWithItsNumberChanges() {
+        var monitor = monitor("gitlab-namesake");
+        long reader = readerNativeId();
+        listed(monitor, reader);
+        long gitLab = gitLab();
+        long project = Objects.requireNonNull(
+                jdbc.queryForObject("""
+                INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,
+                    html_url,pushed_at,visibility)
+                VALUES (?,?,'project',?,true,false,false,'https://example.com/project',now(),'PRIVATE') RETURNING id
+                """, Long.class, repositoryNativeId, gitLab, "lab/" + repositoryNativeId));
+        long namesake = Objects.requireNonNull(
+                jdbc.queryForObject("""
+                INSERT INTO "user"(id,provider_id,native_id,login,type,avatar_url,html_url)
+                VALUES (?,?,?,?,'USER','','') RETURNING id
+                """, Long.class, mirrorId(), gitLab, reader, "lab-reader-" + reader));
+        jdbc.update(
+                "INSERT INTO repository_collaborator(repository_id,user_id,permission) VALUES (?,?,'READ')",
+                project,
+                namesake);
+
+        jdbc.update("DELETE FROM repository_collaborator WHERE repository_id = ?", project);
+        jdbc.update("DELETE FROM repository WHERE id = ?", project);
+
+        assertThat(readers(monitor)).containsExactly(reader);
+        assertThat(proof(monitor)).isEqualTo("RESTRICTED PROVEN READERS_LISTED");
+    }
+
+    /** A GitLab instance of this test's own, so its native ids meet GitHub's only by number. */
+    private long gitLab() {
+        return Objects.requireNonNull(providers
+                .saveAndFlush(new IdentityProvider(
+                        IdentityProviderType.GITLAB, "https://gitlab-" + repositoryNativeId + ".example.test"))
+                .getId());
+    }
+
+    private void awaitBlockedBy(int holder, String description) {
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(jdbc.queryForObject(
+                                "SELECT count(*) FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))",
+                                Long.class,
+                                holder))
+                        .as(description)
+                        .isEqualTo(1L));
     }
 
     private long organizationOwningTheRepository() {

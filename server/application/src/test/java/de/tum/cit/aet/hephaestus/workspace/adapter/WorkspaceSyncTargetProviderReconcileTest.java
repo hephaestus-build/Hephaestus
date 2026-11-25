@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
@@ -75,6 +76,7 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 workspaceRepository,
                 repositoryToMonitorRepository,
                 mock(ResourceReaderRepository.class),
+                mock(PersonDataWriteFence.class),
                 workspaceScopeFilter,
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),

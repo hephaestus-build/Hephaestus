@@ -49,8 +49,8 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "workspace_id",
                         "",
                         0),
-                // A reader is a provider identity of the person, matched by its native subject on any provider:
-                // erasing a namesake's row on another provider only narrows a proof, and the next listing restores it.
+                // A reader is one provider identity: the provider and its native subject. The natural key survives a
+                // listing that names the person again, so the frozen selection still finds the row.
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
@@ -58,9 +58,9 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "resource_reader",
                         "EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
                                 + " i(\"providerId\" bigint,subject text,\"teamId\" text)"
-                                + " WHERE i.subject=t.reader_native_id::text)",
-                        "id,workspace_id,repository_to_monitor_id,reader_native_id",
-                        "id",
+                                + " WHERE i.\"providerId\"=t.provider_id AND i.subject=t.reader_native_id::text)",
+                        "workspace_id,repository_to_monitor_id,provider_id,reader_native_id",
+                        "workspace_id,repository_to_monitor_id,provider_id,reader_native_id",
                         "",
                         100),
                 new PersonalSpacePersonDataStore(jdbc, mapper, personalSpaces));

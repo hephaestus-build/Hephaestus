@@ -4,6 +4,8 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -36,12 +38,14 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -59,6 +63,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final ResourceReaderRepository resourceReaderRepository;
+    private final PersonDataWriteFence writeFence;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final ConnectionService connectionService;
     private final ApplicationEventPublisher eventPublisher;
@@ -74,6 +79,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             ResourceReaderRepository resourceReaderRepository,
+            PersonDataWriteFence writeFence,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
@@ -85,6 +91,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.resourceReaderRepository = resourceReaderRepository;
+        this.writeFence = writeFence;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         this.eventPublisher = eventPublisher;
@@ -270,6 +277,11 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         if (listing instanceof ReaderListing.Listed && !readOfThisMonitor(read)) {
             return;
         }
+        // The person-data fence comes before the monitor lock, in the order erasure takes them: erasure holds the
+        // fence while its removal of a collaborator locks the monitors. A person whom erasure removed is never stored.
+        List<Long> admitted = listing instanceof ReaderListing.Listed listed
+                ? admitted(read.providerId(), listed.readerNativeIds())
+                : List.of();
         locked(read.syncTargetId(), null)
                 .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
                 .ifPresent(rtm -> {
@@ -277,11 +289,14 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                     switch (listing) {
                         case ReaderListing.Listed listed -> {
                             if (readers.readersListed(read.generation(), read.requestedAt())) {
-                                forgetReaders(rtm);
-                                resourceReaderRepository.insertReaders(
-                                        workspaceIdOf(rtm),
-                                        Objects.requireNonNull(rtm.getId()),
-                                        listed.readerNativeIds().toArray(Long[]::new));
+                                long workspaceId = workspaceIdOf(rtm);
+                                long monitorId = Objects.requireNonNull(rtm.getId());
+                                Long[] rows = admitted.toArray(Long[]::new);
+                                // Rows that the listing names again keep their key, so an erasure that selected them
+                                // still finds them.
+                                resourceReaderRepository.deleteReadersNotIn(
+                                        workspaceId, monitorId, read.providerId(), rows);
+                                resourceReaderRepository.insertReaders(workspaceId, monitorId, read.providerId(), rows);
                             }
                         }
                         case ReaderListing.Stopped stopped -> readers.listingStopped(stopped.reason());
@@ -291,6 +306,44 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                         }
                     }
                 });
+    }
+
+    /**
+     * The readers that the person-data fence admits, holding the fence until this transaction ends. Sorted, so two
+     * listings take the fence's locks in one order.
+     */
+    private List<Long> admitted(long providerId, Set<Long> readerNativeIds) {
+        List<Long> sorted = readerNativeIds.stream().sorted().toList();
+        if (sorted.isEmpty()
+                || writeFence.holdForWrite(sorted.stream()
+                        .map(reader -> identity(providerId, reader))
+                        .toList())) {
+            return sorted;
+        }
+        return sorted.stream()
+                .filter(reader -> writeFence.holdForWrite(List.of(identity(providerId, reader))))
+                .toList();
+    }
+
+    private static PersonIdentity identity(long providerId, long readerNativeId) {
+        return new PersonIdentity(providerId, Long.toString(readerNativeId), null);
+    }
+
+    @Override
+    @Transactional
+    public void recordReaderRemoved(long providerId, long readerNativeId, Collection<Long> repositoryNativeIds) {
+        repositoryNativeIds.stream()
+                .distinct()
+                .flatMap(nativeId ->
+                        repositoryToMonitorRepository.findByNativeIdOnSourceProvider(nativeId, providerId).stream())
+                .map(RepositoryToMonitor::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .forEach(monitorId -> locked(monitorId, null).ifPresent(rtm -> {
+                    rtm.getReaders().readerRemoved();
+                    resourceReaderRepository.deleteReader(workspaceIdOf(rtm), monitorId, providerId, readerNativeId);
+                }));
     }
 
     /** A monitor holds readers only while a listing proves its class, so every answer that ends that proof drops them. */

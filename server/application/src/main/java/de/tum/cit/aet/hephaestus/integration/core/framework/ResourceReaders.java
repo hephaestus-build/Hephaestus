@@ -137,6 +137,14 @@ public class ResourceReaders {
         move(VisibilityClass.UNPROVEN, ProofReason.RESOURCE_UNAVAILABLE);
     }
 
+    /**
+     * The provider removed one reader. The caller deletes that reader; the rest of the listing still holds. The
+     * generation moves on, so a listing that began before the removal and still names the person does not apply.
+     */
+    public void readerRemoved() {
+        proofGeneration++;
+    }
+
     /** The monitor now names another resource on the provider, so the old resource's readers prove nothing. */
     public void identityChanged() {
         move(VisibilityClass.UNPROVEN, ProofReason.AWAITING_READERS);

@@ -6,12 +6,14 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -34,6 +36,8 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +52,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     // The handler reads GitHub's current collaborator access; a plain mock answers for GitHub.
     private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
+    private final RepositoryReadersProvider readers = mock(RepositoryReadersProvider.class);
 
     private GitHubMemberMessageHandler handler;
 
@@ -103,6 +108,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 collaboratorRepository,
                 scopeIdResolver,
                 accessReader,
+                readers,
                 deserializer,
                 transactionTemplate);
         githubReportsCollaborator("write");
@@ -210,8 +216,13 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         handler.dispatchEvent(removeEvent);
 
-        // Then - handler processes without error
+        // Then - the removal reaches the monitors' readers, though the mirror held no collaborator row for the person
         assertThat(removeEvent.action()).isEqualTo("removed");
+        verify(readers)
+                .recordReaderRemoved(
+                        Objects.requireNonNull(gitProvider.getId()),
+                        required(removeEvent.member().getDatabaseId()),
+                        List.of(required(removeEvent.repository().id())));
     }
 
     @Test

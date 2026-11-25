@@ -38,13 +38,15 @@ class GitHubRepositoryReadersMigrationTest {
                 INSERT INTO repository(id, native_id, provider_id, name, name_with_owner, is_archived, is_disabled,
                                        is_private, visibility)
                 VALUES (979511, 979511, 979501, 'closed', 'course/closed', false, false, true, 'PRIVATE'),
-                       (979512, 979512, 979501, 'internal', 'course/internal', false, false, true, 'INTERNAL');
+                       (979512, 979512, 979501, 'internal', 'course/internal', false, false, true, 'INTERNAL'),
+                       (979513, 979513, 979501, 'kept', 'course/kept', false, false, true, 'PRIVATE');
                 INSERT INTO repository_to_monitor(id, workspace_id, generated_paths, name_with_owner, native_id,
                                                   visibility_class, proof_state, proof_reason, readers_synced_at)
                 VALUES (979521, 979501, '[]', 'course/closed', 979511, 'RESTRICTED', 'PROVEN', 'READERS_LISTED',
                         now()),
                        (979522, 979501, '[]', 'course/internal', 979512, 'UNPROVEN', 'PENDING', 'AWAITING_READERS',
-                        NULL);
+                        NULL),
+                       (979523, 979501, '[]', 'course/kept', 979513, 'RESTRICTED', 'PROVEN', 'READERS_LISTED', now());
                 """);
 
         try (var connection = DriverManager.getConnection(owner.jdbcUrl(), owner.username(), owner.password());
@@ -62,8 +64,9 @@ class GitHubRepositoryReadersMigrationTest {
                     .as("every existing proof gets the time it began to wait or hold")
                     .containsExactly("course/closed true", "course/internal true");
             PracticeMigrationFixture.execute(owner, """
-                    INSERT INTO resource_reader(workspace_id, repository_to_monitor_id, reader_native_id)
-                    VALUES (979501, 979521, 1001), (979501, 979521, 1002);
+                    INSERT INTO resource_reader(workspace_id, repository_to_monitor_id, provider_id, reader_native_id)
+                    VALUES (979501, 979521, 979501, 1001), (979501, 979521, 979501, 1002),
+                           (979501, 979523, 979501, 1001);
                     UPDATE repository_to_monitor
                     SET visibility_class = 'UNPROVEN', proof_state = 'FAILED', proof_reason = 'READERS_NOT_LISTABLE'
                     WHERE id = 979522;
@@ -76,8 +79,8 @@ class GitHubRepositoryReadersMigrationTest {
                     .as("a repository whose readers no listing names is never restricted to a reader set")
                     .hasStackTraceContaining("ck_repository_to_monitor_readers_proof");
             assertThatThrownBy(() -> PracticeMigrationFixture.execute(owner, """
-                            INSERT INTO resource_reader(workspace_id, repository_to_monitor_id, reader_native_id)
-                            VALUES (979599, 979521, 1003)
+                            INSERT INTO resource_reader(workspace_id, repository_to_monitor_id, provider_id, reader_native_id)
+                            VALUES (979599, 979521, 979501, 1003)
                             """))
                     .as("a reader belongs to the workspace of its monitor")
                     .hasStackTraceContaining("fk_resource_reader_repository_to_monitor");
@@ -94,11 +97,13 @@ class GitHubRepositoryReadersMigrationTest {
             PracticeMigrationFixture.rollbackOnly(liquibase, "prod", CHANGELOG);
 
             assertThat(PracticeMigrationFixture.column(owner, """
-                            SELECT visibility_class || ' ' || proof_state || ' ' || proof_reason
-                            FROM repository_to_monitor WHERE id = 979522
+                            SELECT visibility_class || ' ' || proof_state || ' ' || proof_reason || ' '
+                                   || (readers_synced_at IS NULL)::text
+                            FROM repository_to_monitor WHERE id IN (979522, 979523) ORDER BY id
                             """))
-                    .as("the rollback fails closed: the repository waits for its readers again")
-                    .containsExactly("UNPROVEN PENDING AWAITING_READERS");
+                    .as("the rollback fails closed: the reader table goes, so no listing proves a repository")
+                    .containsExactly(
+                            "UNPROVEN PENDING AWAITING_READERS true", "UNPROVEN PENDING AWAITING_READERS true");
             assertThat(PracticeMigrationFixture.column(owner, """
                             SELECT (to_regclass('public.resource_reader') IS NULL)::text || ' '
                                    || (SELECT count(*) FROM information_schema.columns

@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
@@ -41,6 +43,8 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
     private final TeamMembershipRepository teamMembershipRepository;
     private final ScopeIdResolver scopeIdResolver;
     private final GitHubAccessReader accessReader;
+    private final RepositoryReadersProvider readers;
+    private final RepositoryRepository repositories;
 
     GitHubMembershipMessageHandler(
             GitHubUserProcessor userProcessor,
@@ -49,6 +53,8 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             TeamMembershipRepository teamMembershipRepository,
             ScopeIdResolver scopeIdResolver,
             GitHubAccessReader accessReader,
+            RepositoryReadersProvider readers,
+            RepositoryRepository repositories,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -63,6 +69,8 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         this.teamMembershipRepository = teamMembershipRepository;
         this.scopeIdResolver = scopeIdResolver;
         this.accessReader = accessReader;
+        this.readers = readers;
+        this.repositories = repositories;
     }
 
     /**
@@ -156,6 +164,10 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             return;
         }
 
+        if (current.role() == null) {
+            forgetReaderInOrganization(event, providerId, memberDto.getDatabaseId());
+        }
+
         // Get the team
         // The payload carries GitHub's team id, not the stored team's.
         Team team =
@@ -198,5 +210,24 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
 
         teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId());
         log.info("Removed team membership: userId={}, teamName={}", user.getId(), sanitizeForLog(team.getName()));
+    }
+
+    /**
+     * The person left a team, so they may have lost access to any repository that the team reaches, through a parent
+     * team as well. The mirror cannot show which, so the person stops counting as a reader of every repository of the
+     * organization. That only narrows: the next listing names them again where they still read.
+     */
+    private void forgetReaderInOrganization(
+            GitHubMembershipEventDTO event, Long providerId, @Nullable Long readerNativeId) {
+        if (readerNativeId == null
+                || event.organization() == null
+                || event.organization().login() == null) {
+            return;
+        }
+        readers.recordReaderRemoved(
+                providerId,
+                readerNativeId,
+                repositories.findNativeIdsByOrganizationLogin(
+                        event.organization().login(), providerId));
     }
 }
