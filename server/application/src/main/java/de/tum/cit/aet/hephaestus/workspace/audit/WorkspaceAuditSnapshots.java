@@ -37,6 +37,8 @@ public final class WorkspaceAuditSnapshots {
      */
     public record PerPersonResultsSnapshot(boolean perPersonResultsForAdmins) implements ConfigAuditSnapshot {}
 
+    public record StartedMessagesSnapshot(boolean startedMessagesEnabled) implements ConfigAuditSnapshot {}
+
     /** Presence of a stored SCM token — never the token itself. */
     public record TokenSnapshot(
             boolean tokenSet,

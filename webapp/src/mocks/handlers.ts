@@ -14,6 +14,7 @@ import type {
 	OffsetPageDtoFeedbackItem,
 	PasskeyStatus,
 	PerPersonResults,
+	StartedMessages,
 	ProductFeedbackSharing,
 	WorkspacePasskeyPolicy,
 	WorkspaceProviders,
@@ -83,6 +84,10 @@ export const handlers = [
 	// On, as in every workspace that ran practice reviews before the setting existed.
 	http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
 		HttpResponse.json({ enabled: true, canTurnOn: true } satisfies Wire<PerPersonResults>),
+	),
+	// On, as in every new workspace.
+	http.get("*/workspaces/:workspaceSlug/started-messages", () =>
+		HttpResponse.json({ enabled: true } satisfies Wire<StartedMessages>),
 	),
 	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 		HttpResponse.json(workspaceOnboarding()),

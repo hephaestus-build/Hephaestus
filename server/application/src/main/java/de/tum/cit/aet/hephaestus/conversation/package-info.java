@@ -26,6 +26,7 @@
             "core::exception",
             "core::person-data",
             "core::runtime",
+            "core::settings-spi",
             "core::web",
             "evidence",
             "practices::spi",

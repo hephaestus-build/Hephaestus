@@ -13,6 +13,7 @@ import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/Works
 import { WorkspacePerPersonResultsSettings } from "@/components/admin/settings/WorkspacePerPersonResultsSettings";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { WorkspaceSetupSummary } from "@/components/admin/settings/WorkspaceSetupSummary";
+import { WorkspaceStartedMessagesSettings } from "@/components/admin/settings/WorkspaceStartedMessagesSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -22,6 +23,7 @@ import { useWorkspaceDangerZone } from "@/hooks/use-workspace-danger-zone";
 import { useWorkspacePerPersonResults } from "@/hooks/use-workspace-per-person-results";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { useWorkspaceSetup } from "@/hooks/use-workspace-setup";
+import { useWorkspaceStartedMessages } from "@/hooks/use-workspace-started-messages";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
@@ -110,6 +112,7 @@ function ActiveSettings() {
 	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: routeSlug });
 	const mcpClients = useWorkspaceMcpClientGrants({ workspaceSlug: routeSlug });
 	const perPersonResults = useWorkspacePerPersonResults(routeSlug);
+	const startedMessages = useWorkspaceStartedMessages(routeSlug);
 	const {
 		adminWorkspaceSlug: workspaceSlug,
 		isLoading: isWorkspaceLoading,
@@ -159,6 +162,7 @@ function ActiveSettings() {
 						{...perPersonResults}
 					/>
 				}
+				startedMessages={<WorkspaceStartedMessagesSettings {...startedMessages} />}
 				security={<WorkspacePasskeyPolicySection {...passkeys} />}
 				mcpClients={
 					mcpClients === undefined ? undefined : <WorkspaceMcpClientGrantsSection {...mcpClients} />

@@ -1,0 +1,32 @@
+---
+title: Check-ins and contact counts stay with their person
+description: The upgrade adds the rows that the contact policy reads, private to each person, and a workspace switch for check-ins and updates.
+page_type: how-to
+---
+
+The migration adds two tables that the contact policy reads:
+
+- `check_in` holds each contact that a person agreed to, with its scope, kind and state.
+- `account_meter` counts the updates that a person got on their local date, across all workspaces.
+
+Row-level security limits each row to the account that owns it.
+Both tables start empty, so the migration needs no stopped roles and no backfill.
+The migration also adds `workspace.started_messages_enabled`, which is on for every workspace.
+
+1. Upgrade as the [upgrade guide](../upgrade) describes.
+2. To keep check-ins and updates off for the whole instance, set the Helm value `config.startedMessagesEnabled` to `false`.
+   Outside the chart, set `HEPHAESTUS_CONTACT_STARTED_MESSAGES_ENABLED=false`.
+3. To keep them off for one workspace, ask a workspace admin to switch them off.
+   The switch is **Check-ins and updates** in the workspace settings.
+
+## Check that it worked
+
+1. Connect to the database with `psql` as `hephaestus_owner`.
+2. Run this query:
+
+   ```sql
+   SELECT relname, relrowsecurity FROM pg_catalog.pg_class
+   WHERE oid IN ('public.check_in'::regclass, 'public.account_meter'::regclass);
+   ```
+
+3. Make sure that each row shows `t` in `relrowsecurity`.

@@ -9,6 +9,26 @@ erDiagram
 
     direction LR
 
+    AccountMeter {
+        BIGINT account_id PK,FK
+        VARCHAR(32) meter PK
+        INTEGER count "NOT NULL"
+        TIMESTAMPTZ last_at "NOT NULL"
+        DATE local_date "NOT NULL"
+    }
+
+    CheckIn {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(32) kind "NOT NULL"
+        VARCHAR(16) place "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        TIMESTAMPTZ state_changed_at "NOT NULL"
+        VARCHAR(255) topic
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
     Conversation {
         UUID id PK,UK
         TIMESTAMPTZ created_at "NOT NULL"
@@ -76,6 +96,9 @@ erDiagram
     AgentRun ||--|| ConversationTurn : has
 
     %% One-to-Many relationships
+    Account ||--o{ AccountMeter : has
+    Account ||--o{ CheckIn : has
+    Workspace ||--o{ CheckIn : has
     Account ||--o{ Conversation : has
     Conversation ||--o{ Conversation : has
     Workspace ||--o{ Conversation : has

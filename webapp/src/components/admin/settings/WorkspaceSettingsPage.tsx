@@ -18,6 +18,7 @@ export interface WorkspaceSettingsPageProps {
 	setupSummary?: ReactNode;
 	/** Whether the workspace's admins see practice results per person. Only an owner turns it on. */
 	perPersonResults?: ReactNode;
+	startedMessages?: ReactNode;
 	security?: ReactNode;
 	/** The connected MCP clients; absent while the instance has MCP clients turned off. */
 	mcpClients?: ReactNode;
@@ -31,6 +32,7 @@ export interface WorkspaceSettingsPageProps {
 export function WorkspaceSettingsPage({
 	setupSummary,
 	perPersonResults,
+	startedMessages,
 	security,
 	mcpClients,
 	workspaceSlug,
@@ -47,6 +49,7 @@ export function WorkspaceSettingsPage({
 				practicesEnabled={practicesEnabled}
 			/>
 			{perPersonResults}
+			{startedMessages}
 			<WorkspacePublicActivitySettings {...publicActivity} />
 			<WorkspaceHiddenPeopleSettings workspaceSlug={workspaceSlug} {...hiddenPeople} />
 			{security}

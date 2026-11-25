@@ -80,6 +80,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "Conversation",
             "ConversationEntry",
             "ConversationTurn",
+            "CheckIn", // direct workspace_id scalar
             // Through Workspace.organizationId (ID-based relationship via JOIN)
             "OrganizationMembership", // organizationId -> Workspace.organizationId
             // Through project owner (ID-based: ownerId -> Organization/Repository/User)
@@ -158,6 +159,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
             "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
             "ProvenanceSigningKey", // Instance keys that sign the provenance records of generated text
+            "AccountMeter", // A person's contact counts span workspaces (ADR 0139 decision 4)
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces

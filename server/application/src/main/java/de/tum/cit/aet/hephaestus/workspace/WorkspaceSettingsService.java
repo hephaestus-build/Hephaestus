@@ -71,6 +71,26 @@ public class WorkspaceSettingsService {
     }
 
     /**
+     * Lets Hephaestus start messages to people in the workspace, or stops it. Any admin may do either. The row lock
+     * serializes two admins, so the before value is current, and the recorder writes no row for an unchanged value.
+     */
+    @Transactional
+    public Workspace updateStartedMessages(long workspaceId, boolean enabled) {
+        Workspace workspace = workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", Long.toString(workspaceId)));
+        boolean previous = workspace.isStartedMessagesEnabled();
+        workspace.setStartedMessagesEnabled(enabled);
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_FEATURES,
+                workspaceId,
+                workspaceId,
+                new WorkspaceAuditSnapshots.StartedMessagesSnapshot(previous),
+                new WorkspaceAuditSnapshots.StartedMessagesSnapshot(enabled)));
+        return workspaceRepository.save(workspace);
+    }
+
+    /**
      * Update the personal access token for a workspace. Rotates the bearer credential on
      * whichever SCM Connection (GitHub PAT or GitLab) is currently active — the caller
      * controls which workspace this hits via {@code workspaceId}, the kind is resolved

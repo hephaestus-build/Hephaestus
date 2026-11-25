@@ -973,6 +973,10 @@
 		"access": "internal"
 	},
 	{
+		"operation": "GET /workspaces/{workspaceSlug}/started-messages",
+		"access": "internal"
+	},
+	{
 		"operation": "GET /workspaces/{workspaceSlug}/sync/progress",
 		"access": "internal"
 	},
@@ -1156,6 +1160,10 @@
 	},
 	{
 		"operation": "PATCH /workspaces/{workspaceSlug}/slack/me/preferences",
+		"access": "internal"
+	},
+	{
+		"operation": "PATCH /workspaces/{workspaceSlug}/started-messages",
 		"access": "internal"
 	},
 	{

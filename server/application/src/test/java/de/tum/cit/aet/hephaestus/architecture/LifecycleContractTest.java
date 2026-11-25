@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.tngtech.archunit.core.domain.JavaClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
+import de.tum.cit.aet.hephaestus.conversation.CheckIn;
 import de.tum.cit.aet.hephaestus.core.ContinuingLifecycle;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
@@ -82,6 +83,7 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(PracticeState.ACTIVE)),
                 new Contract<>(
                         FeedbackThreadResolutionState.class, Set.of(FeedbackThreadResolutionState.PENDING), Set.of()),
+                new Contract<>(CheckIn.State.class, Set.of(CheckIn.State.ACTIVE), Set.of()),
                 new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),

@@ -5157,6 +5157,10 @@ export const zStartTrialRequest = z.object({
 		.optional(),
 });
 
+export const zStartedMessages = z.object({
+	enabled: z.boolean(),
+});
+
 export const zStateBasis = zClaimBasis.and(
 	z.object({
 		explanation: z.string().optional(),
@@ -5978,6 +5982,10 @@ export const zUpdateSlackChannelConsentRequest = z.object({
 
 export const zUpdateSlackUserPreferencesRequest = z.object({
 	channelMessagesAllowed: z.boolean(),
+});
+
+export const zUpdateStartedMessages = z.object({
+	enabled: z.boolean(),
 });
 
 export const zUpdateSyncJobRequest = z.object({

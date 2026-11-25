@@ -254,8 +254,18 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldPurgeTheConversationsOfEveryOwnerInTheWorkspaceOnly() throws Exception {
+    void shouldPurgeTheConversationsAndCheckInsOfEveryOwnerInTheWorkspaceOnly() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_purge", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(connection).update("""
+                    INSERT INTO check_in (id, workspace_id, account_id, kind, topic, place, state, created_at,
+                                          state_changed_at)
+                    VALUES ('00000000-0000-0000-0000-00000000c001', 1, 11, 'CHECK_IN', NULL, 'APP', 'ACTIVE', now(), now()),
+                           ('00000000-0000-0000-0000-00000000c002', 1, 13, 'GOAL_FOLLOW_UP', 'goal-1', 'APP', 'PAUSED',
+                            now(), now()),
+                           ('00000000-0000-0000-0000-00000000c003', 2, 11, 'CHECK_IN', NULL, 'APP', 'ACTIVE', now(), now())
+                    """);
+        }
 
         sweepAsApplication(database, RowSweepRule.WORKSPACE_PURGE, 1, null);
 
@@ -265,6 +275,8 @@ class OwnerFunctionsDatabaseTest {
                     .containsExactly(BO_ELSEWHERE);
             assertThat(owner.queryForList("SELECT id FROM conversation_entry ORDER BY id", UUID.class))
                     .containsExactly(BO_ELSEWHERE_OLD, BO_TIE, BO_REDACTED);
+            assertThat(owner.queryForList("SELECT id FROM check_in ORDER BY id", UUID.class))
+                    .containsExactly(UUID.fromString("00000000-0000-0000-0000-00000000c003"));
         }
     }
 

@@ -542,6 +542,10 @@ hephaestus:
     mcp:
         enabled: ${HEPHAESTUS_MCP_ENABLED:false}
 
+    # When Hephaestus may reach a person (conversation.ContactProperties, ADR 0139). On until an operator turns it off.
+    contact:
+        started-messages-enabled: ${HEPHAESTUS_CONTACT_STARTED_MESSAGES_ENABLED:true}
+
     # ═══════════════════════════════════════════════════════════════════════════
     # EMAIL — sender identity for the notification module (notification.email.EmailProperties).
     # The SMTP transport is spring.mail.* above; email is on exactly when spring.mail.host is set,

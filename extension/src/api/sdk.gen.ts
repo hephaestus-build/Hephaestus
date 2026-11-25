@@ -610,6 +610,9 @@ import type {
 	GetSlackUserPreferencesData,
 	GetSlackUserPreferencesErrors,
 	GetSlackUserPreferencesResponses,
+	GetStartedMessagesData,
+	GetStartedMessagesErrors,
+	GetStartedMessagesResponses,
 	GetStoppedGitLabProjectsData,
 	GetStoppedGitLabProjectsErrors,
 	GetStoppedGitLabProjectsResponses,
@@ -1114,6 +1117,9 @@ import type {
 	UpdateSlackUserPreferencesData,
 	UpdateSlackUserPreferencesErrors,
 	UpdateSlackUserPreferencesResponses,
+	UpdateStartedMessagesData,
+	UpdateStartedMessagesErrors,
+	UpdateStartedMessagesResponses,
 	UpdateStatusData,
 	UpdateStatusErrors,
 	UpdateStatusResponses,
@@ -7627,6 +7633,42 @@ export const getSlackScopes = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/scopes",
 		...options,
+	});
+
+/**
+ * Whether Hephaestus may start messages to people in the workspace
+ */
+export const getStartedMessages = <ThrowOnError extends boolean = false>(
+	options: Options<GetStartedMessagesData, ThrowOnError>,
+): RequestResult<GetStartedMessagesResponses, GetStartedMessagesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetStartedMessagesResponses,
+		GetStartedMessagesErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/started-messages",
+		...options,
+	});
+
+/**
+ * Let Hephaestus start messages to people in the workspace, or stop it
+ */
+export const updateStartedMessages = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateStartedMessagesData, ThrowOnError>,
+): RequestResult<UpdateStartedMessagesResponses, UpdateStartedMessagesErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateStartedMessagesResponses,
+		UpdateStartedMessagesErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/started-messages",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 /**

@@ -234,6 +234,8 @@ spec:
             {{- end }}
             - name: HEPHAESTUS_MCP_ENABLED
               value: {{ $config.mcpEnabled | quote }}
+            - name: HEPHAESTUS_CONTACT_STARTED_MESSAGES_ENABLED
+              value: {{ $config.startedMessagesEnabled | quote }}
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
               value: {{ $config.slack.clientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET" "optional" true) | nindent 12 }}

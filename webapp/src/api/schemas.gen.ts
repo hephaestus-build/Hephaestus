@@ -16525,6 +16525,17 @@ export const StartTrialRequestSchema = {
 	required: ["practiceSlug"],
 } as const;
 
+export const StartedMessagesSchema = {
+	type: "object",
+	properties: {
+		enabled: {
+			type: "boolean",
+			description: "Whether Hephaestus may start messages to people in the workspace",
+		},
+	},
+	required: ["enabled"],
+} as const;
+
 export const StateBasisSchema = {
 	allOf: [
 		{
@@ -17719,6 +17730,16 @@ export const UpdateSlackUserPreferencesRequestSchema = {
 		},
 	},
 	required: ["channelMessagesAllowed"],
+} as const;
+
+export const UpdateStartedMessagesSchema = {
+	type: "object",
+	properties: {
+		enabled: {
+			type: "boolean",
+		},
+	},
+	required: ["enabled"],
 } as const;
 
 export const UpdateSyncJobRequestSchema = {

@@ -7152,6 +7152,13 @@ export type StartTrialRequest = {
 	practiceVersionId?: string;
 };
 
+export type StartedMessages = {
+	/**
+	 * Whether Hephaestus may start messages to people in the workspace
+	 */
+	enabled: boolean;
+};
+
 export type StateBasis = Omit<ClaimBasis, "type"> & {
 	explanation?: string;
 	type: "StateBasis";
@@ -7878,6 +7885,10 @@ export type UpdateSlackChannelConsentRequest = {
 
 export type UpdateSlackUserPreferencesRequest = {
 	channelMessagesAllowed: boolean;
+};
+
+export type UpdateStartedMessages = {
+	enabled: boolean;
 };
 
 export type UpdateSyncJobRequest = {
@@ -22992,6 +23003,77 @@ export type GetSlackScopesResponses = {
 };
 
 export type GetSlackScopesResponse = GetSlackScopesResponses[keyof GetSlackScopesResponses];
+
+export type GetStartedMessagesData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/started-messages";
+};
+
+export type GetStartedMessagesErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetStartedMessagesError = GetStartedMessagesErrors[keyof GetStartedMessagesErrors];
+
+export type GetStartedMessagesResponses = {
+	/**
+	 * OK
+	 */
+	200: StartedMessages;
+};
+
+export type GetStartedMessagesResponse =
+	GetStartedMessagesResponses[keyof GetStartedMessagesResponses];
+
+export type UpdateStartedMessagesData = {
+	body: UpdateStartedMessages;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/started-messages";
+};
+
+export type UpdateStartedMessagesErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type UpdateStartedMessagesError =
+	UpdateStartedMessagesErrors[keyof UpdateStartedMessagesErrors];
+
+export type UpdateStartedMessagesResponses = {
+	/**
+	 * The setting after the change
+	 */
+	200: StartedMessages;
+};
+
+export type UpdateStartedMessagesResponse =
+	UpdateStartedMessagesResponses[keyof UpdateStartedMessagesResponses];
 
 export type UpdateStatusData = {
 	body: UpdateWorkspaceStatusRequest;

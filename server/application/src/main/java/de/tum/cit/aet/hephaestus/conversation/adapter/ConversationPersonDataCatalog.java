@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The person's own Hephaestus conversations are exported and deleted. Copies of the person's data in other people's
+ * The person's own Hephaestus conversations, check-ins and contact counts are exported and deleted. Copies of the person's data in other people's
  * conversations are redacted: feedback Hephaestus showed about the person, and tool results that read the person's data.
  */
 @Component
@@ -33,7 +33,9 @@ import tools.jackson.databind.ObjectMapper;
     "conversation_entry_feedback_copy",
     "conversation_entry",
     "conversation_turn",
-    "conversation"
+    "conversation",
+    "check_in",
+    "account_meter"
 })
 public class ConversationPersonDataCatalog implements PersonDataCatalog {
 
@@ -81,6 +83,26 @@ public class ConversationPersonDataCatalog implements PersonDataCatalog {
                                 + "slack_channel_id,created_at,last_activity_at,last_read_at",
                         "id",
                         "",
-                        -90));
+                        -90),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "check_in",
+                        "check_in",
+                        "t.account_id = :account",
+                        "id,workspace_id,account_id,kind,topic,place,state,created_at,state_changed_at",
+                        "id",
+                        "",
+                        -80),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "account_meter",
+                        "account_meter",
+                        "t.account_id = :account",
+                        "account_id,meter,local_date,count,last_at",
+                        "account_id,meter",
+                        "",
+                        -80));
     }
 }

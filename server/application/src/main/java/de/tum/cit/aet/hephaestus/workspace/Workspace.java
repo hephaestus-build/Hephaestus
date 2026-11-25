@@ -122,6 +122,14 @@ public class Workspace {
     private boolean perPersonResultsForAdmins;
 
     /**
+     * Whether Hephaestus may start messages to people in this workspace: agreed check-ins and unprompted updates (ADR
+     * 0139 decision 15). On by default. Answers and the results a person asked for arrive either way.
+     */
+    @Column(name = "started_messages_enabled", nullable = false)
+    @ColumnDefault("true")
+    private boolean startedMessagesEnabled = true;
+
+    /**
      * Current lifecycle state of the workspace.
      *
      * @see WorkspaceStatus for valid states and transitions

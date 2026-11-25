@@ -412,6 +412,8 @@ config:
   browserFaultReports: false
   # Workspace admins can connect MCP clients, such as Claude Code, to a workspace: docs/admin/mcp-clients.mdx.
   mcpEnabled: false
+  # Hephaestus may send check-ins and updates of its own. Each workspace can also turn them off.
+  startedMessagesEnabled: true
   # The scheduled sync of each workspace's repositories.
   sync:
     runOnStartup: true

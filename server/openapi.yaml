@@ -193,6 +193,10 @@ tags:
      their results.
   name: workspace-per-person-results
 - name: workspace-registry
+- description: |-
+    Whether Hephaestus may start messages to people in the workspace: agreed check-ins and unprompted updates (ADR
+     0139). Answers and the results a person asked for arrive either way.
+  name: workspace-started-messages
 paths:
   /.well-known/hephaestus-provenance-keys.json:
     get:
@@ -16764,6 +16768,82 @@ paths:
         Slack token does not hold
       tags:
       - Slack connection
+  /workspaces/{workspaceSlug}/started-messages:
+    get:
+      operationId: getStartedMessages
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartedMessages"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Whether Hephaestus may start messages to people in the workspace
+      tags:
+      - workspace-started-messages
+    patch:
+      operationId: updateStartedMessages
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStartedMessages"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartedMessages"
+          description: The setting after the change
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: "Let Hephaestus start messages to people in the workspace, or stop\
+        \ it"
+      tags:
+      - workspace-started-messages
   /workspaces/{workspaceSlug}/status:
     patch:
       operationId: updateStatus
@@ -30829,6 +30909,14 @@ components:
           pattern: "^[1-9][0-9]*$"
       required:
       - practiceSlug
+    StartedMessages:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Whether Hephaestus may start messages to people in the workspace
+      required:
+      - enabled
     StateBasis:
       allOf:
       - $ref: "#/components/schemas/ClaimBasis"
@@ -31829,6 +31917,13 @@ components:
           type: boolean
       required:
       - channelMessagesAllowed
+    UpdateStartedMessages:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+      - enabled
     UpdateSyncJobRequest:
       type: object
       properties:

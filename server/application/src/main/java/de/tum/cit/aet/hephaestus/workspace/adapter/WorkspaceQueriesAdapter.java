@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryReposit
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResultVisibility;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceStartedMessages;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -22,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProviderAccounts, WorkspaceResultVisibility {
+public class WorkspaceQueriesAdapter
+        implements WorkspaceQueries, WorkspaceProviderAccounts, WorkspaceResultVisibility, WorkspaceStartedMessages {
     private final WorkspaceRepository workspaces;
     private final RepositoryToMonitorRepository monitors;
     private final ReviewScopeRepositoryRepository targets;
@@ -82,6 +84,14 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProvi
         return workspaces
                 .findById(workspaceId)
                 .map(Workspace::isPerPersonResultsForAdmins)
+                .orElse(false);
+    }
+
+    @Override
+    public boolean startedMessagesEnabled(long workspaceId) {
+        return workspaces
+                .findById(workspaceId)
+                .map(Workspace::isStartedMessagesEnabled)
                 .orElse(false);
     }
 

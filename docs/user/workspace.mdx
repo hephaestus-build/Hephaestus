@@ -233,6 +233,26 @@ Hephaestus records each change in the configuration audit of the workspace, with
 A workspace that ran practice reviews before this setting existed keeps it on.
 The upgrade records one audit entry for that.
 
+## Choose whether Hephaestus sends check-ins and updates
+
+**Check-ins and updates** decides whether Hephaestus may contact people in the workspace on its own.
+It is on for a new workspace.
+
+| | On | Off |
+| --- | --- | --- |
+| Check-ins that a person agreed to | Hephaestus sends them. | Hephaestus does not send them. |
+| Updates when Hephaestus finds something new for a person | Hephaestus may send them. | Hephaestus does not send them. |
+| Answers, and results that a person asked for | Hephaestus sends them. | Same. |
+| The weekly digest, for people who chose it | Hephaestus sends it. | Same. |
+| Feedback on the work | It follows the review settings. | Same. |
+
+1. Under **Administration**, open **Workspace settings**.
+2. Under **Messages from Hephaestus**, switch **Check-ins and updates** off or on.
+
+Any admin or owner can change it, in one step and with no confirmation.
+Hephaestus records each change in the configuration audit of the workspace, with who changed it and when.
+If the operator turned off messages that Hephaestus starts for the whole instance, the switch cannot turn them on.
+
 ## Replace a refused token
 
 Hephaestus checks GitLab tokens daily and rotates them, as [Create a workspace](#create-a-workspace) describes.

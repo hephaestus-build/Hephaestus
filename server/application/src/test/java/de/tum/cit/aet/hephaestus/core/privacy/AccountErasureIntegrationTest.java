@@ -90,6 +90,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -1056,6 +1057,18 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         issuedTokens.saveAndFlush(targetToken);
         UUID targetSession = UUID.randomUUID();
         UUID otherSession = UUID.randomUUID();
+        // Contact rows have row-level security, so the table owner writes them.
+        var owner = PostgreSQLTestContainer.ownerJdbc();
+        for (Account person : List.of(targetAccount, otherAccount)) {
+            owner.update("""
+                INSERT INTO check_in(id,workspace_id,account_id,kind,topic,place,state,created_at,state_changed_at)
+                VALUES (gen_random_uuid(),?,?,'CHECK_IN',NULL,'APP','ACTIVE',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                """, nonceWorkspace.getId(), person.getId());
+            owner.update("""
+                INSERT INTO account_meter(account_id,meter,local_date,count,last_at)
+                VALUES (?,'DAILY_UPDATES',CURRENT_DATE,1,CURRENT_TIMESTAMP)
+                """, person.getId());
+        }
         for (var entry :
                 Map.of(targetSession, targetAccount, otherSession, otherAccount).entrySet()) {
             jdbc.update("""

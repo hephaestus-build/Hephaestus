@@ -1226,6 +1226,7 @@
 				"pageExperienceMetrics",
 				"browserFaultReports",
 				"mcpEnabled",
+				"startedMessagesEnabled",
 				"sync",
 				"credentialKey",
 				"systemKey",
@@ -1329,6 +1330,9 @@
 					"type": "boolean"
 				},
 				"mcpEnabled": {
+					"type": "boolean"
+				},
+				"startedMessagesEnabled": {
 					"type": "boolean"
 				},
 				"sync": {

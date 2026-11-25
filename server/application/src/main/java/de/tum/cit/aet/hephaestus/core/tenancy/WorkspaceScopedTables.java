@@ -95,6 +95,9 @@ public class WorkspaceScopedTables {
             "provider_event_step",
             // Native-account email subscriptions are independent of workspace membership.
             "notification_subscription",
+            // A person's contact counts for the daily limit span workspaces (ADR 0139 decision 4); row security
+            // scopes each row to its account
+            "account_meter",
             // Instance LLM-config catalog — app_admin-owned, curated, shared across all
             // workspaces
             "llm_connection",

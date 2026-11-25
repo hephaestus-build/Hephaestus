@@ -580,6 +580,10 @@ export {
 	getSlackUserPreferencesQueryKey,
 } from "./react-query/getSlackUserPreferences.gen.js";
 export {
+	getStartedMessagesOptions,
+	getStartedMessagesQueryKey,
+} from "./react-query/getStartedMessages.gen.js";
+export {
 	getStoppedGitLabProjectsOptions,
 	getStoppedGitLabProjectsQueryKey,
 } from "./react-query/getStoppedGitLabProjects.gen.js";
@@ -965,6 +969,7 @@ export { updateReviewScheduleMutation } from "./react-query/updateReviewSchedule
 export { updateScanStatusMutation } from "./react-query/updateScanStatus.gen.js";
 export { updateSlackChannelConsentMutation } from "./react-query/updateSlackChannelConsent.gen.js";
 export { updateSlackUserPreferencesMutation } from "./react-query/updateSlackUserPreferences.gen.js";
+export { updateStartedMessagesMutation } from "./react-query/updateStartedMessages.gen.js";
 export { updateStatusMutation } from "./react-query/updateStatus.gen.js";
 export { updateTeamVisibilityMutation } from "./react-query/updateTeamVisibility.gen.js";
 export { updateTokenMutation } from "./react-query/updateToken.gen.js";

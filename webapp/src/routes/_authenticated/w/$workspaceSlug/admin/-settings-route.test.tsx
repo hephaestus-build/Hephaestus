@@ -1043,6 +1043,44 @@ describe("per-person results for admins", () => {
 	});
 });
 
+describe("messages from Hephaestus", () => {
+	it("turns check-ins and updates off and on again, one step each", async () => {
+		const user = userEvent.setup();
+		const changes: unknown[] = [];
+		let enabled = true;
+		server.use(
+			http.get("*/workspaces/acme/started-messages", () => HttpResponse.json({ enabled })),
+			http.patch<PathParams, { enabled: boolean }>(
+				"*/workspaces/acme/started-messages",
+				async ({ request }) => {
+					const body = await request.json();
+					changes.push(body);
+					enabled = body.enabled;
+					return HttpResponse.json({ enabled });
+				},
+			),
+		);
+		renderSettingsRoute(true);
+
+		const toggle = await screen.findByRole(
+			"switch",
+			{ name: "Check-ins and updates" },
+			ROUTE_RENDER_WAIT,
+		);
+		await user.click(toggle);
+		await screen.findByText("Hephaestus now sends no check-ins or updates here");
+		await waitFor(() =>
+			expect(
+				screen.getByRole("switch", { name: "Check-ins and updates" }).getAttribute("aria-checked"),
+			).toBe("false"),
+		);
+
+		await user.click(screen.getByRole("switch", { name: "Check-ins and updates" }));
+		await screen.findByText("Hephaestus may now send check-ins and updates here");
+		expect(changes).toStrictEqual([{ enabled: false }, { enabled: true }]);
+	});
+});
+
 describe("workspace settings lifetime", () => {
 	it("keeps a completed public-page write with its workspace after switching to another", async () => {
 		const user = userEvent.setup();

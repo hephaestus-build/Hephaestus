@@ -61,6 +61,23 @@ At each boundary the checks run in this order:
 ADR 0134 (proposed in #4863) owns this order. A contact change never counts as a permission change.
 **Pause**, quiet hours and **Not now** never stop an answer that streams, and never reset a cache.
 
+### Where the facts come from
+
+`ContactFacts` reads the facts again at each boundary, as the person they are about:
+
+- The instance switch is `hephaestus.contact.started-messages-enabled`.
+  The workspace switch is **Check-ins and updates** in the workspace settings (C9).
+- Silent Mode comes from the instance settings.
+- The daily count comes from `account_meter`: one row for each person and meter, on the person's local date.
+- An agreed contact needs an active `check_in` row of that person in that workspace.
+- Until #4937 stores the person's controls, each person has the defaults in `ContactFacts.PERSON_DEFAULTS`.
+  These are no **Pause**, no mute, quiet hours from 22:00 to 08:00 and **Sometimes**.
+- No fact comes from a message, its read state or a reply.
+  `ContactRulesReadNoMessagesTest` makes sure of this (ADR 0139 decision 16).
+
+Row-level security limits each `check_in` and `account_meter` row to its owner.
+A workspace purge deletes the check-ins of the workspace through `person_row_sweep`.
+
 ## The notification budget
 
 The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) defines the notification budget.
