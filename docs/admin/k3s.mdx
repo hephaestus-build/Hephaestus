@@ -126,6 +126,55 @@ The check exits with an error if the host differs from the policy.
 
 To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 
+### Apply a declared policy with recovery
+
+Open the host console before you change the policy.
+Set strict reverse-path filtering before you apply the UFW policy.
+Install the boot recovery service from the same trusted checkout and make sure `nft` is available at `/usr/sbin/nft`.
+
+```bash
+sudo install -m 0644 deploy/host-firewall/hephaestus-firewall-recovery-boot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable hephaestus-firewall-recovery-boot.service
+```
+
+The script checks the built-in `INPUT` and `FORWARD` chains before it schedules a change.
+If it lists conflicting rules, use the console to remove or migrate them before you retry.
+UFW reset replaces its before and after rules with package defaults.
+Review any custom UFW rules before you continue.
+
+1. Connect from the admin VPN with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
+   Use the configuration at `/etc/hephaestus/host-firewall.json`.
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --apply /etc/hephaestus/host-firewall.json
+   ```
+
+2. If the policy changed, open a second SSH connection with the same options.
+   Check that the site and metrics scrape work.
+   Confirm from the new session within 10 minutes.
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --confirm /etc/hephaestus/host-firewall.json
+   ```
+
+The script records the last confirmed policy in `/etc/hephaestus/host-firewall-confirmed.json`.
+Run `--apply` once with a policy that already matches the host to record a starting policy.
+If the timer expires, it rebuilds and checks the last confirmed policy.
+If recovery fails or this is the first change, the emergency firewall drops incoming and routed traffic.
+It permits SSH from the available declared VPN networks.
+
+After a reboot during an unconfirmed change, the boot service loads the emergency firewall before networking.
+Use the console or connect from the admin VPN and retry recovery:
+
+```bash
+sudo node scripts/host-firewall.ts --restore-ufw
+```
+
+After recovery, run the policy check and verify the site.
+If the script reports an unreadable pending policy, wait for the timer to stop.
+Then apply the intended policy and confirm it from a fresh VPN SSH session.
+
 ## What the installer checks
 
 The installer stops before it changes the host when one of these checks fails. Each message tells you what to change.
