@@ -79,6 +79,7 @@ const logOnlyChains = [
 const ufw = "/usr/sbin/ufw";
 const nft = "/usr/sbin/nft";
 const systemctl = "/usr/bin/systemctl";
+const reversePathFile = "/etc/sysctl.d/99-hephaestus-public-rp-filter.conf";
 const ufwDefaults = "/etc/default/ufw";
 const ufwFiles = {
 	"user.rules": "/etc/ufw/user.rules",
@@ -191,17 +192,11 @@ export function rulesFor(config: unknown): Rule[] {
 }
 
 export function publicInterface(config: unknown, defaultRoute: () => string) {
-	const names =
-		typeof config === "object" && config !== null && "publicInterface" in config
-			? [config.publicInterface]
-			: [
-					...new Set(
-						Array.from(
-							defaultRoute().matchAll(/\bdev (?<name>\S+)/gu),
-							(match) => match.groups?.name,
-						),
-					),
-				];
+	const names = [
+		...new Set(
+			Array.from(defaultRoute().matchAll(/\bdev (?<name>\S+)/gu), (match) => match.groups?.name),
+		),
+	];
 	const [name] = names;
 	if (
 		names.length !== 1 ||
@@ -209,22 +204,67 @@ export function publicInterface(config: unknown, defaultRoute: () => string) {
 		!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/u.test(name) ||
 		["all", "default", "lo", "cni0", "flannel.1"].includes(name)
 	) {
-		throw new Error("Set publicInterface to the public IPv4 interface name.");
+		throw new Error("The IPv4 default routes must use one public interface.");
+	}
+	if (
+		typeof config === "object" &&
+		config !== null &&
+		"publicInterface" in config &&
+		config.publicInterface !== name
+	) {
+		throw new Error(`Set publicInterface to ${name}, the IPv4 default-route interface.`);
 	}
 	return name;
 }
 
-export function reversePathDrift(all: string, device: string): Problem[] {
-	if (["0", "1"].includes(all.trim()) && device.trim() === "1") {
-		return [];
-	}
-	return [
-		{
+function strictReversePath(all: string, device: string) {
+	const global = all.trim();
+	return (global === "0" || global === "1") && device.trim() === "1";
+}
+
+function savedReversePath(contents: string, device: string) {
+	// A dot in an interface name is literal in slash notation and escaped as '/' in dot notation.
+	const keys = new Set([
+		`net/ipv4/conf/${device}/rp_filter`,
+		`net.ipv4.conf.${device.replaceAll(".", "/")}.rp_filter`,
+	]);
+	const line = contents.split("\n").findLast((entry) => {
+		const key = entry.split("=", 1)[0]?.trim().replace(/^-/u, "");
+		return entry.includes("=") && key !== undefined && keys.has(key);
+	});
+	return line?.slice(line.indexOf("=") + 1) ?? "";
+}
+
+export function reversePathDrift(
+	config: unknown,
+	defaultRoute = () => run("/usr/sbin/ip", ["-o", "-4", "route", "show", "default"]),
+	read = (file: string) => readFileSync(file, "utf8"),
+): Problem[] {
+	const problems: Problem[] = [];
+	try {
+		const device = publicInterface(config, defaultRoute);
+		const knobs = "/proc/sys/net/ipv4/conf";
+		if (!strictReversePath(read(`${knobs}/all/rp_filter`), read(`${knobs}/${device}/rp_filter`))) {
+			problems.push({
+				reason: "reverse_path_filter",
+				message:
+					"Set strict IPv4 reverse-path filtering on the public interface. The global value must be 0 or 1.",
+			});
+		}
+		const saved = read(reversePathFile);
+		if (!strictReversePath(savedReversePath(saved, "all"), savedReversePath(saved, device))) {
+			problems.push({
+				reason: "reverse_path_filter",
+				message: `Save the global and public interface reverse-path settings in ${reversePathFile}.`,
+			});
+		}
+	} catch (error) {
+		problems.push({
 			reason: "reverse_path_filter",
-			message:
-				"Set strict IPv4 reverse-path filtering on the public interface. The global value must be 0 or 1.",
-		},
-	];
+			message: `Could not verify IPv4 reverse-path filtering. ${error instanceof Error ? error.message : String(error)}`,
+		});
+	}
+	return problems;
 }
 
 export function ufwArgs(rule: Rule): string[] {
@@ -640,13 +680,13 @@ interface FirewallState {
 	ufwUnit: string;
 	persistenceProblem: string | null;
 	bootGuardActive: boolean;
-	reversePath: ReturnType<typeof readReversePath>;
+	reversePath: Problem[];
 	filters: Record<Family, { saved: string; live: string[] }>;
 }
 
 export function evaluateFirewall(state: FirewallState, rules: Rule[], guarded = false): Problem[] {
 	const problems = settingsDrift(state.defaultSettings, state.ufwConfig, state.ufwUnit);
-	problems.push(...reversePathDrift(state.reversePath.all, state.reversePath.device));
+	problems.push(...state.reversePath);
 	if (state.persistenceProblem !== null) {
 		problems.push({ reason: "netfilter_persistent", message: state.persistenceProblem });
 	}
@@ -682,17 +722,6 @@ function bootGuardActive() {
 	return run(nft, ["list", "tables"]).split("\n").includes(`table inet ${guardTable}`);
 }
 
-function readReversePath(config: unknown) {
-	const device = publicInterface(config, () =>
-		run("/usr/sbin/ip", ["-o", "-4", "route", "show", "default"]),
-	);
-	const knobs = "/proc/sys/net/ipv4/conf";
-	return {
-		all: readFileSync(`${knobs}/all/rp_filter`, "utf8"),
-		device: readFileSync(`${knobs}/${device}/rp_filter`, "utf8"),
-	};
-}
-
 function drift(rules: Rule[], guarded: boolean, config: unknown): Problem[] {
 	return evaluateFirewall(
 		{
@@ -701,7 +730,7 @@ function drift(rules: Rule[], guarded: boolean, config: unknown): Problem[] {
 			ufwUnit: unitState("ufw.service", "UnitFileState"),
 			persistenceProblem: snapshotDrift(),
 			bootGuardActive: bootGuardActive(),
-			reversePath: readReversePath(config),
+			reversePath: reversePathDrift(config),
 			filters: {
 				4: familyState(4, ufwFiles["user.rules"]),
 				6: familyState(6, ufwFiles["user6.rules"]),
@@ -821,7 +850,7 @@ interface RecoveryRuntime {
 interface ChangeRuntime extends RecoveryRuntime {
 	unitState: typeof unitState;
 	snapshotDrift: typeof snapshotDrift;
-	readReversePath: typeof readReversePath;
+	reversePathDrift: (config: unknown) => Problem[];
 	sshConnection: typeof sshConnection;
 	uptime: () => number;
 }
@@ -837,7 +866,7 @@ const hostRecovery: ChangeRuntime = {
 	drift,
 	unitState,
 	snapshotDrift,
-	readReversePath,
+	reversePathDrift,
 	sshConnection,
 	uptime: () => Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]),
 };
@@ -1279,10 +1308,9 @@ export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
 		throw new Error(snapshot);
 	}
 	runtime.sshConnection(rules);
-	const reversePath = runtime.readReversePath(policy);
-	const [invalidPublicPath] = reversePathDrift(reversePath.all, reversePath.device);
-	if (invalidPublicPath !== undefined) {
-		throw new Error(invalidPublicPath.message);
+	const reversePath = runtime.reversePathDrift(policy);
+	if (reversePath.length > 0) {
+		throw new Error(reversePath.map(({ message }) => message).join("\n"));
 	}
 	for (const family of families) {
 		const live = runtime.execute(packetFilter[family], ["-w", "5", "-S"]).split("\n");

@@ -62,6 +62,7 @@ void test("rejects malformed addresses, default routes and missing VPN networks"
 		{ sshVpnCidrs: ["0.0.0.0/0", "2001:db8:1::/64"] },
 		{ sshVpnCidrs: ["192.0.2.2/24", "2001:db8:1::/64"] },
 		{ sshVpnCidrs: ["192.0.2.0/24", "2001:db8::/129"] },
+		{ sshVpnCidrs: ["<vpn-range>"] },
 		{ sshVpnCidrs: [] },
 		{ monitoringAddresses: ["198.51.100.4/24", "2001:db8:2::4"] },
 		{ monitoringAddresses: ["198.51.100.4", "::ffff:192.0.2.4"] },
@@ -234,6 +235,48 @@ function readTestChange(file: string) {
 	};
 }
 
+const reversePathFile = "/etc/sysctl.d/99-hephaestus-public-rp-filter.conf";
+const strictSysctl = "net/ipv4/conf/all/rp_filter = 0\nnet/ipv4/conf/eth0/rp_filter = 1\n";
+
+function reversePathFixture(
+	config: unknown = {},
+	{
+		all = "0",
+		device = "1",
+		persisted = strictSysctl,
+		route = "default dev eth0",
+	}: {
+		all?: string;
+		device?: string;
+		persisted?: string | null;
+		route?: string;
+	} = {},
+) {
+	return reversePathDrift(
+		config,
+		() => route,
+		(file) => {
+			switch (file) {
+				case "/proc/sys/net/ipv4/conf/all/rp_filter": {
+					return all;
+				}
+				case "/proc/sys/net/ipv4/conf/eth0/rp_filter": {
+					return device;
+				}
+				case reversePathFile: {
+					if (persisted !== null) {
+						return persisted;
+					}
+					throw new Error("No persisted reverse-path settings.");
+				}
+				default: {
+					assert.fail(`Unexpected read: ${file}`);
+				}
+			}
+		},
+	);
+}
+
 function testFirewallState(
 	rules: ReturnType<typeof rulesFor>,
 	bootGuardActive = false,
@@ -268,7 +311,7 @@ function testFirewallState(
 		ufwUnit: "enabled",
 		persistenceProblem: null,
 		bootGuardActive,
-		reversePath: { all: "0", device: "1" },
+		reversePath: reversePathFixture(),
 		filters: { 4: filters(4, k3sV4), 6: filters(6, k3sV6) },
 	};
 }
@@ -277,7 +320,7 @@ function rejectMutation(): never {
 	assert.fail("Apply attempted a mutation.");
 }
 
-void test("apply refuses non-strict reverse-path settings before arming", () => {
+void test("apply refuses reverse-path drift before arming", () => {
 	const config = { ...base, k3s: true, http3: false };
 	const runtime = {
 		directory: "/unused",
@@ -292,11 +335,19 @@ void test("apply refuses non-strict reverse-path settings before arming", () => 
 		snapshotDrift: () => null,
 		sshConnection: () => 90,
 		uptime: () => 100,
-		readReversePath: () => ({ all: "2", device: "1" }),
+		reversePathDrift: () => reversePathFixture(config, { all: "2" }),
 	};
 	assert.throws(
 		() => apply(config, rulesFor(config), runtime),
 		/Set strict IPv4 reverse-path filtering/u,
+	);
+	assert.throws(
+		() =>
+			apply(config, rulesFor(config), {
+				...runtime,
+				reversePathDrift: () => reversePathFixture(config, { persisted: null }),
+			}),
+		/No persisted reverse-path settings/u,
 	);
 });
 
@@ -305,6 +356,7 @@ for (const scenario of [
 	"first apply",
 	"verification fails",
 	"loose during restore",
+	"default route missing during restore",
 	"snapshot enabled during restore",
 	"missing config on restore",
 	"service unloaded",
@@ -344,6 +396,7 @@ for (const scenario of [
 		let bootFilterLoaded = false;
 		let armed = 0;
 		let sshAge = 90;
+		let hostPrerequisiteFixed = false;
 		const foreignRule =
 			new Map([
 				["unowned INPUT", "-A INPUT -s 203.0.113.9/32 -j ACCEPT"],
@@ -404,7 +457,7 @@ for (const scenario of [
 			bootGuard: path.join(directory, "boot.nft"),
 			defaultsPath: path.join(directory, "defaults"),
 			snapshotDrift: () => null,
-			readReversePath: () => ({ all: "0", device: "1" }),
+			reversePathDrift: reversePathFixture,
 			uptime: () => 100,
 			sshConnection: () => sshAge,
 			unitState(_unit: string, property: string) {
@@ -488,10 +541,13 @@ for (const scenario of [
 					waiting = false;
 				}
 				const state = testFirewallState(rules, bootFilterLoaded);
-				if (scenario === "loose during restore") {
-					state.reversePath = { all: "2", device: "1" };
+				if (!hostPrerequisiteFixed && scenario === "loose during restore") {
+					state.reversePath = reversePathFixture(policy, { all: "2" });
 				}
-				if (scenario === "snapshot enabled during restore") {
+				if (!hostPrerequisiteFixed && scenario === "default route missing during restore") {
+					state.reversePath = reversePathFixture(policy, { route: "" });
+				}
+				if (!hostPrerequisiteFixed && scenario === "snapshot enabled during restore") {
 					state.persistenceProblem = "An enabled service restores a saved snapshot.";
 				}
 				if (scenario === "verification fails" && rules.some((rule) => rule.port === 443)) {
@@ -635,7 +691,13 @@ for (const scenario of [
 			assertEmergencyGuards(guards, scenario === "verification fails");
 			assert.equal(bootFilterLoaded, true);
 			assert.match(readFileSync(runtime.bootGuard, "utf8"), /tcp dport 22 accept/u);
-		} else if (["loose during restore", "snapshot enabled during restore"].includes(scenario)) {
+		} else if (
+			[
+				"loose during restore",
+				"default route missing during restore",
+				"snapshot enabled during restore",
+			].includes(scenario)
+		) {
 			assert.throws(
 				() => restoreUfw(runtime),
 				/Restored the last confirmed UFW policy\. The emergency guard remains active/u,
@@ -645,6 +707,12 @@ for (const scenario of [
 			assertEmergencyGuards(guards, true);
 			assert.equal(bootFilterLoaded, true);
 			assert.ok(existsSync(runtime.pending));
+			hostPrerequisiteFixed = true;
+			restoreUfw(runtime);
+			assert.equal(guards.size, 0);
+			assert.equal(bootFilterLoaded, false);
+			assert.ok(!existsSync(runtime.bootGuard));
+			assert.ok(!existsSync(runtime.pending));
 		} else {
 			restoreUfw(runtime);
 			assert.deepEqual(calls, [
@@ -827,7 +895,7 @@ void test("recognizes both live k3s rule sets and checks saved filter rules per 
 
 void test("requires effective strict reverse-path filtering for the public interface", () => {
 	assert.equal(
-		publicInterface({ publicInterface: "eth0" }, () => ""),
+		publicInterface({ publicInterface: "eth0" }, () => "default dev eth0"),
 		"eth0",
 	);
 	assert.equal(
@@ -835,22 +903,69 @@ void test("requires effective strict reverse-path filtering for the public inter
 		"eth0",
 	);
 	assert.throws(() => publicInterface({}, () => "default dev eth0\ndefault dev eth1"));
-	assert.throws(() => publicInterface({ publicInterface: "../all" }, () => ""));
-	assert.throws(() => publicInterface({ publicInterface: "cni0" }, () => ""));
+	assert.throws(() => publicInterface({ publicInterface: "../all" }, () => "default dev eth0"));
+	assert.throws(() => publicInterface({ publicInterface: "cni0" }, () => "default dev cni0"));
+	assert.deepEqual(reversePathFixture({ publicInterface: "eth1" }), [
+		{
+			reason: "reverse_path_filter",
+			message:
+				"Could not verify IPv4 reverse-path filtering. Set publicInterface to eth0, the IPv4 default-route interface.",
+		},
+	]);
 
-	for (const [global, device] of [
+	for (const [all, device] of [
 		["2", "1"],
 		["0", "2"],
 		["0", "0"],
 		["1", "2"],
 	] as const) {
 		assert.deepEqual(
-			reversePathDrift(global, device).map(({ reason }) => reason),
+			reversePathFixture({}, { all, device }).map(({ reason }) => reason),
 			["reverse_path_filter"],
 		);
 	}
-	assert.deepEqual(reversePathDrift("0\n", "1\n"), []);
-	assert.deepEqual(reversePathDrift("1", "1"), []);
+	assert.deepEqual(reversePathFixture({}, { all: "0\n", device: "1\n" }), []);
+	assert.deepEqual(reversePathFixture({}, { all: "1" }), []);
+});
+
+void test("requires a persisted strict reverse-path declaration for the routed interface", () => {
+	for (const persisted of [
+		null,
+		"",
+		"net/ipv4/conf/eth0/rp_filter = 1",
+		strictSysctl.replace("eth0", "eth1"),
+		`${strictSysctl}net.ipv4.conf.eth0.rp_filter = 2\n`,
+	]) {
+		const state = testFirewallState([]);
+		state.reversePath = reversePathFixture({}, { persisted });
+		assert.deepEqual(
+			evaluateFirewall(state, []).map(({ reason }) => reason),
+			["reverse_path_filter"],
+		);
+	}
+	assert.deepEqual(reversePathFixture({}, { persisted: strictSysctl.replaceAll("/", ".") }), []);
+});
+
+void test("reads reverse-path settings for a dotted interface", () => {
+	for (const key of ["net/ipv4/conf/eth0.100/rp_filter", "net.ipv4.conf.eth0/100.rp_filter"]) {
+		const files = new Map([
+			["/proc/sys/net/ipv4/conf/all/rp_filter", "0"],
+			["/proc/sys/net/ipv4/conf/eth0.100/rp_filter", "1"],
+			[reversePathFile, `net/ipv4/conf/all/rp_filter = 0\n${key} = 1\n`],
+		]);
+		assert.deepEqual(
+			reversePathDrift(
+				{ publicInterface: "eth0.100" },
+				() => "default dev eth0.100",
+				(file) => {
+					const value = files.get(file);
+					assert.ok(value !== undefined);
+					return value;
+				},
+			),
+			[],
+		);
+	}
 });
 
 void test("a loaded boot guard reports drift even when UFW matches the policy", () => {
