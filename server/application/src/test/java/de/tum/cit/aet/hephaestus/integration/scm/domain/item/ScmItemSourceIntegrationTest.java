@@ -1102,6 +1102,51 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(cost.get()).isEqualTo(few);
     }
 
+    /**
+     * A read of many work items checks every item's source as its own check does, and reads what they share, here
+     * their repository and their author, once. Every third item's work is deleted, so it is refused.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldCheckTheSourcesOfManyItemsAsTheirOwnChecksDoAtAFixedStatementCount(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        List<ItemRef> refs = new ArrayList<>();
+        Runnable more = () -> {
+            for (int index = 0; index < 3; index++) {
+                var issue = progressIssue(fixture, 300 + refs.size(), null);
+                if (refs.size() % 3 == 2) {
+                    issue.setDeletedAt(Instant.now());
+                    issues.saveAndFlush(issue);
+                }
+                refs.add(writer.upsert(
+                        new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null)));
+            }
+        };
+        Supplier<Long> cost = () -> {
+            var read = reads.measure(() -> sourceAccess.permitsAll(
+                    refs, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, SourceReadAudience.PROCESSING));
+            for (var ref : refs)
+                assertThat(read.value())
+                        .as("item %s", ref.itemId())
+                        .containsEntry(
+                                ref.itemId(), sourceAccess.permits(ref, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY));
+            assertThat(read.value()).containsValues(true, false);
+            return read.cost().statements();
+        };
+
+        more.run();
+        long few = cost.get();
+        more.run();
+        more.run();
+
+        assertThat(cost.get()).isEqualTo(few);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,

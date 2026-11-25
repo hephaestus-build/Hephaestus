@@ -29,10 +29,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -174,15 +176,16 @@ public class ReviewResultQueryService {
     public Page<ReviewProblemDTO> listProblems(
             long workspaceId, ResultQueryFilter filter, ProblemQueryFilter child, Pageable page) {
         var rows = results.problems(workspaceId, filter, child, page);
-        return rows.map(p -> problemRow(workspaceId, p));
+        var parents = parents(workspaceId, rows.getContent());
+        return rows.map(p -> problemRow(p, Objects.requireNonNull(parents.get(p.getResultId()))));
     }
 
     public ReviewProblemDetailDTO problem(long ws, UUID id) {
         var p = problems.findByIdAndWorkspaceId(id, ws)
                 .orElseThrow(() -> new EntityNotFoundException("Problem", id.toString()));
-        var row = problemRow(ws, p);
-        var r = require(ws, p.getResultId());
-        var v = views.operatorViews(ws, List.of(r.facts())).getFirst();
+        var parent = Objects.requireNonNull(parents(ws, List.of(p)).get(p.getResultId()));
+        var row = problemRow(p, parent);
+        var v = parent.view();
         return new ReviewProblemDetailDTO(
                 row.id(),
                 row.resultId(),
@@ -230,10 +233,64 @@ public class ReviewResultQueryService {
                 freshness.capturedAt());
     }
 
-    private ReviewProblemDTO problemRow(long ws, Problem p) {
-        var r = require(ws, p.getResultId());
-        var v = views.operatorViews(ws, List.of(r.facts())).getFirst();
-        boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+    /** What a problem row shows of its result, read once for every problem of the page that shares the result. */
+    private record Parent(
+            Result result,
+            ResultView view,
+            boolean permitted,
+            Map<ResultMarkKind, Instant> marks,
+            @Nullable ReviewPersonDTO developer,
+            @Nullable Instant disagreedAt) {}
+
+    /**
+     * The results of {@code rows}, each with its view, its evidence permission, its active marks, its developer and its
+     * latest disagreement, read for all of them at once and keyed by result id.
+     */
+    private Map<UUID, Parent> parents(long ws, List<Problem> rows) {
+        if (rows.isEmpty()) return Map.of();
+        var ids = rows.stream().map(Problem::getResultId).distinct().toList();
+        var byId = results.findByWorkspaceIdAndIdIn(ws, ids).stream()
+                .collect(Collectors.toMap(Result::getId, Function.identity()));
+        var loaded = ids.stream()
+                .map(id -> Objects.requireNonNull(
+                        byId.get(id), () -> "Result " + id + " of a problem is not in the workspace"))
+                .toList();
+        var facts = loaded.stream().map(Result::facts).toList();
+        var permitted = authorization.permitsAll(ws, facts, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        var viewById = views.operatorViews(ws, facts).stream()
+                .collect(Collectors.toMap(v -> v.result().id(), Function.identity()));
+        Map<UUID, Map<ResultMarkKind, Instant>> marked = new HashMap<>();
+        listRows.markTimes(ws, ids)
+                .forEach(mark -> marked.computeIfAbsent(mark.resultId(), ignored -> new EnumMap<>(ResultMarkKind.class))
+                        .merge(mark.kind(), mark.createdAt(), (left, right) -> left.isAfter(right) ? left : right));
+        var developers = references.namedDevelopers(
+                ws,
+                loaded.stream()
+                        .map(Result::getDeveloperId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList());
+        var disagreed = presentation.latestDisagreements(ws, ids);
+        Map<UUID, Parent> parents = new HashMap<>();
+        for (var r : loaded) {
+            var developer = r.getDeveloperId() == null ? null : developers.get(r.getDeveloperId());
+            parents.put(
+                    r.getId(),
+                    new Parent(
+                            r,
+                            Objects.requireNonNull(viewById.get(r.getId())),
+                            permitted.contains(r.getId()),
+                            marked.getOrDefault(r.getId(), Map.of()),
+                            developer,
+                            disagreed.get(r.getId())));
+        }
+        return parents;
+    }
+
+    private ReviewProblemDTO problemRow(Problem p, Parent parent) {
+        var r = parent.result();
+        var v = parent.view();
+        boolean permitted = parent.permitted();
         var dto = presentation.problem(p, permitted);
         var primary = dto.citations().isEmpty() ? null : dto.citations().getFirst();
         var group = v.practice().getGroup();
@@ -248,7 +305,7 @@ public class ReviewResultQueryService {
                 group == null
                         ? null
                         : new GroupRefDTO(group.getSlug(), group.getName(), group.getIcon(), group.getColor()),
-                developer(v),
+                parent.developer(),
                 p.getSeverity(),
                 dto.summary(),
                 primary == null ? null : primary.path(),
@@ -260,12 +317,9 @@ public class ReviewResultQueryService {
                 freshness.currentness(),
                 freshness.unverifiableReason(),
                 freshness.capturedAt(),
-                presentation.markedAt(r, ResultMarkKind.INCORRECT),
-                presentation.markedAt(r, ResultMarkKind.ACCEPTED),
-                presentation.disagreements(r).stream()
-                        .map(d -> d.respondedAt())
-                        .max(Instant::compareTo)
-                        .orElse(null),
+                parent.marks().get(ResultMarkKind.INCORRECT),
+                parent.marks().get(ResultMarkKind.ACCEPTED),
+                parent.disagreedAt(),
                 r.getRecordedAt());
     }
 

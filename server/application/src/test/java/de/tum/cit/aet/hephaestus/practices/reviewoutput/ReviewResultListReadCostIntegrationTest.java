@@ -2,12 +2,14 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.practices.result.ProblemQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.result.ResultQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewResultDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
@@ -149,6 +151,44 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.statements()).isLessThanOrEqualTo(23);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
+    }
+
+    /**
+     * A page of problems reads each of its results once: their views, evidence permission, marks and developers are
+     * read for the whole page, so the statements do not grow with the results on it.
+     */
+    @Test
+    void shouldKeepOperatorProblemListReadsBoundedAsThePageGrows() {
+        var scenario = data.scenario();
+        var account = Objects.requireNonNull(scenario.account().getId());
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
+                account.toString(), new String[0], "problem-read-cost-token"));
+        var at = Instant.parse("2026-01-01T00:00:00Z");
+        var first = data.result(scenario, ResultOutcome.NOT_MET, at);
+        var accepted = data.mark(first, ResultMarkKind.ACCEPTED, account);
+        data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(1));
+        data.result(data.scenario(), ResultOutcome.NOT_MET, at);
+        var every = new ProblemQueryFilter(null, null, null, false, ReviewListSort.NEWEST);
+
+        var small = reads.measure(() -> results.listProblems(
+                scenario.workspace().getId(), ResultQueryFilter.ALL, every, PageRequest.of(0, 25)));
+        assertThat(small.value().getContent()).hasSize(2);
+        assertThat(small.value().getContent())
+                .filteredOn(row -> row.resultId().equals(first.getId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.acceptedAt()).isEqualTo(accepted.getCreatedAt()));
+        for (int index = 2; index < 8; index++) {
+            data.result(otherDeveloperWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
+        }
+
+        var larger = reads.measure(() -> results.listProblems(
+                scenario.workspace().getId(), ResultQueryFilter.ALL, every, PageRequest.of(0, 25)));
+
+        assertThat(larger.value().getContent()).hasSize(8);
+        assertThat(larger.value().getContent()).containsAll(small.value().getContent());
+        assertThat(larger.cost().statements())
+                .as("small=%s, larger=%s", small.cost(), larger.cost())
+                .isEqualTo(small.cost().statements());
     }
 
     private ReviewIntegrationData.Scenario otherDeveloperWork(ReviewIntegrationData.Scenario scenario) {

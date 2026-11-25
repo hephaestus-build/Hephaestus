@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -234,7 +235,15 @@ class ScmItemSourceAccessTest extends BaseUnitTest {
         lenient().when(items.parent(FILE, ScmItemEvents.REPOSITORY)).thenReturn(ROOT);
         lenient().when(repositories.findById(3L)).thenReturn(Optional.of(repository));
         var service = new ScmItemSourceAccess(
-                items, repositories, reviews, access, contributors, suppression, identities, accounts);
+                items,
+                mock(ItemIndexService.class),
+                repositories,
+                reviews,
+                access,
+                contributors,
+                suppression,
+                identities,
+                accounts);
         return new Fixture(
                 service, items, reviews, access, contributors, suppression, identities, accounts, repository);
     }

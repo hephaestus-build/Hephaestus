@@ -242,14 +242,26 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
 
     @Override
     public boolean isSourceSuppressed(long workspaceId, String itemKind, long sourceId) {
+        return suppressedSources(workspaceId, itemKind, List.of(sourceId)).contains(sourceId);
+    }
+
+    /** A source is suppressed when any person its attribution names is: each person is checked once for all sources. */
+    @Override
+    public Set<Long> suppressedSources(long workspaceId, String itemKind, Collection<Long> sourceIds) {
+        if (sourceIds.isEmpty()) return Set.of();
         var owners = sourceOwners.stream()
                 .filter(owner -> owner.itemKinds().contains(itemKind))
                 .toList();
         if (owners.size() > 1) throw new IllegalStateException("Duplicate person source attribution owner");
         if (owners.isEmpty()) throw new IllegalStateException("No person source attribution owner is available");
-        var identities = owners.getFirst().identitiesForSource(workspaceId, itemKind, sourceId);
-        if (identities.isEmpty()) return false;
-        return identities.stream()
-                .anyMatch(identity -> isSuppressed(identity.providerId(), identity.subject(), identity.teamId()));
+        Map<PersonIdentity, Boolean> people = new HashMap<>();
+        Set<Long> suppressed = new HashSet<>();
+        owners.getFirst().identitiesForSources(workspaceId, itemKind, sourceIds).forEach((sourceId, identities) -> {
+            if (identities.stream()
+                    .anyMatch(identity -> people.computeIfAbsent(
+                            identity, key -> isSuppressed(key.providerId(), key.subject(), key.teamId()))))
+                suppressed.add(sourceId);
+        });
+        return Set.copyOf(suppressed);
     }
 }

@@ -184,6 +184,25 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
         """, nativeQuery = true)
     Optional<WorkFacts> work(@Param("kind") String kind, @Param("sourceId") long sourceId);
 
+    /** {@link #work} of many issues or pull requests of {@code kind}: the repository and deletion of each found one. */
+    @WorkspaceAgnostic(
+            "Reads the native SCM mirror rows of indexed items; their repositories are authorized before use")
+    @Query(value = """
+        SELECT work.id AS source_id, work.repository_id AS repository_id, work.deleted_at IS NOT NULL AS deleted
+        FROM issue work WHERE work.id = ANY(:sourceIds)
+          AND work.issue_type=CASE :kind WHEN 'scm.pull_request' THEN 'PULL_REQUEST' WHEN 'scm.issue' THEN 'ISSUE' END
+        """, nativeQuery = true)
+    List<WorkState> workStates(@Param("kind") String kind, @Param("sourceIds") Long[] sourceIds);
+
+    interface WorkState {
+        long getSourceId();
+
+        @Nullable
+        Long getRepositoryId();
+
+        boolean getDeleted();
+    }
+
     /** Every issue the stored pull request closes, as its entity's closing issues hold them. */
     @WorkspaceAgnostic("Reads the native SCM mirror rows linked to an indexed pull request after its authorization")
     @Query("SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :pullRequestId")
