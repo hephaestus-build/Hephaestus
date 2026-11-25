@@ -1203,9 +1203,23 @@ void test("Semgrep scans PRs and main without a privileged trigger or mutable ru
 	assert.match(source, /--strict\b/u);
 	assert.match(source, /--error\b/u);
 	assert.match(source, /--sarif-output\b/u);
-	assert.doesNotMatch(source, /continue-on-error|secrets\.|--config (?:auto|p\/)/u);
+	assert.doesNotMatch(source, /secrets\.|--config (?:auto|p\/)/u);
+	// Only the scan's verdict can fail the job: the code scanning upload may fail without failing it,
+	// and no other step may.
+	const steps = workflow.getIn(["jobs", "scan", "steps"]);
+	assert.ok(isSeq(steps));
+	const tolerant = steps.items
+		.filter((item) => isMap(item) && item.get("continue-on-error") !== undefined)
+		.map((item) => (isMap(item) ? String(item.get("name")) : ""));
+	assert.deepEqual(tolerant, ["Upload code scanning results"]);
 	const upload = namedStep(workflow, ["jobs", "scan"], "Upload code scanning results");
+	assert.equal(upload.get("continue-on-error"), true);
 	assert.equal(stepInputs(upload).get("category"), "semgrep-tls");
+	assert.equal(
+		namedStep(workflow, ["jobs", "scan"], "Report a failed code scanning upload").get("if"),
+		`\${{ steps.upload.outcome == 'failure' }}`,
+		"a failed upload is reported in the job summary",
+	);
 	assert.match(
 		String(upload.get("if")),
 		/github\.event\.pull_request\.head\.repo\.full_name == github\.repository/u,
