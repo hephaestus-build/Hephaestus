@@ -350,8 +350,12 @@ Entries become due once a week, so that this cost comes about once a week.
 The database clock decides which entries are due.
 An entry is due when it is older than its limit less two weeks at 03:45 UTC on the last Sunday.
 
-`mentoring_due_work` names the due entries of the `entries` rule.
-A workspace-scoped query names the due copies of each workspace, and the sweep merges them oldest first.
+`mentoring_due_work` names the due entries of both rules.
+The `entries` kinds read every workspace at one age.
+The `copies` kinds read one workspace at its own age, through a partial index on the copies of each workspace.
+The sweep merges the pages of the workspaces oldest first, in the `uuid` order of PostgreSQL.
+Both read only accounts outside erasure, and a sweep page skips an account that another transaction holds.
+
 Each run of `ConversationRetentionSweeper` reads a bounded number of pages and starts no new work after 10 minutes.
 An erased entry is no longer due, so a crash or another replica starts again at the oldest entry still due.
 A person whose erasure fails is passed over for the rest of the run.

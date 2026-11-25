@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.retention;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
@@ -67,7 +65,7 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
         verify(slackParticipantConsentRepository).deleteByWorkspaceId(42L);
         // Every Hephaestus entry written in Slack, and the Slack DM identities of Hephaestus conversations.
         verify(conversationEntries).redactSlackEntries(42L);
-        verify(conversationEntries).redactCopyingToolResultsWrittenBefore(eq(42L), any(), eq(Integer.MAX_VALUE));
+        verify(conversationEntries).redactCopyingToolResults(42L);
         verify(conversations).clearSlackIdentities(42L);
     }
 }

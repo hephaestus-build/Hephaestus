@@ -99,6 +99,9 @@ public class ConversationRetentionSweeper {
      */
     static final Duration RUN_BUDGET = Duration.ofMinutes(10);
 
+    /** How long the margin reuses a read of the copying sources' retentions: one run's interval. */
+    static final Duration COPY_LIMITS_FOR = Duration.ofMinutes(15);
+
     /** PostgreSQL orders {@code uuid} by its bytes, unsigned; the copies of several workspaces merge in that order. */
     private static final Comparator<DueEntry> OLDEST_FIRST = Comparator.comparing(DueEntry::getDueAt)
             .thenComparing(DueEntry::getId, (a, b) -> {
@@ -131,6 +134,7 @@ public class ConversationRetentionSweeper {
     private final Supplier<List<CopyingSourceRetention>> copyingSources;
     private final PrivacyJobMetrics metrics;
     private final Clock clock;
+    private volatile @Nullable CopyLimits copyLimits;
     private final Sweep entriesSweep;
     private final Sweep copiesSweep;
     private final int batch;
@@ -265,32 +269,30 @@ public class ConversationRetentionSweeper {
         return new DueSource() {
             @Override
             public List<DueEntry> page(DuePage page, int size) {
-                return entries.findDueForRetention(age, DueWorkKind.ENTRY_RETENTION, page, size);
+                return entries.findDueForRetention(age, DueWorkKind.ENTRY_RETENTION, null, page, size);
             }
 
             @Override
             public double margin() {
                 return marginOf(
-                        entries.findDueForRetention(age, DueWorkKind.ENTRY_RETENTION_DEADLINE, DuePage.FIRST, 1),
+                        entries.findDueForRetention(age, DueWorkKind.ENTRY_RETENTION_DEADLINE, null, DuePage.FIRST, 1),
                         limit);
             }
         };
     }
 
-    /** The copying tool results of each workspace with a copying source, merged oldest first across workspaces. */
-    private DueSource copiesSource() {
-        Map<Long, Duration> limits = new TreeMap<>();
-        for (CopyingSourceRetention source : copyingSources.get()) {
-            source.retentionByWorkspace()
-                    .forEach((workspaceId, limit) ->
-                            limits.merge(workspaceId, limit, (a, b) -> a.compareTo(b) <= 0 ? a : b));
-        }
+    /**
+     * The copying tool results of each workspace with a copying source, merged oldest first across workspaces. The owner
+     * function names each workspace's due copies at that workspace's shortest retention.
+     */
+    private DueSource copiesSource(boolean fresh) {
+        Map<Long, Duration> limits = copyLimits(fresh);
         return new DueSource() {
             @Override
             public List<DueEntry> page(DuePage page, int size) {
                 List<DueEntry> due = new ArrayList<>();
-                limits.forEach((workspaceId, limit) -> due.addAll(entries.findDueCopiesForRetention(
-                        workspaceId, dueAge(limit).toSeconds(), page, size)));
+                limits.forEach((workspaceId, limit) -> due.addAll(entries.findDueForRetention(
+                        dueAge(limit).toSeconds(), DueWorkKind.COPY_RETENTION, workspaceId, page, size)));
                 due.sort(OLDEST_FIRST);
                 return due.size() > size ? List.copyOf(due.subList(0, size)) : due;
             }
@@ -299,15 +301,13 @@ public class ConversationRetentionSweeper {
             public double margin() {
                 double margin = Double.POSITIVE_INFINITY;
                 for (Map.Entry<Long, Duration> workspace : limits.entrySet()) {
-                    margin = Math.min(
-                            margin,
-                            marginOf(
-                                    entries.findDueCopiesForRetention(
-                                            workspace.getKey(),
-                                            dueAge(workspace.getValue()).toSeconds(),
-                                            DuePage.FIRST,
-                                            1),
-                                    workspace.getValue()));
+                    List<DueEntry> oldest = entries.findDueForRetention(
+                            dueAge(workspace.getValue()).toSeconds(),
+                            DueWorkKind.COPY_RETENTION_DEADLINE,
+                            workspace.getKey(),
+                            DuePage.FIRST,
+                            1);
+                    margin = Math.min(margin, marginOf(oldest, workspace.getValue()));
                 }
                 return margin;
             }
@@ -315,8 +315,31 @@ public class ConversationRetentionSweeper {
     }
 
     /**
-     * Erases one person's due entries in a transaction bound to that person. A person in erasure is passed over: the
-     * erasure removes the entries, and a copy page does not leave such a person out itself.
+     * For each workspace with a copying source, the shortest retention of those sources. The sources change rarely and
+     * one of them scans its table to answer, so the margin, which is read every minute, reuses a read for
+     * {@link #COPY_LIMITS_FOR}. A run always reads them afresh.
+     */
+    private Map<Long, Duration> copyLimits(boolean fresh) {
+        CopyLimits cached = copyLimits;
+        Instant now = clock.instant();
+        if (!fresh && cached != null && now.isBefore(cached.readAt().plus(COPY_LIMITS_FOR))) {
+            return cached.limits();
+        }
+        Map<Long, Duration> limits = new TreeMap<>();
+        for (CopyingSourceRetention source : copyingSources.get()) {
+            source.retentionByWorkspace()
+                    .forEach((workspaceId, limit) ->
+                            limits.merge(workspaceId, limit, (a, b) -> a.compareTo(b) <= 0 ? a : b));
+        }
+        copyLimits = new CopyLimits(Map.copyOf(limits), now);
+        return limits;
+    }
+
+    private record CopyLimits(Map<Long, Duration> limits, Instant readAt) {}
+
+    /**
+     * Erases one person's due entries in a transaction bound to that person. A person who entered erasure after the page
+     * was read is passed over: the erasure removes the entries.
      *
      * @return whether it erased them
      */
@@ -376,13 +399,14 @@ public class ConversationRetentionSweeper {
                     .register(meters);
         }
 
-        private DueSource source() {
-            return rule == Rule.ENTRIES ? entriesSource() : copiesSource();
+        /** A run reads the copying sources afresh; a sample may reuse a recent read. */
+        private DueSource source(boolean fresh) {
+            return rule == Rule.ENTRIES ? entriesSource() : copiesSource(fresh);
         }
 
         void sample() {
             try {
-                deadlineMargin.set(source().margin());
+                deadlineMargin.set(source(false).margin());
                 lastRead.set(clock.instant().getEpochSecond());
             } catch (RuntimeException e) {
                 samplerFailures.increment();
@@ -394,7 +418,7 @@ public class ConversationRetentionSweeper {
         }
 
         Run run(Progress progress) {
-            DueSource source = source();
+            DueSource source = source(true);
             Instant deadline = clock.instant().plus(RUN_BUDGET);
             Set<Owner> deferred = failedLastRun;
             SequencedSet<Owner> failed = new LinkedHashSet<>();

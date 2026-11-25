@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795588126000-1" author="hephaestus">
+        <comment>The copy retention reads the unerased tool results that can copy anyone's data, by workspace and write time.</comment>
+        <sql>CREATE INDEX IF NOT EXISTS ix_conversation_entry_unredacted_copies ON public.conversation_entry (workspace_id, created_at, id) WHERE redacted_at IS NULL AND kind = 'TOOL_RESULT' AND payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')</sql>
+        <rollback>
+            <sql>DROP INDEX public.ix_conversation_entry_unredacted_copies</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795588126000-2" author="hephaestus">
+        <comment>The owner function also names the due copying tool results of one workspace, so the copy retention crosses owners only through it. It stays one of the narrow definer functions: it returns only kind, key, workspace, account and due time.</comment>
+        <sql splitStatements="false"><![CDATA[
+-- IF EXISTS and OR REPLACE: a run that stopped after PostgreSQL committed this change set, and before Liquibase
+-- recorded it, runs it again.
+DROP FUNCTION IF EXISTS public.mentoring_due_work(text, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer);
+
+CREATE OR REPLACE FUNCTION public.mentoring_due_work(
+        work_kind text, max_age_seconds bigint, scope_workspace_id bigint, after_due timestamp with time zone,
+        after_id uuid, skip_workspace_ids bigint[], skip_account_ids bigint[], max_rows integer)
+    RETURNS TABLE (kind text, id uuid, workspace_id bigint, account_id bigint, due_at timestamp with time zone)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    due_before timestamp with time zone;
+BEGIN
+    -- A page starts after the row (after_due, after_id) of the previous page, or at the oldest row when both are null.
+    -- The owners (skip_workspace_ids[i], skip_account_ids[i]) are passed over: two arrays of equal length without NULL.
+    IF max_age_seconds IS NULL OR max_age_seconds <= 0 OR max_rows IS NULL OR max_rows < 0
+       OR (after_due IS NULL) <> (after_id IS NULL)
+       OR skip_workspace_ids IS NULL OR skip_account_ids IS NULL
+       OR cardinality(skip_workspace_ids) <> cardinality(skip_account_ids)
+       OR array_position(skip_workspace_ids, NULL) IS NOT NULL OR array_position(skip_account_ids, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'mentoring_due_work: needs a positive age, a limit, a whole cursor or none, and whole owners'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    -- A copy kind reads the copies of one workspace, at that workspace's age; the entry kinds read every workspace.
+    IF (work_kind IN ('COPY_RETENTION', 'COPY_RETENTION_DEADLINE')) <> (scope_workspace_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'mentoring_due_work: a copy kind needs its workspace, and only a copy kind takes one'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    -- A conversation entry is due when it is older than max_age_seconds at the start of the current retention week, which
+    -- starts at 03:45 UTC every Sunday, and is not erased yet, and only accounts outside erasure have due entries. due_at
+    -- is the time it was written. The cutoff moves once a week, so a week's due entries are erased together and a long
+    -- conversation is summarized again about once a week. now() is the start of the caller's transaction. Seconds, not
+    -- days: a day is not always 24 hours in the session time zone.
+    due_before := date_bin(interval '7 days', now(), timestamp with time zone '2000-01-02 03:45:00+00')
+        - make_interval(secs => max_age_seconds);
+    IF work_kind = 'ENTRY_RETENTION' THEN
+        -- A pass skips the accounts that another transaction holds locked, such as an erasure.
+        IF after_due IS NULL THEN
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL AND e.created_at < due_before
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        ELSE
+            -- A row range, so the partial index on unerased entries serves each later page directly.
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL AND e.created_at < due_before
+                  AND (e.created_at, e.id) > (after_due, after_id)
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        END IF;
+    ELSIF work_kind = 'ENTRY_RETENTION_DEADLINE' THEN
+        -- The same rows, read without locking an account: the deadline margin must also see an account that a short
+        -- write holds, which ENTRY_RETENTION would skip.
+        RETURN QUERY
+            SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+            FROM public.conversation_entry e
+            JOIN public.account a ON a.id = e.account_id
+            WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+              AND e.redacted_at IS NULL AND e.created_at < due_before
+              AND (after_due IS NULL OR (e.created_at, e.id) > (after_due, after_id))
+              AND NOT EXISTS (
+                  SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                  WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+            ORDER BY e.created_at, e.id
+            LIMIT max_rows;
+    ELSIF work_kind = 'COPY_RETENTION' THEN
+        -- The tool results of one workspace that can copy anyone's data (ConversationEntryRepository.COPIES_PERSON_DATA,
+        -- word for word), at the shortest retention of a source in that workspace. The partial index on such results serves each page. A pass
+        -- skips the accounts that another transaction holds locked, such as an erasure.
+        IF after_due IS NULL THEN
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE e.workspace_id = scope_workspace_id AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL
+                  AND e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')
+                  AND e.created_at < due_before
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        ELSE
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE e.workspace_id = scope_workspace_id AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL
+                  AND e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')
+                  AND e.created_at < due_before
+                  AND (e.created_at, e.id) > (after_due, after_id)
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        END IF;
+    ELSIF work_kind = 'COPY_RETENTION_DEADLINE' THEN
+        -- The same copies, read without locking an account, for the deadline margin.
+        RETURN QUERY
+            SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+            FROM public.conversation_entry e
+            JOIN public.account a ON a.id = e.account_id
+            WHERE e.workspace_id = scope_workspace_id AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+              AND e.redacted_at IS NULL
+                  AND e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')
+              AND e.created_at < due_before
+              AND (after_due IS NULL OR (e.created_at, e.id) > (after_due, after_id))
+              AND NOT EXISTS (
+                  SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                  WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+            ORDER BY e.created_at, e.id
+            LIMIT max_rows;
+    ELSE
+        RAISE EXCEPTION 'mentoring_due_work: unknown kind %', work_kind USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+END
+$$;
+
+REVOKE ALL ON FUNCTION public.mentoring_due_work(text, bigint, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mentoring_due_work(text, bigint, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer) TO hephaestus_app;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP FUNCTION public.mentoring_due_work(text, bigint, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer);
+
+CREATE FUNCTION public.mentoring_due_work(
+        work_kind text, max_age_seconds bigint, after_due timestamp with time zone, after_id uuid,
+        skip_workspace_ids bigint[], skip_account_ids bigint[], max_rows integer)
+    RETURNS TABLE (kind text, id uuid, workspace_id bigint, account_id bigint, due_at timestamp with time zone)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    due_before timestamp with time zone;
+BEGIN
+    -- A page starts after the row (after_due, after_id) of the previous page, or at the oldest row when both are null.
+    -- The owners (skip_workspace_ids[i], skip_account_ids[i]) are passed over: two arrays of equal length without NULL.
+    IF max_age_seconds IS NULL OR max_age_seconds <= 0 OR max_rows IS NULL OR max_rows < 0
+       OR (after_due IS NULL) <> (after_id IS NULL)
+       OR skip_workspace_ids IS NULL OR skip_account_ids IS NULL
+       OR cardinality(skip_workspace_ids) <> cardinality(skip_account_ids)
+       OR array_position(skip_workspace_ids, NULL) IS NOT NULL OR array_position(skip_account_ids, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'mentoring_due_work: needs a positive age, a limit, a whole cursor or none, and whole owners'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    -- A conversation entry is due when it is older than max_age_seconds at the start of the current retention week, which
+    -- starts at 03:45 UTC every Sunday, and is not erased yet, and only accounts outside erasure have due entries. due_at
+    -- is the time it was written. The cutoff moves once a week, so a week's due entries are erased together and a long
+    -- conversation is summarized again about once a week. now() is the start of the caller's transaction. Seconds, not
+    -- days: a day is not always 24 hours in the session time zone.
+    due_before := date_bin(interval '7 days', now(), timestamp with time zone '2000-01-02 03:45:00+00')
+        - make_interval(secs => max_age_seconds);
+    IF work_kind = 'ENTRY_RETENTION' THEN
+        -- A pass skips the accounts that another transaction holds locked, such as an erasure.
+        IF after_due IS NULL THEN
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL AND e.created_at < due_before
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        ELSE
+            -- A row range, so the partial index on unerased entries serves each later page directly.
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.account a ON a.id = e.account_id
+                WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+                  AND e.redacted_at IS NULL AND e.created_at < due_before
+                  AND (e.created_at, e.id) > (after_due, after_id)
+                  AND NOT EXISTS (
+                      SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                      WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows
+                FOR SHARE OF a SKIP LOCKED;
+        END IF;
+    ELSIF work_kind = 'ENTRY_RETENTION_DEADLINE' THEN
+        -- The same rows, read without locking an account: the deadline margin must also see an account that a short
+        -- write holds, which ENTRY_RETENTION would skip.
+        RETURN QUERY
+            SELECT work_kind, e.id, e.workspace_id, e.account_id, e.created_at
+            FROM public.conversation_entry e
+            JOIN public.account a ON a.id = e.account_id
+            WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+              AND e.redacted_at IS NULL AND e.created_at < due_before
+              AND (after_due IS NULL OR (e.created_at, e.id) > (after_due, after_id))
+              AND NOT EXISTS (
+                  SELECT FROM unnest(skip_workspace_ids, skip_account_ids) AS skip (workspace_id, account_id)
+                  WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id)
+            ORDER BY e.created_at, e.id
+            LIMIT max_rows;
+    ELSE
+        RAISE EXCEPTION 'mentoring_due_work: unknown kind %', work_kind USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+END
+$$;
+
+REVOKE ALL ON FUNCTION public.mentoring_due_work(text, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mentoring_due_work(text, bigint, timestamp with time zone, uuid, bigint[], bigint[], integer) TO hephaestus_app;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

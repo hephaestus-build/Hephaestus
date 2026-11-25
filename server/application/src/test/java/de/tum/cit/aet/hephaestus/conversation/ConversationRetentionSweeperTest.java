@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -214,7 +215,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         doReturn(List.copyOf(due))
                 .doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), any(), any(), anyInt());
 
         assertThatThrownBy(sweeper::sweepNow).isInstanceOf(IllegalStateException.class);
 
@@ -245,7 +246,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
     void shouldRecordAFailureWhenTheDueWorkCannotBeRead() {
         doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), any(), any(), anyInt());
 
         assertThatThrownBy(sweeper::sweepNow).isInstanceOf(IllegalStateException.class);
         assertThat(counter("failure")).isEqualTo(1);
@@ -259,6 +260,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 .findDueForRetention(
                         Duration.ofDays(386).toSeconds(),
                         DueWorkKind.ENTRY_RETENTION,
+                        null,
                         new DuePage(null, null, List.of()),
                         BATCH);
     }
@@ -274,6 +276,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 .findDueForRetention(
                         Duration.ofDays(386).toSeconds(),
                         DueWorkKind.ENTRY_RETENTION_DEADLINE,
+                        null,
                         new DuePage(null, null, List.of()),
                         1);
 
@@ -287,7 +290,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
 
         doThrow(new IllegalStateException("database down"))
                 .when(entries)
-                .findDueForRetention(anyLong(), any(), any(), anyInt());
+                .findDueForRetention(anyLong(), any(), any(), any(), anyInt());
         now = NOW.plusSeconds(150);
         sweeper.sampleDeadlineMargin();
 
@@ -421,9 +424,19 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
         sweeper.sampleDeadlineMargin();
 
         verify(entries, atLeastOnce())
-                .findDueCopiesForRetention(eq(1L), eq(Duration.ofDays(6).toSeconds()), any(), anyInt());
+                .findDueForRetention(
+                        eq(Duration.ofDays(6).toSeconds()),
+                        eq(DueWorkKind.COPY_RETENTION_DEADLINE),
+                        eq(1L),
+                        any(),
+                        eq(1));
         verify(entries, atLeastOnce())
-                .findDueCopiesForRetention(eq(2L), eq(Duration.ofDays(46).toSeconds()), any(), anyInt());
+                .findDueForRetention(
+                        eq(Duration.ofDays(46).toSeconds()),
+                        eq(DueWorkKind.COPY_RETENTION_DEADLINE),
+                        eq(2L),
+                        any(),
+                        eq(1));
         assertThat(meters.get("conversation.retention.deadline.margin")
                         .tag("rule", "copies")
                         .gauge()
@@ -441,6 +454,33 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1);
+    }
+
+    /**
+     * The copy margin is read every minute, and a source answers by scanning its table: the margin reuses a read for a
+     * run's interval. A run reads the sources afresh, so a new source counts from the next run.
+     */
+    @Test
+    void shouldReadTheCopyingSourcesForTheMarginOnlyOnceARunsInterval() {
+        AtomicInteger reads = new AtomicInteger();
+        copyingSources.add(() -> {
+            reads.incrementAndGet();
+            return Map.of(1L, Duration.ofDays(30));
+        });
+
+        sweeper.sampleDeadlineMargin();
+        now = now.plus(ConversationRetentionSweeper.COPY_LIMITS_FOR).minusSeconds(1);
+        sweeper.sampleDeadlineMargin();
+        assertThat(reads).hasValue(1);
+
+        now = now.plusSeconds(1);
+        sweeper.sampleDeadlineMargin();
+        assertThat(reads).hasValue(2);
+
+        sweeper.sweepCopiesNow();
+        assertThat(reads).as("a run reads afresh").hasValue(3);
+        sweeper.sampleDeadlineMargin();
+        assertThat(reads).as("and the margin reuses that read").hasValue(3);
     }
 
     @Test
@@ -486,41 +526,42 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 .count();
     }
 
+    /** One workspace's due copies after the cursor, in PostgreSQL's order, as the owner function pages them. */
+    private List<DueEntry> copies(long workspaceId, DuePage page, int limit) {
+        return due.stream()
+                .filter(entry -> entry.getWorkspaceId() == workspaceId)
+                .filter(entry -> page.afterDue() == null
+                        || entry.getDueAt().isAfter(page.afterDue())
+                        || (entry.getDueAt().equals(page.afterDue())
+                                && postgresOrder(entry.getId(), page.afterId()) > 0))
+                .filter(entry -> page.skip().stream()
+                        .noneMatch(owner -> owner.workspaceId() == entry.getWorkspaceId()
+                                && owner.accountId() == entry.getAccountId()))
+                .sorted(Comparator.comparing(DueEntry::getDueAt)
+                        .thenComparing(DueEntry::getId, ConversationRetentionSweeperTest::postgresOrder))
+                .limit(limit)
+                .toList();
+    }
+
     /**
      * Pages the due entries by (due time, id) after the cursor and without the passed-over people, as the owner
      * function does; redaction erases an entry, so it is no longer due, and fails for a failing person.
      */
     private void serve() {
         lenient().when(accounts.holdForRetention(anyLong())).thenReturn(true);
-        lenient()
-                .when(entries.findDueCopiesForRetention(anyLong(), anyLong(), any(), anyInt()))
-                .thenAnswer(call -> {
-                    long workspaceId = call.getArgument(0);
-                    DuePage page = call.getArgument(2);
-                    int limit = call.getArgument(3);
-                    return due.stream()
-                            .filter(entry -> entry.getWorkspaceId() == workspaceId)
-                            .filter(entry -> page.afterDue() == null
-                                    || entry.getDueAt().isAfter(page.afterDue())
-                                    || (entry.getDueAt().equals(page.afterDue())
-                                            && postgresOrder(entry.getId(), page.afterId()) > 0))
-                            .filter(entry -> page.skip().stream()
-                                    .noneMatch(owner -> owner.workspaceId() == entry.getWorkspaceId()
-                                            && owner.accountId() == entry.getAccountId()))
-                            .sorted(Comparator.comparing(DueEntry::getDueAt)
-                                    .thenComparing(DueEntry::getId, ConversationRetentionSweeperTest::postgresOrder))
-                            .limit(limit)
-                            .toList();
-                });
         // Lenient: a test that reads no due entry never calls redaction.
         lenient()
-                .when(entries.findDueForRetention(anyLong(), any(), any(), anyInt()))
+                .when(entries.findDueForRetention(anyLong(), any(), any(), any(), anyInt()))
                 .thenAnswer(call -> {
+                    DueWorkKind kind = call.getArgument(1);
+                    if (kind == DueWorkKind.COPY_RETENTION || kind == DueWorkKind.COPY_RETENTION_DEADLINE) {
+                        return copies(call.getArgument(2), call.getArgument(3), call.getArgument(4));
+                    }
                     pagesRead++;
-                    DuePage page = call.getArgument(2);
+                    DuePage page = call.getArgument(3);
                     @Nullable Instant afterDue = page.afterDue();
                     @Nullable UUID afterId = page.afterId();
-                    int limit = call.getArgument(3);
+                    int limit = call.getArgument(4);
                     Set<List<Long>> skip = new HashSet<>();
                     page.skip().forEach(owner -> skip.add(List.of(owner.workspaceId(), owner.accountId())));
                     return due.stream()

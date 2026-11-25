@@ -420,17 +420,12 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
-    /** The tool results of a workspace not erased yet that can copy anyone's data, written before the cutoff. */
+    /** The tool results of a workspace not erased yet that can copy anyone's data. */
     @Query(value = """
             SELECT e.id FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND e.created_at < :cutoff AND
-            """ + COPIES_PERSON_DATA + """
-
-            ORDER BY e.created_at
-            LIMIT :limit
-            """, nativeQuery = true)
-    List<UUID> findUnredactedCopyingToolResultIdsWrittenBefore(
-            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND
+            """ + COPIES_PERSON_DATA, nativeQuery = true)
+    List<UUID> findUnredactedCopyingToolResultIds(@Param("workspaceId") long workspaceId);
 
     /** The messages of the account's conversations as the app shows them, in every workspace, oldest first. */
     @WorkspaceAgnostic("The self-service export reads the account's own messages in every workspace")
@@ -480,16 +475,17 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     }
 
     /**
-     * A page of the entries of every person older than {@code maxAgeSeconds} at the start of the database's current
-     * retention week and not erased yet, oldest first, as {@link DuePage} describes. {@code kind} is
-     * {@link DueWorkKind#ENTRY_RETENTION} for a sweep page, which passes over the accounts that another transaction
-     * holds, or {@link DueWorkKind#ENTRY_RETENTION_DEADLINE} for the deadline margin, which reads them. The owner
-     * function {@code mentoring_due_work} finds them whoever owns them, and returns no content.
+     * A page of due entries, oldest first, as {@link DuePage} describes: every workspace's entries older than
+     * {@code maxAgeSeconds} at the start of the database's current retention week for the entry kinds, or one
+     * {@code workspaceId}'s copying tool results for the copy kinds. The sweep kinds ({@link DueWorkKind#ENTRY_RETENTION},
+     * {@link DueWorkKind#COPY_RETENTION}) pass over the accounts that another transaction holds; the deadline kinds read
+     * them. The owner function {@code mentoring_due_work} finds them whoever owns them, and returns no content.
      */
     @WorkspaceAgnostic("The retention sweep finds the due entries of every workspace, then erases each as its owner")
     @Query(value = """
             SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt", now() AS "readAt"
             FROM public.mentoring_due_work(CAST(:#{#kind.name()} AS text), CAST(:maxAgeSeconds AS bigint),
+                                           CAST(:workspaceId AS bigint),
                                            CAST(:#{#page.afterDue()} AS timestamptz), CAST(:#{#page.afterId()} AS uuid),
                                            CAST(:#{#page.skipWorkspaces()} AS bigint[]),
                                            CAST(:#{#page.skipAccounts()} AS bigint[]), :limit)
@@ -498,35 +494,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     List<DueEntry> findDueForRetention(
             @Param("maxAgeSeconds") long maxAgeSeconds,
             @Param("kind") DueWorkKind kind,
-            @Param("page") DuePage page,
-            @Param("limit") int limit);
-
-    /**
-     * A page of the tool results of a workspace that can copy anyone's data ({@link #COPIES_PERSON_DATA}), older than
-     * {@code maxAgeSeconds} at the start of the database's current retention week (the week
-     * of {@code mentoring_due_work}) and not erased yet, oldest first, as {@link DuePage} describes.
-     */
-    @Query(value = """
-            SELECT e.id, e.workspace_id AS "workspaceId", e.account_id AS "accountId", e.created_at AS "dueAt",
-                   now() AS "readAt"
-            FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL
-              AND e.created_at < date_bin(interval '7 days', now(), timestamptz '2000-01-02 03:45:00+00')
-                  - make_interval(secs => CAST(:maxAgeSeconds AS double precision))
-              AND (CAST(:#{#page.afterDue()} AS timestamptz) IS NULL
-                   OR (e.created_at, e.id) > (CAST(:#{#page.afterDue()} AS timestamptz), CAST(:#{#page.afterId()} AS uuid)))
-              AND NOT EXISTS (
-                  SELECT FROM unnest(CAST(:#{#page.skipWorkspaces()} AS bigint[]),
-                                     CAST(:#{#page.skipAccounts()} AS bigint[])) AS skip (workspace_id, account_id)
-                  WHERE skip.workspace_id = e.workspace_id AND skip.account_id = e.account_id) AND
-            """ + COPIES_PERSON_DATA + """
-
-            ORDER BY e.created_at, e.id
-            LIMIT :limit
-            """, nativeQuery = true)
-    List<DueEntry> findDueCopiesForRetention(
-            @Param("workspaceId") long workspaceId,
-            @Param("maxAgeSeconds") long maxAgeSeconds,
+            @Param("workspaceId") @Nullable Long workspaceId,
             @Param("page") DuePage page,
             @Param("limit") int limit);
 

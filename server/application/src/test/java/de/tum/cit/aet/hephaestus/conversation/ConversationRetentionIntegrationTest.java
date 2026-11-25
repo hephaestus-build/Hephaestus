@@ -792,6 +792,46 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         assertThat(erased(justKept)).isFalse();
     }
 
+    /**
+     * The copies of a person in erasure are the erasure's to remove: the copy sweep leaves them, and they do not hold the
+     * copy margin below its limit, or a person in erasure would keep the alert firing.
+     */
+    @Test
+    void shouldLeaveTheCopiesOfAPersonInErasureToTheErasureAndOutOfTheCopyMargin() {
+        connectSlack(workspace);
+        List<UUID> erasing = copyBacklog(colleagueMain, 2, Instant.now().minus(Duration.ofDays(60)));
+        jdbc.update(
+                "UPDATE account SET status = 'DELETING', deleted_at = now() WHERE id = ?",
+                colleagueMain.getAccountId());
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ConversationRetentionSweeper sweeper = new ConversationRetentionSweeper(
+                entryRepository,
+                reportingRedaction(),
+                accounts,
+                ownerScope,
+                transactions,
+                retention,
+                () -> List.of(slackRetention),
+                metrics,
+                meters,
+                Clock.systemUTC(),
+                ConversationRetentionSweeper.BATCH,
+                ConversationRetentionSweeper.MAX_PAGES);
+
+        // Also drains the due copies that earlier tests left.
+        ConversationRetentionSweeper.Run run = sweeper.sweepCopiesNow();
+        sweeper.sampleDeadlineMargin();
+
+        assertThat(run.drained()).isTrue();
+        assertThat(run.failedOwners()).isZero();
+        assertThat(unerased(erasing)).isEqualTo(2);
+        assertThat(meters.get("conversation.retention.deadline.margin")
+                        .tag("rule", "copies")
+                        .gauge()
+                        .value())
+                .isEqualTo(Double.POSITIVE_INFINITY);
+    }
+
     @Test
     void shouldEraseEveryCopyingToolResultWhenTheSlackContentIsErased() {
         UUID read = entry(main, "TOOL_RESULT", "read", Duration.ofHours(1), "words-channel-message");
