@@ -141,6 +141,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
             // Account ↔ Workspace association lives on Membership, not on these rows.
             "PersonDataRequest", // Instance-wide rights request, never a workspace endpoint
+            "PrivacyJournalRow", // Instance recovery spans workspaces and must survive their deletion
+            "PrivacyJournalBackupHorizonRow", // Instance-wide backup metadata
             "IdentityRestriction", // Exact provider identity restrictions span workspaces
             "Account", // Hephaestus-native principal; spans workspaces
             "Identity", // Federated-login association; user-scoped

@@ -60,6 +60,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -72,6 +73,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -846,6 +850,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
         long joinedRoot = stopKeptProject(joined, 7701L);
         long administeredRoot = stopKeptProject(administered, 7702L);
+        String workspaceRef = administered.getId().toString();
+        assertThat(jdbc.queryForList(
+                        "SELECT entry_id FROM privacy_journal WHERE kind='REPOSITORY_REMOVED' AND refs->>'workspaceId'=?",
+                        UUID.class,
+                        workspaceRef))
+                .isEmpty();
+        Long repositoryId = jdbc.queryForObject("SELECT source_id FROM item WHERE id=?", Long.class, administeredRoot);
         UUID joinedReceipt = gitLabStoppedProjectService
                 .getStoppedProjects(joined.getId())
                 .getFirst()
@@ -915,6 +926,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .expectBody(Void.class);
 
         assertThat(kept(administered, administeredRoot)).isFalse();
+        assertThat(jdbc.queryForList(
+                        "SELECT refs->>'repositoryId' FROM privacy_journal WHERE kind='REPOSITORY_REMOVED'"
+                                + " AND refs->>'workspaceId'=? AND entry_id=?",
+                        String.class,
+                        workspaceRef,
+                        listed.getFirst().stopReceipt()))
+                .containsExactly(Objects.requireNonNull(repositoryId).toString());
         assertThat(kept(joined, joinedRoot)).isTrue();
         assertThat(stoppedProjectRemovals(administered))
                 .extracting(ConnectionAudit::getDetail, ConnectionAudit::getActorAccountId)

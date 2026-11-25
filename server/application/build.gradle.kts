@@ -283,7 +283,8 @@ val testTiers =
 // The integration shards: `review` runs on every pull request that selects the server suites.
 // It holds one review from its request to its admitted results, and the contract tests. Each
 // contract test checks the code against a file that ships beside it, such as the migrated schema
-// or the alert rules, or bounds the statements of one request. A numbered shard would first run
+// or the alert rules, or bounds the statements of one request. It also proves scheduler locks
+// with two replicas. A numbered shard would first run
 // them in the merge queue. A test opts in by its name. The numbered shards split every other class
 // by the seconds it took, as integration-test-durations.json records them
 // (docs/contributor/ci-cd.mdx § Integration shards).
@@ -291,6 +292,7 @@ val reviewShardTests =
     listOf(
         "de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest",
         "de.tum.cit.aet.hephaestus.Schema*IntegrationTest",
+        "de.tum.cit.aet.hephaestus.core.runtime.ScheduledWorkAcrossReplicasIntegrationTest",
         "de.tum.cit.aet.hephaestus.observability.ScrapeContractIntegrationTest",
         "*CostIntegrationTest",
     )

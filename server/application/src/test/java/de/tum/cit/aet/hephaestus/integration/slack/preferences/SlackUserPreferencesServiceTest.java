@@ -125,12 +125,12 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(1L, ConsentState.ACTIVE))
                 .thenReturn(1L);
 
-        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class)))
                 .thenReturn(true);
 
         SlackUserWorkspacePreferencesDTO dto = service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, false);
 
-        verify(participantConsentService).recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class));
+        verify(participantConsentService).recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class));
         verify(erasureService).erasePerson(1L, ACCOUNT_ID, "U1");
         assertThat(dto.channelMessagesAllowed()).isFalse();
     }
@@ -142,7 +142,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(slackConnection(1L, "acme", "Hephaestus", "T1", "acme-slack")));
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(link(SLACK_PROVIDER_ID, "U1", "T1")));
-        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("T1"), eq("U1"), any(Instant.class)))
                 .thenReturn(false);
         when(participantConsentService.channelMessagesAllowed(1L, "U1")).thenReturn(true);
 

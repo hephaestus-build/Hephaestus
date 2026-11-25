@@ -21,6 +21,10 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
 data:
+  backup-publish-horizon.sh: |
+    {{- .Files.Get "files/backup-publish-horizon.sh" | nindent 4 }}
+  backup-oldest-point.pl: |
+    {{- .Files.Get "files/backup-oldest-point.pl" | nindent 4 }}
   # PostgreSQL's side: the archive push and the TLS server. The credentials come from the
   # environment, never from this file.
   server.conf: |
@@ -167,7 +171,7 @@ spec:
             onPodConditions:
               - type: DisruptionTarget
       template:
-        {{- include "hephaestus.backup.pod" (dict "root" $ "command" (printf "pgbackrest --stanza=hephaestus --type=%s backup" $type)) | nindent 8 }}
+        {{- include "hephaestus.backup.pod" (dict "root" $ "reportsHorizon" true "command" (printf "sh /etc/pgbackrest/backup-publish-horizon.sh %s" $type)) | nindent 8 }}
 {{- end }}
 ---
 # The server reads the backup CronJobs for the backup staleness alert: get on exactly these two, nothing else.
@@ -198,7 +202,7 @@ subjects:
     name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
     namespace: {{ .Release.Namespace }}
 ---
-# The backup Jobs reach PostgreSQL's TLS server and the repository, and nothing else.
+# The backup Jobs reach PostgreSQL for pgBackRest and to publish the recovery point. They also reach the repository.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -215,6 +219,8 @@ spec:
         {{- include "hephaestus.componentPeer" (dict "root" . "component" "postgresql") | nindent 8 }}
       ports:
         - port: 8432
+          protocol: TCP
+        - port: 5432
           protocol: TCP
     {{- include "hephaestus.policy.backupEgress" . | nindent 4 }}
 {{- end }}

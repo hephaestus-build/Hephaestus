@@ -142,12 +142,14 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     @Test
     void appHomeChannelMessageOptOut_recordsIngestion_erasesMemberData_republishesHome() {
         when(identityResolver.resolveAccountId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(RATER_ID));
-        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(
+                        eq(WORKSPACE_ID), eq(TEAM), eq(USER), any(Instant.class)))
                 .thenReturn(true);
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, "false"));
 
-        verify(participantConsentService).recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class));
+        verify(participantConsentService)
+                .recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(TEAM), eq(USER), any(Instant.class));
         verify(personErasureService).erasePerson(WORKSPACE_ID, RATER_ID, USER);
         verify(messageService)
                 .sendEphemeralForWorkspace(
@@ -167,12 +169,14 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     @Test
     void inMessageOptOut_recordsChannelMessageOptOut_erasesData_andConfirmsEphemerally() {
         when(identityResolver.resolveAccountId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(RATER_ID));
-        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(
+                        eq(WORKSPACE_ID), eq(TEAM), eq(USER), any(Instant.class)))
                 .thenReturn(true);
 
         handler.handleBlockActions(blockActions(SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT, ""));
 
-        verify(participantConsentService).recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class));
+        verify(participantConsentService)
+                .recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(TEAM), eq(USER), any(Instant.class));
         verify(personErasureService).erasePerson(WORKSPACE_ID, RATER_ID, USER);
         verify(messageService)
                 .sendEphemeralForWorkspace(
@@ -193,7 +197,8 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
 
     @Test
     void shouldEraseNothingWhenALaterChoiceIsStored() {
-        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+        when(participantConsentService.recordChannelMessageOptOut(
+                        eq(WORKSPACE_ID), eq(TEAM), eq(USER), any(Instant.class)))
                 .thenReturn(false);
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, "false"));

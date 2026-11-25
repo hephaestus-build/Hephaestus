@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.auth.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.GrantStanding;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.util.List;
 import java.util.Map;
@@ -38,12 +40,15 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private PrivacyJournal journal;
+
     private ConsentService service;
 
     // Built here rather than configured, so the test shares the cached application context.
     @BeforeEach
     void setUp() {
-        service = new ConsentService(decisions, accounts, new ConsentProperties("AET"));
+        service = new ConsentService(decisions, accounts, new ConsentProperties("AET"), mock(PrivacyJournal.class));
     }
 
     // The service is not a bean here, so the transaction its Spring proxy would open is opened by hand.
@@ -142,6 +147,26 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
                         WIDER_WORDING,
                         ConsentService.WORDING_VERSION,
                         ConsentService.WORDING_VERSION);
+    }
+
+    @Test
+    void shouldJournalAWithdrawalWhenTheResearchOrganisationChanges() {
+        long id = recordWiderConsent(true);
+        long originalGrant = latestResearchId(id);
+        service = new ConsentService(decisions, accounts, new ConsentProperties("New research organisation"), journal);
+
+        complete(
+                id,
+                new ConsentService.FirstLoginConsentDTO(
+                        ConsentService.WORDING_VERSION, true, false, "New research organisation"));
+
+        assertThat(inTransaction(() -> service.grantStandings(Map.of(id, originalGrant))))
+                .containsEntry(id, GrantStanding.WITHDRAWN);
+        assertThat(jdbc.queryForList("""
+            SELECT refs->>'consentId' FROM privacy_journal
+            WHERE kind='CONSENT_WITHDRAWN' AND refs->>'accountId'=?
+            """, String.class, Long.toString(id)))
+                .containsExactly(Long.toString(originalGrant));
     }
 
     private long recordWiderConsent(boolean granted) {

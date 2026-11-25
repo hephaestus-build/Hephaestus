@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795493171959-1" author="hephaestus">
+        <createTable tableName="privacy_journal">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="privacy_journalPK"/>
+            </column>
+            <column defaultValueComputed="clock_timestamp()" name="recorded_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entry_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="refs" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipped_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'Keep the privacy journal. Follow the erasure recovery guide.';
+                END
+                $$;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795493171959-2" author="hephaestus">
+        <addUniqueConstraint columnNames="entry_id" constraintName="UC_PRIVACY_JOURNALENTRY_ID_COL" tableName="privacy_journal"/>
+    </changeSet>
+    <changeSet id="1795493171959-3" author="hephaestus">
+        <createIndex indexName="ix_privacy_journal_recorded" tableName="privacy_journal">
+            <column name="recorded_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795493171959-4" author="hephaestus">
+        <sql>
+            ALTER TABLE privacy_journal
+                ADD CONSTRAINT ck_privacy_journal_kind CHECK (kind IN (
+                        'ACCOUNT_ERASED', 'PERSON_ERASED', 'WORKSPACE_PURGED', 'CONNECTION_ERASED', 'COLLECTION_ERASED',
+                        'ENTRY_DELETED', 'SLACK_CHANNEL_ERASED', 'SLACK_MESSAGE_CHANGED', 'SLACK_PARTICIPANT_WITHDRAWN',
+                        'REPOSITORY_REMOVED',
+                        'SCOPE_ERASED', 'RECORD_DELETED', 'GROWTH_DELETED', 'SEGMENT_ITEM_FORGOTTEN',
+                        'TRANSFER_REVOKED', 'RECORD_KEPT_OUT', 'SPACE_EXCLUDED', 'TRANSFER_RECALLED',
+                        'SUPPORT_SHARE_REVOKED', 'DRIVER_BINDING_REVOKED', 'WORKSPACE_POLICY_NARROWED', 'MEMBERSHIP_ENDED',
+                        'ACCOUNT_SUSPENDED', 'SESSION_REVOKED', 'CONSENT_WITHDRAWN', 'RESEARCH_DATASET_RELEASED',
+                        'RESEARCH_REMOVAL_OWED', 'RESEARCH_REMOVAL_RECORDED', 'RESEARCH_MAPPING_ERASED', 'EXPERIMENT_WITHDRAWN', 'EXPERIMENT_KEY_DESTROYED')),
+                ADD CONSTRAINT ck_privacy_journal_refs CHECK (jsonb_typeof(refs) = 'object');
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE privacy_journal
+                    DROP CONSTRAINT ck_privacy_journal_refs,
+                    DROP CONSTRAINT ck_privacy_journal_kind;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795493171959-5" author="hephaestus">
+        <addColumn tableName="privacy_journal">
+            <column name="retention_observed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795493171959-6" author="hephaestus">
+        <createTable tableName="privacy_journal_backup_horizon">
+            <column name="id" type="SMALLINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="privacy_journal_backup_horizonPK"/>
+            </column>
+            <column name="observed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="oldest_backup_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <sql splitStatements="false">
+            ALTER TABLE privacy_journal_backup_horizon
+                ADD CONSTRAINT ck_privacy_journal_backup_horizon_singleton CHECK (id = 1),
+                ADD CONSTRAINT ck_privacy_journal_backup_horizon_time CHECK (oldest_backup_at &lt;= observed_at);
+
+            CREATE FUNCTION privacy_journal_backup_horizon_write_fence() RETURNS trigger
+            LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtext('hephaestus'), hashtext('privacy-journal-backup-horizon'));
+                RETURN NULL;
+            END
+            $$;
+            CREATE TRIGGER trg_privacy_journal_backup_horizon_write
+                BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON privacy_journal_backup_horizon
+                FOR EACH STATEMENT EXECUTE FUNCTION privacy_journal_backup_horizon_write_fence();
+
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_app') THEN
+                    REVOKE INSERT, UPDATE, DELETE ON privacy_journal_backup_horizon FROM hephaestus_app;
+                END IF;
+                IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_backup_reporter') THEN
+                    GRANT SELECT, INSERT, UPDATE (observed_at, oldest_backup_at)
+                        ON privacy_journal_backup_horizon TO hephaestus_backup_reporter;
+                END IF;
+            END
+            $$;
+        </sql>
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT FROM privacy_journal) THEN
+                        RAISE EXCEPTION 'Keep the populated privacy journal. Follow the erasure recovery guide.';
+                    END IF;
+                END
+                $$;
+            </sql>
+            <dropTable tableName="privacy_journal_backup_horizon"/>
+            <sql>DROP FUNCTION privacy_journal_backup_horizon_write_fence()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

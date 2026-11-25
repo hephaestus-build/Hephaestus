@@ -141,7 +141,7 @@ public class SlackInteractivityHandler {
             Instant decidedAt,
             boolean refreshHome) {
         // An opt-out older than the stored choice would erase what the person allowed after it.
-        if (!participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId, decidedAt)) {
+        if (!participantConsentService.recordChannelMessageOptOut(workspaceId, teamId, slackUserId, decidedAt)) {
             log.debug("slack.interactivity: opt-out not recorded for user {}", slackUserId);
             return;
         }

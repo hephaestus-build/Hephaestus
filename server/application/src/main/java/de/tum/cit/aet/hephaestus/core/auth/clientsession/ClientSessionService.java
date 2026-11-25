@@ -10,12 +10,15 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -54,6 +57,7 @@ public class ClientSessionService {
     private final AuthEventLogger authEventLogger;
     private final McpClientGrantRepository grantRepository;
     private final Clock clock;
+    private final PrivacyJournal journal;
 
     public ClientSessionService(
             ClientSessionRepository sessionRepository,
@@ -64,7 +68,8 @@ public class ClientSessionService {
             HephaestusJwtIssuer jwtIssuer,
             AuthEventLogger authEventLogger,
             McpClientGrantRepository grantRepository,
-            Clock clock) {
+            Clock clock,
+            PrivacyJournal journal) {
         this.sessionRepository = sessionRepository;
         this.handoffRepository = handoffRepository;
         this.issuedJwtRepository = issuedJwtRepository;
@@ -74,6 +79,7 @@ public class ClientSessionService {
         this.authEventLogger = authEventLogger;
         this.grantRepository = grantRepository;
         this.clock = clock;
+        this.journal = journal;
     }
 
     /** The tokens a client holds after a sign-in or a rotation; they travel only in a response body. */
@@ -186,7 +192,7 @@ public class ClientSessionService {
         }
         if (handoffRepository.consume(codeHash, now) != 1) {
             if (mcpGrantId != null) {
-                endReplayedGrant(mcpGrantId, lockedSessionId, now);
+                endReplayedGrant(accountId, mcpGrantId, lockedSessionId, now);
             }
             return Optional.empty();
         }
@@ -286,7 +292,7 @@ public class ClientSessionService {
             McpClientGrant reused = mcpSession
                     ? grantRepository.findActiveBySession(session.getId()).orElse(null)
                     : null;
-            end(session.getId(), IssuedJwt.RevokedReason.REFRESH_REUSE, now);
+            endAndRecord(session.getAccountId(), session.getId(), IssuedJwt.RevokedReason.REFRESH_REUSE, now);
             var reuse = authEventLogger
                     .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.FAILURE)
                     .account(session.getAccountId())
@@ -324,7 +330,8 @@ public class ClientSessionService {
     @Transactional
     public void logout(String refreshToken) {
         lockSessionOf(Pkce.hash(refreshToken)).ifPresent(session -> {
-            if (end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, clock.instant())) {
+            if (endAndRecord(
+                    session.getAccountId(), session.getId(), IssuedJwt.RevokedReason.LOGOUT, clock.instant())) {
                 authEventLogger
                         .event(AuthEvent.EventType.LOGOUT, AuthEvent.Result.SUCCESS)
                         .account(session.getAccountId())
@@ -346,7 +353,7 @@ public class ClientSessionService {
         if (session == null || !session.getAccountId().equals(accountId)) {
             return false;
         }
-        return end(sessionId, reason, clock.instant());
+        return endAndRecord(accountId, sessionId, reason, clock.instant());
     }
 
     /**
@@ -368,6 +375,7 @@ public class ClientSessionService {
         }
         handoffRepository.consumeForGrant(grantId, now);
         boolean open = grantRepository.revokeIfOpen(grantId, now) == 1;
+        if (open) recordGrantEnd(accountId, grantId, now);
         endLockedSession(grantId, sessionId, IssuedJwt.RevokedReason.ADMIN_REVOKE, now);
         return open;
     }
@@ -417,8 +425,9 @@ public class ClientSessionService {
      * A used MCP code came back, so two parties hold it: the grant and the session the code issued end
      * (OAuth 2.1 § 4.1.2). The caller holds the grant lock.
      */
-    private void endReplayedGrant(UUID grantId, @Nullable UUID lockedSessionId, Instant now) {
+    private void endReplayedGrant(Long accountId, UUID grantId, @Nullable UUID lockedSessionId, Instant now) {
         if (grantRepository.revokeIfOpen(grantId, now) == 1) {
+            recordGrantEnd(accountId, grantId, now);
             log.warn("auth.client: a used MCP authorization code was presented again; its grant ended");
         }
         endLockedSession(grantId, lockedSessionId, IssuedJwt.RevokedReason.CODE_REUSE, now);
@@ -436,6 +445,22 @@ public class ClientSessionService {
                 && lockedSessionId.equals(grantRepository.findSessionId(grantId).orElse(null))) {
             end(lockedSessionId, reason, now);
         }
+    }
+
+    private void recordGrantEnd(Long accountId, UUID grantId, Instant now) {
+        journal.record(
+                PrivacyJournalKind.SESSION_REVOKED,
+                Map.of("accountId", accountId, "through", now, "target", "MCP_GRANT", "grantId", grantId));
+    }
+
+    private boolean endAndRecord(Long accountId, UUID sessionId, IssuedJwt.RevokedReason reason, Instant now) {
+        boolean ended = end(sessionId, reason, now);
+        if (ended) {
+            journal.record(
+                    PrivacyJournalKind.SESSION_REVOKED,
+                    Map.of("accountId", accountId, "through", now, "target", "SESSION", "sessionId", sessionId));
+        }
+        return ended;
     }
 
     /** Ends a session whose row lock the caller holds, and revokes every token of its family. */

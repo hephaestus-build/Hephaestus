@@ -5,12 +5,20 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ResearchRecoverySubjects;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -39,11 +47,27 @@ import tools.jackson.databind.ObjectMapper;
     "person_data_request",
     "person_data_request_administration",
     "person_data_store_administration",
+    CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL,
     "identity_restriction"
 })
 public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
+    static final String PRIVACY_JOURNAL = "privacy_journal";
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final PersonIdentityResolver identities;
+    private final Optional<ResearchRecoverySubjects> researchSubjects;
+
+    private List<PersonDataRecovery.NativeIdentity> nativeTargets(PersonScope scope) {
+        if (scope.identities().isEmpty()) return List.of();
+        var providers = identities.providers();
+        return scope.identities().stream()
+                .flatMap(identity -> providers.stream()
+                        .filter(provider -> provider.id() == identity.providerId())
+                        .map(provider -> new PersonDataRecovery.NativeIdentity(
+                                provider.type(), provider.serverUrl(), identity.subject(), identity.teamId())))
+                .toList();
+    }
 
     @Override
     public List<PersonDataContributor> contributors() {
@@ -59,6 +83,66 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "",
                         900),
                 new PersonDataStoreAdministrationContributor(jdbc, mapper),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        PRIVACY_JOURNAL,
+                        PRIVACY_JOURNAL,
+                        """
+                        t.refs->>'accountId' = CAST(:account AS text)
+                        OR (t.kind = 'RESEARCH_DATASET_RELEASED' AND t.entry_id = ANY(:researchReleases))
+                        OR EXISTS (
+                            SELECT 1 FROM jsonb_to_recordset(CAST(:nativeTargets AS jsonb))
+                                AS p("providerType" text, "serverUrl" text, subject text, "teamId" text)
+                            WHERE EXISTS (
+                                SELECT 1 FROM jsonb_to_recordset(COALESCE(t.refs->'identities', '[]'::jsonb))
+                                    AS r("providerType" text, "serverUrl" text, subject text, "teamId" text)
+                                WHERE (r."providerType", r."serverUrl", r.subject) =
+                                      (p."providerType", p."serverUrl", p.subject)
+                                  AND r."teamId" IS NOT DISTINCT FROM p."teamId"
+                            ) OR (t.kind = 'SLACK_PARTICIPANT_WITHDRAWN' AND p."providerType" = 'SLACK'
+                                  AND p."serverUrl" = 'https://slack.com'
+                                  AND p.subject = t.refs->>'slackUserId' AND p."teamId" = t.refs->>'slackTeamId')
+                        )
+                        """,
+                        "entry_id,kind,recorded_at",
+                        "entry_id",
+                        "",
+                        800) {
+                    @Override
+                    public PersonDataSelection select(PersonScope scope) {
+                        return selectUsing(journalBindings(scope));
+                    }
+
+                    @Override
+                    public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+                        return exportMatchingScope(selection, journalBindings(frozenScope));
+                    }
+
+                    private Map<String, Object> journalBindings(PersonScope scope) {
+                        var bindings = new HashMap<>(JdbcPersonDataStore.parameters(scope, mapper));
+                        bindings.put("nativeTargets", mapper.writeValueAsString(nativeTargets(scope)));
+                        var accountId = scope.accountId();
+                        var releases = accountId == null
+                                ? List.<UUID>of()
+                                : researchSubjects
+                                        .map(subjects -> subjects.releasesFor(accountId))
+                                        .orElseGet(List::of);
+                        bindings.put("researchReleases", new SqlArrayValue("uuid", releases.toArray()));
+                        return bindings;
+                    }
+
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        // Recovery still needs the fact until the backups that can undo it expire.
+                        return 0L;
+                    }
+
+                    @Override
+                    public boolean selectionMustStayUnchanged() {
+                        return false;
+                    }
+                },
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
@@ -257,16 +341,16 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
                         var bindings = parameters(frozenScope, mapper);
                         int removed = jdbc.update("""
-                                DELETE FROM event_publication t
-                                WHERE t.serialized_event::jsonb ->> 'accountId' = CAST(:account AS text)
-                                   OR t.serialized_event::jsonb ->> 'recipientAccountId' = CAST(:account AS text)
-                                """, bindings);
+                            DELETE FROM event_publication t
+                            WHERE t.serialized_event::jsonb ->> 'accountId' = CAST(:account AS text)
+                               OR t.serialized_event::jsonb ->> 'recipientAccountId' = CAST(:account AS text)
+                            """, bindings);
                         int anonymized = jdbc.update("""
-                                UPDATE event_publication t SET serialized_event = jsonb_set(t.serialized_event::jsonb,
-                                    '{change}', redact_role_change(t.serialized_event::jsonb -> 'change', :account))::text
-                                WHERE t.serialized_event::jsonb #>> '{change,accountId}' = CAST(:account AS text)
-                                   OR t.serialized_event::jsonb #>> '{change,actorAccountId}' = CAST(:account AS text)
-                                """, bindings);
+                            UPDATE event_publication t SET serialized_event = jsonb_set(t.serialized_event::jsonb,
+                                '{change}', redact_role_change(t.serialized_event::jsonb -> 'change', :account))::text
+                            WHERE t.serialized_event::jsonb #>> '{change,accountId}' = CAST(:account AS text)
+                               OR t.serialized_event::jsonb #>> '{change,actorAccountId}' = CAST(:account AS text)
+                            """, bindings);
                         return (long) removed + anonymized;
                     }
                 },

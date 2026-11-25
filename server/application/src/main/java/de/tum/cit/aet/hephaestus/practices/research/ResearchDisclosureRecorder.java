@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.practices.research;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchDisclosureAudit;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.GrantStanding;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ResearchSubjectReference;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureSubject.RemovalReason;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureSubjectRepository.SubjectState;
@@ -31,6 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnServerRole
 class ResearchDisclosureRecorder {
 
+    private final PrivacyJournal journal;
     private final ResearchDisclosureRepository disclosures;
     private final ResearchDisclosureSubjectRepository subjects;
     private final ResearchParticipationQuery consent;
@@ -40,7 +44,9 @@ class ResearchDisclosureRecorder {
             ResearchDisclosureRepository disclosures,
             ResearchDisclosureSubjectRepository subjects,
             ResearchParticipationQuery consent,
-            ResearchDisclosureAudit audit) {
+            ResearchDisclosureAudit audit,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.disclosures = disclosures;
         this.subjects = subjects;
         this.consent = consent;
@@ -117,6 +123,27 @@ class ResearchDisclosureRecorder {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE, "The release could not be audited. Nothing was released.");
         }
+        journal.record(
+                release.datasetId(),
+                PrivacyJournalKind.RESEARCH_DATASET_RELEASED,
+                Map.of(
+                        "datasetId",
+                        release.datasetId(),
+                        "workspaceId",
+                        release.workspaceId(),
+                        "receiptDigest",
+                        release.contentSha256(),
+                        "releasedAt",
+                        now,
+                        "useUntil",
+                        release.useUntil(),
+                        "subjectLinks",
+                        participantKeys.entrySet().stream()
+                                .map(entry -> new ResearchSubjectReference(
+                                        entry.getKey(),
+                                        entry.getValue(),
+                                        Objects.requireNonNull(current.get(entry.getKey()))))
+                                .toList()));
         return disclosure;
     }
 
@@ -164,8 +191,19 @@ class ResearchDisclosureRecorder {
                 Long grant = row.grantDecisionId();
                 if (row.removalReason() != null || account == null || grant == null) continue;
                 RemovalReason reason = reason(standings.get(account));
-                if (reason != null) {
-                    subjects.requireRemoval(row.workspaceId(), row.id(), account, grant, reason.name(), now);
+                if (reason != null
+                        && subjects.requireRemoval(row.workspaceId(), row.id(), account, grant, reason.name(), now)
+                                == 1) {
+                    journal.record(
+                            row.id(),
+                            PrivacyJournalKind.RESEARCH_REMOVAL_OWED,
+                            Map.of(
+                                    "datasetId",
+                                    row.disclosureId(),
+                                    "rowKey",
+                                    row.participantKey(),
+                                    "reason",
+                                    reason.name()));
                 }
             }
         }
@@ -219,6 +257,15 @@ class ResearchDisclosureRecorder {
             throw outstandingOnly();
         }
         requireAudited(audit.recordRemoval(adminId, disclosure.getWorkspaceId(), datasetId, requested.size(), null));
+        journal.record(
+                PrivacyJournalKind.RESEARCH_REMOVAL_RECORDED,
+                Map.of(
+                        "datasetId",
+                        datasetId,
+                        "rowKeys",
+                        requested.stream().sorted().toList(),
+                        "removedAt",
+                        now));
         return requested.size();
     }
 
@@ -232,6 +279,11 @@ class ResearchDisclosureRecorder {
         disclosure.close(closure, now);
         int removed = subjects.deleteForDisclosure(disclosure.getWorkspaceId(), datasetId);
         requireAudited(audit.recordRemoval(adminId, disclosure.getWorkspaceId(), datasetId, removed, closure.name()));
+        if (removed > 0) {
+            journal.record(
+                    PrivacyJournalKind.RESEARCH_MAPPING_ERASED,
+                    Map.of("datasetId", datasetId, "closure", closure, "closedAt", now));
+        }
     }
 
     private ResearchDisclosure openForUpdate(UUID datasetId) {

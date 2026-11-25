@@ -4,6 +4,8 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
@@ -30,6 +32,7 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -51,6 +54,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final ConnectionService connectionService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PrivacyJournal journal;
 
     private final ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository;
     private final MeterRegistry meterRegistry;
@@ -62,8 +66,10 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             ConnectionService connectionService,
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
             ApplicationEventPublisher eventPublisher,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            PrivacyJournal journal) {
         this.meterRegistry = meterRegistry;
+        this.journal = journal;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -402,10 +408,10 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional
     public void removeSyncTarget(Long syncTargetId) {
-        removeMonitor(syncTargetId);
+        removeMonitor(syncTargetId, true);
     }
 
-    private void removeMonitor(Long syncTargetId) {
+    private void removeMonitor(Long syncTargetId, boolean releasingScope) {
         // The workspace's monitor set removes orphans. A monitor deleted while a loaded set still holds it would be
         // persisted again at flush, so it is removed from that set as well.
         repositoryToMonitorRepository.findById(syncTargetId).ifPresent(monitor -> {
@@ -417,6 +423,11 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             repositoryToMonitorRepository.delete(monitor);
             repositoryToMonitorRepository.flush();
             if (workspace != null) {
+                if (releasingScope) {
+                    journal.record(
+                            PrivacyJournalKind.REPOSITORY_REMOVED,
+                            Map.of("workspaceId", workspace.getId(), "monitorId", syncTargetId));
+                }
                 eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(workspace.getId(), repositoryIds));
             }
         });
@@ -467,7 +478,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                     practiceReviewRepositoryTargetRepository.save(
                             new ReviewScopeRepository(workspaceId, keptSyncTargetId, branches));
                 });
-        removeMonitor(duplicateSyncTargetId);
+        removeMonitor(duplicateSyncTargetId, false);
         return true;
     }
 

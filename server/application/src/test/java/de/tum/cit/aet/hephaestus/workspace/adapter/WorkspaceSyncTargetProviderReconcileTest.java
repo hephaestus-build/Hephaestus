@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -65,7 +66,8 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(PrivacyJournal.class));
     }
 
     private RepositoryToMonitor monitor(Long nativeId, String nameWithOwner) {

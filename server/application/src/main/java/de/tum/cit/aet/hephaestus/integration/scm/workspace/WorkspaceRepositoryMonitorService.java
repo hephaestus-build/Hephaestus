@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
@@ -57,6 +59,7 @@ public class WorkspaceRepositoryMonitorService {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceRepositoryMonitorService.class);
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
+    private final PrivacyJournal journal;
     private final WorkspaceLocks workspaceLocks;
 
     private final WorkspaceLookup workspaceLookup;
@@ -105,7 +108,9 @@ public class WorkspaceRepositoryMonitorService {
             List<WorkspaceDataSyncTrigger> dataSyncTriggerList,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate,
-            ManualRepositoryMonitorService manualAdds) {
+            ManualRepositoryMonitorService manualAdds,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.manualAdds = manualAdds;
         this.workspaceLocks = workspaceLocks;
         this.workspaceLookup = workspaceLookup;
@@ -601,10 +606,15 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void deleteRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean retainIndex) {
-        List<Long> repositoryIds = monitorSources.sourceRepositoryIds(monitor.getId());
-        monitorCommands.remove(workspace.getId(), monitor.getId());
-        eventPublisher.publishEvent(
-                new RepositoryMonitoringChangedEvent(workspace.getId(), repositoryIds, retainIndex));
+        long workspaceId = workspace.getId();
+        long monitorId = monitor.getId();
+        List<Long> repositoryIds = monitorSources.sourceRepositoryIds(monitorId);
+        monitorCommands.remove(workspaceId, monitorId);
+        if (!retainIndex) {
+            journal.record(
+                    PrivacyJournalKind.REPOSITORY_REMOVED, Map.of("workspaceId", workspaceId, "monitorId", monitorId));
+        }
+        eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(workspaceId, repositoryIds, retainIndex));
     }
 
     /**

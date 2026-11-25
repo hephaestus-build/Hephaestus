@@ -39,17 +39,30 @@ DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql takes SCRAM-SHA-256 verifiers, n
 -- the run instead.
 SELECT 'CREATE ROLE hephaestus_owner' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_owner') \gexec
 SELECT 'CREATE ROLE hephaestus_app' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_app') \gexec
+SELECT 'CREATE ROLE hephaestus_backup_reporter' WHERE NOT EXISTS (
+    SELECT FROM pg_roles WHERE rolname = 'hephaestus_backup_reporter') \gexec
 DO $$
 BEGIN
-    IF EXISTS (SELECT FROM pg_roles WHERE rolname IN ('hephaestus_owner', 'hephaestus_app')
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname IN ('hephaestus_owner', 'hephaestus_app', 'hephaestus_backup_reporter')
                AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolreplication)) THEN
-        RAISE EXCEPTION 'hephaestus_owner and hephaestus_app must not be superusers, bypass row-level security, create roles or replicate'
-            USING HINT = 'As a superuser, ALTER ROLE them NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOREPLICATION.';
+        RAISE EXCEPTION 'Hephaestus database roles must not be superusers, bypass row-level security, create roles or replicate'
+            USING HINT = 'As a superuser, ALTER the Hephaestus roles to NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOREPLICATION.';
     END IF;
 END
 $$;
 ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD :'owner_verifier';
 ALTER ROLE hephaestus_app WITH LOGIN PASSWORD :'app_verifier';
+-- Only the backup Job needs this login. The role already exists when the owner migrates.
+\getenv backup_reporter_verifier DATABASE_BACKUP_REPORTER_VERIFIER
+\if :{?backup_reporter_verifier}
+SELECT :'backup_reporter_verifier' ~ '^SCRAM-SHA-256\$[0-9]+:[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$' AS backup_reporter_verifier_valid \gset
+\if :backup_reporter_verifier_valid
+ALTER ROLE hephaestus_backup_reporter WITH LOGIN PASSWORD :'backup_reporter_verifier';
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql takes a SCRAM-SHA-256 backup reporter verifier, never a password'; END $$;
+\endif
+\endif
+
 
 BEGIN;
 
@@ -67,6 +80,7 @@ SELECT format('ALTER DATABASE %I OWNER TO hephaestus_owner', current_database())
 -- The owner keeps CREATE through the grant, whoever owns public.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;
+GRANT USAGE ON SCHEMA public TO hephaestus_backup_reporter;
 
 -- A database that another role migrated, such as the administrator before 1.0, moves to the owner. REASSIGN OWNED
 -- cannot do this: it refuses the bootstrap superuser, which owns the system catalogs. The objects of an extension
@@ -114,6 +128,12 @@ WHERE EXISTS (SELECT FROM pg_namespace WHERE nspname = 'partman') \gexec
 -- The rows, for the objects that exist and for each one that the owner creates later. Functions keep PUBLIC's
 -- EXECUTE unless the migration revokes it, as it does for the partition maintenance of auth_event.
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hephaestus_app;
+-- The application reads backup metadata. It cannot publish or remove a recovery point.
+SELECT 'REVOKE INSERT, UPDATE, DELETE ON privacy_journal_backup_horizon FROM hephaestus_app'
+WHERE to_regclass('public.privacy_journal_backup_horizon') IS NOT NULL \gexec
+SELECT 'GRANT SELECT, INSERT, UPDATE (observed_at, oldest_backup_at) ON privacy_journal_backup_horizon TO hephaestus_backup_reporter'
+WHERE to_regclass('public.privacy_journal_backup_horizon') IS NOT NULL \gexec
+
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO hephaestus_app;
 -- The routines of the schema only: those of an extension keep PUBLIC's EXECUTE, and a grant on them by an
 -- administrator that does not own them only warns.

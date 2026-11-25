@@ -286,13 +286,21 @@ await test(
 	},
 );
 
-await test("--backups adds the backup passphrase only", { skip }, () => {
-	const first = run();
-	const result = run({ cluster: { secret: encoded(first.secret) }, args: ["--backups"] });
-	assert.equal(result.status, 0, result.output);
-	assert.equal(result.stdout.trim(), "Added BACKUP_CIPHER_PASS");
-	assert.match(result.secret.BACKUP_CIPHER_PASS ?? "", /^[A-Za-z0-9+/=]{64}$/u);
-});
+await test(
+	"--backups adds the repository passphrase and the metadata writer password",
+	{ skip },
+	() => {
+		const first = run();
+		const result = run({ cluster: { secret: encoded(first.secret) }, args: ["--backups"] });
+		assert.equal(result.status, 0, result.output);
+		assert.equal(
+			result.stdout.trim(),
+			"Added BACKUP_CIPHER_PASS\nAdded DATABASE_BACKUP_REPORTER_PASSWORD",
+		);
+		assert.match(result.secret.DATABASE_BACKUP_REPORTER_PASSWORD ?? "", /^[a-f0-9]{48}$/u);
+		assert.match(result.secret.BACKUP_CIPHER_PASS ?? "", /^[A-Za-z0-9+/=]{64}$/u);
+	},
+);
 
 await test(
 	"a Secret with the single database login before 1.0 is refused, and nothing is generated",

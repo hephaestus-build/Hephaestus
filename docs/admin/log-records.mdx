@@ -154,6 +154,15 @@ The chart's [monitoring stack](./monitoring#run-the-monitoring-stack) keeps no e
 A Prometheus with exemplar storage keeps them.
 Then its retention and access follow the policy for trace IDs.
 
+## Privacy journal
+
+The `privacy.journal.recorded` event follows the database commit.
+It carries the kind in `privacy.journal.kind` and the entry ID in `privacy.journal.entry.id`.
+The `privacy.journal.target.ids` field contains validated internal target IDs, such as the account, workspace or connection ID.
+Provider identity fields and links between research subjects and released rows stay in the restricted journal.
+Restrict access to the events.
+Keep them while the oldest retained backup can restore data that the fact removed.
+
 ## Agent-job lifecycle
 
 Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `review.id`, `job.phase`,

@@ -25,6 +25,13 @@ A missing or invalid manifest, a manifest of version 1, 2 or 3, an unknown provi
 
 ## Write the manifest
 
+Use the `privacy.journal.recorded` events to cross-check the restricted incident record.
+The `privacy.journal.target.ids` field lists validated internal targets when the fact has them.
+Use the incident record for provider identities and research subject links.
+Keep any research subject links in protected recovery records for the backup retention period.
+The version 5 journal records a subsequent fact when a research mapping is erased.
+Restrict access to the recovery log and keep it while the oldest retained backup can restore data that a fact removed.
+
 1. From the incident record, write a JSON manifest of each erasure after the recovery point.
 2. List each disconnected connection under `disconnects`, with its workspace ID and connection ID.
    Include each disconnect that a provider caused, such as a Slack app uninstall.

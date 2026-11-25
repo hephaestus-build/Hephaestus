@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -41,11 +40,9 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -63,6 +60,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
@@ -160,10 +159,35 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var person = new Account("Restored personal name");
         person.setPrimaryEmail("restored-person@example.test");
         long personId = Objects.requireNonNull(accounts.saveAndFlush(person).getId());
-        Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
-                 "people":[{"accountId":%d,"identities":[]}]}
-                """.formatted(administratorId, personId));
+        // Save the journal fact outside the transaction, then restore the database state from before admission.
+        var transactions = new TransactionTemplate(beans.getBean(PlatformTransactionManager.class));
+        var recovery = Objects.requireNonNull(transactions.execute(status -> {
+            var service = beans.getBean(PersonDataService.class);
+            var id = service.preview(administratorId, personId, List.of())
+                    .request()
+                    .getId();
+            service.requestErasure(id, administratorId, false);
+            var refs = Objects.requireNonNull(beans.getBean(JdbcTemplate.class)
+                    .queryForObject(
+                            "SELECT refs::text FROM privacy_journal WHERE entry_id = ? AND kind = 'PERSON_ERASED'",
+                            String.class,
+                            id));
+            status.setRollbackOnly();
+            return mapper.readValue(refs, PersonDataRecovery.Person.class);
+        }));
+        assertThat(accounts.findById(personId).orElseThrow().getStatus()).isEqualTo(Account.Status.ACTIVE);
+        Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
+                4,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                false,
+                administratorId,
+                List.of(recovery),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of())));
         var journal = new RecordingPrivacyJournal();
         var recordingService = advisedService(
                 beans.getBean(PersonDataRegistry.class),
@@ -275,20 +299,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of())));
-        var journal = new RecordingPrivacyJournal();
-        var recordingService = advisedService(
-                beans.getBean(PersonDataRegistry.class),
-                beans.getBeanProvider(PersonEvidenceErasure.class)
-                        .orderedStream()
-                        .toList(),
-                journal);
         var processing = new AtomicBoolean();
-        try (var context = context(manifest, processing, recordingService)) {
+        try (var context = context(manifest, processing)) {
             context.refresh();
             assertThat(processing).isTrue();
         }
         var suppression = beans.getBean(PersonProcessingSuppression.class);
-        var exact = new ArrayList<PersonIdentity>();
         for (var identity : identities) {
             long providerId = Objects.requireNonNull(inventory
                     .findByTypeAndServerUrl(IdentityProviderType.valueOf(identity.providerType()), identity.serverUrl())
@@ -296,16 +312,21 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                     .getId());
             assertThat(suppression.isSuppressed(providerId, identity.subject(), identity.teamId()))
                     .isTrue();
-            exact.add(new PersonIdentity(providerId, identity.subject(), identity.teamId()));
         }
         // A person without an account still leaves a fact: the erasure by native identity alone.
-        assertThat(journal.facts()).singleElement().satisfies(fact -> {
-            assertThat(fact.kind()).isEqualTo(PrivacyJournalKind.PERSON_ERASED);
-            assertThat(fact.refs()).containsOnlyKeys("identities");
-            assertThat(fact.refs().get("identities"))
-                    .asInstanceOf(InstanceOfAssertFactories.list(PersonIdentity.class))
-                    .containsExactlyInAnyOrderElementsOf(exact);
-        });
+        assertThat(jdbc.queryForList("""
+                        SELECT refs::text FROM privacy_journal WHERE kind = ?
+                            AND entry_id IN (SELECT id FROM person_data_request WHERE administrator_account_id = ?)
+                        """, String.class, PrivacyJournalKind.PERSON_ERASED.name(), administratorId))
+                .singleElement()
+                .satisfies(refs -> {
+                    var fact = mapper.readTree(refs);
+                    assertThat(fact.size()).isEqualTo(2);
+                    assertThat(fact.path("externalCopiesRemoved")).isEqualTo(mapper.readTree("false"));
+                    assertThat(fact.path("identities").values())
+                            .containsExactlyInAnyOrderElementsOf(
+                                    mapper.<JsonNode>valueToTree(identities).values());
+                });
     }
 
     @Test
@@ -361,20 +382,22 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 new PersonDataScopeResolver(resolver, evidence, new OwnerScope(jdbc)),
                 registry,
                 beans.getBean(PersonDataRequestRepository.class),
-                new IdentityRestrictionService(
-                        jdbc,
-                        beans.getBeanProvider(PersonSourceIdentityContributor.class)
-                                .orderedStream()
-                                .toList(),
-                        beans.getBean(PersonDataCopyFence.class),
-                        journal),
-                beans.getBean(PersonDataWriteFence.class),
-                beans.getBean(PersonDataCopyFence.class),
+                new PersonDataErasureHold(
+                        new IdentityRestrictionService(
+                                jdbc,
+                                beans.getBeanProvider(PersonSourceIdentityContributor.class)
+                                        .orderedStream()
+                                        .toList(),
+                                beans.getBean(PersonDataCopyFence.class),
+                                journal),
+                        beans.getBean(PersonDataWriteFence.class),
+                        beans.getBean(PersonDataCopyFence.class)),
                 beans.getBean(IssuedJwtRepository.class),
                 beans.getBean(PlatformTransactionManager.class),
                 mapper,
                 jdbc,
-                beans.getBean(MeterRegistry.class));
+                beans.getBean(MeterRegistry.class),
+                journal);
         var initialized = beans.getAutowireCapableBeanFactory()
                 .initializeBean(unadvised, "recoveryService" + System.identityHashCode(unadvised));
         return PersonDataService.class.cast(initialized);

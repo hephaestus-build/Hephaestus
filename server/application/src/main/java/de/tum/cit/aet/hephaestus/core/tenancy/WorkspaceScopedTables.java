@@ -70,6 +70,9 @@ public class WorkspaceScopedTables {
             "account_export",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
+            // Restricted recovery facts outlive the workspace or account they identify.
+            "privacy_journal",
+            "privacy_journal_backup_horizon",
             // ADR 0101: pseudonymous unresolved removal identities have no workspace/person pointer.
             "provider_resource_repair",
             "identity_restriction",

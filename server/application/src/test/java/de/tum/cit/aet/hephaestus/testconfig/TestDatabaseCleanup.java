@@ -30,6 +30,11 @@ public final class TestDatabaseCleanup implements BeforeEachCallback, AfterEachC
         return releaseAfterTest(name, () -> PostgreSQLTestContainer.createDatabase(name));
     }
 
+    /** Creates a fixture with the current schema for the current test. */
+    public static TestDatabase createMigratedDatabase(String name) {
+        return releaseAfterTest(name, () -> PostgreSQLTestContainer.createMigratedDatabase(name));
+    }
+
     /** Copies a fixture template for the current test. */
     public static TestDatabase copyDatabase(String name, TestDatabase template) {
         return releaseAfterTest(name, () -> PostgreSQLTestContainer.copyDatabase(name, template));

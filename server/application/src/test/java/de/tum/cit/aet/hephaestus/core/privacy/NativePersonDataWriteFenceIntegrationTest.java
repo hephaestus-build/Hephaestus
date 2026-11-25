@@ -223,7 +223,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
                 fence.holdForErasure(identities);
                 locked.countDown();
                 waitFor(release);
-                suppression.suppress(new PersonScope(null, identities, List.of()), request.getId());
+                suppression.suppress(new PersonScope(null, identities, List.of()), request.getId(), false);
             }));
             assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
             var writer = executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {

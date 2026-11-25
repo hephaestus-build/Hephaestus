@@ -155,11 +155,24 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
             Files.writeString(root.resolve(kept).resolve("objects"), "keeping workspace");
         }
 
+        var monitorId = jdbcTemplate.queryForObject(
+                "SELECT id FROM repository_to_monitor WHERE workspace_id=? AND native_id=9001",
+                Long.class,
+                departingWorkspace);
         // An uninstall purges the workspace.
         if (purge) provisioningAdapter.onInstallationDeleted(5001L);
         else
             provisioningAdapter.onRepositoriesRemoved(
                     5001L, List.of(new ProvisioningListener.RepositoryRemoval(9001L, SHARED_REPO)));
+
+        if (!purge) {
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT refs->>'monitorId' FROM privacy_journal WHERE kind='REPOSITORY_REMOVED'"
+                                    + " AND refs->>'workspaceId'=?",
+                            String.class,
+                            Long.toString(departingWorkspace)))
+                    .containsExactly(Objects.requireNonNull(monitorId).toString());
+        }
 
         for (Path root : roots) {
             var properties = new GitRepositoryProperties(true, 1, 1024, 1L << 40);

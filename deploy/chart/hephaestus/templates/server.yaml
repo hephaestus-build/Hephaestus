@@ -268,6 +268,13 @@ spec:
               value: {{ $config.llmUsageRetention | quote }}
             - name: HEPHAESTUS_FEEDBACK_RETENTION
               value: {{ $config.feedbackRetention | quote }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_RETENTION
+              value: {{ .Values.privacyJournal.retention | quote }}
+            {{- if and (not .Values.privacyJournal.backupsEnabled) .Values.postgresql.backup.enabled }}
+            {{- fail "privacyJournal.backupsEnabled cannot be false while PostgreSQL chart backups are enabled" }}
+            {{- end }}
+            - name: HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED
+              value: {{ .Values.privacyJournal.backupsEnabled | quote }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
             - name: HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED

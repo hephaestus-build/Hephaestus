@@ -272,6 +272,22 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    PrivacyJournal {
+        BIGINT id PK
+        TIMESTAMPTZ recorded_at "NOT NULL"
+        UUID entry_id UK "NOT NULL"
+        VARCHAR(32) kind "NOT NULL"
+        JSONB refs "NOT NULL"
+        TIMESTAMPTZ shipped_at
+        TIMESTAMPTZ retention_observed_at
+    }
+
+    PrivacyJournalBackupHorizon {
+        SMALLINT id PK
+        TIMESTAMPTZ observed_at "NOT NULL"
+        TIMESTAMPTZ oldest_backup_at
+    }
+
     ProvenanceSigningKey {
         VARCHAR(64) kid PK
         TIMESTAMPTZ created_at "NOT NULL"

@@ -676,6 +676,14 @@ groups:
         annotations:
           summary: Readers' browsers reported at least twenty failures of one kind in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusPrivacyJournalBackupHorizonUnavailable
+        expr: max(privacy_journal_backup_horizon_unavailable{job="hephaestus"}) == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The privacy journal cannot verify the oldest retained backup
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The metric's label job reaches the store as exported_job, because the scrape sets its own job.
       - alert: HephaestusPrivacyJobFailing
         expr: sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",outcome=~"failure|incomplete"}[26h])) >= 2

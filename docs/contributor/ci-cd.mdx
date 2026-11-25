@@ -1565,13 +1565,14 @@ A commit from before an image was renamed or added published nothing under that 
 
 ### Integration shards
 
-The `review` shard holds `ReviewEndToEndIntegrationTest` and the contract tests.
+The `review` shard holds `ReviewEndToEndIntegrationTest`, the contract tests, and the replica lock test.
 A contract test checks the code against a file that ships beside it, or bounds the statements of one request.
 A test opts in by its name:
 
 - `de.tum.cit.aet.hephaestus.Schema*IntegrationTest` checks the migrated schema, for example its foreign-key indexes and column types.
 - `ScrapeContractIntegrationTest` checks that the server exports every metric that the alert rules read.
 - `*CostIntegrationTest` bounds the SQL statements of one read or request.
+- `ScheduledWorkAcrossReplicasIntegrationTest` checks scheduler locks with two server contexts that share a database.
 
 Every pull request that selects the server suites runs them, as it runs the numbered shards.
 Most of their cost is the start of the test contexts that they bring.

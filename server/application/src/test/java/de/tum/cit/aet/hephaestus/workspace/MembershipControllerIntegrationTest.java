@@ -796,6 +796,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         desiredRoles.put(owner.getId(), WorkspaceRole.OWNER);
 
         workspaceMembershipService.syncWorkspaceMembers(workspace, desiredRoles);
+        assertMembershipEnding(workspace.getId(), accountId(hiddenUser));
 
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndId_AccountId(
                         workspace.getId(), accountId(hiddenUser)))
@@ -891,6 +892,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isNoContent()
                 .expectBody(Void.class);
 
+        assertMembershipEnding(workspace.getId(), accountId);
         Membership left = workspaceMembershipService.getMembership(workspace.getId(), accountId);
         assertThat(left.getLeftAt()).isNotNull();
         assertThat(left.getRoleSource()).isEqualTo(Membership.RoleSource.PERSON);
@@ -1026,6 +1028,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus()
                 .isNoContent()
                 .expectBody(Void.class);
+        assertMembershipEnding(workspace.getId(), accountId);
         // Unlike leaving, a removal does not keep out a person whom the provider still lists.
         workspaceMembershipService.syncWorkspaceMembers(workspace, Map.of(member.getId(), WorkspaceRole.MEMBER));
 
@@ -1033,5 +1036,13 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .getMembership(workspace.getId(), accountId)
                         .getLeftAt())
                 .isNull();
+    }
+
+    private void assertMembershipEnding(long workspaceId, long accountId) {
+        assertThat(jdbc.queryForList("""
+                        SELECT kind FROM privacy_journal WHERE kind='MEMBERSHIP_ENDED'
+                        AND refs->>'workspaceId'=? AND refs->>'accountId'=?
+                        """, String.class, Long.toString(workspaceId), Long.toString(accountId)))
+                .containsExactly("MEMBERSHIP_ENDED");
     }
 }

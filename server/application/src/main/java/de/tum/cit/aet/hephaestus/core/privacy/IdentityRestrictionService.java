@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +102,7 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
 
     private record ProviderAlias(long id, Optional<String> origin) {}
 
-    public void suppress(PersonScope scope, UUID requestId) {
+    public void suppress(PersonScope scope, UUID requestId, boolean externalCopiesRemoved) {
         for (PersonIdentity i : scope.identities()) {
             jdbc.update(
                     "INSERT INTO identity_restriction(id, provider_id, provider_user_key, team_key,"
@@ -132,11 +133,12 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
         }
         // The permanent restriction is the erasure decision, so its fact commits with it.
         Long accountId = scope.accountId();
-        if (accountId != null) {
-            journal.record(
-                    PrivacyJournalKind.PERSON_ERASED, Map.of("identities", scope.identities(), "accountId", accountId));
-        } else if (!scope.identities().isEmpty()) {
-            journal.record(PrivacyJournalKind.PERSON_ERASED, Map.of("identities", scope.identities()));
+        if (accountId != null || !scope.identities().isEmpty()) {
+            Map<String, Object> refs = new HashMap<>();
+            if (accountId != null) refs.put("accountId", accountId);
+            refs.put("identities", scope.identities());
+            if (externalCopiesRemoved) refs.put("externalCopiesRemoved", true);
+            journal.record(requestId, PrivacyJournalKind.PERSON_ERASED, refs);
         }
     }
 

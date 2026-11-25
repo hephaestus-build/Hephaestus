@@ -395,6 +395,13 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
         UUID linked = grantIdOfSession(sidOf(exchangedFirst));
         assertThat(authorization.revoke(workspaceId, linked, accountId)).isTrue();
         assertThat(grantStatusById(linked)).isEqualTo("REVOKED");
+        assertThat(jdbc.queryForList("""
+                        SELECT refs->>'grantId'
+                        FROM privacy_journal
+                        WHERE kind='SESSION_REVOKED' AND refs->>'target'='MCP_GRANT'
+                            AND refs->>'grantId' IN (?,?)
+                        """, String.class, revokedFirst.toString(), linked.toString()))
+                .containsExactlyInAnyOrder(revokedFirst.toString(), linked.toString());
         flow.callTool(exchangedFirst.accessToken(), slug, LIST_TOOLS)
                 .expectStatus()
                 .isUnauthorized()

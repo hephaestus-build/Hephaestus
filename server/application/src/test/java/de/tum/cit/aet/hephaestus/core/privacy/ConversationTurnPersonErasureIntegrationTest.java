@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -451,14 +453,13 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
                 new PersonDataRegistry(List.of(new ErasureSteps(List.of(source, toolResults)))),
                 requests,
-                suppression,
-                writeFence,
-                copyFence,
+                new PersonDataErasureHold(suppression, writeFence, copyFence),
                 tokens,
                 transactions,
                 mapper,
                 jdbc,
-                meters);
+                meters,
+                mock(PrivacyJournal.class));
     }
 
     /** The account linked to the user's provider identity, so an erasure by that identity resolves it. */

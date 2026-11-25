@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ public class ConsentService implements ResearchParticipationQuery {
     // retained purposes belong here; a later version must not automatically inherit these grants.
     private static final Set<String> ACCEPTED_NOTICE_VERSIONS = Set.of("2026-10-04", "2026-10-31");
 
+    private final PrivacyJournal journal;
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;
     private final ConsentProperties properties;
@@ -50,7 +53,9 @@ public class ConsentService implements ResearchParticipationQuery {
     public ConsentService(
             ConsentDecisionRepository decisionRepository,
             AccountRepository accountRepository,
-            ConsentProperties properties) {
+            ConsentProperties properties,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.decisionRepository = decisionRepository;
         this.accountRepository = accountRepository;
         this.properties = properties;
@@ -308,6 +313,11 @@ public class ConsentService implements ResearchParticipationQuery {
                     mechanism,
                     WORDING_VERSION,
                     organisation));
+            if (!granted && current != null && current.isGranted()) {
+                journal.record(
+                        PrivacyJournalKind.CONSENT_WITHDRAWN,
+                        Map.of("accountId", accountId, "consentId", Objects.requireNonNull(current.getId())));
+            }
         }
     }
 
@@ -364,7 +374,8 @@ public class ConsentService implements ResearchParticipationQuery {
 
             @Schema(
                     description =
-                            "Organization that runs the optional research program, or null when this instance runs none")
+                            "Organization that runs the optional research program, or null when this instance runs"
+                                    + " none")
             @Nullable
             String researchOrganization) {}
 

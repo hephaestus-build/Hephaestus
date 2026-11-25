@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.auth.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.GrantStanding;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
@@ -46,7 +48,7 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        service = new ConsentService(decisions, accounts, new ConsentProperties("AET"));
+        service = new ConsentService(decisions, accounts, new ConsentProperties("AET"), mock(PrivacyJournal.class));
     }
 
     private <T> T inTransaction(Supplier<T> work) {
@@ -59,7 +61,8 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
 
     private long decide(long accountId, boolean granted, String notice, String organization, Instant at) {
         jdbc.update(
-                "INSERT INTO consent_decision(account_id,purpose,granted,mechanism,notice_version,research_organization,occurred_at)"
+                "INSERT INTO"
+                        + " consent_decision(account_id,purpose,granted,mechanism,notice_version,research_organization,occurred_at)"
                         + " VALUES (?,'RESEARCH_PARTICIPATION',?,'ACCOUNT_SETTINGS',?,?,?)",
                 accountId,
                 granted,
@@ -115,8 +118,9 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
                     .as("cohort read agrees with participates() for account %s", id)
                     .isEqualTo(service.participates(id) && active);
         }
-        assertThat(inTransaction(
-                        () -> new ConsentService(decisions, accounts, new ConsentProperties(null)).currentGrants(all)))
+        assertThat(inTransaction(() -> new ConsentService(
+                                decisions, accounts, new ConsentProperties(null), mock(PrivacyJournal.class))
+                        .currentGrants(all)))
                 .as("no study configured authorises nobody")
                 .isEmpty();
     }
@@ -146,7 +150,8 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
                         erased, GrantStanding.ACCOUNT_ERASED));
         assertThat(inTransaction(() -> service.grantStandings(Map.of(regranted, second))))
                 .containsEntry(regranted, GrantStanding.CURRENT);
-        assertThat(inTransaction(() -> new ConsentService(decisions, accounts, new ConsentProperties("Renamed"))
+        assertThat(inTransaction(() -> new ConsentService(
+                                decisions, accounts, new ConsentProperties("Renamed"), mock(PrivacyJournal.class))
                         .grantStandings(Map.of(current, currentGrant))))
                 .containsEntry(current, GrantStanding.QUESTION_CHANGED);
     }

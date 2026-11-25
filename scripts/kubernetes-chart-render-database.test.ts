@@ -130,7 +130,7 @@ const checksum = (layers: readonly Layer[]) =>
 		"checksum/backup",
 	);
 
-await test("backups archive the WAL from PostgreSQL and read its data through mutual TLS only", () => {
+await test("backups archive the WAL, read through mutual TLS and report the oldest recovery point", () => {
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
 		...layersFor("small"),
@@ -191,7 +191,20 @@ await test("backups archive the WAL from PostgreSQL and read its data through mu
 			.flatMap((volume) => list(get(volume, "secret", "items")))
 			.map((item) => String(get(item, "key")))
 			.toSorted(byCodePoint);
-		assert.deepEqual(keys, ["ca.crt", "tls.crt", "tls.key"]);
+		assert.deepEqual(keys, ["ca.crt", "ca.crt", "tls.crt", "tls.key"]);
+		const [backupContainer] = list(get(pod, "containers"));
+		assert.match(
+			String(get(backupContainer, "command", 2)),
+			/backup-publish-horizon\.sh (?:full|diff)$/u,
+		);
+		const backupEnvironment = list(get(backupContainer, "env"));
+		const value = (name: string) => backupEnvironment.find((entry) => get(entry, "name") === name);
+		assert.equal(get(value("PGUSER"), "value"), "hephaestus_backup_reporter");
+		assert.equal(get(value("PGSSLMODE"), "value"), "verify-full");
+		assert.deepEqual(get(value("PGPASSWORD"), "valueFrom", "secretKeyRef"), {
+			name: secretName,
+			key: "DATABASE_BACKUP_REPORTER_PASSWORD",
+		});
 	}
 	const config = resources.find(
 		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "postgresql-backup",
@@ -1053,6 +1066,27 @@ await test("an install warns when the bundled PostgreSQL has no backup, and only
 	assert.ok(!backedUp.includes(warning), backedUp);
 	// An external database is backed up where it runs, which the chart cannot see.
 	assert.ok(!installNotes(layersFor("external")).includes(warning));
+});
+
+await test("privacy journal retention waits for a backup report when backups exist", () => {
+	const name = "HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED";
+	assert.equal(envValue(workload(rendered(layersFor("small")), "server"), name), "true");
+	const noBackups = rendered([
+		...layersFor("small"),
+		{ privacyJournal: { backupsEnabled: false } },
+	]);
+	assert.equal(envValue(workload(noBackups, "server"), name), "false");
+	assert.equal(envValue(workload(rendered(layersFor("external")), "server"), name), "true");
+	const backups = rendered([...layersFor("small"), backupsOn]);
+	assert.equal(envValue(workload(backups, "server"), name), "true");
+	assert.equal(
+		envValue(workload(backups, "server"), "DATABASE_BACKUP_REPORTER_PASSWORD"),
+		undefined,
+	);
+	assert.equal(
+		render([...layersFor("small"), backupsOn, { privacyJournal: { backupsEnabled: false } }]).ok,
+		false,
+	);
 });
 
 const postgresqlResources = (resources: Resource[]) =>
