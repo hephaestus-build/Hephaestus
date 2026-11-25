@@ -4,8 +4,8 @@
     <img alt="Hephaestus" width="484" src="./docs/public/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
   </h1>
   <!-- The tagline, the category line and the lead paragraph: docs/contributor/practice-feedback-language.mdx § Tagline and lead. -->
-  <p><strong>Put good practice to work.</strong></p>
-  <p>Open-source practice feedback for software teams</p>
+  <p><strong>Get better at the work you already do.</strong></p>
+  <p>The open-source AI mentor for software engineering practices</p>
 
   <p>
     <a href="https://hephaestus.build"><strong>App</strong></a> ·
@@ -21,18 +21,14 @@
   </p>
 </div>
 
-Hephaestus helps software teams put good engineering practices into their everyday work.
-It reviews pull requests, issues, code reviews and team discussions as the work happens.
-Each person gets feedback that cites their work and names a next step.
-Feedback appears on the work while it is still open, in a weekly digest, and on each person's Practice profile.
-The profile shows how each practice develops over time.
-Work drafted with a coding agent gets the same feedback.
+Hephaestus is an AI mentor for software engineering practices.
+It reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose.
+When your work gives it grounds, it tells you what to improve and why, at the exact place, and names a next step.
+When it does not, it stays silent or says that it could not check.
+You can talk it through, ask for an example, or disagree, in the app or in Slack.
 
-In a conversation, anyone can ask Hephaestus why, ask for an example, or disagree.
-
-Hephaestus gives formative, self-directed feedback on the work.
-It is not designed to grade, appraise, rank, or set allocation or pay for people.
-See [Intended purpose](./docs/admin/intended-purpose.mdx).
+Hephaestus is software, and it can be wrong.
+You decide what to do with its feedback, and merge decisions stay with your reviewers.
 
 <div align="center">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-dark.png#gh-dark-mode-only" width="1280">
@@ -44,35 +40,55 @@ See [Intended purpose](./docs/admin/intended-purpose.mdx).
   <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/public/img/user/practice-profile/overview.light.webp#gh-light-mode-only" width="1024">
 </div>
 
-## Why Hephaestus
+## Why an AI mentor
 
 Developers learn engineering practices by doing the work and getting feedback on it.
-That feedback comes from reviewers and experienced colleagues, and their time is scarce.
+That feedback comes from reviewers and mentors, and their time is scarce.
 In 37 Apache projects, a [2022 study](https://doi.org/10.1145/3540250.3549167) found that only about a quarter of pull requests received an implicit-mentoring comment.
 Such a comment explains a suggestion, an instruction, or a way to fix an error.
-Hephaestus gives feedback on every piece of work it can assess, so experienced people can spend their time where judgment and relationships matter.
+
+Hephaestus gives this kind of feedback on the work it can assess.
+It takes one part of mentoring: coaching through feedback on how you apply a practice.
+The mentoring relationship stays with people.
+Hephaestus adds to your reviewers and mentors, so they can spend their time where judgment and relationships matter.
+
+## Never a grade
+
+Hephaestus is built to help you grow, not to grade you.
+It is not designed to grade, appraise or rank people, or to set allocation or pay ([Intended purpose](./docs/admin/intended-purpose.mdx)).
+
+- Your feedback has no score, grade or rank.
+- Your Practice profile is yours.
+  Workspace admins see practice results, each linked to the work it is about.
+  They see that your feedback exists, not what it says.
+  They see no names unless a workspace owner turns that on.
+  The setting is off by default, and each change is recorded.
+- No workspace admin page shows your conversation with Hephaestus.
+- Feedback on the work is visible to everyone who can see that work, like any review comment.
+
+[Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) lists every reader, including the audited support access of instance admins.
 
 ## Features
 
-- **Practices**: Start from a curated catalog or write your own.
-  Each states what good work looks like.
+- **Practices Your Team Chose**: Start from the catalog or write your own.
+  Each practice states what good work looks like.
   The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
-- **Feedback on the Work**: A comment on the pull request, merge request, or issue.
-- **Practice Page**: Each developer's private view of feedback and progress per practice.
-  Workspace admins see the observations and delivery status behind it.
-  They see names only with **Per-person results for admins** on.
-- **Ask Hephaestus**: A weekly digest you can turn on arrives in the conversation.
-  Developers ask why, ask for an example, or disagree.
-  Conversations run in the web app and, if Slack is connected, in a direct message.
-- **Feedback Mode**: Off, Approve first, or Automatic, per workspace, practice group, or practice.
-  Approve first holds feedback on the work until a workspace admin approves it.
+  For each practice, feedback is Off, waits for a workspace admin's approval, or goes out automatically.
+- **Feedback on the Work**: A note on the pull request, merge request, or issue while it is still open.
+  It cites the exact place, says why, and names a next step.
+  When a later review shows that you fixed every problem a line note named, Hephaestus resolves its thread.
+  Work drafted with a coding agent gets the same feedback.
+- **Speaks Only With Evidence**: When the evidence does not support a point, Hephaestus says nothing.
+  When it could not check a practice, it says so.
+  It never turns a missing check into a claim about your work.
+- **Practice Profile**: Your private page for each practice: patterns across your work, what is going well, and where you stand.
+  No score, grade, or rank.
+- **Ask Hephaestus**: Ask why, ask for an example, or disagree, in the web app or in a Slack direct message.
+  A weekly digest you can turn on arrives there too.
 - **Your Stack**: Works with GitHub, GitLab, Slack, and Outline.
   Your own model provider: OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint.
   Helm on your Kubernetes.
-
-Developers decide what to do with feedback: fix the work, ask why, or disagree.
-Merge decisions stay with your reviewers.
-Each member chooses which models may handle their work: **In-house**, **Cloud**, or **No AI**.
+  Each member chooses which models may handle their work: **In-house**, **Cloud**, or **No AI**.
 
 [MIT](./LICENSE) ·
 [Helm chart](https://docs.hephaestus.build/admin/kubernetes) ·
@@ -125,7 +141,7 @@ The [Code of Conduct](./CODE_OF_CONDUCT.md) governs participation in the project
 ## Project origins
 
 Developed at the Technical University of Munich.
-There, Hephaestus is the research platform for a study of how AI-generated feedback can improve developers' application of engineering practices.
+There, Hephaestus is the research platform for a study of whether and how AI-generated feedback improves developers' application of engineering practices.
 [Applied Education Technologies](https://aet.cit.tum.de/) maintains Hephaestus under the [MIT license](./LICENSE).
 Its name comes from the Greek god of the forge.
 In Plato's myth, someone stole the god's craft from his workshop and gave it to people.
