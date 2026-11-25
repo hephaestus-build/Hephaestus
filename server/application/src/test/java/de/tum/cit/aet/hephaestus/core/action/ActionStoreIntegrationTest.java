@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -199,7 +200,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var claim = claimOwn(List.of(id)).getFirst();
 
         try (var _ = RunningMigration.start(dataSource)) {
-            assertThat(store.beginWrite(id, claim.epoch(), MARGIN)).isTrue();
+            assertThat(store.beginWrite(claim, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
             assertThat(store.settle(
                             id, claim.epoch(), new ActionResult.Done("in-flight"), ActionStoreIntegrationTest::ignore))
                     .isPresent();
@@ -215,10 +216,10 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var current = claimOwn(List.of(id)).getFirst();
 
         assertThat(current.epoch()).isEqualTo(stale.epoch() + 1);
-        assertThat(store.beginWrite(id, stale.epoch(), MARGIN)).isFalse();
+        assertThat(store.beginWrite(stale, MARGIN)).isEqualTo(ActionStore.WriteAdmission.LOST);
         assertThat(store.settle(id, stale.epoch(), new ActionResult.Done("stale"), ActionStoreIntegrationTest::ignore))
                 .isEmpty();
-        assertThat(store.beginWrite(id, current.epoch(), MARGIN)).isTrue();
+        assertThat(store.beginWrite(current, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
         assertThat(store.settle(
                         id, current.epoch(), new ActionResult.Done("current"), ActionStoreIntegrationTest::ignore))
                 .as("the settled action names itself, so its events can")
@@ -238,7 +239,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldNeverTakeAnEmailAgainAfterItsWriteStarted() {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
         var claim = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(id, claim.epoch(), MARGIN)).isTrue();
+        assertThat(store.beginWrite(claim, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
         expireLease(id);
 
         assertThat(claimOwn(List.of(id))).isEmpty();
@@ -340,7 +341,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldRetryOnlyUntilTheLastAttemptAndClearTheFenceOfAProvenRetry() {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 2));
         var first = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(id, first.epoch(), MARGIN)).isTrue();
+        assertThat(store.beginWrite(first, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
 
         store.settle(id, first.epoch(), new ActionResult.Retry(Duration.ZERO), ActionStoreIntegrationTest::ignore);
         assertThat(row(id)).containsEntry("state", "ADMITTED").containsEntry("write_started_at", null);
@@ -604,7 +605,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheFenceAndTakeTheActionAgainToReadBack() {
         UUID id = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
         var first = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(id, first.epoch(), MARGIN)).isTrue();
+        assertThat(store.beginWrite(first, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
 
         store.settle(id, first.epoch(), new ActionResult.Reread(Duration.ZERO), ActionStoreIntegrationTest::ignore);
 
@@ -625,7 +626,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var ended = new ArrayList<ActionEnded>();
         for (var claim : claims) {
             if (claim.id().equals(done)) store.settle(done, claim.epoch(), new ActionResult.Done("ref"), ended::add);
-            else assertThat(store.beginWrite(lost, claim.epoch(), MARGIN)).isTrue();
+            else assertThat(store.beginWrite(claim, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
         }
         expireLease(lost);
 
@@ -764,7 +765,10 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var claim = store.start(
                         new ActionRequest(
                                 kind,
-                                kind.instanceLevel() ? null : workspace(),
+                                kind.instanceLevel()
+                                        ? null
+                                        : context.getBean(AuthorityGenerations.class)
+                                                .requestedNow(workspace(), List.of()),
                                 key,
                                 key,
                                 JsonNodeFactory.instance.objectNode().put("n", 1),
@@ -774,8 +778,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                                 null),
                         LEASE)
                 .orElseThrow();
-        if (writeStarted)
-            assertThat(store.beginWrite(claim.id(), claim.epoch(), MARGIN)).isTrue();
+        if (writeStarted) assertThat(store.beginWrite(claim, MARGIN)).isEqualTo(ActionStore.WriteAdmission.ADMITTED);
         expireLease(claim.id());
         return claim.id();
     }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
@@ -105,10 +106,11 @@ public class FeedbackStoreService implements FeedbackStore {
     public void retry(long workspaceId, UUID feedbackId, long actorId) {
         if (actorId <= 0) throw new IllegalArgumentException("A retry requires an authenticated account.");
         var row = lock(workspaceId, feedbackId);
+        CheckedAuthority actor = sendQueue.asAdmin(row, actorId);
         var send = sendQueue.current(workspaceId, feedbackId);
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
         if (row.getDestination() == FeedbackDestination.ON_WORK && visibility.withdrawn(workspaceId, feedbackId)) {
-            retryWithdrawal(row, send, children);
+            retryWithdrawal(row, send, children, actor);
             return;
         }
         if (row.getDestination() != FeedbackDestination.ON_WORK
@@ -129,12 +131,13 @@ public class FeedbackStoreService implements FeedbackStore {
                 exposed ? FeedbackState.UNCONFIRMED : FeedbackState.READY,
                 exposed ? FeedbackStopReason.DELIVERY_UNCONFIRMED : null,
                 row.getDeliveredAt());
-        sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
+        sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING, actor);
     }
 
     public void recheck(long workspaceId, UUID feedbackId, long actorId) {
         if (actorId <= 0) throw new IllegalArgumentException("A recheck requires an authenticated account.");
-        sendQueue.recheck(lock(workspaceId, feedbackId));
+        var row = lock(workspaceId, feedbackId);
+        sendQueue.recheck(row, sendQueue.asAdmin(row, actorId));
     }
 
     /**
@@ -142,7 +145,8 @@ public class FeedbackStoreService implements FeedbackStore {
      * did not acknowledge. It records no decision and keeps the copies' receipts. The copies decide: the withdrawal's own
      * send may be gone, because the outbox keeps an ended send for 30 days.
      */
-    private void retryWithdrawal(Feedback row, Optional<FeedbackSend> send, List<FeedbackCopy> children) {
+    private void retryWithdrawal(
+            Feedback row, Optional<FeedbackSend> send, List<FeedbackCopy> children, CheckedAuthority actor) {
         if (send.filter(s -> s.getState() != FeedbackSendState.DONE).isPresent())
             throw conflict("The withdrawal is still in progress.");
         if (children.stream()
@@ -150,7 +154,7 @@ public class FeedbackStoreService implements FeedbackStore {
                         && c.getExternalRef() != null
                         && c.getReadback() == FeedbackCopyReadback.TRANSIENT))
             throw conflict("No withdrawn copy can be retried.");
-        sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
+        sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING, actor);
     }
 
     public FeedbackCheck check(Feedback row, boolean approval) {

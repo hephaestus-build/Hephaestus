@@ -71,22 +71,30 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
+import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -107,9 +115,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import mockwebserver3.Dispatcher;
@@ -253,6 +263,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private AccountRepository accounts;
 
+    @Autowired
+    private AccountDirectory accountDirectory;
+
+    @Autowired
+    private ReviewIntegrationData reviewData;
+
     private JobTokenAuthenticationFilter filter;
     private Workspace workspace;
     private SimpleMeterRegistry meterRegistry;
@@ -315,7 +331,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .build());
             ConnectionRef ref = probeModel(upstream, protocol, byo);
             var capacity = admittingPermits();
-            var policy = probePolicy();
+            var policy = liveRequestPolicy();
             var proxy = proxyService(
                     guardedClient(),
                     liveBudgetService,
@@ -456,7 +472,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return ref;
     }
 
-    private ProxyRequestPolicy probePolicy() {
+    private ProxyRequestPolicy liveRequestPolicy() {
         return new ProxyRequestPolicy(
                 draftCalls,
                 modelResolver,
@@ -480,7 +496,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         liveBudgetService,
                         admittingPermits(),
                         new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
-                        probePolicy(),
+                        liveRequestPolicy(),
                         health),
                 objectMapper);
     }
@@ -1399,15 +1415,20 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    @AuthorityFenceCase(setting = Membership.class, boundary = AuthorityBoundary.MODEL_DISPATCH)
     void shouldRefuseAReviewsModelCallBeforeItLeavesWhenTheWorkspacesAuthorityNarrowed() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
+            User member = persistUser(
+                    "dispatch-member-" + UUID.randomUUID().toString().substring(0, 8));
+            ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
-            // A narrowing after the review was requested, such as a member who left the workspace.
+            // A narrowing after the review was requested: a member leaves the workspace.
             jdbc.update(
-                    "UPDATE workspace SET authority_generation = authority_generation + 1 WHERE id = ?",
-                    workspace.getId());
+                    "DELETE FROM membership WHERE workspace_id = ? AND account_id = ?",
+                    workspace.getId(),
+                    accountId(member));
             var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
             request.setRemoteAddr("127.0.0.1");
             request.addHeader("Authorization", "Bearer " + tokenFor(job));
@@ -1442,6 +1463,140 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             .count())
                     .isEqualTo(1);
         }
+    }
+
+    @Test
+    void shouldRefuseAReviewWhenMembershipEndsDuringTheCallLedgerLockWait() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            long memberAccount = addMember("proxy-ledger-member");
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            var service = proxyService();
+
+            int status = changeWhileTheCallWaitsForItsLedger(service, job, () -> removeMember(memberAccount));
+            assertThat(upstream.getRequestCount())
+                    .as("provider requests after membership ended (proxy HTTP %s)", status)
+                    .isZero();
+            assertThat(status).isEqualTo(409);
+            assertThat(jdbc.queryForObject(
+                            "SELECT stop_reason FROM agent_run WHERE id = ? AND workspace_id = ?",
+                            String.class,
+                            job.getRunId(),
+                            workspace.getId()))
+                    .isEqualTo("AUTHORITY_CHANGED");
+        }
+    }
+
+    @Test
+    void shouldRefuseAReviewWhenItsDeveloperDisablesAiDuringTheCallLedgerLockWait() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            var scenario = reviewData.scenario();
+            workspace = scenario.workspace();
+            long developer = Objects.requireNonNull(scenario.account().getId());
+            var review = reviewData.activeReview(scenario, developer, ReviewStatus.RUNNING, Instant.now(), null);
+            var assignment = new ReviewAssignmentId(
+                    review.getId(),
+                    Objects.requireNonNull(scenario.practice().getId()),
+                    Objects.requireNonNull(scenario.item().getId()));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString(), LlmApiProtocol.OPENAI_COMPLETIONS, assignment);
+            var service = proxyService(
+                    guardedClient(),
+                    mock(LlmBudgetService.class),
+                    admittingPermits(),
+                    new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                    liveRequestPolicy());
+
+            int status = changeWhileTheCallWaitsForItsLedger(
+                    service, job, () -> accountDirectory.setAiChoice(developer, AiChoice.NO_AI));
+            int requests = upstream.getRequestCount();
+
+            assertThat(callChat(service, job))
+                    .as("a fresh call sees the same committed choice")
+                    .isEqualTo(403);
+            assertThat(upstream.getRequestCount()).isEqualTo(requests);
+            assertThat(requests)
+                    .as("requests after NO_AI committed (proxy HTTP %s)", status)
+                    .isZero();
+            assertThat(status).isEqualTo(403);
+        }
+    }
+
+    private int changeWhileTheCallWaitsForItsLedger(LlmProxyService service, ReviewJob job, Runnable change)
+            throws Exception {
+        var holder = HeldTransaction.holdIn(
+                transactionTemplate,
+                jdbc,
+                () -> jdbc.queryForObject(
+                        "SELECT id FROM agent_run WHERE id = ? AND workspace_id = ? FOR UPDATE",
+                        UUID.class,
+                        job.getRunId(),
+                        workspace.getId()));
+        var pending = new CompletableFuture<Integer>();
+        Thread.startVirtualThread(() -> {
+            try {
+                pending.complete(callChat(service, job));
+            } catch (Exception failure) {
+                pending.completeExceptionally(failure);
+            }
+        });
+        holder.commitAfter(pending, () -> {
+            assertThat(pending.isDone())
+                    .as("the call is waiting to open its ledger row")
+                    .isFalse();
+            change.run();
+        });
+        return pending.get(10, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void shouldRefuseTheUsageFallbackWhenMembershipEndedDuringTheFirstModelRequest() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            long memberAccount = addMember("proxy-retry-member");
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            upstream.setDispatcher(new Dispatcher() {
+                private final AtomicBoolean first = new AtomicBoolean(true);
+
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (!first.getAndSet(false)) {
+                        return json("{\"choices\":[]}");
+                    }
+                    removeMember(memberAccount);
+                    return new MockResponse.Builder()
+                            .code(400)
+                            .addHeader("Content-Type", "application/json")
+                            .body("{\"error\":{\"message\":\"Unrecognized request argument: stream_options\"}}")
+                            .build();
+                }
+            });
+            var capacity = admittingPermits();
+            when(capacity.beforeRetry(any(), any(), any())).thenReturn(true);
+            var service = proxyService(guardedClient(), mock(LlmBudgetService.class), capacity);
+
+            assertThat(callChat(service, job)).isEqualTo(409);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+            RecordedRequest sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(objectMapper
+                            .readTree(Objects.requireNonNull(sent.getBody()).utf8())
+                            .path("stream_options")
+                            .path("include_usage")
+                            .asBoolean())
+                    .isTrue();
+        }
+    }
+
+    private long addMember(String login) {
+        User member = persistUser(login);
+        ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
+        return accountId(member);
+    }
+
+    private void removeMember(long account) {
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), account);
     }
 
     @Test
@@ -1928,6 +2083,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ReviewJob reviewJob(String baseUrl, LlmApiProtocol protocol) {
+        return reviewJob(baseUrl, protocol, null);
+    }
+
+    private ReviewJob reviewJob(String baseUrl, LlmApiProtocol protocol, @Nullable ReviewAssignmentId assignment) {
         LlmConnection connection = LlmCatalogTestFixtures.connection("chat-" + System.nanoTime());
         connection.setBaseUrl(baseUrl);
         connection.setApiProtocol(protocol);
@@ -1963,6 +2122,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 CHAT_OUTPUT_LIMIT,
                 600);
         ReviewJob job = new ReviewJob();
+        if (assignment != null) {
+            job.setReviewId(assignment.reviewId());
+            job.setInput(new ReviewJobInput(assignment.itemId(), List.of(assignment)));
+        }
         RuntimeJobTestData.initialize(job, workspace.getId());
         ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));

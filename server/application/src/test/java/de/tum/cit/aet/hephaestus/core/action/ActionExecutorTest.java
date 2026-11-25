@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -37,11 +38,13 @@ import tools.jackson.databind.json.JsonMapper;
 /** The executor's last guard: an adapter that throws never turns a write that may exist into a retry. */
 class ActionExecutorTest extends BaseUnitTest {
     private static final UUID ID = UUID.randomUUID();
+    private static final AuthorizationStamp STAMP = new AuthorizationStamp(0);
+
     private final ActionStore store = mock(ActionStore.class);
 
     @Test
     void shouldEndUncertainWhenTheAdapterThrowsAfterTheFence() {
-        when(store.beginWrite(eq(ID), eq(7L), any())).thenReturn(true);
+        when(store.beginWrite(any(), any())).thenReturn(ActionStore.WriteAdmission.ADMITTED);
 
         ActionResult result = executor(attempt -> {
                     attempt.fence().beginWrite();
@@ -118,6 +121,34 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCancelAnActionWhoseAuthorityNarrowedBeforeItsWriteWithoutReachingTheProvider() {
+        when(store.beginWrite(any(), any())).thenReturn(ActionStore.WriteAdmission.AUTHORITY_CHANGED);
+        var provider = new AtomicInteger();
+
+        ActionResult result = executor(attempt -> {
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    provider.incrementAndGet();
+                    return new ActionResult.Done(null);
+                })
+                .run(workspaceClaim(false));
+
+        assertThat(result).isEqualTo(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(provider).hasValue(0);
+        verify(store).settle(eq(ID), eq(7L), eq(result), any());
+    }
+
+    @Test
+    void shouldEndUncertainWhenAuthorityNarrowedAfterAWriteOfTheActionStarted() {
+        when(store.beginWrite(any(), any())).thenReturn(ActionStore.WriteAdmission.AUTHORITY_CHANGED);
+
+        ActionResult result = executor(attempt ->
+                        attempt.fence().beginWrite() ? new ActionResult.Done(null) : new ActionResult.Abandoned())
+                .run(workspaceClaim(true));
+
+        assertThat(result).isEqualTo(new ActionResult.Uncertain(ActionStopReason.AUTHORITY_CHANGED));
+    }
+
+    @Test
     void shouldEndUncertainWhenAnEarlierAttemptMayHaveWritten() {
         ActionResult result = executor(attempt -> {
                     throw new IllegalStateException("readback failed");
@@ -132,7 +163,8 @@ class ActionExecutorTest extends BaseUnitTest {
         ActionResult result = executor(attempt -> {
                     throw new IllegalStateException("socket closed");
                 })
-                .run(new ActionStore.Claim(ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null, null));
+                .run(new ActionStore.Claim(
+                        ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null, null, STAMP));
 
         assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
     }
@@ -274,7 +306,8 @@ class ActionExecutorTest extends BaseUnitTest {
                         if (failure) throw new IllegalStateException("adapter failed");
                         return new ActionResult.Done(null);
                     })
-                    .run(new ActionStore.Claim(ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null, null));
+                    .run(new ActionStore.Claim(
+                            ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null, null, STAMP));
 
             assertThat(during.get())
                     .containsEntry("action.id", ID.toString())
@@ -323,7 +356,7 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     private static ActionStore.Claim claim(ActionKind kind) {
-        return new ActionStore.Claim(UUID.randomUUID(), null, kind, "key", "{}", 1, 7L, false, null, null);
+        return new ActionStore.Claim(UUID.randomUUID(), null, kind, "key", "{}", 1, 7L, false, null, null, STAMP);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
@@ -338,7 +371,12 @@ class ActionExecutorTest extends BaseUnitTest {
         return ActionTestSupport.adapters(execute);
     }
 
+    private static ActionStore.Claim workspaceClaim(boolean writeStarted) {
+        return new ActionStore.Claim(
+                ID, 42L, ActionKind.SLACK_POST, "key", "{}", 1, 7L, writeStarted, null, null, STAMP);
+    }
+
     private static ActionStore.Claim claim(boolean writeStarted) {
-        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null, null);
+        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null, null, STAMP);
     }
 }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.decision;
 
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -74,6 +75,9 @@ public class FeedbackDecisionService {
         Feedback feedback = feedbackRepository
                 .lockByIdAndWorkspaceId(feedbackId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
+        // The route checked the actor's role before this transaction: a send that the decision queues carries the
+        // authority of a role check in this transaction, read after its stamp (ADR 0134).
+        CheckedAuthority actor = sendQueue.asAdmin(feedback, actorAccountId);
         if (feedback.getDestination() == FeedbackDestination.ON_WORK && feedback.getState() == FeedbackState.REPLACED)
             throw conflict("A newer revision owns this copy. Open that revision to change its delivery.");
         var send = sendQueue.current(workspaceId, feedbackId);
@@ -124,7 +128,8 @@ public class FeedbackDecisionService {
                 sendQueue.queue(
                         feedback,
                         FeedbackSendAction.POST,
-                        action == FeedbackDecisionAction.APPROVE ? FeedbackSendState.PENDING : FeedbackSendState.DONE);
+                        action == FeedbackDecisionAction.APPROVE ? FeedbackSendState.PENDING : FeedbackSendState.DONE,
+                        actor);
             }
         }
         FeedbackDecision decision = decisions.save(FeedbackDecision.builder()
@@ -144,7 +149,7 @@ public class FeedbackDecisionService {
             if (lockedCopies.stream()
                     .anyMatch(copy -> copy.getState() == FeedbackCopyState.POSTED
                             || copy.getState() == FeedbackCopyState.RETRACTED)) {
-                sendQueue.queue(feedback, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
+                sendQueue.queue(feedback, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING, actor);
             } else if (action == FeedbackDecisionAction.RESTORE
                     && feedback.getState() == FeedbackState.READY
                     && !lockedCopies.isEmpty()
@@ -153,7 +158,7 @@ public class FeedbackDecisionService {
                                     && copy.getWriteStartedAt() == null
                                     && copy.getPostedAt() == null
                                     && copy.getExternalRef() == null)) {
-                sendQueue.queue(feedback, FeedbackSendAction.POST, FeedbackSendState.PENDING);
+                sendQueue.queue(feedback, FeedbackSendAction.POST, FeedbackSendState.PENDING, actor);
             }
         }
         return new FeedbackDecisionOutcome(

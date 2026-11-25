@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.UnchangedAuthority;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
                 mock(ReviewMethodVerifier.class),
-                mock(AgentRuns.class));
+                mock(AgentRuns.class),
+                new UnchangedAuthority());
         assertThat(service.enqueue(review, 2, List.of(assigned.id()))).isEqualTo(job.getId());
         verifyNoInteractions(policy, models, assignments);
     }
@@ -67,7 +69,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
                 mock(ReviewMethodVerifier.class),
-                mock(AgentRuns.class));
+                mock(AgentRuns.class),
+                new UnchangedAuthority());
         var other = new ReviewAssignmentId(review.id(), 31, 7);
         assertThatThrownBy(() -> service.enqueue(review, 7, List.of(other)))
                 .isInstanceOf(ReviewJobStateConflictException.class);
@@ -86,7 +89,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
                 mock(ReviewMethodVerifier.class),
-                mock(AgentRuns.class));
+                mock(AgentRuns.class),
+                new UnchangedAuthority());
         var review = RuntimeReviewTestData.review(ReviewKind.ITEM, RuntimeReviewTestData.assignment(null, null));
         assertThatThrownBy(() -> service.enqueue(review, 2, List.of())).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(jobs);

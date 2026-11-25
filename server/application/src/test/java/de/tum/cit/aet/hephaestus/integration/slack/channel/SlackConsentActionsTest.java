@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.UnchangedAuthority;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class SlackConsentActionsTest extends BaseUnitTest {
         when(events.findLatestSetupRevision(7L, "C1")).thenReturn(10L);
         when(events.findFirstActivationTime(7L, "C1", 10L)).thenReturn(Instant.parse("2026-11-13T12:02:00Z"));
 
-        new SlackConsentActions(actions, events, mapper).enqueue(channel, request, true);
+        new SlackConsentActions(actions, new UnchangedAuthority(), events, mapper).enqueue(channel, request, true);
 
         ArgumentCaptor<ActionRequest> captured = ArgumentCaptor.captor();
         verify(actions).enqueue(captured.capture());

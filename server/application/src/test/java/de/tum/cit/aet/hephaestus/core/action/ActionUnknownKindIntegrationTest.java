@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyBypass;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -65,6 +66,9 @@ class ActionUnknownKindIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private AuthorityGenerations generations;
 
     // Micrometer gauges hold their state object by weak reference. The sampler owns that state, so the test keeps it
     // for the meter's lifetime, as the Spring singleton does.
@@ -356,7 +360,10 @@ class ActionUnknownKindIntegrationTest extends BaseIntegrationTest {
                     // WorkspaceAgnostic methods opens in production.
                     try (var ignored = TenancyBypass.open("outbox statements of an unknown kind")) {
                         body.accept(new Outbox(
-                                sql, repository, new ActionStore(repository, mapper), ActionAdmission.of(adapters)));
+                                sql,
+                                repository,
+                                new ActionStore(repository, mapper, generations),
+                                ActionAdmission.of(adapters)));
                     }
                 } finally {
                     transaction.rollback();

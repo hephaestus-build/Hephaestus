@@ -7,6 +7,8 @@
             "core::auth-reference",
             "core::auth-spi",
             "core::auth-types",
+            // A feedback send carries the authority that its request was checked under (ADR 0134).
+            "core::authority-spi",
             "core::config-audit-spi",
             "core::current-account",
             "core::event",

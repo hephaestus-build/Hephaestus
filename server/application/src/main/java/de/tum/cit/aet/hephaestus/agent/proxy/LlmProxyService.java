@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
@@ -598,10 +599,25 @@ class LlmProxyService {
                     return refusal(HttpStatus.CONFLICT, narrowed, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
                 }
                 row.sending(credential.upstreamModelId());
+                // Opening the row can wait for the run's lock. A person's AI choice that changed meanwhile, such as a
+                // review subject who turned AI off, refuses the call before it leaves.
+                if (!requestPolicy.allows(routing)) {
+                    row.answeredWithError();
+                    permit.released();
+                    return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                }
             } catch (ProxyCallLedger.ClaimLost lost) {
                 permit.released();
                 return refusal(
                         HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+            } catch (AuthorityRefusedException narrowed) {
+                // Refused under the run's lock: the recheck, now that nothing is held, ends the run.
+                permit.released();
+                ProxyRefusal ended = routingService.dispatchRefusal(routing);
+                return refusal(
+                        HttpStatus.CONFLICT,
+                        ended == null ? ProxyRefusal.AUTHORITY_CHANGED : ended,
+                        JobTokenAuthenticationFilter.ATTEMPT_ENDED);
             } catch (ProxyCallLedger.BudgetHeld held) {
                 permit.released();
                 if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT) accounting.budgetHeld(routing);

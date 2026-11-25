@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -13,6 +14,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.AopTestUtils;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Runs the outbox in a test. */
 public final class ActionTestSupport {
@@ -199,7 +201,8 @@ public final class ActionTestSupport {
                                          OR (d.state = 'ADMITTED' AND b.id < d.id AND b.state IN ('PROPOSED', 'ADMITTED'))))
                     ORDER BY d.id LIMIT 1)
                 RETURNING c.id, c.workspace_id, c.kind, c.idempotency_key, c.payload::text AS payload, c.attempts,
-                          c.lease_epoch, c.write_started_at IS NOT NULL AS write_started, c.readback_ref, c.native_recipient::text AS native_recipient
+                          c.lease_epoch, c.write_started_at IS NOT NULL AS write_started, c.readback_ref, c.native_recipient::text AS native_recipient,
+                          c.authorization_stamp::text AS authorization_stamp
                 """,
                 (rs, row) -> new ActionStore.Claim(
                         rs.getObject("id", UUID.class),
@@ -211,7 +214,10 @@ public final class ActionTestSupport {
                         rs.getLong("lease_epoch"),
                         rs.getBoolean("write_started"),
                         rs.getString("readback_ref"),
-                        rs.getString("native_recipient")),
+                        rs.getString("native_recipient"),
+                        JsonMapper.builder()
+                                .build()
+                                .readValue(rs.getString("authorization_stamp"), AuthorizationStamp.class)),
                 laneKey);
         return claims.stream().findFirst();
     }

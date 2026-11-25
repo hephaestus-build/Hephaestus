@@ -4,6 +4,10 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
@@ -43,7 +47,8 @@ class ActionStore {
             long epoch,
             boolean writeStarted,
             @Nullable String readbackRef,
-            @Nullable String nativeRecipient) {}
+            @Nullable String nativeRecipient,
+            AuthorizationStamp stamp) {}
 
     /** The state an action moved to, with its reason once it ended. */
     record Settled(
@@ -71,6 +76,7 @@ class ActionStore {
 
     private final AgentActionRepository actions;
     private final ObjectMapper mapper;
+    private final AuthorityGenerations generations;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -118,11 +124,18 @@ class ActionStore {
                         request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                         request.maxAttempts(),
                         request.expiresAt(),
-                        delay.toSeconds())
+                        delay.toSeconds(),
+                        stamp(request))
                 .map(id -> {
                     queued(request, id);
                     return id;
                 });
+    }
+
+    /** The stamp of the authority that the action's request was checked under; an instance-level one carries 0. */
+    private String stamp(ActionRequest request) {
+        CheckedAuthority authority = request.authority();
+        return mapper.writeValueAsString(authority == null ? new AuthorizationStamp(0) : authority.stamp());
     }
 
     private void queued(ActionRequest request, UUID id) {
@@ -136,7 +149,7 @@ class ActionStore {
     /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
     @Transactional
     public Optional<Claim> claim(UUID id, Duration lease, ActionAdmission admission) {
-        return actions.claimById(id, lease.toSeconds(), admission.json()).map(ActionStore::claim);
+        return actions.claimById(id, lease.toSeconds(), admission.json()).map(this::claim);
     }
 
     @Transactional(readOnly = true)
@@ -170,7 +183,8 @@ class ActionStore {
                         request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                         request.maxAttempts(),
                         request.expiresAt(),
-                        lease.toSeconds())
+                        lease.toSeconds(),
+                        stamp(request))
                 .map(row -> {
                     queued(request, row.getId());
                     return claim(row);
@@ -181,14 +195,46 @@ class ActionStore {
     @Transactional
     public List<Claim> claim(int limit, Duration lease, ActionAdmission admission) {
         return actions.claim(limit, lease.toSeconds(), AT_MOST_ONCE, admission.json()).stream()
-                .map(ActionStore::claim)
+                .map(this::claim)
                 .toList();
     }
 
-    /** Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. */
+    /** Whether a write may start: the claim still holds the action, and the action's authority still holds. */
+    enum WriteAdmission {
+        ADMITTED,
+        /** Another claim took the action, an erasure deleted it, or too little of the lease is left. */
+        LOST,
+        /** The workspace's authority narrowed since the action was queued (ADR 0134). */
+        AUTHORITY_CHANGED
+    }
+
+    /**
+     * Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. The
+     * send boundary of ADR 0134: it holds the workspace's generation while it admits the write, so a narrowing either
+     * committed before and refuses the write, or waits until the write was admitted. An instance-level action has no
+     * workspace authority.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean beginWrite(UUID id, long epoch, Duration margin) {
-        return actions.beginWrite(id, epoch, margin.toSeconds()) == 1;
+    public WriteAdmission beginWrite(Claim claim, Duration margin) {
+        return admit(claim, margin, true);
+    }
+
+    /** Admits a write that only removes content: no narrowing of authority blocks it ({@link ActionAttempt.Fence}). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public WriteAdmission beginRemoval(Claim claim, Duration margin) {
+        return admit(claim, margin, false);
+    }
+
+    private WriteAdmission admit(Claim claim, Duration margin, boolean checkAuthority) {
+        Long workspace = claim.workspaceId();
+        if (checkAuthority && workspace != null) {
+            if (generations
+                    .checkHeld(claim.stamp(), workspace, AuthorityBoundary.SEND)
+                    .isPresent()) return WriteAdmission.AUTHORITY_CHANGED;
+        }
+        return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1
+                ? WriteAdmission.ADMITTED
+                : WriteAdmission.LOST;
     }
 
     /**
@@ -312,7 +358,7 @@ class ActionStore {
                 row.getReadbackRef());
     }
 
-    private static Claim claim(AgentActionRepository.ClaimRow row) {
+    private Claim claim(AgentActionRepository.ClaimRow row) {
         return new Claim(
                 row.getId(),
                 row.getWorkspaceId(),
@@ -323,6 +369,7 @@ class ActionStore {
                 row.getEpoch(),
                 row.getWriteStarted(),
                 row.getReadbackRef(),
-                row.getNativeRecipient());
+                row.getNativeRecipient(),
+                mapper.readValue(row.getAuthorizationStamp(), AuthorizationStamp.class));
     }
 }

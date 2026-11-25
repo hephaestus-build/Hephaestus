@@ -55,7 +55,37 @@ class StoredTransitionQualificationTest {
                     UPDATE review SET status = 'CANCELLED', stop_reason = 'AUTHORITY_CHANGED', completed_at = now()
                     WHERE id = '00000000-0000-4000-8000-000000997103'""", """
                     SELECT status = 'CANCELLED' AND stop_reason = 'AUTHORITY_CHANGED'
-                    FROM review WHERE id = '00000000-0000-4000-8000-000000997103'"""));
+                    FROM review WHERE id = '00000000-0000-4000-8000-000000997103'"""),
+            new StoredTransition(
+                    "account authority_generation 0 -> 1 when the AI choice narrows (ADR 0134)",
+                    """
+                    INSERT INTO account(id,display_name,ai_choice,ai_choice_at) VALUES(997106,'AI choice',
+                        'CLOUD',now())""",
+                    "UPDATE account SET ai_choice = 'NO_AI', ai_choice_at = now() WHERE id = 997106",
+                    "SELECT authority_generation = 1 FROM account WHERE id = 997106"),
+            actionEnd(997104, false, "CANCELLED"),
+            actionEnd(997105, true, "UNCERTAIN"));
+
+    /** An outbox action that the send boundary refused, before or after a write of it started (ADR 0134). */
+    private static StoredTransition actionEnd(int id, boolean writeStarted, String state) {
+        String action = "00000000-0000-4000-8000-000000%06d".formatted(id);
+        return new StoredTransition(
+                "agent_action EXECUTING%s -> %s AUTHORITY_CHANGED (ADR 0134)"
+                        .formatted(writeStarted ? " after a write started" : "", state),
+                """
+                INSERT INTO workspace(id,slug,display_name,account_login,account_type,status)
+                    VALUES(%1$d,'w%1$d','W%1$d','w%1$d','ORG','ACTIVE');
+                INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,attempts,
+                    max_attempts,next_attempt_at,lease_epoch,leased_until,write_started_at,created_at,updated_at)
+                    VALUES('%2$s',%1$d,'SLACK_NOTICE','lane:%1$d','key:%1$d','EXECUTING','{}',1,3,now(),1,
+                        now() + interval '1 minute',%3$s,now(),now())""".formatted(id, action, writeStarted ? "now()" : "NULL"),
+                """
+                UPDATE agent_action SET state = '%2$s', stop_reason = 'AUTHORITY_CHANGED', ended_at = clock_timestamp(),
+                    payload = NULL, leased_until = NULL, updated_at = clock_timestamp()
+                WHERE id = '%1$s' AND lease_epoch = 1 AND state = 'EXECUTING'""".formatted(action, state),
+                "SELECT state = '%2$s' AND stop_reason = 'AUTHORITY_CHANGED' FROM agent_action WHERE id = '%1$s'"
+                        .formatted(action, state));
+    }
 
     @Test
     void shouldApplyEveryRegisteredTransitionOnTheMigratedSchema() {

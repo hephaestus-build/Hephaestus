@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceConte
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackConversationDmMessageHandler;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.UnchangedAuthority;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -248,7 +249,7 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 new SlackWorkspaceResolver(connectionService, activeConnections),
                 slack,
                 new SlackInteractiveReplyAdapter(slack),
-                new SlackNoticeActions(actions, mapper, registry),
+                new SlackNoticeActions(actions, new UnchangedAuthority(), mapper, registry),
                 identities,
                 new KeywordSlackConversationInputGuard(),
                 readiness,

@@ -517,12 +517,21 @@ The probe then renews the lease and locks the named rows with a short lock timeo
 [ADR 0134](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) owns the rule.
 This section gives the mechanism for runs.
 
-- `AgentRuns.enqueue` writes the run's `authorization_stamp`: the workspace's `authority_generation`, as the caller's transaction reads it.
-  Read the stamp before the authority check that it covers, in the same transaction.
-  `TurnRunsAdapter.enqueue` checks the conversation owner's membership after the stamp for this reason.
+- New work takes a `CheckedAuthority`: proof of the authority that its request was checked under.
+  `AuthorityGenerations.authorize(workspace, access)` reads the workspace's `authority_generation` first, then runs the caller's access check in the same transaction, and returns the proof only if the check passed.
+  So no stamp can be read after the check that it covers: a narrowing that commits after the read refuses the work at its next boundary.
+  `TurnRunsAdapter.enqueue` passes the conversation owner's membership check this way.
+  An admin's feedback decision, retry or recheck passes the actor's role check this way (`FeedbackSendQueue.asAdmin`): the route checked the role before the transaction began.
+  Work that checks no access of its own in its transaction, such as a review that an event selected, takes `requestedNow`.
+  Work that continues stored work, such as a turn's Slack reply, takes `CheckedAuthority.inherited` with the stored stamp.
+- `AgentRuns.enqueue` writes the run's `authorization_stamp` from that proof.
 - A continuation keeps the stamp of the run that it continues: it is the same work.
   `AgentRuns.resume`, which queues completed work again because something asks for it now, takes the stamp of now.
   A database trigger refuses a change of the stamp.
+- A person has a generation too: `account.authority_generation`, which the trigger `account_ai_choice_narrows_authority` raises when their AI choice narrows (to NO_AI, from CLOUD to IN_HOUSE_ONLY, or cleared).
+  A stamp holds it for each person the work depends on, under `accounts`: a review's developers, a turn's owner, a feedback's developer.
+  Every boundary compares those too, and a refusal names `ACCOUNT_AUTHORITY_NARROWED`.
+  ADR 0134 puts the person's generation on the relationship, which #4903 has not added yet, so the account holds it until then.
 - Only a narrowing raises `authority_generation`.
   The trigger `membership_narrows_authority` raises it when a membership ends, is left, moves or loses a role, whatever wrote the row.
   `Workspace` maps the column neither insertable nor updatable, so a flush of the entity cannot write back an older value.
@@ -539,6 +548,11 @@ This section gives the mechanism for runs.
 - The model proxy checks again with the boundary `MODEL_DISPATCH` just before each request leaves for the provider, after every wait for capacity or budget (`ProxyRoutingService.dispatchRefusal`).
   A refused call answers `409` with the refusal `AUTHORITY_CHANGED` and the text of an ended attempt, so each runner stops as it does for a lost lease.
   A capability probe and a report draft carry no workspace authority, and skip the check.
+  The call's ledger row opens under the run's lock, which a call can wait for while a narrowing commits.
+  So the ledger checks again there (`AgentRuns.requireCurrentUnder`): with the lock held, it holds the workspace's generation with `FOR SHARE` and compares it with the run's stamp.
+  A narrowing either committed before and refuses the call, or waits until the row is open.
+  A person's AI choice has no generation, so the proxy asks the live choice again once the row is open, and a choice that changed during the wait refuses the call as `AI_CHOICE`.
+- Every send to someone other than the owner is an outbox action, so the send boundary sits in the outbox's write fence ([Outbox](./outbox.mdx#the-lease-and-the-fence)).
 - `authority_refused_total` counts each refusal by boundary and reason.
 
 ## Reaper

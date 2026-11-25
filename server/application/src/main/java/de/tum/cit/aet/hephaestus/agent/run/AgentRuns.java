@@ -5,8 +5,11 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -128,8 +131,8 @@ public class AgentRuns {
     }
 
     /**
-     * Queues a new run of a subject. Claimers hear of it after the transaction commits. The run carries the workspace's
-     * authorization generation as the caller's transaction reads it now ({@link AuthorityGenerations#stamp}).
+     * Queues a new run of a subject that is requested now with no access check of its own in this transaction
+     * ({@link AuthorityGenerations#requestedNow}). Claimers hear of it after the transaction commits.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
@@ -138,12 +141,35 @@ public class AgentRuns {
             AgentRunBand band,
             String concurrencyKey,
             @Nullable Duration startWithin) {
+        return queue(generations.requestedNow(workspaceId, List.of()), kind, band, concurrencyKey, startWithin);
+    }
+
+    /**
+     * Queues a new run of a subject under the authority that its access check granted. Claimers hear of it after the
+     * transaction commits.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueue(
+            CheckedAuthority authority,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin) {
+        return queue(authority, kind, band, concurrencyKey, startWithin);
+    }
+
+    private AgentRunRef queue(
+            CheckedAuthority authority,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin) {
         return insert(
-                workspaceId,
+                authority.workspaceId(),
                 kind,
                 band,
                 concurrencyKey,
-                generations.stamp(workspaceId),
+                authority.stamp(),
                 0,
                 0,
                 startWithin,
@@ -211,7 +237,11 @@ public class AgentRuns {
                 kind,
                 previous.getBand(),
                 previous.getConcurrencyKey(),
-                generations.stamp(previous.getWorkspaceId()),
+                generations
+                        .requestedNow(
+                                previous.getWorkspaceId(),
+                                previous.getAuthorizationStamp().accounts().keySet())
+                        .stamp(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + (again ? 1 : 0),
                 again ? startWithin(previous) : null,
@@ -619,6 +649,29 @@ public class AgentRuns {
     public void requireCurrent(AgentRunFence fence) {
         if (runs.lockCurrent(fence.runId(), fence.workspaceId(), fence.epoch()).isEmpty())
             throw new StaleRunException(fence);
+    }
+
+    /**
+     * Holds the lease as {@link #requireCurrent} does, then holds the workspace's and its people's authorization
+     * generations and checks the run's stamp against them (ADR 0134). The lease can be waited for while a narrowing commits; with both held, a
+     * narrowing either committed before and refuses here, or waits until the caller's transaction ends. Instance work
+     * carries no workspace authority.
+     *
+     * @throws StaleRunException when {@code fence} no longer holds the run
+     * @throws AuthorityRefusedException when the workspace's authority narrowed since the work was requested; the
+     *     caller ends the run once it holds nothing ({@link AgentRunAuthority#require})
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireCurrentUnder(AgentRunFence fence, AuthorityBoundary boundary) {
+        if (runs.lockCurrent(fence.runId(), fence.workspaceId(), fence.epoch()).isEmpty())
+            throw new StaleRunException(fence);
+        if (fence.workspaceId() == AgentRunRef.INSTANCE_SCOPE) return;
+        AuthorizationStamp stamp = runs.findByRef(fence.runId(), fence.workspaceId())
+                .map(AgentRun::getAuthorizationStamp)
+                .orElseThrow(() -> new StaleRunException(fence));
+        generations.checkHeld(stamp, fence.workspaceId(), boundary).ifPresent(refusal -> {
+            throw new AuthorityRefusedException(refusal);
+        });
     }
 
     /** Whether the claim numbered {@code epoch} holds {@code run} now; never for an epoch before the first claim. */

@@ -20,6 +20,8 @@
             // auth SPI ports only (GitProviderRegistry + AccountIdentityQuery + AccountMembershipQuery) —
             // never core.auth domain types.
             "core::auth-spi",
+            // A Slack join, consent or notice carries the authority that it was requested under (ADR 0134).
+            "core::authority-spi",
             // A paused or revoked channel tells running Hephaestus turns that their context changed.
             "core::event",
             // SlackChannelConsentService throws the shared EntityNotFoundException (→ 404) for an unknown /

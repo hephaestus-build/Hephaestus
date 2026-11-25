@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -123,6 +125,7 @@ public class ActionExecutor implements SmartLifecycle {
             for (ActionStopReason reason : ActionStopReason.values()) endCounter(kind, ActionState.UNCERTAIN, reason);
         recordFailures("end");
         recordFailures("settle");
+        AuthorityRefusal.register(meters);
     }
 
     /** Ends what can no longer run, then starts due actions in the free slots. The next run starts a second later. */
@@ -315,6 +318,7 @@ public class ActionExecutor implements SmartLifecycle {
 
     private ActionResult attempt(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
+        var narrowed = new AtomicBoolean();
         var attempt = new ActionAttempt(
                 claim.id(),
                 claim.workspaceId(),
@@ -325,10 +329,16 @@ public class ActionExecutor implements SmartLifecycle {
                 claim.epoch(),
                 claim.writeStarted(),
                 claim.readbackRef(),
-                () -> {
-                    boolean begun = store.beginWrite(claim.id(), claim.epoch(), WRITE_MARGIN);
-                    if (begun) fenced.set(true);
-                    return begun;
+                new ActionAttempt.Fence() {
+                    @Override
+                    public boolean beginWrite() {
+                        return admitted(store.beginWrite(claim, WRITE_MARGIN), fenced, narrowed);
+                    }
+
+                    @Override
+                    public boolean beginRemoval() {
+                        return admitted(store.beginRemoval(claim, WRITE_MARGIN), fenced, narrowed);
+                    }
                 },
                 claim.nativeRecipient() == null
                         ? null
@@ -346,6 +356,14 @@ public class ActionExecutor implements SmartLifecycle {
             if (!fenced.get() && !claim.writeStarted()) result = new ActionResult.Retry(backoff(claim.attempts()));
             else if (claim.kind().atMostOnce()) result = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
             else result = new ActionResult.Reread(backoff(claim.attempts()));
+        }
+        if (narrowed.get()) {
+            event(log.atInfo(), "action.authority_refused", claim.id(), claim.workspaceId(), claim.kind())
+                    .log("Action refused before its write because its workspace's authority narrowed");
+            // After a write of this action started, part of its effect may exist.
+            result = fenced.get() || claim.writeStarted()
+                    ? new ActionResult.Uncertain(ActionStopReason.AUTHORITY_CHANGED)
+                    : new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED);
         }
         if (evaluation != null) {
             String providerObjectId = result instanceof ActionResult.Done done ? done.providerObjectId() : null;
@@ -377,6 +395,24 @@ public class ActionExecutor implements SmartLifecycle {
                 .increment();
         settled.ifPresent(this::recordEnd);
         return result;
+    }
+
+    /** Whether the write may start; a refusal at the send boundary (ADR 0134) is counted and ends the action later. */
+    private boolean admitted(ActionStore.WriteAdmission admission, AtomicBoolean fenced, AtomicBoolean narrowed) {
+        return switch (admission) {
+            case ADMITTED -> {
+                fenced.set(true);
+                yield true;
+            }
+            case LOST -> false;
+            // The adapter answers abandoned, and the action ends after it, outside the adapter's work.
+            case AUTHORITY_CHANGED -> {
+                narrowed.set(true);
+                new AuthorityRefusal(AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)
+                        .count(meters);
+                yield false;
+            }
+        };
     }
 
     /** Hands an action that ended to its adapter, in the transaction that ended it. */

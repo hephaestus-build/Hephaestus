@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBearing;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
@@ -26,6 +27,12 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * A person's membership of a workspace. Ending it, leaving, moving it or losing a role narrows the workspace's
+ * authority: the database trigger {@code membership_narrows_authority} raises the workspace's generation for every
+ * writer.
+ */
+@AuthorityBearing(generation = AuthorityBearing.Generation.WORKSPACE)
 @Entity
 @Table(
         name = "membership",

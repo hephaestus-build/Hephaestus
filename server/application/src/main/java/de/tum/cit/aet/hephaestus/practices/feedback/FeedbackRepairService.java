@@ -85,7 +85,7 @@ public class FeedbackRepairService implements FeedbackRepair {
                 next.remove("readback");
                 target.setComposition(next);
                 feedback.saveAndFlush(target);
-                queue.queue(target, FeedbackSendAction.READBACK, FeedbackSendState.PENDING);
+                queue.queue(target, FeedbackSendAction.READBACK, FeedbackSendState.PENDING, queue.requestedNow(target));
             }
         }
         return new FeedbackRepairStatus(targetId, FeedbackRepairStatus.State.WAITING, 0, List.of());
@@ -200,7 +200,8 @@ public class FeedbackRepairService implements FeedbackRepair {
             feedback.updateComposition(draft.workspaceId(), rootId, rootState);
         }
         policy.prepared(row);
-        if (row.getState() == FeedbackState.READY) queue.queue(row, FeedbackSendAction.EDIT, FeedbackSendState.PENDING);
+        if (row.getState() == FeedbackState.READY)
+            queue.queue(row, FeedbackSendAction.EDIT, FeedbackSendState.PENDING, queue.requestedNow(row));
         return receipt;
     }
 

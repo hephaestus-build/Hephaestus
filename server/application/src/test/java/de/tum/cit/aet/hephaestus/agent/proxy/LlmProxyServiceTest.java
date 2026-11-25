@@ -1048,6 +1048,26 @@ class LlmProxyServiceTest extends BaseUnitTest {
             verify(callLedger, never()).open(any(), any(), any(), any());
         }
 
+        @Test
+        void shouldRefuseAnAiChoiceThatChangedWhileTheLedgerWaitedForTheRunsLock() throws Exception {
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            // Both checks before the ledger pass; the review subject turns AI off while the ledger waits.
+            when(requestPolicy.allows(any())).thenReturn(true, true, false);
+            // A call that went out anyway gets an answer, so the test fails instead of waiting.
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"sent\"}}]}\n\n")
+                    .build());
+
+            var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(403);
+            assertThat(upstream.getRequestCount()).isZero();
+            verify(callLedger).open(any(), any(), any(), any());
+        }
+
         /** The hold: the ledger refuses to open a call whose upper bound does not fit under its purse's cap. */
         @Test
         void shouldRefuseACallWhoseUpperBoundDoesNotFitUnderTheCapBeforeItReachesItsProvider() throws Exception {
@@ -1794,7 +1814,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             ProxyRouting routing = streamingRouting();
             stubStreamCredential(routing);
-            when(requestPolicy.allows(any())).thenReturn(true, true, false);
+            // Before the call, after its ledger opens, and then the retry without the usage request refuses.
+            when(requestPolicy.allows(any())).thenReturn(true, true, true, false);
 
             var answer = proxyReview(routing, new MockHttpServletResponse());
 

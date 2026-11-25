@@ -80,7 +80,8 @@ public class FeedbackDeliveryPolicy {
                 if (automatic.allowed()) {
                     if (row.getState() == FeedbackState.AWAITING_APPROVAL)
                         outcomes.update(row, FeedbackState.READY, null, null);
-                    sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
+                    sendQueue.queue(
+                            row, FeedbackSendAction.POST, FeedbackSendState.PENDING, sendQueue.requestedNow(row));
                 } else withhold(row, Objects.requireNonNull(automatic.reason()));
             }
         }

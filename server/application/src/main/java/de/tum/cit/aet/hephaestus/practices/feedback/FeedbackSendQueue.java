@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
@@ -7,11 +8,17 @@ import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
+import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
+import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +44,8 @@ public class FeedbackSendQueue {
     private static final String PREFIX = "feedback:";
 
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
+    private final WorkspaceMemberships memberships;
     private final ObjectMapper mapper;
     private final FeedbackCopyRepository copies;
     private final FeedbackVisibilityService visibility;
@@ -57,9 +66,12 @@ public class FeedbackSendQueue {
      * Queues a send, or with {@link FeedbackSendState#DONE} only withdraws the sends that have not started. A new send
      * replaces one that has not started. While a send runs, it is refused: the running send decides, as it ends, what
      * follows it ({@link #follow}).
+     *
+     * @param authority the authority that the send's request was checked under: an admin's decision takes {@link
+     *     #asAdmin}, and work that checks no access of its own in this transaction takes {@link #requestedNow}
      */
     @Transactional
-    public void queue(Feedback row, FeedbackSendAction action, FeedbackSendState state) {
+    public void queue(Feedback row, FeedbackSendAction action, FeedbackSendState state, CheckedAuthority authority) {
         if (state == FeedbackSendState.DONE) {
             actions.cancelPending(row.getWorkspaceId(), lane(row.getId()));
             return;
@@ -68,10 +80,40 @@ public class FeedbackSendQueue {
                 row,
                 action == FeedbackSendAction.POST && row.getComposition().hasNonNull("editOf")
                         ? FeedbackSendAction.EDIT
-                        : action);
+                        : action,
+                authority);
     }
 
-    private void enqueue(Feedback row, FeedbackSendAction action) {
+    /**
+     * The authority of a workspace admin's decision: it reads the stamp, then checks that the actor is still at least an
+     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction. The
+     * send also depends on the feedback's developer, whose AI choice can narrow it.
+     *
+     * @throws AccessForbiddenException when the actor is no longer an admin of the workspace
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CheckedAuthority asAdmin(Feedback row, long actorAccountId) {
+        long workspaceId = row.getWorkspaceId();
+        return generations
+                .authorize(
+                        workspaceId,
+                        List.of(row.getDeveloperId()),
+                        () -> memberships
+                                .activeRole(workspaceId, actorAccountId)
+                                .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
+                                .isPresent())
+                .orElseThrow(() -> new AccessForbiddenException("Only a workspace admin can decide on feedback."));
+    }
+
+    /**
+     * The authority of a send that its request checks no access for in this transaction, such as a policy's send. It
+     * depends on the feedback's developer, whose AI choice can narrow it.
+     */
+    public CheckedAuthority requestedNow(Feedback row) {
+        return generations.requestedNow(row.getWorkspaceId(), List.of(row.getDeveloperId()));
+    }
+
+    private void enqueue(Feedback row, FeedbackSendAction action, CheckedAuthority authority) {
         var prior = actions.newestInLane(row.getWorkspaceId(), lane(row.getId()));
         var send = prior.map(p -> FeedbackSend.of(row.getId(), row.getWorkspaceId(), p));
         if (send.filter(s -> s.getState() == FeedbackSendState.SENDING
@@ -80,21 +122,26 @@ public class FeedbackSendQueue {
                                 && s.getState() != FeedbackSendState.DONE))
                 .isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The existing send must settle first.");
-        next(row, action, prior);
+        next(row, action, prior, authority);
     }
 
-    /** Queues the send that follows one that ends now; the end of that send calls it, in its transaction. */
+    /**
+     * Queues the correction that follows a send that ends now; the end of that send calls it, in its transaction. It
+     * never keeps the ended send's stamp: an authorized decision, recorded while that send ran, asked for the
+     * correction, and a removal goes out whatever happened to the workspace's access since ({@link
+     * ActionAttempt.Fence#beginRemoval}).
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void follow(Feedback row, FeedbackSendAction action) {
-        next(row, action, actions.newestInLane(row.getWorkspaceId(), lane(row.getId())));
+        next(row, action, actions.newestInLane(row.getWorkspaceId(), lane(row.getId())), requestedNow(row));
     }
 
-    private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior) {
+    private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior, CheckedAuthority authority) {
         actions.cancelPending(row.getWorkspaceId(), lane(row.getId()));
         int generation = prior.map(p -> generationOf(p.idempotencyKey()) + 1).orElse(1);
         actions.enqueue(new ActionRequest(
                 kindOf(action),
-                row.getWorkspaceId(),
+                authority,
                 lane(row.getId()),
                 lane(row.getId()) + ":" + generation + ":" + action.name(),
                 mapper.createObjectNode().put("feedbackId", row.getId().toString()),
@@ -142,7 +189,7 @@ public class FeedbackSendQueue {
      * and when, in that same transaction.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void recheck(Feedback row) {
+    public void recheck(Feedback row, CheckedAuthority authority) {
         long workspaceId = row.getWorkspaceId();
         UUID feedbackId = row.getId();
         // A send that ended long ago may be gone (the outbox keeps ended actions for 30 days): the copies decide.
@@ -162,7 +209,7 @@ public class FeedbackSendQueue {
         boolean withdrawn = visibility.withdrawn(workspaceId, feedbackId);
         var prior = send.map(FeedbackSend::getAction).orElse(FeedbackSendAction.POST);
         int attempts = send.map(FeedbackSend::getAttempts).orElse(0);
-        enqueue(row, FeedbackSendAction.POST);
+        enqueue(row, FeedbackSendAction.POST, authority);
         audit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.FEEDBACK_DELIVERY_RECHECK,
                 feedbackId,

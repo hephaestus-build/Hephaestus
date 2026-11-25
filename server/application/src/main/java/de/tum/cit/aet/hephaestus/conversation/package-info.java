@@ -22,6 +22,9 @@
             "core",
             "core::action",
             "core::auth-spi",
+            // New work carries the authority that its request was checked under (ADR 0134).
+            "core::authority",
+            "core::authority-spi",
             "core::event",
             "core::exception",
             "core::person-data",

@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.slack.channel;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class SlackChannelJoinActions {
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
     private final SlackChannelConsentEventRepository events;
     private final ObjectMapper mapper;
 
@@ -32,7 +35,8 @@ public class SlackChannelJoinActions {
         String key = "slack_join:" + workspace + ":" + channel.getId() + ":" + requestId;
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_JOIN,
-                workspace,
+                // A channel's own action, queued with the consent change that asks for it, checks no access here.
+                generations.requestedNow(workspace, List.of()),
                 lane(workspace, channel.getSlackChannelId()),
                 key,
                 mapper.valueToTree(new SlackChannelJoin(

@@ -23,6 +23,9 @@ So old and new servers cannot run together.
 - A review stops with the stop reason **Authority changed**.
   Its results stay, and Hephaestus measures its other practices again.
   A review that had admitted no results shows as cancelled.
+- Each queued message, email or comment on the work also keeps the generation of its workspace.
+  If the generation rose after it was queued, Hephaestus does not send it, and it ends with the stop reason `AUTHORITY_CHANGED`.
+- A person's AI choice also has a generation. Turning AI off, or narrowing it to in-house models, stops the work that depends on that person at its next check, with the stop reason `AUTHORITY_CHANGED`.
 - A narrowing stops every run of its workspace, also the runs that the change did not concern.
   The person asks again for the answer. A later review runs under the new access.
 
