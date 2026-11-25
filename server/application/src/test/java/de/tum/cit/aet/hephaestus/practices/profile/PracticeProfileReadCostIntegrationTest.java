@@ -198,6 +198,19 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(asked.get("overview")).isPositive().isLessThanOrEqualTo(2L * works.size() + 2 * 8);
     }
 
+    /**
+     * The review list narrows and pages the developer's whole history, but shows whether a result's sources are current
+     * only for the reviews on the page. Each piece of work here holds one result of its own review, so a read of every
+     * result would ask about all 24.
+     */
+    @Test
+    void shouldReadTheWorkBehindOnlyTheReviewsOnTheListPage() {
+        works = IntStream.range(0, 24).mapToObj(index -> onNewWork()).toList();
+        seed(works.size());
+
+        assertThat(workReads().get("reviews")).isPositive().isLessThanOrEqualTo(5);
+    }
+
     @Test
     void shouldReadTheDevelopersResultHistoryOnceForTheOverview() {
         seed(2 * works.size());
@@ -329,6 +342,10 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         reads.put(
                 "group standings",
                 () -> groupStandings.getGroupStandings(scenario.workspace().getId(), shown));
+        reads.put(
+                "reviews",
+                () -> reviewList.list(
+                        context, new OwnReviewFilter(null, null, null, null, null, false), PageRequest.of(0, 5)));
         Map<String, Long> counts = new LinkedHashMap<>();
         reads.forEach((name, read) -> {
             clearInvocations(sourceFingerprints);

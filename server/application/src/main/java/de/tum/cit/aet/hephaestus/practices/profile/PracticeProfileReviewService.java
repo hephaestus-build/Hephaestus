@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
+import de.tum.cit.aet.hephaestus.practices.result.SourceFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReusedResultQuery;
@@ -77,7 +78,8 @@ public class PracticeProfileReviewService {
                 && items.items(ws.id(), List.of(itemId)).stream()
                         .anyMatch(item -> item.getKind().equals("scm.pull_request"));
         var byReview = new LinkedHashMap<UUID, List<ResultView>>();
-        views.views(ws.id(), rows).stream()
+        // Narrowing and paging read no source freshness, so only the page's views read it, below.
+        views.viewsOnDemand(ws.id(), rows).stream()
                 .filter(v -> itemKinds == null
                         || itemKinds.isEmpty()
                         || itemKinds.contains(v.item().kind()))
@@ -110,8 +112,10 @@ public class PracticeProfileReviewService {
                 ws.id(),
                 account.get(),
                 shown.stream().map(v -> v.getFirst().review().getId()).toList());
-        // The page's references, observation rows and own feedback are each read once for all of its reviews.
+        // The page's references, observation rows, freshness and own feedback are each read once for all of its
+        // reviews.
         var shownRows = shown.stream().flatMap(List::stream).toList();
+        SourceFreshness.prefetch(shownRows);
         var refs = reviews.refs(
                 ws.id(), shown.stream().map(v -> v.getFirst().review()).toList());
         var listed = presentation.lists(ws.id(), shownRows, permitted).stream()
