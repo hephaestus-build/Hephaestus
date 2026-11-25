@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.core.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -177,8 +179,16 @@ class PracticeV1ConversationReceiptDatabaseTest {
                 "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + SHOWN
                         + ",conversation_entry_id='" + ANSWER + "' WHERE id='" + COPY + "'");
 
-        PracticeMigrationFixture.execute(
-                database, "SELECT public.person_row_sweep('WORKSPACE_PURGE', 978001, NULL, NULL)");
+        try (var connection =
+                DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password())) {
+            var key = RowSweepAdmissionDatabaseFixture.installKey(connection);
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(connection, key, RowSweepRule.WORKSPACE_PURGE, 978001, null);
+            try (var statement = connection.createStatement()) {
+                statement.execute("SELECT public.person_row_sweep('WORKSPACE_PURGE', 978001, NULL, NULL)");
+            }
+            connection.commit();
+        }
 
         assertThat(PracticeMigrationFixture.column(
                         database,

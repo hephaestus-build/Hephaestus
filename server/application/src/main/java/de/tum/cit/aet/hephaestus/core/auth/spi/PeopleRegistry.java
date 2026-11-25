@@ -6,6 +6,4 @@ public interface PeopleRegistry {
     long ensureHuman(PersonIdentity identity, String displayName);
 
     long claim(PersonIdentity identity);
-
-    void absorbUnclaimed(long claimedAccountId, long unclaimedAccountId);
 }

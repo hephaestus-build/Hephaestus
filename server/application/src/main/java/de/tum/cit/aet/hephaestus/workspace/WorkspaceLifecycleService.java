@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -53,6 +54,7 @@ public class WorkspaceLifecycleService {
     private final TransactionTemplate transactions;
 
     private final PrivacyJournal journal;
+    private final RowSweepAdmission sweepAdmission;
 
     public WorkspaceLifecycleService(
             WorkspaceRepository workspaceRepository,
@@ -64,7 +66,9 @@ public class WorkspaceLifecycleService {
             List<WorkspaceProviderRemoval> providerRemovals,
             PlatformTransactionManager transactionManager,
             ConfigAuditPort configAudit,
-            PrivacyJournal journal) {
+            PrivacyJournal journal,
+            RowSweepAdmission sweepAdmission) {
+        this.sweepAdmission = sweepAdmission;
         this.journal = journal;
         this.configAudit = configAudit;
         this.workspaceRepository = workspaceRepository;
@@ -187,6 +191,7 @@ public class WorkspaceLifecycleService {
 
     private Workspace purge(Workspace workspace) {
         Long workspaceId = workspace.getId();
+        sweepAdmission.admitWorkspacePurge(workspaceId);
         purgeContributors.stream()
                 .sorted(Comparator.comparingInt(WorkspacePurgeContributor::getOrder))
                 .forEach(contributor -> contributor.deleteWorkspaceData(workspaceId));

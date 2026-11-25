@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.time.Duration;
 import java.util.List;
@@ -116,9 +117,15 @@ public final class MigratedSchemaWait implements InitializingBean {
     // database role. Until both are done, the database refuses the connection, which is one more reason to wait.
     private Attempt attempt(List<ChangeSet> expected) {
         try {
-            return new Attempt(pending(expected), null);
+            var pending = pending(expected);
+            boolean keyPending = pending.isEmpty()
+                    && !Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS (SELECT FROM public.system_secret WHERE name = ?)",
+                            Boolean.class,
+                            RowSweepAdmission.KEY_NAME));
+            return new Attempt(pending, null, keyPending);
         } catch (CannotGetJdbcConnectionException e) {
-            return new Attempt(null, e);
+            return new Attempt(null, e, false);
         }
     }
 
@@ -170,15 +177,18 @@ public final class MigratedSchemaWait implements InitializingBean {
                 + "first " + first.getId() + " in " + first.getFilePath() + ".";
     }
 
-    /** One look at the database: the change sets still pending, or the refused connection that hid them. */
+    /** The pending change sets, a missing sweep key, or the refused connection that hid them. */
     private record Attempt(
-            @Nullable List<ChangeSet> pending, @Nullable CannotGetJdbcConnectionException refusal) {
+            @Nullable List<ChangeSet> pending,
+            @Nullable CannotGetJdbcConnectionException refusal,
+            boolean sweepKeyPending) {
 
         boolean current() {
-            return pending != null && pending.isEmpty();
+            return pending != null && pending.isEmpty() && !sweepKeyPending;
         }
 
         String describe() {
+            if (sweepKeyPending) return "The database migration has not installed the owner sweep admission key.";
             return pending != null
                     ? behind(pending)
                     : "The database refused a connection: "

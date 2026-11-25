@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
@@ -12,21 +13,27 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
@@ -59,7 +66,7 @@ class OwnerFunctionsDatabaseTest {
             INSERT INTO workspace (id, account_login, account_type, display_name, slug, status)
             VALUES (1, 'first-org', 'ORG', 'First', 'first-org', 'ACTIVE'),
                    (2, 'second-org', 'ORG', 'Second', 'second-org', 'ACTIVE');
-            INSERT INTO account (id, display_name, status) VALUES (11, 'Ada', 'ACTIVE'), (12, 'Bo', 'UNCLAIMED');
+            INSERT INTO account (id, display_name, status) VALUES (11, 'Ada', 'ACTIVE'), (12, 'Bo', 'UNCLAIMED'), (13, 'Cal', 'ACTIVE');
             INSERT INTO conversation (id, created_at, last_activity_at, account_id, workspace_id)
             VALUES ('00000000-0000-0000-0000-00000000a001', now(), now(), 11, 1),
                    ('00000000-0000-0000-0000-00000000b001', now(), now(), 12, 1),
@@ -98,6 +105,7 @@ class OwnerFunctionsDatabaseTest {
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_owner_functions");
         PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            RowSweepAdmissionDatabaseFixture.installKey(connection);
             jdbc(connection).execute(SEED);
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to seed the owner function database", e);
@@ -156,10 +164,10 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldPurgeTheConversationsOfEveryOwnerInTheWorkspaceOnly() throws SQLException {
+    void shouldPurgeTheConversationsOfEveryOwnerInTheWorkspaceOnly() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_purge", SEEDED);
 
-        sweepAsApplication(database, "SELECT public.person_row_sweep('WORKSPACE_PURGE', 1, NULL, NULL)");
+        sweepAsApplication(database, RowSweepRule.WORKSPACE_PURGE, 1, null);
 
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             JdbcTemplate owner = jdbc(connection);
@@ -187,10 +195,10 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldMergeTheAbsorbedMainAndMoveEveryOtherConversationToTheClaimingAccount() throws SQLException {
+    void shouldMergeTheAbsorbedMainAndMoveEveryOtherConversationToTheClaimingAccount() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_absorb", SEEDED);
 
-        sweepAsApplication(database, "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)");
+        sweepAsApplication(database, RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
 
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             JdbcTemplate owner = jdbc(connection);
@@ -221,6 +229,181 @@ class OwnerFunctionsDatabaseTest {
                     .as("the Slack DM moves to the claiming main, which had none")
                     .isEqualTo("T1 U12 D12");
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("rulesThatRequireLifecycleAdmission")
+    void shouldRefuseEachLifecycleRuleWithoutAdmission(RowSweepRule rule) throws SQLException {
+        var database = TestDatabaseCleanup.copyDatabase(
+                "sweep_without_admission_" + rule.name().toLowerCase(Locale.ROOT), SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var app = jdbc(connection);
+            switch (rule) {
+                case WORKSPACE_PURGE -> assertRefused(() -> sweep(app, rule, 1L, null));
+                case ACCOUNT_ABSORB -> assertRefused(() -> sweep(app, rule, 12L, 11L));
+                default -> throw new AssertionError("Add an unsigned sweep test for " + rule);
+            }
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            assertThat(jdbc(connection)
+                            .query(
+                                    "SELECT id, account_id FROM conversation ORDER BY id",
+                                    (rs, row) -> rs.getObject("id") + " " + rs.getLong("account_id")))
+                    .containsExactly(ADA_MAIN + " 11", BO_MAIN + " 12", BO_ELSEWHERE + " 12");
+        }
+    }
+
+    private static Stream<RowSweepRule> rulesThatRequireLifecycleAdmission() {
+        return Arrays.stream(RowSweepRule.values()).filter(RowSweepRule::requiresLifecycleAdmission);
+    }
+
+    @Test
+    void shouldRefuseOrdinaryAppWritesAndAdmissionForADifferentWorkspaceOrTransaction() throws Exception {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_admission", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var app = jdbc(connection);
+            assertThatThrownBy(() -> app.queryForList("SELECT inner_pad FROM lifecycle_private.sweep_key"))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("permission denied");
+            assertThatThrownBy(() -> app.update("UPDATE lifecycle_private.sweep_key SET inner_pad = outer_pad"))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("permission denied");
+            app.queryForObject("SELECT set_config('hephaestus.sweep_admission', 'forged', false)", String.class);
+            assertRefused(() -> sweep(app, RowSweepRule.WORKSPACE_PURGE, 1L, null));
+            assertRefused(() -> sweep(app, RowSweepRule.ACCOUNT_ABSORB, 12L, 11L));
+
+            connection.setAutoCommit(false);
+            String proof = RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.WORKSPACE_PURGE, 1, null);
+            assertRefused(() -> sweep(app, RowSweepRule.WORKSPACE_PURGE, 2L, null));
+            connection.rollback();
+            app.queryForObject("SELECT set_config('hephaestus.sweep_admission', ?, true)", String.class, proof);
+            assertRefused(() -> sweep(app, RowSweepRule.WORKSPACE_PURGE, 1L, null));
+            connection.rollback();
+
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
+            assertRefused(() -> sweep(app, RowSweepRule.ACCOUNT_ABSORB, 12L, 13L));
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            assertThat(jdbc(connection).queryForList("SELECT id FROM conversation ORDER BY id", UUID.class))
+                    .containsExactly(ADA_MAIN, BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
+    @Test
+    void shouldRefuseAnOldApprovalAfterTheDatabaseOwnerReplacesItsSigningKey() throws Exception {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_key_reset", SEEDED);
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var owner = jdbc(ownerConnection);
+            var app = jdbc(appConnection);
+            appConnection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    appConnection, signingKey(database), RowSweepRule.WORKSPACE_PURGE, 1, null);
+
+            ownerConnection.setAutoCommit(false);
+            owner.update("DELETE FROM public.system_secret WHERE name = 'owner-sweep-admission'");
+            owner.update("DELETE FROM lifecycle_private.sweep_key");
+            ownerConnection.commit();
+            ownerConnection.setAutoCommit(true);
+            byte[] replacement = RowSweepAdmissionDatabaseFixture.installKey(ownerConnection);
+
+            assertRefused(() -> sweep(app, RowSweepRule.WORKSPACE_PURGE, 1L, null));
+            appConnection.rollback();
+            RowSweepAdmissionDatabaseFixture.admit(appConnection, replacement, RowSweepRule.WORKSPACE_PURGE, 1, null);
+            assertThat(sweep(app, RowSweepRule.WORKSPACE_PURGE, 1L, null)).isPositive();
+            appConnection.commit();
+
+            assertThat(owner.queryForList("SELECT id FROM conversation ORDER BY id", UUID.class))
+                    .containsExactly(BO_ELSEWHERE);
+        }
+    }
+
+    @Test
+    void shouldKeepMaintenanceAwayFromAnAccountDuringAndAfterErasure() throws SQLException {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_erasure", SEEDED);
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var owner = jdbc(ownerConnection);
+            var app = jdbc(appConnection);
+            ownerConnection.setAutoCommit(false);
+            owner.update("UPDATE account SET status = 'DELETING', deleted_at = now() WHERE id = 12");
+
+            assertThat(dueEntries(app)).containsExactly(ADA_OLD);
+            assertThat(dueEntriesAfter(app, ADA_OLD)).isEmpty();
+            assertThat(sweep(app, RowSweepRule.EXPIRED_EXPORTS, null, null)).isEqualTo(1);
+            ownerConnection.commit();
+
+            assertThat(dueEntries(app)).containsExactly(ADA_OLD);
+            assertThat(sweep(app, RowSweepRule.EXPIRED_EXPORTS, null, null)).isZero();
+            owner.update("UPDATE account SET status = 'DELETED' WHERE id = 12");
+            ownerConnection.commit();
+
+            assertThat(dueEntries(app)).containsExactly(ADA_OLD);
+            assertThat(sweep(app, RowSweepRule.EXPIRED_EXPORTS, null, null)).isZero();
+            assertThat(owner.queryForObject(
+                            "SELECT status FROM account_export WHERE id = 22 AND payload IS NOT NULL", String.class))
+                    .isEqualTo("READY");
+        }
+    }
+
+    @Test
+    void shouldRefuseAnAdmittedClaimWhenErasureWinsTheAccountLock() throws Exception {
+        var database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_claim_race", SEEDED);
+        try (Connection ownerConnection = connect(PostgreSQLTestContainer.asOwner(database));
+                Connection appConnection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            var owner = jdbc(ownerConnection);
+            var app = jdbc(appConnection);
+            ownerConnection.setAutoCommit(false);
+            appConnection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    appConnection, signingKey(database), RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
+            int appPid = Objects.requireNonNull(app.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            owner.update("UPDATE account SET status = 'DELETING', deleted_at = now() WHERE id = 12");
+            var claim = CompletableFuture.runAsync(
+                    () -> assertThatThrownBy(() -> sweep(app, RowSweepRule.ACCOUNT_ABSORB, 12L, 11L))
+                            .isInstanceOf(DataAccessException.class)
+                            .rootCause()
+                            .hasMessageContaining("only an unclaimed account is absorbed"));
+            try {
+                await().atMost(Duration.ofSeconds(10))
+                        .until(() -> Boolean.TRUE.equals(owner.queryForObject(
+                                "SELECT pg_backend_pid() = ANY (pg_blocking_pids(?))", Boolean.class, appPid)));
+            } finally {
+                ownerConnection.commit();
+                claim.get(10, TimeUnit.SECONDS);
+            }
+            assertThat(owner.queryForList("SELECT id FROM conversation WHERE account_id = 12 ORDER BY id", UUID.class))
+                    .containsExactly(BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
+    private static List<@Nullable UUID> dueEntries(JdbcTemplate app) {
+        return app.queryForList(
+                "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now() - interval '30 days', NULL, NULL, 10)",
+                UUID.class);
+    }
+
+    private static List<@Nullable UUID> dueEntriesAfter(JdbcTemplate app, UUID cursor) {
+        return app.queryForList("""
+                SELECT id FROM public.mentoring_due_work(
+                    'ENTRY_RETENTION', now() - interval '30 days',
+                    (SELECT due_at FROM public.mentoring_due_work('ENTRY_RETENTION', now() - interval '30 days', NULL, NULL, 1)),
+                    ?::uuid, 10)
+                """, UUID.class, cursor);
+    }
+
+    private static void assertRefused(Runnable call) {
+        assertThatThrownBy(call::run)
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .isInstanceOfSatisfying(SQLException.class, refusal -> {
+                    assertThat(refusal.getSQLState()).isEqualTo("55000");
+                    assertThat(refusal.getMessage()).contains("lifecycle admission required");
+                });
     }
 
     @Test
@@ -271,9 +454,8 @@ class OwnerFunctionsDatabaseTest {
     }
 
     /**
-     * Every registered rule reaches its own branch, in a transaction that rolls back: a purge of a workspace that does
-     * not exist and an expiry before any export change no row, and an account absorbed into itself gets the refusal of
-     * that branch.
+     * Every registered rule reaches its own branch. A purge requires admission, an expiry before any export changes
+     * no row, and an account cannot be absorbed into itself.
      */
     @ParameterizedTest
     @EnumSource(RowSweepRule.class)
@@ -284,7 +466,8 @@ class OwnerFunctionsDatabaseTest {
             case ACCOUNT_ABSORB -> new @Nullable Object[] {rule.name(), 11L, 11L, null};
         };
         var refusal = switch (rule) {
-            case WORKSPACE_PURGE, EXPIRED_EXPORTS -> Optional.<String>empty();
+            case WORKSPACE_PURGE -> Optional.of("lifecycle admission required");
+            case EXPIRED_EXPORTS -> Optional.<String>empty();
             case ACCOUNT_ABSORB -> Optional.of("ACCOUNT_ABSORB needs two different accounts");
         };
         String call = "SELECT public.person_row_sweep(?, ?::bigint, ?::bigint, ?::timestamptz)";
@@ -379,8 +562,11 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldRefuseToAbsorbAnAccountThatIsNotUnclaimedAndKeepItsConversations() throws SQLException {
+    void shouldRefuseToAbsorbAnAccountThatIsNotUnclaimedAndKeepItsConversations() throws Exception {
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(SEEDED), RowSweepRule.ACCOUNT_ABSORB, 11, 12L);
             assertThatThrownBy(() -> jdbc(connection)
                             .queryForObject(
                                     "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 11, 12, NULL)", Long.class))
@@ -395,7 +581,7 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldRefuseAClashThatTheCallerDidNotPrepareAndMoveNothing() throws SQLException {
+    void shouldRefuseAClashThatTheCallerDidNotPrepareAndMoveNothing() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_unprepared", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
@@ -407,6 +593,9 @@ class OwnerFunctionsDatabaseTest {
         }
 
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
             assertThatThrownBy(() -> jdbc(connection)
                             .queryForObject(
                                     "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)", Long.class))
@@ -422,7 +611,7 @@ class OwnerFunctionsDatabaseTest {
     }
 
     @Test
-    void shouldRefuseAClashWhoseQueuedRunTheCallerDidNotMoveAndMoveNothing() throws SQLException {
+    void shouldRefuseAClashWhoseQueuedRunTheCallerDidNotMoveAndMoveNothing() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_queued", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
@@ -438,6 +627,9 @@ class OwnerFunctionsDatabaseTest {
         }
 
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(
+                    connection, signingKey(database), RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
             assertThatThrownBy(() -> jdbc(connection)
                             .queryForObject(
                                     "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)", Long.class))
@@ -484,6 +676,31 @@ class OwnerFunctionsDatabaseTest {
             assertThat(Objects.requireNonNull(changed))
                     .as("rows the sweep changed")
                     .isPositive();
+        }
+    }
+
+    private static int sweep(JdbcTemplate app, RowSweepRule rule, @Nullable Long subject, @Nullable Long other) {
+        return Objects.requireNonNull(app.queryForObject(
+                "SELECT public.person_row_sweep(?, ?::bigint, ?::bigint, now())",
+                Integer.class,
+                rule.name(),
+                subject,
+                other));
+    }
+
+    private static byte[] signingKey(TestDatabase database) throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            return RowSweepAdmissionDatabaseFixture.installKey(connection);
+        }
+    }
+
+    private static void sweepAsApplication(TestDatabase database, RowSweepRule rule, long subject, @Nullable Long other)
+            throws Exception {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            connection.setAutoCommit(false);
+            RowSweepAdmissionDatabaseFixture.admit(connection, signingKey(database), rule, subject, other);
+            assertThat(sweep(jdbc(connection), rule, subject, other)).isPositive();
+            connection.commit();
         }
     }
 

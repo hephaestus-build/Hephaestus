@@ -88,6 +88,21 @@ public interface IdentityRepository extends JpaRepository<Identity, Long> {
         """)
     List<Identity> findActiveByAccountIds(@Param("accountIds") Collection<Long> accountIds);
 
+    /** Confirms the exact source identity after the account locks are held. */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT FROM identity
+                WHERE account_id = :accountId AND provider_id = :providerId AND provider_user_key = :subject
+                  AND team_key = :teamKey AND disabled_at IS NULL
+                FOR SHARE
+            )
+            """, nativeQuery = true)
+    boolean lockActiveIdentity(
+            @Param("accountId") long accountId,
+            @Param("providerId") long providerId,
+            @Param("subject") String subject,
+            @Param("teamKey") String teamKey);
+
     @Modifying
     @Query("UPDATE Identity i SET i.account.id = :target WHERE i.account.id = :source")
     int absorbAccount(@Param("target") long target, @Param("source") long source);

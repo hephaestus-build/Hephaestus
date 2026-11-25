@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import de.tum.cit.aet.hephaestus.core.database.DatabaseMigration;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -161,7 +162,18 @@ public final class PostgreSQLTestContainer {
         validateDatabaseName(name);
         if (!migratedTemplateReady) {
             TestDatabase template = createDatabase(MIGRATED_TEMPLATE_DATABASE);
-            migrateDatabase(template, "dev");
+            int status = DatabaseMigration.run(new String[] {
+                "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
+                "--spring.liquibase.contexts=dev",
+                "--spring.datasource.url=" + template.jdbcUrl(),
+                "--spring.datasource.username=" + template.username(),
+                "--spring.datasource.password=" + template.password(),
+                "--spring.liquibase.user=" + template.username(),
+                "--spring.liquibase.password=" + template.password(),
+                "--hephaestus.security.encryption-key=" + TestSystemSecrets.DEFAULT_KEY,
+                "--spring.main.banner-mode=off"
+            });
+            if (status != 0) throw new IllegalStateException("The application database template did not migrate");
             migratedTemplateReady = true;
         }
         return cloneDatabase(name, MIGRATED_TEMPLATE_DATABASE);

@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** SCM and Outline capture permission checks use account state on the server role. */
@@ -45,6 +46,17 @@ public class AccountDirectoryService implements AccountDirectory {
         return accounts.findAllById(accountIds).stream()
                 .map(AccountDirectoryService::view)
                 .collect(Collectors.toUnmodifiableMap(AccountView::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdForRetention(long accountId) {
+        return accounts.lockStatusForShare(accountId)
+                .map(status -> switch (status) {
+                    case "UNCLAIMED", "ACTIVE", "BLOCKED" -> true;
+                    default -> false;
+                })
+                .orElse(false);
     }
 
     @Override

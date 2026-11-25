@@ -441,10 +441,15 @@ await test("every revision migrates the database once, in a Job that only reache
 			"DATABASE_URL",
 			"DATABASE_USERNAME",
 			"DATABASE_PASSWORD",
-			// A change set that migrates sealed values opens them with the system key (ADR 0104).
+			// A change set can read values sealed before or during a system key rotation.
 			"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+			"HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY",
 		],
 	);
+	const priorSystemKey = list(get(entry, "env")).find(
+		(variable) => get(variable, "name") === "HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY",
+	);
+	assert.equal(get(priorSystemKey, "valueFrom", "secretKeyRef", "optional"), true);
 	// It starts once PostgreSQL accepts connections: on a first install, both start together.
 	const [wait] = list(get(podSpec(migration), "initContainers"));
 	const waitEnv = (name: string) =>

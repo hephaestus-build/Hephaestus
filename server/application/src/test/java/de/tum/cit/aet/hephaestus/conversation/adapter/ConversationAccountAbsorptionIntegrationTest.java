@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation.adapter;
 
+import static de.tum.cit.aet.hephaestus.core.auth.oauth.VerifiedAccountClaimFixture.verifiedClaim;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -16,10 +17,12 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -30,6 +33,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -37,8 +41,10 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
@@ -61,7 +67,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     private SharedEventRecorder events;
 
     @Autowired
-    private ConversationAccountAbsorptionContributor contributor;
+    private PeopleRegistryService people;
 
     @Autowired
     private AccountRepository accounts;
@@ -93,25 +99,67 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private Workspace workspace(String name) {
         return workspaces.save(WorkspaceTestFixtures.activeWorkspace(
                 name + "-" + UUID.randomUUID().toString().substring(0, 8)));
     }
 
-    /** An account with one Slack identity, as the person-data write fence requires. */
-    private long account(String name, Account.Status status) {
+    private long claimedAccount(String name) {
+        return account(name, Account.Status.ACTIVE, IdentityProviderType.GITHUB, "https://github.com", "");
+    }
+
+    private long unclaimedSlackAccount() {
+        return account(
+                "Slack developer", Account.Status.UNCLAIMED, IdentityProviderType.SLACK, "https://slack.com", "T1");
+    }
+
+    private long account(String name, Account.Status status, IdentityProviderType type, String serverUrl, String team) {
         var account = AccountFixtures.withStatus(name, status);
         account = accounts.save(account);
-        var slack = providers
-                .findByTypeAndServerUrl(IdentityProviderType.SLACK, "https://slack.com")
-                .orElseGet(() -> providers.save(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com")));
+        var provider = providers
+                .findByTypeAndServerUrl(type, serverUrl)
+                .orElseGet(() -> providers.save(new IdentityProvider(type, serverUrl)));
         var identity = new Identity();
         identity.setAccount(account);
-        identity.setProviderId(Objects.requireNonNull(slack.getId()));
+        identity.setProviderId(Objects.requireNonNull(provider.getId()));
         identity.setProviderUserKey("U" + UUID.randomUUID().toString().substring(0, 8));
-        identity.setTeamKey("T1");
+        identity.setTeamKey(team);
         identities.save(identity);
         return Objects.requireNonNull(account.getId());
+    }
+
+    private PersonIdentity identityOf(long accountId) {
+        var identity = identities.findActiveByAccountId(accountId).getFirst();
+        return PersonIdentity.of(identity.getProviderId(), identity.getProviderUserKey(), identity.getTeamKey());
+    }
+
+    @Test
+    void shouldRefuseToMoveASlackConversationWithoutItsOwnersVerifiedIdentity() {
+        var workspace = workspace("absorb-wrong-identity");
+        long claimed = claimedAccount("Claimed developer");
+        long unclaimed = unclaimedSlackAccount();
+        long otherSlackAccount = unclaimedSlackAccount();
+        var conversation = conversations.findOrCreateMain(workspace.getId(), unclaimed);
+        entityManager.flush();
+        assertThat(jdbc.update("""
+                UPDATE conversation SET slack_team_id = 'T1', slack_user_id = ?, slack_channel_id = 'D1'
+                WHERE id = ?
+                """, identityOf(unclaimed).subject(), conversation.getId()))
+                .isOne();
+
+        assertThatThrownBy(
+                        () -> people.absorbUnclaimed(verifiedClaim(claimed, unclaimed, identityOf(otherSlackAccount))))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        assertThat(jdbc.queryForMap(
+                        "SELECT account_id, slack_channel_id FROM conversation WHERE id = ?", conversation.getId()))
+                .containsEntry("account_id", unclaimed)
+                .containsEntry("slack_channel_id", "D1");
     }
 
     private ConversationEntry hephaestus(Workspace workspace, Conversation conversation, String text) {
@@ -133,8 +181,8 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     void shouldMergeTheAbsorbedMainAfterTheClaimingMainAndMoveEveryOtherConversation() {
         Workspace shared = workspace("absorb-shared");
         Workspace onlyAbsorbed = workspace("absorb-only");
-        long claimed = account("Claimed developer", Account.Status.ACTIVE);
-        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        long claimed = claimedAccount("Claimed developer");
+        long unclaimed = unclaimedSlackAccount();
 
         Conversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
         UUID keptFirst = hephaestus(shared, kept, "Kept one").getId();
@@ -168,8 +216,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         null));
         Conversation elsewhere = conversations.findOrCreateMain(onlyAbsorbed.getId(), unclaimed);
 
-        contributor.absorb(claimed, unclaimed);
-        contributor.finish(claimed, unclaimed);
+        people.absorbUnclaimed(verifiedClaim(claimed, unclaimed, identityOf(unclaimed)));
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM conversation WHERE id = ?", Long.class, absorbed.getId()))
                 .as("the absorbed main is gone")
@@ -236,8 +283,8 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldQueueTheAbsorbedRunningTurnAgainAndRefuseItsHostWhenBothMainsRunATurn() {
         Workspace shared = workspace("absorb-running");
-        long claimed = account("Claimed developer", Account.Status.ACTIVE);
-        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        long claimed = claimedAccount("Claimed developer");
+        long unclaimed = unclaimedSlackAccount();
         Conversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
         Conversation absorbed = conversations.findOrCreateMain(shared.getId(), unclaimed);
         ConversationTurnService.Submission inApp =
@@ -251,8 +298,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
         UUID slackLease = Objects.requireNonNull(slackClaim.getRunId());
         turnRepository.flush();
 
-        contributor.absorb(claimed, unclaimed);
-        contributor.finish(claimed, unclaimed);
+        people.absorbUnclaimed(verifiedClaim(claimed, unclaimed, identityOf(unclaimed)));
 
         assertThat(jdbc.queryForList(
                         "SELECT id FROM conversation_turn WHERE conversation_id = ? AND status = 'RUNNING'",
@@ -305,15 +351,15 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldStartMergedQuestionsInLedgerOrderRatherThanTheirOriginalRunOrder() {
         Workspace shared = workspace("absorb-order");
-        long claimed = account("Claimed developer", Account.Status.ACTIVE);
-        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        long claimed = claimedAccount("Claimed developer");
+        long unclaimed = unclaimedSlackAccount();
         Conversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
         Conversation absorbed = conversations.findOrCreateMain(shared.getId(), unclaimed);
         var firstSubmitted = ask(shared, absorbed, ConversationTurn.Surface.SLACK, "Asked first", "17.01");
         var keptQuestion = ask(shared, kept, ConversationTurn.Surface.APP, "Kept first in the merged ledger", null);
         turnRepository.flush();
 
-        contributor.absorb(claimed, unclaimed);
+        people.absorbUnclaimed(verifiedClaim(claimed, unclaimed, identityOf(unclaimed)));
 
         ConversationTurn next = claims.claim(keptQuestion.turn());
         assertThat(next.getId()).isEqualTo(keptQuestion.turn().getId());
@@ -330,8 +376,8 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldFenceAStoppedHolderBeforeMovingItsConversation() {
         Workspace shared = workspace("absorb-stopped");
-        long claimed = account("Claimed developer", Account.Status.ACTIVE);
-        long unclaimed = account("Slack developer", Account.Status.UNCLAIMED);
+        long claimed = claimedAccount("Claimed developer");
+        long unclaimed = unclaimedSlackAccount();
         Conversation kept = conversations.findOrCreateMain(shared.getId(), claimed);
         Conversation absorbed = conversations.findOrCreateMain(shared.getId(), unclaimed);
         var stoppedQuestion = ask(shared, absorbed, ConversationTurn.Surface.SLACK, "Stop this answer", "17.01");
@@ -342,7 +388,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
         var keptQuestion = ask(shared, kept, ConversationTurn.Surface.APP, "Next answer", null);
         turnRepository.flush();
 
-        contributor.absorb(claimed, unclaimed);
+        people.absorbUnclaimed(verifiedClaim(claimed, unclaimed, identityOf(unclaimed)));
 
         assertThat(claims.claim(keptQuestion.turn()).getId())
                 .isEqualTo(keptQuestion.turn().getId());
@@ -362,7 +408,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     void shouldPurgeTurnsBeforeTheirRunsAndKeepAnotherWorkspacesConversation() {
         Workspace purged = workspace("purge-turn");
         Workspace kept = workspace("keep-turn");
-        long developer = account("Developer", Account.Status.ACTIVE);
+        long developer = claimedAccount("Developer");
         var purgedConversation = conversations.findOrCreateMain(purged.getId(), developer);
         var keptConversation = conversations.findOrCreateMain(kept.getId(), developer);
         var deletedTurn = ask(purged, purgedConversation, ConversationTurn.Surface.APP, "Remove this", null)
