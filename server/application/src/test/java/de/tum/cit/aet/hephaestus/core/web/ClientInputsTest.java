@@ -46,10 +46,7 @@ class ClientInputsTest {
     @Test
     void shouldIncludeAttachmentHashesInTheFingerprint() {
         var inputs = new ClientInputs(
-                mock(ClientInputRepository.class),
-                mock(OwnerScope.class),
-                JsonMapper.shared(),
-                Clock.systemUTC());
+                mock(ClientInputRepository.class), mock(OwnerScope.class), JsonMapper.shared(), Clock.systemUTC());
         var request = new FingerprintInput("submit", "A message", List.of("a".repeat(64)));
         var first = inputs.fingerprint(request);
         assertThat(inputs.fingerprint(request)).isEqualTo(first);

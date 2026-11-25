@@ -136,11 +136,13 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                         return;
                     }
 
-                    Set<JavaClass> dependencyTypes =
-                            javaClass.getFields().stream().map(f -> f.getRawType()).collect(Collectors.toSet());
+                    Set<JavaClass> dependencyTypes = javaClass.getFields().stream()
+                            .map(f -> f.getRawType())
+                            .collect(Collectors.toSet());
                     javaClass.getConstructors().forEach(c -> dependencyTypes.addAll(c.getRawParameterTypes()));
-                    Set<String> dependencies =
-                            dependencyTypes.stream().map(JavaClass::getSimpleName).collect(Collectors.toSet());
+                    Set<String> dependencies = dependencyTypes.stream()
+                            .map(JavaClass::getSimpleName)
+                            .collect(Collectors.toSet());
 
                     boolean hasWorkspaceAwareDependency = dependencies.contains("SyncTargetProvider")
                             || dependencies.contains("SyncContextProvider")
@@ -650,7 +652,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
 
         @Test
         void shouldRejectAScheduledJobThatHoldsARepositoryBesideOwnerSweeps() {
-            assertThat(scheduledJobViolations(OwnerSweepsAndRepositoryJob.class)).hasSize(1);
+            assertThat(scheduledJobViolations(OwnerSweepsAndRepositoryJob.class))
+                    .hasSize(1);
         }
 
         @Test
