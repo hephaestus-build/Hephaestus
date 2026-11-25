@@ -17,23 +17,23 @@ Use item only in contributor documentation, code and API contracts.
 
 ## Tagline and lead
 
-Hephaestus gives people feedback on how they apply practices in their work.
+Hephaestus is an AI mentor for software engineering practices.
 Software engineering is the first domain.
 This section owns the tagline, the category line, and the lead.
 
 | Name | Text |
 | --- | --- |
-| **Tagline** | Put good practice to work. |
-| **Category line** | Open-source practice feedback for software teams |
+| **Tagline** | Get better at the work you already do. |
+| **Category line** | The open-source AI mentor for software engineering practices |
 
 **Lead for the current release**
 
-> Hephaestus helps software teams put good engineering practices into their everyday work.
-> It reviews pull requests, issues, code reviews and team discussions as the work happens.
-> Each person gets feedback that cites their work and names a next step.
-> Feedback appears on the work while it is still open, in a weekly digest, and on each person’s Practice profile.
-> The profile shows how each practice develops over time.
-> Work drafted with a coding agent gets the same feedback.
+> Hephaestus is an AI mentor for software engineering practices.
+> It reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose.
+> When your work gives it grounds, it tells you what to improve and why, at the exact place, and names a next step.
+> When it does not, it stays silent or says that it could not check.
+> You can talk it through, ask for an example, or disagree, in the app or in Slack.
+> Your feedback has no score, grade or rank, and no admin can read your conversation.
 
 **Lead for 1.0**
 
@@ -44,9 +44,31 @@ This section owns the tagline, the category line, and the lead.
 Use this lead when the release provides these controls.
 The [user guide](/user/privacy) describes the access controls in the current release.
 
-A surface with a length limit starts with the first sentence of the lead for the current release.
+A surface with a length limit starts with the category line, or with the first sentence of the lead for the current release.
 Display text keeps the full stop of the tagline.
 A browser title drops it.
+
+### What the category claims
+
+An AI mentor gives one function of mentoring: coaching through feedback on how a person applies a practice in real work.
+The mentoring relationship stays with people.
+In code review, experienced colleagues give this coaching when they explain why a change is needed, which research calls implicit mentoring ([Feng et al., 2022](https://doi.org/10.1145/3540250.3549167)).
+
+Product text can claim three behaviours, because the product does each of them:
+
+1. **Assess.** Hephaestus checks real work against the practices that the team chose, and records observations.
+2. **Decide when to speak.** It speaks only when the evidence supports a point. Otherwise it stays silent, or it says that it could not check. Feedback earns trust or it is not sent.
+3. **Support uptake.** Feedback names a next step. The person can talk it through, ask for an example, or disagree. A later review sees a fix.
+
+Product text does not claim what only a person can do: sponsor, advocate, protect, or befriend.
+It claims no outcome that research has not established.
+Do not write that Hephaestus is proven to improve practice, that it makes people learn faster, or give a learning gain.
+Do not write "your mentor", "has your back", or "cares about you".
+Hephaestus adds to reviewers and human mentors. It does not replace them.
+
+Every first-contact surface says that Hephaestus is software and can be wrong ([ADR 0124](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md), Consequences).
+"Never a performance instrument" ([ADR 0125](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0125-hephaestus-is-never-a-performance-instrument.md)) is part of the category, and product text states it.
+State only the access rules of the current release, as [Privacy](/user/privacy#who-can-see-what) gives them.
 
 ## Writing feedback
 
@@ -307,7 +329,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | `Heph`, Mentor, Conversations (as the area), chat, AI assistant |
 | **Mentor** | A person who guides a less experienced person, such as a reviewer or an experienced colleague. Use it only for people. “Mentor” alone never names Hephaestus. |  |
 | **Hephaestus** | The application. It also answers in a person's conversation. | agent, `Heph`, mentor, the mentor, your mentor, assistant |
-| **AI mentor** | The product category of Hephaestus. Use Hephaestus as the name in product text. | mentor (alone, for the product), coach, companion |
+| **AI mentor** | The product category of Hephaestus, always written with "AI". Use Hephaestus as the name in product text. [What the category claims](#what-the-category-claims) limits its use. | mentor (alone, for the product), your mentor, coach, companion |
 | **Guided tour** | The chapters on the Practice profile that explain how work becomes feedback and how to read the page. It never opens by itself: a person starts it from the page or from a step of Get started. | product tour, walkthrough, onboarding wizard |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
@@ -361,6 +383,9 @@ Use the research word only when you quote or cite the research.
 | Delivery strategy: in-context, in-app, in-chat | Destination: On the work, On the practice page, In conversation |
 | Mentor approves feedback | A workspace admin approves feedback in the Approve first feedback mode |
 | Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the conversation |
+| Feedback on software engineering practices | Practice feedback |
+| Mentoring (the functions of a mentor) | Only coaching through feedback is an AI mentor's function. See [What the category claims](#what-the-category-claims). |
+| Uptake: a revision of the same work that fixes a named problem | No product word. The nearest product state is a problem that is No longer present. |
 
 The outcomes, problem, severity and next step have the same names in both.
 A destination matches a delivery strategy only by the place where feedback appears.

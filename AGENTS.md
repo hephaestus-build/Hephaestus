@@ -5,10 +5,10 @@ It has two profiles.
 UI text, user-facing responses, and user docs use the product voice.
 Admin docs, contributor docs, and repository instructions use STE.
 
-Hephaestus is open-source software that gives people feedback on how they apply practices.
-Software engineering is its first domain.
-It checks work in GitHub, GitLab, Slack, and Outline against the practices that the project values.
-It gives feedback on the work, on practice pages, or in conversation.
+Hephaestus is an open-source AI mentor for software engineering practices.
+It checks work in GitHub, GitLab, and Slack against the practices that the team values.
+It says what to improve and why: on the work, on a private practice page, or in a private conversation.
+It is never a performance instrument (ADR 0125).
 See the [product statement](docs/contributor/practice-feedback-language.mdx#tagline-and-lead).
 
 ## What we will not compromise on

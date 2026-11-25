@@ -6,4 +6,4 @@ tokens:
   - view as user
   - per-person results for admins
   - nudg(?:e|es|ed|ing)
-  - AI mentor
+  - Hephaestus(?:,| is| as)? (?:your |a |an |the )?mentor\b
