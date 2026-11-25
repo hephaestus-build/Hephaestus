@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 
-import { CAPTURE_LIMIT_BYTES } from "./process.ts";
+import { bounded, CAPTURE_LIMIT_BYTES, howItEnded } from "./process.ts";
 
 const files = path.resolve(import.meta.dirname, "../../deploy/chart/hephaestus/files");
 
@@ -19,9 +19,12 @@ function docker(args: string[], env: Record<string, string | undefined>): void {
 		encoding: "utf8",
 		env: { ...process.env, ...env },
 		maxBuffer: CAPTURE_LIMIT_BYTES,
+		...bounded(2 * 60 * 1000),
 	});
 	if (result.status !== 0) {
-		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		throw new Error(
+			`docker ${args.join(" ")} ${howItEnded(result)}:\n${result.stdout}${result.stderr}`,
+		);
 	}
 }
 

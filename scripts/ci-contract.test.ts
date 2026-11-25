@@ -428,6 +428,33 @@ void describe("ci-contract: tooling", () => {
 		assertNeeds(source, "all-ci-passed", "Docker");
 	});
 
+	void test("every PostgreSQL drill waits on a child process only until a deadline", async () => {
+		// A drill step that waits on a child without one blocks until the job limit cancels the job, and a
+		// cancelled job keeps no log of the call that hung.
+		const offenders: string[] = [];
+		for (const file of [
+			...(await posixGlob("scripts/postgres-*-test.ts")),
+			"scripts/lib/database-roles.ts",
+			"scripts/lib/postgres-container.ts",
+		]) {
+			if (spawnsWithoutDeadline(await readFile(file, "utf8")) > 0) {
+				offenders.push(file);
+			}
+		}
+		assert.deepEqual(offenders, [], "these drills wait on a child process without a deadline");
+	});
+
+	void test("a deadline is a timeout or the shared bounded options", () => {
+		assert.equal(spawnsWithoutDeadline('spawnSync("docker", ["ps"]);'), 1);
+		assert.equal(spawnsWithoutDeadline('spawnSync("docker", ["ps"], { encoding: "utf8" });'), 1);
+		assert.equal(spawnsWithoutDeadline('spawnSync("docker", ["ps"], bounded(60_000));'), 0);
+		assert.equal(
+			spawnsWithoutDeadline('spawnSync("docker", ["ps"], { stdio: "ignore", ...quick });'),
+			0,
+		);
+		assert.equal(spawnsWithoutDeadline('spawnSync("docker", ["ps"], { timeout: 5_000 });'), 0);
+	});
+
 	void test("bounds every captured subprocess above Node's 1 MiB default", async () => {
 		// Node caps a captured subprocess at 1 MiB and throws past it. That default has broken the
 		// release pipeline three times: a cosign attestation carrying an SBOM, a `gh api` release
@@ -1100,6 +1127,18 @@ function literalEnd(source: string, start: number, delimiter: string): number {
 		index += 1;
 	}
 	return source.length;
+}
+
+/** How many of a source's `spawnSync` calls run without a deadline: a `timeout`, or the shared `bounded` options. */
+function spawnsWithoutDeadline(source: string): number {
+	let count = 0;
+	for (const call of source.matchAll(/\bspawnSync\(/gu)) {
+		const options = callArguments(source, call.index + call[0].length);
+		if (!/\btimeout\b|\bbounded\(|\.\.\.quick\b/u.test(options)) {
+			count += 1;
+		}
+	}
+	return count;
 }
 
 /**

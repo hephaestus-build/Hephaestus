@@ -7,6 +7,8 @@ import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
+import { finalServerAnswers } from "./lib/postgres-container.ts";
+import { bounded, howItEnded } from "./lib/process.ts";
 import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
@@ -55,10 +57,12 @@ function run(command: string, args: string[], input?: Buffer): string {
 		encoding: "utf8",
 		input,
 		maxBuffer: 64 * 1024 * 1024,
-		timeout: 6 * 60 * 1000,
+		...bounded(6 * 60 * 1000),
 	});
 	if (result.status !== 0) {
-		throw new Error(`${command} failed:\n${result.stdout}${result.stderr}`);
+		throw new Error(
+			`${command} ${args.join(" ")} ${howItEnded(result)}:\n${result.stdout}${result.stderr}`,
+		);
 	}
 	return result.stdout.trim();
 }
@@ -85,6 +89,11 @@ function mc(role: "writer" | "reader", ...args: string[]): string {
 		"--insecure",
 		...args,
 	);
+}
+
+// A CI step's timeout ends the drill without its own error, so the log names the phase that was running.
+function phase(name: string): void {
+	console.log(`PITR ${new Date().toISOString()}: ${name}`);
 }
 
 function pause(seconds: number): void {
@@ -199,19 +208,7 @@ function sql(query: string, user = "root"): string {
 function waitForDatabase(restored: boolean): void {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
 		if (
-			// Over TCP: the entrypoint's temporary server for the first initialization listens only on the socket,
-			// so only the final server answers here. The image's init, not postgres, is PID 1.
-			spawnSync("docker", [
-				"exec",
-				container,
-				"pg_isready",
-				"-h",
-				"127.0.0.1",
-				"-U",
-				"root",
-				"-d",
-				"hephaestus",
-			]).status === 0 &&
+			finalServerAnswers(container) &&
 			(!restored ||
 				spawnSync(
 					"docker",
@@ -226,7 +223,7 @@ function waitForDatabase(restored: boolean): void {
 						"-Atc",
 						"SELECT pg_is_in_recovery()",
 					],
-					{ encoding: "utf8" },
+					{ encoding: "utf8", ...bounded(15_000) },
 				).stdout.trim() === "f")
 		) {
 			return;
@@ -329,9 +326,11 @@ try {
 	for (const volume of volumes) {
 		docker("volume", "create", volume);
 	}
+	phase("starting the object store and the source database");
 	startObjectStore();
 	const sourcePort = start();
 	applyDatabaseRoles(container, "hephaestus", credentials);
+	phase("migrating the source database");
 	migrate(sourcePort, credentials.DATABASE_OWNER_PASSWORD);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
@@ -340,6 +339,7 @@ try {
 	sql(
 		"CREATE TABLE restore_probe(value text PRIMARY KEY); INSERT INTO restore_probe VALUES ('before')",
 	);
+	phase("taking and verifying a full backup");
 	sidecar("ro", false, "--type=full", "backup");
 	sidecar("ro", true, "verify");
 	let readerWriteRejected = false;
@@ -351,6 +351,7 @@ try {
 	if (!readerWriteRejected) {
 		throw new Error("restore identity was able to write to the backup bucket");
 	}
+	phase("backing up while the repository is unavailable");
 	docker("stop", objectStore);
 	let outageFailed = false;
 	try {
@@ -365,6 +366,7 @@ try {
 		throw new Error("backup did not fail when the off-host repository was unavailable");
 	}
 	sidecar("ro", true, "verify");
+	phase("archiving WAL around the restore target");
 	sql("INSERT INTO restore_probe VALUES ('middle')");
 	archiveCurrentWal();
 	pause(2);
@@ -375,6 +377,7 @@ try {
 	docker("rm", "-f", container);
 	docker("volume", "rm", data);
 	docker("volume", "create", data);
+	phase("restoring to the target and starting the restored database");
 	const restoreStartedAt = performance.now();
 	sidecar("rw", true, "--type=time", `--target=${target}`, "--target-action=promote", "restore");
 	start(true);
@@ -385,6 +388,7 @@ try {
 	if (Number(sql("SELECT count(*) FROM databasechangelog")) < 1) {
 		throw new Error("restored database has no application migration history");
 	}
+	phase("locking the restored data down");
 	const lockdown = readFileSync(
 		path.join(
 			import.meta.dirname,
@@ -416,14 +420,14 @@ try {
 		`PITR passed: encrypted S3 repository verified; read-only restore and backup outage proved; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent; application data locked down`,
 	);
 } finally {
-	spawnSync("docker", ["rm", "-f", container]);
-	spawnSync("docker", ["rm", "-f", objectStore]);
+	spawnSync("docker", ["rm", "-f", container], bounded(60_000));
+	spawnSync("docker", ["rm", "-f", objectStore], bounded(60_000));
 	for (const volume of volumes) {
-		spawnSync("docker", ["volume", "rm", "-f", volume]);
+		spawnSync("docker", ["volume", "rm", "-f", volume], bounded(60_000));
 	}
-	spawnSync("docker", ["network", "rm", network]);
+	spawnSync("docker", ["network", "rm", network], bounded(60_000));
 	rmSync(certificates, { recursive: true, force: true });
 	if (values["target-image"] === undefined) {
-		spawnSync("docker", ["rmi", "-f", image]);
+		spawnSync("docker", ["rmi", "-f", image], bounded(60_000));
 	}
 }

@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
-import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { bounded, CAPTURE_LIMIT_BYTES, howItEnded } from "./lib/process.ts";
 
 // PostgreSQL 18's postmaster restarts every backend when a child it did not start exits non-zero.
 // As PID 1 it inherits such children from exec sessions, for example the pg_isready of a probe
@@ -23,36 +23,9 @@ const password = randomBytes(16).toString("hex");
 // The chart's user. The entrypoint then initializes the volume directly, without gosu.
 const user = "999:999";
 
-// Every Docker call ends by its deadline, so the waits below keep theirs and the cleanup cannot hang. A call
-// that runs out returns a null status. Every step that the drill decides on fails on it; only pg_isready's
-// readiness answer counts it as not ready yet, and its wait still fails at its own deadline.
-const bounded = (milliseconds: number) => ({
-	timeout: milliseconds,
-	killSignal: "SIGKILL" as const,
-});
+// Every Docker call ends by its deadline, so the waits below keep theirs and the cleanup cannot hang. Only
+// pg_isready's readiness answer counts a call that ran out as not ready yet, and its wait fails at its own deadline.
 const quick = bounded(15_000);
-
-/** How a Docker call ended: its exit code, its timeout, too much output, the signal that ended it, or why it could not start. */
-function howItEnded(result: {
-	status: number | null;
-	signal: NodeJS.Signals | null;
-	error?: Error;
-}): string {
-	const code =
-		result.error !== undefined && "code" in result.error ? String(result.error.code) : undefined;
-	if (code === "ETIMEDOUT") {
-		return "timed out";
-	}
-	if (code === "ENOBUFS") {
-		return "wrote more output than the limit";
-	}
-	if (code !== undefined) {
-		return `failed to run (${code})`;
-	}
-	return result.status === null
-		? `ended by ${String(result.signal)}`
-		: `exit ${String(result.status)}`;
-}
 
 function docker(...args: string[]): string {
 	// Building the image installs packages; every other call is a container or volume operation.
