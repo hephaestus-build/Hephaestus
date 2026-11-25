@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class ClientInputRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
-    private ClientInputs clientInputs;
+    private ClientInputExpiry expiry;
 
     @Test
     void shouldExpireReceiptsOlderThanEightDaysOfEveryOwnerAndKeepTheRest() {
@@ -35,7 +35,7 @@ class ClientInputRetentionIntegrationTest extends AbstractWorkspaceIntegrationTe
         owner.update(seed, workspace.getId(), accountId(second), expiredSecond, 9);
         owner.update(seed, workspace.getId(), accountId(first), fresh, 7);
 
-        clientInputs.prune();
+        expiry.prune();
 
         assertThat(owner.queryForList(
                         "SELECT idem_key FROM client_input WHERE idem_key IN (?,?,?)",

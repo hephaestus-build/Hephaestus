@@ -53,11 +53,4 @@ public class ClientInputRepository {
                 .param("related", relatedId)
                 .update();
     }
-
-    public int prune() {
-        return jdbc.sql("SELECT public.person_row_sweep('CLIENT_INPUT_EXPIRY', CAST(NULL AS bigint),"
-                        + " CAST(NULL AS bigint), pg_catalog.now())")
-                .query(Integer.class)
-                .single();
-    }
 }

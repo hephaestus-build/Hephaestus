@@ -28,6 +28,8 @@ import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerSweeps;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlagController;
@@ -50,8 +52,11 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.onboarding.AccountAiChoiceController;
 import de.tum.cit.aet.hephaestus.workspace.onboarding.PublicActivityOnboardingController;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -60,6 +65,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
@@ -67,6 +73,11 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.NoRepositoryBean;
+import org.springframework.data.repository.Repository;
+import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -96,6 +107,138 @@ import org.springframework.web.bind.annotation.RestController;
  * @see ArchitectureTestConstants
  */
 class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
+
+    /** Scheduled jobs run outside any request context, so they must set up their own workspace iteration. */
+    static final ArchCondition<JavaClass> HAVE_WORKSPACE_ITERATION_CAPABILITY =
+            new ArchCondition<>("have workspace iteration or context dependencies") {
+                @Override
+                public void check(JavaClass javaClass, ConditionEvents events) {
+                    boolean hasScheduledMethods =
+                            javaClass.getMethods().stream().anyMatch(m -> m.isAnnotatedWith(Scheduled.class));
+
+                    if (!hasScheduledMethods) {
+                        return;
+                    }
+
+                    if (javaClass.isAnnotatedWith(WorkspaceAgnostic.class)) {
+                        return;
+                    }
+
+                    // Skip if EVERY @Scheduled method declares the bypass itself. This is the tighter form of
+                    // the type-level annotation and the one to prefer: a scheduler whose cron fan-outs are
+                    // cross-tenant but whose other (single-workspace) entry points are not must NOT blanket
+                    // the whole class in a bypass — that would silently disarm WorkspaceStatementInspector on
+                    // the scoped methods too (see OutlineDocumentSyncScheduler).
+                    boolean everyScheduledMethodDeclaresBypass = javaClass.getMethods().stream()
+                            .filter(m -> m.isAnnotatedWith(Scheduled.class))
+                            .allMatch(m -> m.isAnnotatedWith(WorkspaceAgnostic.class));
+                    if (everyScheduledMethodDeclaresBypass) {
+                        return;
+                    }
+
+                    Set<JavaClass> dependencyTypes =
+                            javaClass.getFields().stream().map(f -> f.getRawType()).collect(Collectors.toSet());
+                    javaClass.getConstructors().forEach(c -> dependencyTypes.addAll(c.getRawParameterTypes()));
+                    Set<String> dependencies =
+                            dependencyTypes.stream().map(JavaClass::getSimpleName).collect(Collectors.toSet());
+
+                    boolean hasWorkspaceAwareDependency = dependencies.contains("SyncTargetProvider")
+                            || dependencies.contains("SyncContextProvider")
+                            || dependencies.contains("WorkspaceLookup")
+                            || dependencies.contains("WorkspaceRepository")
+                            || dependencies.contains("WorkspaceService")
+                            ||
+                            // Cache eviction schedulers are workspace-agnostic by design
+                            javaClass.getSimpleName().contains("Cache");
+
+                    // The owner function's rule bounds what an owner sweep changes. A job that reaches the
+                    // database only through OwnerSweeps therefore needs no workspace.
+                    boolean onlyOwnerSweeps =
+                            dependencyTypes.stream().anyMatch(type -> type.isEquivalentTo(OwnerSweeps.class))
+                                    && dependencyTypes.stream().noneMatch(MultiTenancyArchitectureTest::accessesData);
+
+                    if (!hasWorkspaceAwareDependency && !onlyOwnerSweeps) {
+                        events.add(SimpleConditionEvent.violated(
+                                javaClass,
+                                String.format(
+                                        "SCHEDULED JOB CONTEXT: %s has @Scheduled methods but no workspace"
+                                                + " iteration dependencies. Add SyncTargetProvider or"
+                                                + " WorkspaceLookup to iterate workspaces and set context, or"
+                                                + " mark it @WorkspaceAgnostic if truly system-wide.",
+                                        javaClass.getSimpleName())));
+                    }
+                }
+            };
+
+    private static final List<Class<?>> DATA_ACCESS_TYPES = List.of(
+            Repository.class,
+            JdbcOperations.class,
+            NamedParameterJdbcOperations.class,
+            JdbcClient.class,
+            DataSource.class,
+            EntityManager.class,
+            EntityManagerFactory.class);
+
+    private static boolean accessesData(JavaClass type) {
+        return DATA_ACCESS_TYPES.stream().anyMatch(type::isAssignableTo)
+                || type.isAnnotatedWith(org.springframework.stereotype.Repository.class)
+                || type.isAnnotatedWith(Service.class);
+    }
+
+    static class OwnerSweepsOnlyJob {
+        private final OwnerSweeps sweeps;
+
+        OwnerSweepsOnlyJob(OwnerSweeps sweeps) {
+            this.sweeps = sweeps;
+        }
+
+        @Scheduled(fixedDelay = 1000)
+        void run() {
+            sweeps.expire(RowSweepRule.CLIENT_INPUT_EXPIRY, Instant.EPOCH);
+        }
+    }
+
+    static class OwnerSweepsAndJdbcJob {
+        private final OwnerSweeps sweeps;
+        private final JdbcClient jdbc;
+
+        OwnerSweepsAndJdbcJob(OwnerSweeps sweeps, JdbcClient jdbc) {
+            this.sweeps = sweeps;
+            this.jdbc = jdbc;
+        }
+
+        @Scheduled(fixedDelay = 1000)
+        void run() {
+            sweeps.expire(RowSweepRule.CLIENT_INPUT_EXPIRY, Instant.EPOCH);
+            jdbc.sql("SELECT 1").update();
+        }
+    }
+
+    @NoRepositoryBean
+    interface FixtureRepository extends Repository<Object, Long> {
+        void touch();
+    }
+
+    static class OwnerSweepsAndRepositoryJob {
+        private final OwnerSweeps sweeps;
+        private final FixtureRepository repository;
+
+        OwnerSweepsAndRepositoryJob(OwnerSweeps sweeps, FixtureRepository repository) {
+            this.sweeps = sweeps;
+            this.repository = repository;
+        }
+
+        @Scheduled(fixedDelay = 1000)
+        void run() {
+            sweeps.expire(RowSweepRule.CLIENT_INPUT_EXPIRY, Instant.EPOCH);
+            repository.touch();
+        }
+    }
+
+    static class NoDependencyJob {
+        @Scheduled(fixedDelay = 1000)
+        void run() {}
+    }
 
     /**
      * Package prefixes that are inherently workspace-agnostic.
@@ -486,71 +629,41 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
         /** Scheduled jobs run outside any request context, so they must set up their own workspace iteration. */
         @Test
         void scheduledClassesHaveWorkspaceIterationDependencies() {
-            ArchCondition<JavaClass> haveWorkspaceIterationCapability =
-                    new ArchCondition<>("have workspace iteration or context dependencies") {
-                        @Override
-                        public void check(JavaClass javaClass, ConditionEvents events) {
-                            boolean hasScheduledMethods =
-                                    javaClass.getMethods().stream().anyMatch(m -> m.isAnnotatedWith(Scheduled.class));
-
-                            if (!hasScheduledMethods) {
-                                return;
-                            }
-
-                            if (javaClass.isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                return;
-                            }
-
-                            // Skip if EVERY @Scheduled method declares the bypass itself. This is the tighter form of
-                            // the type-level annotation and the one to prefer: a scheduler whose cron fan-outs are
-                            // cross-tenant but whose other (single-workspace) entry points are not must NOT blanket
-                            // the whole class in a bypass — that would silently disarm WorkspaceStatementInspector on
-                            // the scoped methods too (see OutlineDocumentSyncScheduler).
-                            boolean everyScheduledMethodDeclaresBypass = javaClass.getMethods().stream()
-                                    .filter(m -> m.isAnnotatedWith(Scheduled.class))
-                                    .allMatch(m -> m.isAnnotatedWith(WorkspaceAgnostic.class));
-                            if (everyScheduledMethodDeclaresBypass) {
-                                return;
-                            }
-
-                            Set<String> dependencies = javaClass.getFields().stream()
-                                    .map(f -> f.getRawType().getSimpleName())
-                                    .collect(Collectors.toSet());
-
-                            javaClass
-                                    .getConstructors()
-                                    .forEach(c ->
-                                            c.getRawParameterTypes().forEach(p -> dependencies.add(p.getSimpleName())));
-
-                            boolean hasWorkspaceAwareDependency = dependencies.contains("SyncTargetProvider")
-                                    || dependencies.contains("SyncContextProvider")
-                                    || dependencies.contains("WorkspaceLookup")
-                                    || dependencies.contains("WorkspaceRepository")
-                                    || dependencies.contains("WorkspaceService")
-                                    ||
-                                    // Cache eviction schedulers are workspace-agnostic by design
-                                    javaClass.getSimpleName().contains("Cache");
-
-                            if (!hasWorkspaceAwareDependency) {
-                                events.add(SimpleConditionEvent.violated(
-                                        javaClass,
-                                        String.format(
-                                                "SCHEDULED JOB CONTEXT: %s has @Scheduled methods but no workspace"
-                                                        + " iteration dependencies. Add SyncTargetProvider or"
-                                                        + " WorkspaceLookup to iterate workspaces and set context, or"
-                                                        + " mark it @WorkspaceAgnostic if truly system-wide.",
-                                                javaClass.getSimpleName())));
-                            }
-                        }
-                    };
-
             ArchRule rule = classes()
                     .that()
                     .resideInAPackage(BASE_PACKAGE + "..")
-                    .should(haveWorkspaceIterationCapability)
+                    .should(HAVE_WORKSPACE_ITERATION_CAPABILITY)
                     .because("Scheduled jobs must iterate workspaces and set context");
 
             rule.check(classes);
+        }
+
+        @Test
+        void shouldAcceptAScheduledJobThatReachesTheDatabaseOnlyThroughOwnerSweeps() {
+            assertThat(scheduledJobViolations(OwnerSweepsOnlyJob.class)).isEmpty();
+        }
+
+        @Test
+        void shouldRejectAScheduledJobThatHoldsAJdbcClientBesideOwnerSweeps() {
+            assertThat(scheduledJobViolations(OwnerSweepsAndJdbcJob.class)).hasSize(1);
+        }
+
+        @Test
+        void shouldRejectAScheduledJobThatHoldsARepositoryBesideOwnerSweeps() {
+            assertThat(scheduledJobViolations(OwnerSweepsAndRepositoryJob.class)).hasSize(1);
+        }
+
+        @Test
+        void shouldRejectAScheduledJobWithoutAWorkspaceOrOwnerSweepDependency() {
+            assertThat(scheduledJobViolations(NoDependencyJob.class)).hasSize(1);
+        }
+
+        private static List<String> scheduledJobViolations(Class<?> job) {
+            return classes()
+                    .should(HAVE_WORKSPACE_ITERATION_CAPABILITY)
+                    .evaluate(new ClassFileImporter().importClasses(job))
+                    .getFailureReport()
+                    .getDetails();
         }
 
         @Test
