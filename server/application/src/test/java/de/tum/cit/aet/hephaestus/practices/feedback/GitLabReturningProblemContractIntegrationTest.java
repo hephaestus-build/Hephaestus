@@ -595,7 +595,9 @@ class GitLabReturningProblemContractIntegrationTest extends BaseIntegrationTest 
                 new AdmissionRequestDTO(
                         3, review.reviewId(), identity.jobId(), identity.attempt(), List.of(result), List.of()));
         return admission.admit(
-                identity, new SealResultsRequestDTO(3, review.reviewId(), identity.jobId(), identity.attempt()));
+                identity,
+                new SealResultsRequestDTO(3, review.reviewId(), identity.jobId(), identity.attempt()),
+                () -> {});
     }
 
     /* The same summary and one diff note on the admitted problem, composed from the named public history. */

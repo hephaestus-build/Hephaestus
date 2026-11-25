@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -32,11 +34,14 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
@@ -48,6 +53,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -167,6 +174,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRunKind reviewRuns;
+
+    @Autowired
+    private AgentRunAuthority authority;
 
     @Autowired
     private ApplicationContext context;
@@ -588,6 +598,81 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("a review whose access narrows before it admits stops at its next source read, cancelled for it")
+    void shouldCancelAReviewWhoseAccessNarrowedBeforeItMeasured() {
+        UUID jobId = runningJobOwnedBy("narrowed-before", Instant.now(), 0);
+        // A sandbox reads only once its attempt's execution started; the claim bound the review's items to its job.
+        UUID reviewId = jobRepository.findById(jobId).orElseThrow().getReviewId();
+        jdbc.update("UPDATE review_job SET execution_started_at = now() WHERE id = ?", jobId);
+        jdbc.update("UPDATE review_item SET job_id=? WHERE review_id=?", jobId, reviewId);
+        AgentRunFence fence =
+                RuntimeJobTestData.fence(jdbc, jobRepository.findById(jobId).orElseThrow());
+        narrowAccess();
+
+        assertThatThrownBy(() -> authority.require(fence, AuthorityBoundary.CONTEXT_READ))
+                .isInstanceOf(AuthorityRefusedException.class);
+        // A second refusal of the same claim, as a parallel call of the runner makes, finds the job ended already.
+        assertThatCode(() -> transactionTemplate.executeWithoutResult(
+                        status -> reviewRuns.ended(fence.run(), fence.epoch(), AgentRunStopReason.AUTHORITY_CHANGED)))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> authority.require(fence, AuthorityBoundary.CONTEXT_READ))
+                .isInstanceOf(StaleRunException.class);
+        settle();
+
+        ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(ended.getOutput()).isNotNull();
+        assertThat(Objects.requireNonNull(ended.getOutput()).path("outcome").asString())
+                .isEqualTo("AUTHORITY_CHANGED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT state||'/'||stop_reason FROM agent_run WHERE id=?", String.class, fence.runId()))
+                .isEqualTo("ENDED/AUTHORITY_CHANGED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT status||'/'||stop_reason FROM review WHERE id=?", String.class, ended.getReviewId()))
+                .isEqualTo("CANCELLED/AUTHORITY_CHANGED");
+        assertThat(jdbc.queryForList(
+                        "SELECT state||'/'||reason FROM review_item WHERE review_id=?", String.class, reviewId))
+                .as("each practice is carried, so a follow-up measures it under the new access")
+                .containsOnly("WITHHELD/NOT_RUN");
+    }
+
+    @Test
+    @DisplayName("an admitted review whose access narrows before it composes keeps its results and closes as partial")
+    void shouldKeepTheResultsOfAnAdmittedReviewWhoseAccessNarrowed() {
+        UUID jobId = runningJobOwnedBy("narrowed-admitted", Instant.now(), 0);
+        Result observed = admitWithResult(jobId);
+        AgentRunFence fence =
+                RuntimeJobTestData.fence(jdbc, jobRepository.findById(jobId).orElseThrow());
+        narrowAccess();
+
+        assertThatThrownBy(() -> authority.require(fence, AuthorityBoundary.CONTEXT_READ))
+                .isInstanceOf(AuthorityRefusedException.class);
+        settle();
+
+        ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
+        assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+        assertThat(jdbc.queryForObject(
+                        "SELECT status||'/'||stop_reason FROM review WHERE id=?", String.class, ended.getReviewId()))
+                .isEqualTo("PARTIAL/AUTHORITY_CHANGED");
+    }
+
+    /**
+     * One settlement pass. A pass holds its scheduler lock for at least a second, so the lock that an earlier pass of
+     * this or another class left is released first: otherwise this pass would settle nothing.
+     */
+    private void settle() {
+        jdbc.update("UPDATE shedlock SET lock_until = timezone('utc', CURRENT_TIMESTAMP) - INTERVAL '1 second'"
+                + " WHERE name = 'practice-job-completion'");
+        completion.tick();
+    }
+
+    /** A narrowing of the workspace's authority, as a membership that ends raises it. */
+    private void narrowAccess() {
+        jdbc.update(
+                "UPDATE workspace SET authority_generation = authority_generation + 1 WHERE id = ?", workspace.getId());
+    }
+
+    @Test
     @DisplayName("an admitted review whose every attempt is lost closes as partial with its own reason, results kept")
     void shouldCloseAnAdmittedReviewAsPartialWhenEveryAttemptIsLost() {
         UUID jobId = runningJobOwnedBy("dead-replica-12", Instant.now().minus(Duration.ofMinutes(5)), 8);
@@ -598,7 +683,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         double unrecordedBefore = unrecorded.count();
 
         reaper.reap();
-        completion.tick();
+        settle();
 
         ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
@@ -1144,7 +1229,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         transactionTemplate,
                         objectMapper,
                         telemetry,
-                        context.getBean(JobEvidenceFiles.class)),
+                        context.getBean(JobEvidenceFiles.class),
+                        context.getBean(AgentRunAuthority.class)),
                 terminal,
                 reviewRuns,
                 context.getBean(ProviderOutages.class),

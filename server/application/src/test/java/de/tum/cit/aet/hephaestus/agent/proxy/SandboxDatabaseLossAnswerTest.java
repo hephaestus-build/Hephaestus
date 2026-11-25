@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrors;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.sql.SQLException;
@@ -121,7 +122,7 @@ class SandboxDatabaseLossAnswerTest extends BaseUnitTest {
     private static MockHttpServletResponse admitFailingWith(RuntimeException failure, AttemptCaptureFailures failures)
             throws Exception {
         var admission = mock(ResultAdmissionService.class);
-        when(admission.admit(any(), any())).thenThrow(failure);
+        when(admission.admit(any(), any(), any())).thenThrow(failure);
         var now = Instant.now();
         var jwt = new AttemptJwt(
                 AttemptJwt.Kind.REVIEW,
@@ -134,8 +135,8 @@ class SandboxDatabaseLossAnswerTest extends BaseUnitTest {
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(30));
-        return MockMvcBuilders.standaloneSetup(
-                        new ResultAdmissionController(admission, failures, mock(AttemptServerErrors.class)))
+        return MockMvcBuilders.standaloneSetup(new ResultAdmissionController(
+                        admission, failures, mock(AttemptServerErrors.class), mock(AgentRunAuthority.class)))
                 .setControllerAdvice(new AgentGatewayErrors(), new GlobalControllerAdvice())
                 .build()
                 .perform(post("/internal/llm/admit-results")

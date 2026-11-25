@@ -87,11 +87,14 @@ public class ReviewJobCompletionService {
                         ? ReviewStopReason.TIMED_OUT
                         : RefusalOutcome.PROVIDER_UNAVAILABLE.name().equals(outcome)
                                 ? ReviewStopReason.PROVIDER_UNAVAILABLE
-                                : job.getExecutionStartedAt() == null
-                                                || Objects.equals(
-                                                        job.getExitCode(), SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
-                                        ? ReviewStopReason.PREPARATION_FAILED
-                                        : ReviewStopReason.EXECUTION_FAILED;
+                                : RefusalOutcome.AUTHORITY_CHANGED.name().equals(outcome)
+                                        ? ReviewStopReason.AUTHORITY_CHANGED
+                                        : job.getExecutionStartedAt() == null
+                                                        || Objects.equals(
+                                                                job.getExitCode(),
+                                                                SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
+                                                ? ReviewStopReason.PREPARATION_FAILED
+                                                : ReviewStopReason.EXECUTION_FAILED;
         // A cancel for room ends the practices whether or not a server claimed the job, so a scan stops binding them.
         if (!admitted
                 && (job.getStatus() != ReviewJobStatus.CANCELLED
@@ -134,7 +137,9 @@ public class ReviewJobCompletionService {
         var refusal = RefusalOutcome.INSUFFICIENT_EVIDENCE.name().equals(outcome)
                 ? ReviewStopReason.READINESS_REFUSED
                 : RefusalOutcome.WORKSPACE_REFUSED.name().equals(outcome) ? ReviewStopReason.EVIDENCE_TOO_LARGE : null;
-        var status = job.getStatus() == ReviewJobStatus.CANCELLED
+        boolean authorityChanged = reason == ReviewStopReason.AUTHORITY_CHANGED;
+        // A review stopped for its access before it measured anything says so, never that the review failed.
+        var status = job.getStatus() == ReviewJobStatus.CANCELLED || (authorityChanged && !admitted)
                 ? ReviewStatus.CANCELLED
                 : refusal != null
                         ? ReviewStatus.PARTIAL
@@ -146,11 +151,15 @@ public class ReviewJobCompletionService {
         boolean unconfirmed = RefusalOutcome.COMPOSITION_UNCONFIRMED.name().equals(outcome);
         var stop = refusal != null
                 ? refusal
-                : unconfirmed
-                        ? ReviewStopReason.COMPOSITION_UNCONFIRMED
-                        : completed
-                                ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
-                                : job.getStatus() == ReviewJobStatus.TIMED_OUT ? ReviewStopReason.TIMED_OUT : reason;
+                : authorityChanged
+                        ? ReviewStopReason.AUTHORITY_CHANGED
+                        : unconfirmed
+                                ? ReviewStopReason.COMPOSITION_UNCONFIRMED
+                                : completed
+                                        ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
+                                        : job.getStatus() == ReviewJobStatus.TIMED_OUT
+                                                ? ReviewStopReason.TIMED_OUT
+                                                : reason;
         reviews.complete(
                 job.getWorkspaceId(),
                 review.id(),

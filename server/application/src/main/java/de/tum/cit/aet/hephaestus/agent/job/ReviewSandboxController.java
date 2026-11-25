@@ -1,11 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,25 +46,31 @@ public class ReviewSandboxController {
 
     private final ReviewSandboxRuns reviews;
     private final AgentRuns runs;
+    private final AgentRunAuthority authority;
 
-    public ReviewSandboxController(ReviewSandboxRuns reviews, AgentRuns runs) {
+    public ReviewSandboxController(ReviewSandboxRuns reviews, AgentRuns runs, AgentRunAuthority authority) {
         this.reviews = reviews;
         this.runs = runs;
+        this.authority = authority;
     }
 
     /** @param resultByteBudget the most that the result may hold, as {@link SandboxOutputArchive} reads it */
     public record Capabilities(int protocolVersion, long workspaceByteBudget, long resultByteBudget) {}
 
     @GetMapping
+    @ReadsContext
     public Capabilities capabilities(SandboxRun run) {
         current(run);
-        return new Capabilities(3, reviews.session(run).inputBytes(), SandboxOutputArchive.MAX_OUTPUT_BYTES);
+        return new Capabilities(3, session(run).inputBytes(), SandboxOutputArchive.MAX_OUTPUT_BYTES);
     }
 
     @GetMapping("/workspace")
+    @ReadsContext
     public void workspace(SandboxRun run, HttpServletResponse response) throws IOException {
         current(run);
-        var session = reviews.session(run);
+        var session = session(run);
+        // Preparing the archive can wait: it is served only while the run's authority still holds.
+        authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
         try (var input = session.download()) {
             response.setContentType("application/x-tar");
             response.setContentLengthLong(session.inputBytes());
@@ -70,6 +80,7 @@ public class ReviewSandboxController {
 
     /** Its declared length is bounded on the gateway chain before this is reached. */
     @PostMapping(value = "/result", consumes = "application/x-tar")
+    @ReadsContext
     public void result(
             SandboxRun run,
             @RequestHeader("Content-Digest") String contentDigest,
@@ -80,6 +91,8 @@ public class ReviewSandboxController {
         current(run);
         try {
             var upload = reviews.receive(run, request.getInputStream(), contentDigest);
+            // The upload can take long, and recording it can rebuild the evidence and seal staged results.
+            authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
             reviews.measured(run, new SandboxResult(exitCode, upload.files(), "", timedOut, Duration.ZERO));
             // Only now: the runner reads a 409 with this ETag as confirmed, and an error answer keeps the headers.
             response.setHeader("ETag", upload.etag());
@@ -87,6 +100,11 @@ public class ReviewSandboxController {
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid result archive", exception);
         }
+    }
+
+    /** The attempt's session: its lookup ends a run whose authority narrowed while it was prepared. */
+    private SandboxGatewaySessions.Session session(SandboxRun run) {
+        return reviews.session(run);
     }
 
     private void current(SandboxRun run) {

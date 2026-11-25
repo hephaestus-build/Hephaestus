@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
@@ -72,7 +73,8 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
                         beans.getBeanProvider(ContextLoader.class),
                         Clock.fixed(now, ZoneOffset.UTC),
                         observed,
-                        layout)) {
+                        layout,
+                        mock(AgentRunAuthority.class))) {
             var loaded = preparations.submit(() -> folder.prepare(turn, now.plusSeconds(30), "repos/fixture"));
             try {
                 assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();

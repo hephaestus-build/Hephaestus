@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -31,8 +32,9 @@ public class ConversationTurnConfiguration {
             ObjectProvider<ContextLoader> loaders,
             Clock clock,
             PersonDataCopyFence copies,
-            FabricLayout layout) {
-        return new TurnContextLoads(turns, loaders, clock, copies, layout);
+            FabricLayout layout,
+            AgentRunAuthority authority) {
+        return new TurnContextLoads(turns, loaders, clock, copies, layout, authority);
     }
 
     @Bean

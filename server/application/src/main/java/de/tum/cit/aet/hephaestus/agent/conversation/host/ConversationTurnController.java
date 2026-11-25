@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
@@ -64,6 +65,7 @@ public class ConversationTurnController {
     public record ResultLink(@NotNull UUID resultId) {}
 
     @PostMapping("/link-result")
+    @ReadsContext
     public ResultLink linkResult(SandboxRun run, @Valid @RequestBody ResultLink request) {
         return turns.write(run, false, turn -> {
             return ConversationToolCalls.logged(
@@ -83,6 +85,7 @@ public class ConversationTurnController {
     public record ProblemLink(@NotNull UUID problemId) {}
 
     @PostMapping("/link-problem")
+    @ReadsContext
     public ProblemLink linkProblem(SandboxRun run, @Valid @RequestBody ProblemLink request) {
         return turns.write(run, false, turn -> {
             return ConversationToolCalls.logged(
@@ -105,6 +108,7 @@ public class ConversationTurnController {
     public record FeedbackShow(@NotNull UUID feedbackId) {}
 
     @PostMapping("/show-feedback")
+    @ReadsContext
     public FeedbackShow showFeedback(SandboxRun run, @Valid @RequestBody FeedbackShow request) {
         return turns.write(run, false, turn -> {
             return ConversationToolCalls.logged(
@@ -137,6 +141,7 @@ public class ConversationTurnController {
     public record SearchResponse(List<ConversationTurnContexts.SearchHit> hits) {}
 
     @PostMapping("/search")
+    @ReadsContext
     public SearchResponse search(SandboxRun run, @Valid @RequestBody SearchRequest request) {
         return turns.write(run, false, turn -> {
             String branch = request.branch();

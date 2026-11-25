@@ -11,5 +11,7 @@ enum RefusalOutcome {
     /** Every attempt of an admitted review ended before it confirmed a decision for each destination. */
     COMPOSITION_UNCONFIRMED,
     /** The model provider answered none of the review's calls, or limited their rate, until the review's bound passed. */
-    PROVIDER_UNAVAILABLE
+    PROVIDER_UNAVAILABLE,
+    /** The workspace's access narrowed after the review was requested, and a boundary refused it (ADR 0134). */
+    AUTHORITY_CHANGED
 }

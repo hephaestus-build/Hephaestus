@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
@@ -151,9 +152,18 @@ class TurnContextControllerTest extends BaseUnitTest {
             }
         });
         loads = new TurnContextLoads(
-                rows, beans.getBeanProvider(ContextLoader.class), Clock.fixed(NOW, ZoneOffset.UTC), copies, layout);
+                rows,
+                beans.getBeanProvider(ContextLoader.class),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                copies,
+                layout,
+                mock(AgentRunAuthority.class));
         controller = new TurnContextController(
-                mock(ConversationTurnContexts.class), turns, loads, Clock.fixed(NOW, ZoneOffset.UTC));
+                mock(ConversationTurnContexts.class),
+                turns,
+                loads,
+                mock(AgentRunAuthority.class),
+                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @AfterEach

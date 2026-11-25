@@ -116,7 +116,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     void shouldRestoreTheFrozenBytesOnAnotherServer() throws Exception {
         var job = job();
         restorable(job);
-        try (var restored = files().resume(job)) {
+        try (var restored = files().resume(job, () -> {})) {
             assertThat(Files.readAllBytes(
                             Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"))))
                     .isEqualTo(FROZEN);
@@ -128,7 +128,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var job = job();
         restorable(job);
         when(inputs.content(job, "INDEX.json")).thenReturn("Changed".getBytes(StandardCharsets.UTF_8));
-        assertThatThrownBy(() -> files().resume(job))
+        assertThatThrownBy(() -> files().resume(job, () -> {}))
                 .isInstanceOf(CheckoutUnverifiedException.class)
                 .hasMessageContaining("differs from its digest");
     }
@@ -138,11 +138,11 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var job = job();
         restorable(job);
         Path target;
-        try (var restored = files().resume(job)) {
+        try (var restored = files().resume(job, () -> {})) {
             target = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
         }
         Files.setPosixFilePermissions(target, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-        assertThatThrownBy(() -> files().resume(job))
+        assertThatThrownBy(() -> files().resume(job, () -> {}))
                 .isInstanceOf(CheckoutUnverifiedException.class)
                 .hasMessageContaining("recorded permissions");
         assertThat(Files.readAllBytes(target)).isEqualTo(FROZEN);
@@ -154,13 +154,13 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var job = job();
         restorable(job);
         Path target;
-        try (var restored = files().resume(job)) {
+        try (var restored = files().resume(job, () -> {})) {
             target = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
         }
         Files.createDirectories(target.getParent());
         Files.setPosixFilePermissions(target, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         Files.writeString(target, "Changed local bytes");
-        assertThatThrownBy(() -> files().resume(job))
+        assertThatThrownBy(() -> files().resume(job, () -> {}))
                 .isInstanceOf(CheckoutUnverifiedException.class)
                 .hasMessageContaining("differs from its recorded digest");
     }
@@ -171,7 +171,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         restorable(job);
         var files = files();
         Path index;
-        try (var restored = files.resume(job)) {
+        try (var restored = files.resume(job, () -> {})) {
             index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
 
             assertThat(files.cleanEndedAttempts()).isZero();
@@ -196,7 +196,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
                         + ProvenanceDigest.sha256Hex(
                                 UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8))
                         + ".preparing-1");
-        try (var restored = files.resume(job)) {
+        try (var restored = files.resume(job, () -> {})) {
             Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
             Files.createDirectories(staging);
             Files.write(staging.resolve("checkout.pack"), new byte[1024 * 1024]);
@@ -213,7 +213,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var job = job();
         restorable(job);
         var files = files();
-        try (var restored = files.resume(job)) {
+        try (var restored = files.resume(job, () -> {})) {
             Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
             ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
 

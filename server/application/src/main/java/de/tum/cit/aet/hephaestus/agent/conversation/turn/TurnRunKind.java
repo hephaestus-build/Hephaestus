@@ -29,6 +29,8 @@ import org.springframework.stereotype.Component;
  *       {@link TurnRunsAdapter#GRACE}. The server ends it: stopped, or failed for taking too long. Only the holder has
  *       the entries, so the partial answer readers saw last settles the feedback it called.
  *   <li>The run's start window: the turn waited longer than {@link TurnRunsAdapter#START_WAIT} for a free Hephaestus.
+ *   <li>A narrowed access: a boundary refused the run (ADR 0134). A running turn fails and says that access changed; a
+ *       stopped turn stays stopped.
  * </ul>
  */
 @Component
@@ -95,21 +97,29 @@ public class TurnRunKind implements AgentRunHandler {
                 }
                 log.warn("Conversation turn {} could not start before its start wait ran out", turn.getId());
             }
-            case DEADLINE -> {
+            case DEADLINE, AUTHORITY_CHANGED -> {
                 if (turn.getAttempt() != lastEpoch
                         || (turn.getStatus() != ConversationTurn.Status.RUNNING
                                 && turn.getStatus() != ConversationTurn.Status.STOPPED)) return;
+                // A turn the developer stopped keeps its own end; any other ends failed, with the reason.
                 boolean stopped = turn.getStatus() == ConversationTurn.Status.STOPPED;
+                boolean deadline = reason == AgentRunStopReason.DEADLINE;
                 completion.endWithoutHolder(
                         turn,
                         new ConversationTurnCompletion.Ending(
                                 stopped ? ConversationTurn.Status.STOPPED : ConversationTurn.Status.FAILED,
                                 List.of(),
-                                stopped ? null : ConversationTurnCompletion.TOOK_TOO_LONG,
                                 stopped
                                         ? null
-                                        : "its holder did not end it within " + TurnRunsAdapter.GRACE
-                                                + " after its deadline",
+                                        : deadline
+                                                ? ConversationTurnCompletion.TOOK_TOO_LONG
+                                                : ConversationTurnCompletion.ACCESS_CHANGED,
+                                stopped
+                                        ? null
+                                        : deadline
+                                                ? "its holder did not end it within " + TurnRunsAdapter.GRACE
+                                                        + " after its deadline"
+                                                : "a boundary refused it because its authority narrowed",
                                 null,
                                 progress.snapshot(turn.getWorkspaceId(), turn.getId(), turn.getAttempt())));
             }

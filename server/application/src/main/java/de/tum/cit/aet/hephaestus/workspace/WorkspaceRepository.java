@@ -31,6 +31,10 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
             """, nativeQuery = true)
     boolean isInitialMemberImport(@Param("workspaceId") long workspaceId);
 
+    /** The workspace's authorization generation as committed now, never as a cached entity holds it. */
+    @Query(value = "SELECT authority_generation FROM workspace WHERE id = :workspaceId", nativeQuery = true)
+    Optional<Long> findAuthorityGeneration(@Param("workspaceId") long workspaceId);
+
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery$WorkspaceView(
             w.workspaceSlug, w.displayName)

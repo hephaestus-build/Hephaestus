@@ -64,12 +64,12 @@ public final class ReviewWithholdings {
             ReviewStopReason.SOURCES_MOVED.name(), ReviewStopReason.NOT_RUN.name(), ReviewStopReason.REPLACED.name());
 
     /**
-     * The reason a practice that the run left unmeasured keeps: a run that ran out of time or ended early leaves it owed
-     * ({@code NOT_RUN}), and any other stop keeps its own reason.
+     * The reason a practice that the run left unmeasured keeps: a run that ran out of time, ended early or lost its
+     * access leaves it owed ({@code NOT_RUN}), and any other stop keeps its own reason.
      */
     public static ReviewStopReason unmeasured(ReviewStopReason stop) {
         return switch (stop) {
-            case DEADLINE, TIMED_OUT, EXECUTION_INCOMPLETE -> ReviewStopReason.NOT_RUN;
+            case DEADLINE, TIMED_OUT, EXECUTION_INCOMPLETE, AUTHORITY_CHANGED -> ReviewStopReason.NOT_RUN;
             default -> stop;
         };
     }

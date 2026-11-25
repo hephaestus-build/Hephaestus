@@ -21,6 +21,8 @@
             "core::auth-spi",
             "core::auth-types",
             "core::auth-validation",
+            "core::authority",
+            "core::authority-spi",
             "core::config-audit-spi",
             "core::current-account",
             "core::event",

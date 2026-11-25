@@ -231,6 +231,49 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCancelAReviewWhoseAccessNarrowedBeforeItAdmittedAndCarryEachPractice() {
+        var job = RuntimeReviewTestData.job();
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(Instant.now());
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "AUTHORITY_CHANGED"));
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(members)
+                .fail(
+                        1,
+                        RuntimeReviewTestData.assignment(null, null).id(),
+                        job.getId(),
+                        ReviewStopReason.NOT_RUN,
+                        "The execution ended without an admitted result (AUTHORITY_CHANGED).");
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.CANCELLED
+                                && completion.reason() == ReviewStopReason.AUTHORITY_CHANGED));
+    }
+
+    @Test
+    void shouldCloseAnAdmittedReviewWhoseAccessNarrowedBeforeItComposedWithThatReason() {
+        var job = RuntimeReviewTestData.job();
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
+        job.setAdmissionAttempt(0);
+        job.setAdmissionDigest("proof");
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "AUTHORITY_CHANGED"));
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.AUTHORITY_CHANGED));
+    }
+
+    @Test
     void shouldCloseAnAdmittedPartialRunWithItsRuntimeNonResultReason() {
         var job = RuntimeReviewTestData.job();
         ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);

@@ -43,6 +43,13 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     boolean existsByReviewIdAndWorkspaceIdAndCancellationReason(
             UUID reviewId, long workspaceId, ReviewJobCancellationReason cancellationReason);
 
+    /** Whether a boundary refused one of the review's jobs because the workspace's access narrowed (ADR 0134). */
+    @Query(value = """
+        SELECT EXISTS(SELECT 1 FROM review_job WHERE review_id=:reviewId AND workspace_id=:workspaceId
+          AND output->>'outcome'='AUTHORITY_CHANGED')
+        """, nativeQuery = true)
+    boolean existsAuthorityRefusal(@Param("reviewId") UUID reviewId, @Param("workspaceId") long workspaceId);
+
     @Query(
             "SELECT j.id FROM ReviewJob j WHERE j.reviewId=:reviewId AND j.workspaceId=:workspaceId AND j.status IN :statuses")
     Optional<UUID> findActiveId(
@@ -416,6 +423,22 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("attempt") int attempt,
             @Param("now") Instant now,
+            @Param("output") JsonNode output);
+
+    /**
+     * Ends the job of a run that a boundary refused because the workspace's access narrowed (ADR 0134). Its output tells
+     * settlement why; admitted results stay. Fenced on the run, which the caller ends in the same transaction.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.errorMessage = :error, "
+            + "j.output = :output WHERE j.id = :id AND j.workspaceId = :workspaceId AND j.runId = :runId "
+            + "AND j.status IN ('RUNNING', 'QUEUED')")
+    int failForAuthority(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("runId") UUID runId,
+            @Param("now") Instant now,
+            @Param("error") String error,
             @Param("output") JsonNode output);
 
     /** Ends an admitted attempt whose decisions nothing confirmed. Its output tells settlement why; its results stay. */

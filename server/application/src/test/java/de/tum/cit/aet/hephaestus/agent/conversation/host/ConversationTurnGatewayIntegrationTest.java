@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -165,7 +166,11 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
         ConversationTurnContexts contexts = ConversationTurnFixtures.contexts(beans);
         var controller = new ConversationTurnController(contexts, completion, served, usage);
         var sandboxController = new TurnContextController(
-                contexts, served, ConversationTurnFixtures.folder(beans), beans.getBean(Clock.class));
+                contexts,
+                served,
+                ConversationTurnFixtures.folder(beans),
+                beans.getBean(AgentRunAuthority.class),
+                beans.getBean(Clock.class));
         var transactions = beans.getBean(TransactionTemplate.class);
         var kind = new TurnSandboxRunKind(
                 ConversationTurnStarts.admitting(beans, metrics),
@@ -191,6 +196,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             factory.registerSingleton("turnSandboxRunKind", kind);
             factory.registerSingleton("agentSandboxes", sandboxes);
             factory.registerSingleton("tracer", beans.getBean(Tracer.class));
+            factory.registerSingleton("agentRunAuthority", beans.getBean(AgentRunAuthority.class));
             factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
@@ -575,16 +581,18 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
     @Import(SandboxGatewayConfiguration.class)
     static class GatewayApplication implements WebMvcConfigurer {
         private final AgentRuns runs;
+        private final AgentRunAuthority authority;
         private final Tracer tracer;
 
-        GatewayApplication(AgentRuns runs, Tracer tracer) {
+        GatewayApplication(AgentRuns runs, AgentRunAuthority authority, Tracer tracer) {
             this.runs = runs;
+            this.authority = authority;
             this.tracer = tracer;
         }
 
         @Override
         public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new SandboxRunArgumentResolver(runs, tracer));
+            resolvers.add(new SandboxRunArgumentResolver(runs, authority, tracer));
         }
     }
 }

@@ -230,6 +230,73 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldEndAScanForItsAccessInsteadOfQueueingItsNextFileOnceAFileWasRefused() {
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("scan-authority-changed"));
+        var refused = job(workspace.getId(), UUID.randomUUID());
+        ReviewJobFixtures.withStatus(refused, ReviewJobStatus.FAILED);
+        refused.setCompletedAt(Instant.now());
+        refused.setProcessingStatus(ProcessingStatus.DONE);
+        refused.setOutput(new JsonMapper().createObjectNode().put("outcome", "AUTHORITY_CHANGED"));
+        RuntimeJobTestData.persistParent(jdbc, refused);
+        jobs.saveAndFlush(refused);
+        jdbc.update(
+                "UPDATE review SET kind='SCAN',budget_usd=10,status='RUNNING' WHERE id=? AND workspace_id=?",
+                refused.getReviewId(),
+                workspace.getId());
+        var file = RuntimeReviewTestData.assignment(null, null);
+        var review = new ReviewSnapshot(
+                refused.getReviewId(),
+                workspace.getId(),
+                new ItemRef(workspace.getId(), refused.getInput().itemId(), new ItemKind("test.item"), 1L, null, null),
+                ReviewKind.SCAN,
+                new ItemVersion("test:1", null),
+                ReviewOrigin.REQUEST,
+                0,
+                List.of(file.practice()));
+        var scans = mock(ReviewScanStore.class);
+        when(scans.pending(anyLong(), any(), anyInt())).thenReturn(List.of(file));
+        var budget = mock(ScanBudget.class);
+        when(budget.permits(any(), any())).thenReturn(true);
+        var queue = mock(ReviewQueue.class);
+        var driver = new ScanDriver(
+                scans,
+                mock(ReviewScanReuse.class),
+                reviews,
+                mock(ReviewStart.class),
+                mock(ScanService.class),
+                budget,
+                queue,
+                jobs,
+                mock(ReviewJobLifecycleService.class),
+                transactions,
+                new ScanProperties(100, 10000, Duration.ofMinutes(1), Duration.ofHours(24)),
+                Clock.systemUTC());
+
+        // One file was judged before the narrowing, and a second one waits.
+        transactions.executeWithoutResult(status -> driver.advance(new ScanExecutionSnapshot(
+                review,
+                ReviewStatus.RUNNING,
+                BigDecimal.TEN,
+                Instant.now(),
+                false,
+                true,
+                true,
+                Set.of(file.practice().practiceId()),
+                2,
+                1,
+                0,
+                0)));
+
+        verify(queue, never()).enqueue(any(), anyLong(), any());
+        assertThat(jdbc.queryForMap(
+                        "SELECT status, stop_reason FROM review WHERE id=? AND workspace_id=?",
+                        refused.getReviewId(),
+                        workspace.getId()))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "AUTHORITY_CHANGED");
+    }
+
+    @Test
     void shouldSkipSettledHistoryBeforeLimitingCompletionCandidatesAcrossWorkspaces() {
         var firstWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("completion-native-first"));
         var secondWorkspace =

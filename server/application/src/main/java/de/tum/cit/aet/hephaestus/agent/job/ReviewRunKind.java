@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHandler;
@@ -16,6 +15,8 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -53,6 +54,9 @@ public class ReviewRunKind implements AgentRunHandler {
     static final String RETRIES_EXHAUSTED =
             "The review's attempts ended without a result more often than its retry limit allows.";
 
+    /** A review whose workspace authority narrowed while it ran (ADR 0134). */
+    static final String AUTHORITY_CHANGED = "Access to the workspace changed while the review ran, so it stopped.";
+
     /**
      * {@link #RETRIES_EXHAUSTED} for a queued job, with the crash of its last attempt's review programs when they
      * recorded one. The attempt that ended last spent the last retry.
@@ -72,6 +76,7 @@ public class ReviewRunKind implements AgentRunHandler {
     private final AttemptCopyReceipts receipts;
     private final ObjectMapper mapper;
     private final ReviewStart reviewStart;
+    private final FeedbackRepair repairs;
     private final MeterRegistry meters;
 
     ReviewRunKind(
@@ -83,6 +88,7 @@ public class ReviewRunKind implements AgentRunHandler {
             AttemptCopyReceipts receipts,
             ObjectMapper mapper,
             ReviewStart reviewStart,
+            FeedbackRepair repairs,
             MeterRegistry meters) {
         this.jobs = jobs;
         this.runs = runs;
@@ -92,6 +98,7 @@ public class ReviewRunKind implements AgentRunHandler {
         this.receipts = receipts;
         this.mapper = mapper;
         this.reviewStart = reviewStart;
+        this.repairs = repairs;
         this.meters = meters;
         compositionUnconfirmed(AgentRunStopReason.ATTEMPTS_EXHAUSTED);
         compositionUnconfirmed(AgentRunStopReason.DEADLINE);
@@ -187,6 +194,27 @@ public class ReviewRunKind implements AgentRunHandler {
         ReviewJob job = jobs.lockByRun(run.id(), run.workspaceId()).orElse(null);
         if (job == null) return;
         Instant now = Instant.now();
+        if (reason == AgentRunStopReason.AUTHORITY_CHANGED) {
+            // AgentRunAuthority checks the claim under this lock first; this keeps the job unchanged if the domain ever
+            // reaches here for a job that no longer holds the run.
+            if (!run.id().equals(job.getRunId())
+                    || (job.getStatus() != ReviewJobStatus.RUNNING && job.getStatus() != ReviewJobStatus.QUEUED))
+                return;
+            // Settlement reads the outcome: the review stops for its access, and its admitted results stay.
+            jobs.failForAuthority(
+                    job.getId(),
+                    run.workspaceId(),
+                    run.id(),
+                    now,
+                    AUTHORITY_CHANGED,
+                    mapper.createObjectNode().put("outcome", RefusalOutcome.AUTHORITY_CHANGED.name()));
+            // A repair resumes a review that settled already: its review keeps its result, and the feedback that the
+            // repair was for stops waiting for it.
+            if (job.getProcessingStatus() == ProcessingStatus.DONE)
+                repairs.stop(job.getWorkspaceId(), job.getReviewId(), RefusalOutcome.AUTHORITY_CHANGED.name());
+            log.info("Review run ended because its access narrowed: jobId={}", job.getId());
+            return;
+        }
         boolean queued = job.getStatus() == ReviewJobStatus.QUEUED;
         if (queued && !ResultAdmissionService.isAdmitted(job)) {
             jobs.transitionStatus(
@@ -344,15 +372,9 @@ public class ReviewRunKind implements AgentRunHandler {
         AgentRunRef ended = new AgentRunRef(resumable.getRunId(), workspaceId);
         // A review that composed on its review run, before composition had a run of its own, resumes on one. That run
         // ended COMPLETED long ago and does not change, so it is resumed work like any other, not a hand-off.
-        AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
-                ? runs.continueAfter(
-                        ended,
-                        resumable.getEpoch(),
-                        AgentRuns.Charge.SPEND,
-                        Duration.ZERO,
-                        compositionExecutionWindow())
-                : runs.continueAs(
-                        ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
+        // A repair is new work, requested now: it runs under the access of now, not of the review that it resumes.
+        AgentRunRef next =
+                runs.resume(ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
         jobs.queueOnRun(resumable.getId(), workspaceId, next.id());
         reviewStart.requeue(workspaceId, reviewId);
         runs.retire(ended);

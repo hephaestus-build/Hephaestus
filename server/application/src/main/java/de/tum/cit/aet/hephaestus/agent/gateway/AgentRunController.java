@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
@@ -57,6 +58,7 @@ public class AgentRunController {
 
     /** The run's context, as its kind's loop reads it. */
     @GetMapping("/context")
+    @ReadsContext
     public JsonNode context(SandboxRun run) {
         var kind = kind(run);
         if (!runs.isCurrent(run.fence().run(), run.fence().epoch())) throw new StaleRunException(run.fence());

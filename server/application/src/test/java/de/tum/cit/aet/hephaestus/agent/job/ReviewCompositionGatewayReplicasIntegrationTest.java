@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -394,6 +395,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
             factory.registerSingleton("agentRuns", runs);
             factory.registerSingleton("reviewJobRepository", jobs);
             factory.registerSingleton("tracer", beans.getBean(Tracer.class));
+            factory.registerSingleton("agentRunAuthority", beans.getBean(AgentRunAuthority.class));
             factory.registerSingleton(
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));
@@ -436,16 +438,18 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
     @Import(SandboxGatewayConfiguration.class)
     static class GatewayApplication implements WebMvcConfigurer {
         private final AgentRuns runs;
+        private final AgentRunAuthority authority;
         private final Tracer tracer;
 
-        GatewayApplication(AgentRuns runs, Tracer tracer) {
+        GatewayApplication(AgentRuns runs, AgentRunAuthority authority, Tracer tracer) {
             this.runs = runs;
+            this.authority = authority;
             this.tracer = tracer;
         }
 
         @Override
         public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new SandboxRunArgumentResolver(runs, tracer));
+            resolvers.add(new SandboxRunArgumentResolver(runs, authority, tracer));
         }
     }
 }

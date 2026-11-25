@@ -156,6 +156,8 @@ export const REVIEW_STOP_REASON_SENTENCES = {
 	SOURCES_MOVED:
 		"Something its practices read changed before they started, so Hephaestus measures them again.",
 	NOT_RUN: "Hephaestus did not get to every practice, so it measures the rest again.",
+	AUTHORITY_CHANGED:
+		"Access to the workspace changed while it ran, so Hephaestus measures the rest again.",
 	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",
 	SUSPECT_LISTING: "The file listing changed too much to trust, so files were not removed.",

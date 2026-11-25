@@ -14784,6 +14784,7 @@ export const ReviewStopReasonSchema = {
 		"EVIDENCE_TOO_LARGE",
 		"SOURCES_MOVED",
 		"NOT_RUN",
+		"AUTHORITY_CHANGED",
 	],
 } as const;
 

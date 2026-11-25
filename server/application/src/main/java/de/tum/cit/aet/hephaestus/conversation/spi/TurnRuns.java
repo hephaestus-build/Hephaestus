@@ -12,8 +12,14 @@ import java.util.UUID;
  */
 public interface TurnRuns {
 
-    /** Queues the run of a new turn of the conversation, and returns its id. */
-    UUID enqueue(long workspaceId, UUID conversationId);
+    /**
+     * Queues the run of a new turn of the conversation, and returns its id. The run carries the authorization stamp of
+     * now, and the owner's membership is checked after it in the caller's transaction (ADR 0134): a membership that
+     * ended since the request's own check either refuses here or leaves the run with a stale stamp.
+     *
+     * @throws de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException when the owner is no longer a member
+     */
+    UUID enqueue(long workspaceId, UUID conversationId, long ownerAccountId);
 
     /** Queues proactive digest work behind this conversation's current holder, in the background band. */
     UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin);

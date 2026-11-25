@@ -49,6 +49,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
@@ -1473,7 +1474,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 agentRuns,
                 mock(AttemptCopyReceipts.class),
-                mock(ReviewAttemptMeasurements.class));
+                mock(ReviewAttemptMeasurements.class),
+                context.getBean(AgentRunAuthority.class));
     }
 
     /** Leases the job's review run as its review sandbox's pull does; false when the sandbox has nothing to measure. */

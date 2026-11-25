@@ -52,5 +52,10 @@ public enum ReviewStopReason {
      * The practice is owed and was never measured: the attempt ended before it started or finished, by its deadline, a
      * watchdog or a lost sandbox. It says nothing about the work. It is carried, and the run keeps its own stop reason.
      */
-    NOT_RUN;
+    NOT_RUN,
+    /**
+     * The workspace's access narrowed after the review was requested, so a boundary stopped it (ADR 0134). It describes
+     * the access, never the work. Its unmeasured practices are carried as {@link #NOT_RUN}.
+     */
+    AUTHORITY_CHANGED;
 }

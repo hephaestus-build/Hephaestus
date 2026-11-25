@@ -28,6 +28,7 @@ erDiagram
         VARCHAR(16) hold_reason
         INTEGER start_within_seconds
         TIMESTAMPTZ deferred_until
+        JSONB authorization_stamp "NOT NULL"
     }
 
     AgentSandbox {

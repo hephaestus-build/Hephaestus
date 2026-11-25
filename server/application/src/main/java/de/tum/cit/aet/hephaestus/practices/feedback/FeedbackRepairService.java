@@ -304,7 +304,12 @@ public class FeedbackRepairService implements FeedbackRepair {
     @Transactional(readOnly = true)
     public boolean pending(long workspaceId, UUID reviewId) {
         var state = readStatus(workspaceId, reviewId);
-        return state.feedbackId() != null && state.state() != FeedbackRepairStatus.State.STOPPED;
+        if (state.feedbackId() == null || state.state() == FeedbackRepairStatus.State.STOPPED) return false;
+        // A revision that awaits approval shows as such, but a repair that recorded its stop waits for nothing more:
+        // no composition resumes it.
+        return feedback.findByIdAndWorkspaceId(state.feedbackId(), workspaceId)
+                .map(row -> !row.getComposition().hasNonNull("stop"))
+                .orElse(false);
     }
 
     @Override

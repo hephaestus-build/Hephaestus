@@ -65,6 +65,10 @@ public class ConversationTurnCompletion {
 
     public static final String TOOK_TOO_LONG = "Hephaestus took too long to reply and stopped. Try again.";
 
+    /** A turn whose workspace authority narrowed while it ran (ADR 0134). */
+    public static final String ACCESS_CHANGED =
+            "Access to this workspace changed while Hephaestus replied, so it stopped. Ask again to get an answer.";
+
     static final String NOT_SHOWN = "Hephaestus's answer did not show the feedback.";
     static final String CUT_OFF = "Hephaestus's answer stopped or failed after it showed the feedback.";
     static final String LEASE_LOST = "Hephaestus's answer was lost while it showed the feedback.";

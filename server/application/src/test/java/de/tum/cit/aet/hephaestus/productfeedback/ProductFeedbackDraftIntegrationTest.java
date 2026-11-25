@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentNextWaitsFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -170,7 +171,7 @@ class ProductFeedbackDraftIntegrationTest extends AbstractProductFeedbackFilingI
         gateway = MockMvcBuilders.standaloneSetup(next, new AgentRunController(runs, sandboxes, transactions, kinds))
                 .setCustomArgumentResolvers(
                         new AuthenticationPrincipalArgumentResolver(),
-                        new SandboxRunArgumentResolver(runs, Tracer.NOOP))
+                        new SandboxRunArgumentResolver(runs, context.getBean(AgentRunAuthority.class), Tracer.NOOP))
                 .addFilters(SandboxGatewayFixtures.sandboxCredentialFilter(verifier, sandboxes))
                 .build();
     }

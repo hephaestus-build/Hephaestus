@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -159,7 +160,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                         results,
                         reviewRuns,
                         runs,
-                        preparationLocks()));
+                        preparationLocks()),
+                mock(AgentRunAuthority.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -250,7 +252,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                         results,
                         reviewRuns,
                         runs,
-                        preparationLocks()));
+                        preparationLocks()),
+                mock(AgentRunAuthority.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -342,7 +345,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                         attemptResults,
                         reviewRuns,
                         runs,
-                        preparationLocks()));
+                        preparationLocks()),
+                mock(AgentRunAuthority.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -385,7 +389,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 mock(AgentRuns.class),
                 mock(AttemptCopyReceipts.class),
-                mock(ReviewAttemptMeasurements.class));
+                mock(ReviewAttemptMeasurements.class),
+                mock(AgentRunAuthority.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -433,7 +438,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 receipts,
-                mock(ReviewAttemptMeasurements.class));
+                mock(ReviewAttemptMeasurements.class),
+                mock(AgentRunAuthority.class));
         var run = new SandboxRun(
                 new AgentSandboxes.LiveSandbox(
                         UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW),

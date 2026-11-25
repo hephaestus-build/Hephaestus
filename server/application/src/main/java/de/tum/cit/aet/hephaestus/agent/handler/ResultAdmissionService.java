@@ -161,10 +161,17 @@ public class ResultAdmissionService {
         }));
     }
 
-    /** Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. */
-    public AdmissionResponseDTO admit(AdmissionIdentity identity, SealResultsRequestDTO request) {
-        return admittedResponse(
-                withAttemptFolder(identity, () -> seal(identity, request)).job());
+    /**
+     * Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. {@code
+     * beforeAnswer} runs after the seal, and again once the answer's private read holds its locks, before it reads the
+     * developer's earlier results and feedback: a read-only recheck that the waits must not leave stale.
+     */
+    public AdmissionResponseDTO admit(
+            AdmissionIdentity identity, SealResultsRequestDTO request, Runnable beforeAnswer) {
+        ReviewJob sealed =
+                withAttemptFolder(identity, () -> sealOnce(identity, request)).job();
+        beforeAnswer.run();
+        return answer(sealed, beforeAnswer);
     }
 
     /**
@@ -176,7 +183,7 @@ public class ResultAdmissionService {
      *     hand-on still composes.
      */
     public boolean sealUnmeasured(AdmissionIdentity identity, SealResultsRequestDTO request) {
-        return withAttemptFolder(identity, () -> seal(identity, request)).tookStaged();
+        return withAttemptFolder(identity, () -> sealOnce(identity, request)).tookStaged();
     }
 
     /** @param tookStaged whether this seal admitted a result that an earlier attempt staged */
@@ -185,7 +192,7 @@ public class ResultAdmissionService {
     /** The capture key that keeps {@link Sealed#tookStaged} of the attempt's seal. */
     private static final String ADMITTED_STAGED = "admittedStaged";
 
-    private Sealed seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
+    private Sealed sealOnce(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
         return Objects.requireNonNull(transactions.execute(status -> {
             receipts.holdCopyAdmission();
@@ -275,7 +282,7 @@ public class ResultAdmissionService {
                     if (currentness != Currentness.CURRENT) {
                         staging.failOpen(job, ReviewStopReason.NOT_RUN);
                     } else if (!assignments.open(job).isEmpty()) return false;
-                    seal(
+                    sealOnce(
                             identity,
                             new SealResultsRequestDTO(
                                     SandboxLayout.PRACTICE_CONTRACT_VERSION,
@@ -303,7 +310,7 @@ public class ResultAdmissionService {
                     var job = ownedJob(identity);
                     if (isAdmitted(job)) return job;
                     staging.failOpen(job, ReviewWithholdings.unmeasured(reason));
-                    return seal(
+                    return sealOnce(
                                     identity,
                                     new SealResultsRequestDTO(
                                             SandboxLayout.PRACTICE_CONTRACT_VERSION,
@@ -329,6 +336,11 @@ public class ResultAdmissionService {
     }
 
     public AdmissionResponseDTO admittedResponse(ReviewJob job) {
+        return answer(job, () -> {});
+    }
+
+    /** {@code beforeRead} runs once the private read holds its copy admission and its job, before it reads. */
+    private AdmissionResponseDTO answer(ReviewJob job, Runnable beforeRead) {
         if (!isAdmitted(job)) throw new AdmissionConflictException();
         var admitted = proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job));
         var results = projection.results(job, admitted);
@@ -350,6 +362,7 @@ public class ResultAdmissionService {
                     identity,
                     () -> Objects.requireNonNull(transactions.execute(status -> {
                         ownedJob(identity);
+                        beforeRead.run();
                         return composition.read(job, admitted);
                     })),
                     read -> new AttemptCopyReceipts.LateCopies(read.copies()));

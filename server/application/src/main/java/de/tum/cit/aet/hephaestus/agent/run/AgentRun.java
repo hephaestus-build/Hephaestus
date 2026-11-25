@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,6 +18,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -113,6 +116,15 @@ public class AgentRun {
     @Column(name = "deadline", updatable = false)
     private @Nullable Instant deadline;
 
+    /**
+     * The authorization generations that the work was requested under (ADR 0134 decision 8). Every continuation of the
+     * work keeps it, and a boundary refuses the run once a generation moved on.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnDefault("jsonb_build_object('workspace', 0)")
+    @Column(name = "authorization_stamp", nullable = false, updatable = false, columnDefinition = "jsonb")
+    private AuthorizationStamp authorizationStamp;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 24)
     private @Nullable AgentRunStopReason stopReason;
@@ -133,6 +145,7 @@ public class AgentRun {
             AgentRunKind kind,
             AgentRunBand band,
             String concurrencyKey,
+            AuthorizationStamp authorizationStamp,
             int leaseEpoch,
             int attempt,
             Instant now,
@@ -148,6 +161,7 @@ public class AgentRun {
         this.kind = kind;
         this.band = band;
         this.concurrencyKey = concurrencyKey;
+        this.authorizationStamp = authorizationStamp;
         this.state = AgentRunState.QUEUED;
         this.leaseEpoch = leaseEpoch;
         this.attempt = attempt;

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,12 +16,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -57,6 +62,7 @@ class AgentRunControllerTest extends BaseUnitTest {
     private static final AgentRunFence FENCE = new AgentRunFence(RUN, WORKSPACE, 3);
 
     private final AgentRuns runs = mock(AgentRuns.class);
+    private final AgentRunAuthority authority = mock(AgentRunAuthority.class);
     private final SandboxRunKind review = mock(SandboxRunKind.class);
     private final AgentSandboxes sandboxes = mock(AgentSandboxes.class);
     private MockMvc mvc;
@@ -80,7 +86,7 @@ class AgentRunControllerTest extends BaseUnitTest {
         mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(runs, sandboxes, transactions, List.of(review)))
                 // The global advice too, whose handler of every exception must not answer a stale claim first.
                 .setControllerAdvice(new GlobalControllerAdvice(), new AgentGatewayErrors())
-                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, Tracer.NOOP))
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, authority, Tracer.NOOP))
                 .build();
         SecurityContextHolder.getContext()
                 .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(SANDBOX, null, List.of()));
@@ -131,6 +137,30 @@ class AgentRunControllerTest extends BaseUnitTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(JobTokenAuthenticationFilter.ATTEMPT_ENDED));
         verify(review, never()).context(any());
+    }
+
+    @Test
+    void shouldRefuseTheContextWithItsReasonWhenTheRunsAuthorityNarrowed() throws Exception {
+        when(runs.isCurrent(FENCE.run(), 3)).thenReturn(true);
+        doThrow(new AuthorityRefusedException(new AuthorityRefusal(
+                        AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)))
+                .when(authority)
+                .require(FENCE, AuthorityBoundary.CONTEXT_READ);
+
+        mvc.perform(claimed(get("/internal/agent/runs/{runId}/context", RUN)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(JobTokenAuthenticationFilter.ATTEMPT_ENDED))
+                .andExpect(jsonPath("$.boundary").value("CONTEXT_READ"))
+                .andExpect(jsonPath("$.reason").value("WORKSPACE_AUTHORITY_NARROWED"));
+        verify(review, never()).context(any());
+    }
+
+    @Test
+    void shouldRenewALeaseWithoutTheContextReadRecheck() throws Exception {
+        when(runs.renew(FENCE)).thenReturn(Optional.of(Instant.parse("2026-11-09T12:05:00Z")));
+
+        mvc.perform(claimed(post("/internal/agent/runs/{runId}/lease", RUN))).andExpect(status().isOk());
+        verify(authority, never()).require(any(), any());
     }
 
     @Test
@@ -224,7 +254,7 @@ class AgentRunControllerTest extends BaseUnitTest {
         var unserved = MockMvcBuilders.standaloneSetup(
                         new AgentRunController(runs, sandboxes, mock(TransactionTemplate.class), List.of()))
                 .setControllerAdvice(new AgentGatewayErrors())
-                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, Tracer.NOOP))
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs, authority, Tracer.NOOP))
                 .build();
 
         unserved.perform(claimed(get("/internal/agent/runs/{runId}/context", RUN)))

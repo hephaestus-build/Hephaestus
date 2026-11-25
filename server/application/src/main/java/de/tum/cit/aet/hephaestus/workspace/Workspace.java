@@ -141,6 +141,15 @@ public class Workspace {
     @Setter(AccessLevel.NONE)
     private WorkspaceKind kind = WorkspaceKind.TEAM;
 
+    /**
+     * The workspace's authorization generation (ADR 0134). Only the database writes it, on a narrowing; a flush never
+     * writes it, so it cannot put back an older value. A boundary reads it fresh through {@code AuthorityGenerations}.
+     */
+    @Column(name = "authority_generation", nullable = false, insertable = false, updatable = false)
+    @ColumnDefault("0")
+    @Setter(AccessLevel.NONE)
+    private long authorityGeneration;
+
     /** The account that owns a personal space; empty for a team workspace. */
     @Column(name = "personal_account_id", unique = true, updatable = false)
     @Setter(AccessLevel.NONE)

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrors;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -53,7 +54,7 @@ class SandboxBusyAnswerTest extends BaseUnitTest {
     void shouldAnswerAResultAdmissionBusyWhenItWaitedPastTheLockBound() throws Exception {
         var admission = mock(ResultAdmissionService.class);
         var failures = mock(AttemptCaptureFailures.class);
-        when(admission.admit(any(), any())).thenThrow(LOCK_TIMEOUT);
+        when(admission.admit(any(), any(), any())).thenThrow(LOCK_TIMEOUT);
         var now = Instant.now();
         var jwt = new AttemptJwt(
                 AttemptJwt.Kind.REVIEW,
@@ -67,7 +68,8 @@ class SandboxBusyAnswerTest extends BaseUnitTest {
                 now.plusSeconds(60),
                 now.plusSeconds(30));
 
-        var response = gateway(new ResultAdmissionController(admission, failures, mock(AttemptServerErrors.class)))
+        var response = gateway(new ResultAdmissionController(
+                        admission, failures, mock(AttemptServerErrors.class), mock(AgentRunAuthority.class)))
                 .perform(post("/internal/llm/admit-results")
                         .principal(new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes()))
                         .contentType(MediaType.APPLICATION_JSON)

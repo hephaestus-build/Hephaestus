@@ -38,6 +38,9 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
@@ -329,6 +332,29 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheSealButReadNoHistoryWhenTheRecheckAfterTheSealRefuses() {
+        var assignment = RuntimeReviewTestData.assignment(5L, null);
+        when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, assignment));
+        when(assignments.load(job)).thenReturn(List.of(assignment));
+        var request = new SealResultsRequestDTO(3, job.getReviewId(), job.getId(), 0);
+        var writes = new AtomicInteger();
+        when(output.seal(job, List.of())).thenAnswer(call -> {
+            writes.incrementAndGet();
+            return new AdmissionReceipt(List.of(), List.of());
+        });
+        var refused = new AuthorityRefusedException(new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+
+        assertThatThrownBy(() -> service.admit(identity(), request, () -> {
+                    throw refused;
+                }))
+                .isSameAs(refused);
+
+        assertThat(writes.get()).as("the seal committed before the recheck").isEqualTo(1);
+        verify(proof, never()).forAttempt(anyLong(), any(), any(), anyInt());
+    }
+
+    @Test
     void shouldKeepAdmissionIdempotentAndRejectChangedPayload() {
         var assignment = RuntimeReviewTestData.assignment(5L, null);
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, assignment));
@@ -341,11 +367,12 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
             writes.incrementAndGet();
             return new AdmissionReceipt(List.of(), List.of());
         });
-        service.admit(identity(), request);
-        service.admit(identity(), request);
+        service.admit(identity(), request, () -> {});
+        service.admit(identity(), request, () -> {});
         assertThat(writes.get()).isEqualTo(1);
         job.setAdmissionDigest("another-payload");
-        assertThatThrownBy(() -> service.admit(identity(), request)).isInstanceOf(AdmissionConflictException.class);
+        assertThatThrownBy(() -> service.admit(identity(), request, () -> {}))
+                .isInstanceOf(AdmissionConflictException.class);
     }
 
     @Test
@@ -359,7 +386,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(
                         Optional.of(Map.of("context/original.txt", "Original work".getBytes(StandardCharsets.UTF_8))));
 
-        service.admit(identity(), request);
+        service.admit(identity(), request, () -> {});
 
         var saved = ArgumentCaptor.forClass(ReviewCompositionBasis.class);
         verify(bases).save(saved.capture());
@@ -373,7 +400,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     void shouldKeepNoNewWriterInputCopyAfterTheOccasionDeadline() {
         var request = admissionWithRetainedInputs(Instant.now().minusSeconds(1));
 
-        service.admit(identity(), request);
+        service.admit(identity(), request, () -> {});
 
         verify(bases, never()).save(any());
     }
@@ -389,7 +416,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         Optional.of(Map.of("context/current.txt", "Current work".getBytes(StandardCharsets.UTF_8))));
         var before = Instant.now();
 
-        service.admit(identity(), request);
+        service.admit(identity(), request, () -> {});
 
         var after = Instant.now();
         var saved = ArgumentCaptor.forClass(ReviewCompositionBasis.class);
@@ -417,7 +444,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(receipts.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1L, 0))
                 .thenReturn(true);
 
-        service.admit(identity(), request);
+        service.admit(identity(), request, () -> {});
 
         assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
         assertThat(basis.getAdmissionDigest()).isEqualTo(job.getAdmissionDigest());
@@ -533,7 +560,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         // A seal that ignored the open assignment would succeed, so the test fails as a missing conflict.
         lenient().when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        assertThatThrownBy(() -> service.admit(identity(), sealRequest()))
+        assertThatThrownBy(() -> service.admit(identity(), sealRequest(), () -> {}))
                 .isInstanceOf(AdmissionConflictException.class);
 
         assertThat(ResultAdmissionService.isAdmitted(job)).isFalse();
@@ -550,7 +577,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest(ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request)));
 
-        assertThatThrownBy(() -> service.admit(continuing, request)).isInstanceOf(AdmissionConflictException.class);
+        assertThatThrownBy(() -> service.admit(continuing, request, () -> {}))
+                .isInstanceOf(AdmissionConflictException.class);
     }
 
     @Test
@@ -567,7 +595,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
         when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        var response = service.admit(identity(), sealRequest());
+        var response = service.admit(identity(), sealRequest(), () -> {});
 
         verify(stagingStore).refuseCopy(1, job.getId(), 0, assignment.id());
         assertThat(response.withheld())
@@ -586,7 +614,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(false);
         when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        var response = service.admit(identity(), sealRequest());
+        var response = service.admit(identity(), sealRequest(), () -> {});
 
         verify(stagingStore).refuseCopy(1, job.getId(), 0, assignment.id());
         assertThat(response.withheld())
@@ -603,7 +631,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
         when(output.seal(job, List.of(candidate))).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        var response = service.admit(identity(), sealRequest());
+        var response = service.admit(identity(), sealRequest(), () -> {});
 
         verify(stagingStore, never()).refuseCopy(anyLong(), any(), anyInt(), any());
         assertThat(response.withheld()).isEmpty();
@@ -675,7 +703,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(output.seal(job, List.of()))
                 .thenReturn(new AdmissionReceipt(List.of(), List.of(new WithheldItem(31, 2, "quote_unverified"))));
 
-        var response = service.admit(identity(), sealRequest());
+        var response = service.admit(identity(), sealRequest(), () -> {});
 
         assertThat(response.withheld())
                 .containsExactly(new AdmissionResponseDTO.Withheld("clear-names", "2", "quote_unverified"));
