@@ -89,7 +89,14 @@ jobs:
           export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
-            if [[ -n "${WATCH_PID:-}" ]]; then kill "$WATCH_PID" 2>/dev/null || true; fi
+            if [[ -n "${WATCH_PID:-}" ]]; then
+              # A watch that found a hang finishes its thread dumps and report first: two dumps of
+              # at most 60 s each (scripts/e2e-server-watch.ts).
+              if [[ -e e2e-server-threads.pending ]]; then
+                for _ in $(seq 150); do kill -0 "$WATCH_PID" 2>/dev/null || break; sleep 1; done
+              fi
+              kill "$WATCH_PID" 2>/dev/null || true
+            fi
             if [[ -n "${SERVER_PID:-}" ]]; then
               kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
               (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &
@@ -206,7 +213,14 @@ jobs:
           export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
-            if [[ -n "${WATCH_PID:-}" ]]; then kill "$WATCH_PID" 2>/dev/null || true; fi
+            if [[ -n "${WATCH_PID:-}" ]]; then
+              # A watch that found a hang finishes its thread dumps and report first: two dumps of
+              # at most 60 s each (scripts/e2e-server-watch.ts).
+              if [[ -e e2e-server-threads.pending ]]; then
+                for _ in $(seq 150); do kill -0 "$WATCH_PID" 2>/dev/null || break; sleep 1; done
+              fi
+              kill "$WATCH_PID" 2>/dev/null || true
+            fi
             if [[ -n "${SERVER_PID:-}" ]]; then
               kill -TERM -- "-$SERVER_PID" 2>/dev/null || true
               (sleep 10; kill -KILL -- "-$SERVER_PID" 2>/dev/null || true) &

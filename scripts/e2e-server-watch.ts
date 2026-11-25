@@ -9,7 +9,7 @@
  * Java-level deadlock), reports the hang, and stops the server, so every remaining test fails at once.
  */
 import { spawnSync } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 
@@ -117,6 +117,21 @@ function dumpThreads(pid: number, prefix: string): string[] {
 	return lines;
 }
 
+/**
+ * Runs `record` with `<prefix>.pending` on disk, so the job's cleanup knows that a hang is being recorded
+ * and gives it time to finish before it stops the server. The file goes when `record` ends, also when
+ * it throws.
+ */
+export function whileRecording<T>(prefix: string, record: () => T): T {
+	const pending = path.resolve(`${prefix}.pending`);
+	writeFileSync(pending, `${new Date().toISOString()}\n`);
+	try {
+		return record();
+	} finally {
+		rmSync(pending, { force: true });
+	}
+}
+
 function running(pid: number): boolean {
 	try {
 		process.kill(pid, 0);
@@ -142,20 +157,25 @@ if (import.meta.main) {
 		misses: 3,
 	});
 	if (verdict.kind === "hung") {
-		const report = hangReport(url, verdict.misses, dumpThreads(pid, prefix));
-		process.stderr.write(
-			`\n::error title=The server stopped answering::${annotation(report)}\n${report}\n`,
-		);
-		const summary = process.env.GITHUB_STEP_SUMMARY;
-		if (summary !== undefined && summary !== "") {
-			appendFileSync(summary, `\n### The server stopped answering\n\n\`\`\`\n${report}\n\`\`\`\n`);
-		}
-		// The server runs in its own session (setsid), so its process group goes with it.
-		try {
-			process.kill(-pid, "SIGKILL");
-		} catch {
-			process.kill(pid, "SIGKILL");
-		}
+		whileRecording(prefix, () => {
+			const report = hangReport(url, verdict.misses, dumpThreads(pid, prefix));
+			process.stderr.write(
+				`\n::error title=The server stopped answering::${annotation(report)}\n${report}\n`,
+			);
+			const summary = process.env.GITHUB_STEP_SUMMARY;
+			if (summary !== undefined && summary !== "") {
+				appendFileSync(
+					summary,
+					`\n### The server stopped answering\n\n\`\`\`\n${report}\n\`\`\`\n`,
+				);
+			}
+			// The server runs in its own session (setsid), so its process group goes with it.
+			try {
+				process.kill(-pid, "SIGKILL");
+			} catch {
+				process.kill(pid, "SIGKILL");
+			}
+		});
 		process.exitCode = 1;
 	}
 }

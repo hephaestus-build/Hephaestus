@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { after, test } from "node:test";
 
-import { hangReport, probePage, watch } from "./e2e-server-watch.ts";
+import { hangReport, probePage, watch, whileRecording } from "./e2e-server-watch.ts";
 
 function port(listening: Server): number {
 	const address = listening.address();
@@ -120,5 +123,23 @@ void test("an error answer is still an answer", async () => {
 		assert.equal(await probePage(`http://127.0.0.1:${port(failing)}/`, 1000), undefined);
 	} finally {
 		failing.close();
+	}
+});
+
+void test("a hang being recorded leaves a pending mark for the cleanup, and only while it records", () => {
+	const directory = mkdtempSync(path.join(tmpdir(), "e2e-server-watch-"));
+	try {
+		const prefix = path.join(directory, "e2e-server-threads");
+		const seen = whileRecording(prefix, () => existsSync(`${prefix}.pending`));
+		assert.equal(seen, true, "the mark is there while the dumps run");
+		assert.equal(existsSync(`${prefix}.pending`), false, "and gone after");
+		assert.throws(() =>
+			whileRecording(prefix, () => {
+				throw new Error("jcmd failed");
+			}),
+		);
+		assert.equal(existsSync(`${prefix}.pending`), false, "also after a failure");
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
 	}
 });
