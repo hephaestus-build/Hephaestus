@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.PersonalSpaceFixtures;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Objects;
@@ -20,6 +21,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.ObjectMapper;
 
@@ -40,6 +42,9 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcClient jdbc;
+
+    @Autowired
+    private JdbcTemplate fixtures;
 
     private long seq;
 
@@ -64,6 +69,16 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 "USER",
                 "Another member's message.",
                 null);
+        var elsewhere = data.inAnotherWorkspace(scenario).workspace();
+        entry(conversation(elsewhere.getId(), account), "DIGEST", "My weekly digest.", null);
+        long personal = PersonalSpaceFixtures.insert(fixtures, account);
+        entry(conversation(personal, account), "USER", "My personal reflection.", null);
+        long otherPersonal = PersonalSpaceFixtures.insert(fixtures, Objects.requireNonNull(other.getId()));
+        entry(conversation(otherPersonal, other.getId()), "USER", "Another person's private reflection.", null);
+        String personalSlug = jdbc.sql("SELECT slug FROM workspace WHERE id=:id")
+                .param("id", personal)
+                .query(String.class)
+                .single();
 
         var result = data.result(scenario, ResultOutcome.NOT_MET, AT);
         UUID delivered = feedback(result, account, "DELIVERED", "Name the tests after the behaviour.", AT);
@@ -88,12 +103,15 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
         ExportBundle bundle = assembler.assemble(account);
 
         assertThat(bundle.conversationMessages())
-                .extracting(AccountConversationExport.Message::author, AccountConversationExport.Message::text)
-                .containsExactly(
-                        tuple("USER", "How do I split this pull request?"),
-                        tuple("ANSWER", "Split it by the two features."));
-        assertThat(bundle.conversationMessages().getFirst().workspace())
-                .isEqualTo(scenario.workspace().getWorkspaceSlug());
+                .extracting(
+                        AccountConversationExport.Message::workspace,
+                        AccountConversationExport.Message::author,
+                        AccountConversationExport.Message::text)
+                .containsExactlyInAnyOrder(
+                        tuple(scenario.workspace().getWorkspaceSlug(), "USER", "How do I split this pull request?"),
+                        tuple(scenario.workspace().getWorkspaceSlug(), "ANSWER", "Split it by the two features."),
+                        tuple(elsewhere.getWorkspaceSlug(), "DIGEST", "My weekly digest."),
+                        tuple(personalSlug, "USER", "My personal reflection."));
         assertThat(bundle.feedbackReceived())
                 .extracting(AccountFeedbackExport.Received::feedbackId)
                 .containsExactly(delivered, withdrawn);

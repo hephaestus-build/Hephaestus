@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The database keeps a personal space's kind, owner and one member, and only the request filter's lookup finds it
@@ -67,6 +70,9 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private WebTestClient client;
 
     private long ownerId;
     private long spaceId;
@@ -222,6 +228,69 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(row.get("slug").asString()).isEqualTo(slug);
             assertThat(row.propertyNames()).containsExactlyInAnyOrder("slug", "created_at");
         });
+    }
+
+    @Test
+    void shouldShowConversationCountsForErasureAndRefuseAnAdminDownload() {
+        String personalWords = "Words from the subject's personal space";
+        String teamWords = "Words from the team workspace";
+        UUID personal = finishedTurnWithWords(spaceId, ownerId, personalWords);
+        var team = workspaces.save(WorkspaceTestFixtures.activeWorkspace("team-in-person-export"));
+        jdbc.update(
+                "INSERT INTO membership (workspace_id, account_id, role) VALUES (?, ?, 'MEMBER')",
+                team.getId(),
+                ownerId);
+        UUID teamConversation = finishedTurnWithWords(team.getId(), ownerId, teamWords);
+        long admin = Objects.requireNonNull(
+                persistInstanceAdmin("Person data administrator").getId());
+        String token = "mock-jwt-admin-" + admin;
+        JsonNode preview = Objects.requireNonNull(client.post()
+                .uri("/admin/person-data/preview")
+                .headers(headers -> headers.setBearerAuth(token))
+                .bodyValue(Map.of("accountId", ownerId, "identities", List.of()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody());
+
+        String requestId = preview.path("id").asString();
+        assertThat(preview.path("counts").path("conversation_entry").asLong()).isEqualTo(2);
+        assertThat(preview.toString())
+                .doesNotContain(personal.toString(), teamConversation.toString(), personalWords, teamWords);
+
+        JsonNode reopened = Objects.requireNonNull(client.get()
+                .uri("/admin/person-data/{id}", requestId)
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody());
+
+        assertThat(reopened.path("counts")).isEqualTo(preview.path("counts"));
+        assertThat(reopened.toString())
+                .doesNotContain(personal.toString(), teamConversation.toString(), personalWords, teamWords);
+
+        client.post()
+                .uri("/admin/person-data/{id}/export", requestId)
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    private UUID finishedTurnWithWords(long workspace, long account, String words) {
+        UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, workspace, account);
+        jdbc.update(
+                "UPDATE conversation_entry SET text = ?, search_text = ? WHERE conversation_id = ?",
+                words,
+                words,
+                conversation);
+        return conversation;
     }
 
     /**
