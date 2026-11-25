@@ -16,7 +16,10 @@ const CONFIRM_MS = 150;
 const SETTLE_MS = 45_000;
 
 interface Sample {
-	/** The app's idle period (`usePageIdle` in `src/runtime/page-idle.ts`), or undefined while it loads. */
+	/**
+	 * The document and its idle period (`installPageIdle` in `src/runtime/page-idle.ts`), or undefined
+	 * while it loads. Two reads that match saw the same document stay idle.
+	 */
 	period: string | undefined;
 	blockers: string[];
 }

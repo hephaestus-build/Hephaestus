@@ -65,7 +65,7 @@ it("marks the page idle only after its first load answers, and only after the ho
 	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS - 10);
 	expect(mark(), "not before the hold").toBeUndefined();
 	await vi.advanceTimersByTimeAsync(20);
-	expect(mark()).toMatch(/^\d+$/u);
+	expect(mark()).toMatch(/^[\d.]+:\d+$/u);
 	unobserve();
 });
 
@@ -75,7 +75,7 @@ it("stays idle while a poll refetches data on screen and while another page is p
 	install(client);
 	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
 	const idle = mark();
-	expect(idle).toMatch(/^\d+$/u);
+	expect(idle).toMatch(/^[\d.]+:\d+$/u);
 	const refetch = deferred<string>();
 	const unobserve = observe(client, POLLED_KEY, async () => refetch.promise);
 	const preload = deferred<string>();
@@ -100,7 +100,7 @@ it("is not idle while a route loads or a write is pending, and starts a new idle
 	load(false);
 	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
 	const first = mark();
-	expect(first).toMatch(/^\d+$/u);
+	expect(first).toMatch(/^[\d.]+:\d+$/u);
 	const write = deferred<undefined>();
 	const mutation = client
 		.getMutationCache()
@@ -110,14 +110,14 @@ it("is not idle while a route loads or a write is pending, and starts a new idle
 	write.resolve(undefined);
 	await mutation;
 	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
-	expect(mark()).toMatch(/^\d+$/u);
+	expect(mark()).toMatch(/^[\d.]+:\d+$/u);
 	expect(mark(), "a new idle period").not.toBe(first);
 });
 
 it("takes the mark away when it stops", async () => {
 	install(new QueryClient());
 	await vi.advanceTimersByTimeAsync(PAGE_IDLE_SETTLE_MS * 2);
-	expect(mark()).toMatch(/^\d+$/u);
+	expect(mark()).toMatch(/^[\d.]+:\d+$/u);
 	stop();
 	expect(mark()).toBeUndefined();
 });

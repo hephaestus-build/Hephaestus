@@ -13,8 +13,9 @@ type RouterLike = Pick<AnyRouter, "state" | "subscribe">;
 /**
  * Marks the document with `data-page-idle` while no first load of the page, no write and no route
  * load is pending, so that a browser test waits for the app's own readiness instead of guessing it
- * from the network (`webapp/e2e/screenshots/settled.ts`). Its value counts the idle periods, so a test
- * can confirm that the page stayed idle between two reads.
+ * from the network (`webapp/e2e/screenshots/settled.ts`). Its value names the document and counts its
+ * idle periods, so a test can confirm that the same page stayed idle between two reads, also across a
+ * redirect to a new document whose count starts again.
  *
  * A first load is a read with no data yet that something on the page observes: a background refetch
  * of data on screen does not count, and neither does a preload for another page.
@@ -48,7 +49,7 @@ export function installPageIdle(router: RouterLike, queryClient: QueryClient): (
 			timer = undefined;
 			if (!busy()) {
 				idlePeriods += 1;
-				root.dataset.pageIdle = String(idlePeriods);
+				root.dataset.pageIdle = `${performance.timeOrigin}:${idlePeriods}`;
 			}
 		}, PAGE_IDLE_SETTLE_MS);
 	};
