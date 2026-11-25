@@ -69,6 +69,9 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
     private SharedEventRecorder events;
 
     @Autowired
+    private ConversationRetentionSweeper retention;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     /** A fixture changes the schema as its owner: the application role cannot. */
@@ -227,6 +230,35 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
         // The answer is Hephaestus's own message, so it stays, also where it repeats the question.
         assertThat(stored(answer).isRedacted()).isFalse();
         assertThat(stored(answer).getText()).contains("Rebase secret");
+    }
+
+    /** A message whose retention ends takes its summary and the search result that quotes it, as a delete does. */
+    @Test
+    void shouldEraseEverySummaryAndSearchResultOfAMessageWhenItsRetentionEnds() {
+        ConversationTurnService.Submission asked = ask(main, "Rebase secret");
+        ConversationEntry answer = ended(
+                claim(asked),
+                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Noted the Rebase secret"));
+        ConversationEntry covering = entries.append(
+                workspace.getId(),
+                main.getId(),
+                summary("Asked about the rebase secret", ConversationLedgerFixtures.piIdOf(answer)));
+        Conversation thread = conversations.openThread(workspace.getId(), answer.getId());
+        ConversationEntry result = ended(runningTurn(thread), searchResult(asked.question(), "Rebase secret"));
+        // Far past any retention: the question alone is due, and its copies are newer.
+        jdbcTemplate.update(
+                "UPDATE conversation_entry SET created_at = now() - interval '2000 days' WHERE id = ?",
+                asked.question().getId());
+
+        retention.sweepNow();
+
+        assertThat(stored(asked.question()).isRedacted()).isTrue();
+        assertThat(stored(covering)).satisfies(summary -> {
+            assertThat(summary.isRedacted()).isTrue();
+            assertThat(summary.getText()).isEmpty();
+        });
+        assertThat(stored(result).isRedacted()).isTrue();
+        assertThat(payload(result).toString()).doesNotContain("Rebase secret");
     }
 
     @Test

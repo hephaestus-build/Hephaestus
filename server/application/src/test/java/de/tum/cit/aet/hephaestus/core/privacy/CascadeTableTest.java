@@ -140,8 +140,9 @@ class CascadeTableTest extends BaseUnitTest {
             WIRED_REVOCATION_PROOF);
 
     /** The source erasure that reaches no sandbox. */
-    private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended connection publishes"
-            + " no context change, so it reaches no sandbox.";
+    private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended Slack or Outline"
+            + " connection publishes no context change, so it reaches no sandbox. An SCM disconnect erases its mirror,"
+            + " which announces the change.";
 
     /** A partial answer is Hephaestus's own words, which a revoked turn keeps until it ends. */
     private static final String PARTIAL_REVOKED = "A partial answer holds Hephaestus's own words, as an answer does."
@@ -176,6 +177,7 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.ERASE,
                     List.of(
                             DELETE_PROOF,
+                            ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenItsRetentionEnds",
                             LEDGER
                                     + "shouldEraseWhatAnEndingTurnStoresWhenTheDeveloperDeletesTheQuotedMessageMeanwhile",
                             ENTRIES
@@ -373,8 +375,8 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.KEEP,
                     List.of(),
                     "A backup keeps its copy until the backup expires. A restore reapplies the journaled disconnects,"
-                            + " collection removals and Slack channel erasures before it serves data. Gap, owned by"
-                            + " #4968: it reapplies no repository removal or SCM mirror erasure."),
+                            + " collection removals and Slack channel erasures before it serves data. A disconnect"
+                            + " erases the SCM mirror again. Gap, owned by #4968: it reapplies no repository removal."),
             new Cell(CascadeCause.ERASURE, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             new Cell(CascadeCause.NARROWING, CascadeDependent.BACKUP, Action.KEEP, List.of(), BACKUPS),
             // EXPORT

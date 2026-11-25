@@ -301,6 +301,7 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
         var fixture = fixture(type);
         reconcile(monitor(fixture.workspace(), fixture.repository()), fixture.repository());
         long itemId = repositoryItemId(fixture);
+        int changesBefore = monitoringChanges(fixture.workspace()).size();
 
         if (type == IdentityProviderType.GITHUB) {
             monitorService.removeRepositoryMonitorForInstallation(
@@ -322,11 +323,14 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
         assertActive(fixture.workspace(), itemId, false);
         assertThat(repositories.findById(fixture.repository().getId())).isEmpty();
         // The removal tells running Hephaestus turns of the workspace that what they may read changed.
-        assertThat(events.of(
-                        RepositoryMonitoringChangedEvent.class,
-                        RepositoryMonitoringChangedEvent::workspaceId,
-                        fixture.workspace().getId()))
-                .isNotEmpty();
+        assertThat(monitoringChanges(fixture.workspace())).hasSizeGreaterThan(changesBefore);
+    }
+
+    private List<RepositoryMonitoringChangedEvent> monitoringChanges(Workspace workspace) {
+        return events.of(
+                RepositoryMonitoringChangedEvent.class,
+                RepositoryMonitoringChangedEvent::workspaceId,
+                workspace.getId());
     }
 
     @Test
