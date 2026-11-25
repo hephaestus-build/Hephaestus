@@ -380,6 +380,33 @@ class OwnerFunctionsDatabaseTest {
                             .isEqualTo("READY");
                 }
             }
+            case CLIENT_INPUT_EXPIRY -> {
+                // One call deletes at most a batch of receipts older than eight days, and keeps a younger one.
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    jdbc(connection).execute("""
+                            INSERT INTO client_input
+                                (workspace_id, account_id, idem_key, fingerprint, result_id, related_id, created_at)
+                            SELECT 1, 13, gen_random_uuid(), sha256('old'::bytea), gen_random_uuid(), gen_random_uuid(),
+                                   now() - INTERVAL '9 days' - n * INTERVAL '1 second'
+                            FROM generate_series(1, 1001) n;
+                            INSERT INTO client_input
+                                (workspace_id, account_id, idem_key, fingerprint, result_id, related_id, created_at)
+                            VALUES (1, 13, gen_random_uuid(), sha256('new'::bytea), gen_random_uuid(), gen_random_uuid(),
+                                    now() - INTERVAL '7 days');
+                            """);
+                }
+                try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+                    assertThat(sweep(jdbc(connection), rule, null, null)).isEqualTo(1000);
+                }
+                try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+                    assertThat(jdbc(connection)
+                                    .queryForList(
+                                            "SELECT created_at > now() - INTERVAL '8 days' FROM client_input",
+                                            Boolean.class))
+                            .as("the batch leaves one old receipt and the younger one")
+                            .containsExactlyInAnyOrder(false, true);
+                }
+            }
             case ACCOUNT_ABSORB -> {
                 // The claiming account takes every conversation of the absorbed one.
                 sweepAsApplication(database, rule, 12, 11L);
