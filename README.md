@@ -59,7 +59,8 @@ It is not designed to grade, appraise or rank people, or to set allocation or pa
 
 - Your feedback has no score, grade or rank.
 - Your Practice profile is yours.
-  Workspace admins see that feedback exists, not what it says.
+  Workspace admins see practice results, each linked to the work it is about.
+  They see that your feedback exists, not what it says.
   They see no names unless a workspace owner turns that on.
   The setting is off by default, and each change is recorded.
 - Workspace admins cannot read your conversation with Hephaestus.
