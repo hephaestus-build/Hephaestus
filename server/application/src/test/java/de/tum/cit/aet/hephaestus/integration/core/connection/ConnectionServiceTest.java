@@ -378,6 +378,8 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThat(journal.facts())
                 .containsExactly(new RecordingPrivacyJournal.Fact(
                         PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", 7L, "connectionId", 55L)));
+        // Running Hephaestus turns may hold what the connection made readable.
+        verify(eventPublisher).publishEvent(new AgentContextChangedEvent(7L));
     }
 
     @Test
@@ -622,19 +624,6 @@ class ConnectionServiceTest extends BaseUnitTest {
 
             verify(eventPublisher)
                     .publishEvent(new ConnectionLifecycleEvent.Deactivated(55L, 7L, IntegrationKind.GITHUB));
-        }
-
-        /** A disconnect of an active connection tells running Hephaestus turns that what they may read changed. */
-        @Test
-        void transitionActiveToUninstalled_tellsRunningTurnsTheContextChanged() {
-            Connection connection = connectionInState(IntegrationState.ACTIVE);
-
-            service.transition(
-                    connection,
-                    TransitionRequest.byAccount(
-                            IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", 42L, "corr-4", "disconnected"));
-
-            verify(eventPublisher).publishEvent(new AgentContextChangedEvent(7L));
         }
 
         @Test

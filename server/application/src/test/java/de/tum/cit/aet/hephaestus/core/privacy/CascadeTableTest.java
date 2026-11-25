@@ -119,14 +119,14 @@ class CascadeTableTest extends BaseUnitTest {
 
     /** How each source erasure changes the context, which revokes the workspace's conversation sandboxes. */
     private static final String CONTEXT_CHANGING_ERASURES = "A disconnect of an active connection deactivates it"
-            + " (ConnectionLifecycleEffects), a channel erasure revokes the channel's consent, and a collection removal,"
+            + " (ConnectionLifecycleEffects), a channel erasure revokes the channel's consent, and an admin's collection removal,"
             + " an SCM mirror erasure and a repository removal announce the change. Each change revokes the"
             + " workspace's conversation sandboxes.";
 
     /** Each source erasure's context change, entered through its cause, and the revocation that a change makes. */
     private static final List<String> CONTEXT_CHANGE_PROOFS = List.of(
-            "integration.core.connection.ConnectionServiceTest$LifecycleEvents#"
-                    + "transitionActiveToUninstalled_tellsRunningTurnsTheContextChanged",
+            "integration.core.connection.ConnectionServiceTest#"
+                    + "disconnect_erasesUnderTheFenceAndKeepsTheFootprintForTheProviderTeardown",
             "integration.slack.channel.SlackChannelConsentServiceTest#"
                     + "transitionToRevoked_tellsRunningTurnsTheContextChanged",
             "integration.outline.collection.OutlineCollectionAdminServiceTest#"
@@ -141,13 +141,13 @@ class CascadeTableTest extends BaseUnitTest {
 
     /** The source erasure that reaches no sandbox. */
     private static final String SUSPENDED_GAP = "Gap, owned by #5158: a disconnect of a suspended Slack or Outline"
-            + " connection publishes no context change, so it reaches no sandbox. An SCM disconnect erases its mirror,"
-            + " which announces the change.";
+            + " connection, and an Outline collection deleted upstream, publish no context change, so they reach no"
+            + " sandbox. An SCM disconnect erases its mirror, which announces the change.";
 
     /** A partial answer is Hephaestus's own words, which a revoked turn keeps until it ends. */
     private static final String PARTIAL_REVOKED = "A partial answer holds Hephaestus's own words, as an answer does."
-            + " The revocation ends the turn at its next write, and a server drops the snapshot when the turn ends."
-            + " Gap, owned by #5141: until then, a server serves it.";
+            + " The revocation refuses the attempt's next write, but does not end the turn. Gap, owned by #5141: a"
+            + " server serves the last partial answer until the turn ends.";
 
     /** The gap of every stored dependent under a narrowing: #4907 owns the authorization generations of ADR 0134. */
     private static final String NARROWING_GAP =
@@ -162,9 +162,9 @@ class CascadeTableTest extends BaseUnitTest {
             + " decision 9).";
 
     /** What a ready export holds, and how long. */
-    private static final String EXPORT = "A ready export holds the account's visible conversation messages: its"
-            + " questions, and Hephaestus's replies and digests, without tool results. It keeps them until its download"
-            + " window ends, 48 hours after it was ready.";
+    private static final String EXPORT = "A ready export holds the account's unredacted questions, answers and"
+            + " digests as they were when it was built, without tool results. It keeps them until its download window"
+            + " ends, 48 hours after it was ready, also when the conversation redacts one later.";
 
     private static final String POSTED = "Hephaestus deletes no message that it posted in Slack. The provider keeps its"
             + " copy, and removal goes through the operator path (personal-data map, delivery destination).";
@@ -259,8 +259,9 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeDependent.PARTIAL_ANSWER,
                     Action.KEEP,
                     List.of(),
-                    "No partial frame of an attempt is accepted after the erasure starts. Gap, owned by #5141: the last"
-                            + " frame is served until the turn ends."),
+                    "A partial frame is refused once the erasure holds the copy fence. Gap, owned by #5141: a frame"
+                            + " written between the erasure's admission and the fence, and the last frame, are served"
+                            + " until the turn ends."),
             new Cell(CascadeCause.NARROWING, CascadeDependent.PARTIAL_ANSWER, Action.KEEP, List.of(), PARTIAL_REVOKED),
             // DERIVED_ANSWER
             new Cell(
@@ -391,7 +392,8 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeDependent.EXPORT,
                     Action.KEEP,
                     List.of(),
-                    EXPORT + " A reply that repeats an erased source stays in it, as it stays in the conversation."),
+                    EXPORT + " A Slack disconnect redacts the entries written in Slack in the conversation, not in a"
+                            + " ready export. A reply that repeats an erased source stays in both."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.EXPORT,
@@ -611,9 +613,11 @@ class CascadeTableTest extends BaseUnitTest {
         String[] parts = proof.split("#", -1);
         assertThat(parts).as("Class#method: %s", proof).hasSize(2);
         Class<?> test = Class.forName(PACKAGE + parts[0]);
-        assertThat(test.isAnnotationPresent(Disabled.class))
-                .as("%s is disabled", test)
-                .isFalse();
+        for (Class<?> enclosing = test; enclosing != null; enclosing = enclosing.getEnclosingClass()) {
+            assertThat(enclosing.isAnnotationPresent(Disabled.class))
+                    .as("%s is disabled", enclosing)
+                    .isFalse();
+        }
         assertThat(Arrays.stream(test.getDeclaredMethods())
                         .filter(method -> method.getName().equals(parts[1]))
                         .filter(CascadeTableTest::isEnabledTest))

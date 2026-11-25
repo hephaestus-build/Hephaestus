@@ -301,9 +301,10 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
         var fixture = fixture(type);
         reconcile(monitor(fixture.workspace(), fixture.repository()), fixture.repository());
         long itemId = repositoryItemId(fixture);
-        int changesBefore = monitoringChanges(fixture.workspace()).size();
+        long changesBefore;
 
         if (type == IdentityProviderType.GITHUB) {
+            changesBefore = monitoringChanges(fixture);
             monitorService.removeRepositoryMonitorForInstallation(
                     installationId(fixture.workspace()),
                     fixture.repository().getNameWithOwner(),
@@ -316,6 +317,8 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
             assertThat(stopped)
                     .singleElement()
                     .satisfies(project -> assertThat(project.repositoryItemId()).isEqualTo(String.valueOf(itemId)));
+            // A GitLab Stop announces a change too: count from the removal on.
+            changesBefore = monitoringChanges(fixture);
             stoppedProjects.removeStoppedProject(
                     fixture.workspace().getId(), itemId, stopped.getFirst().stopReceipt(), actor());
         }
@@ -323,14 +326,20 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
         assertActive(fixture.workspace(), itemId, false);
         assertThat(repositories.findById(fixture.repository().getId())).isEmpty();
         // The removal tells running Hephaestus turns of the workspace that what they may read changed.
-        assertThat(monitoringChanges(fixture.workspace())).hasSizeGreaterThan(changesBefore);
+        assertThat(monitoringChanges(fixture)).isGreaterThan(changesBefore);
     }
 
-    private List<RepositoryMonitoringChangedEvent> monitoringChanges(Workspace workspace) {
-        return events.of(
-                RepositoryMonitoringChangedEvent.class,
-                RepositoryMonitoringChangedEvent::workspaceId,
-                workspace.getId());
+    /** The workspace's announced monitoring changes that name the fixture's repository. */
+    private long monitoringChanges(Fixture fixture) {
+        return events
+                .of(
+                        RepositoryMonitoringChangedEvent.class,
+                        RepositoryMonitoringChangedEvent::workspaceId,
+                        fixture.workspace().getId())
+                .stream()
+                .filter(change ->
+                        change.repositoryIds().contains(fixture.repository().getId()))
+                .count();
     }
 
     @Test
