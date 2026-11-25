@@ -60,6 +60,7 @@ DECLARE
     clash record;
     absorbed record;
     admitted boolean;
+    bound timestamp with time zone;
 BEGIN
     IF rule IN ('WORKSPACE_PURGE', 'ACCOUNT_ABSORB') THEN
         -- Hash the supplied and expected MACs before comparing their bytes.
@@ -104,19 +105,22 @@ BEGIN
         IF cutoff IS NULL THEN
             RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
         END IF;
-        -- Account erasure locks the account before its exports. Skip a busy account until the next pass.
-        WITH eligible AS MATERIALIZED (
-            SELECT a.id FROM public.account a
-            WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
-              AND EXISTS (SELECT FROM public.account_export x WHERE x.account_id = a.id
-                          AND x.status = 'READY' AND x.expires_at < LEAST(cutoff, statement_timestamp()))
-            ORDER BY a.id
+        -- One call expires at most 100 exports, by expiry and key. Account erasure locks the account before its
+        -- exports, so a busy account is skipped, and so is an export that another transaction holds: the job commits
+        -- each call and calls again, and its next run retries what it skipped (ExportRetentionSweeper). The bound is a
+        -- variable, so the ready-expiry index can range on it.
+        bound := LEAST(cutoff, statement_timestamp());
+        WITH due AS MATERIALIZED (
+            SELECT x.id FROM public.account_export x JOIN public.account a ON a.id = x.account_id
+            WHERE x.status = 'READY' AND x.expires_at < bound AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+            ORDER BY x.expires_at, x.id
+            LIMIT 100
+            FOR UPDATE OF x SKIP LOCKED
             FOR SHARE OF a SKIP LOCKED
         )
         UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
-        FROM eligible
-        WHERE x.account_id = eligible.id AND x.status = 'READY'
-          AND x.expires_at < LEAST(cutoff, statement_timestamp());
+        FROM due
+        WHERE x.id = due.id;
         GET DIAGNOSTICS changed = ROW_COUNT;
     ELSIF rule = 'ACCOUNT_ABSORB' THEN
         -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
@@ -215,9 +219,9 @@ BEGIN
     RETURN changed;
 END
 $$;
-        ]]></sql>
-        <rollback changeSetId="1795573450000-2" changeSetAuthor="hephaestus"
-                  changeSetPath="db/changelog/next/20261125090220-fix-personal-space-audit-erasure.xml"/>
+                ]]></sql>
+        <rollback changeSetId="1795549938000-1" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125095022-fix-export-expiry-skip-locked.xml"/>
     </changeSet>
     <changeSet id="1795480139787-3" author="hephaestus">
         <comment>A request id is unique per owner, so another person's request id does not collide with a new one.</comment>
