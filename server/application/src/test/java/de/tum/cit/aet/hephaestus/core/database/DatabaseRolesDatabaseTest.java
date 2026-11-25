@@ -221,31 +221,60 @@ class DatabaseRolesDatabaseTest {
     @Test
     void shouldQualifyRelationReferencesInPublicRoutines() throws SQLException {
         try (Connection connection = connect(INSTALLED)) {
-            var database = jdbc(connection);
-            Set<String> relations =
-                    Set.copyOf(database.query("""
-                SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname IN ('public', 'pg_catalog', 'partman') AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-                """, (row, _) -> Objects.requireNonNull(row.getString(1))));
-            var unqualified = database
-                    .query("""
-                SELECT p.oid::regprocedure::text, p.prosrc
-                FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-                WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
-                  AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass
-                                  AND d.objid = p.oid AND d.deptype = 'e')
-                ORDER BY 1
-                """, (row, _) -> {
-                        String routine = row.getString(1);
-                        return unqualifiedRelations(Objects.requireNonNull(row.getString(2)), relations).stream()
-                                .map(relation -> routine + ": " + relation)
-                                .toList();
-                    })
-                    .stream()
-                    .flatMap(List::stream)
-                    .toList();
-            assertThat(unqualified).isEmpty();
+            assertThat(unqualifiedPublicRoutineReferences(jdbc(connection))).isEmpty();
         }
+    }
+
+    @Test
+    void shouldReportUnqualifiedRelationsInBothDefinerAndInvokerRoutines() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
+            connection.setAutoCommit(false);
+            try {
+                var database = jdbc(connection);
+                database.execute("""
+                    CREATE FUNCTION public.qualification_definer_probe() RETURNS void
+                    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+                    AS $$ BEGIN PERFORM FROM workspace; END; $$
+                    """);
+                database.execute("""
+                    CREATE FUNCTION public.qualification_invoker_probe() RETURNS void
+                    LANGUAGE plpgsql SECURITY INVOKER
+                    AS $$ BEGIN PERFORM FROM workspace; END; $$
+                    """);
+                assertThat(unqualifiedPublicRoutineReferences(database))
+                        .containsExactlyInAnyOrder(
+                                "public.qualification_definer_probe(): workspace",
+                                "public.qualification_invoker_probe(): workspace");
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    private static List<String> unqualifiedPublicRoutineReferences(JdbcTemplate database) {
+        Set<String> relations = Set.copyOf(database.query("""
+            SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname IN ('public', 'pg_catalog', 'partman') AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+            """, (row, _) -> Objects.requireNonNull(row.getString(1))));
+        return database
+                .query(
+                        """
+            SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), p.prosrc
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
+              AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass
+                              AND d.objid = p.oid AND d.deptype = 'e')
+            ORDER BY 1
+            """,
+                        (row, _) -> {
+                            String routine = row.getString(1);
+                            return unqualifiedRelations(Objects.requireNonNull(row.getString(2)), relations).stream()
+                                    .map(relation -> routine + ": " + relation)
+                                    .toList();
+                        })
+                .stream()
+                .flatMap(List::stream)
+                .toList();
     }
 
     @Test
