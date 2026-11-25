@@ -199,10 +199,19 @@ function sql(query: string, user = "root"): string {
 function waitForDatabase(restored: boolean): void {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
 		if (
-			spawnSync("docker", ["exec", container, "sh", "-c", 'test "$(cat /proc/1/comm)" = postgres'])
-				.status === 0 &&
-			spawnSync("docker", ["exec", container, "pg_isready", "-U", "root", "-d", "hephaestus"])
-				.status === 0 &&
+			// Over TCP: the entrypoint's temporary server for the first initialization listens only on the socket,
+			// so only the final server answers here. The image's init, not postgres, is PID 1.
+			spawnSync("docker", [
+				"exec",
+				container,
+				"pg_isready",
+				"-h",
+				"127.0.0.1",
+				"-U",
+				"root",
+				"-d",
+				"hephaestus",
+			]).status === 0 &&
 			(!restored ||
 				spawnSync(
 					"docker",
