@@ -197,6 +197,7 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         sender.send(workspace.getId(), feedbackId);
         var first = current().getDeliveredAt();
         assertThat(first).isNotNull();
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);

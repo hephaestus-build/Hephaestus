@@ -28,13 +28,22 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.CreateFeedbackDecisionRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransactions;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -79,6 +88,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,6 +182,303 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         jdbc.update("UPDATE feedback_copy SET state='FAILED', readback='ABSENT' WHERE feedback_id=?", other.getId());
         newSender().send(workspace.getId(), piece);
         assertThat(provider.summaryCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldEndWithheldForTheGateReasonAndReleaseTheWorkWhenTheFenceRefusesAfterStaging() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.afterStaging = () -> refuse(feedbackId, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(staging.drafts).isEmpty();
+        assertThat(staging.published).isEmpty();
+        assertRefusedAfterStaging(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        assertNextPackageDelivers(staging);
+    }
+
+    @Test
+    void shouldRemoveTheLeftoverDraftOnTheNextAttemptWhenTheCleanupAfterARefusalDidNotRun() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.afterStaging = () -> refuse(feedbackId, FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        staging.discardFails = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(staging.drafts).hasSize(2);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(children())
+                .allSatisfy(copy -> assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED));
+
+        staging.discardFails = false;
+        settledWrites();
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(staging.drafts).isEmpty();
+        assertThat(staging.published).isEmpty();
+        assertRefusedAfterStaging(FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        assertNextPackageDelivers(staging);
+    }
+
+    @Test
+    void shouldNeverProveACopyAbsentWhileItsNotifyingRequestMayStillLand() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.loseNotify = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(children()).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+            assertThat(copy.getWriteSentAt()).isNotNull();
+        });
+
+        // Readback finds nothing while the request may still land: the copies stay unresolved, and the send waits.
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(children()).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+            assertThat(copy.getReadback()).isNotEqualTo(FeedbackCopyReadback.ABSENT);
+        });
+
+        // The request lands late, and the next readback finds it: one delivery, never a second post.
+        staging.land();
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(children()).allSatisfy(copy -> assertThat(copy.getState()).isEqualTo(FeedbackCopyState.POSTED));
+        assertThat(staging.submissions).isEqualTo(1);
+    }
+
+    @Test
+    void shouldNeverProveACopyAbsentWhileADraftCreationMayStillLand() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.loseStaging = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        // Readback finds no draft yet, and the creation may still commit: the copies stay unresolved.
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(children())
+                .allSatisfy(copy -> assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED));
+
+        // The draft commits late; once no request can land any more, readback deletes it and proves the copies absent.
+        staging.landDrafts();
+        settledWrites();
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(staging.drafts).isEmpty();
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(children())
+                .allSatisfy(copy -> assertThat(copy.getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT));
+    }
+
+    @Test
+    void shouldWaitAFullSettleTimeForACopyWhoseWriteAnEarlierReleaseSentUnrecorded() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.loseNotify = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+        staging.inFlight.clear();
+        // As an earlier release left it: the write started, and nobody recorded when it was sent.
+        jdbc.update("UPDATE feedback_copy SET write_sent_at = NULL WHERE feedback_id = ?", feedbackId);
+
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(children()).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+            assertThat(copy.getWriteSentAt()).isNotNull();
+        });
+    }
+
+    @Test
+    void shouldProveACopyAbsentOnceItsNotifyingRequestCanNoLongerLand() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.loseNotify = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+        // The request ended without publishing anything, and the settle time has passed.
+        staging.inFlight.clear();
+        jdbc.update(
+                "UPDATE feedback_copy SET write_sent_at = ? WHERE feedback_id = ?",
+                Timestamp.from(Instant.now()
+                        .minus(FeedbackSendTransactions.WRITE_SETTLED)
+                        .minusSeconds(60)),
+                feedbackId);
+
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(children()).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.FAILED);
+            assertThat(copy.getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        });
+    }
+
+    @Test
+    void shouldFailTheCopiesForARetryWhenTheRefusalNoLongerHoldsOnceReadbackProvesThemAbsent() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.afterStaging = () -> refuse(feedbackId, FeedbackStopReason.WORKSPACE_DELIVERY_PAUSED);
+        staging.discardFails = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        // The pause is lifted before readback proves the copies absent: nothing withholds them any more.
+        refuse(UUID.randomUUID(), FeedbackStopReason.WORKSPACE_DELIVERY_PAUSED);
+        staging.discardFails = false;
+        settledWrites();
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(staging.drafts).isEmpty();
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(children()).hasSize(2).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.FAILED);
+            assertThat(copy.getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        });
+    }
+
+    private void assertRefusedAfterStaging(FeedbackStopReason reason) {
+        assertThat(current().getState()).isEqualTo(FeedbackState.WITHHELD);
+        assertThat(current().getStopReason()).isEqualTo(reason);
+        assertThat(children()).hasSize(2).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WITHHELD);
+            assertThat(copy.getStopReason()).isEqualTo(reason);
+            assertThat(copy.getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+            assertThat(copy.getLastError()).isNull();
+        });
+    }
+
+    private void assertNextPackageDelivers(StagingProvider staging) {
+        UUID review = review();
+        var next = publicPiece(review, "Name the missing failure case.", contextFor(review));
+        newSender(staging).send(workspace.getId(), next);
+        assertThat(feedback.findById(next).orElseThrow().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(staging.published).containsOnlyKeys(FeedbackIds.copy(next, FeedbackCopyKind.SUMMARY, 0));
+        assertThat(staging.submissions).isEqualTo(1);
+    }
+
+    /** The gate refuses this piece from now on, as it would after the reason arose; it allows every other piece. */
+    private void refuse(UUID piece, FeedbackStopReason reason) {
+        doAnswer(call -> {
+                    Feedback row = call.getArgument(0);
+                    FeedbackCheckStage stage = call.getArgument(1);
+                    return row.getId().equals(piece)
+                            ? new FeedbackCheck(
+                                    stage,
+                                    false,
+                                    reason,
+                                    Instant.now(),
+                                    new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false))
+                            : allowed(stage);
+                })
+                .when(gate)
+                .evaluate(any(), any(), anyBoolean());
+    }
+
+    /**
+     * Stages a package as private drafts that notify nobody, then publishes it with one submission, as GitHub and
+     * GitLab do. A stop before the submission deletes the drafts; readback deletes a draft that a stop left behind.
+     */
+    private static final class StagingProvider implements LineNoteWriter {
+        final Map<UUID, String> drafts = new LinkedHashMap<>();
+        final Map<UUID, String> published = new LinkedHashMap<>();
+        final Map<UUID, String> inFlight = new LinkedHashMap<>();
+        int submissions;
+        boolean discardFails;
+
+        /** The next notifying request loses its answer and stays in flight until {@link #land}. */
+        boolean loseNotify;
+
+        /** The next staging request loses its answer, and its drafts appear only at {@link #landDrafts}. */
+        boolean loseStaging;
+
+        final Map<UUID, String> lateDrafts = new LinkedHashMap<>();
+
+        @Nullable
+        Runnable afterStaging;
+
+        @Override
+        public IntegrationKind kind() {
+            return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public LiveHead liveHead(FeedbackTarget target) {
+            return LiveHead.CURRENT;
+        }
+
+        @Override
+        public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
+            if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
+            if (loseStaging) {
+                publication.copyIds().forEach(id -> lateDrafts.put(id, "draft"));
+                return publication.attempted();
+            }
+            publication.copyIds().forEach(id -> drafts.put(id, "draft"));
+            var hook = afterStaging;
+            afterStaging = null;
+            if (hook != null) hook.run();
+            if (!fence.beforeNotify())
+                return discard(publication.copyIds()) ? publication.notSent() : publication.attempted();
+            submissions++;
+            if (loseNotify) {
+                publication.copyIds().forEach(id -> inFlight.put(id, Objects.requireNonNull(drafts.remove(id))));
+                return publication.attempted();
+            }
+            publication.copyIds().forEach(id -> published.put(id, Objects.requireNonNull(drafts.remove(id))));
+            return CopyWriteResult.of(receipts(publication));
+        }
+
+        /** The staging requests complete on the provider after their answers were lost. */
+        void landDrafts() {
+            drafts.putAll(lateDrafts);
+            lateDrafts.clear();
+        }
+
+        /** The request in flight completes on the provider, after its answer was lost. */
+        void land() {
+            published.putAll(inFlight);
+            inFlight.clear();
+        }
+
+        @Override
+        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+            return discard(publication.copyIds()) ? receipts(publication) : null;
+        }
+
+        private boolean discard(List<UUID> ids) {
+            if (discardFails) return false;
+            ids.forEach(drafts::remove);
+            return true;
+        }
+
+        private List<CopyReceipt> receipts(OnWorkPackage publication) {
+            return publication.copyIds().stream()
+                    .filter(published::containsKey)
+                    .map(id -> new CopyReceipt(
+                            id, CopyDisposition.POSTED, id.toString(), "https://example.test/" + id, true, null))
+                    .toList();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     @Test
@@ -414,6 +721,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
             provider.physical.put(summary.getId(), current().getBody());
         provider.readback = presence == LookupPresence.UNKNOWN ? LookupPresence.UNKNOWN : LookupPresence.FOUND;
         store.recheck(workspace.getId(), feedbackId, developerId);
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
@@ -463,6 +771,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                                         .path("withdrawn")
                                         .asBoolean())
                         .isTrue());
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
@@ -548,6 +857,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                             .asString())
                     .isEqualTo("POST");
         });
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
@@ -571,7 +881,12 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 assertThat(provider.noteCreates).isZero();
             }
             case ABSENT -> {
-                assertThat(after.get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
+                // Proved absent, the note is withheld while the gate refuses its basis; a withdrawal is no gate
+                // refusal, so that note failed.
+                if (correction == Correction.INCORRECT_MARK) {
+                    assertThat(after.get(1).getState()).isEqualTo(FeedbackCopyState.WITHHELD);
+                    assertThat(after.get(1).getStopReason()).isEqualTo(FeedbackStopReason.RESULT_MARKED_INCORRECT);
+                } else assertThat(after.get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
                 assertThat(after.get(1).getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
                 var next = publicPiece(nextReview, "Cover the empty input as well.", priorContext);
                 newSender().send(workspace.getId(), next);
@@ -937,7 +1252,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         var owner = owner(feedbackId);
         assertThat(transactions.claim(workspace.getId(), feedbackId, owner)).isNotNull();
         var summary = children().getFirst();
-        assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of()))
+        assertThat(transactions.fencePackage(workspace.getId(), feedbackId, owner, List.of(summary.getId()), List.of()))
                 .isTrue();
         finishSend(feedbackId, owner, true);
         assertThat(sends.findById(feedbackId).orElseThrow().getState()).isEqualTo(FeedbackSendState.DONE);
@@ -963,7 +1278,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         "https://example.test/comments/" + summary.getId(),
                         true,
                         null)));
-        assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(note.getId()), List.of()))
+        assertThat(transactions.fencePackage(workspace.getId(), feedbackId, owner, List.of(note.getId()), List.of()))
                 .isTrue();
         finishSend(feedbackId, owner, true);
         var post = sends.findById(feedbackId).orElseThrow();

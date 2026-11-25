@@ -55,8 +55,10 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     private final List<Map<String, Object>> threads = new ArrayList<>();
     private boolean loseSubmit;
     private @Nullable String providerHead = COMMIT;
+    private boolean failDelete;
     private int failThread;
     private int createdThreads;
+    private int createdReviews;
     private GitHubLineNoteWriter writer;
 
     @BeforeEach
@@ -134,12 +136,14 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAdoptTheSamePendingReviewAfterPartialDraftFailure() {
+    void shouldAdoptTheSamePendingReviewWhenItCouldNotBeDeletedAfterPartialDraftFailure() {
         failThread = 2;
+        failDelete = true;
         var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
-        assertThat(first.receipts()).noneMatch(CopyReceipt::acknowledged);
+        assertThat(first.receipts()).noneMatch(CopyReceipt::acknowledged).allMatch(CopyReceipt::unconfirmed);
         assertThat(writes).doesNotContain("SubmitFeedbackReview");
         failThread = 0;
+        failDelete = false;
         var retried = writer.postPackage(TARGET, publication(), (ids, done) -> true);
         assertThat(retried.receipts()).allMatch(CopyReceipt::acknowledged);
         assertThat(reviews).hasSize(1);
@@ -182,7 +186,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseAnotherPendingReviewWithoutChangingIt() {
-        reviews.add(review("Unrelated draft"));
+        reviews.add(review("PRR_9", "Unrelated draft"));
         assertThat(writer.postPackage(TARGET, publication(), (ids, done) -> true)
                         .receipts())
                 .noneMatch(CopyReceipt::acknowledged);
@@ -193,6 +197,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     @Test
     void shouldRefuseForeignTextAddedToItsPendingReview() {
         failThread = 2;
+        failDelete = true;
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         var foreign = new LinkedHashMap<String, Object>(threads.getFirst());
         var comment = new LinkedHashMap<String, Object>(comment(foreign));
@@ -205,9 +210,27 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldStopBeforeSubmissionWhenThePublicationFenceIsRevoked() {
-        writer.postPackage(TARGET, publication(), (ids, done) -> threads.size() < 2);
-        assertThat(writes).doesNotContain("SubmitFeedbackReview");
+    void shouldDeleteItsPendingReviewSoTheNextPackageDeliversWhenTheFenceRefusesBeforeSubmission() {
+        var refused = writer.postPackage(TARGET, publication(), (ids, done) -> threads.size() < 2);
+        assertThat(writes).doesNotContain("SubmitFeedbackReview").contains("DeleteFeedbackReview");
+        assertThat(reviews).isEmpty();
+        assertThat(threads).isEmpty();
+        assertThat(refused.receipts()).hasSize(3).noneMatch(CopyReceipt::unconfirmed);
+
+        var next = writer.postPackage(TARGET, otherPublication(), (ids, done) -> true);
+        assertThat(next.receipts()).hasSize(3).allMatch(CopyReceipt::acknowledged);
+        assertThat(writes.stream().filter("SubmitFeedbackReview"::equals)).hasSize(1);
+        assertThat(reviews)
+                .singleElement()
+                .satisfies(review -> assertThat(review.get("body")).asString().contains(OTHER_MARKER));
+    }
+
+    @Test
+    void shouldStayUnconfirmedWhenItsPendingReviewCannotBeDeletedAfterARefusal() {
+        failDelete = true;
+        var refused = writer.postPackage(TARGET, publication(), (ids, done) -> threads.size() < 2);
+        assertThat(refused.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(writes).endsWith("DeleteFeedbackReview").doesNotContain("SubmitFeedbackReview");
         assertThat(reviews.getFirst().get("state")).isEqualTo("PENDING");
     }
 
@@ -259,11 +282,17 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldProveAbsenceWhenOnlyAPendingDraftCarriesTheMarkers() {
+    void shouldDeleteTheLeftoverPendingReviewBeforeProvingAbsence() {
         failThread = 2;
+        failDelete = true;
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         assertThat(reviews.getFirst().get("state")).isEqualTo("PENDING");
+        assertThat(writer.findPosted(TARGET, publication())).isNull();
+
+        failDelete = false;
         assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(reviews).isEmpty();
+        assertThat(threads).isEmpty();
     }
 
     @Test
@@ -309,6 +338,19 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
         assertThat(writes).isEmpty();
     }
 
+    private static final String OTHER_MARKER = "<!-- hephaestus-feedback-copy:other-summary -->";
+
+    /** The package of a later review on the same pull request. */
+    private OnWorkPackage otherPublication() {
+        return new OnWorkPackage(
+                new SummaryContent(
+                        UUID.nameUUIDFromBytes("other-summary".getBytes(StandardCharsets.UTF_8)),
+                        "A later review summary.",
+                        "other-summary",
+                        OTHER_MARKER),
+                List.of(note("other-line", 9), note("other-file", null)));
+    }
+
     private OnWorkPackage publication() {
         return new OnWorkPackage(
                 new SummaryContent(
@@ -340,15 +382,23 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                 + "<!-- hephaestus-feedback-copy:" + key + " -->\n<!-- hephaestus-diff-note-ck=" + key + " -->";
     }
 
-    private Map<String, Object> review(String body) {
+    private Map<String, Object> review(String id, String body) {
         var review = new LinkedHashMap<String, Object>();
-        review.put("id", "PRR_1");
+        review.put("id", id);
         review.put("body", body);
         review.put("state", "PENDING");
         review.put("viewerDidAuthor", true);
         review.put("url", "https://github.com/owner/repo/pull/42#pullrequestreview-1");
         review.put("commit", Map.of("oid", COMMIT));
         return review;
+    }
+
+    /** GitHub submits or deletes only a pending review. */
+    private Map<String, Object> pending(@Nullable Object id) {
+        return reviews.stream()
+                .filter(review -> Objects.equals(review.get("id"), id) && "PENDING".equals(review.get("state")))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No pending review " + id));
     }
 
     @SuppressWarnings("unchecked") // The fake holds only the GraphQL maps it created.
@@ -367,6 +417,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                             Map.of(
                                     "nodes",
                                     threads.stream()
+                                            .filter(thread -> Objects.equals(thread.get("review"), review.get("id")))
                                             .map(GitHubLineNoteWriterTest::comment)
                                             .toList(),
                                     "pageInfo",
@@ -386,8 +437,9 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
             case "AddPullRequestReviewWithThreads" -> {
                 writes.add(document);
                 assertThat(variables).doesNotContainKey("event");
-                reviews.add(review((String) Objects.requireNonNull(variables.get("body"))));
-                fields.put("addPullRequestReview.pullRequestReview.id", "PRR_1");
+                String id = "PRR_" + ++createdReviews;
+                reviews.add(review(id, (String) Objects.requireNonNull(variables.get("body"))));
+                fields.put("addPullRequestReview.pullRequestReview.id", id);
                 fields.put("addPullRequestReview.pullRequestReview.state", "PENDING");
             }
             case "AddFeedbackReviewThread" -> {
@@ -406,6 +458,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                 comment.put("originalCommit", Map.of("oid", COMMIT));
                 var thread = new LinkedHashMap<String, Object>();
                 thread.put("id", "PRRT_" + createdThreads);
+                thread.put("review", input.get("pullRequestReviewId"));
                 thread.put("subjectType", input.get("subjectType"));
                 thread.put("diffSide", input.get("side"));
                 thread.put("startDiffSide", input.get("startSide"));
@@ -415,9 +468,18 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
             }
             case "SubmitFeedbackReview" -> {
                 writes.add(document);
-                reviews.getFirst().put("state", "COMMENTED");
+                var review = pending(variables.get("reviewId"));
+                review.put("state", "COMMENTED");
                 if (loseSubmit) throw new IllegalStateException("Response lost after submission");
-                fields.put("submitPullRequestReview.pullRequestReview.id", "PRR_1");
+                fields.put("submitPullRequestReview.pullRequestReview.id", review.get("id"));
+            }
+            case "DeleteFeedbackReview" -> {
+                writes.add(document);
+                if (failDelete) throw new IllegalStateException("Deletion was not confirmed");
+                var review = pending(variables.get("reviewId"));
+                reviews.remove(review);
+                threads.removeIf(thread -> Objects.equals(thread.get("review"), review.get("id")));
+                fields.put("deletePullRequestReview.pullRequestReview.id", review.get("id"));
             }
             default -> throw new IllegalArgumentException(document);
         }

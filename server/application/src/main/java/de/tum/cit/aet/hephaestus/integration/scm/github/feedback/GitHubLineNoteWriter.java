@@ -44,7 +44,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
 
 /**
- * Stages a package as one pending review with its threads, then submits it once, the only notifying write.
+ * Stages a package as one pending review with its threads, then submits it once, the only notifying write. A stop
+ * before the submission deletes the pending review, so a private draft never outlives the send that staged it.
  * A lost response permits readback only. Verify copies at {@link FeedbackTarget#version}; resolved or
  * outdated threads still count.
  */
@@ -110,6 +111,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         long workspace = target.item().workspaceId();
         if (gitHubProvider.isRateLimitCritical(workspace) || commitOid(target) == null) return publication.notSent();
         boolean fenced = false;
+        boolean submitting = false;
+        String staged = null;
         try {
             var footer = formatter.footer(target.item());
             var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
@@ -136,6 +139,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
             fenced = true;
             String pending = reviews.pending();
+            staged = pending;
             if (pending == null) {
                 var response = execute(
                         workspace,
@@ -151,6 +155,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                 List.of()));
                 pending = response.field("addPullRequestReview.pullRequestReview.id")
                         .getValue();
+                staged = pending;
                 if (pending == null
                         || !"PENDING"
                                 .equals(response.field("addPullRequestReview.pullRequestReview.state")
@@ -163,13 +168,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     continue;
                 }
                 if (gitHubProvider.isRateLimitCritical(workspace)) return publication.attempted();
-                if (!fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, pending, publication);
                 var input = buildThread(note.anchor(), postedBody(footer, note));
                 input.put("pullRequestReviewId", pending);
                 var created = execute(workspace, "AddFeedbackReviewThread", Map.of("input", input));
                 String id =
                         created.field("addPullRequestReviewThread.thread.id").getValue();
-                if (id == null) return publication.attempted();
+                if (id == null) return discarded(workspace, pending, publication);
             }
             // Re-read the entire pending review before the single notifying write. Never submit a foreign draft.
             var beforeSubmit = reviewLookup(
@@ -185,9 +190,10 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     || publication.notes().stream().anyMatch(note -> {
                         var copy = complete.get(note.writeKey());
                         return copy == null || !copy.verified();
-                    })
-                    || !fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                    })) return publication.attempted();
             egressGuard.requireDeliveryAllowed("github.submit-feedback-package");
+            if (!fence.beforeNotify()) return discarded(workspace, pending, publication);
+            submitting = true;
             execute(workspace, "SubmitFeedbackReview", Map.of("reviewId", pending));
             var found = findPosted(target, publication);
             return found == null ? publication.attempted() : CopyWriteResult.of(found);
@@ -195,7 +201,27 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             throw suppressed;
         } catch (RuntimeException unknown) {
             // A timeout can follow submission; only readback may establish success on the next attempt.
-            return fenced ? publication.attempted() : publication.notSent();
+            if (!fenced) return publication.notSent();
+            return submitting || staged == null ? publication.attempted() : discarded(workspace, staged, publication);
+        }
+    }
+
+    /**
+     * Ends a send that stopped before its submission. Nothing was published, so once GitHub confirms that the pending
+     * review is gone, no copy of the package exists.
+     */
+    private CopyWriteResult discarded(long workspace, String review, OnWorkPackage publication) {
+        return discard(workspace, review) ? publication.notSent() : publication.attempted();
+    }
+
+    /** Deletes one of the viewer's pending reviews with its threads. Only a pending review can be deleted. */
+    private boolean discard(long workspace, String review) {
+        try {
+            var response = execute(workspace, "DeleteFeedbackReview", Map.of("reviewId", review));
+            return review.equals(response.field("deletePullRequestReview.pullRequestReview.id")
+                    .getValue());
+        } catch (RuntimeException unknown) {
+            return false;
         }
     }
 
@@ -213,8 +239,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         publication, review.submitted(), indexCopies(workspace, pr, publication.notes(), commit));
             // No submitted review holds the package. A copy is absent only if no submitted review carries its marker.
             // A marker that is there but did not match leaves the copy unknown, never absent. The threads of submitted
-            // reviews are their comments; a pending review is a private draft that the next attempt adopts.
+            // reviews are their comments. The package's pending review is a private draft: readback deletes it, so a
+            // draft that a stop or a crash left never blocks a later package. GitHub deletes only a pending review, so
+            // a submission that landed first makes the deletion fail, and the copies stay unknown.
             if (!review.complete()) return null;
+            if (review.pending() != null && !discard(workspace, review.pending())) return null;
             var seen = review.seen();
             var unknown = new ArrayList<CopyReceipt>();
             var summary = publication.summary();

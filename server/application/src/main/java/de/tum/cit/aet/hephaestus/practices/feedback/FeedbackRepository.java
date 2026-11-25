@@ -43,7 +43,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
         AND COALESCE(f.delivered_at, f.created_at) <= :cutoff
         AND NOT EXISTS(SELECT 1 FROM feedback_copy c WHERE c.workspace_id = f.workspace_id AND c.feedback_id = f.id
             AND c.posted_at IS NULL AND (c.write_started_at IS NOT NULL OR c.state = 'WRITE_STARTED')
-            AND NOT (c.state = 'FAILED' AND c.readback = 'ABSENT'))
+            AND NOT (c.state IN ('FAILED','WITHHELD') AND c.readback = 'ABSENT'))
         ORDER BY f.id LIMIT :limit
         """, nativeQuery = true)
     List<UUID> expiredIds(

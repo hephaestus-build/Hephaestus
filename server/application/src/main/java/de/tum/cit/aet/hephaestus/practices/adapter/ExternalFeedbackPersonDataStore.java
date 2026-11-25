@@ -41,7 +41,7 @@ final class ExternalFeedbackPersonDataStore extends JdbcPersonDataStore {
 
     private List<JsonNode> inspectionRows(PersonDataSelection selection) {
         return querySelected(
-                "jsonb_build_object('id',t.id,'workspaceId',t.workspace_id,'state',t.state,'readback',t.readback,'lastError',t.last_error,'feedbackId',t.feedback_id,'writeStartedAt',t.write_started_at,'writeMarker',t.write_marker,'externalRef',t.external_ref,'externalUrl',t.external_url,'postedAt',t.posted_at)::text",
+                "jsonb_build_object('id',t.id,'workspaceId',t.workspace_id,'state',t.state,'readback',t.readback,'lastError',t.last_error,'feedbackId',t.feedback_id,'writeStartedAt',t.write_started_at,'writeSentAt',t.write_sent_at,'writeMarker',t.write_marker,'externalRef',t.external_ref,'externalUrl',t.external_url,'postedAt',t.posted_at)::text",
                 "feedback_copy t",
                 selection);
     }

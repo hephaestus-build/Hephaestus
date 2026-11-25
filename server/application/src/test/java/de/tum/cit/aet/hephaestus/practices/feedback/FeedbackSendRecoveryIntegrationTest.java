@@ -42,10 +42,11 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var attempt = transactions.claim(workspace.getId(), feedbackId, owner);
         assertThat(attempt).isNotNull();
         var copyId = children().getFirst().getId();
-        assertThat(transactions.fence(workspace.getId(), feedbackId, owner, List.of(copyId), List.of()))
+        assertThat(transactions.fencePackage(workspace.getId(), feedbackId, owner, List.of(copyId), List.of()))
                 .isTrue();
         var firstFence = children().getFirst().getWriteStartedAt();
         expireClaim();
+        settledWrites();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(provider.summaryCreates).isZero();
         assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
@@ -184,6 +185,7 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         prepare(false);
         provider.summaryFailure = Failure.BEFORE_CREATE;
         sender.send(workspace.getId(), feedbackId);
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);

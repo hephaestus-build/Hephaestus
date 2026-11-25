@@ -5,8 +5,10 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
@@ -23,6 +25,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +44,13 @@ import org.springframework.util.Assert;
 @RequiredArgsConstructor
 public class FeedbackSendService {
     private static final Logger log = LoggerFactory.getLogger(FeedbackSendService.class);
+
+    /** How long a send whose write started waits while Silent Mode holds the provider writes that readback makes. */
+    static final Duration SILENCED = Duration.ofMinutes(5);
+
+    /** How long a send waits before it reads back a copy whose package write may still land. */
+    static final Duration SETTLING = Duration.ofMinutes(5);
+
     private final FeedbackSendTransactions transactions;
     private final FeedbackTargetResolver targets;
     private final List<SummaryWriter> summaries;
@@ -49,6 +60,8 @@ public class FeedbackSendService {
     private final FeedbackProviderReadback providerReadback;
     private final FeedbackOwnCopyEditor editor;
     private final FeedbackGate gate;
+    private final SilentModeQuery silentMode;
+    private final Clock clock;
 
     /** Carries out one claimed send of a feedback to its work. */
     public ActionResult send(ActionAttempt owner) {
@@ -64,6 +77,11 @@ public class FeedbackSendService {
             gate.syncSources(workspaceId, feedbackId);
         var attempt = transactions.claim(workspaceId, feedbackId, owner);
         if (attempt == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+        // Readback deletes a package's leftover draft, a write that Silent Mode refuses. The send waits without
+        // spending an attempt, so lifting Silent Mode settles it.
+        if (attempt.action() != FeedbackSendAction.RETRACT
+                && attempt.copies().stream().anyMatch(copy -> copy.getState() == FeedbackCopyState.WRITE_STARTED)
+                && silentMode.isSilentModeEngaged()) return new ActionResult.Defer(SILENCED);
         try {
             var target = attempt.action() == FeedbackSendAction.RETRACT
                             || attempt.copies().stream().anyMatch(copy -> copy.getWriteStartedAt() != null)
@@ -76,8 +94,8 @@ public class FeedbackSendService {
                 case RETRACT -> corrector.correct(attempt, target, owner);
                 case POST -> {
                     if (target.item().kind().value().equals("scm.pull_request")) {
-                        var unread = packageOnWork(attempt, target, owner);
-                        if (unread != null) return unread;
+                        var waiting = packageOnWork(attempt, target, owner);
+                        if (waiting != null) return waiting;
                     } else
                         for (var copy : attempt.copies())
                             if (copy.getKind() == FeedbackCopyKind.SUMMARY) summary(attempt, target, owner, copy);
@@ -126,6 +144,7 @@ public class FeedbackSendService {
                 null,
                 attempt.feedback().getProvenance());
         if (copy.getState() == FeedbackCopyState.WRITE_STARTED) {
+            var readAt = clock.instant();
             var lookup = writer.findExistingSummary(target, content);
             readbacks.record(target.integration().kind(), lookup.presence());
             if (lookup.presence() == LookupPresence.FOUND) {
@@ -142,7 +161,7 @@ public class FeedbackSendService {
                                 true,
                                 null)));
             } else if (lookup.presence() == LookupPresence.ABSENT)
-                transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId());
+                transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId(), readAt);
             return;
         }
         if (!owner.fence().beginWrite()
@@ -159,7 +178,8 @@ public class FeedbackSendService {
 
     /**
      * Writes the package, or reads back a write that may have reached the provider. It returns the attempt's result
-     * only when it stops before anything is written, because the provider's head could not be read.
+     * when it stops before anything is written because the provider's head could not be read, or when readback must
+     * look again later, without spending an attempt, because a write of its package may still land.
      */
     private @Nullable ActionResult packageOnWork(
             FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
@@ -196,6 +216,9 @@ public class FeedbackSendService {
             // The submission that may have happened holds every copy written with it, posted ones included.
             var written = new ArrayList<>(copies(attempt, FeedbackCopyState.POSTED));
             written.addAll(unresolved);
+            transactions.recordUnrecordedWrites(workspaceId, feedbackId, owner);
+            // Absence is decided from what the provider showed when this read started, never from a later clock.
+            var readAt = clock.instant();
             var found = writer.findPosted(target, publication(attempt, written));
             for (var copy : unresolved)
                 readbacks.record(
@@ -210,10 +233,12 @@ public class FeedbackSendService {
                     found.stream()
                             .filter(receipt -> ids.contains(receipt.copyId()))
                             .toList());
+            boolean settling = false;
             for (var copy : unresolved)
                 if (found.stream().noneMatch(receipt -> receipt.copyId().equals(copy.getId())))
-                    transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId());
-            return null;
+                    settling |= !transactions.absent(
+                            copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId(), readAt);
+            return settling ? new ActionResult.Defer(SETTLING) : null;
         }
         // The locked checks read this server's copy of the work, which can miss a push. The provider's head decides,
         // read once for this send. Nothing is written for a reviewed version that is no longer the head.
@@ -233,16 +258,32 @@ public class FeedbackSendService {
             }
         }
         var publication = publication(attempt, planned);
-        var result = writer.postPackage(
-                target,
-                publication,
-                (attempting, completed) ->
-                        (attempting.isEmpty() || owner.fence().beginWrite())
-                                && transactions.fence(workspaceId, feedbackId, owner, attempting, completed));
+        var result =
+                writer.postPackage(target, publication, new PackageFence(transactions, workspaceId, feedbackId, owner));
         transactions.receipt(workspaceId, feedbackId, owner, result.receipts());
         transactions.withholdCopies(
                 workspaceId, feedbackId, owner, result.withheldCopyIds(), FeedbackStopReason.VOLUME_CAPPED);
         return null;
+    }
+
+    /**
+     * The checks a package passes before its provider writes. A private staging write needs no lease margin; only the
+     * notifying write can reach the developer, so it starts only with the margin left, and is recorded as sent.
+     */
+    private record PackageFence(
+            FeedbackSendTransactions transactions, long workspaceId, UUID feedbackId, ActionAttempt owner)
+            implements CopyWriteFence {
+        @Override
+        public boolean beforeCreate(List<UUID> attempting, List<CopyReceipt> completed) {
+            return (attempting.isEmpty() || owner.fence().beginWrite())
+                    && transactions.fencePackage(workspaceId, feedbackId, owner, attempting, completed);
+        }
+
+        @Override
+        public boolean beforeNotify() {
+            return owner.fence().beginWrite()
+                    && transactions.fencePackage(workspaceId, feedbackId, owner, List.of(), List.of());
+        }
     }
 
     private static List<FeedbackCopy> copies(FeedbackSendTransactions.Attempt attempt, FeedbackCopyState state) {

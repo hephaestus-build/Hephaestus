@@ -138,6 +138,42 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("copyId") UUID copyId,
             @Param("error") String error);
 
+    /**
+     * Records a send time for started copies that have none: an earlier release sent their writes without recording
+     * one. Readback then waits a full settle time from now before it proves them absent.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy SET write_sent_at = :at
+         WHERE workspace_id = :workspaceId AND feedback_id = :feedbackId AND state = 'WRITE_STARTED'
+           AND write_sent_at IS NULL AND external_ref IS NULL AND posted_at IS NULL
+        """, nativeQuery = true)
+    int recordUnrecordedWriteSent(
+            @Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId, @Param("at") Instant at);
+
+    /** Records that a provider write of a feedback's started copies is being sent now. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy SET write_sent_at = :at
+         WHERE workspace_id = :workspaceId AND feedback_id = :feedbackId
+           AND state = 'WRITE_STARTED' AND external_ref IS NULL AND posted_at IS NULL
+        """, nativeQuery = true)
+    int recordWriteSent(
+            @Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId, @Param("at") Instant at);
+
+    /** Withholds a started copy that the provider proved was never created. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy SET state = 'WITHHELD', stop_reason = :reason, last_error = NULL, readback = 'ABSENT'
+         WHERE workspace_id = :workspaceId AND feedback_id = :feedbackId AND id = :copyId
+           AND state = 'WRITE_STARTED' AND external_ref IS NULL AND posted_at IS NULL
+        """, nativeQuery = true)
+    int withholdAbsent(
+            @Param("workspaceId") long workspaceId,
+            @Param("feedbackId") UUID feedbackId,
+            @Param("copyId") UUID copyId,
+            @Param("reason") String reason);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_copy SET state='WITHHELD',stop_reason=:reason

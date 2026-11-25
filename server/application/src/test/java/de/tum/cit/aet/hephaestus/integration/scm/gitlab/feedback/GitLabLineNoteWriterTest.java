@@ -96,6 +96,11 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
         lenient().when(tokenService.getAccessToken(1L)).thenReturn("glpat-test");
     }
 
+    /** The token holds no draft notes on the merge request. */
+    private void noDrafts() {
+        rest.answer(200, List.of());
+    }
+
     @Test
     void shouldVerifyEachCopyUsingItsOwnMarker() {
         when(gitLabProvider.forScope(1L)).thenReturn(client);
@@ -111,10 +116,15 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                         discussion("gid://Disc/A", List.of(note("gid://gitlab/Note/A", located(a), BOT))),
                         discussion("gid://Disc/B", List.of(note("gid://gitlab/Note/B", located(b), BOT)))),
                 BOT);
+        noDrafts();
         assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(a, b))))
                 .extracting(CopyReceipt::externalRef)
                 .containsExactlyInAnyOrder("gid://gitlab/Note/A", "gid://gitlab/Note/B");
-        assertThat(rest.calls()).isEmpty();
+        // Readback writes nothing: it only lists the drafts that it would delete.
+        assertThat(rest.calls()).singleElement().satisfies(call -> {
+            assertThat(call.method()).isEqualTo(HttpMethod.GET);
+            assertThat(call.path()).endsWith("/merge_requests/42/draft_notes");
+        });
     }
 
     @Test
@@ -129,6 +139,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                                 note("gid://Note/COPY", located(wanted), PERSON)))),
                 BOT);
 
+        noDrafts();
         assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(wanted))))
                 .singleElement()
                 .satisfies(receipt -> assertThat(receipt.externalRef()).isEqualTo("gid://Note/A"));
@@ -152,6 +163,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                         "gid://Disc/1", List.of(diffNote("gid://Note/7", earlierFooter, BOT, 10, REVIEWED)))),
                 BOT);
 
+        noDrafts();
         assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(expectedCopy))))
                 .singleElement()
                 .satisfies(receipt -> assertThat(receipt.externalRef()).isEqualTo("gid://Note/7"));
@@ -173,6 +185,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                                 diffNote("gid://Note/7", posted(expectedCopy), BOT, 10, REVIEWED)))),
                 BOT);
 
+        noDrafts();
         assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(expectedCopy))))
                 .singleElement()
                 .satisfies(receipt -> assertThat(receipt.externalRef()).isEqualTo("gid://Note/7"));
@@ -185,6 +198,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
         Map<String, Object> crowded = discussion("gid://gitlab/Discussion/1", List.of());
         crowded.put("notes", Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", true)));
         stubDiscussions(List.of(crowded), BOT);
+        noDrafts();
 
         assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(item("fix", "result:a:0")))))
                 .isNull();

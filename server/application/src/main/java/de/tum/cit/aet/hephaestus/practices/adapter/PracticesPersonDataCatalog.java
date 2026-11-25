@@ -196,7 +196,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "feedback_copy",
                                 "feedback_copy",
                                 "t.feedback_id IN(" + FEEDBACK_IDS + ")",
-                                "id,workspace_id,feedback_id,kind,position,body,path,start_line,end_line,side,stop_reason,last_error,state,write_started_at,write_key,write_marker,external_ref,thread_ref,external_url,conversation_turn_id,conversation_entry_id,created_at,posted_at",
+                                "id,workspace_id,feedback_id,kind,position,body,path,start_line,end_line,side,stop_reason,last_error,state,write_started_at,write_sent_at,write_key,write_marker,external_ref,thread_ref,external_url,conversation_turn_id,conversation_entry_id,created_at,posted_at",
                                 "id,workspace_id",
                                 "",
                                 -210),

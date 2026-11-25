@@ -316,6 +316,7 @@ class FeedbackMarkRestorationIntegrationTest extends AbstractFeedbackDeliveryInt
         var firstFence = children().getFirst().getWriteStartedAt();
         provider.summaryFailure = Failure.NONE;
         provider.readback = LookupPresence.ABSENT;
+        settledWrites();
         due();
         newSender().send(workspace.getId(), feedbackId);
         assertThat(children().getFirst().getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);

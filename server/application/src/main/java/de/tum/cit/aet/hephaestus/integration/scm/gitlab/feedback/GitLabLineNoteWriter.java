@@ -51,6 +51,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 // Stages a package as private draft notes, then one bulk publication with the summary is the only notifying write.
+// A stop before the publication deletes the package's drafts, so a private draft never outlives the send that staged
+// it.
 @Component
 @ConditionalOnServerRole
 @OutboundEgressGateway
@@ -185,6 +187,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 expected.put(note.writeKey(), fields);
             }
             String api = GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr);
+            var staging = Staging.of(api, publication);
             var pending = ownDrafts(workspace, api, scan.author(), expected);
             egressGuard.requireDeliveryAllowed("gitlab.publish-feedback-package");
             // A refused fence started nothing: the copies stay as they were.
@@ -192,19 +195,24 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             fenced = true;
             for (var entry : expected.entrySet()) {
                 if (pending.contains(entry.getKey())) continue;
-                if (gitLabProvider.isRateLimitCritical(workspace) || !fence.beforeCreate(List.of(), List.of()))
-                    return publication.notSent();
+                if (gitLabProvider.isRateLimitCritical(workspace)) return publication.attempted();
+                if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, staging, publication);
                 var created = http.exchange(
                         workspace,
                         HttpMethod.POST,
                         http.authorized(workspace, URI.create(api + "/draft_notes")),
                         entry.getValue());
-                if (created.status() < 200 || created.status() >= 300) return publication.notSent();
+                int status = created.status();
+                // Only a client error proves GitLab refused the draft. A server error or a timeout, such as a proxy's
+                // 504, can answer while GitLab still saves it: that draft is settled by a later readback.
+                if (status >= 400 && status < 500 && status != 408) return discarded(workspace, staging, publication);
+                if (status < 200 || status >= 300) return publication.attempted();
             }
             // Bulk publish includes every draft of this token. Refuse drafts outside this exact checked package.
-            if (ownDrafts(workspace, api, scan.author(), expected).size() != expected.size()
-                    || !fence.beforeCreate(List.of(), List.of())) return publication.notSent();
+            if (ownDrafts(workspace, api, scan.author(), expected).size() != expected.size())
+                return publication.attempted();
             egressGuard.requireDeliveryAllowed("gitlab.submit-feedback-package");
+            if (!fence.beforeNotify()) return discarded(workspace, staging, publication);
             var summary = publication.summary();
             var fields = summary == null
                     ? Map.<String, Object>of()
@@ -222,14 +230,24 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         } catch (OutboundEgressSuppressedException suppressed) {
             throw suppressed;
         } catch (RuntimeException unknown) {
+            // A request without an answer, a draft creation too, may still land: only a later readback settles it.
             return fenced ? publication.attempted() : publication.notSent();
+        }
+    }
+
+    /** Where a package stages its drafts: the merge request, and each note's write marker by its delivery key. */
+    private record Staging(String api, Map<String, String> markers) {
+        static Staging of(String api, OnWorkPackage publication) {
+            return new Staging(
+                    api,
+                    publication.notes().stream().collect(Collectors.toMap(LineNote::writeKey, LineNote::writeMarker)));
         }
     }
 
     /** Reads all this token's drafts, adopting only exact bodies and positions from this package. */
     private Set<String> ownDrafts(long workspace, String api, long author, Map<String, Map<String, Object>> expected) {
         var found = new HashSet<String>();
-        for (var draft : pages(workspace, api + "/draft_notes")) {
+        for (var draft : drafts(workspace, api)) {
             String body = draft.path("note").asString("");
             String key = ScmFeedbackFormatter.lastDeliveryKey(body);
             var fields = key == null ? null : expected.get(key);
@@ -246,6 +264,61 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 throw new FeedbackDeliveryException("Unrelated or changed draft notes prevent bulk publication");
         }
         return found;
+    }
+
+    /** The token's drafts on the merge request. GitLab answers the whole list, unpaginated. */
+    private List<JsonNode> drafts(long workspace, String api) {
+        var response = http.exchange(
+                workspace, HttpMethod.GET, http.authorized(workspace, URI.create(api + "/draft_notes")), null);
+        var rows = response.json();
+        if (response.status() != 200 || rows == null || !rows.isArray())
+            throw new FeedbackDeliveryException("GitLab pending notes were not read completely");
+        var result = new ArrayList<JsonNode>();
+        rows.forEach(result::add);
+        return List.copyOf(result);
+    }
+
+    /**
+     * Ends a send that stopped before its publication. Nothing was published, so once GitLab confirms that the
+     * package's drafts are gone, no copy of the package exists.
+     */
+    private CopyWriteResult discarded(long workspace, Staging staging, OnWorkPackage publication) {
+        return discard(workspace, staging) ? publication.notSent() : publication.attempted();
+    }
+
+    /**
+     * Deletes the token's drafts of this package: a draft whose closing markers are one of its notes' write marker and
+     * delivery tag. GitLab lists and deletes only the token's own drafts; one that a person wrote is left alone.
+     */
+    private boolean discard(long workspace, Staging staging) {
+        if (staging.markers().isEmpty()) return true;
+        try {
+            for (var draft : drafts(workspace, staging.api())) {
+                String body = draft.path("note").asString("");
+                String key = ScmFeedbackFormatter.lastDeliveryKey(body);
+                if (key == null) continue;
+                String marker = staging.markers().get(key);
+                if (marker != null
+                        && ScmFeedbackFormatter.carries(body, marker)
+                        && ScmFeedbackFormatter.carries(body, ScmFeedbackFormatter.deliveryTag(key))
+                        && draft.path("id").isIntegralNumber()
+                        && !delete(workspace, staging.api(), draft.path("id").longValue())) return false;
+            }
+            return true;
+        } catch (RuntimeException unknown) {
+            return false;
+        }
+    }
+
+    /** Deletes one draft; a draft that is already gone counts as deleted. */
+    private boolean delete(long workspace, String api, long draft) {
+        int status = http.exchange(
+                        workspace,
+                        HttpMethod.DELETE,
+                        http.authorized(workspace, URI.create(api + "/draft_notes/" + draft)),
+                        null)
+                .status();
+        return (status >= 200 && status < 300) || status == 404;
     }
 
     private List<JsonNode> pages(long workspace, String endpoint) {
@@ -307,8 +380,13 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         if (gitLabProvider.isRateLimitCritical(workspace)) return null;
         try {
             var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
-            var scan = indexCopies(workspace, mr, publication.notes(), target);
-            return packageReceipts(workspace, mr, publication, scan);
+            // The package's drafts are private: readback deletes them, so a draft that a stop or a crash left never
+            // blocks a later package. It deletes them before it reads the notes, so it reads a publication that
+            // consumed them instead of missing it.
+            var staging = Staging.of(
+                    GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr), publication);
+            if (!discard(workspace, staging)) return null;
+            return packageReceipts(workspace, mr, publication, indexCopies(workspace, mr, publication.notes(), target));
         } catch (RuntimeException unknown) {
             return null;
         }

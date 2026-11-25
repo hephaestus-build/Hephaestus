@@ -94,14 +94,47 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRetainPartialDraftsAndAdoptThemOnRetryWithoutPostingAPartialReview() {
+    void shouldDeleteItsPartialDraftsWithoutPostingAPartialReview() {
         provider.failDraft(2);
         var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
-        assertThat(first.receipts()).noneMatch(CopyReceipt::acknowledged);
+        assertThat(first.receipts()).hasSize(3).noneMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isZero();
+        assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42))).isEmpty();
+        assertThat(provider.bulkPublications()).isZero();
+    }
+
+    @Test
+    void shouldKeepTheDraftsForReadbackWhenAProxyAnswersADraftCreationWithAServerError() {
+        provider.gatewayTimeoutOnDraft(2);
+        var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(first.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(provider.bulkPublications()).isZero();
+    }
+
+    @Test
+    void shouldKeepTheDraftsForReadbackWhenADraftCreationLostItsAnswer() {
+        provider.loseDraftAnswer(2);
+        var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(first.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(provider.bulkPublications()).isZero();
+
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isZero();
+    }
+
+    @Test
+    void shouldAdoptPartialDraftsThatCouldNotBeDeletedOnRetryWithoutPostingAPartialReview() {
+        provider.failDraft(2);
+        provider.failDelete(true);
+        var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(first.receipts()).noneMatch(CopyReceipt::acknowledged).allMatch(CopyReceipt::unconfirmed);
         assertThat(provider.pendingDrafts()).isEqualTo(1);
         assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42))).isEmpty();
         assertThat(provider.bulkPublications()).isZero();
         provider.failDraft(0);
+        provider.failDelete(false);
         assertThat(writer.postPackage(TARGET, publication(), (ids, done) -> true)
                         .receipts())
                 .hasSize(3)
@@ -136,11 +169,79 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPublishNothingWhenTheFenceIsRevokedAfterCreatingPrivateDrafts() {
-        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
-        assertThat(provider.pendingDrafts()).isEqualTo(2);
+    void shouldDeleteItsDraftsSoTheNextPackageDeliversWhenTheFenceIsRevokedAfterCreatingThem() {
+        var refused = writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        assertThat(refused.receipts()).hasSize(3).noneMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isZero();
         assertThat(provider.bulkPublications()).isZero();
         assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42))).isEmpty();
+
+        var next = writer.postPackage(TARGET, otherPublication(), (ids, done) -> true);
+        assertThat(next.receipts()).hasSize(3).allMatch(CopyReceipt::acknowledged);
+        assertThat(provider.bulkPublications()).isEqualTo(1);
+        assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
+                .hasSize(3)
+                .allSatisfy(note -> assertThat(note.body()).contains("hephaestus-feedback-copy:other-"));
+    }
+
+    @Test
+    void shouldStayUnconfirmedWhenItsDraftsCannotBeDeletedAfterTheFenceIsRevoked() {
+        provider.failDelete(true);
+        var refused = writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        assertThat(refused.receipts()).hasSize(3).allMatch(CopyReceipt::unconfirmed);
+        assertThat(provider.pendingDrafts()).isEqualTo(2);
+        assertThat(provider.bulkPublications()).isZero();
+    }
+
+    @Test
+    void shouldLeaveAPersonsDraftThatQuotesTheMarkersWhenItDeletesTheLeftover() {
+        provider.failDelete(true);
+        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        provider.failDelete(false);
+        provider.personDraft("See this note:\n" + "<!-- hephaestus-feedback-copy:line -->\n"
+                + ScmFeedbackFormatter.deliveryTag("line") + "\nI disagree with it.");
+
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldReadEveryDraftOnceWhenGitLabAnswersMoreThanOnePageOfThem() {
+        provider.failDelete(true);
+        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        provider.failDelete(false);
+        for (int draft = 0; draft < 120; draft++) provider.personDraft("A person's draft " + draft);
+
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isEqualTo(120);
+    }
+
+    @Test
+    void shouldFindAPublicationThatLandsWhileReadbackDeletesTheDrafts() {
+        provider.failDelete(true);
+        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        provider.failDelete(false);
+        provider.publishOnNextDraftRead();
+
+        var found = writer.findPosted(TARGET, publication());
+
+        assertThat(provider.bulkPublications()).isEqualTo(1);
+        assertThat(found)
+                .extracting(CopyReceipt::copyId)
+                .containsExactlyInAnyOrderElementsOf(
+                        publication().notes().stream().map(LineNote::copyId).toList());
+        assertThat(found).allMatch(CopyReceipt::acknowledged);
+    }
+
+    @Test
+    void shouldDeleteTheLeftoverDraftsBeforeProvingAbsence() {
+        provider.failDelete(true);
+        writer.postPackage(TARGET, publication(), (ids, done) -> provider.pendingDrafts() < 2);
+        assertThat(writer.findPosted(TARGET, publication())).isNull();
+
+        provider.failDelete(false);
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
+        assertThat(provider.pendingDrafts()).isZero();
     }
 
     @Test
@@ -149,7 +250,7 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         when(provider.provider().isRateLimitCritical(1L)).thenReturn(true);
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
-        assertThat(provider.pendingDrafts()).isEqualTo(1);
+        assertThat(provider.pendingDrafts()).isZero();
         assertThat(provider.bulkPublications()).isZero();
         when(provider.provider().isRateLimitCritical(1L)).thenReturn(false);
         provider.failDraft(0);
@@ -190,6 +291,19 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         assertThat(provider.bulkPublications()).isZero();
         assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42))).isEmpty();
+    }
+
+    /** The package of a later review on the same merge request. */
+    private static OnWorkPackage otherPublication() {
+        return new OnWorkPackage(
+                new SummaryContent(
+                        ScmFeedbackFixtures.copyId("other-summary"),
+                        "A later review summary.",
+                        "other-summary",
+                        "<!-- hephaestus-feedback-copy:other-summary -->"),
+                List.of(
+                        note("other-line", new FeedbackAnchor("new.java", null, 21, CitationSide.NEW)),
+                        note("other-file", new FeedbackAnchor("new.java", null, null, CitationSide.NEW))));
     }
 
     private static OnWorkPackage publication() {
