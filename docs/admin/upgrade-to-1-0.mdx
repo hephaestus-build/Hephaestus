@@ -178,7 +178,7 @@ A host on 1.0.0-rc.6 made these changes when it installed that release.
 | Image outside the chart | `HEPHAESTUS_MENTOR_TURN_*`, `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_*` | `HEPHAESTUS_CONVERSATION_TURN_*`, `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_*` | *Stop every role before Ask Hephaestus takes its names* |
 | Server settings | `hephaestus.mentor.*` | `hephaestus.conversation.*` | *Stop every role before Ask Hephaestus takes its names* |
 | Monitoring | `mentor_turn_*`, `mentor_live_streams`, `surface="mentor"`, log events `mentor.turn.ended` and `heph.turn.*` | `conversation_turn_*`, `conversation_live_streams`, `surface="conversation"`, `conversation.turn.*` | *Stop every role before Ask Hephaestus takes its names* |
-| API clients | `/api/workspaces/{slug}/mentor/…`, `/api/workspaces/{slug}/agents` | `/api/workspaces/{slug}/conversation/…`, `/api/workspaces/{slug}/model-assignments` | *Stop every role before Ask Hephaestus takes its names* |
+| API clients | `/api/workspaces/{slug}/mentor/…` | Use the public conversation operations in the [API contract](./compatibility-policy.mdx#the-public-contract). | *Stop every role before Ask Hephaestus takes its names* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
 <MigrationEntries after="1.0.0-rc.7" group="values" />

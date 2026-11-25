@@ -520,6 +520,38 @@ function* curlApiRequests(source: string): Generator<{ method: string; resource:
 	}
 }
 
+function* documentedApiRequests(source: string): Generator<{ method: string; resource: string }> {
+	for (const match of source.matchAll(
+		/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?:https?:\/\/(?:<[^>\r\n]+>|[^/\s"'<>]+))?(?<resource>\/(?:<[^>\r\n]+>|\{[^}\r\n]+\}|[^\s"'<>{}])+)/gu,
+	)) {
+		const { verbs, resource } = match.groups ?? {};
+		assert.ok(verbs !== undefined && resource !== undefined);
+		for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
+			yield { method, resource };
+		}
+	}
+	yield* curlApiRequests(source);
+}
+
+void test("documented calls accept absolute and relative paths with placeholders", () => {
+	assert.deepEqual(
+		[
+			...documentedApiRequests(
+				"GET https://<instance host>/.well-known/oauth-authorization-server\n" +
+					"PUT or DELETE /api/workspaces/<workspace slug>/practice-repository\n" +
+					"GET https://hephaestus.example/.well-known/oauth-protected-resource/{resourcePath}\n" +
+					"The /api/workspaces/<slug>/practice-repository path supports changes.",
+			),
+		],
+		[
+			{ method: "GET", resource: "/.well-known/oauth-authorization-server" },
+			{ method: "PUT", resource: "/api/workspaces/<workspace slug>/practice-repository" },
+			{ method: "DELETE", resource: "/api/workspaces/<workspace slug>/practice-repository" },
+			{ method: "GET", resource: "/.well-known/oauth-protected-resource/{resourcePath}" },
+		],
+	);
+});
+
 void test("the public operation list covers existing documented methods and extension SDK imports", () => {
 	const classes = apiOperationClassifications(
 		parseJson(readRepositoryFile(API_OPERATION_REGISTRY)),
@@ -604,20 +636,7 @@ void test("the public operation list covers existing documented methods and exte
 				}
 			}
 		};
-		for (const match of text.matchAll(
-			/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?<resource>\/[^\s]+)/gu,
-		)) {
-			const { groups } = match;
-			assert.ok(groups !== undefined);
-			const { verbs, resource } = groups;
-			assert.ok(verbs !== undefined && resource !== undefined);
-			assert.notEqual(verbs, "");
-			assert.notEqual(resource, "");
-			for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
-				checkDocumentedCall(method, resource);
-			}
-		}
-		for (const { method, resource } of curlApiRequests(text)) {
+		for (const { method, resource } of documentedApiRequests(text)) {
 			checkDocumentedCall(method, resource);
 		}
 	}

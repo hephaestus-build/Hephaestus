@@ -55,7 +55,8 @@ The folders live on the default branch, under `.hephaestus/practices/` unless yo
 **Change** and **Unset** in **Practice repository** first ask you to confirm.
 Changing the repository or the directory, or unsetting the practice repository, makes every practice edited in the old one editable in Hephaestus again.
 Nothing is deleted.
-Automation can do the same through the API, under `/api/workspaces/<slug>/practice-repository`.
+Automation calls `PUT /api/workspaces/<slug>/practice-repository` to set or change the repository.
+It calls `DELETE /api/workspaces/<slug>/practice-repository` to unset it.
 
 A practice edited in the repository is read-only in Hephaestus, except for its feedback mode and position.
 In **Practice setup**, it shows **Edited in the practice repository**.

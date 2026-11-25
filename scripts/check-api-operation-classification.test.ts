@@ -66,18 +66,39 @@ void test("a public operation needs at least one named caller", () => {
 	}
 });
 
-void test("the CLI annotates invalid registries without a stack trace", async (context) => {
+void test("the CLI points errors to their source and limits classification guidance", async (context) => {
 	const cwd = await mkdtemp(path.join(tmpdir(), "api-operation-classification-"));
 	context.after(async () => rm(cwd, { recursive: true, force: true }));
 	await mkdir(path.join(cwd, "server"));
-	await writeFile(path.join(cwd, "server/openapi.yaml"), JSON.stringify(spec));
-	await writeFile(path.join(cwd, API_OPERATION_REGISTRY), JSON.stringify(entries.slice(1)));
 	const command = fileURLToPath(new URL("check-api-operation-classification.ts", import.meta.url));
-	const result = spawnSync(process.execPath, [command], { cwd, encoding: "utf8" });
-	assert.equal(result.status, 1, result.stderr);
-	assert.match(
-		result.stderr,
-		/^::error file=server\/public-api-operations\.json::Unclassified API operation: GET \/threads%0A/u,
-	);
-	assert.equal(result.stderr.trimEnd().split("\n").length, 1);
+	const scenarios = [
+		{
+			packaged: { paths: { "/threads": { get: {} } } },
+			registry: JSON.stringify(entries),
+			prefix: /^::error file=server\/openapi\.yaml::.*GET \/threads operationId/u,
+			guidance: false,
+		},
+		{
+			packaged: spec,
+			registry: "[invalid-json]",
+			prefix: /^::error file=server\/public-api-operations\.json::/u,
+			guidance: false,
+		},
+		{
+			packaged: spec,
+			registry: JSON.stringify(entries.slice(1)),
+			prefix:
+				/^::error file=server\/public-api-operations\.json::Unclassified API operation: GET \/threads%0A/u,
+			guidance: true,
+		},
+	];
+	for (const { packaged, registry, prefix, guidance } of scenarios) {
+		await writeFile(path.join(cwd, "server/openapi.yaml"), JSON.stringify(packaged));
+		await writeFile(path.join(cwd, API_OPERATION_REGISTRY), registry);
+		const result = spawnSync(process.execPath, [command], { cwd, encoding: "utf8" });
+		assert.equal(result.status, 1, result.stderr);
+		assert.match(result.stderr, prefix);
+		assert.equal(result.stderr.includes("Set access to public, internal, or reserved"), guidance);
+		assert.equal(result.stderr.trimEnd().split("\n").length, 1);
+	}
 });

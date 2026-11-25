@@ -1,4 +1,5 @@
 ---
+"hephaestus": patch
 ---
 
-No release note. The build checks the operation classifications and their callers against the generated API.
+The public API contract covers setting and unsetting the practice repository, MCP sign-in discovery, and the public keys that verify provenance records.

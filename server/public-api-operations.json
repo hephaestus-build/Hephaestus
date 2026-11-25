@@ -113,7 +113,10 @@
 	},
 	{
 		"operation": "DELETE /workspaces/{workspaceSlug}/practice-repository",
-		"access": "internal"
+		"access": "public",
+		"callers": [
+			"automation"
+		]
 	},
 	{
 		"operation": "DELETE /workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response",
@@ -153,7 +156,10 @@
 	},
 	{
 		"operation": "GET /.well-known/hephaestus-provenance-keys.json",
-		"access": "internal"
+		"access": "public",
+		"callers": [
+			"automation"
+		]
 	},
 	{
 		"operation": "GET /.well-known/jwks.json",
@@ -161,11 +167,17 @@
 	},
 	{
 		"operation": "GET /.well-known/oauth-authorization-server",
-		"access": "internal"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "GET /.well-known/oauth-protected-resource/{resourcePath}",
-		"access": "internal"
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "GET /admin/audit",
@@ -1682,7 +1694,8 @@
 		"operation": "PUT /workspaces/{workspaceSlug}/practice-repository",
 		"access": "public",
 		"callers": [
-			"webapp"
+			"webapp",
+			"automation"
 		]
 	},
 	{
