@@ -71,6 +71,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -78,9 +80,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
@@ -259,6 +263,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private AccountRepository accounts;
 
+    @Autowired
+    private AccountDirectory accountDirectory;
+
+    @Autowired
+    private ReviewIntegrationData reviewData;
+
     private JobTokenAuthenticationFilter filter;
     private Workspace workspace;
     private SimpleMeterRegistry meterRegistry;
@@ -321,7 +331,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .build());
             ConnectionRef ref = probeModel(upstream, protocol, byo);
             var capacity = admittingPermits();
-            var policy = probePolicy();
+            var policy = liveRequestPolicy();
             var proxy = proxyService(
                     guardedClient(),
                     liveBudgetService,
@@ -462,7 +472,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return ref;
     }
 
-    private ProxyRequestPolicy probePolicy() {
+    private ProxyRequestPolicy liveRequestPolicy() {
         return new ProxyRequestPolicy(
                 draftCalls,
                 modelResolver,
@@ -486,7 +496,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         liveBudgetService,
                         admittingPermits(),
                         new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
-                        probePolicy(),
+                        liveRequestPolicy(),
                         health),
                 objectMapper);
     }
@@ -1463,31 +1473,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             long memberAccount = addMember("proxy-ledger-member");
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
             var service = proxyService();
-            var holder = HeldTransaction.holdIn(
-                    transactionTemplate,
-                    jdbc,
-                    () -> jdbc.queryForObject(
-                            "SELECT id FROM agent_run WHERE id = ? AND workspace_id = ? FOR UPDATE",
-                            UUID.class,
-                            job.getRunId(),
-                            workspace.getId()));
-            var pending = new CompletableFuture<Integer>();
-            Thread.startVirtualThread(() -> {
-                try {
-                    pending.complete(callChat(service, job));
-                } catch (Exception failure) {
-                    pending.completeExceptionally(failure);
-                }
-            });
 
-            holder.commitAfter(pending, () -> {
-                assertThat(pending.isDone())
-                        .as("the call is waiting to open its ledger row")
-                        .isFalse();
-                removeMember(memberAccount);
-            });
-
-            int status = pending.get(10, TimeUnit.SECONDS);
+            int status = changeWhileTheCallWaitsForItsLedger(service, job, () -> removeMember(memberAccount));
             assertThat(upstream.getRequestCount())
                     .as("provider requests after membership ended (proxy HTTP %s)", status)
                     .isZero();
@@ -1499,6 +1486,69 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             workspace.getId()))
                     .isEqualTo("AUTHORITY_CHANGED");
         }
+    }
+
+    @Test
+    void shouldRefuseAReviewWhenItsDeveloperDisablesAiDuringTheCallLedgerLockWait() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            var scenario = reviewData.scenario();
+            workspace = scenario.workspace();
+            long developer = Objects.requireNonNull(scenario.account().getId());
+            var review = reviewData.activeReview(scenario, developer, ReviewStatus.RUNNING, Instant.now(), null);
+            var assignment = new ReviewAssignmentId(
+                    review.getId(),
+                    Objects.requireNonNull(scenario.practice().getId()),
+                    Objects.requireNonNull(scenario.item().getId()));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString(), LlmApiProtocol.OPENAI_COMPLETIONS, assignment);
+            var service = proxyService(
+                    guardedClient(),
+                    mock(LlmBudgetService.class),
+                    admittingPermits(),
+                    new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                    liveRequestPolicy());
+
+            int status = changeWhileTheCallWaitsForItsLedger(
+                    service, job, () -> accountDirectory.setAiChoice(developer, AiChoice.NO_AI));
+            int requests = upstream.getRequestCount();
+
+            assertThat(callChat(service, job))
+                    .as("a fresh call sees the same committed choice")
+                    .isEqualTo(403);
+            assertThat(upstream.getRequestCount()).isEqualTo(requests);
+            assertThat(requests)
+                    .as("requests after NO_AI committed (proxy HTTP %s)", status)
+                    .isZero();
+            assertThat(status).isEqualTo(403);
+        }
+    }
+
+    private int changeWhileTheCallWaitsForItsLedger(LlmProxyService service, ReviewJob job, Runnable change)
+            throws Exception {
+        var holder = HeldTransaction.holdIn(
+                transactionTemplate,
+                jdbc,
+                () -> jdbc.queryForObject(
+                        "SELECT id FROM agent_run WHERE id = ? AND workspace_id = ? FOR UPDATE",
+                        UUID.class,
+                        job.getRunId(),
+                        workspace.getId()));
+        var pending = new CompletableFuture<Integer>();
+        Thread.startVirtualThread(() -> {
+            try {
+                pending.complete(callChat(service, job));
+            } catch (Exception failure) {
+                pending.completeExceptionally(failure);
+            }
+        });
+        holder.commitAfter(pending, () -> {
+            assertThat(pending.isDone())
+                    .as("the call is waiting to open its ledger row")
+                    .isFalse();
+            change.run();
+        });
+        return pending.get(10, TimeUnit.SECONDS);
     }
 
     @Test
@@ -2033,6 +2083,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ReviewJob reviewJob(String baseUrl, LlmApiProtocol protocol) {
+        return reviewJob(baseUrl, protocol, null);
+    }
+
+    private ReviewJob reviewJob(String baseUrl, LlmApiProtocol protocol, @Nullable ReviewAssignmentId assignment) {
         LlmConnection connection = LlmCatalogTestFixtures.connection("chat-" + System.nanoTime());
         connection.setBaseUrl(baseUrl);
         connection.setApiProtocol(protocol);
@@ -2068,6 +2122,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 CHAT_OUTPUT_LIMIT,
                 600);
         ReviewJob job = new ReviewJob();
+        if (assignment != null) {
+            job.setReviewId(assignment.reviewId());
+            job.setInput(new ReviewJobInput(assignment.itemId(), List.of(assignment)));
+        }
         RuntimeJobTestData.initialize(job, workspace.getId());
         ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
