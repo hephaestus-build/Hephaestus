@@ -4507,9 +4507,9 @@ tests:
     interval: 1m
     input_series:
       - series: 'monitored_repository_readers_pending_seconds{job="hephaestus",instance="server-a:9090"}'
-        values: "93000x10 93700x30 NaNx20"
+        values: "93000x10 93700x30 _x20"
       - series: 'monitored_repository_readers_pending_seconds{job="hephaestus",instance="server-b:9090"}'
-        values: "93000x10 93660x30 NaNx20"
+        values: "93000x10 93660x30 _x20"
     alert_rule_test:
       - eval_time: 10m
         alertname: HephaestusRepositoryReadersWaiting

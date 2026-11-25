@@ -33,7 +33,8 @@ import org.jspecify.annotations.Nullable;
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uk_resource_reader_monitor_reader",
-                        columnNames = {"repository_to_monitor_id", "reader_native_id"}),
+                        // The monitor's key leads, so the index also serves the foreign key to the monitor.
+                        columnNames = {"repository_to_monitor_id", "workspace_id", "reader_native_id"}),
         indexes = @Index(name = "idx_resource_reader_reader_native_id", columnList = "reader_native_id"))
 @Getter
 public class ResourceReader {

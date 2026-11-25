@@ -61,7 +61,7 @@ public class ResourceReaders {
      * it, so it takes the applying replica's clock.
      */
     @Column(name = "proof_changed_at", nullable = false)
-    @ColumnDefault("CURRENT_TIMESTAMP")
+    @ColumnDefault("now()")
     private Instant proofChangedAt = Instant.now();
 
     /**

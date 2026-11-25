@@ -18,27 +18,27 @@
     </changeSet>
     <changeSet id="1795595919745-2" author="hephaestus">
         <addColumn tableName="outline_collection">
-            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+            <column defaultValueComputed="now()" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
                 <constraints nullable="false"/>
             </column>
         </addColumn>
     </changeSet>
     <changeSet id="1795595919745-3" author="hephaestus">
         <addColumn tableName="repository_to_monitor">
-            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+            <column defaultValueComputed="now()" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
                 <constraints nullable="false"/>
             </column>
         </addColumn>
     </changeSet>
     <changeSet id="1795595919745-4" author="hephaestus">
         <addColumn tableName="slack_monitored_channel">
-            <column defaultValueComputed="CURRENT_TIMESTAMP" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+            <column defaultValueComputed="now()" name="proof_changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
                 <constraints nullable="false"/>
             </column>
         </addColumn>
     </changeSet>
     <changeSet id="1795595919745-5" author="hephaestus">
-        <addUniqueConstraint columnNames="repository_to_monitor_id, reader_native_id" constraintName="uk_resource_reader_monitor_reader" tableName="resource_reader"/>
+        <addUniqueConstraint columnNames="repository_to_monitor_id, workspace_id, reader_native_id" constraintName="uk_resource_reader_monitor_reader" tableName="resource_reader"/>
     </changeSet>
     <changeSet id="1795595919745-6" author="hephaestus">
         <createIndex indexName="idx_resource_reader_reader_native_id" tableName="resource_reader">
