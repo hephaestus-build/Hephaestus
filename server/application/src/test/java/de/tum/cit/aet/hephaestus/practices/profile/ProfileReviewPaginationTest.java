@@ -150,7 +150,7 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
             return ids.stream().collect(Collectors.toMap(id -> id, id -> new ResultQueries.PlaceOnWork(1, 1)));
         });
         when(authorization.permitsAll(eq(1L), anyCollection(), any())).thenReturn(visible);
-        when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.viewsOnDemand(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();
