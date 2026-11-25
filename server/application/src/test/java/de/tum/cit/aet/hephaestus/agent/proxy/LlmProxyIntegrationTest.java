@@ -84,6 +84,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
@@ -110,9 +111,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import mockwebserver3.Dispatcher;
@@ -1450,6 +1453,100 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             .count())
                     .isEqualTo(1);
         }
+    }
+
+    @Test
+    void shouldRefuseAReviewWhenMembershipEndsDuringTheCallLedgerLockWait() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            long memberAccount = addMember("proxy-ledger-member");
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            var service = proxyService();
+            var holder = HeldTransaction.holdIn(
+                    transactionTemplate,
+                    jdbc,
+                    () -> jdbc.queryForObject(
+                            "SELECT id FROM agent_run WHERE id = ? AND workspace_id = ? FOR UPDATE",
+                            UUID.class,
+                            job.getRunId(),
+                            workspace.getId()));
+            var pending = new CompletableFuture<Integer>();
+            Thread.startVirtualThread(() -> {
+                try {
+                    pending.complete(callChat(service, job));
+                } catch (Exception failure) {
+                    pending.completeExceptionally(failure);
+                }
+            });
+
+            holder.commitAfter(pending, () -> {
+                assertThat(pending.isDone())
+                        .as("the call is waiting to open its ledger row")
+                        .isFalse();
+                removeMember(memberAccount);
+            });
+
+            int status = pending.get(10, TimeUnit.SECONDS);
+            assertThat(upstream.getRequestCount())
+                    .as("provider requests after membership ended (proxy HTTP %s)", status)
+                    .isZero();
+            assertThat(status).isEqualTo(409);
+            assertThat(jdbc.queryForObject(
+                            "SELECT stop_reason FROM agent_run WHERE id = ? AND workspace_id = ?",
+                            String.class,
+                            job.getRunId(),
+                            workspace.getId()))
+                    .isEqualTo("AUTHORITY_CHANGED");
+        }
+    }
+
+    @Test
+    void shouldRefuseTheUsageFallbackWhenMembershipEndedDuringTheFirstModelRequest() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            long memberAccount = addMember("proxy-retry-member");
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            upstream.setDispatcher(new Dispatcher() {
+                private final AtomicBoolean first = new AtomicBoolean(true);
+
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (!first.getAndSet(false)) {
+                        return json("{\"choices\":[]}");
+                    }
+                    removeMember(memberAccount);
+                    return new MockResponse.Builder()
+                            .code(400)
+                            .addHeader("Content-Type", "application/json")
+                            .body("{\"error\":{\"message\":\"Unrecognized request argument: stream_options\"}}")
+                            .build();
+                }
+            });
+            var capacity = admittingPermits();
+            when(capacity.beforeRetry(any(), any(), any())).thenReturn(true);
+            var service = proxyService(guardedClient(), mock(LlmBudgetService.class), capacity);
+
+            assertThat(callChat(service, job)).isEqualTo(409);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+            RecordedRequest sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(objectMapper
+                            .readTree(Objects.requireNonNull(sent.getBody()).utf8())
+                            .path("stream_options")
+                            .path("include_usage")
+                            .asBoolean())
+                    .isTrue();
+        }
+    }
+
+    private long addMember(String login) {
+        User member = persistUser(login);
+        ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
+        return accountId(member);
+    }
+
+    private void removeMember(long account) {
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), account);
     }
 
     @Test
