@@ -221,7 +221,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						size="lg"
 						className="relative z-10"
 					>
-						Open-source practice feedback for software teams
+						The open-source AI mentor for software engineering practices
 					</Badge>
 
 					<motion.h1
@@ -229,15 +229,15 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Put{" "}
+						Get better at the work you{" "}
 						<span className="relative inline-block whitespace-nowrap">
-							good practice
+							already do
 							<span
 								className={cn(styles.headlineMark, "absolute -right-1 -bottom-1 -left-1 -z-10")}
 								aria-hidden="true"
 							/>
-						</span>{" "}
-						to work.
+						</span>
+						.
 					</motion.h1>
 
 					<motion.p
@@ -245,12 +245,12 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						className="relative z-10 mt-6 max-w-2xl text-lg leading-relaxed text-pretty sm:text-xl"
 					>
 						<span className="font-semibold text-foreground">
-							Hephaestus helps software teams put good engineering practices into their everyday
-							work.
+							Hephaestus reads your work where it happens and checks it against the practices that
+							your team chose.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							It reviews pull requests, issues, code reviews and team discussions as the work
-							happens. Each person gets feedback that cites their work and names a next step.
+							When your work gives it grounds, it tells you what to improve and why, and names a
+							next step. Then you can talk it through. It never grades you.
 						</span>
 					</motion.p>
 
