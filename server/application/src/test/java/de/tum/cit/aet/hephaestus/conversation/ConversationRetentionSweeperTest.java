@@ -448,6 +448,49 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
     }
 
     /**
+     * The copy margin of the readable workspaces is published while one workspace's read fails, which counts as a
+     * failed read. When no workspace can be read, the margin keeps its last read: {@code +Inf} would claim that no copy
+     * is due.
+     */
+    @Test
+    void shouldPublishTheCopyMarginOfTheReadableWorkspacesAndCountTheOthersAsFailedReads() {
+        copyingSources.add(() -> Map.of(1L, Duration.ofDays(20), 2L, Duration.ofDays(30)));
+        due.add(new Due(UUID.randomUUID(), 1, 11, WRITTEN, READ_AT));
+        due.add(new Due(UUID.randomUUID(), 2, 12, WRITTEN, READ_AT));
+        unreadable.add(1L);
+
+        sweeper.sampleDeadlineMargin();
+
+        double readable =
+                Duration.between(READ_AT, WRITTEN.plus(Duration.ofDays(30))).toSeconds();
+        assertThat(copiesGauge("conversation.retention.deadline.margin")).isEqualTo(readable);
+        assertThat(copySamplerFailures()).isEqualTo(1);
+
+        unreadable.add(2L);
+        now = now.plusSeconds(60);
+        sweeper.sampleDeadlineMargin();
+
+        assertThat(copiesGauge("conversation.retention.deadline.margin"))
+                .as("the last read, not +Inf")
+                .isEqualTo(readable);
+        assertThat(copiesGauge("conversation.retention.margin.read.timestamp"))
+                .as("the time of the last good read")
+                .isEqualTo((double) now.minusSeconds(60).getEpochSecond());
+        assertThat(copySamplerFailures()).isEqualTo(2);
+    }
+
+    private double copiesGauge(String name) {
+        return meters.get(name).tag("rule", "copies").gauge().value();
+    }
+
+    private double copySamplerFailures() {
+        return meters.get("conversation.retention.sampler.failures")
+                .tag("rule", "copies")
+                .counter()
+                .count();
+    }
+
+    /**
      * A workspace's copies go at the shortest retention of a source that it has, and the copy margin is the least of all
      * workspaces. Entries without a copying source keep the conversation retention.
      */

@@ -63,8 +63,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * conversation is summarized again about once a week: more often only while a backlog drains over several runs.
  *
  * <p>Each run of a rule reads at most {@link #MAX_PAGES} pages of {@link #BATCH} due entries, across workspaces in the
- * order in which they reach their limit, and erases each person's entries of a page in a transaction bound to that person, the owner the due row
- * names. It starts no new work after {@link #RUN_BUDGET}; the person's transaction it started last still finishes.
+ * order in which they reach their limit, and erases each person's entries of a page in a transaction bound to that
+ * person, the owner the due row names. It starts no new work after {@link #RUN_BUDGET}; the person's transaction it started last still finishes.
  * Progress is the erasure itself: an erased entry is no longer due, so the next run, a crash or another replica starts
  * again at the oldest entry still due, and a run that finds an entry already erased changes nothing. A person whose
  * erasure fails is passed over for the rest of the run, so the other people of the workspace still progress. The
@@ -104,8 +104,8 @@ public class ConversationRetentionSweeper {
     static final Duration COPY_LIMITS_FOR = Duration.ofMinutes(15);
 
     /**
-     * By due time, then as PostgreSQL orders {@code uuid}: by its bytes, unsigned. The copies of several workspaces merge
-     * in that order, so a cursor skips none.
+     * By due time, then as PostgreSQL orders {@code uuid}: by its bytes, unsigned. The copies of several workspaces
+     * merge in that order, so a cursor skips none.
      */
     private static final Comparator<DueEntry> OLDEST_FIRST = Comparator.comparing(DueEntry::getDueAt)
             .thenComparing(DueEntry::getId, (a, b) -> {
@@ -171,7 +171,7 @@ public class ConversationRetentionSweeper {
                 MAX_PAGES);
     }
 
-    /** A sweeper with its own sources, page size and page budget, so a test drives several runs over a small backlog. */
+    /** A sweeper with its own sources, page size and page budget, so a test drives several runs over a backlog. */
     ConversationRetentionSweeper(
             ConversationEntryRepository entries,
             ConversationRedaction redaction,
@@ -235,8 +235,8 @@ public class ConversationRetentionSweeper {
 
     /**
      * One bounded run of a rule. {@link Outcome#INCOMPLETE} means a person's erasure failed, or a workspace's due
-     * entries could not be read: due work that this run could not do. A run that spends its budget leaves the rest to the next run, which is the design, so it is a
-     * success; the deadline margin shows a sweep that falls behind.
+     * entries could not be read: due work that this run could not do. A run that spends its budget leaves the rest to
+     * the next run, which is the design, so it is a success; the deadline margin shows a sweep that falls behind.
      */
     private Run run(Rule rule) {
         Progress progress = new Progress();
@@ -347,17 +347,30 @@ public class ConversationRetentionSweeper {
                 return failed.size();
             }
 
+            // The least margin of the workspaces whose copies can be read; each other workspace counts as a failed
+            // read. When no workspace can be read, the read fails: +Inf would claim that no copy is due.
             @Override
             public double margin() {
                 double margin = Double.POSITIVE_INFINITY;
                 for (Map.Entry<Long, Duration> workspace : limits.entrySet()) {
-                    List<DueEntry> oldest = entries.findDueForRetention(
-                            dueAge(workspace.getValue()).toSeconds(),
-                            DueWorkKind.COPY_RETENTION_DEADLINE,
-                            workspace.getKey(),
-                            DuePage.FIRST,
-                            1);
-                    margin = Math.min(margin, marginOf(oldest, workspace.getValue()));
+                    try {
+                        List<DueEntry> oldest = entries.findDueForRetention(
+                                dueAge(workspace.getValue()).toSeconds(),
+                                DueWorkKind.COPY_RETENTION_DEADLINE,
+                                workspace.getKey(),
+                                DuePage.FIRST,
+                                1);
+                        margin = Math.min(margin, marginOf(oldest, workspace.getValue()));
+                    } catch (RuntimeException e) {
+                        failed.add(workspace.getKey());
+                        log.warn(
+                                "conversation.retention: reading the oldest due copy of workspaceId={} failed: {}",
+                                workspace.getKey(),
+                                e.toString());
+                    }
+                }
+                if (!limits.isEmpty() && failed.size() == limits.size()) {
+                    throw new IllegalStateException("no workspace's due copies could be read");
                 }
                 return margin;
             }
@@ -392,8 +405,8 @@ public class ConversationRetentionSweeper {
             implements DueEntry {}
 
     /**
-     * Erases one person's due entries in a transaction bound to that person. A person who entered erasure after the page
-     * was read is passed over: the erasure removes the entries.
+     * Erases one person's due entries in a transaction bound to that person. A person who entered erasure after the
+     * page was read is passed over: the erasure removes the entries.
      *
      * @return whether it erased them
      */
@@ -458,10 +471,16 @@ public class ConversationRetentionSweeper {
             return rule == Rule.ENTRIES ? entriesSource() : copiesSource(fresh);
         }
 
+        /**
+         * A workspace whose copies cannot be read counts as a failed read, while the margin of the others is published,
+         * so the sampler alert reports it without hiding the other workspaces from the margin alert.
+         */
         void sample() {
             try {
-                deadlineMargin.set(source(false).margin());
+                DueSource source = source(false);
+                deadlineMargin.set(source.margin());
                 lastRead.set(clock.instant().getEpochSecond());
+                samplerFailures.increment(source.failedWorkspaces());
             } catch (RuntimeException e) {
                 samplerFailures.increment();
                 log.warn(
@@ -586,8 +605,8 @@ public class ConversationRetentionSweeper {
      *     counts too
      * @param failedOwners the people whose erasure failed in this run
      * @param failedWorkspaces the workspaces whose due entries this run could not read
-     * @param drained whether the run found no due entry left but those of the failed people; {@code false} when it
-     *     spent its page or time budget
+     * @param drained whether the run found no due entry left but those of the failed people and the failed workspaces;
+     *     {@code false} when it spent its page or time budget
      */
     public record Run(long erased, int failedOwners, int failedWorkspaces, boolean drained) {}
 

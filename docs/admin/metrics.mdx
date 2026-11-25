@@ -400,14 +400,16 @@ An empty backlog is a `success`.
 `HephaestusPrivacyJobNotRunning` reports an hourly sweep that ended no run.
 `HephaestusPrivacyJobFailing` reports a job that failed or left work at least twice in 26 hours.
 `incomplete` means the run ended without error but exhausted its time budget while eligible work remained.
+
 For `conversation_retention` and `conversation_copy_retention`, `incomplete` means instead that the erasure of one person's entries failed.
+For `conversation_copy_retention`, it can also mean that the tool results of one workspace could not be read.
 A run of either without a failed erasure that spends its budget is a `success`, because the next run continues 15 minutes later.
 The deadline margin below shows a sweep that falls behind.
 
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
 | `conversation_retention_deadline_margin_seconds` | Gauge | `rule` | Seconds until the oldest due conversation entry reaches its retention limit, by the database clock. Each server replica reads it every minute, including the entries of an account that a short write holds. `+Inf` when no entry is due. A failed read keeps the last value |
-| `conversation_retention_sampler_failures_total` | Counter | `rule` | Reads of the margin that failed |
+| `conversation_retention_sampler_failures_total` | Counter | `rule` | Reads of the margin that failed. For `copies`, each workspace whose tool results could not be read counts, while the margin of the other workspaces is published |
 | `conversation_retention_margin_read_timestamp_seconds` | Gauge | `rule` | When the replica last read the margin, in seconds since the epoch, or its start until the first read. An empty read counts |
 
 `rule` is `entries`, for every entry at the conversation retention, or `copies`, for the tool results that can copy another source at its retention.

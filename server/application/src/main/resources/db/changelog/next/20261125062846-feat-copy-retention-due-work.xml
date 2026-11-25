@@ -137,7 +137,7 @@ BEGIN
             JOIN public.account a ON a.id = e.account_id
             WHERE e.workspace_id = scope_workspace_id AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
               AND e.redacted_at IS NULL
-                  AND e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')
+              AND e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'fetch_context')
               AND e.created_at < due_before
               AND (after_due IS NULL OR (e.created_at, e.id) > (after_due, after_id))
               AND NOT EXISTS (
