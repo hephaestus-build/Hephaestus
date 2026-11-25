@@ -234,11 +234,13 @@ async function dispatch(): Promise<void> {
 	 */
 	const failures = {
 		refuses: [400, "refused"],
-		times_out: [504, "upstream_stalled: timed out"],
+		times_out: [403, "draft_deadline: time ran out"],
+		stalls: [504, "upstream_stalled: provider went silent"],
 		throttled: [429, "draft_unavailable: provider rate limit"],
 		provider_error: [502, "draft_unavailable: provider failed"],
 		paused: [503, "upstream_paused: provider paused"],
 		capacity: [503, "draft_capacity: unavailable"],
+		quota: [429, "draft_quota: daily limit reached"],
 		budget: [429, "budget exhausted"],
 		ai_choice: [403, "AI choice refused"],
 	} as const;
@@ -246,7 +248,12 @@ async function dispatch(): Promise<void> {
 	async function measure(
 		kind: string,
 		runner: KindRunner,
-		model: keyof typeof failures | "answers" | "cancelled" = "refuses",
+		model:
+			| keyof typeof failures
+			| "answers"
+			| "cancelled"
+			| "stream_stalls"
+			| "stream_times_out" = "refuses",
 	): Promise<Use & { asked: number; outsideFactory: number; outcome: unknown }> {
 		built = [];
 		fromFactory = new WeakSet();
@@ -265,22 +272,22 @@ async function dispatch(): Promise<void> {
 				if (model === "cancelled") {
 					claim.abort();
 				}
-				if (model === "answers") {
+				if (model === "answers" || model === "stream_stalls" || model === "stream_times_out") {
 					const chunk = {
 						id: "draft",
 						object: "chat.completion.chunk",
 						created: 1,
 						model: "draft-model",
 					};
-					const frames = [
-						{
-							index: 0,
-							delta: { role: "assistant", content: '{"disposition":"ISSUE"}' },
-							finish_reason: null,
-						},
-						{ index: 0, delta: {}, finish_reason: "stop" },
-					].map((choice) => `data: ${JSON.stringify({ ...chunk, choices: [choice] })}\n\n`);
-					return new Response(`${frames.join("")}data: [DONE]\n\n`, {
+					const frame = (delta: Record<string, string>, finishReason: string | null) =>
+						`data: ${JSON.stringify({ ...chunk, choices: [{ index: 0, delta, finish_reason: finishReason }] })}\n\n`;
+					const partial = frame({ role: "assistant", content: '{"disposition":"ISSUE"}' }, null);
+					const code = model === "stream_stalls" ? "upstream_stalled" : "draft_deadline";
+					const end =
+						model === "answers"
+							? `${frame({}, "stop")}data: [DONE]\n\n`
+							: `data: ${JSON.stringify({ error: { message: `${code}: stream ended`, type: code, code } })}\n\n`;
+					return new Response(`${partial}${end}`, {
 						headers: { "content-type": "text/event-stream" },
 					});
 				}
@@ -375,10 +382,14 @@ async function dispatch(): Promise<void> {
 		["answers", { leaseLost: false, outcome: "completed", answer: '{"disposition":"ISSUE"}' }],
 		["times_out", { leaseLost: false, outcome: "completed", cause: "model_timeout" }],
 		["cancelled", { leaseLost: true }],
+		["stalls", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
+		["stream_stalls", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
+		["stream_times_out", { leaseLost: false, outcome: "completed", cause: "model_timeout" }],
 		["throttled", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
 		["provider_error", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
 		["paused", { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" }],
 		["capacity", { leaseLost: false, outcome: "handed_on", cause: "model_capacity" }],
+		["quota", { leaseLost: false, outcome: "completed", cause: "quota_exhausted" }],
 		["refuses", { leaseLost: false, outcome: "completed", cause: "model_failed" }],
 		["budget", { leaseLost: false, outcome: "completed", cause: "model_failed" }],
 		["ai_choice", { leaseLost: false, outcome: "completed", cause: "model_failed" }],

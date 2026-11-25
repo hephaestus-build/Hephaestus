@@ -21,6 +21,9 @@ import tools.jackson.databind.node.ObjectNode;
 /** How {@link LlmProxyService} reports a provider's failure: to the connection's breaker, and to the model client. */
 final class ProxyStallErrors {
 
+    private static final String DRAFT_DEADLINE = "draft_deadline";
+    private static final String DRAFT_DEADLINE_MESSAGE = "The draft deadline passed.";
+
     private static final Logger log = LoggerFactory.getLogger(ProxyStallErrors.class);
 
     private final ObjectMapper objectMapper;
@@ -54,7 +57,10 @@ final class ProxyStallErrors {
             return providerError(status, "draft_capacity", "The model capacity was unavailable.", refusal);
         }
         if (ProxyRefusal.WORK_TIME.name().equals(refusal)) {
-            return providerError(status, LlmProxyService.UPSTREAM_STALLED, "The draft deadline passed.", refusal);
+            return providerError(status, DRAFT_DEADLINE, DRAFT_DEADLINE_MESSAGE, refusal);
+        }
+        if (ProxyRefusal.DRAFT_QUOTA.name().equals(refusal)) {
+            return providerError(status, "draft_quota", "The daily draft limit was reached.", refusal);
         }
         if (refusal == null
                 && (status.value() == 429 || status.is5xxServerError())
@@ -93,6 +99,10 @@ final class ProxyStallErrors {
      */
     void writeStallFrame(HttpServletResponse response, LlmApiProtocol protocol, String message) {
         writeErrorFrame(response, protocol, LlmProxyService.UPSTREAM_STALLED, message);
+    }
+
+    void writeDraftDeadlineFrame(HttpServletResponse response, LlmApiProtocol protocol) {
+        writeErrorFrame(response, protocol, DRAFT_DEADLINE, DRAFT_DEADLINE_MESSAGE);
     }
 
     /** Ends a stream the proxy stopped with an error event, so a client cannot read the cut answer as complete. */

@@ -18,8 +18,14 @@ public interface ProductFeedbackDraftCalls {
     /** Whether the report still waits for this generation's draft; a call that waits for capacity asks this often. */
     boolean waits(UUID feedbackId, int generation);
 
+    enum Admission {
+        ADMITTED,
+        INELIGIBLE,
+        QUOTA_EXHAUSTED
+    }
+
     /** Reserves daily quota in the ledger opening transaction, after the pool granted capacity. */
-    boolean admitCall(UUID feedbackId, int generation, long modelId);
+    Admission admitCall(UUID feedbackId, int generation, long modelId);
 
     /** Locks the report before its usage row, in the same order as erasure. */
     void lockForUsage(UUID feedbackId);

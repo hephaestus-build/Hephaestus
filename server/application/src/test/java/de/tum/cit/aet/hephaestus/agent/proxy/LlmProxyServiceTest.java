@@ -658,10 +658,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 caller.execute(() -> {
                     authenticate(routing);
                     try {
+                        HttpHeaders headers = new HttpHeaders();
+                        if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT)
+                            headers.set(ProxyRouting.DRAFT_MODEL_HEADER, Objects.toString(routing.modelId()));
                         answer.complete(streamingController.proxy(
                                 request("POST", "/internal/llm/chat/completions"),
                                 response,
-                                new HttpHeaders(),
+                                headers,
                                 STREAM_REQUEST,
                                 capture));
                     } catch (RuntimeException | Error failure) {
@@ -1912,15 +1915,22 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
 
         private void stubStreamCredential(ProxyRouting routing) {
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
+            var credential = new LlmModelResolver.ProxyCredential(
+                    upstream.url("/v1").toString(),
+                    "openai-completions",
+                    LlmAuthMode.BEARER,
+                    "catalog-model",
+                    "secret",
+                    42L);
+            if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
+                var ref = new LlmModelResolver.ConnectionRef(
+                        routing.connectionScope(), routing.connectionId(), routing.modelId(), null);
+                when(resolver.resolveInstanceModel(Objects.requireNonNull(routing.modelId())))
+                        .thenReturn(new LlmModelResolver.InstanceModel(
+                                ref, credential, LlmApiProtocol.OPENAI_COMPLETIONS, null));
+            } else {
+                stubCredential(routing, credential);
+            }
         }
 
         private @Nullable ResponseEntity<?> proxyReview(ProxyRouting routing, HttpServletResponse response) {
@@ -1985,6 +1995,34 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 verify(callLedger).complete(any(), eq(CALL), isNull(), any());
                 assertThat(missingUsage()).isZero();
                 assertThat(requested.availablePermits()).isZero();
+            }
+        }
+
+        @Test
+        void aDraftThatReachesItsDeadlineEndsTheStreamWithAnError() throws Exception {
+            String partial = "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n";
+            try (VirtualCall call = new VirtualCall(
+                    streaming(Flux.just(sse(partial)).concatWith(Flux.never())), SILENCE_NEVER_REACHED)) {
+                Duration workTime = Duration.ofSeconds(1);
+                var routing = new ProxyRouting(
+                        "report-draft",
+                        "openai-completions",
+                        upstream.url("/v1").toString(),
+                        UsageFundingSource.INSTANCE,
+                        7L,
+                        8L,
+                        null,
+                        new ProxyRouting.BilledAttempt(
+                                UsageSourceType.PRODUCT_FEEDBACK_DRAFT, UUID.randomUUID(), 1, LEASE, null, 1),
+                        call.now().plus(workTime),
+                        100L);
+                call.start(routing);
+                call.relayed();
+                call.time.advanceTimeBy(workTime);
+                assertThat(call.finished()).isNull();
+                assertThat(call.response.getContentAsString())
+                        .startsWith(partial)
+                        .contains("draft_deadline:");
             }
         }
 

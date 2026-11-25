@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls.Admission;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -67,7 +68,7 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
                 new ProxyRouting.BilledAttempt(UsageSourceType.PRODUCT_FEEDBACK_DRAFT, report, 2, run, null, 3),
                 Instant.now().plusSeconds(30),
                 100L);
-        when(drafts.admitCall(report, 2, 4L)).thenReturn(true);
+        when(drafts.admitCall(report, 2, 4L)).thenReturn(Admission.ADMITTED);
         when(admission.admitInstance(4L))
                 .thenReturn(new LlmAdmissionService.InstanceCharge("draft-model", LlmPriceSnapshot.unpricedInstance()));
         when(recorder.open(any())).thenReturn(call);
@@ -89,6 +90,11 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         doThrow(new StaleRunException(fence)).when(runs).requireCurrent(fence);
         assertThatThrownBy(() -> ledger.open(route, new ProxyCallLedger.Bound(80, 100L), "draft-model", null))
                 .isInstanceOf(ProxyCallLedger.ClaimLost.class);
+        when(drafts.admitCall(report, 2, 4L)).thenReturn(Admission.QUOTA_EXHAUSTED);
+        assertThatThrownBy(() -> ledger.open(route, new ProxyCallLedger.Bound(80, 100L), "draft-model", null))
+                .isInstanceOfSatisfying(
+                        ProxyCallLedger.BudgetHeld.class,
+                        held -> assertThat(held.refusal).isEqualTo(ProxyRefusal.DRAFT_QUOTA));
         verify(recorder, times(1)).open(any());
     }
 }

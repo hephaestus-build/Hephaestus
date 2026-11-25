@@ -101,12 +101,18 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      */
     String BARRIER_LIFTED = "  AND " + MaintenanceBarrier.LIFTED + "\n";
 
+    /** A draft returns its report-specific sandbox while it waits. Its next attempt joins the other due drafts. */
+    String DUE_SINCE = "GREATEST(r.available_at, CASE WHEN r.kind = 'DRAFT_REPORT' THEN r.deferred_until END)";
+
     String ORDER = """
             ORDER BY CASE WHEN r.band = 'INTERACTIVE' THEN 0
                           ELSE GREATEST(1, (CASE r.band WHEN 'BATCH' THEN 1 ELSE 2 END)
-                               - FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - r.available_at)) / :agingSeconds))
+                               - FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() -\s""" + DUE_SINCE + """
+                               )) / :agingSeconds))
                      END,
-                     COALESCE(busy.leased, 0), r.created_at, r.id
+                     COALESCE(busy.leased, 0),
+                     CASE WHEN r.kind = 'DRAFT_REPORT' THEN (""" + DUE_SINCE + """
+                     ) ELSE r.created_at END, r.id
             """;
 
     String CLAIM_ORDER = ORDER + """

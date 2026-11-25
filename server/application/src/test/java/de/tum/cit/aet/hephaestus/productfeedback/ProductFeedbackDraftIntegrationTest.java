@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import static de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics.STEPS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls.Admission;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -54,11 +55,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
@@ -282,33 +286,51 @@ class ProductFeedbackDraftIntegrationTest extends AbstractProductFeedbackFilingI
         gateway.perform(get(url(queued) + "/context").headers(claimHeaders(token, queued)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.prompt").doesNotExist());
-        Boolean admitted = transactions.execute(status -> draftCalls.admitCall(report, 1, model.getId()));
-        assertThat(admitted).isFalse();
+        var admitted = transactions.execute(status -> draftCalls.admitCall(report, 1, model.getId()));
+        assertThat(admitted).isEqualTo(Admission.INELIGIBLE);
         assertThat(filings.findById(report).orElseThrow().getDraftAdmittedAt()).isNull();
     }
 
-    @Test
-    void shouldDeferWhenThePoolHasNoRoom() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"model_capacity", "model_unavailable"})
+    void shouldFreeTheSlotAndOfferTheWaitingReportBeforeTryingAgain(String cause) throws Exception {
         UUID report = report();
         AgentRun queued = run(report);
         String token = sandbox(report);
         claim(token, queued);
-        end(token, queued, new AgentRunController.End("handed_on", "model_capacity"));
+        AgentRun other = run(report());
+        end(token, queued, new AgentRunController.End("handed_on", cause));
 
         AgentRun deferred = run(report);
         assertThat(deferred.getState()).isEqualTo(AgentRunState.QUEUED);
-        assertThat(deferred.getAttempt()).isZero();
+        boolean capacity = "model_capacity".equals(cause);
+        assertThat(deferred.getAttempt()).isEqualTo(capacity ? 0 : 1);
         assertThat(deferred.getDeadline()).isEqualTo(queued.getDeadline());
-        assertThat(mine(report).waitingForModel()).isTrue();
-        assertThat(sandboxState(queued)).containsExactly("READY");
+        assertThat(mine(report).waitingForModel()).isEqualTo(capacity);
+        assertThat(sandboxState(queued)).isEmpty();
+        gateway.perform(post("/internal/agent/next").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        // Dispatch may only run after the first draft is due again, for example if claim deletion took a while.
+        jdbc.update("""
+                UPDATE agent_run SET available_at=LEAST(available_at, clock_timestamp()),
+                       deferred_until=LEAST(deferred_until, CASE WHEN deferred_until IS NOT NULL THEN clock_timestamp() END)
+                 WHERE id=?
+                """, queued.getId());
+        assertThat(runs.due(Set.of(AgentRunKind.DRAFT_REPORT), 0, 100))
+                .extracting(due -> due.run().id())
+                .containsSubsequence(other.getId(), queued.getId());
     }
 
     @Test
     void shouldEndAfterTheThirdTransientFailureEvenIfSandboxDeletionFails() throws Exception {
         UUID report = report();
         AgentRun first = run(report);
-        String token = sandbox(report);
-        doThrow(new IllegalStateException("Claim deletion failed")).when(claims).delete(anyString());
+        doNothing()
+                .doNothing()
+                .doThrow(new IllegalStateException("Claim deletion failed"))
+                .when(claims)
+                .delete(anyString());
         var unavailable =
                 context.getBean(MeterRegistry.class).counter(STEPS, "step", "draft", "outcome", "model_unavailable");
         double before = unavailable.count();
@@ -320,12 +342,15 @@ class ProductFeedbackDraftIntegrationTest extends AbstractProductFeedbackFilingI
             assertThat(queued.getDeadline()).isEqualTo(first.getDeadline());
             assertThat(queued.getAttempt()).isEqualTo(attempt);
             if (attempt > 0) {
-                assertThat(sandboxState(first)).containsExactly("READY");
+                assertThat(sandboxState(first)).isEmpty();
                 jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", first.getId());
             }
 
+            String token = sandbox(report);
             claim(token, queued);
             end(token, queued, failure);
+            gateway.perform(get(url(first) + "/context").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isUnauthorized());
         }
 
         AgentRun ended = run(report);
@@ -337,8 +362,6 @@ class ProductFeedbackDraftIntegrationTest extends AbstractProductFeedbackFilingI
         assertThat(filing.getState()).isEqualTo(FilingState.ANSWERED);
         assertThat(filing.getAnswer()).isNull();
         assertThat(sandboxState(first)).containsExactly("DELETING");
-        gateway.perform(get(url(first) + "/context").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -386,18 +409,30 @@ class ProductFeedbackDraftIntegrationTest extends AbstractProductFeedbackFilingI
     }
 
     @Test
-    void shouldReserveTheDailyAllowanceBeforeTheModelCall() {
+    void shouldReserveTheDailyAllowanceAndRecordAQuotaRefusal() throws Exception {
         UUID first = report();
         UUID second = report();
         var destination = destination();
         destination.setDailyDraftLimit(1);
         destinationRows.save(destination);
-        Boolean admittedFirst = transactions.execute(status -> draftCalls.admitCall(first, 1, model.getId()));
-        Boolean admittedSecond = transactions.execute(status -> draftCalls.admitCall(second, 1, model.getId()));
-        assertThat(admittedFirst).isTrue();
-        assertThat(admittedSecond).isFalse();
+        var admittedFirst = transactions.execute(status -> draftCalls.admitCall(first, 1, model.getId()));
+        var admittedSecond = transactions.execute(status -> draftCalls.admitCall(second, 1, model.getId()));
+        assertThat(admittedFirst).isEqualTo(Admission.ADMITTED);
+        assertThat(admittedSecond).isEqualTo(Admission.QUOTA_EXHAUSTED);
         assertThat(filings.findById(first).orElseThrow().getDraftAdmittedAt()).isNotNull();
         assertThat(filings.findById(second).orElseThrow().getDraftAdmittedAt()).isNull();
+
+        var quota = context.getBean(MeterRegistry.class).counter(STEPS, "step", "draft", "outcome", "quota_exhausted");
+        double before = quota.count();
+        AgentRun queued = run(second);
+        String token = sandbox(second);
+        claim(token, queued);
+        end(token, queued, new AgentRunController.End("completed", "quota_exhausted"));
+        assertThat(quota.count()).isEqualTo(before + 1);
+        assertThat(run(second).getStopReason()).isEqualTo(AgentRunStopReason.FAILED);
+        var filing = filings.findById(second).orElseThrow();
+        assertThat(filing.getState()).isEqualTo(FilingState.ANSWERED);
+        assertThat(filing.getAnswer()).isNull();
     }
 
     @Test

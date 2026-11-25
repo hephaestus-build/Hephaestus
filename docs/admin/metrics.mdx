@@ -236,7 +236,7 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back, by reason: `expired`, `start_limit`, `held`, `idle`, `lost` or `orphan`. `held` is a review sandbox whose runs all wait on a hold, such as a spent budget. `lost` is a ready sandbox whose claim is gone. `orphan` is a claim that no sandbox row names |
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
-| `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
+| `agent_sandbox_revoked_total`            | Counter   | `reason`  | Sandboxes that the server took back early. `unisolated` means the network policy did not hold. `draft_requeued` means a report draft returned its lease |
 | `agent_sandbox_ended_total`              | Counter   | `kind`, `reason` | Sandboxes whose claim the server deleted, by how the sandbox ended. `reason` is `completed`, `error`, `oom_killed`, `evicted`, `running`, `deleted`, `unread` or `other`. [Log records § Sandbox ends](./log-records#sandbox-ends) defines each reason |
 | `conversation_turn_duration_seconds`       | Histogram | none      | An attempt, from its claim to its end                                   |
 | `agent_run_first_token_seconds`          | Histogram | `kind`, `start` | From the run start to the first part of the answer. `kind="turn"`, `start="cold"` or `"warm"`         |
@@ -374,7 +374,9 @@ Claim reservations do not add a second wait observation when the model call uses
 
 `refused` is the model's own decision.
 A call that the proxy refuses never reaches a provider, so it has no outcome.
-`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `work_time`, `attempt_ended`, `ai_choice`, or `not_composer_request`.
+`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `draft_quota`, `work_time`, `attempt_ended`, `ai_choice`, or `not_composer_request`.
+
+`draft_quota` counts a draft call refused at the instance or per-account daily limit.
 `not_composer_request` counts a request of a composition run that does not continue that composition's conversation.
 The composer never sends one, so any count is worth a look in the server log.
 A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surface="model_call"` and its `cap`.

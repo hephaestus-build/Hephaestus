@@ -6,6 +6,8 @@ public enum ProxyRefusal {
     AI_CHOICE,
     /** The budget that funds the call is spent. */
     BUDGET,
+    /** The instance or reporter reached the daily draft limit. */
+    DRAFT_QUOTA,
     /** The attempt's work deadline has passed. */
     WORK_TIME,
     /** The attempt was ended while the call waited. */
