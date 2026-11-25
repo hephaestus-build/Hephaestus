@@ -331,6 +331,7 @@ jobs:
       - name: Verify the maintainer's release check
         if: needs.release.outputs.tag_name == 'v1.0.0'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE: ${{ needs.release.outputs.candidate }}
           RELEASE_PLAN: ${{ inputs.release-plan }}
           RELEASE_PLAN_SIGNATURE: ${{ inputs.release-plan-signature }}

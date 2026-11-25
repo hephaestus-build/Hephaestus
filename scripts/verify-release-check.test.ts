@@ -27,6 +27,7 @@ void test(
 			execFileSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", file]);
 		}
 		const publicKey = await readFile(`${key}.pub`, "utf8");
+		const otherPublicKey = await readFile(`${otherKey}.pub`, "utf8");
 		await writeFile(allowedSigners, `maintainer namespaces="${namespace}" ${publicKey}`);
 		const lockBytes = '{"chart":{"digest":"sha256:abc"}}\n';
 		await writeFile(lock, lockBytes);
@@ -49,12 +50,55 @@ void test(
 				stdio: "ignore",
 			});
 		};
-		const verify = async (tag = candidate) =>
-			verifyReleaseCheck(tag, lock, planFile, signature, allowedSigners);
+		const repository = "owner/project";
+		const permissionEndpoint = `repos/${repository}/collaborators/maintainer/permission`;
+		const keysEndpoint = "users/maintainer/ssh_signing_keys";
+		const permissionArgs = [permissionEndpoint];
+		const keyArgs = ["--paginate", "--slurp", keysEndpoint];
+		const github =
+			({ permission = "admin", registeredKey = publicKey } = {}) =>
+			async (args: string[]): Promise<unknown> => {
+				if (args[0] === permissionEndpoint) {
+					assert.deepEqual(args, permissionArgs);
+					return { permission };
+				}
+				assert.deepEqual(args, keyArgs);
+				return [[{ key: registeredKey }]];
+			};
+		const verify = async (tag = candidate, githubApi = github()) =>
+			verifyReleaseCheck(tag, lock, planFile, signature, { allowedSigners, repository, githubApi });
 		await writeFile(planFile, JSON.stringify(plan));
 		await assert.rejects(verify(), /ssh-keygen/u);
 		await sign(key);
 		await verify();
+
+		await t.test("rejects a pinned key absent from the signer's GitHub signing keys", async () => {
+			await assert.rejects(
+				verify(candidate, github({ registeredKey: otherPublicKey })),
+				/GitHub SSH signing key/u,
+			);
+		});
+		await t.test(
+			"rejects a signer with repository write access but no admin permission",
+			async () => {
+				await assert.rejects(
+					verify(candidate, github({ permission: "write" })),
+					/repository admin/u,
+				);
+			},
+		);
+		await t.test("fails closed when either GitHub API call fails", async () => {
+			for (const endpoint of [permissionEndpoint, keysEndpoint]) {
+				const failure = new Error("GitHub API unavailable");
+				const unavailable = async (args: string[]) => {
+					if (args.includes(endpoint)) {
+						throw failure;
+					}
+					return github()(args);
+				};
+				await assert.rejects(verify(candidate, unavailable), failure);
+			}
+		});
 
 		await assert.rejects(verify("v1.0.0-rc.3"), /selected candidate/u);
 		await writeFile(lock, lockBytes.replace("abc", "def"));

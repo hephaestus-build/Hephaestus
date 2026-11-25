@@ -801,8 +801,8 @@ They protect the public API, vocabulary, and portable download format.
 | `reference-model` | Before grading, pin the reference local model selected by the capacity benchmark ([#4949](https://github.com/hephaestus-build/Hephaestus/issues/4949)). |
 | `rubric-judge` | Before grading, pin the rubric judge from a different model family ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)). |
 | `judge-spot-check-rule` | Before grading, record how the release owner selects the sample of grades to check ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)). |
-| `release-evaluation` | Report the candidate's release evaluation ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)) with the required-problem case ([#4983](https://github.com/hephaestus-build/Hephaestus/issues/4983)). Record the human spot-check results, including disagreements with the judge. |
-| `contact-simulation` | One contact simulation report from the candidate source. The exact contact timing and frequency counts show no regression ([#4959](https://github.com/hephaestus-build/Hephaestus/issues/4959)). |
+| `release-evaluation` | The candidate's release evaluation cases ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)) pass on the pinned reference local model. Include the required-problem case ([#4983](https://github.com/hephaestus-build/Hephaestus/issues/4983)). Record the human spot-check results, including disagreements with the judge. |
+| `contact-simulation` | One contact simulation from the candidate source shows zero hard-rule breaches. The exact contact timing and frequency counts show no regression ([#4959](https://github.com/hephaestus-build/Hephaestus/issues/4959)). |
 | `restore-and-recovery` | Passing restore and journal replay drills on the candidate ([#4968](https://github.com/hephaestus-build/Hephaestus/issues/4968), [#5012](https://github.com/hephaestus-build/Hephaestus/issues/5012)). Run the stopped-migration drill with background provider access verification ([#5023](https://github.com/hephaestus-build/Hephaestus/issues/5023)). Run the external-effect restore and failover drill on the packaged candidate ([#5026](https://github.com/hephaestus-build/Hephaestus/issues/5026)). Run the packaged Slack recovery check ([#4975](https://github.com/hephaestus-build/Hephaestus/issues/4975)). |
 | `upgrade` | A maintainer's upgrade from seeded 1.0.0-rc.1 to the candidate. Follow the [upgrade guide](/admin/upgrade-to-1-0), record every deviation, and include the guide completeness check for all 1.0 changesets ([#5024](https://github.com/hephaestus-build/Hephaestus/issues/5024)). |
 | `red-team` | A red-team run on the packaged candidate by someone who did not design the boundaries. Use the canary detectors ([#4897](https://github.com/hephaestus-build/Hephaestus/issues/4897)). Try to read another person's data, leak private content into a comment on the work, hide a Major problem, and inject instructions through repository content. No canary escapes. |
@@ -816,6 +816,7 @@ They protect the public API, vocabulary, and portable download format.
 
 Sign with an SSH signing key in [the release signer list](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/release-check-signers).
 A reviewed change on `main` updates the list before the candidate is cut.
+Register the key as a GitHub SSH signing key on the same account. That account must have admin permission on the repository.
 
 Download and [verify the candidate's joint lock](/admin/release-image-lock) before you record its digest.
 The signed lock pins the source commit, images, and chart used for qualification.
@@ -830,13 +831,7 @@ Set `signing_key` to the path of your SSH signing key.
 ssh-keygen -Y sign -f "$signing_key" -n hephaestus-release-check release-plan.json
 ```
 
-From a checkout of the candidate source, verify the completed plan against the verified joint lock.
-Use this command with the plan and signature from the published release to check the evidence again.
-
-```bash
-node scripts/verify-release-check.ts "$candidate" "release-${candidate}.chart.json" \
-  release-plan.json release-plan.json.sig
-```
+[Verify the completed plan](#verify-the-10-release-plan) before you send it.
 
 Send the signed files as workflow inputs. Reading them with `--rawfile` preserves the signed bytes.
 
@@ -848,7 +843,25 @@ jq -n --arg candidate "$candidate" \
 ```
 
 The workflow verifies the maintainer's signature and the candidate lock digest before it creates a stable draft.
+It stops if GitHub cannot confirm the signer's admin permission or signing key.
 It retains the plan and signature with the published release. If the candidate changes, check the new package and sign a new plan.
+
+#### Verify the 1.0 release plan
+
+To verify published evidence, download `release-plan.json` and `release-plan.json.sig` from the 1.0.0 release.
+Set `candidate` to the tag in the plan.
+[Verify the candidate's joint lock](/admin/release-image-lock#independent-verification) and check out the source commit it records.
+Run these commands with the lock, plan, and signature in the checkout directory.
+
+```bash
+sha256sum "release-${candidate}.chart.json"
+ssh-keygen -Y verify -f .github/release-check-signers \
+  -I "$(jq -er '.signer' release-plan.json)" -n hephaestus-release-check \
+  -s release-plan.json.sig < release-plan.json
+```
+
+The SHA-256 printed by the first command must equal the plan's `lockDigest` after the `sha256:` prefix.
+The second command must print a good signature for the signer in the plan.
 
 ## Deploys
 
