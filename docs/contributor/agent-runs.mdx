@@ -544,6 +544,7 @@ This section gives the mechanism for runs.
   The call's ledger row opens under the run's lock, which a call can wait for while a narrowing commits.
   So the ledger checks again there (`AgentRuns.requireCurrentUnder`): with the lock held, it holds the workspace's generation with `FOR SHARE` and compares it with the run's stamp.
   A narrowing either committed before and refuses the call, or waits until the row is open.
+  A person's AI choice has no generation, so the proxy asks the live choice again once the row is open, and a choice that changed during the wait refuses the call as `AI_CHOICE`.
 - Every send to someone other than the owner is an outbox action, so the send boundary sits in the outbox's write fence ([Outbox](./outbox.mdx#the-lease-and-the-fence)).
 - `authority_refused_total` counts each refusal by boundary and reason.
 

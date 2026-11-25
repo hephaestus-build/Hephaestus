@@ -599,6 +599,13 @@ class LlmProxyService {
                     return refusal(HttpStatus.CONFLICT, narrowed, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
                 }
                 row.sending(credential.upstreamModelId());
+                // Opening the row can wait for the run's lock. A person's AI choice that changed meanwhile, such as a
+                // review subject who turned AI off, refuses the call before it leaves.
+                if (!requestPolicy.allows(routing)) {
+                    row.answeredWithError();
+                    permit.released();
+                    return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                }
             } catch (ProxyCallLedger.ClaimLost lost) {
                 permit.released();
                 return refusal(
