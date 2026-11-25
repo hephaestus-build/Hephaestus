@@ -218,7 +218,10 @@ void describe("ci-contract: merge-queue", () => {
 			const jobs = callee.get("jobs");
 			assert.ok(isMap(jobs));
 			for (const entry of jobs.items) {
-				const condition = isMap(entry.value) ? String(entry.value.get("if")) : "";
+				if (!isMap(entry.value)) {
+					continue;
+				}
+				const condition = String(entry.value.get("if"));
 				if (/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(condition)) {
 					const name = `${caller} / ${String(entry.value.get("name"))}`;
 					guarded.push(String(entry.key));
