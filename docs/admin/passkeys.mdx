@@ -53,7 +53,8 @@ It ends when an admin disconnects the client or when the client's refresh token 
 It also ends when the account's passkeys or sessions change, or when the client goes unused for 90 days.
 A refresh ends it when the account is no longer an admin of the workspace.
 
-It never covers instance administration, and an account in passkey recovery cannot approve a client.
+An instance admin who is an admin or owner of the workspace can approve a client in the same way.
+The confirmation never covers instance administration, and an account in passkey recovery cannot approve a client.
 
 After `adminMaxAge`, the admin verifies a passkey again, and the session continues.
 High-risk admin operations need a verification within the last five minutes, except under an MCP client grant as described above.

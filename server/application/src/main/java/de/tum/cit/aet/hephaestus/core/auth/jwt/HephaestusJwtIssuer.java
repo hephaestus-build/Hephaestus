@@ -179,8 +179,8 @@ public class HephaestusJwtIssuer {
         if (mcp == null) {
             claims.audience(List.of(properties.audience())).claim("roles", List.copyOf(principal.roles()));
         } else {
-            // An MCP token reaches one workspace endpoint and nothing else: no web-app audience, so the REST
-            // decoder refuses it, and no roles, so instance-admin elevation cannot happen on its path.
+            // An MCP token reaches one workspace endpoint and nothing else: a scope claim and no web-app audience,
+            // so the REST decoder refuses it, and no roles, so instance-admin elevation cannot happen on its path.
             claims.audience(List.of(mcp.resource())).claim("scope", mcp.scope());
         }
         if (sessionExpiresAt != null) {

@@ -23,10 +23,7 @@ export interface McpConsentRequestView {
 	passkeyRequired: boolean;
 }
 
-export type McpConsentRefusal =
-	| "NOT_ADMIN"
-	| "PASSKEY_RECOVERY_PENDING"
-	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
+export type McpConsentRefusal = "NOT_ADMIN" | "PASSKEY_RECOVERY_PENDING";
 
 /**
  * The passkey confirmation that Allow runs first when the request needs one: `confirm` asks for the
@@ -75,8 +72,6 @@ const REFUSALS: Record<McpConsentRefusal, string> = {
 	NOT_ADMIN: "You are not an admin of this workspace. Only an admin or owner can connect a client.",
 	PASSKEY_RECOVERY_PENDING:
 		"Your passkey recovery is not finished. Finish it in your passkey settings, then connect the client again.",
-	INSTANCE_ADMIN_PASSKEY_REQUIRED:
-		"This instance requires a passkey from its instance admins, and an instance admin’s passkey is never lent to a client. Connect the client with an account that is not an instance admin.",
 };
 
 const INVALID: Record<McpAuthorizationError, string> = {

@@ -3515,10 +3515,7 @@ export type McpConsentRequest = {
 	workspaceSlug: string;
 };
 
-export type McpConsentRequestMcpConsentRefusal =
-	| "NOT_ADMIN"
-	| "PASSKEY_RECOVERY_PENDING"
-	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
+export type McpConsentRequestMcpConsentRefusal = "NOT_ADMIN" | "PASSKEY_RECOVERY_PENDING";
 
 /**
  * An error response of the token endpoint (RFC 6749 § 5.2).

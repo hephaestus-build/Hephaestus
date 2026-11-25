@@ -61,7 +61,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
             assignment("core.auth.mcp.McpAuthorizationConformanceIntegrationTest", "dev-login"),
-            assignment("core.auth.mcp.McpPasskeyConsentIntegrationTest", "dev-login"),
+            assignment("core.auth.mcp.McpPasskeyConsentIntegrationTest", "required-passkeys"),
+            assignment("core.auth.mcp.McpTokenRestRefusalIntegrationTest", "mcp-audience-overlap"),
             assignment("practices.mcp.McpPracticeToolsIntegrationTest", "dev-login"),
             assignment("practices.mcp.McpWriteToolsIntegrationTest", "dev-login"),
             assignment("core.auth.webauthn.PasskeyLifecycleIntegrationTest", "required-passkeys"),
@@ -179,6 +180,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real cookie and installed-client sign-in with the production consent" + " interceptor enabled"),
             Map.entry("dev-login", "dev-login feature-property behavior"),
             Map.entry(
+                    "mcp-audience-overlap",
+                    "a web-app audience equal to one workspace's MCP resource, to prove that the REST API refuses MCP"
+                            + " client tokens by their claims"),
+            Map.entry(
                     "email-capture",
                     "shared configured sender identity and captured SMTP boundary for"
                             + " durable delivery and HTTP authorization"),
@@ -224,7 +229,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real signed browser and installed-client tokens with configured research consent, unconditional fresh-passkey authorization, and persisted disclosure fixtures"),
             Map.entry(
                     "required-passkeys",
-                    "mandatory instance-admin policy with real signed cookies, WebAuthn signatures, and database-backed recovery"),
+                    "mandatory instance-admin policy with real signed cookies, WebAuthn signatures, database-backed recovery,"
+                            + " and MCP consent by dev-login accounts"),
             Map.entry(
                     "review-disabled-integrations",
                     "persisted mixed-provider history and real timing reads with Slack and Outline adapters disabled"),
@@ -360,6 +366,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.auth.dev.DevLoginIntegrationTest",
             "core.auth.mcp.McpAuthorizationConformanceIntegrationTest",
             "core.auth.mcp.McpPasskeyConsentIntegrationTest",
+            "core.auth.mcp.McpTokenRestRefusalIntegrationTest",
             "practices.mcp.McpPracticeToolsIntegrationTest",
             "practices.mcp.McpWriteToolsIntegrationTest",
             "integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest",

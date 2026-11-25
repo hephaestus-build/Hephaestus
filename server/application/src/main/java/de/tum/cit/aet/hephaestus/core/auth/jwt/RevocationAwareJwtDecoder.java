@@ -125,10 +125,19 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
         return nimbus;
     }
 
-    /** The web app's audience: the REST API refuses every token that does not name it. */
+    /**
+     * The web app's token: the REST API refuses every token that does not name the web app's audience, and every MCP
+     * client token. An MCP token is the only one with a {@code scope} claim, so the REST API refuses it by that claim
+     * whatever audiences the deployment configures (ADR 0110 update of 2026-11-25).
+     */
     private static OAuth2TokenValidator<Jwt> webAppAudience(AuthProperties properties) {
-        return new JwtClaimValidator<List<String>>(
+        OAuth2TokenValidator<Jwt> audience = new JwtClaimValidator<List<String>>(
                 JwtClaimNames.AUD, aud -> aud != null && aud.contains(properties.audience()));
+        OAuth2TokenValidator<Jwt> notMcp = jwt -> jwt.hasClaim("scope")
+                ? OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        OAuth2ErrorCodes.INVALID_TOKEN, "an MCP client token never reaches the REST API", null))
+                : OAuth2TokenValidatorResult.success();
+        return new DelegatingOAuth2TokenValidator<>(audience, notMcp);
     }
 
     private static OAuth2TokenValidator<Jwt> buildValidator(

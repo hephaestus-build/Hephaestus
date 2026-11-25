@@ -62,9 +62,6 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         if (account.isPasskeyRecoveryRequired()) {
             return McpConsentProof.REFUSED_RECOVERY_PENDING;
         }
-        if (instanceAdminNeedsProof(account, false)) {
-            return McpConsentProof.REFUSED_INSTANCE_ADMIN;
-        }
         return needsProof(account, false, true, workspaceRequired) ? McpConsentProof.PASSKEY : McpConsentProof.NONE;
     }
 
@@ -77,20 +74,17 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
     private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
         return account.isPasskeyProtectionEnabled()
                 || account.isPasskeyRecoveryRequired()
-                || instanceAdminNeedsProof(account, instanceAdmin)
+                || ((instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
+                        && properties.instanceAdminRequired())
                 || (workspace && (workspaceRequired || properties.workspaceAdminRequired()));
-    }
-
-    private boolean instanceAdminNeedsProof(Account account, boolean instanceAdmin) {
-        return (instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
-                && properties.instanceAdminRequired();
     }
 
     /**
      * Whether this call comes from an MCP client whose grant holds a passkey proof. The account confirmed with a passkey
      * when it approved the client (ADR 0110 decision 8), so the proof stands for the grant's admin work in its one
      * workspace while the grant lives, as a trusted device does. The grant ends when it is revoked, when its refresh
-     * secret is reused, or when it goes unused for 90 days.
+     * secret is reused, or when it goes unused for 90 days. An instance admin's grant holds the same proof for the same
+     * work (ADR 0110 update of 2026-11-25); it never stands for instance administration or for elevation.
      */
     private boolean delegatedProofHolds(Jwt jwt) {
         return jwt.hasClaim("sid")
@@ -128,7 +122,7 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
             return;
         }
         boolean proven = verified(authentication, sensitive ? auth.stepUpMaxAge() : properties.adminMaxAge())
-                || (workspace && !instanceAdminNeedsProof(account, instanceAdmin) && delegatedProofHolds(jwt));
+                || (workspace && !instanceAdmin && delegatedProofHolds(jwt));
         if (account.isPasskeyRecoveryRequired() || !proven) {
             events.required(Objects.requireNonNull(account.getId()));
             throw new PasskeyRequiredException();

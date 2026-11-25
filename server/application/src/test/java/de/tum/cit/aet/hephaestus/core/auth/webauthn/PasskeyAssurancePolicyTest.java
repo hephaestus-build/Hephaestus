@@ -326,13 +326,25 @@ class PasskeyAssurancePolicyTest {
                 .isInstanceOf(PasskeyRequiredException.class);
     }
 
+    /** An instance admin's grant holds the same proof as any admin's, for the workspace work of a real membership. */
     @Test
-    void shouldNeverLetAGrantsPasskeyProofStandForAnInstanceAdminOrARecovery() {
+    void shouldAcceptAnInstanceAdminsMcpCallWhoseGrantHoldsAPasskeyProof() {
+        SecurityContextHolder.getContext().setAuthentication(mcpClient());
+        onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, NOW));
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+
+        policy(true, false).requireWorkspaceAdmin(true, false, true);
+    }
+
+    @Test
+    void shouldNeverLetAGrantsPasskeyProofStandForInstanceAdministrationElevationOrARecovery() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
         onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, NOW));
         PasskeyAssurancePolicy instance = policy(true, false);
         account.setAppRole(Account.AppRole.APP_ADMIN);
-        assertThatThrownBy(() -> instance.requireWorkspaceAdmin(true, false, false))
+        assertThatThrownBy(() -> instance.requireInstanceAdmin(mcpClient(), false))
+                .isInstanceOf(PasskeyRequiredException.class);
+        assertThatThrownBy(() -> instance.requireWorkspaceAdmin(true, true, false))
                 .isInstanceOf(PasskeyRequiredException.class);
 
         account.setAppRole(Account.AppRole.USER);
@@ -353,8 +365,7 @@ class PasskeyAssurancePolicyTest {
 
         PasskeyAssurancePolicy instance = policy(true, false);
         account.setAppRole(Account.AppRole.APP_ADMIN);
-        assertThat(instance.mcpConsentProof(42L, true))
-                .isEqualTo(AdminPasskeyAccess.McpConsentProof.REFUSED_INSTANCE_ADMIN);
+        assertThat(instance.mcpConsentProof(42L, false)).isEqualTo(AdminPasskeyAccess.McpConsentProof.PASSKEY);
 
         account.setPasskeyRecoveryRequired(true);
         assertThat(instance.mcpConsentProof(42L, true))

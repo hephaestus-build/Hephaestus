@@ -40,6 +40,5 @@ public record McpConsentRequestDTO(
     public enum McpConsentRefusal {
         NOT_ADMIN,
         PASSKEY_RECOVERY_PENDING,
-        INSTANCE_ADMIN_PASSKEY_REQUIRED,
     }
 }
