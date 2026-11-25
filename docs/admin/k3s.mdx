@@ -42,6 +42,21 @@ Set the host and provider firewalls to drop packets sent to blocked ports.
 Container port forwarding can bypass host input rules.
 Verify the public ports from a network outside the admin VPN and the hosting provider's private network.
 
+### Set reverse-path filtering
+
+Set IPv4 reverse-path filtering to strict mode (`rp_filter=1`) on the public interface.
+Linux uses the greater of the public interface value and `net.ipv4.conf.all.rp_filter`.
+A global value of 2 overrides the public interface setting.
+If the global value is 2, keep the current effective values on other interfaces before you set the global value to 0.
+
+Record the settings in a file such as `/etc/sysctl.d/99-hephaestus-public-rp-filter.conf`.
+Replace `eth0` with your public interface:
+
+```ini
+net/ipv4/conf/all/rp_filter = 0
+net/ipv4/conf/eth0/rp_filter = 1
+```
+
 ### Check the policy with UFW
 
 Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
@@ -69,15 +84,37 @@ Replace the example addresses with your VPN networks and the addresses of your m
 For each source, include only the IP families it uses.
 Use an empty `monitoringAddresses` list if the k3s Pod network already allows your scraper.
 Set `k3s` for a host with the default k3s interfaces, and set `http3` for a proxy that serves HTTP/3.
+Set `publicInterface` to your public IPv4 interface.
+With no `publicInterface` value, the check requires one interface on the IPv4 default route.
 
 ```json
 {
   "sshVpnCidrs": ["192.0.2.0/24", "2001:db8:1::/64"],
   "monitoringAddresses": ["198.51.100.4", "2001:db8:2::4"],
   "k3s": true,
-  "http3": false
+  "http3": false,
+  "publicInterface": "eth0"
 }
 ```
+
+Use separate UFW rules for the two TCP web ports.
+Run each source rule once for each listed VPN range or monitoring address.
+Replace the source placeholders before you run the commands.
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default deny routed
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from <vpn-range> to any port 22 proto tcp
+sudo ufw allow from <monitoring-address> to any port 9100 proto tcp
+sudo ufw allow in on cni0
+sudo ufw allow in on flannel.1
+```
+
+Add `sudo ufw allow 443/udp` if the proxy serves HTTP/3.
+Use the `cni0` and `flannel.1` rules on the k3s host only.
 
 Run the policy check on the host:
 

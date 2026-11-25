@@ -18,8 +18,8 @@ ${ports.join("\n")}
 </nmaprun>`;
 }
 
-function port(protocol: "tcp" | "udp", number: number, state = "open") {
-	return `<port protocol="${protocol}" portid="${number}"><state state="${state}" reason="response"/></port>`;
+function port(protocol: "tcp" | "udp", number: number, state = "open", reason = "response") {
+	return `<port protocol="${protocol}" portid="${number}"><state state="${state}" reason="${reason}"/></port>`;
 }
 
 const online = { expectedOnline: true, http3: false };
@@ -61,6 +61,31 @@ void test("accepts UDP 443 only for an HTTP/3 target", () => {
 	assert.deepEqual(assessScan(scan, online).unexpected, ["443/udp"]);
 	assert.deepEqual(assessScan(scan, down).unexpected, ["443/udp"]);
 	assert.deepEqual(assessScan(scan, { ...online, http3: true }).unexpected, []);
+});
+
+void test("ICMP prohibition is a reply even when Nmap reports the port as filtered", () => {
+	const denied = port("udp", 8472, "filtered", "admin-prohibited");
+	const silent = port("tcp", 6443, "filtered", "no-response");
+	const deniedV6 = port("tcp", 10_250, "filtered", "icmp6-adm-prohibited");
+	assert.deepEqual(assessScan(report([denied, silent, deniedV6]), down).unexpected, [
+		"8472/udp",
+		"10250/tcp",
+	]);
+	const grouped = report([]).replace(
+		"</extraports>",
+		'<extrareasons reason="no-response" count="131069"/><extrareasons reason="admin-prohibited" count="1"/></extraports>',
+	);
+	assert.equal(assessScan(grouped, down).hiddenReplies, true);
+	assert.equal(
+		assessScan(
+			report([]).replace(
+				"</extraports>",
+				'<extrareasons reason="no-response" count="131070"/></extraports>',
+			),
+			down,
+		).hiddenReplies,
+		false,
+	);
 });
 
 void test("a complete silent scan passes only for a host marked down", () => {

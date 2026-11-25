@@ -6,6 +6,17 @@ import { output } from "./lib/process.ts";
 const publicPorts = new Set(["80/tcp", "443/tcp"]);
 const respondingStates = new Set(["open", "closed", "unfiltered"]);
 
+function responseReason(attributes: string) {
+	return /(?:^|\s)reason="(?<reason>[^"]+)"/u.exec(attributes)?.groups?.reason;
+}
+
+function answered(state: string, reason?: string) {
+	return (
+		respondingStates.has(state) ||
+		(state === "filtered" && reason !== undefined && reason !== "no-response")
+	);
+}
+
 interface Target {
 	addresses: [string, string];
 	expectedOnline: boolean;
@@ -59,16 +70,26 @@ export function assessScan(report: string, { expectedOnline, http3 }: Omit<Targe
 	).toSorted((left, right) => left.localeCompare(right));
 	const ports = Array.from(
 		report.matchAll(
-			/<port protocol="(?<protocol>tcp|udp)" portid="(?<port>\d+)">\s*<state state="(?<state>[^"]+)"/gu,
+			/<port protocol="(?<protocol>tcp|udp)" portid="(?<port>\d+)">\s*<state state="(?<state>[^"]+)"(?<attributes>[^>]*)>/gu,
 		),
 		({ groups }) => ({
 			port: `${groups?.port ?? ""}/${groups?.protocol ?? ""}`,
 			state: groups?.state ?? "",
+			reason: responseReason(groups?.attributes ?? ""),
 		}),
 	);
 	const elided = Array.from(
-		report.matchAll(/<extraports state="(?<state>[^"]+)" count="(?<count>\d+)"/gu),
-		({ groups }) => ({ state: groups?.state ?? "", count: Number(groups?.count) }),
+		report.matchAll(
+			/<extraports state="(?<state>[^"]+)" count="(?<count>\d+)"\s*(?:\/>|>(?<reasons>[\s\S]*?)<\/extraports>)/gu,
+		),
+		({ groups }) => ({
+			state: groups?.state ?? "",
+			count: Number(groups?.count),
+			reasons: Array.from(
+				(groups?.reasons ?? "").matchAll(/<extrareasons (?<attributes>[^>]*)>/gu),
+				({ groups: reason }) => responseReason(reason?.attributes ?? ""),
+			),
+		}),
 	);
 	const total = ports.length + elided.reduce((sum, group) => sum + group.count, 0);
 	if (
@@ -80,8 +101,10 @@ export function assessScan(report: string, { expectedOnline, http3 }: Omit<Targe
 	) {
 		throw new Error("The probe did not produce a complete TCP and UDP result.");
 	}
-	const responding = ports.filter(({ state }) => respondingStates.has(state));
-	const hiddenReplies = elided.some(({ state }) => respondingStates.has(state));
+	const responding = ports.filter(({ state, reason }) => answered(state, reason));
+	const hiddenReplies = elided.some(
+		({ state, reasons }) => answered(state) || reasons.some((reason) => answered(state, reason)),
+	);
 	const reachable = responding.length > 0 || hiddenReplies;
 	if (!reachable && expectedOnline) {
 		throw new Error("The address did not answer on either protocol.");

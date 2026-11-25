@@ -15,6 +15,7 @@ interface Rule {
 
 type DriftReason =
 	| "netfilter_persistent"
+	| "reverse_path_filter"
 	| "ipv6_disabled"
 	| "boot_disabled"
 	| "default_policy"
@@ -141,10 +142,13 @@ export function rulesFor(config: unknown): Rule[] {
 		!("http3" in config) ||
 		typeof config.k3s !== "boolean" ||
 		typeof config.http3 !== "boolean" ||
-		Object.keys(config).length !== 4
+		Object.keys(config).some(
+			(key) =>
+				!["sshVpnCidrs", "monitoringAddresses", "k3s", "http3", "publicInterface"].includes(key),
+		)
 	) {
 		throw new Error(
-			"Use sshVpnCidrs, monitoringAddresses, k3s and http3 in the firewall configuration.",
+			"Use sshVpnCidrs, monitoringAddresses, k3s, http3 and optional publicInterface in the firewall configuration.",
 		);
 	}
 	const ssh = sources(config.sshVpnCidrs, "sshVpnCidrs", true);
@@ -156,6 +160,43 @@ export function rulesFor(config: unknown): Rule[] {
 		{ port: 443, protocol: "tcp" },
 		...(config.http3 ? [{ port: 443, protocol: "udp" as const }] : []),
 		...(config.k3s ? [{ device: "cni0" }, { device: "flannel.1" }] : []),
+	];
+}
+
+export function publicInterface(config: unknown, defaultRoute: () => string) {
+	const names =
+		typeof config === "object" && config !== null && "publicInterface" in config
+			? [config.publicInterface]
+			: [
+					...new Set(
+						Array.from(
+							defaultRoute().matchAll(/\bdev (?<name>\S+)/gu),
+							(match) => match.groups?.name,
+						),
+					),
+				];
+	const [name] = names;
+	if (
+		names.length !== 1 ||
+		typeof name !== "string" ||
+		!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/u.test(name) ||
+		["all", "default", "lo", "cni0", "flannel.1"].includes(name)
+	) {
+		throw new Error("Set publicInterface to the public IPv4 interface name.");
+	}
+	return name;
+}
+
+export function reversePathDrift(all: string, device: string): Problem[] {
+	if (["0", "1"].includes(all.trim()) && device.trim() === "1") {
+		return [];
+	}
+	return [
+		{
+			reason: "reverse_path_filter",
+			message:
+				"Set strict IPv4 reverse-path filtering on the public interface. The global value must be 0 or 1.",
+		},
 	];
 }
 
@@ -480,11 +521,22 @@ export function settingsDrift(configuration: string, ufwConfig: string, unit: st
 	return problems;
 }
 
-function drift(rules: Rule[]): Problem[] {
+function drift(config: unknown): Problem[] {
+	const rules = rulesFor(config);
+	const device = publicInterface(config, () =>
+		run("/usr/sbin/ip", ["-o", "-4", "route", "show", "default"]),
+	);
+	const knobs = "/proc/sys/net/ipv4/conf";
 	const problems = settingsDrift(
 		readFileSync(ufwDefaults, "utf8"),
 		readFileSync(ufwFiles["ufw.conf"], "utf8"),
 		unitState("ufw.service", "UnitFileState"),
+	);
+	problems.push(
+		...reversePathDrift(
+			readFileSync(`${knobs}/all/rp_filter`, "utf8"),
+			readFileSync(`${knobs}/${device}/rp_filter`, "utf8"),
+		),
 	);
 	const snapshot = snapshotDrift();
 	if (snapshot !== null) {
@@ -539,7 +591,7 @@ function reportPolicyStatus(config: string, metrics: string) {
 	}
 	let problems: Problem[];
 	try {
-		problems = drift(rulesFor(readConfig(config)));
+		problems = drift(readConfig(config));
 	} catch (error) {
 		problems = [
 			{
@@ -593,7 +645,7 @@ function main() {
 		reportPolicyStatus(config, values.report);
 		return;
 	}
-	const problems = drift(rulesFor(readConfig(config)));
+	const problems = drift(readConfig(config));
 	if (problems.length > 0) {
 		throw new Error(problems.map(({ message }) => message).join("\n"));
 	}

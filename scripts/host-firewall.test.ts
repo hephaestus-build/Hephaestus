@@ -4,7 +4,9 @@ import { test } from "node:test";
 import {
 	conflictingSnapshot,
 	liveDrift,
+	publicInterface,
 	renderPolicyMetrics,
+	reversePathDrift,
 	rulesFor,
 	savedDrift,
 	settingsDrift,
@@ -222,6 +224,34 @@ void test("reports unrestricted Pod and Service source rules as drift", () => {
 		]);
 		assert.equal(savedDrift([...savedK3sV4, unscoped].join("\n"), 4, rules), true);
 	}
+});
+
+void test("requires effective strict reverse-path filtering for the public interface", () => {
+	assert.equal(
+		publicInterface({ publicInterface: "eth0" }, () => ""),
+		"eth0",
+	);
+	assert.equal(
+		publicInterface({}, () => "default via 192.0.2.1 dev eth0 proto static"),
+		"eth0",
+	);
+	assert.throws(() => publicInterface({}, () => "default dev eth0\ndefault dev eth1"));
+	assert.throws(() => publicInterface({ publicInterface: "../all" }, () => ""));
+	assert.throws(() => publicInterface({ publicInterface: "cni0" }, () => ""));
+
+	for (const [global, device] of [
+		["2", "1"],
+		["0", "2"],
+		["0", "0"],
+		["1", "2"],
+	] as const) {
+		assert.deepEqual(
+			reversePathDrift(global, device).map(({ reason }) => reason),
+			["reverse_path_filter"],
+		);
+	}
+	assert.deepEqual(reversePathDrift("0\n", "1\n"), []);
+	assert.deepEqual(reversePathDrift("1", "1"), []);
 });
 
 void test("reports denies before required input rules and allows stock invalid-packet drops", () => {
