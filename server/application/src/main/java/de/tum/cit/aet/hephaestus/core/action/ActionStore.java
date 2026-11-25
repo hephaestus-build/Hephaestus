@@ -216,8 +216,18 @@ class ActionStore {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public WriteAdmission beginWrite(Claim claim, Duration margin) {
+        return admit(claim, margin, true);
+    }
+
+    /** Admits a write that only removes content: no narrowing of authority blocks it ({@link ActionAttempt.Fence}). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public WriteAdmission beginRemoval(Claim claim, Duration margin) {
+        return admit(claim, margin, false);
+    }
+
+    private WriteAdmission admit(Claim claim, Duration margin, boolean checkAuthority) {
         Long workspace = claim.workspaceId();
-        if (workspace != null) {
+        if (checkAuthority && workspace != null) {
             OptionalLong held = generations.workspaceHeld(workspace);
             if (held.isEmpty() || held.getAsLong() != claim.stamp().workspace())
                 return WriteAdmission.AUTHORITY_CHANGED;
@@ -283,8 +293,7 @@ class ActionStore {
                 row.getNextAttemptAt(),
                 reason == null ? null : ActionStopReason.valueOf(reason),
                 row.getCreatedAt(),
-                row.getUpdatedAt(),
-                new AuthorizationStamp(row.getStampedGeneration()));
+                row.getUpdatedAt());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

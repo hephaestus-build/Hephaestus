@@ -21,11 +21,13 @@ public interface AuthorityGenerations {
      * transaction. A narrowing that commits after the read makes the stamp stale, so the work is refused at its next
      * boundary, also when {@code access} still saw the old authority.
      *
-     * @return the authority that {@code access} granted; empty when it refused
+     * @return the authority that {@code access} granted; empty when it refused, or when the workspace no longer
+     *     exists, which {@code access} is then not asked about
      */
     default Optional<CheckedAuthority> authorize(long workspaceId, BooleanSupplier access) {
-        var stamp = new AuthorizationStamp(workspace(workspaceId)
-                .orElseThrow(() -> new IllegalStateException("Work belongs to a workspace that exists")));
+        OptionalLong generation = workspace(workspaceId);
+        if (generation.isEmpty()) return Optional.empty();
+        var stamp = new AuthorizationStamp(generation.getAsLong());
         return access.getAsBoolean() ? Optional.of(new CheckedAuthority(workspaceId, stamp)) : Optional.empty();
     }
 
@@ -34,7 +36,8 @@ public interface AuthorityGenerations {
      * review that an event selected. A caller that checks access passes its check to {@link #authorize} instead.
      */
     default CheckedAuthority requestedNow(long workspaceId) {
-        return authorize(workspaceId, () -> true).orElseThrow();
+        return authorize(workspaceId, () -> true)
+                .orElseThrow(() -> new IllegalStateException("Work belongs to a workspace that exists"));
     }
 
     /**

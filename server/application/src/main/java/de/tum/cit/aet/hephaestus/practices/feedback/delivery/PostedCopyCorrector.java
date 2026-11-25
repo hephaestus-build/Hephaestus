@@ -47,7 +47,10 @@ public class PostedCopyCorrector {
             boolean remove = visibility.withdrawn(workspaceId, feedbackId)
                     || copies.incorrectCopyIds(workspaceId, feedbackId).contains(copy.getId());
             if (remove == (copy.getState() == FeedbackCopyState.RETRACTED)) continue;
-            if (!owner.fence().beginWrite() || !transactions.admitCorrection(workspaceId, feedbackId, owner)) return;
+            // A removal goes out whatever happened to the workspace's access; a restore adds content back.
+            boolean begun =
+                    remove ? owner.fence().beginRemoval() : owner.fence().beginWrite();
+            if (!begun || !transactions.admitCorrection(workspaceId, feedbackId, owner)) return;
             if (!remove) {
                 if (restoreAllowed == null) restoreAllowed = transactions.mayRestore(workspaceId, feedbackId, owner);
                 if (!restoreAllowed) continue;

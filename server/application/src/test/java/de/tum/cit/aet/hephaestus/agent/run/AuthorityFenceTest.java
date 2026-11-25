@@ -32,10 +32,16 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -85,6 +91,9 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private AgentRuns agentRuns;
+
+    @Autowired
+    private DataSource dataSource;
 
     private Workspace workspace;
     private long asker;
@@ -170,24 +179,57 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldMakeANarrowingWaitWhileAWriteIsAdmittedUnderTheGeneration() {
-        new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            assertThat(generations.workspaceHeld(workspace.getId())).hasValue(generation());
+    void shouldMakeANarrowingWaitWhileTheSendsWriteIsAdmitted() throws Exception {
+        var claimed = new CountDownLatch(1);
+        var admit = new CountDownLatch(1);
+        var provider = new CopyOnWriteArrayList<UUID>();
+        var executor =
+                ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_NOTICE, attempt -> {
+                    claimed.countDown();
+                    awaitQuietly(admit);
+                    if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+                    provider.add(attempt.id());
+                    return new ActionResult.Done(null);
+                }));
+        UUID action = actions.enqueue(notice());
+        var sending = CompletableFuture.supplyAsync(() -> executor.runNow(action));
+        assertThat(claimed.await(10, TimeUnit.SECONDS)).isTrue();
 
-            assertThatThrownBy(
-                            () -> PostgreSQLTestContainer.ownerJdbc().execute("""
-                            DO $$ BEGIN
-                                SET LOCAL lock_timeout = '300ms';
-                                DELETE FROM membership WHERE workspace_id = %d AND account_id = %d;
-                            END $$""".formatted(workspace.getId(), asker)))
-                    .hasMessageContaining("lock timeout");
-        });
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM membership WHERE workspace_id = ? AND account_id = ?",
-                        Long.class,
-                        workspace.getId(),
-                        asker))
-                .isEqualTo(1);
+        try (var holder = dataSource.getConnection()) {
+            // The write admission now waits for this row lock while it holds the workspace's generation.
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT 1 FROM agent_action WHERE id = ? FOR UPDATE")) {
+                lock.setObject(1, action);
+                lock.executeQuery().close();
+            }
+            admit.countDown();
+            awaitLockWaiter();
+
+            assertThatThrownBy(() -> narrowWithin("300ms")).hasMessageContaining("lock timeout");
+            holder.rollback();
+        }
+
+        assertThat(sending.get(10, TimeUnit.SECONDS)).contains(new ActionResult.Done(null));
+        assertThat(provider).containsExactly(action);
+    }
+
+    @Test
+    void shouldSendARemovalButRefuseAWriteAfterTheMemberLeft() {
+        var removed = new CopyOnWriteArrayList<UUID>();
+        var remover =
+                ActionTestSupport.withAdapter(context, ActionTestSupport.adapter(ActionKind.SLACK_NOTICE, attempt -> {
+                    if (!attempt.fence().beginRemoval()) return new ActionResult.Abandoned();
+                    removed.add(attempt.id());
+                    return new ActionResult.Done(null);
+                }));
+        UUID removal = actions.enqueue(notice());
+        UUID write = actions.enqueue(notice());
+        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+
+        assertThat(remover.runNow(removal)).contains(new ActionResult.Done(null));
+        assertThat(removed).containsExactly(removal);
+        assertThat(sendingTo(new CopyOnWriteArrayList<>()).runNow(write))
+                .contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
     }
 
     @Test
@@ -202,20 +244,31 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRefuseAModelCallUnderTheRunsLockWhenTheMemberLeftWhileItWaited() {
+    void shouldRefuseAModelCallWhoseMemberLeftWhileItWaitedForTheRunsLock() throws Exception {
         AgentRunFence fence = fence(runningTurn());
-        // The narrowing commits while the call would still wait for the run's lock.
-        jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+        CompletableFuture<Void> dispatch;
+        try (var holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT 1 FROM agent_run WHERE id = ? FOR UPDATE")) {
+                lock.setObject(1, fence.runId());
+                lock.executeQuery().close();
+            }
+            // The call's ledger opens under the run's lock, and waits for it here.
+            dispatch = CompletableFuture.runAsync(() -> new TransactionTemplate(transactions)
+                    .executeWithoutResult(
+                            status -> agentRuns.requireCurrentUnder(fence, AuthorityBoundary.MODEL_DISPATCH)));
+            awaitLockWaiter();
+            jdbc.update("DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+            holder.rollback();
+        }
 
-        var refused = catchThrowableOfType(
-                AuthorityRefusedException.class,
-                () -> new TransactionTemplate(transactions)
-                        .executeWithoutResult(
-                                status -> agentRuns.requireCurrentUnder(fence, AuthorityBoundary.MODEL_DISPATCH)));
-
-        assertThat(refused.refusal())
-                .isEqualTo(new AuthorityRefusal(
-                        AuthorityBoundary.MODEL_DISPATCH, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED));
+        assertThatThrownBy(() -> dispatch.get(10, TimeUnit.SECONDS))
+                .hasCauseInstanceOf(AuthorityRefusedException.class)
+                .cause()
+                .satisfies(refused -> assertThat(((AuthorityRefusedException) refused).refusal())
+                        .isEqualTo(new AuthorityRefusal(
+                                AuthorityBoundary.MODEL_DISPATCH,
+                                AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
     }
 
     @Test
@@ -324,6 +377,35 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
                         workspace.getId(),
                         "conversation:" + UUID.randomUUID()))
                 .doesNotThrowAnyException();
+    }
+
+    /** Removes the member on another connection, waiting at most {@code timeout} for a lock. */
+    private void narrowWithin(String timeout) {
+        PostgreSQLTestContainer.ownerJdbc().execute("""
+                DO $$ BEGIN
+                    SET LOCAL lock_timeout = '%s';
+                    DELETE FROM membership WHERE workspace_id = %d AND account_id = %d;
+                END $$""".formatted(timeout, workspace.getId(), asker));
+    }
+
+    /** Waits until a statement of this database waits for a row lock. */
+    private void awaitLockWaiter() {
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(10))
+                .until(() -> Objects.requireNonNull(jdbc.queryForObject("""
+                                SELECT count(*) FROM pg_stat_activity
+                                WHERE datname = current_database() AND wait_event_type = 'Lock'
+                                """, Long.class)) > 0);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS))
+                throw new IllegalStateException("The test never released the latch");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
     }
 
     /** The executor with a recording fake in place of the Slack notice adapter: it records each write it starts. */

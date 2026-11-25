@@ -661,10 +661,12 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void requireCurrentUnder(AgentRunFence fence, AuthorityBoundary boundary) {
-        requireCurrent(fence);
+        if (runs.lockCurrent(fence.runId(), fence.workspaceId(), fence.epoch()).isEmpty())
+            throw new StaleRunException(fence);
         if (fence.workspaceId() == AgentRunRef.INSTANCE_SCOPE) return;
-        AuthorizationStamp stamp =
-                find(fence.run()).map(AgentRun::getAuthorizationStamp).orElseThrow(() -> new StaleRunException(fence));
+        AuthorizationStamp stamp = runs.findByRef(fence.runId(), fence.workspaceId())
+                .map(AgentRun::getAuthorizationStamp)
+                .orElseThrow(() -> new StaleRunException(fence));
         OptionalLong held = generations.workspaceHeld(fence.workspaceId());
         if (held.isEmpty() || held.getAsLong() != stamp.workspace())
             throw new AuthorityRefusedException(

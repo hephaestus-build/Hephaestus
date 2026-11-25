@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,7 +18,8 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
-import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -40,6 +43,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.UnchangedAuthority;
+import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -66,6 +71,8 @@ class FeedbackDecisionServiceTest {
     final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
     final FeedbackContentDigest digests = mock(FeedbackContentDigest.class);
     final FeedbackPublicationContext publication = mock(FeedbackPublicationContext.class);
+    final AuthorityGenerations generations = spy(new UnchangedAuthority());
+    final WorkspaceMemberships memberships = mock(WorkspaceMemberships.class);
     final Instant now = Instant.EPOCH;
     final UUID id = UUID.randomUUID();
     final FeedbackDecisionService service = new FeedbackDecisionService(
@@ -80,7 +87,8 @@ class FeedbackDecisionServiceTest {
             privacy,
             new FeedbackSendQueue(
                     actions,
-                    new UnchangedAuthority(),
+                    generations,
+                    memberships,
                     new ObjectMapper(),
                     copies,
                     mock(FeedbackVisibilityService.class),
@@ -91,6 +99,7 @@ class FeedbackDecisionServiceTest {
     @BeforeEach
     void setup() {
         when(privacy.holdForAccountWrite(anyLong())).thenReturn(true);
+        when(memberships.activeRole(1, 3)).thenReturn(Optional.of(WorkspaceRole.ADMIN));
         when(digests.current(1, id)).thenReturn(digest());
         row = Feedback.builder()
                 .id(id)
@@ -143,6 +152,27 @@ class FeedbackDecisionServiceTest {
         var capture = ArgumentCaptor.forClass(ActionRequest.class);
         verify(actions).enqueue(capture.capture());
         assertThat(capture.getValue().idempotencyKey()).isEqualTo("feedback:" + id + ":1:POST");
+    }
+
+    @Test
+    void shouldRefuseAnApprovalWhoseActorLostTheAdminRoleAfterTheRouteCheckedIt() {
+        // The route saw an admin; a downgrade committed before the decision's transaction checked the role.
+        when(memberships.activeRole(1, 3)).thenReturn(Optional.of(WorkspaceRole.MEMBER));
+
+        assertThatThrownBy(() -> service.decide(
+                        1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest())))
+                .isInstanceOf(AccessForbiddenException.class);
+        verify(actions, never()).enqueue(any());
+        verify(decisions, never()).save(any());
+    }
+
+    @Test
+    void shouldReadTheStampBeforeTheActorsRoleSoALaterDowngradeRefusesTheSend() {
+        service.decide(1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+
+        var order = inOrder(generations, memberships);
+        order.verify(generations).workspace(1);
+        order.verify(memberships).activeRole(1, 3);
     }
 
     @Test
@@ -253,8 +283,7 @@ class FeedbackDecisionServiceTest {
                         now,
                         null,
                         now,
-                        now,
-                        new AuthorizationStamp(0))));
+                        now)));
         when(copies.lockByFeedbackId(1, id))
                 .thenReturn(List.of(
                         FeedbackCopy.builder().state(FeedbackCopyState.POSTED).build()));

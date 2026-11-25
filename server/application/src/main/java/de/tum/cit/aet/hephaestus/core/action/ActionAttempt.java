@@ -35,5 +35,14 @@ public record ActionAttempt(
          * adapter then must not call the provider, and returns {@link ActionResult.Abandoned}.
          */
         boolean beginWrite();
+
+        /**
+         * Records that a provider call starts that only removes content, such as retracting a posted copy. A narrowing of
+         * the workspace's authority never blocks a removal, only a write that adds content (ADR 0134); otherwise it
+         * refuses as {@link #beginWrite} does.
+         */
+        default boolean beginRemoval() {
+            return beginWrite();
+        }
     }
 }

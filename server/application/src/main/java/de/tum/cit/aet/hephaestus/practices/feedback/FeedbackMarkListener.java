@@ -58,7 +58,11 @@ public class FeedbackMarkListener {
                                 .anyMatch(c ->
                                         c.getState() == FeedbackCopyState.POSTED && incorrect.contains(c.getId()))) {
                     if (send.isEmpty() || send.get().getState() == FeedbackSendState.DONE)
-                        sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
+                        sendQueue.queue(
+                                row,
+                                FeedbackSendAction.RETRACT,
+                                FeedbackSendState.PENDING,
+                                sendQueue.requestedNow(row));
                 } else if ((!onWork || basis.isIncorrect(row.getWorkspaceId(), id))
                         && children.stream().noneMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED))
                     policy.withhold(row, FeedbackStopReason.RESULT_MARKED_INCORRECT);
@@ -75,7 +79,8 @@ public class FeedbackMarkListener {
                     sendQueue.queue(
                             row,
                             restoredUnsent ? FeedbackSendAction.POST : FeedbackSendAction.RETRACT,
-                            FeedbackSendState.PENDING);
+                            FeedbackSendState.PENDING,
+                            sendQueue.requestedNow(row));
             } else if (row.getState() == FeedbackState.WITHHELD
                     && row.getStopReason() == FeedbackStopReason.RESULT_MARKED_INCORRECT
                     && !visibility.withdrawn(row.getWorkspaceId(), id)
@@ -97,7 +102,8 @@ public class FeedbackMarkListener {
                 copies.restoreUnsent(row.getWorkspaceId(), id);
                 outcomes.update(row, state, null, row.getDeliveredAt());
                 if (state == FeedbackState.READY && row.getDestination() == FeedbackDestination.ON_WORK)
-                    sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
+                    sendQueue.queue(
+                            row, FeedbackSendAction.POST, FeedbackSendState.PENDING, sendQueue.requestedNow(row));
             }
         }
     }
