@@ -913,4 +913,6 @@ The reason is a production measurement. A practice session sends its whole trans
 
 Over 24 hours, 41 of 134 reviews of three practices failed this way. None of those failures was a practice that kept rereading.
 
-The budget still does what the 2026-11-14 update decided. A practice that rereads large files puts them into the prompt again as new tokens, and it spends the budget. The default stays 342000. Its basis, the 99th percentile on staging, counted cache reads too. Thus, the same number now allows more calls over a cached opening, and not more new reading.
+The budget still does what the 2026-11-14 update decided. A practice that rereads large files puts them into the prompt again as new tokens, and it spends the budget.
+
+The default stays 342000. Its basis, the 99th percentile on staging, counted cache reads too. Now the whole 342000 is for new input: uncached input and cache writes. Before, the cache reads of a practice took part of it. For example, 150k new and 100k cached tokens counted 250k, and now they count 150k.
