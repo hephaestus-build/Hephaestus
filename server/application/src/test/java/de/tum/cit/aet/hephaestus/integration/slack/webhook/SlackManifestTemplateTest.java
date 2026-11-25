@@ -50,15 +50,16 @@ class SlackManifestTemplateTest extends BaseUnitTest {
 
     /**
      * Slack shows the app's description and agent description before anyone writes to it, so both say that
-     * Hephaestus is an AI system. "AI assistant" is a generic label and a retired product term.
+     * Hephaestus is an AI mentor, which discloses that it is AI. "AI assistant" is a generic label and a retired
+     * product term.
      */
     @Test
-    void manifestDescribesHephaestusAsAnAiSystem() throws Exception {
+    void manifestDescribesHephaestusAsAnAiMentor() throws Exception {
         String manifest = Files.readString(MANIFEST, StandardCharsets.UTF_8);
 
         assertThat(manifest)
-                .contains("  description: Hephaestus is an AI system that answers")
-                .contains("    agent_description: Hephaestus is an AI system.")
+                .contains("  description: Hephaestus is an AI mentor for software engineering practices.")
+                .contains("    agent_description: Hephaestus is an AI mentor for software engineering practices.")
                 .doesNotContainIgnoringCase("assistant");
     }
 
