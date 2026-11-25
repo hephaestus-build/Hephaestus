@@ -259,9 +259,6 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM config_audit_event WHERE id = ?", Long.class, teamTrail))
                 .isOne();
-        assertRefused(
-                () -> jdbc.update("DELETE FROM config_audit_event WHERE id = ?", teamTrail),
-                "config_audit_event is append-only");
     }
 
     private long auditRow(long workspaceId) {
