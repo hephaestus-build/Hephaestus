@@ -33,6 +33,14 @@ class LearningBundleSchemaTest extends BaseUnitTest {
         assertThat(SCHEMA.validate(fixture())).isEmpty();
     }
 
+    @Test
+    void shouldAcceptARecordTextWhenItHoldsTabsAndLineBreaks() {
+        ObjectNode bundle = fixture();
+        record(bundle, 0).put("text", "First line\r\n\tindented second line\nthird line");
+
+        assertThat(SCHEMA.validate(bundle)).isEmpty();
+    }
+
     /** Each case changes one value of the valid fixture, so the named keyword at the named place is the refusal. */
     @ParameterizedTest
     @MethodSource("refusedBundles")
@@ -148,10 +156,58 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         "pattern",
                         "/growthPoints/0/occurredWeek"),
                 refused(
+                        "a tombstone item type that the format does not know",
+                        b -> tombstone(b).put("itemType", "PORTABLE_RECORD"),
+                        "enum",
+                        "/tombstones/0/itemType"),
+                refused(
+                        "the time of a tombstone",
+                        b -> tombstone(b).put("at", "2026-11-18T09:05:00Z"),
+                        "additionalProperties",
+                        "/tombstones/0"),
+                refused(
+                        "a tombstone origin without its portable id",
+                        b -> ((ObjectNode) b.withArray("tombstones").get(1).get("origin")).remove("portableId"),
+                        "required",
+                        "/tombstones/1/origin"),
+                refused(
                         "a tombstone reason that the format does not know",
                         b -> tombstone(b).put("reason", "EXPIRED"),
                         "enum",
                         "/tombstones/0/reason"),
+                refused(
+                        "an escape character in a record text",
+                        b -> record(b, 0).put("text", "red \u001B[31m text"),
+                        "pattern",
+                        "/records/0/text"),
+                refused(
+                        "a bidirectional isolate in a record text",
+                        b -> record(b, 0).put("text", "before\u2066after"),
+                        "pattern",
+                        "/records/0/text"),
+                refused(
+                        "a record without its goal links",
+                        b -> record(b, 0).remove("goalIds"),
+                        "required",
+                        "/records/0"),
+                refused(
+                        "a goal link that is not a UUID",
+                        b -> record(b, 0).putArray("goalIds").add("goal-1"),
+                        "pattern",
+                        "/records/0/goalIds/0"),
+                refused(
+                        "one goal linked twice",
+                        b -> record(b, 0)
+                                .putArray("goalIds")
+                                .add("c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02")
+                                .add("c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02"),
+                        "uniqueItems",
+                        "/records/0/goalIds"),
+                refused(
+                        "a goal linked to a goal",
+                        b -> record(b, 1).putArray("goalIds").add("b2f4c6d8-1a3e-4f5b-9c7d-0e2a4c6e8f01"),
+                        "maxItems",
+                        "/records/1/goalIds"),
                 refused(
                         "a practice of one workspace",
                         b -> growthPoint(b, 0).put("practiceKey", "local/42"),

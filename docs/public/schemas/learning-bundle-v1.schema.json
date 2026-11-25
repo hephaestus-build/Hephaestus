@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
 	"title": "Hephaestus learning bundle, format version 1",
-	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after the 1.0.0 release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, an origin whose instanceId is the bundle's own, an origin that occurs more than once, a goalId that is not the portableId of a GOAL record in the bundle, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text about the person's own learning that identifies no other person, directly or indirectly, and in a CONFIRMED record only the exact text that the person confirmed. A writer whose bundle would exceed a limit of this format fails the download with that reason and serves no part of it. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof. Revisions and tombstones compare only within one instanceId and portableId; origin is a hint that two items are copies of one, never an order between them and never a reason to change or remove an item of another issuer without the person's choice.",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after its first release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a goalId that is not the portableId of a GOAL record in the bundle, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text about the person's own learning that identifies no other person, directly or indirectly, and in a CONFIRMED record only the exact text that the person confirmed. The stores that feed a bundle hold the limits of this format when they write, so a writer never meets an item past them. A writer leaves out a goalId whose goal the bundle does not carry. A writer may leave out tombstones older than its retention, so a reader treats the tombstones as possibly incomplete. A writer whose bundle would exceed the size limit fails the download with that reason and serves no part of it. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof. Revisions and tombstones compare only within one instanceId and portableId; items with one origin are copies of one item, which a reader may ask the person to choose between. Origin never orders two copies and never changes or removes an item of another issuer without the person's choice.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -71,7 +71,7 @@
 			"$ref": "#/$defs/uuid"
 		},
 		"revision": {
-			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. An item and its tombstones share this counter, so a restoration has a higher revision than the tombstone before it. A reader keeps the highest revision of one portableId from one instanceId.",
+			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. An item and its tombstones share this counter, so a restoration has a higher revision than the tombstone before it. A change to the goalIds that a bundle carries also raises it. A reader keeps the highest revision of one portableId from one instanceId. On equal revisions, the tombstone wins.",
 			"type": "integer",
 			"minimum": 1,
 			"maximum": 9007199254740991
@@ -105,6 +105,7 @@
 				"authorKind",
 				"text",
 				"practiceKeys",
+				"goalIds",
 				"createdAt",
 				"revisedAt"
 			],
@@ -124,7 +125,7 @@
 					"enum": ["ACHIEVED", "DROPPED", "REPLACED", "ARCHIVED"]
 				},
 				"authorKind": {
-					"description": "WRITTEN: the person wrote the words of this revision. CONFIRMED: Hephaestus wrote them and the person confirmed them word for word, also when the person kept a noted record. A noted record that the person did not keep never appears.",
+					"description": "WRITTEN: every word of this revision came from the person. CONFIRMED: some words of this revision came from Hephaestus, for example in an accepted suggestion or a kept note, and the person confirmed the whole text as shown. A noted record that the person did not keep never appears.",
 					"enum": ["WRITTEN", "CONFIRMED"]
 				},
 				"text": {
@@ -141,7 +142,7 @@
 					"items": { "$ref": "#/$defs/practiceKey" }
 				},
 				"goalIds": {
-					"description": "The goals in this bundle that the person linked the record to.",
+					"description": "The goals in this bundle that the person linked the record to. A goal has none.",
 					"type": "array",
 					"maxItems": 20,
 					"uniqueItems": true,
@@ -164,8 +165,9 @@
 					"else": { "not": { "required": ["closeReason"] } }
 				},
 				{
-					"if": { "not": { "properties": { "kind": { "const": "GOAL" } } } },
-					"then": { "not": { "required": ["helpPreference"] } }
+					"if": { "properties": { "kind": { "const": "GOAL" } } },
+					"then": { "properties": { "goalIds": { "maxItems": 0 } } },
+					"else": { "not": { "required": ["helpPreference"] } }
 				}
 			]
 		},

@@ -34,6 +34,7 @@
 			"authorKind": "CONFIRMED",
 			"text": "Write a test that fails before each bug fix.",
 			"practiceKeys": [],
+			"goalIds": [],
 			"helpPreference": "HINT",
 			"createdAt": "2026-10-01T10:00:00Z",
 			"revisedAt": "2026-11-02T10:00:00Z"
