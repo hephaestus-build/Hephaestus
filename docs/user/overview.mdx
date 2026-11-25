@@ -6,15 +6,16 @@ page_type: overview
 
 Hephaestus is an AI mentor for software engineering practices.
 It reads the work you already do and checks it against the practices that your team chose.
-When your work gives it grounds, it tells you what to improve and why, at the exact place, and names a next step.
-When it does not, it stays silent or says that it could not check.
+When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step.
+An observation can say when the evidence could not settle a question.
 
-Find feedback on work while it is still open, on your Practice profile, or through links in your weekly digest.
+Find feedback on the work, on your Practice profile, or in a conversation with Hephaestus.
+Your weekly digest can link to feedback you already received.
 Your profile shows how each practice changes over time.
 You can get feedback on work you draft with a coding agent, too.
 
 Hephaestus helps you grow, and it does not grade you.
-Your feedback has no score, grade or rank, and it is not an appraisal or an input to allocation or pay.
+Your feedback has no score, grade or rank, and it is designed to help you improve your work.
 Unless a workspace owner turns on per-person results, workspace admins see practice results with no names and no filter by person.
 Each result still shows the work it is about.
 [Privacy](./privacy#who-can-see-what) explains who sees what.
@@ -40,7 +41,7 @@ Workspace admins can approve feedback before it appears on the work.
 ## Practice profile
 
 Your [Practice profile](./practice-profile) is the home page of a workspace that reviews practices.
-It shows how your work stands, the evidence behind it, and your private feedback.
+It shows how your work stands, the evidence behind it, and the feedback you received there.
 A workspace that does not review practices opens on Activity.
 
 ## Ask Hephaestus
@@ -53,7 +54,7 @@ Hephaestus can use the workspace context it’s allowed to see, so you do not ne
 ## Activity
 
 Find pull requests that need your review, check your assigned issues, or copy recent work for a standup.
-Workspace activity shows everyone with work in the workspace or one team, in a table you can sort by each count.
+Workspace activity lists work by developer for the workspace or one team. You can sort the table by each count.
 [Activity](./activity) explains both pages.
 
 ## Chrome extension
@@ -64,14 +65,14 @@ Use the optional [Chrome extension](./browser-extension) to see practice reviews
 
 A workspace holds one team’s repositories, members, practices, integrations, and settings.
 Your connected GitHub, GitLab, Slack, and Outline integrations supply project activity, team conversations, and documentation.
-Hephaestus uses Slack channel messages only when you allow it.
+Hephaestus uses new Slack messages in channels your workspace monitors. You can turn off use of your channel messages.
 This context can help Hephaestus understand the work.
 
 Workspace admins can:
 
 - Connect GitHub or GitLab repositories and keep each team’s data separate.
 - Adopt practices from the instance catalog and customize them for the project.
-- Choose the AI models, and set a monthly cap on the workspace’s own AI provider.
+- Choose the AI models and set a monthly cap on the workspace’s own AI provider if the workspace uses one.
 - Manage members, teams, and integrations.
 
 [Set up your workspace](./workspace) explains these tasks.
@@ -93,7 +94,7 @@ See [Practice feedback language](/contributor/practice-feedback-language) for th
 - **Standing:** **Going well**, **Mixed feedback**, or **Needs attention**, read from your newest reviewed work on a practice.
 - **Ask Hephaestus:** the area where you talk about your work in the web app.
 - **Workspace:** the repositories, members, teams, workspace practices, and settings for one group.
-- **Workspace admin:** a member who configures a workspace. An **instance admin** operates the whole deployment.
+- **Workspace admin:** a member who configures a workspace. An **instance admin** configures the instance.
 
 ## Other guides
 

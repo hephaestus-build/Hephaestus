@@ -11,9 +11,9 @@ export function AboutHeroSection() {
 			<p className="mx-auto max-w-2xl text-xl leading-relaxed text-pretty text-muted-foreground">
 				Hephaestus is the open-source AI mentor for software engineering practices. It reads your
 				pull requests, merge requests, issues and code reviews where they happen, and checks them
-				against the practices that your team chose. When your work gives it grounds, it tells you
-				what to improve and why, at the exact place, and names a next step. When it does not, it
-				stays silent or says that it could not check.
+				against the practices that your team chose. When a review finds a problem it can support,
+				Hephaestus can point to the work, explain what to improve, and suggest a next step. An
+				observation can say when the evidence could not settle a question.
 			</p>
 			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
 				In a conversation, you can ask Hephaestus why, ask for an example, or disagree. Your

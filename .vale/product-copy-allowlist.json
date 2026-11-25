@@ -17,7 +17,6 @@
 	"docs/user/privacy.mdx: | Practice profile and its feedback | No | That feedback exists and its delivery state, not its text. They see whom it is about only if the workspace turned on **Per-person results for admins**. | Read-only view, with a recorded reason | No |",
 	"docs/user/privacy.mdx: | Practice observations | Only inside unnamed counts | With your name only if the workspace turned on **Per-person results for admins**. Otherwise with no name, but each result still shows the work it is about. | Read-only view, with a recorded reason. In a workspace that they open as an admin, the same as workspace admins. | No |",
 	"docs/user/privacy.mdx: - **Per-person results for admins** is a workspace setting. It is off for a new workspace.",
-	"docs/user/privacy.mdx: - **Instance admins** read your private data only through **View as user**, also before your first sign-in. Each view records a reason. The view cannot act for you. Workspace admins do not have this access.",
 	"docs/user/user-settings.mdx: Workspace admins see the observations of those reviews, with your name only if the workspace turned on **Per-person results for admins**.",
 	"docs/user/workspace.mdx: **Per-person results for admins** decides whether workspace admins see who each practice result, problem and piece of feedback is about.",
 	"docs/user/workspace.mdx: 2. Under **Practice results for admins**, find **Per-person results for admins**.",

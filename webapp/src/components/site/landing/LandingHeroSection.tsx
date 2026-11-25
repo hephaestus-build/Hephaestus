@@ -249,8 +249,8 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 							your team chose.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							When your work gives it grounds, it tells you what to improve and why, and names a
-							next step. Then you can talk it through. It never grades you.
+							When a review finds a problem it can support, Hephaestus can explain what to improve
+							and why, and suggest a next step. Then you can talk it through. It never grades you.
 						</span>
 					</motion.p>
 
