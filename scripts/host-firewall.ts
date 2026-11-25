@@ -1,7 +1,22 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { isIP } from "node:net";
+import {
+	chmodSync,
+	chownSync,
+	closeSync,
+	copyFileSync,
+	existsSync,
+	fsyncSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
+import { BlockList, isIP } from "node:net";
+import nodePath from "node:path";
 import { parseArgs } from "node:util";
 
 type Family = 4 | 6;
@@ -21,6 +36,7 @@ type DriftReason =
 	| "default_policy"
 	| "saved_rules"
 	| "live_rules"
+	| "recovery_guard"
 	| "check_error";
 
 interface Problem {
@@ -30,10 +46,20 @@ interface Problem {
 
 const families = [4, 6] as const;
 const defaults = [
-	{ chain: "INPUT", direction: "incoming", policy: "DROP" },
-	{ chain: "OUTPUT", direction: "outgoing", policy: "ACCEPT" },
-	{ chain: "FORWARD", direction: "routed", policy: "DROP" },
+	{ chain: "INPUT", direction: "incoming", ufw: "deny", policy: "DROP" },
+	{ chain: "OUTPUT", direction: "outgoing", ufw: "allow", policy: "ACCEPT" },
+	{ chain: "FORWARD", direction: "routed", ufw: "deny", policy: "DROP" },
 ] as const;
+const lock = "/run/hephaestus-host-firewall.lock";
+const pending = "/etc/hephaestus/host-firewall-pending.json";
+const confirmed = "/etc/hephaestus/host-firewall-confirmed.json";
+const fallbackConfig = "/etc/hephaestus/host-firewall.json";
+const bootGuard = "/etc/hephaestus/host-firewall-recovery.nft";
+const bootGuardUnit = "hephaestus-firewall-recovery-boot.service";
+const guardTable = "hephaestus_firewall_recovery";
+const rollback = "hephaestus-host-firewall-rollback";
+const recoveryDirectory = "/run/hephaestus-host-firewall-recovery";
+const recoveryChain = "HEPHAESTUS-RECOVERY";
 const inputHooks = [
 	"before-logging",
 	"before",
@@ -50,8 +76,10 @@ const logOnlyChains = [
 	"logging-allow",
 	"logging-deny",
 ] as const;
-const packetFilter = { 4: "/usr/sbin/iptables", 6: "/usr/sbin/ip6tables" } as const;
+const ufw = "/usr/sbin/ufw";
+const nft = "/usr/sbin/nft";
 const systemctl = "/usr/bin/systemctl";
+const reversePathFile = "/etc/sysctl.d/99-hephaestus-public-rp-filter.conf";
 const ufwDefaults = "/etc/default/ufw";
 const ufwFiles = {
 	"user.rules": "/etc/ufw/user.rules",
@@ -164,17 +192,11 @@ export function rulesFor(config: unknown): Rule[] {
 }
 
 export function publicInterface(config: unknown, defaultRoute: () => string) {
-	const names =
-		typeof config === "object" && config !== null && "publicInterface" in config
-			? [config.publicInterface]
-			: [
-					...new Set(
-						Array.from(
-							defaultRoute().matchAll(/\bdev (?<name>\S+)/gu),
-							(match) => match.groups?.name,
-						),
-					),
-				];
+	const names = [
+		...new Set(
+			Array.from(defaultRoute().matchAll(/\bdev (?<name>\S+)/gu), (match) => match.groups?.name),
+		),
+	];
 	const [name] = names;
 	if (
 		names.length !== 1 ||
@@ -182,21 +204,89 @@ export function publicInterface(config: unknown, defaultRoute: () => string) {
 		!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/u.test(name) ||
 		["all", "default", "lo", "cni0", "flannel.1"].includes(name)
 	) {
-		throw new Error("Set publicInterface to the public IPv4 interface name.");
+		throw new Error("The IPv4 default routes must use one public interface.");
+	}
+	if (
+		typeof config === "object" &&
+		config !== null &&
+		"publicInterface" in config &&
+		config.publicInterface !== name
+	) {
+		throw new Error(`Set publicInterface to ${name}, the IPv4 default-route interface.`);
 	}
 	return name;
 }
 
-export function reversePathDrift(all: string, device: string): Problem[] {
-	if (["0", "1"].includes(all.trim()) && device.trim() === "1") {
-		return [];
+function strictReversePath(all: string, device: string) {
+	const global = all.trim();
+	return (global === "0" || global === "1") && device.trim() === "1";
+}
+
+function savedReversePath(contents: string, device: string) {
+	// A dot in an interface name is literal in slash notation and escaped as '/' in dot notation.
+	const keys = new Set([
+		`net/ipv4/conf/${device}/rp_filter`,
+		`net.ipv4.conf.${device.replaceAll(".", "/")}.rp_filter`,
+	]);
+	const line = contents.split("\n").findLast((entry) => {
+		const key = entry.split("=", 1)[0]?.trim().replace(/^-/u, "");
+		return entry.includes("=") && key !== undefined && keys.has(key);
+	});
+	return line?.slice(line.indexOf("=") + 1) ?? "";
+}
+
+export function reversePathDrift(
+	config: unknown,
+	defaultRoute = () => run("/usr/sbin/ip", ["-o", "-4", "route", "show", "default"]),
+	read = (file: string) => readFileSync(file, "utf8"),
+): Problem[] {
+	const problems: Problem[] = [];
+	try {
+		const device = publicInterface(config, defaultRoute);
+		const knobs = "/proc/sys/net/ipv4/conf";
+		if (!strictReversePath(read(`${knobs}/all/rp_filter`), read(`${knobs}/${device}/rp_filter`))) {
+			problems.push({
+				reason: "reverse_path_filter",
+				message:
+					"Set strict IPv4 reverse-path filtering on the public interface. The global value must be 0 or 1.",
+			});
+		}
+		const saved = read(reversePathFile);
+		if (!strictReversePath(savedReversePath(saved, "all"), savedReversePath(saved, device))) {
+			problems.push({
+				reason: "reverse_path_filter",
+				message: `Save the global and public interface reverse-path settings in ${reversePathFile}.`,
+			});
+		}
+	} catch (error) {
+		problems.push({
+			reason: "reverse_path_filter",
+			message: `Could not verify IPv4 reverse-path filtering. ${error instanceof Error ? error.message : String(error)}`,
+		});
+	}
+	return problems;
+}
+
+export function ufwArgs(rule: Rule): string[] {
+	if (rule.device !== undefined) {
+		return ["allow", "in", "on", rule.device];
+	}
+	if (rule.source === undefined) {
+		return ["allow", `${String(rule.port)}/${String(rule.protocol)}`];
+	}
+	if (rule.port === undefined) {
+		return ["allow", "from", rule.source];
 	}
 	return [
-		{
-			reason: "reverse_path_filter",
-			message:
-				"Set strict IPv4 reverse-path filtering on the public interface. The global value must be 0 or 1.",
-		},
+		"allow",
+		"from",
+		rule.source,
+		"to",
+		"any",
+		"port",
+		String(rule.port),
+		"proto",
+		String(rule.protocol),
 	];
 }
 
@@ -207,14 +297,15 @@ function setting(contents: string, name: string): string | undefined {
 		: undefined;
 }
 
-function run(command: string, args: string[]): string {
+function run(command: string, args: string[], input?: string): string {
 	try {
 		return execFileSync(command, args, {
 			encoding: "utf8",
 			env: { ...process.env, LC_ALL: "C" },
 			timeout: 15_000,
 			maxBuffer: 16 * 1024 * 1024,
-			stdio: ["ignore", "pipe", "pipe"],
+			input,
+			stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
 		}).trim();
 	} catch (error) {
 		const detail =
@@ -283,7 +374,12 @@ function liveRule(rule: Rule, chain: string): string {
 	].join(" ");
 }
 
-export function liveDrift(lines: string[], family: Family, rules: Rule[]): string[] {
+export function liveDrift(
+	lines: string[],
+	family: Family,
+	rules: Rule[],
+	guarded = false,
+): string[] {
 	const prefix = family === 4 ? "ufw" : "ufw6";
 	const input = `${prefix}-user-input`;
 	const familyRules = rules.filter((rule) => rule.family === undefined || rule.family === family);
@@ -318,6 +414,17 @@ export function liveDrift(lines: string[], family: Family, rules: Rule[]): strin
 		problems.push(`IPv${family} has an unmanaged input rule.`);
 	}
 	if (
+		lines.some(
+			(line) =>
+				line.startsWith("-A FORWARD ") && unmanagedForwardRule(withoutComment(line), prefix),
+		)
+	) {
+		problems.push(`IPv${family} has an unmanaged forwarding rule.`);
+	}
+	if (!guarded && lines.includes(`-A INPUT -j ${recoveryChain}`)) {
+		problems.push(`IPv${family} has an active emergency firewall guard.`);
+	}
+	if (
 		deniesBefore(lines, "INPUT", `${prefix}-before-input`, familyRules) ||
 		deniesBefore(lines, `${prefix}-before-input`, input) ||
 		(lines
@@ -332,17 +439,20 @@ export function liveDrift(lines: string[], family: Family, rules: Rule[]): strin
 
 function deniesBefore(lines: string[], chain: string, next?: string, rules?: Rule[]) {
 	const hook = next === undefined ? lines.length : lines.indexOf(`-A ${chain} -j ${next}`);
-	return lines.slice(0, Math.max(hook, 0)).some((line) => {
-		const rule = withoutComment(line);
-		return (
-			rule.startsWith(`-A ${chain} `) &&
-			(/ -[jg] (?:DROP|REJECT)(?: |$)/u.test(rule) ||
-				(next !== undefined && / -j RETURN(?: |$)/u.test(rule))) &&
-			rule !== `-A ${chain} -m conntrack --ctstate INVALID -j DROP` &&
-			rule !== `-A ${chain} -m rt --rt-type 0 -j DROP` &&
-			(rules === undefined || denyCanBlockInput(rule, rules))
-		);
-	});
+	return lines
+		.slice(0, Math.max(hook, 0))
+		.some((line) => inputDeny(line, chain, next !== undefined, rules));
+}
+
+function inputDeny(line: string, chain: string, returns: boolean, rules?: Rule[]) {
+	const rule = withoutComment(line);
+	return (
+		rule.startsWith(`-A ${chain} `) &&
+		(/ -[jg] (?:DROP|REJECT)(?: |$)/u.test(rule) || (returns && / -j RETURN(?: |$)/u.test(rule))) &&
+		rule !== `-A ${chain} -m conntrack --ctstate INVALID -j DROP` &&
+		rule !== `-A ${chain} -m rt --rt-type 0 -j DROP` &&
+		(rules === undefined || denyCanBlockInput(rule, rules))
+	);
 }
 
 function denyCanBlockInput(line: string, rules: Rule[]) {
@@ -445,6 +555,7 @@ function unmanagedKernelInputRule(rule: string, target: string, prefix: string) 
 	return (
 		rule !== "-m mark --mark 0x20000/0x20000 -j ACCEPT" &&
 		rule !== "-i lo -j ACCEPT" &&
+		rule !== `-j ${recoveryChain}` &&
 		!inputHooks.some((name) => rule === `-j ${prefix}-${name}-input`) &&
 		![
 			"DROP",
@@ -458,6 +569,48 @@ function unmanagedKernelInputRule(rule: string, target: string, prefix: string) 
 			"KUBE-EXTERNAL-SERVICES",
 			"KUBE-SERVICES",
 		].includes(target)
+	);
+}
+
+export function blockedByBuiltInRules(lines: string[], family: Family, rules: Rule[]) {
+	const prefix = family === 4 ? "ufw" : "ufw6";
+	const inputHook = lines.indexOf(`-A INPUT -j ${prefix}-before-input`);
+	const familyRules = rules.filter((rule) => rule.family === undefined || rule.family === family);
+	return lines.filter((line, index) => {
+		if (line.startsWith("-A INPUT ")) {
+			return (
+				unmanagedInputRule(line, prefix, family) ||
+				((inputHook === -1 || index < inputHook) && inputDeny(line, "INPUT", true, familyRules))
+			);
+		}
+		return line.startsWith("-A FORWARD ") && unmanagedForwardRule(withoutComment(line), prefix);
+	});
+}
+
+function unmanagedForwardRule(line: string, prefix: string) {
+	const rule = line.slice("-A FORWARD ".length);
+	const target = / -[jg] (?<jump>\S+)/u.exec(line)?.groups?.jump;
+	return (
+		target !== undefined &&
+		![
+			"KUBE-ROUTER-FORWARD",
+			"KUBE-FORWARD",
+			"KUBE-PROXY-FIREWALL",
+			"KUBE-EXTERNAL-SERVICES",
+			"KUBE-SERVICES",
+			"FLANNEL-FWD",
+		].includes(target) &&
+		![
+			"-j DOCKER-USER",
+			"-j DOCKER-FORWARD",
+			"-m mark --mark 0x20000/0x20000 -j ACCEPT",
+			`-j ${recoveryChain}-FORWARD`,
+		].includes(rule) &&
+		!inputHooks.some((name) => rule === `-j ${prefix}-${name}-forward`) &&
+		!/^-o (?:docker0|br-[a-f0-9]{12}) (?:-j DOCKER|-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT)$/u.test(
+			rule,
+		) &&
+		!/^-i (?<bridge>docker0|br-[a-f0-9]{12}) (?:! )?-o \k<bridge> -j ACCEPT$/u.test(rule)
 	);
 }
 
@@ -521,41 +674,745 @@ export function settingsDrift(configuration: string, ufwConfig: string, unit: st
 	return problems;
 }
 
-function drift(config: unknown): Problem[] {
-	const rules = rulesFor(config);
-	const device = publicInterface(config, () =>
-		run("/usr/sbin/ip", ["-o", "-4", "route", "show", "default"]),
-	);
-	const knobs = "/proc/sys/net/ipv4/conf";
-	const problems = settingsDrift(
-		readFileSync(ufwDefaults, "utf8"),
-		readFileSync(ufwFiles["ufw.conf"], "utf8"),
-		unitState("ufw.service", "UnitFileState"),
-	);
-	problems.push(
-		...reversePathDrift(
-			readFileSync(`${knobs}/all/rp_filter`, "utf8"),
-			readFileSync(`${knobs}/${device}/rp_filter`, "utf8"),
-		),
-	);
-	const snapshot = snapshotDrift();
-	if (snapshot !== null) {
-		problems.push({ reason: "netfilter_persistent", message: snapshot });
+interface FirewallState {
+	defaultSettings: string;
+	ufwConfig: string;
+	ufwUnit: string;
+	persistenceProblem: string | null;
+	bootGuardActive: boolean;
+	reversePath: Problem[];
+	filters: Record<Family, { saved: string; live: string[] }>;
+}
+
+export function evaluateFirewall(state: FirewallState, rules: Rule[], guarded = false): Problem[] {
+	const problems = settingsDrift(state.defaultSettings, state.ufwConfig, state.ufwUnit);
+	problems.push(...state.reversePath);
+	if (state.persistenceProblem !== null) {
+		problems.push({ reason: "netfilter_persistent", message: state.persistenceProblem });
+	}
+	if (state.bootGuardActive && !guarded) {
+		problems.push({
+			reason: "recovery_guard",
+			message: "The emergency firewall is active. Verify or restore the host policy.",
+		});
 	}
 	for (const family of families) {
-		const file = family === 4 ? ufwFiles["user.rules"] : ufwFiles["user6.rules"];
-		if (savedDrift(readFileSync(file, "utf8"), family, rules)) {
+		const { saved, live } = state.filters[family];
+		if (savedDrift(saved, family, rules)) {
 			problems.push({ reason: "saved_rules", message: `Saved IPv${family} UFW rules differ.` });
 		}
-		for (const message of liveDrift(
-			run(packetFilter[family], ["-w", "5", "-S"]).split("\n"),
-			family,
-			rules,
-		)) {
+		for (const message of liveDrift(live, family, rules, guarded)) {
 			problems.push({ reason: "live_rules", message });
 		}
 	}
 	return problems;
+}
+
+function familyState(family: Family, path: string) {
+	return {
+		saved: readFileSync(path, "utf8"),
+		live: run(packetFilter[family], ["-w", "5", "-S"]).split("\n"),
+	};
+}
+
+function bootGuardActive() {
+	if (!existsSync(nft)) {
+		return existsSync(bootGuard);
+	}
+	return run(nft, ["list", "tables"]).split("\n").includes(`table inet ${guardTable}`);
+}
+
+function drift(rules: Rule[], guarded: boolean, config: unknown): Problem[] {
+	return evaluateFirewall(
+		{
+			defaultSettings: readFileSync(ufwDefaults, "utf8"),
+			ufwConfig: readFileSync(ufwFiles["ufw.conf"], "utf8"),
+			ufwUnit: unitState("ufw.service", "UnitFileState"),
+			persistenceProblem: snapshotDrift(),
+			bootGuardActive: bootGuardActive(),
+			reversePath: reversePathDrift(config),
+			filters: {
+				4: familyState(4, ufwFiles["user.rules"]),
+				6: familyState(6, ufwFiles["user6.rules"]),
+			},
+		},
+		rules,
+		guarded,
+	);
+}
+
+function sshConnection(rules: Rule[]) {
+	const connection = process.env.SSH_CONNECTION ?? "";
+	const [peer = "", peerPort, local, port, extra] = connection.split(" ");
+	if (
+		port !== "22" ||
+		!/^\d+$/u.test(peerPort ?? "") ||
+		!isIP(local ?? "") ||
+		extra !== undefined
+	) {
+		throw new Error("Use SSH on port 22 and preserve SSH_CONNECTION through sudo.");
+	}
+	const family = addressFamily(peer, "SSH_CONNECTION");
+	const vpn = new BlockList();
+	const sshRules = rules.filter((rule) => rule.port === 22 && rule.family === family);
+	for (const rule of sshRules) {
+		const [network = "", prefix] = rule.source?.split("/") ?? [];
+		vpn.addSubnet(network, Number(prefix), family === 4 ? "ipv4" : "ipv6");
+	}
+	if (!vpn.check(peer, family === 4 ? "ipv4" : "ipv6")) {
+		throw new Error("The SSH client is outside the configured VPN networks.");
+	}
+	return sshStartedAt(process.ppid, Number(run("/usr/bin/getconf", ["CLK_TCK"])), (pid) =>
+		readFileSync(`/proc/${pid}/stat`, "utf8"),
+	);
+}
+
+export function sshStartedAt(
+	parentPid: number,
+	tickRate: number,
+	readStat: (pid: number) => string,
+) {
+	// OpenSSH keeps a process for the TCP connection, even when a client multiplexes new sessions.
+	let pid = parentPid;
+	let started = 0;
+	while (pid > 1) {
+		const stat = readStat(pid);
+		const nameEnd = stat.lastIndexOf(")");
+		const name = stat.slice(stat.indexOf("(") + 1, nameEnd);
+		const fields = stat.slice(nameEnd + 2).split(" ");
+		pid = Number(fields[1]);
+		if (pid > 1 && ["sshd", "sshd-session", "sshd-auth"].includes(name)) {
+			started = Number(fields[19]) / tickRate;
+		}
+	}
+	if (!Number.isFinite(started) || started <= 0) {
+		throw new Error("Cannot verify the age of this SSH connection.");
+	}
+	return started;
+}
+
+export function requireFreshSshConnection(changedAt: number, startedAt: () => number) {
+	if (!Number.isFinite(changedAt) || changedAt <= 0 || startedAt() <= changedAt) {
+		throw new Error("Open a new SSH connection before confirming.");
+	}
+}
+
+function replaceFile(
+	path: string,
+	contents: string,
+	metadata?: { uid: number; gid: number; mode: number },
+) {
+	const temporary = `${path}.hephaestus-${randomUUID()}`;
+	try {
+		writeFileSync(temporary, contents, { flag: "wx", mode: 0o600, flush: true });
+		if (metadata !== undefined) {
+			chownSync(temporary, metadata.uid, metadata.gid);
+			chmodSync(temporary, metadata.mode % 0o1000);
+		}
+		renameSync(temporary, path);
+		syncParent(path);
+	} finally {
+		rmSync(temporary, { force: true });
+	}
+}
+
+function syncParent(path: string) {
+	if (process.platform === "linux") {
+		const directory = openSync(nodePath.dirname(path), "r");
+		try {
+			fsyncSync(directory);
+		} finally {
+			closeSync(directory);
+		}
+	}
+}
+
+const packetFilter = { 4: "/usr/sbin/iptables", 6: "/usr/sbin/ip6tables" } as const;
+
+interface Change {
+	id: string;
+	policy: unknown;
+	started?: true;
+	changedAt?: number;
+}
+
+interface RecoveryRuntime {
+	directory: string;
+	pending: string;
+	confirmed: string;
+	config: string;
+	bootGuard: string;
+	defaultsPath: string;
+	execute: typeof run;
+	drift: (rules: Rule[], guarded: boolean, config: unknown) => Problem[];
+}
+
+interface ChangeRuntime extends RecoveryRuntime {
+	unitState: typeof unitState;
+	snapshotDrift: typeof snapshotDrift;
+	reversePathDrift: (config: unknown) => Problem[];
+	sshConnection: typeof sshConnection;
+	uptime: () => number;
+}
+
+const hostRecovery: ChangeRuntime = {
+	directory: recoveryDirectory,
+	pending,
+	confirmed,
+	config: fallbackConfig,
+	bootGuard,
+	defaultsPath: ufwDefaults,
+	execute: run,
+	drift,
+	unitState,
+	snapshotDrift,
+	reversePathDrift,
+	sshConnection,
+	uptime: () => Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]),
+};
+
+function readChange(file: string): Change | undefined {
+	if (!existsSync(file)) {
+		return undefined;
+	}
+	const data: unknown = JSON.parse(readFileSync(file, "utf8"));
+	if (
+		typeof data !== "object" ||
+		data === null ||
+		!("id" in data) ||
+		typeof data.id !== "string" ||
+		!("policy" in data) ||
+		("started" in data && data.started !== true) ||
+		("changedAt" in data &&
+			(typeof data.changedAt !== "number" || !Number.isFinite(data.changedAt)))
+	) {
+		throw new Error("Invalid saved firewall policy declaration.");
+	}
+	rulesFor(data.policy);
+	return {
+		id: data.id,
+		policy: data.policy,
+		...("started" in data && data.started === true ? { started: true as const } : {}),
+		...("changedAt" in data && typeof data.changedAt === "number"
+			? { changedAt: data.changedAt }
+			: {}),
+	};
+}
+
+function saveChange(file: string, change: Change) {
+	replaceFile(file, JSON.stringify(change));
+}
+
+const clearGuardTable = `add table inet ${guardTable}\ndelete table inet ${guardTable}\n`;
+
+export function bootGuardRules(vpn: Rule[]) {
+	return [
+		clearGuardTable.trimEnd(),
+		`table inet ${guardTable} {`,
+		"  chain input {",
+		"    type filter hook input priority -5; policy drop;",
+		'    iifname "lo" accept',
+		"    ip daddr 127.0.0.0/8 drop",
+		"    ip6 daddr ::1 drop",
+		"    ct state { established, related } ct direction reply accept",
+		"    icmp type destination-unreachable icmp code 4 accept",
+		"    icmpv6 type { 2, 134, 135, 136 } accept",
+		...vpn
+			.filter((rule) => rule.source !== undefined)
+			.map(
+				(rule) =>
+					`    ${rule.family === 4 ? "ip" : "ip6"} saddr ${String(rule.source)} tcp dport 22 accept`,
+			),
+		"  }",
+		"  chain forward {",
+		"    type filter hook forward priority -5; policy drop;",
+		"  }",
+		"}",
+		"",
+	].join("\n");
+}
+
+function prepareBootGuard(runtime: RecoveryRuntime, vpn: Rule[]) {
+	const guard = bootGuardRules(vpn);
+	runtime.execute(nft, ["--check", "--file", "-"], guard);
+	replaceFile(runtime.bootGuard, guard);
+}
+
+function loadBootGuard(runtime: RecoveryRuntime) {
+	runtime.execute(nft, ["--file", runtime.bootGuard]);
+}
+
+function removeBootFilter(runtime: RecoveryRuntime) {
+	runtime.execute(nft, ["--file", "-"], clearGuardTable);
+}
+
+function clearBootGuard(runtime: RecoveryRuntime) {
+	if (existsSync(runtime.bootGuard)) {
+		removeBootFilter(runtime);
+		rmSync(runtime.bootGuard);
+		syncParent(runtime.bootGuard);
+	}
+}
+
+function finishRecovery(runtime: RecoveryRuntime) {
+	clearBootGuard(runtime);
+	rmSync(runtime.pending, { force: true });
+	syncParent(runtime.pending);
+}
+
+export function recoveryCommand(directory: string): string[] {
+	return [
+		"/usr/bin/flock",
+		lock,
+		process.execPath,
+		nodePath.join(directory, "host-firewall.ts"),
+		"--restore-ufw",
+	];
+}
+
+export function recoveryFilter(family: Family, rules: Rule[], existing: string) {
+	const forwardChain = `${recoveryChain}-FORWARD`;
+	const inputHook = `INPUT -j ${recoveryChain}`;
+	const forwardHook = `FORWARD -j ${forwardChain}`;
+	const hooks = new Set([inputHook, forwardHook]);
+	const previousHooks = existing
+		.split("\n")
+		.filter((line) => line.startsWith("-A ") && hooks.has(line.slice(3)))
+		.map((line) => `-D ${line.slice(3)}`);
+	const inputRules = rules.filter((rule) => rule.family === undefined || rule.family === family);
+	const devices = inputRules.flatMap(({ device }) => (device === undefined ? [] : [device]));
+	const established = "-m conntrack --ctstate RELATED,ESTABLISHED";
+	return [
+		"*filter",
+		`:${recoveryChain} - [0:0]`,
+		`:${forwardChain} - [0:0]`,
+		"-P INPUT DROP",
+		"-P FORWARD DROP",
+		...previousHooks,
+		`-A ${recoveryChain} -i lo -j ACCEPT`,
+		// Keep loopback services private even before k3s inspects the packet.
+		`-A ${recoveryChain} -d ${family === 4 ? "127.0.0.0/8" : "::1/128"} -j DROP`,
+		`-A ${recoveryChain} ${established}${rules.every(({ port }) => port === 22) ? " --ctdir REPLY" : ""} -j ACCEPT`,
+		// Router advertisements, neighbor discovery and packet-too-big keep IPv6 SSH usable.
+		...(family === 6
+			? [2, 134, 135, 136].map(
+					(type) => `-A ${recoveryChain} -p ipv6-icmp --icmpv6-type ${type} -j ACCEPT`,
+				)
+			: [`-A ${recoveryChain} -p icmp --icmp-type 3/4 -j ACCEPT`]),
+		...inputRules.map((rule) => liveRule(rule, recoveryChain)),
+		`-A ${recoveryChain} -j DROP`,
+		// Leave admitted forwarding with k3s so its network policies still apply.
+		...(devices.length === 0
+			? []
+			: [
+					`-A ${forwardChain} ${established} -j RETURN`,
+					...devices.map((device) => `-A ${forwardChain} -i ${device} -j RETURN`),
+					...inputRules.flatMap(({ port, protocol }) =>
+						protocol !== undefined && (port === 80 || port === 443)
+							? [
+									`-A ${forwardChain} -p ${protocol} -m conntrack --ctstate DNAT --ctdir ORIGINAL --ctorigdstport ${port} -j RETURN`,
+								]
+							: [],
+					),
+				]),
+		`-A ${forwardChain} -j DROP`,
+		`-I INPUT 1 -j ${recoveryChain}`,
+		`-I FORWARD 1 -j ${forwardChain}`,
+		"COMMIT",
+		"",
+	].join("\n");
+}
+
+function removeRecoveryFilter(execute: typeof run) {
+	for (const family of families) {
+		const command = packetFilter[family];
+		const rules = execute(command, ["-w", "5", "-S"]).split("\n");
+		for (const [chain, base] of [
+			[recoveryChain, "INPUT"],
+			[`${recoveryChain}-FORWARD`, "FORWARD"],
+		] as const) {
+			if (rules.includes(`-A ${base} -j ${chain}`)) {
+				execute(command, ["-w", "5", "-D", base, "-j", chain]);
+				execute(command, ["-w", "5", "-F", chain]);
+				execute(command, ["-w", "5", "-X", chain]);
+			}
+		}
+	}
+}
+
+function installRecoveryFilters(rules: Rule[], execute: typeof run) {
+	const failures: unknown[] = [];
+	for (const family of families) {
+		const command = packetFilter[family];
+		try {
+			const existing = execute(command, ["-w", "5", "-S"]);
+			execute(
+				`${command}-restore`,
+				["--noflush", "--wait", "5"],
+				recoveryFilter(family, rules, existing),
+			);
+			const live = execute(command, ["-w", "5", "-S"]).split("\n");
+			if (
+				!live.includes("-P INPUT DROP") ||
+				!live.includes("-P FORWARD DROP") ||
+				live.find((line) => line.startsWith("-A INPUT ")) !== `-A INPUT -j ${recoveryChain}` ||
+				live.find((line) => line.startsWith("-A FORWARD ")) !==
+					`-A FORWARD -j ${recoveryChain}-FORWARD`
+			) {
+				throw new Error(`IPv${family} emergency firewall guards differ.`);
+			}
+		} catch (error) {
+			failures.push(error);
+		}
+	}
+	if (failures.length > 0) {
+		throw new AggregateError(
+			failures,
+			"Could not verify fail-closed recovery on both IP families.",
+		);
+	}
+}
+
+function setUfwDefault(path: string, name: "IPV6" | "MANAGE_BUILTINS", value: "yes" | "no") {
+	const contents = readFileSync(path, "utf8");
+	const previous = setting(contents, name);
+	if (previous === undefined) {
+		throw new Error(`Expected one ${name} setting in the UFW defaults.`);
+	}
+	if (previous !== value) {
+		replaceFile(
+			path,
+			contents.replace(new RegExp(`^${name}=.*$`, "mu"), `${name}=${value}`),
+			statSync(path),
+		);
+	}
+}
+
+function vpnRules(rules: Rule[]) {
+	return rules.filter(({ port }) => port === 22);
+}
+
+function recoveryVpn(candidate: Rule[], previous: Rule[]) {
+	return [
+		...new Map(vpnRules([...candidate, ...previous]).map((rule) => [rule.source, rule])).values(),
+	];
+}
+
+function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, config: unknown) {
+	const problems = runtime.drift(rules, false, config);
+	if (problems.length > 0) {
+		throw new Error(problems.map(({ message }) => message).join("\n"));
+	}
+}
+
+class HostPrerequisitesError extends Error {
+	override name = "HostPrerequisitesError";
+}
+
+interface RebuildOptions {
+	fallback?: Rule[];
+	emergency?: boolean;
+	policy: unknown;
+}
+
+function verifyRebuiltPolicy(
+	rules: Rule[],
+	runtime: RecoveryRuntime,
+	{ policy, emergency }: RebuildOptions,
+	guarded: boolean,
+) {
+	const problems = runtime.drift(rules, guarded, policy);
+	const ufwProblems = problems.filter(
+		({ reason }) => reason !== "reverse_path_filter" && reason !== "netfilter_persistent",
+	);
+	if (ufwProblems.length > 0) {
+		throw new Error(ufwProblems.map(({ message }) => message).join("\n"));
+	}
+	if (emergency !== true && problems.length > 0) {
+		throw new HostPrerequisitesError(problems.map(({ message }) => message).join("\n"));
+	}
+}
+
+function resetUfw(execute: typeof run) {
+	try {
+		execute(ufw, ["--force", "reset"]);
+	} catch (error) {
+		// UFW uses a one-second timestamp for its own reset backups.
+		if (
+			!(error instanceof Error) ||
+			!/\.rules\.\d{8}_\d{6}' already exists\. Aborting/u.test(error.message)
+		) {
+			throw error;
+		}
+		execute("/usr/bin/sleep", ["1"]);
+		execute(ufw, ["--force", "reset"]);
+	}
+}
+
+function rebuildPolicy(
+	rules: Rule[],
+	runtime: RecoveryRuntime,
+	{ fallback = vpnRules(rules), emergency = false, policy }: RebuildOptions,
+) {
+	const { execute, defaultsPath } = runtime;
+	// UFW reset disables UFW temporarily. Guard the declared traffic while rebuilding.
+	installRecoveryFilters(rules, execute);
+	try {
+		setUfwDefault(defaultsPath, "MANAGE_BUILTINS", "no");
+		resetUfw(execute);
+		setUfwDefault(defaultsPath, "IPV6", "yes");
+		for (const { direction, ufw: action } of defaults) {
+			execute(ufw, ["default", action, direction]);
+		}
+		for (const rule of rules) {
+			execute(ufw, ufwArgs(rule));
+		}
+		execute(ufw, ["--force", "enable"]);
+		execute(systemctl, ["enable", "ufw.service"]);
+		verifyRebuiltPolicy(rules, runtime, { emergency, policy }, true);
+		if (emergency) {
+			installRecoveryFilters(rules, execute);
+		} else {
+			removeRecoveryFilter(execute);
+			removeBootFilter(runtime);
+			verifyRebuiltPolicy(rules, runtime, { policy }, false);
+		}
+	} catch (error) {
+		installRecoveryFilters(fallback, execute);
+		throw error;
+	}
+}
+
+function confirmedPolicy(runtime: RecoveryRuntime) {
+	try {
+		return readChange(runtime.confirmed) ?? null;
+	} catch {
+		console.error("Cannot read the last confirmed firewall policy.");
+		return null;
+	}
+}
+
+function configVpn(runtime: RecoveryRuntime) {
+	try {
+		return vpnRules(rulesFor(readConfig(runtime.config)));
+	} catch {
+		return [];
+	}
+}
+
+export function restoreUfw(runtime = hostRecovery) {
+	let change: Change | undefined;
+	const last = confirmedPolicy(runtime);
+	const previous = last === null ? [] : rulesFor(last.policy);
+	try {
+		change = readChange(runtime.pending);
+	} catch (error) {
+		const vpn = recoveryVpn(configVpn(runtime), previous);
+		if (vpn.length === 0) {
+			throw new Error("Cannot recover SSH without a valid VPN declaration. Use the host console.", {
+				cause: error,
+			});
+		}
+		prepareBootGuard(runtime, vpn);
+		loadBootGuard(runtime);
+		installRecoveryFilters(vpn, runtime.execute);
+		throw new Error("Cannot read the unconfirmed policy. The emergency guards are active.", {
+			cause: error,
+		});
+	}
+	if (change === undefined) {
+		return;
+	}
+	if (change.started !== true) {
+		finishRecovery(runtime);
+		return;
+	}
+	const vpn = recoveryVpn(rulesFor(change.policy), [...previous, ...configVpn(runtime)]);
+	try {
+		if (last === null) {
+			throw new Error("No valid firewall policy has been confirmed.");
+		}
+		if (last.id !== change.id) {
+			rebuildPolicy(previous, runtime, { fallback: vpn, policy: last.policy });
+			console.log("Restored the last confirmed UFW policy.");
+		}
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : "Could not restore UFW.");
+		prepareBootGuard(runtime, vpn);
+		loadBootGuard(runtime);
+		if (error instanceof HostPrerequisitesError) {
+			throw new Error(
+				"Restored the last confirmed UFW policy. The emergency guard remains active until the host settings pass.",
+				{ cause: error },
+			);
+		}
+		rebuildPolicy(vpn, runtime, { emergency: true, policy: change.policy });
+		throw new Error("UFW recovery applied a VPN-only emergency policy. Use the host console.", {
+			cause: error,
+		});
+	}
+	finishRecovery(runtime);
+}
+
+export function armRecovery(change: Change, runtime = hostRecovery) {
+	mkdirSync(runtime.directory, { mode: 0o700, recursive: true });
+	copyFileSync(import.meta.filename, nodePath.join(runtime.directory, "host-firewall.ts"));
+	saveChange(runtime.pending, change);
+	// Recovery uses the same lock. An unarmed change record is safe to replace on the next apply.
+	runtime.execute("/usr/bin/systemd-run", [
+		`--unit=${rollback}`,
+		"--on-active=10min",
+		"--timer-property=AccuracySec=1s",
+		"--timer-property=RemainAfterElapse=no",
+		"--collect",
+		"--setenv=HEPHAESTUS_FIREWALL_LOCKED=1",
+		...recoveryCommand(runtime.directory),
+	]);
+}
+
+export function applyAction(
+	waiting: boolean,
+	hasPendingChange: boolean,
+	recoveryState: string,
+	policyMatches: () => boolean,
+) {
+	if ((waiting && hasPendingChange) || ["active", "activating"].includes(recoveryState)) {
+		throw new Error("A firewall change is awaiting confirmation or recovery.");
+	}
+	if (waiting) {
+		return "retry";
+	}
+	return policyMatches() ? "unchanged" : "arm";
+}
+
+function applyWithBootGuard(rules: Rule[], runtime: ChangeRuntime, options: RebuildOptions) {
+	try {
+		rebuildPolicy(rules, runtime, options);
+	} catch (error) {
+		try {
+			loadBootGuard(runtime);
+		} catch (guardError) {
+			throw new AggregateError(
+				[error, guardError],
+				`Firewall rebuild failed. ${String(error)}\nCould not load the emergency firewall. ${String(guardError)}`,
+				{ cause: guardError },
+			);
+		}
+		throw error;
+	}
+}
+
+export function apply(policy: unknown, rules: Rule[], runtime = hostRecovery) {
+	const snapshot = runtime.snapshotDrift();
+	if (snapshot !== null) {
+		throw new Error(snapshot);
+	}
+	runtime.sshConnection(rules);
+	const reversePath = runtime.reversePathDrift(policy);
+	if (reversePath.length > 0) {
+		throw new Error(reversePath.map(({ message }) => message).join("\n"));
+	}
+	for (const family of families) {
+		const live = runtime.execute(packetFilter[family], ["-w", "5", "-S"]).split("\n");
+		const blocked = blockedByBuiltInRules(live, family, rules);
+		if (blocked.length > 0) {
+			throw new Error(
+				[
+					`IPv${family} built-in rules survive UFW reset. Review and remove the conflicting rules first.`,
+					...blocked,
+				].join("\n"),
+			);
+		}
+	}
+	const waiting = runtime.unitState(`${rollback}.timer`, "SubState") === "waiting";
+	const previous = waiting ? readChange(runtime.pending) : undefined;
+	const recoveryAction = applyAction(
+		waiting,
+		previous?.changedAt !== undefined,
+		runtime.unitState(`${rollback}.service`, "ActiveState"),
+		() => runtime.drift(rules, false, policy).length === 0,
+	);
+	const change = { id: previous?.id ?? randomUUID(), policy };
+	if (recoveryAction === "unchanged") {
+		saveConfirmed(runtime, change);
+		finishRecovery(runtime);
+		console.log("UFW matches the host policy. Recorded the confirmed policy.");
+		return;
+	}
+	if (runtime.unitState(bootGuardUnit, "UnitFileState") !== "enabled") {
+		throw new Error(`Enable ${bootGuardUnit} before applying the firewall policy.`);
+	}
+	const declaredVpn = configVpn(runtime);
+	if (declaredVpn.length === 0) {
+		throw new Error(
+			"Provide a readable firewall configuration with VPN networks at /etc/hephaestus/host-firewall.json.",
+		);
+	}
+	const last = confirmedPolicy(runtime);
+	const vpn = recoveryVpn(rules, [...declaredVpn, ...(last === null ? [] : rulesFor(last.policy))]);
+	if (recoveryAction === "arm") {
+		// A new timer can replace an expired one while an earlier change is still incomplete.
+		armRecovery(existsSync(runtime.bootGuard) ? { ...change, started: true } : change, runtime);
+	} else if (previous === undefined) {
+		throw new Error("The waiting recovery unit has no policy declaration.");
+	}
+	// The boot service reads this file even if a power failure interrupts UFW reset.
+	prepareBootGuard(runtime, vpn);
+	saveChange(runtime.pending, { ...change, started: true });
+	console.log("The recovery timer will reapply the last confirmed UFW policy at its next run:");
+	console.log(runtime.execute(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
+	applyWithBootGuard(rules, runtime, { fallback: vpn, policy });
+	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
+		throw new Error("The recovery timer has expired.");
+	}
+	const changedAt = runtime.uptime();
+	if (!Number.isFinite(changedAt) || changedAt <= 0) {
+		throw new Error("Cannot record when the firewall changed.");
+	}
+	saveChange(runtime.pending, { ...change, started: true, changedAt });
+	console.log("Open a new SSH connection and run --confirm before the recovery timer expires.");
+}
+
+function saveConfirmed(runtime: RecoveryRuntime, change: Change) {
+	mkdirSync(nodePath.dirname(runtime.confirmed), { recursive: true, mode: 0o700 });
+	saveChange(runtime.confirmed, { id: change.id, policy: change.policy });
+}
+
+export function commitPolicy(change: Change, runtime = hostRecovery) {
+	// Publish the confirmation before trying to stop either unit. A queued unit then does no work.
+	saveConfirmed(runtime, change);
+	clearBootGuard(runtime);
+	try {
+		runtime.execute(systemctl, ["stop", `${rollback}.timer`]);
+		try {
+			runtime.execute(systemctl, ["stop", `${rollback}.service`]);
+		} catch (error) {
+			if (runtime.unitState(`${rollback}.service`, "LoadState") !== "not-found") {
+				throw error;
+			}
+		}
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : "Could not stop the recovery units.");
+		return;
+	}
+	finishRecovery(runtime);
+}
+
+export function confirm(rules: Rule[], runtime = hostRecovery, policy?: unknown) {
+	const change = readChange(runtime.pending);
+	if (
+		change?.changedAt === undefined ||
+		JSON.stringify(rulesFor(change.policy)) !== JSON.stringify(rules)
+	) {
+		throw new Error("There is no matching firewall change to confirm. Run --check or --apply.");
+	}
+	requireFreshSshConnection(change.changedAt, () => runtime.sshConnection(rules));
+	verifyPolicy(rules, runtime, policy ?? change.policy);
+	if (runtime.unitState(`${rollback}.timer`, "SubState") !== "waiting") {
+		throw new Error("Cannot confirm the firewall change after the recovery timer expires.");
+	}
+	commitPolicy(change, runtime);
+	console.log("UFW matches the host policy. The new SSH connection confirmed the change.");
 }
 
 export function renderPolicyMetrics(reasons: DriftReason[], seconds: number): string {
@@ -591,7 +1448,8 @@ function reportPolicyStatus(config: string, metrics: string) {
 	}
 	let problems: Problem[];
 	try {
-		problems = drift(readConfig(config));
+		const policy = readConfig(config);
+		problems = drift(rulesFor(policy), false, policy);
 	} catch (error) {
 		problems = [
 			{
@@ -624,9 +1482,15 @@ function main() {
 	if (process.platform !== "linux" || process.getuid?.() !== 0) {
 		throw new Error("Run as root on the Linux host.");
 	}
+	if (process.argv.length === 3 && process.argv[2] === "--restore-ufw") {
+		restoreUfw();
+		return;
+	}
 	const { values, positionals } = parseArgs({
 		options: {
 			check: { type: "boolean" },
+			apply: { type: "boolean" },
+			confirm: { type: "boolean" },
 			report: { type: "string" },
 		},
 		allowPositionals: true,
@@ -635,21 +1499,30 @@ function main() {
 	if (
 		config === undefined ||
 		positionals.length !== 1 ||
-		[values.check, values.report !== undefined].filter(Boolean).length !== 1
+		[values.check, values.apply, values.confirm, values.report !== undefined].filter(Boolean)
+			.length !== 1
 	) {
 		throw new Error(
-			"Usage: sudo node scripts/host-firewall.ts (--check|--report METRICS.prom) CONFIG.json",
+			"Usage: sudo node scripts/host-firewall.ts (--check|--apply|--confirm|--report METRICS.prom) CONFIG.json",
 		);
 	}
 	if (values.report !== undefined) {
 		reportPolicyStatus(config, values.report);
 		return;
 	}
-	const problems = drift(readConfig(config));
-	if (problems.length > 0) {
-		throw new Error(problems.map(({ message }) => message).join("\n"));
+	const policy = readConfig(config);
+	const rules = rulesFor(policy);
+	if (values.check === true) {
+		const problems = drift(rules, false, policy);
+		if (problems.length > 0) {
+			throw new Error(problems.map(({ message }) => message).join("\n"));
+		}
+		console.log("UFW matches the host policy.");
+	} else if (values.apply === true) {
+		apply(policy, rules);
+	} else {
+		confirm(rules, hostRecovery, policy);
 	}
-	console.log("UFW matches the host policy.");
 }
 
 if (typeof import.meta.main !== "boolean") {
@@ -658,7 +1531,36 @@ if (typeof import.meta.main !== "boolean") {
 
 if (import.meta.main) {
 	try {
-		main();
+		// Check and report do not change the firewall.
+		if (
+			["--apply", "--confirm", "--restore-ufw"].some((mode) => process.argv.includes(mode)) &&
+			process.env.HEPHAESTUS_FIREWALL_LOCKED !== "1"
+		) {
+			const result = spawnSync(
+				"/usr/bin/flock",
+				[
+					"--nonblock",
+					"--conflict-exit-code",
+					"75",
+					lock,
+					process.execPath,
+					...process.argv.slice(1),
+				],
+				{
+					env: { ...process.env, HEPHAESTUS_FIREWALL_LOCKED: "1" },
+					stdio: "inherit",
+				},
+			);
+			if (result.error !== undefined) {
+				throw result.error;
+			}
+			if (result.status === 75) {
+				console.error("Another firewall change is running.");
+			}
+			process.exitCode = result.status ?? 1;
+		} else {
+			main();
+		}
 	} catch (error) {
 		if (error instanceof SyntaxError) {
 			console.error("Invalid firewall configuration JSON.");

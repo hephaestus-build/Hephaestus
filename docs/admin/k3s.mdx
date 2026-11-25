@@ -49,13 +49,17 @@ Linux uses the greater of the public interface value and `net.ipv4.conf.all.rp_f
 A global value of 2 overrides the public interface setting.
 If the global value is 2, keep the current effective values on other interfaces before you set the global value to 0.
 
-Record the settings in a file such as `/etc/sysctl.d/99-hephaestus-public-rp-filter.conf`.
-Replace `eth0` with your public interface:
+Record the settings in `/etc/sysctl.d/99-hephaestus-public-rp-filter.conf`.
+Use `ip -4 route show default` to find the public interface. Replace `eth0` with its name.
 
 ```ini
 net/ipv4/conf/all/rp_filter = 0
 net/ipv4/conf/eth0/rp_filter = 1
 ```
+
+Load the saved settings with `sudo sysctl --system`.
+The policy check requires both the saved settings and the running kernel values.
+An IPv6 Pod network requires equivalent IPv6 source validation on the public interface and is outside the scope of this procedure.
 
 ### Check the policy with UFW
 
@@ -84,8 +88,8 @@ Replace the example addresses with your VPN networks and the addresses of your m
 For each source, include only the IP families it uses.
 Use an empty `monitoringAddresses` list if the k3s Pod network already allows your scraper.
 Set `k3s` for a host with the default k3s interfaces, and set `http3` for a proxy that serves HTTP/3.
-Set `publicInterface` to your public IPv4 interface.
-With no `publicInterface` value, the check requires one interface on the IPv4 default route.
+Set `publicInterface` to the interface used by the IPv4 default route, or omit it to use that interface automatically.
+The check reports a mismatch if the configured interface differs.
 
 ```json
 {
@@ -97,24 +101,59 @@ With no `publicInterface` value, the check requires one interface on the IPv4 de
 }
 ```
 
-Use separate UFW rules for the two TCP web ports.
-Run each source rule once for each listed VPN range or monitoring address.
-Replace the source placeholders before you run the commands.
+Open the host console before you change the UFW rules.
+If you use VPN SSH, keep the first session open until a second VPN SSH session works with the final rules.
 
-```bash
-sudo ufw default deny incoming
-sudo ufw default deny routed
-sudo ufw default allow outgoing
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow from <vpn-range> to any port 22 proto tcp
-sudo ufw allow from <monitoring-address> to any port 9100 proto tcp
-sudo ufw allow in on cni0
-sudo ufw allow in on flannel.1
-```
+1. Allow SSH first. Run this block for each VPN network in your configuration.
+   Enter the network in CIDR notation. Continue only if UFW accepts each rule.
 
-Add `sudo ufw allow 443/udp` if the proxy serves HTTP/3.
-Use the `cni0` and `flannel.1` rules on the k3s host only.
+   ```bash
+   (
+     read -r -p 'VPN network in CIDR notation: ' vpn_range
+     if [[ -z "$vpn_range" || "$vpn_range" == '<vpn-range>' ]]; then
+       printf '%s\n' 'Enter your VPN network.' >&2
+       exit 1
+     fi
+     sudo ufw allow from "$vpn_range" to any port 22 proto tcp
+   )
+   ```
+
+2. Allow each TCP web port separately.
+
+   ```bash
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   ```
+
+   For each monitoring address in the configuration, enter that address when prompted and run this block.
+
+   ```bash
+   (
+     read -r -p 'Monitoring host address: ' monitoring_address
+     sudo ufw allow from "$monitoring_address" to any port 9100 proto tcp
+   )
+   ```
+
+   On the k3s host, allow the two cluster interfaces.
+
+   ```bash
+   sudo ufw allow in on cni0
+   sudo ufw allow in on flannel.1
+   ```
+
+   If the proxy serves HTTP/3, add `sudo ufw allow 443/udp`.
+
+3. Set the default policies after all required allows are in place. Enable UFW if it is inactive.
+
+   ```bash
+   sudo ufw default deny incoming
+   sudo ufw default deny routed
+   sudo ufw default allow outgoing
+   sudo ufw enable
+   ```
+
+4. Open a second SSH session from the admin VPN with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
+   Verify that it connects before you close the first session.
 
 Run the policy check on the host:
 
@@ -125,6 +164,59 @@ sudo node scripts/host-firewall.ts --check /etc/hephaestus/host-firewall.json
 The check exits with an error if the host differs from the policy.
 
 To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
+
+### Apply a declared policy with recovery
+
+Open the host console before you change the policy.
+Set strict reverse-path filtering before you apply the UFW policy.
+Install the boot recovery service from the same trusted checkout and make sure `nft` is available at `/usr/sbin/nft`.
+
+```bash
+sudo install -m 0644 deploy/host-firewall/hephaestus-firewall-recovery-boot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable hephaestus-firewall-recovery-boot.service
+```
+
+The script checks the built-in `INPUT` and `FORWARD` chains before it schedules a change.
+If it lists conflicting rules, use the console to remove or migrate them before you retry.
+UFW reset replaces its before and after rules with package defaults.
+Review any custom UFW rules before you continue.
+
+1. Connect from the admin VPN with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
+   Use the configuration at `/etc/hephaestus/host-firewall.json`.
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --apply /etc/hephaestus/host-firewall.json
+   ```
+
+2. If the policy changed, open a second SSH connection with the same options.
+   Check that the site and metrics scrape work.
+   Confirm from the new session within 10 minutes.
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --confirm /etc/hephaestus/host-firewall.json
+   ```
+
+The script records the last confirmed policy in `/etc/hephaestus/host-firewall-confirmed.json`.
+Run `--apply` once with a policy that already matches the host to record a starting policy.
+If the timer expires, it rebuilds and checks the last confirmed policy.
+If recovery fails or this is the first change, the emergency firewall drops incoming and routed traffic.
+It permits SSH from the available declared VPN networks.
+
+Recovery can restore the UFW rules while another host setting still blocks full verification.
+The emergency firewall stays active in that case.
+Correct the reported setting and retry recovery.
+
+After a reboot during an unconfirmed change, the boot service loads the emergency firewall before networking.
+Use the console or connect from the admin VPN and retry recovery:
+
+```bash
+sudo node scripts/host-firewall.ts --restore-ufw
+```
+
+After recovery, run the policy check and verify the site.
+If the script reports an unreadable pending policy, wait for the timer to stop.
+Then apply the intended policy and confirm it from a fresh VPN SSH session.
 
 ## What the installer checks
 

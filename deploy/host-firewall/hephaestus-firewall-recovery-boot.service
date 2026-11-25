@@ -1,0 +1,14 @@
+[Unit]
+Description=Activate the emergency host firewall before networking
+DefaultDependencies=no
+After=local-fs.target nftables.service
+Wants=network-pre.target
+Before=network-pre.target ufw.service k3s.service k3s-agent.service
+ConditionPathExists=/etc/hephaestus/host-firewall-recovery.nft
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft --file /etc/hephaestus/host-firewall-recovery.nft
+
+[Install]
+WantedBy=sysinit.target
