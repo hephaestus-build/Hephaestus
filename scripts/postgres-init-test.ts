@@ -73,14 +73,26 @@ async function waitReady(step: string): Promise<void> {
 	}
 }
 
-/** The process's /proc status inside the container, or "" once it no longer exists. */
+/**
+ * The process's /proc status inside the container, or "" once it no longer exists. Only cat's own
+ * "No such file" proves that the process is gone: a Docker call that timed out or failed proves nothing, so it
+ * fails the drill.
+ */
 function procStatus(pid: string): string {
 	const result = spawnSync("docker", ["exec", container, "cat", `/proc/${pid}/status`], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 		...quick,
 	});
-	return result.status === 0 ? result.stdout : "";
+	if (result.status === 0) {
+		return result.stdout;
+	}
+	if (result.status === 1 && result.stderr.includes("No such file or directory")) {
+		return "";
+	}
+	throw new Error(
+		`Reading /proc/${pid}/status ${howItEnded(result)}:\n${result.stdout}${result.stderr}`,
+	);
 }
 
 async function waitFor(what: string, done: () => boolean): Promise<void> {
