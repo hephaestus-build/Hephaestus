@@ -49,12 +49,13 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         accounts = mock(AccountRepository.class);
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         worker = new ExportGenerationWorker(
                 repository,
                 accounts,
                 assembler,
                 objectMapper,
-                Clock.fixed(NOW, ZoneOffset.UTC),
+                new AccountExportWriter(repository, accounts, clock),
                 metrics,
                 transactionManager,
                 mock(OwnerScope.class));
@@ -135,6 +136,9 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     @Test
     void shouldMarkFailedWhenThePublicationLookupFails() {
         pendingExport();
+        var bundle = mock(ExportBundle.class);
+        when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
+        when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
         when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
         AccountExport export = new AccountExport(ACCOUNT_ID);
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))

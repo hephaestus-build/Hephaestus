@@ -246,7 +246,7 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                 accountRepository,
                 assembler,
                 objectMapper,
-                clock,
+                new AccountExportWriter(repository, accountRepository, clock),
                 new PrivacyJobMetrics(registry),
                 transactionManager,
                 ownerScope);

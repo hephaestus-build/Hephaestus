@@ -3,21 +3,15 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
-import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,7 +39,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountExportService {
 
     private final AccountExportRepository accountExportRepository;
-    private final AccountRepository accounts;
+    private final AccountExportWriter writer;
     private final ApplicationEventPublisher events;
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
@@ -53,30 +47,17 @@ public class AccountExportService {
 
     public AccountExportService(
             AccountExportRepository accountExportRepository,
-            AccountRepository accounts,
+            AccountExportWriter writer,
             ApplicationEventPublisher events,
             AuthEventLogger authEventLogger,
             Clock clock,
             OwnerScope ownerScope) {
         this.accountExportRepository = accountExportRepository;
-        this.accounts = accounts;
+        this.writer = writer;
         this.events = events;
         this.authEventLogger = authEventLogger;
         this.clock = clock;
         this.ownerScope = ownerScope;
-    }
-
-    /** Statuses that count as "in flight" for the one-export-per-account cap. */
-    private static final List<AccountExport.Status> IN_FLIGHT =
-            List.of(AccountExport.Status.PENDING, AccountExport.Status.PROCESSING);
-
-    private static ResponseStatusException inFlightConflict() {
-        return inFlightConflict(null);
-    }
-
-    private static ResponseStatusException inFlightConflict(@Nullable Throwable cause) {
-        return new ResponseStatusException(
-                HttpStatus.CONFLICT, "An export is already in progress for this account.", cause);
     }
 
     /**
@@ -88,26 +69,7 @@ public class AccountExportService {
     @Transactional
     public AccountExport requestExport(PersonAct act) {
         long accountId = ownerScope.fromPrincipal(act);
-        // Hold the account lock through insertion and durable event publication. Erasure locks it before deleting
-        // exports.
-        if (accounts.lockStatusForShare(accountId)
-                .map(Account.Status::valueOf)
-                .filter(AccountExport::accountAllowsExport)
-                .isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This account is unavailable for export.");
-        }
-        // Fast-path friendly check; the authoritative guard is the partial unique index
-        // uq_account_export_in_flight (changeset -14-), which closes the check-then-insert TOCTOU below.
-        if (accountExportRepository.existsByAccountIdAndStatusIn(accountId, IN_FLIGHT)) {
-            throw inFlightConflict();
-        }
-        AccountExport export;
-        try {
-            export = accountExportRepository.saveAndFlush(new AccountExport(accountId));
-        } catch (DataIntegrityViolationException e) {
-            // Lost the race: a concurrent POST inserted the in-flight row first and won the unique index.
-            throw inFlightConflict(e);
-        }
+        AccountExport export = writer.createPending(accountId);
         authEventLogger
                 .event(AuthEvent.EventType.EXPORT_REQUESTED, AuthEvent.Result.SUCCESS)
                 .account(accountId)

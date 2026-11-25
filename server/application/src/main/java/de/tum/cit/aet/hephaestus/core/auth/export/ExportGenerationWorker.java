@@ -6,13 +6,10 @@ import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter.Generation;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -36,14 +33,11 @@ public class ExportGenerationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ExportGenerationWorker.class);
 
-    /** Retention window for a READY export before the sweep expires it and frees the payload. */
-    static final Duration RETENTION = Duration.ofDays(2);
-
     private final AccountExportRepository accountExportRepository;
     private final AccountRepository accounts;
     private final ExportBundleAssembler assembler;
     private final ObjectMapper objectMapper;
-    private final Clock clock;
+    private final AccountExportWriter writer;
     private final PrivacyJobMetrics metrics;
     private final TransactionTemplate transaction;
     private final OwnerScope ownerScope;
@@ -53,7 +47,7 @@ public class ExportGenerationWorker {
             AccountRepository accounts,
             ExportBundleAssembler assembler,
             ObjectMapper objectMapper,
-            Clock clock,
+            AccountExportWriter writer,
             PrivacyJobMetrics metrics,
             PlatformTransactionManager transactionManager,
             OwnerScope ownerScope) {
@@ -61,7 +55,7 @@ public class ExportGenerationWorker {
         this.accounts = accounts;
         this.assembler = assembler;
         this.objectMapper = objectMapper;
-        this.clock = clock;
+        this.writer = writer;
         this.metrics = metrics;
         this.transaction = new TransactionTemplate(transactionManager);
         this.ownerScope = ownerScope;
@@ -102,19 +96,14 @@ public class ExportGenerationWorker {
         if (generated == Generation.ALREADY_DONE) {
             return;
         }
+        if (generated == Generation.NOT_FOUND) {
+            log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
+        }
         metrics.record(Job.EXPORT_GENERATION, generated == Generation.READY ? Outcome.SUCCESS : Outcome.FAILURE);
         if (generated == Generation.READY) {
             metrics.recordAffected(Job.EXPORT_GENERATION, 1);
             log.info("auth.export: export {} for account {} READY", exportId, accountId);
         }
-    }
-
-    private enum Generation {
-        READY,
-        ACCOUNT_UNAVAILABLE,
-        IN_PROGRESS,
-        NOT_FOUND,
-        ALREADY_DONE
     }
 
     private Generation assemble(Long exportId, Long accountId) {
@@ -123,7 +112,7 @@ public class ExportGenerationWorker {
             return Generation.IN_PROGRESS;
         }
         var status = accountExportRepository.findStatus(exportId, accountId);
-        if (status.isPresent() && !inFlight(status.orElseThrow())) {
+        if (status.isPresent() && !status.orElseThrow().inFlight()) {
             return Generation.ALREADY_DONE;
         }
         boolean eligible = accounts.findById(accountId)
@@ -131,58 +120,14 @@ public class ExportGenerationWorker {
                 .filter(AccountExport::accountAllowsExport)
                 .isPresent();
         if (status.isEmpty()) {
-            return missingExport(exportId, accountId, eligible);
+            return eligible ? Generation.NOT_FOUND : Generation.ALREADY_DONE;
         }
         if (!eligible) {
             // Account erasure is irreversible. A missing account also cannot own a retained export.
-            return finish(exportId, accountId, null);
+            return writer.finish(exportId, accountId, null, "account_unavailable");
         }
         byte[] payload = objectMapper.writeValueAsBytes(assembler.assemble(accountId));
-        return publish(exportId, accountId, payload);
-    }
-
-    private Generation publish(Long exportId, Long accountId, byte[] payload) {
-        // Take the lifecycle lock only for publication, and before the export row, as the purge does.
-        boolean eligible = accounts.lockStatusForShare(accountId)
-                .map(Account.Status::valueOf)
-                .filter(AccountExport::accountAllowsExport)
-                .isPresent();
-        return finish(exportId, accountId, eligible ? payload : null);
-    }
-
-    private Generation finish(Long exportId, Long accountId, byte @Nullable [] payload) {
-        AccountExport export = accountExportRepository
-                .lockByIdAndAccountId(exportId, accountId)
-                .orElse(null);
-        if (export == null) {
-            return missingExport(exportId, accountId, payload != null);
-        }
-        if (!inFlight(export.getStatus())) {
-            return Generation.ALREADY_DONE;
-        }
-        if (payload == null) {
-            fail(export, "account_unavailable");
-            return Generation.ACCOUNT_UNAVAILABLE;
-        }
-        Instant now = Instant.now(clock);
-        export.setPayload(payload);
-        export.setCompletedAt(now);
-        export.setExpiresAt(now.plus(RETENTION));
-        export.setStatus(AccountExport.Status.READY);
-        accountExportRepository.save(export);
-        return Generation.READY;
-    }
-
-    private Generation missingExport(long exportId, long accountId, boolean eligible) {
-        if (!eligible) {
-            return Generation.ALREADY_DONE;
-        }
-        log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
-        return Generation.NOT_FOUND;
-    }
-
-    private static boolean inFlight(AccountExport.Status status) {
-        return status == AccountExport.Status.PENDING || status == AccountExport.Status.PROCESSING;
+        return writer.finish(exportId, accountId, payload, "account_unavailable");
     }
 
     private void recordFailure(Long exportId, Long accountId, String reason, RuntimeException failure) {
@@ -192,10 +137,7 @@ public class ExportGenerationWorker {
             // Repository errors can mark a transaction rollback-only; recovery needs a fresh transaction.
             transaction.executeWithoutResult(status -> {
                 ownerScope.ofJob(accountId);
-                accountExportRepository
-                        .lockByIdAndAccountId(exportId, accountId)
-                        .filter(export -> inFlight(export.getStatus()))
-                        .ifPresent(export -> fail(export, reason));
+                writer.finish(exportId, accountId, null, reason);
             });
         } catch (RuntimeException recoveryFailure) {
             log.error(
@@ -207,14 +149,5 @@ public class ExportGenerationWorker {
             // not.
             throw recoveryFailure;
         }
-    }
-
-    private void fail(AccountExport export, String reason) {
-        export.setStatus(AccountExport.Status.FAILED);
-        export.setFailureReason(reason);
-        export.setPayload(null);
-        export.setCompletedAt(null);
-        export.setExpiresAt(null);
-        accountExportRepository.save(export);
     }
 }

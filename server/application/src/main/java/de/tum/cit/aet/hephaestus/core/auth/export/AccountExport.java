@@ -91,6 +91,14 @@ public class AccountExport {
         this.status = Status.PENDING;
     }
 
+    void markFailed(String reason) {
+        status = Status.FAILED;
+        failureReason = reason;
+        payload = null;
+        completedAt = null;
+        expiresAt = null;
+    }
+
     static boolean accountAllowsExport(Account.Status status) {
         return status != Account.Status.DELETING && status != Account.Status.DELETED;
     }
@@ -100,6 +108,10 @@ public class AccountExport {
         PROCESSING,
         READY,
         FAILED,
-        EXPIRED,
+        EXPIRED;
+
+        boolean inFlight() {
+            return this == PENDING || this == PROCESSING;
+        }
     }
 }
