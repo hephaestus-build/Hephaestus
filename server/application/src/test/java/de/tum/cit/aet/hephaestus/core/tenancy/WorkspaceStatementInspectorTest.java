@@ -20,6 +20,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -296,6 +298,47 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         }
     }
 
+    // A request thread's stack is small, and a key list as long as the fast path reads must not overflow it.
+    private static void onSmallStack(Runnable inspection) {
+        var failure = new AtomicReference<@Nullable Throwable>();
+        var thread = Thread.ofPlatform().stackSize(256 * 1024).unstarted(() -> {
+            try {
+                inspection.run();
+            } catch (Throwable thrown) {
+                failure.set(thrown);
+            }
+        });
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(interrupted);
+        }
+        assertThat(failure.get()).isNull();
+    }
+
+    private static String reviewKeyList(int keys) {
+        return "select r1_0.id,r1_0.status from review r1_0 where r1_0.id in (" + "?,".repeat(keys - 1) + "?)";
+    }
+
+    @Test
+    void shouldAcceptALoadByTheLongestKeyListTheFastPathReads() {
+        when(scopedTables.isScoped("review")).thenReturn(true);
+        String sql = reviewKeyList(4_000);
+        assertThat(sql).hasSizeLessThan(8192);
+        onSmallStack(() -> newInspector(TenancyEnforcement.THROW).inspect(sql));
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void shouldReportALoadByAKeyListLongerThanTheFastPathReads() {
+        when(scopedTables.isScoped("review")).thenReturn(true);
+        String sql = reviewKeyList(10_000);
+        onSmallStack(() -> newInspector(TenancyEnforcement.LOG).inspect(sql));
+        verify(reporter).report(sql, Set.of("review"), TenancyEnforcement.LOG);
+    }
+
     // load by the complete composite key (ADR 0004 fast paths)
 
     private static final String REVIEWERS = "pull_request_requested_reviewers";
@@ -313,6 +356,16 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
                 + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id) in ((?,?))");
         inspector.inspect("select rr1_0.review_state from " + REVIEWERS
                 + " rr1_0 where (rr1_0.user_id, rr1_0.pull_request_id) in ((?, ?), (?, ?))");
+        verify(reporter, never()).report(any(), any(), any());
+    }
+
+    @Test
+    void shouldAcceptALoadByTheLongestCompositeKeyListTheFastPathReads() {
+        WorkspaceStatementInspector inspector = reviewerKeyInspector();
+        String sql = "select rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id) in (" + "(?,?),".repeat(1_299) + "(?,?))";
+        assertThat(sql).hasSizeLessThan(8192);
+        onSmallStack(() -> inspector.inspect(sql));
         verify(reporter, never()).report(any(), any(), any());
     }
 
