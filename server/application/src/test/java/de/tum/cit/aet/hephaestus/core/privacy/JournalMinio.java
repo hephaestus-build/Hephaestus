@@ -67,6 +67,20 @@ final class JournalMinio implements AutoCloseable {
         return mc("cat", "test/" + BUCKET + "/" + key).getStdout();
     }
 
+    /** Keeps every write of an object as its own version, so a rewrite of the same bytes is visible. */
+    void keepVersions() throws Exception {
+        mc("version", "enable", "test/" + BUCKET);
+    }
+
+    /** How many versions of the object under {@code key} the bucket holds. */
+    long versions(String key) throws Exception {
+        return mc("ls", "--versions", "test/" + BUCKET + "/" + key)
+                .getStdout()
+                .lines()
+                .filter(line -> !line.isBlank())
+                .count();
+    }
+
     private Container.ExecResult mc(String... args) throws Exception {
         var command = new String[args.length + 1];
         command[0] = "mc";

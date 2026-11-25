@@ -96,6 +96,48 @@ class S3PrivacyJournalStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldConfirmTheStoredObjectWithoutRewritingItAfterTheJournalTableIsRestored() throws Exception {
+        try (var minio = new JournalMinio();
+                var writer = minio.store(PREFIX)) {
+            // A rewrite of the same bytes keeps the ETag. A versioned bucket counts it as a second version.
+            minio.keepVersions();
+            writer.verifyBucket();
+            when(bucket.store(any(), any()))
+                    .thenAnswer(request -> writer.store(request.getArgument(0), request.getArgument(1)));
+            var id = UUID.randomUUID();
+            transactions.executeWithoutResult(status -> journal.record(
+                    id, PrivacyJournalKind.MEMBERSHIP_ENDED, Map.of("workspaceId", 7L, "accountId", 1L)));
+            // The backup holds the fact as it committed, before it shipped.
+            var backup = Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT to_jsonb(j)::text FROM privacy_journal j WHERE entry_id = ?", String.class, id));
+            shipping.confirm(id);
+            var key = PREFIX + jdbc.queryForObject("""
+                            SELECT (recorded_at AT TIME ZONE 'UTC')::date::text || '/' || entry_id || '.json'
+                            FROM privacy_journal WHERE entry_id = ?
+                            """, String.class, id);
+            var stored = minio.object(key);
+            assertThat(minio.versions(key)).isOne();
+
+            jdbc.update("DELETE FROM privacy_journal WHERE entry_id = ?", id);
+            jdbc.update(
+                    "INSERT INTO privacy_journal SELECT * FROM jsonb_populate_record(NULL::privacy_journal, CAST(? AS jsonb))",
+                    backup);
+            assertThat(shipped(id)).isFalse();
+
+            shipping.confirm(id);
+
+            assertThat(shipped(id)).isTrue();
+            assertThat(minio.versions(key)).isOne();
+            assertThat(minio.object(key)).isEqualTo(stored);
+        }
+    }
+
+    private boolean shipped(UUID id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT shipped_at IS NOT NULL FROM privacy_journal WHERE entry_id = ?", Boolean.class, id));
+    }
+
+    @Test
     void refusesABucketThatIgnoresTheConditionalWrite() throws Exception {
         try (var s3 = new MockWebServer()) {
             s3.start();
