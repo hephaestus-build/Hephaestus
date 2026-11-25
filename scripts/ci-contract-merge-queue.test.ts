@@ -58,7 +58,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
 import { asArray, asRecord, asString, asStringArray, at as valueAt, isRecord } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
-import { FULL_VERIFICATION_STEP, QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
+import { QUEUE_TIER_JOBS, QUEUE_TIER_STEP } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 
 void describe("ci-contract: merge-queue", () => {
@@ -237,11 +237,23 @@ void describe("ci-contract: merge-queue", () => {
 				}
 			}
 		}
-		// The latency report reads a pull request's tier from this step of its run, not from its labels.
-		assert.equal(
-			String(namedStep(orchestrator, ["jobs", "detect-changes"], FULL_VERIFICATION_STEP).get("if")),
-			"steps.opt_in.outputs.full == 'true'",
-		);
+		// The latency report reads a pull request's tier from this step of its run, not from its labels,
+		// so the step runs exactly when the `queue-tier` output selects the queue tier.
+		const recorded = `\${{ ${String(namedStep(orchestrator, ["jobs", "detect-changes"], QUEUE_TIER_STEP).get("if"))} }}`;
+		for (const run of [
+			{ full: "true", light: "false" },
+			{ full: "false", light: "false" },
+			{ full: "true", light: "true" },
+			{ full: "false", light: "true" },
+			{},
+		]) {
+			assert.equal(
+				evaluateTierOutput(recorded, "pull_request", run),
+				evaluateTierOutput(decision, "pull_request", run),
+				`the record follows the queue tier: ${JSON.stringify(run)}`,
+			);
+		}
+		assert.equal(evaluateTierOutput(recorded, "merge_group", {}), "false");
 		assert.deepEqual(guarded.toSorted(), [
 			"extension-e2e",
 			"postgres-drill",

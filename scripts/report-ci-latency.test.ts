@@ -17,8 +17,8 @@ import {
 	isLatencySample,
 	latencyBudget,
 	queueTierFailures,
-	FULL_VERIFICATION_STEP,
-	selectedFullVerification,
+	pullRequestTier,
+	QUEUE_TIER_STEP,
 	renderLatencyBudget,
 	selectLatencyRuns,
 } from "./report-ci-latency.ts";
@@ -128,29 +128,38 @@ void test("PR latency includes the shards and database checks while browser runs
 	);
 });
 
-/** A run's `Changes` job, with the step that records `ci:full` ending as `conclusion`. */
+/** A run's `Changes` job, with the step that records the queue tier ending as `conclusion`. */
 const changes = (conclusion: string) => ({
 	jobs: [
 		{
 			name: "Changes",
 			steps: [
 				{ name: "Read the opt-in labels", conclusion: "success" },
-				{ name: FULL_VERIFICATION_STEP, conclusion },
+				{ name: QUEUE_TIER_STEP, conclusion },
 			],
 		},
 	],
 });
 
-void test("a pull request's run that ci:full selected is not a fast-tier sample, whatever its labels later", () => {
-	assert.equal(selectedFullVerification(changes("success")), true);
+void test("a pull request run's tier comes from its own record, whatever its labels later", () => {
+	assert.equal(pullRequestTier(changes("success")), "queue");
 	// The label went on after the run: its step skipped, so the run used the fast tier.
-	assert.equal(selectedFullVerification(changes("skipped")), false);
-	assert.equal(selectedFullVerification({ jobs: [{ name: "Changes", steps: [] }] }), false);
+	assert.equal(pullRequestTier(changes("skipped")), "fast");
+	// A run from before the record, which the fast-tier sample leaves out.
 	assert.equal(
-		selectedFullVerification({
-			jobs: [{ name: "Other", steps: [{ name: FULL_VERIFICATION_STEP, conclusion: "success" }] }],
+		pullRequestTier({
+			jobs: [
+				{ name: "Changes", steps: [{ name: "Read the opt-in labels", conclusion: "success" }] },
+			],
 		}),
-		false,
+		"unknown",
+	);
+	assert.equal(pullRequestTier({ jobs: [] }), "unknown");
+	assert.equal(
+		pullRequestTier({
+			jobs: [{ name: "Other", steps: [{ name: QUEUE_TIER_STEP, conclusion: "success" }] }],
+		}),
+		"unknown",
 	);
 });
 

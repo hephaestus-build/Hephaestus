@@ -539,24 +539,28 @@ export function failedJobNames(jobs: readonly unknown[]): string[] {
 		.map((job) => asString(job.name, "job name"));
 }
 
-/** The `Changes` step that runs only when `ci:full` selects the queue tier for a pull request's run. */
-export const FULL_VERIFICATION_STEP = "Record the queue tier that ci:full selects";
+/** The `Changes` step that runs only when a pull request's run verifies the queue tier. */
+export const QUEUE_TIER_STEP = "Record that this run verifies the queue tier";
 
 /**
- * Whether a pull request's run verified the queue tier because it carried `ci:full`, read from the
- * run's own jobs: the labels the pull request carries later do not change the run's tier.
+ * The tier that a pull request's run verified, read from the run's own `Changes` job, so the labels
+ * the pull request carries later do not move the run. `unknown` is a run from before that job
+ * recorded its tier; the fast-tier sample leaves it out.
  */
-export function selectedFullVerification(jobs: unknown): boolean {
-	return asArray(asRecord(jobs, "jobs response").jobs, "jobs").some((value) => {
+export function pullRequestTier(jobs: unknown): "queue" | "fast" | "unknown" {
+	for (const value of asArray(asRecord(jobs, "jobs response").jobs, "jobs")) {
 		const job = asRecord(value, "job");
-		return (
-			job.name === "Changes" &&
-			asArray(job.steps ?? [], "steps").some((step) => {
-				const { name, conclusion } = asRecord(step, "step");
-				return name === FULL_VERIFICATION_STEP && conclusion === "success";
-			})
-		);
-	});
+		if (job.name !== "Changes") {
+			continue;
+		}
+		for (const stepValue of asArray(job.steps ?? [], "steps")) {
+			const { name, conclusion } = asRecord(stepValue, "step");
+			if (name === QUEUE_TIER_STEP) {
+				return conclusion === "success" ? "queue" : "fast";
+			}
+		}
+	}
+	return "unknown";
 }
 
 /** The latest ten qualifying verdicts of one event, as run summaries. */
@@ -570,7 +574,7 @@ async function sample(
 	const summaries = [];
 	for (const run of selectLatencyRuns(listing, now, event)) {
 		const jobs = await jobsOf(repository, run, 1);
-		if (event === "pull_request" && selectedFullVerification(jobs)) {
+		if (event === "pull_request" && pullRequestTier(jobs) !== "fast") {
 			continue;
 		}
 		const summary = summarizeCiTimings(run, jobs);

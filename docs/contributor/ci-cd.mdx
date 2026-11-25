@@ -1803,7 +1803,10 @@ satisfy this cohort.
 
 The report also selects the ten most recent successful first-attempt PR runs of the fast tier.
 Unit or `review` must have run. No browser suite can have run.
-A run that `ci:full` selected is left out. Its `Changes` job records that selection in the step `Record the queue tier that ci:full selects`, so labels changed later do not move a run.
+
+A run that verified the queue tier is left out: it carried `ci:full`, or its label read failed.
+Its `Changes` job records that tier in the step `Record that this run verifies the queue tier`, so labels changed later do not move a run.
+A run from before that record is left out too, because its tier is unknown.
 Migration PRs remain in that cohort when they run Database and the drills.
 
 It reports the median and p90 as an observation, with no target.
