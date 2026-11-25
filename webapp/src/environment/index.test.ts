@@ -9,6 +9,7 @@ const record = {
 	deploymentEnvironment: "staging",
 	commit: "a".repeat(40),
 	browserFaultReports: true,
+	publicUsage: true,
 };
 
 /** The module reads the config record once, at import, so each case loads it afresh. */
@@ -41,6 +42,7 @@ describe("config record", () => {
 		expect(environment.deployment.name).toBe("Staging");
 		expect(environment.buildInfo.commit).toBe("a".repeat(40));
 		expect(environment.browserFaultReports).toBe(true);
+		expect(environment.publicUsage).toBe(true);
 	});
 
 	it("refuses a record that does not have the server's shape", async () => {

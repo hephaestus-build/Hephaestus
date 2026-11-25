@@ -22,6 +22,8 @@ const APEX_PATHS = [
 	"/verify-passkey",
 	"/integrations",
 	"/about",
+	// Hephaestus in numbers: the totals of the whole server, not of one workspace.
+	"/usage",
 	"/workspaces",
 	// Do not prefix explicit workspace paths; output rewrites handle their target workspace.
 	"/w",

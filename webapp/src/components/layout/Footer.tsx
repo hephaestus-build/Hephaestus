@@ -10,6 +10,8 @@ import { hasText } from "@/lib/text";
 export interface FooterProps {
 	className?: string;
 	isProduction?: boolean;
+	/** Whether this server publishes Hephaestus in numbers, so the footer links it. */
+	showPublicUsage?: boolean;
 	buildInfo?: {
 		branch?: string;
 		commit?: string;
@@ -17,7 +19,12 @@ export interface FooterProps {
 	};
 }
 
-export default function Footer({ className, isProduction, buildInfo }: FooterProps) {
+export default function Footer({
+	className,
+	isProduction,
+	showPublicUsage,
+	buildInfo,
+}: FooterProps) {
 	const showBuildInfo =
 		isProduction !== true &&
 		(hasText(buildInfo?.branch) || hasText(buildInfo?.commit) || hasText(buildInfo?.deployedAt));
@@ -67,6 +74,14 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 						>
 							About
 						</Link>
+						{showPublicUsage === true && (
+							<Link
+								to="/usage"
+								className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+							>
+								Hephaestus in numbers
+							</Link>
+						)}
 						<a
 							href="https://github.com/hephaestus-build/Hephaestus/releases"
 							target="_blank"

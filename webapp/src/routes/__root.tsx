@@ -61,6 +61,7 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
+import { usePublicUsagePublished } from "@/hooks/use-public-usage-published";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWaitingProductFeedback } from "@/hooks/use-waiting-product-feedback";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
@@ -146,6 +147,7 @@ function AppLayout({
 }) {
 	const { userView } = useAuth();
 	const corner = useGetStartedCornerState(pathname);
+	const publicUsagePublished = usePublicUsagePublished();
 
 	return (
 		<>
@@ -192,6 +194,7 @@ function AppLayout({
 								<Footer
 									buildInfo={environment.buildInfo}
 									isProduction={environment.deployment.isProduction}
+									showPublicUsage={publicUsagePublished}
 								/>
 							)}
 							{/* Room for the Get started pill under the page's last row and the footer. */}

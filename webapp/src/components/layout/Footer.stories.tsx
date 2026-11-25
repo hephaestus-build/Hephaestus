@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import Footer from "./Footer";
 
@@ -17,6 +18,17 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	args: {
 		buildInfo: undefined,
+	},
+};
+
+/** While this server publishes Hephaestus in numbers, the footer links it. */
+export const WithHephaestusInNumbers: Story = {
+	args: { buildInfo: undefined, showPublicUsage: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Hephaestus in numbers" })).toHaveAttribute(
+			"href",
+			"/usage",
+		);
 	},
 };
 

@@ -4,8 +4,11 @@ description: Turn on the public page that shows instance totals once each half-y
 page_type: how-to
 ---
 
-**Hephaestus in numbers** shows that your instance is in use, to anyone and without sign-in.
-The server publishes it through `GET /api/public/usage` and `GET /api/public/usage/{period}`.
+**Hephaestus in numbers** is a public page at `/usage`.
+It shows that your instance is in use, to anyone and without sign-in.
+While it is on, the app footer links it.
+
+The server publishes its figures through `GET /api/public/usage` and `GET /api/public/usage/{period}`.
 Each half-year, it shows five totals: workspaces, developers whose work was reviewed, reviewed work, practice reviews, and practice feedback delivered.
 The page is off by default.
 [ADR 0153](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0153-a-public-page-shows-instance-reach-released-once-each-half-year.md) records the rules.
@@ -29,7 +32,11 @@ A hidden figure reads "Not published". The page does not tell why.
 
 ## Turn on the page
 
-Set the chart value, then run the install command again:
+1. Open **Instance administration → Instance settings**.
+2. Under **Hephaestus in numbers**, turn on **Publish Hephaestus in numbers**.
+
+A saved choice takes precedence over the chart value, and the audit log records each change as `PUBLIC_USAGE_CHANGED`.
+To set the default before an admin saves a choice, set the chart value, then run the install command again:
 
 ```yaml title="values.yaml"
 config:
@@ -41,14 +48,16 @@ config:
 The server checks each hour whether a period is due.
 The first release follows at the next check after you turn on the page.
 It needs a half-year that ended at least 14 days ago, with a practice review that is not a trial.
+The footer link reads the switch when a page loads.
+A page that loads more than a minute after a change shows the new state.
 
 An instance admin can also turn the page on or off with `PUT /api/admin/settings/public-usage` and the body `{"allowed": true}`.
-A saved choice takes precedence over the chart value, and the audit log records each change as `PUBLIC_USAGE_CHANGED`.
 
 ## Withdraw a period or a figure
 
 Withdraw a released period, or one of its figures, when a figure must not stay public.
 A withdrawal is final. You cannot show the figure again.
+**Instance settings** lists each withdrawal under **Hephaestus in numbers**.
 
 1. To withdraw a whole released period, send `POST /api/admin/settings/public-usage/withdrawals` with `{"period": "2026-04", "wholePeriod": true}`.
 2. To withdraw one figure, send the figure instead, such as `{"period": "2026-04", "figure": "REVIEWED_PEOPLE"}`.
@@ -122,17 +131,18 @@ The server would compute a released half-year again, from records that changed s
 
 ## Check that it worked
 
-1. Send `GET /api/public/usage` without sign-in.
-2. Check that the response lists the released half-years.
-3. Check that it has the header `Cache-Control: max-age=300, must-revalidate, public`.
+1. Open `/usage` on your instance in a private browser window.
+2. Check that the page lists the released half-years.
+3. Check that `GET /api/public/usage` has the header `Cache-Control: max-age=300, must-revalidate, public`.
 
 ## Undo
 
-1. Send `PUT /api/admin/settings/public-usage` with `{"allowed": false}`.
+1. In **Instance settings**, turn off **Publish Hephaestus in numbers**.
    A choice that an admin saved takes precedence over the chart value.
    So `config.publicUsage.enabled: false` alone does not turn off a page that an admin turned on.
    Use the chart value only for an instance where no admin saved a choice.
-2. After 5 minutes, send `GET /api/public/usage` without sign-in, and check that it answers 404.
+2. After 5 minutes, open `/usage` in a private browser window, and check that `GET /api/public/usage` answers 404 without sign-in.
+   The footer link goes away.
 
 The released periods stay stored. When you turn on the page again, it shows them again, with each withdrawal still in place.
 
