@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRecorded;
@@ -39,6 +40,7 @@ class FeedbackThreadResolver {
     private final FeedbackThreadEvidence evidence;
     private final ItemIndexService itemLocks;
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
     private final ObjectMapper mapper;
     private final Clock clock;
 
@@ -121,7 +123,8 @@ class FeedbackThreadResolver {
         actions.cancelPending(workspaceId, lane);
         actions.enqueue(new ActionRequest(
                 ActionKind.RESOLVE_FEEDBACK_THREAD,
-                workspaceId,
+                // The thread's state decides the write, and no access check runs before it in this transaction.
+                generations.requestedNow(workspaceId),
                 lane,
                 lane + ":" + row.getGeneration() + ":" + (row.isResolved() ? "RESOLVE" : "REOPEN"),
                 mapper.valueToTree(new Payload(row.getId(), row.getGeneration())),

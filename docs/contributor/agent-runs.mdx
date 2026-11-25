@@ -514,9 +514,13 @@ The probe then renews the lease and locks the named rows with a short lock timeo
 [ADR 0134](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) owns the rule.
 This section gives the mechanism for runs.
 
-- `AgentRuns.enqueue` writes the run's `authorization_stamp`: the workspace's `authority_generation`, as the caller's transaction reads it.
-  Read the stamp before the authority check that it covers, in the same transaction.
-  `TurnRunsAdapter.enqueue` checks the conversation owner's membership after the stamp for this reason.
+- New work takes a `CheckedAuthority`: proof of the authority that its request was checked under.
+  `AuthorityGenerations.authorize(workspace, access)` reads the workspace's `authority_generation` first, then runs the caller's access check in the same transaction, and returns the proof only if the check passed.
+  So no stamp can be read after the check that it covers: a narrowing that commits after the read refuses the work at its next boundary.
+  `TurnRunsAdapter.enqueue` passes the conversation owner's membership check this way.
+  Work that checks no access of its own in its transaction, such as a review that an event selected, takes `requestedNow`.
+  Work that continues stored work, such as a turn's Slack reply, takes `CheckedAuthority.inherited` with the stored stamp.
+- `AgentRuns.enqueue` writes the run's `authorization_stamp` from that proof.
 - A continuation keeps the stamp of the run that it continues: it is the same work.
   `AgentRuns.resume`, which queues completed work again because something asks for it now, takes the stamp of now.
   A database trigger refuses a change of the stamp.

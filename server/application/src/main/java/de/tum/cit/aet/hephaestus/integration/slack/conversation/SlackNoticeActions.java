@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
@@ -22,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class SlackNoticeActions {
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
     private final ObjectMapper mapper;
     private final GitProviderRegistry providers;
 
@@ -35,7 +37,8 @@ public class SlackNoticeActions {
                 + notice.messageTs();
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_NOTICE,
-                workspaceId,
+                // A notice answers the Slack event that asks for it now, and checks no access of its own.
+                generations.requestedNow(workspaceId),
                 "slack_dm:" + workspaceId + ":" + notice.channelId(),
                 key,
                 mapper.valueToTree(notice),

@@ -51,7 +51,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             SELECT id AS "id", kind AS "kind", idempotency_key AS "idempotencyKey", state AS "state",
               attempts AS "attempts",
               state = 'EXECUTING' AND next_attempt_at > updated_at AS "rereading", next_attempt_at AS "nextAttemptAt",
-              stop_reason AS "stopReason", created_at AS "createdAt", updated_at AS "updatedAt"
+              stop_reason AS "stopReason", created_at AS "createdAt", updated_at AS "updatedAt",
+              (authorization_stamp ->> 'workspace')::bigint AS "stampedGeneration"
             """;
 
     String ENDED = """
@@ -194,6 +195,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
         Instant getCreatedAt();
 
         Instant getUpdatedAt();
+
+        long getStampedGeneration();
     }
 
     /**

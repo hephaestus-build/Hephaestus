@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.conversation.spi;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -30,6 +31,9 @@ public interface TurnRuns {
      * @throws ConversationLeaseLostException when that claim no longer holds the run
      */
     void requireCurrent(long workspaceId, UUID turnId, UUID runId, int epoch);
+
+    /** The authorization stamp that a turn's run was requested under (ADR 0134); what the turn sends keeps it. */
+    AuthorizationStamp authorizationStamp(long workspaceId, UUID runId);
 
     /** Ends the run of a turn whose holder ended it under {@code epoch}; the caller checked the claim before. */
     void ended(long workspaceId, UUID runId, int epoch, ConversationTurn.Status outcome);

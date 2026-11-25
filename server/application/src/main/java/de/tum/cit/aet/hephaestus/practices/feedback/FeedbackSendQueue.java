@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
@@ -37,6 +39,7 @@ public class FeedbackSendQueue {
     private static final String PREFIX = "feedback:";
 
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
     private final ObjectMapper mapper;
     private final FeedbackCopyRepository copies;
     private final FeedbackVisibilityService visibility;
@@ -80,21 +83,31 @@ public class FeedbackSendQueue {
                                 && s.getState() != FeedbackSendState.DONE))
                 .isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The existing send must settle first.");
-        next(row, action, prior);
+        // A new send of the feedback is requested now, and no access check runs before it in this transaction.
+        next(row, action, prior, generations.requestedNow(row.getWorkspaceId()));
     }
 
-    /** Queues the send that follows one that ends now; the end of that send calls it, in its transaction. */
+    /**
+     * Queues the send that follows one that ends now; the end of that send calls it, in its transaction. It continues
+     * the same send, so it keeps the authority that the ended one was queued under.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void follow(Feedback row, FeedbackSendAction action) {
-        next(row, action, actions.newestInLane(row.getWorkspaceId(), lane(row.getId())));
+        var prior = actions.newestInLane(row.getWorkspaceId(), lane(row.getId()));
+        next(
+                row,
+                action,
+                prior,
+                prior.map(ended -> CheckedAuthority.inherited(row.getWorkspaceId(), ended.stamp()))
+                        .orElseGet(() -> generations.requestedNow(row.getWorkspaceId())));
     }
 
-    private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior) {
+    private void next(Feedback row, FeedbackSendAction action, Optional<LaneAction> prior, CheckedAuthority authority) {
         actions.cancelPending(row.getWorkspaceId(), lane(row.getId()));
         int generation = prior.map(p -> generationOf(p.idempotencyKey()) + 1).orElse(1);
         actions.enqueue(new ActionRequest(
                 kindOf(action),
-                row.getWorkspaceId(),
+                authority,
                 lane(row.getId()),
                 lane(row.getId()) + ":" + generation + ":" + action.name(),
                 mapper.createObjectNode().put("feedbackId", row.getId().toString()),

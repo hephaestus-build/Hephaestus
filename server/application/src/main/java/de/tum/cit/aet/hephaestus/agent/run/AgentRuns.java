@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -128,8 +129,8 @@ public class AgentRuns {
     }
 
     /**
-     * Queues a new run of a subject. Claimers hear of it after the transaction commits. The run carries the workspace's
-     * authorization generation as the caller's transaction reads it now ({@link AuthorityGenerations#stamp}).
+     * Queues a new run of a subject that is requested now with no access check of its own in this transaction
+     * ({@link AuthorityGenerations#requestedNow}). Claimers hear of it after the transaction commits.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
@@ -138,12 +139,35 @@ public class AgentRuns {
             AgentRunBand band,
             String concurrencyKey,
             @Nullable Duration startWithin) {
+        return queue(generations.requestedNow(workspaceId), kind, band, concurrencyKey, startWithin);
+    }
+
+    /**
+     * Queues a new run of a subject under the authority that its access check granted. Claimers hear of it after the
+     * transaction commits.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueue(
+            CheckedAuthority authority,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin) {
+        return queue(authority, kind, band, concurrencyKey, startWithin);
+    }
+
+    private AgentRunRef queue(
+            CheckedAuthority authority,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin) {
         return insert(
-                workspaceId,
+                authority.workspaceId(),
                 kind,
                 band,
                 concurrencyKey,
-                generations.stamp(workspaceId),
+                authority.stamp(),
                 0,
                 0,
                 startWithin,
@@ -211,7 +235,7 @@ public class AgentRuns {
                 kind,
                 previous.getBand(),
                 previous.getConcurrencyKey(),
-                generations.stamp(previous.getWorkspaceId()),
+                generations.requestedNow(previous.getWorkspaceId()).stamp(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + (again ? 1 : 0),
                 again ? startWithin(previous) : null,

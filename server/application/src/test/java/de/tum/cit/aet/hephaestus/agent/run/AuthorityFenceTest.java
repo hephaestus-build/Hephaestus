@@ -22,9 +22,12 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.AuthorityFenceCase;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -40,6 +43,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
@@ -71,6 +76,12 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ApplicationContext context;
+
+    @Autowired
+    private AuthorityGenerations generations;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
 
     private Workspace workspace;
     private long asker;
@@ -128,6 +139,52 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
                         action,
                         workspace.getId()))
                 .isEqualTo("CANCELLED/AUTHORITY_CHANGED");
+    }
+
+    @Test
+    void shouldRefuseASendWhoseNarrowingCommittedBetweenItsAccessCheckAndItsInsert() {
+        var provider = new CopyOnWriteArrayList<UUID>();
+        var executor = sendingTo(provider);
+
+        UUID action = Objects.requireNonNull(new TransactionTemplate(transactions).execute(status -> {
+            CheckedAuthority checked = generations
+                    .authorize(workspace.getId(), () -> {
+                        // The member leaves on another connection after the stamp was read, and the check still
+                        // passes in this transaction.
+                        PostgreSQLTestContainer.ownerJdbc()
+                                .update(
+                                        "DELETE FROM membership WHERE workspace_id = ? AND account_id = ?",
+                                        workspace.getId(),
+                                        asker);
+                        return true;
+                    })
+                    .orElseThrow();
+            return actions.enqueue(notice(checked));
+        }));
+
+        assertThat(executor.runNow(action)).contains(new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED));
+        assertThat(provider).isEmpty();
+    }
+
+    @Test
+    void shouldMakeANarrowingWaitWhileAWriteIsAdmittedUnderTheGeneration() {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(generations.workspaceHeld(workspace.getId())).hasValue(generation());
+
+            assertThatThrownBy(
+                            () -> PostgreSQLTestContainer.ownerJdbc().execute("""
+                            DO $$ BEGIN
+                                SET LOCAL lock_timeout = '300ms';
+                                DELETE FROM membership WHERE workspace_id = %d AND account_id = %d;
+                            END $$""".formatted(workspace.getId(), asker)))
+                    .hasMessageContaining("lock timeout");
+        });
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM membership WHERE workspace_id = ? AND account_id = ?",
+                        Long.class,
+                        workspace.getId(),
+                        asker))
+                .isEqualTo(1);
     }
 
     @Test
@@ -259,10 +316,14 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ActionRequest notice() {
+        return notice(generations.requestedNow(workspace.getId()));
+    }
+
+    private ActionRequest notice(CheckedAuthority authority) {
         String key = "authority-fence:" + UUID.randomUUID();
         return new ActionRequest(
                 ActionKind.SLACK_NOTICE,
-                workspace.getId(),
+                authority,
                 key,
                 key,
                 JsonNodeFactory.instance.objectNode().put("n", 1),

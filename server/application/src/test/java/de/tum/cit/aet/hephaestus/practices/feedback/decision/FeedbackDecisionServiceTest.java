@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -38,6 +39,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionReason;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.testconfig.UnchangedAuthority;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,6 +80,7 @@ class FeedbackDecisionServiceTest {
             privacy,
             new FeedbackSendQueue(
                     actions,
+                    new UnchangedAuthority(),
                     new ObjectMapper(),
                     copies,
                     mock(FeedbackVisibilityService.class),
@@ -250,7 +253,8 @@ class FeedbackDecisionServiceTest {
                         now,
                         null,
                         now,
-                        now)));
+                        now,
+                        new AuthorizationStamp(0))));
         when(copies.lockByFeedbackId(1, id))
                 .thenReturn(List.of(
                         FeedbackCopy.builder().state(FeedbackCopyState.POSTED).build()));

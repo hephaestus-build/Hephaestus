@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -72,7 +73,7 @@ class NativeActionRecipientIntegrationTest extends AbstractWorkspaceIntegrationT
         String key = "native-test:" + UUID.randomUUID();
         return actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_NOTICE,
-                workspaceId,
+                context.getBean(AuthorityGenerations.class).requestedNow(workspaceId),
                 key,
                 key,
                 mapper.createObjectNode().put("channelId", "D_TEST"),

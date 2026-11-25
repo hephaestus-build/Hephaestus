@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
-import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -86,7 +85,6 @@ public class ActionExecutor implements SmartLifecycle {
     private final ObjectMapper mapper;
     private final Map<ActionKind, ActionAdapter> adapters = new EnumMap<>(ActionKind.class);
     private final MeterRegistry meters;
-    private final AuthorityGenerations generations;
     private final ActionAdmission admission;
     private final Duration lease;
 
@@ -100,13 +98,8 @@ public class ActionExecutor implements SmartLifecycle {
     private volatile boolean running = true;
 
     @Autowired
-    public ActionExecutor(
-            ActionStore store,
-            ObjectMapper mapper,
-            List<ActionAdapter> adapters,
-            MeterRegistry meters,
-            AuthorityGenerations generations) {
-        this(store, mapper, adapters, meters, generations, LEASE);
+    public ActionExecutor(ActionStore store, ObjectMapper mapper, List<ActionAdapter> adapters, MeterRegistry meters) {
+        this(store, mapper, adapters, meters, LEASE);
     }
 
     /** @param lease how long a claim holds its action, and so the longest an attempt holds its slot */
@@ -115,11 +108,9 @@ public class ActionExecutor implements SmartLifecycle {
             ObjectMapper mapper,
             List<ActionAdapter> adapters,
             MeterRegistry meters,
-            AuthorityGenerations generations,
             Duration lease) {
         this.lease = lease;
         this.store = store;
-        this.generations = generations;
         this.mapper = mapper;
         this.meters = meters;
         for (ActionAdapter adapter : adapters)
@@ -338,16 +329,21 @@ public class ActionExecutor implements SmartLifecycle {
                 claim.epoch(),
                 claim.writeStarted(),
                 claim.readbackRef(),
-                () -> {
-                    // The send boundary (ADR 0134): no write starts under authority that narrowed since the action was
-                    // queued. The adapter answers abandoned, and the action ends below, outside the adapter's work.
-                    if (narrowed(claim)) {
-                        narrowed.set(true);
-                        return false;
+                () -> switch (store.beginWrite(claim, WRITE_MARGIN)) {
+                    case ADMITTED -> {
+                        fenced.set(true);
+                        yield true;
                     }
-                    boolean begun = store.beginWrite(claim.id(), claim.epoch(), WRITE_MARGIN);
-                    if (begun) fenced.set(true);
-                    return begun;
+                    case LOST -> false;
+                    // The send boundary (ADR 0134): the adapter answers abandoned, and the action ends below, outside
+                    // the adapter's work.
+                    case AUTHORITY_CHANGED -> {
+                        narrowed.set(true);
+                        new AuthorityRefusal(
+                                        AuthorityBoundary.SEND, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)
+                                .count(meters);
+                        yield false;
+                    }
                 },
                 claim.nativeRecipient() == null
                         ? null
@@ -404,18 +400,6 @@ public class ActionExecutor implements SmartLifecycle {
                 .increment();
         settled.ifPresent(this::recordEnd);
         return result;
-    }
-
-    /**
-     * Whether the workspace's authority narrowed since the action was queued, counting the refusal. An instance-level
-     * action has no workspace authority.
-     */
-    private boolean narrowed(ActionStore.Claim claim) {
-        Long workspace = claim.workspaceId();
-        if (workspace == null) return false;
-        var refusal = generations.check(claim.stamp(), workspace, AuthorityBoundary.SEND);
-        refusal.ifPresent(refused -> refused.count(meters));
-        return refusal.isPresent();
     }
 
     /** Hands an action that ended to its adapter, in the transaction that ended it. */

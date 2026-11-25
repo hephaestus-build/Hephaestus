@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
@@ -15,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -130,13 +132,10 @@ class ActionStore {
                 });
     }
 
-    /**
-     * The authorization stamp of an action queued now, in the queueing transaction (ADR 0134). An instance-level action
-     * has no workspace authority and carries generation 0.
-     */
+    /** The stamp of the authority that the action's request was checked under; an instance-level one carries 0. */
     private String stamp(ActionRequest request) {
-        Long workspace = request.workspaceId();
-        return mapper.writeValueAsString(workspace == null ? new AuthorizationStamp(0) : generations.stamp(workspace));
+        CheckedAuthority authority = request.authority();
+        return mapper.writeValueAsString(authority == null ? new AuthorizationStamp(0) : authority.stamp());
     }
 
     private void queued(ActionRequest request, UUID id) {
@@ -200,10 +199,32 @@ class ActionStore {
                 .toList();
     }
 
-    /** Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. */
+    /** Whether a write may start: the claim still holds the action, and the action's authority still holds. */
+    enum WriteAdmission {
+        ADMITTED,
+        /** Another claim took the action, an erasure deleted it, or too little of the lease is left. */
+        LOST,
+        /** The workspace's authority narrowed since the action was queued (ADR 0134). */
+        AUTHORITY_CHANGED
+    }
+
+    /**
+     * Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. The
+     * send boundary of ADR 0134: it holds the workspace's generation while it admits the write, so a narrowing either
+     * committed before and refuses the write, or waits until the write was admitted. An instance-level action has no
+     * workspace authority.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean beginWrite(UUID id, long epoch, Duration margin) {
-        return actions.beginWrite(id, epoch, margin.toSeconds()) == 1;
+    public WriteAdmission beginWrite(Claim claim, Duration margin) {
+        Long workspace = claim.workspaceId();
+        if (workspace != null) {
+            OptionalLong held = generations.workspaceHeld(workspace);
+            if (held.isEmpty() || held.getAsLong() != claim.stamp().workspace())
+                return WriteAdmission.AUTHORITY_CHANGED;
+        }
+        return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1
+                ? WriteAdmission.ADMITTED
+                : WriteAdmission.LOST;
     }
 
     /**
@@ -262,7 +283,8 @@ class ActionStore {
                 row.getNextAttemptAt(),
                 reason == null ? null : ActionStopReason.valueOf(reason),
                 row.getCreatedAt(),
-                row.getUpdatedAt());
+                row.getUpdatedAt(),
+                new AuthorizationStamp(row.getStampedGeneration()));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

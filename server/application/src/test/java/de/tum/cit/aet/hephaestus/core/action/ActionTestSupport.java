@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
-import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -31,8 +30,7 @@ public final class ActionTestSupport {
                 context.getBean(ActionStore.class),
                 context.getBean(ObjectMapper.class),
                 adapters,
-                new SimpleMeterRegistry(),
-                context.getBean(AuthorityGenerations.class));
+                new SimpleMeterRegistry());
     }
 
     /** Applies the real terminal-outcome retention policy. */

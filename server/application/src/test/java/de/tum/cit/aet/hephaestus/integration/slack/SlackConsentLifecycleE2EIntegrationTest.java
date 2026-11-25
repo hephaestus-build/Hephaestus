@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -272,8 +273,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 connectionService,
                 new TransactionTemplate(transactionManager),
                 event -> {},
-                new SlackChannelJoinActions(actions, consentEventRepository, mapper),
-                new SlackConsentActions(actions, consentEventRepository, mapper),
+                new SlackChannelJoinActions(
+                        actions, context.getBean(AuthorityGenerations.class), consentEventRepository, mapper),
+                new SlackConsentActions(
+                        actions, context.getBean(AuthorityGenerations.class), consentEventRepository, mapper),
                 workspaceResolver);
         consentExecutor = ActionTestSupport.withAdapter(
                 context,

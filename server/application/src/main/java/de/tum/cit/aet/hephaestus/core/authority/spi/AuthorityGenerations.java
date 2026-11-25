@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.BooleanSupplier;
 
 /**
  * The current authorization generations. Only an authority narrowing raises one (ADR 0134 decision 2). The workspace
@@ -16,13 +17,31 @@ public interface AuthorityGenerations {
     OptionalLong workspace(long workspaceId);
 
     /**
-     * The stamp for work requested now. Take it before the authority check that it covers, in the same transaction: a
-     * narrowing that commits in between then makes the stamp stale, so the work is refused at its next boundary.
+     * Reads the stamp for work requested now, then runs {@code access}, the caller's own access check, in the same
+     * transaction. A narrowing that commits after the read makes the stamp stale, so the work is refused at its next
+     * boundary, also when {@code access} still saw the old authority.
+     *
+     * @return the authority that {@code access} granted; empty when it refused
      */
-    default AuthorizationStamp stamp(long workspaceId) {
-        return new AuthorizationStamp(workspace(workspaceId)
+    default Optional<CheckedAuthority> authorize(long workspaceId, BooleanSupplier access) {
+        var stamp = new AuthorizationStamp(workspace(workspaceId)
                 .orElseThrow(() -> new IllegalStateException("Work belongs to a workspace that exists")));
+        return access.getAsBoolean() ? Optional.of(new CheckedAuthority(workspaceId, stamp)) : Optional.empty();
     }
+
+    /**
+     * The authority of work that is requested now with no access check of its own in this transaction, such as a
+     * review that an event selected. A caller that checks access passes its check to {@link #authorize} instead.
+     */
+    default CheckedAuthority requestedNow(long workspaceId) {
+        return authorize(workspaceId, () -> true).orElseThrow();
+    }
+
+    /**
+     * The workspace's authorization generation, held until the caller's transaction ends, so no narrowing commits while
+     * that transaction admits work under it. Requires a transaction.
+     */
+    OptionalLong workspaceHeld(long workspaceId);
 
     /** The refusal for work that carries {@code stamp} at {@code boundary}; empty while its authority holds. */
     default Optional<AuthorityRefusal> check(AuthorizationStamp stamp, long workspaceId, AuthorityBoundary boundary) {

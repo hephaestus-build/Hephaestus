@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.turn;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -10,6 +11,9 @@ import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
@@ -37,6 +41,7 @@ public class TurnRunsAdapter implements TurnRuns {
 
     private final AgentRuns runs;
     private final WorkspaceMemberships memberships;
+    private final AuthorityGenerations generations;
     private final Clock clock;
 
     /** The subject of a conversation's runs: also the subject of its sandbox. */
@@ -47,12 +52,15 @@ public class TurnRunsAdapter implements TurnRuns {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public UUID enqueue(long workspaceId, UUID conversationId, long ownerAccountId) {
-        UUID run = runs.enqueue(
-                        workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject(conversationId), START_WAIT)
+        CheckedAuthority owner = generations
+                .authorize(
+                        workspaceId,
+                        () -> memberships
+                                .activeRole(workspaceId, ownerAccountId)
+                                .isPresent())
+                .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
+        return runs.enqueue(owner, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject(conversationId), START_WAIT)
                 .id();
-        if (memberships.activeRole(workspaceId, ownerAccountId).isEmpty())
-            throw new EntityNotFoundException("Conversation", conversationId.toString());
-        return run;
     }
 
     @Override
@@ -61,6 +69,14 @@ public class TurnRunsAdapter implements TurnRuns {
         return runs.enqueue(
                         workspaceId, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
                 .id();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AuthorizationStamp authorizationStamp(long workspaceId, UUID runId) {
+        return runs.find(new AgentRunRef(runId, workspaceId))
+                .map(AgentRun::getAuthorizationStamp)
+                .orElseThrow(() -> new IllegalStateException("A turn's run exists while the turn ends"));
     }
 
     @Override

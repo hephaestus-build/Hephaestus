@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyBypass;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -16,7 +17,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.hibernate.SessionFactory;
@@ -66,6 +66,9 @@ class ActionUnknownKindIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private AuthorityGenerations generations;
 
     // Micrometer gauges hold their state object by weak reference. The sampler owns that state, so the test keeps it
     // for the meter's lifetime, as the Spring singleton does.
@@ -359,7 +362,7 @@ class ActionUnknownKindIntegrationTest extends BaseIntegrationTest {
                         body.accept(new Outbox(
                                 sql,
                                 repository,
-                                new ActionStore(repository, mapper, workspace -> OptionalLong.of(0)),
+                                new ActionStore(repository, mapper, generations),
                                 ActionAdmission.of(adapters)));
                     }
                 } finally {

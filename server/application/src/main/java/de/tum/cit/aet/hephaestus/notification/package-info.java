@@ -14,6 +14,8 @@
             "core::action",
             "core::auth-ratelimit",
             "core::auth-spi",
+            // An email carries the authority that its preparation checked (ADR 0134).
+            "core::authority-spi",
             "core::current-account",
             "core::event",
             "core::person-data",

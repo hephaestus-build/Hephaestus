@@ -104,7 +104,8 @@ public class EmailAdminController {
         var event = new TestEmailNotice.TestEmail(
                 UUID.randomUUID(), to, adminId, clock.instant().plus(TEST_EXPIRY));
         // One attempt on this thread, through the outbox like every email.
-        ActionResult result = executor.runNow(emails.request(notice, event, 1)).orElseThrow();
+        ActionResult result =
+                executor.runNow(emails.request(notice, event, null, 1)).orElseThrow();
         return new EmailTestResponseDTO(
                 EmailAdapter.outcome(result), to, result instanceof ActionResult.Done done ? done.readbackRef() : null);
     }

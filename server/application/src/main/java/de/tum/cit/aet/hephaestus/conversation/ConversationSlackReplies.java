@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
+import de.tum.cit.aet.hephaestus.core.authority.spi.CheckedAuthority;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
@@ -48,6 +51,8 @@ public class ConversationSlackReplies {
     private final AgentActions actions;
     private final ObjectMapper mapper;
     private final OwnerScope owners;
+    private final TurnRuns turnRuns;
+    private final AuthorityGenerations generations;
 
     public static String replyKey(UUID questionId) {
         return REPLY + questionId;
@@ -84,8 +89,14 @@ public class ConversationSlackReplies {
     /** Creates one digest note; the executor can carry it out immediately. */
     @Transactional
     public Optional<UUID> digest(long workspaceId, long accountId, UUID digestId) {
+        // The digest's admission is its request, and it checks no access of its own here.
         return actions.enqueueNew(
-                request(workspaceId, accountId, digestKey(digestId), new Payload(digestId, null)), Duration.ZERO);
+                request(
+                        generations.requestedNow(workspaceId),
+                        accountId,
+                        digestKey(digestId),
+                        new Payload(digestId, null)),
+                Duration.ZERO);
     }
 
     /** The action of a Slack turn's question, including an action another replica already claimed. */
@@ -105,7 +116,10 @@ public class ConversationSlackReplies {
     @Transactional(propagation = Propagation.MANDATORY)
     public void ended(ConversationTurn turn, long accountId, UUID questionId) {
         String key = replyKey(questionId);
-        actions.enqueue(request(turn.getWorkspaceId(), accountId, key, new Payload(questionId, turn.getId())));
+        // The reply keeps the authority that the question was asked under: a narrowing during the turn refuses it.
+        var asked = CheckedAuthority.inherited(
+                turn.getWorkspaceId(), turnRuns.authorizationStamp(turn.getWorkspaceId(), turn.getRunId()));
+        actions.enqueue(request(asked, accountId, key, new Payload(questionId, turn.getId())));
     }
 
     /**
@@ -134,10 +148,10 @@ public class ConversationSlackReplies {
         actions.forgetEnded(workspaceId, keys);
     }
 
-    private ActionRequest request(long workspaceId, long accountId, String key, Payload payload) {
+    private ActionRequest request(CheckedAuthority authority, long accountId, String key, Payload payload) {
         return new ActionRequest(
                 ActionKind.SLACK_POST,
-                workspaceId,
+                authority,
                 key,
                 key,
                 mapper.valueToTree(payload),

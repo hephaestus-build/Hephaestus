@@ -35,6 +35,13 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Query(value = "SELECT authority_generation FROM workspace WHERE id = :workspaceId", nativeQuery = true)
     Optional<Long> findAuthorityGeneration(@Param("workspaceId") long workspaceId);
 
+    /**
+     * The workspace's authorization generation, held for the caller's transaction: a narrowing, which raises it, waits
+     * until that transaction ends.
+     */
+    @Query(value = "SELECT authority_generation FROM workspace WHERE id = :workspaceId FOR SHARE", nativeQuery = true)
+    Optional<Long> findAuthorityGenerationForShare(@Param("workspaceId") long workspaceId);
+
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery$WorkspaceView(
             w.workspaceSlug, w.displayName)

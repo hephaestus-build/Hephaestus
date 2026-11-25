@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.OptionalLong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -23,6 +24,15 @@ class WorkspaceAuthorityGenerations implements AuthorityGenerations {
     public OptionalLong workspace(long workspaceId) {
         return workspaces
                 .findAuthorityGeneration(workspaceId)
+                .map(OptionalLong::of)
+                .orElseGet(OptionalLong::empty);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OptionalLong workspaceHeld(long workspaceId) {
+        return workspaces
+                .findAuthorityGenerationForShare(workspaceId)
                 .map(OptionalLong::of)
                 .orElseGet(OptionalLong::empty);
     }

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.channel;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
@@ -26,6 +27,7 @@ public class SlackConsentActions {
     private static final Duration READBACK_CLOCK_MARGIN = Duration.ofMinutes(15);
 
     private final AgentActions actions;
+    private final AuthorityGenerations generations;
     private final SlackChannelConsentEventRepository events;
     private final ObjectMapper mapper;
 
@@ -48,7 +50,8 @@ public class SlackConsentActions {
                 retry);
         actions.enqueue(new ActionRequest(
                 ActionKind.SLACK_CONSENT,
-                workspace,
+                // A channel's own action, queued with the consent change that asks for it, checks no access here.
+                generations.requestedNow(workspace),
                 SlackChannelJoinActions.lane(workspace, channel.getSlackChannelId()),
                 SlackConsentAnnouncement.idempotencyKey(workspace, requestId),
                 mapper.valueToTree(payload),
