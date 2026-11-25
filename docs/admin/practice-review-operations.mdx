@@ -43,7 +43,8 @@ Each one explains a review that starts late, is refused, or stops early.
 | Attempts of a review after a retryable failure | 5 |
 | Time from submission that a review waits through a provider outage or rate limit, without spending a retry | 2 hours (`hephaestus.agent.capacity.model-outage-window`). After it, the review closes as Partial with Provider unavailable. |
 
-Input tokens count every prompt that the practice's model calls send, cached or not.
+Input tokens count what each of the practice's model calls reads anew: its uncached prompt and its cache writes.
+A cache read of a prompt that an earlier call already sent does not count. So a practice that rereads large files spends the budget, and a practice that makes many calls over the same opening does not.
 A practice that spends one of its budgets ends as `NOT_REACHED` with reason `BUDGET`, and the other practices go on.
 
 The timeout of the workspace's **Practice reviews** model assignment limits the whole review run.

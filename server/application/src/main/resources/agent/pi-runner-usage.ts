@@ -58,6 +58,21 @@ export function callPromptTokens(usage: Partial<AssistantMessage["usage"]> | und
 	return (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
 }
 
+/**
+ * What one model call charges to its practice's input budget: the prompt that the model read anew, its uncached input
+ * and its cache writes. A cache read is the part of the prompt that an earlier call of the session already sent, so
+ * charging it would charge a long session again for each call over the same opening. A practice that keeps rereading
+ * large files still spends the budget, because each read adds new prompt.
+ */
+export function callChargedInputTokens(
+	usage: Partial<AssistantMessage["usage"]> | undefined,
+): number {
+	if (!usage) {
+		return 0;
+	}
+	return (usage.input ?? 0) + (usage.cacheWrite ?? 0);
+}
+
 /** Input tokens one assistant message read; zero for a failed call that reported none. */
 export function inputTokensOf(msg: ReportedMessage): number {
 	if (msg.role !== "assistant") {

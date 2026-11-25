@@ -2,8 +2,8 @@
 // Pure rules, so a test can call them; pi-runner.ts reads the workspace at module scope.
 
 /**
- * Model calls, output tokens and input tokens: what a session may spend, or what it has spent. Input tokens are the
- * prompt total of each call, cached or not, because the model reads all of it.
+ * Model calls, output tokens and input tokens: what a session may spend, or what it has spent. Input tokens are what
+ * each call read anew: its uncached input and its cache writes, not the cache reads of a prompt already sent.
  */
 export interface Work {
 	modelCalls: number;
@@ -14,7 +14,7 @@ export interface Work {
 /**
  * Whether the turn should record now: two model calls left, no more output tokens left than writing what it
  * still owes takes at the pace the session has shown, or no more input tokens left than two calls of the size of
- * its last prompt.
+ * its last whole prompt. A call whose cache the model evicted reads its whole prompt anew, so the reserve assumes it.
  */
 export function shouldRecordNow(
 	used: Work,

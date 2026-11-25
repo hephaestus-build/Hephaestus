@@ -116,7 +116,7 @@ import {
 	newUsageLedger,
 	outputTokensOf,
 	inputTokensOf,
-	callPromptTokens,
+	callChargedInputTokens,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
 import {
@@ -1545,7 +1545,7 @@ async function runReview(): Promise<void> {
 			}
 			turn.calls += 1;
 			turn.outputTokens += output;
-			turn.inputTokens += prompt;
+			turn.inputTokens += callChargedInputTokens(event.message.usage);
 			turn.lastPromptTokens = prompt;
 			noteCutOff(
 				turn,
@@ -2552,7 +2552,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						if (scope.currentTurn && !event.aborted) {
 							scope.currentTurn.compactions += 1;
 							// A compaction calls the model outside the agent loop, so no assistant message charges its prompt.
-							scope.currentTurn.inputTokens += callPromptTokens(event.result?.usage);
+							scope.currentTurn.inputTokens += callChargedInputTokens(event.result?.usage);
 							// Pi can compact after the loop's last turn ends; no later check would see that it spent the budget.
 							if (
 								scope.currentTurn.stoppedBy === null &&

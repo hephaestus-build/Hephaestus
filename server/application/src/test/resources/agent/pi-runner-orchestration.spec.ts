@@ -1465,9 +1465,10 @@ if (scenario !== undefined && scenario !== "") {
 								scenario === "scope-input-budget" ||
 								scenario === "scope-compaction-input-budget"
 							) {
-								// ADR 0068's PracticeInputBudgetTest: the first practice reads until its prompts spend its
-								// input budget, cached reads included, and never records; its sibling records at once.
-								// In the compaction case, one call and the compaction's own prompt spend it.
+								// ADR 0068's PracticeInputBudgetTest: the first practice reads until what its prompts read
+								// anew, uncached input and cache writes, spends its input budget, and never records; its
+								// sibling records at once. Cache reads do not count. In the compaction case, one call and
+								// the compaction's own prompt spend it.
 								const compacts = scenario === "scope-compaction-input-budget";
 								let calls = 1;
 								if (currentSlug === "test-practice") {
@@ -1480,7 +1481,7 @@ if (scenario !== undefined && scenario !== "") {
 										message: {
 											role: "assistant",
 											stopReason: "toolUse",
-											usage: { ...callUsage(100), input: 1000, cacheRead: 500 },
+											usage: { ...callUsage(100), input: 1000, cacheWrite: 500, cacheRead: 5000 },
 											content: [
 												{
 													type: "toolCall",
@@ -1514,7 +1515,7 @@ if (scenario !== undefined && scenario !== "") {
 												summary: "",
 												firstKeptEntryId: "",
 												tokensBefore: 0,
-												usage: { ...callUsage(50), input: 2000, cacheRead: 1000 },
+												usage: { ...callUsage(50), input: 2000, cacheWrite: 1000, cacheRead: 9000 },
 											},
 											aborted: false,
 										});
