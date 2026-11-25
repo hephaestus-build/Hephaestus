@@ -446,16 +446,20 @@ public class PersonDataService {
         return mapper.readValue(Objects.requireNonNull(r.getScopeJson()), PersonScope.class);
     }
 
+    private static final List<String> STORES_ADDED_AFTER_ADMISSION =
+            List.of(CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL, "resource_reader");
+
     private Map<String, PersonDataSelection> selections(PersonDataRequest r) {
         Map<String, PersonDataSelection> selected = mapper.readValue(
                 Objects.requireNonNull(r.getSelectionsJson()),
                 new TypeReference<Map<String, PersonDataSelection>>() {});
-        // A request frozen before the journal was added has no recovery facts to export or erase.
-        String journalStore = CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL;
-        if (!selected.containsKey(journalStore)
-                && registry.stores().stream().anyMatch(s -> s.store().equals(journalStore))) {
-            selected.put(journalStore, new PersonDataSelection(List.of()));
-        }
+        // A request frozen before one of these stores was added selects nothing in it. The privacy journal then held no
+        // recovery facts, and no repository reader existed. A reader written since for a repository where the request
+        // selected the person's collaborator row goes with that row, through the mirror's trigger.
+        for (String added : STORES_ADDED_AFTER_ADMISSION)
+            if (!selected.containsKey(added)
+                    && registry.stores().stream().anyMatch(s -> s.store().equals(added)))
+                selected.put(added, new PersonDataSelection(List.of()));
         return selected;
     }
 

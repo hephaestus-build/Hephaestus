@@ -6,7 +6,11 @@ public enum ProofReason {
     AWAITING_READERS(ProofState.PENDING),
     /** The provider confirmed the resource public. */
     PUBLIC_ON_PROVIDER(ProofState.PROVEN),
-    /** The provider listed every reader of the resource. */
+    /**
+     * The provider listed every reader of the resource that the workspace's credential can see. A listing can leave out
+     * a reader whom the credential cannot see, never add one, so a read rechecks a listed reader on the provider and
+     * refuses a reader the listing does not name.
+     */
     READERS_LISTED(ProofState.PROVEN),
     /** The provider's rate limit stopped the listing of readers; the next sync continues it. */
     RATE_LIMITED(ProofState.PENDING),
@@ -16,7 +20,8 @@ public enum ProofReason {
     RESOURCE_UNAVAILABLE(ProofState.FAILED),
     /**
      * The provider cannot list every reader of the resource, such as a GitHub internal repository that enterprise
-     * members outside its organization can read. It waits until its visibility changes.
+     * members outside its organization can read, or a GitLab project before Hephaestus lists GitLab members. It waits
+     * until its visibility changes or a later release lists its readers.
      */
     READERS_NOT_LISTABLE(ProofState.FAILED);
 

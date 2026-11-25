@@ -200,9 +200,9 @@ class ResourceReadersTest {
         assertThat(readers.trustedClass(NOW, MAX_AGE)).isEqualTo(VisibilityClass.UNPROVEN);
     }
 
-    /** Operators read how long a proof waits; an answer that keeps the class and reason keeps that time. */
+    /** Operators read how long a proof waits; an answer that keeps the class and the proof state keeps that time. */
     @Test
-    void shouldStampWhenTheProofLastChangedOnlyWhenItChanges() {
+    void shouldStampWhenTheProofStateChangesButNotAcrossPendingReasons() {
         var readers = new ResourceReaders();
         readers.listingStopped(ProofReason.RATE_LIMITED);
         // The proof began to wait a minute ago.
@@ -210,9 +210,36 @@ class ResourceReadersTest {
         ReflectionTestUtils.setField(readers, "proofChangedAt", waitingSince);
 
         readers.listingStopped(ProofReason.RATE_LIMITED);
-        assertThat(readers.getProofChangedAt()).isEqualTo(waitingSince);
-
         readers.listingStopped(ProofReason.LISTING_INCOMPLETE);
+        assertThat(readers.getProofChangedAt())
+                .as("a proof that moves from one pending reason to another keeps waiting")
+                .isEqualTo(waitingSince);
+
+        readers.readersListed(readers.getProofGeneration(), NOW);
         assertThat(readers.getProofChangedAt()).isAfter(waitingSince);
+    }
+
+    @Test
+    void shouldEndAListingsProofWhenTheProviderRemovesAccessItCannotAttribute() {
+        var readers = new ResourceReaders();
+        readers.readersListed(readers.getProofGeneration(), NOW);
+        long listingStarted = readers.getProofGeneration();
+
+        readers.readersInvalidated();
+
+        assertThat(proof(readers)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
+        assertThat(readers.readersListed(listingStarted, NOW))
+                .as("a listing that began before the removal does not apply")
+                .isFalse();
+    }
+
+    @Test
+    void shouldKeepAPublicProofWhenATeamLosesAccess() {
+        var readers = new ResourceReaders();
+        readers.confirmedPublic(readers.getProofGeneration(), NOW);
+
+        readers.readersInvalidated();
+
+        assertThat(proof(readers)).isEqualTo("WORKSPACE PROVEN PUBLIC_ON_PROVIDER");
     }
 }

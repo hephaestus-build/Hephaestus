@@ -297,7 +297,9 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
         // The event is an answer of its own: it narrows also when the row already held the repository private, and so
         // wrote nothing, or when no row is stored.
         if (isPrivate && nativeId != null) {
-            syncTargetProvider.recordRepositoryPrivatized(nativeId);
+            identityProviders
+                    .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                    .ifPresent(providerId -> syncTargetProvider.recordRepositoryPrivatized(nativeId, providerId));
         }
     }
 }

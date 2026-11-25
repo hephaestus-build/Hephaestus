@@ -32,13 +32,13 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     List<RepositoryReadersCount> countByReadersProof();
 
     /**
-     * Narrows every monitor of the repository with this native id in one statement, as the mirror row's trigger does:
-     * a public proof falls back to waiting, and every monitor's generation moves on.
+     * Narrows every monitor of the repository with this native id on this provider in one statement, as the mirror
+     * row's trigger does: a public proof falls back to waiting, and every monitor's generation moves on.
      */
     @WorkspaceAgnostic("Bounded by the monitors of one repository: whether it is public is a fact about the repository,"
             + " so its loss narrows every workspace's monitor of it")
-    @Query(value = "SELECT public.narrow_repository_monitors(:nativeId)", nativeQuery = true)
-    int narrowRepositoryMonitors(@Param("nativeId") long nativeId);
+    @Query(value = "SELECT public.narrow_repository_monitors(:nativeId, :providerId)", nativeQuery = true)
+    int narrowRepositoryMonitors(@Param("nativeId") long nativeId, @Param("providerId") long providerId);
 
     boolean existsByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 

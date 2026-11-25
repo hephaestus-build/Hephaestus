@@ -299,7 +299,12 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                                 resourceReaderRepository.insertReaders(workspaceId, monitorId, read.providerId(), rows);
                             }
                         }
-                        case ReaderListing.Stopped stopped -> readers.listingStopped(stopped.reason());
+                        case ReaderListing.Stopped stopped -> {
+                            // The class stays, so operators see which proof waits, but no reader is kept that no
+                            // current listing names.
+                            readers.listingStopped(stopped.reason());
+                            forgetReaders(rtm);
+                        }
                         case ReaderListing.NotListable notListable -> {
                             readers.readersNotListable();
                             forgetReaders(rtm);
@@ -357,8 +362,31 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
 
     @Override
     @Transactional
-    public void recordRepositoryPrivatized(long repositoryNativeId) {
-        repositoryToMonitorRepository.narrowRepositoryMonitors(repositoryNativeId);
+    public void recordRepositoryPrivatized(long repositoryNativeId, long providerId) {
+        repositoryToMonitorRepository.narrowRepositoryMonitors(repositoryNativeId, providerId);
+    }
+
+    @Override
+    @Transactional
+    public void recordRepositoryReadersStale(long providerId, long repositoryNativeId) {
+        repositoryToMonitorRepository.findByNativeIdOnSourceProvider(repositoryNativeId, providerId).stream()
+                .map(RepositoryToMonitor::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .forEach(monitorId -> locked(monitorId, null).ifPresent(rtm -> {
+                    rtm.getReaders().readersInvalidated();
+                    forgetReaders(rtm);
+                }));
+    }
+
+    @Override
+    @Transactional
+    public void recordReadersNotListable(Long syncTargetId) {
+        locked(syncTargetId, null).ifPresent(rtm -> {
+            rtm.getReaders().readersNotListable();
+            forgetReaders(rtm);
+        });
     }
 
     /**

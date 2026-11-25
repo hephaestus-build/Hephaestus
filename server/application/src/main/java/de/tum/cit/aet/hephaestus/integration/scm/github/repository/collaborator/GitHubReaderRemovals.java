@@ -41,4 +41,14 @@ public class GitHubReaderRemovals {
                     repositories.findNativeIdsByOrganizationLogin(organizationLogin, providerId));
         }
     }
+
+    /**
+     * GitHub removed a team's access to one repository. The mirror cannot show which members the team gave their only
+     * access, so the repository's listing stops proving its readers until the next one.
+     */
+    public void teamAccessRemoved(long providerId, @Nullable Long repositoryNativeId) {
+        if (repositoryNativeId != null) {
+            readers.recordRepositoryReadersStale(providerId, repositoryNativeId);
+        }
+    }
 }

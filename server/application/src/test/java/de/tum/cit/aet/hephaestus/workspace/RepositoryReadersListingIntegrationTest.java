@@ -187,6 +187,9 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
         provider.recordRepositoryReaders(read(monitor), new ReaderListing.Stopped(ProofReason.RATE_LIMITED));
 
         assertThat(proof(monitor)).isEqualTo("RESTRICTED PENDING RATE_LIMITED");
+        assertThat(readers(monitor))
+                .as("no reader is kept that no current listing names")
+                .isEmpty();
         assertThat(provider.readersListingDue(monitor.getId(), Instant.now(), Duration.ofHours(1)))
                 .as("a pending proof asks for a listing at once")
                 .isTrue();
@@ -576,6 +579,7 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
         var monitor = monitor("gitlab-namesake");
         long reader = readerNativeId();
         listed(monitor, reader);
+        long generation = generation(monitor);
         long gitLab = gitLab();
         long project = Objects.requireNonNull(
                 jdbc.queryForObject("""
@@ -593,11 +597,65 @@ class RepositoryReadersListingIntegrationTest extends AbstractWorkspaceIntegrati
                 project,
                 namesake);
 
+        jdbc.update("UPDATE repository SET name = 'project-renamed' WHERE id = ?", project);
+        provider.recordRepositoryPrivatized(repositoryNativeId, gitLab);
         jdbc.update("DELETE FROM repository_collaborator WHERE repository_id = ?", project);
         jdbc.update("DELETE FROM repository WHERE id = ?", project);
 
         assertThat(readers(monitor)).containsExactly(reader);
         assertThat(proof(monitor)).isEqualTo("RESTRICTED PROVEN READERS_LISTED");
+        assertThat(generation(monitor))
+                .as("no write of the GitLab project ends a listing of the GitHub repository")
+                .isEqualTo(generation);
+    }
+
+    /** A GitLab project records that its readers cannot be listed yet, so no proof waits for a sync that cannot end it. */
+    @Test
+    void shouldRecordThatAMonitorsReadersCannotBeListed() {
+        var monitor = monitor("not-listable");
+        listed(monitor, 11L);
+
+        provider.recordReadersNotListable(monitor.getId());
+
+        assertThat(proof(monitor)).isEqualTo("UNPROVEN FAILED READERS_NOT_LISTABLE");
+        assertThat(readers(monitor)).isEmpty();
+    }
+
+    /**
+     * GitHub confirms that a team lost the repository while a listing that names the team's members holds the monitor
+     * with its rows not committed. The removal waits for the monitor, then ends the proof and drops the rows.
+     */
+    @Test
+    void shouldEndTheProofWhenATeamLosesTheRepositoryWhileAListingHoldsTheMonitor() throws Exception {
+        var monitor = monitor("team-removed-during-listing");
+        long member = readerNativeId();
+        ReadersRead listingRead = read(monitor);
+        var holderPid = new CompletableFuture<Integer>();
+        var release = new CountDownLatch(1);
+        var listing = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            provider.recordRepositoryReaders(listingRead, new ReaderListing.Listed(Set.of(member)));
+            holderPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            awaitLatch(release);
+        }));
+        CompletableFuture<Void> removal;
+        try {
+            int holder = holderPid.get(30, TimeUnit.SECONDS);
+            removal =
+                    CompletableFuture.runAsync(() -> provider.recordRepositoryReadersStale(gitHub, repositoryNativeId));
+            awaitBlockedBy(holder, "the team removal waits for the listing's monitor lock");
+        } finally {
+            release.countDown();
+        }
+        listing.get(30, TimeUnit.SECONDS);
+        removal.get(30, TimeUnit.SECONDS);
+
+        assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
+        assertThat(readers(monitor)).isEmpty();
+    }
+
+    private long generation(RepositoryToMonitor monitor) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT proof_generation FROM repository_to_monitor WHERE id = ?", Long.class, monitor.getId()));
     }
 
     /** A GitLab instance of this test's own, so its native ids meet GitHub's only by number. */

@@ -20,8 +20,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * One person who can read a monitored repository on the provider, as this workspace's last complete listing of its
- * readers showed. A monitor holds readers only while its visibility class is {@code RESTRICTED}: the listing that
- * proves the class writes them in the same transaction, and every answer that ends that proof removes them. A removal
+ * readers showed. A monitor holds readers only while a listing proves them: the listing writes them in the same
+ * transaction, and every answer that ends that proof, a stopped listing among them, removes them. The listing names the
+ * readers that the workspace's credential can see, so it can leave a reader out but never add one; a read rechecks a
+ * listed reader on the provider. A removal
  * on the provider removes the person's rows through database triggers on the membership mirror tables.
  *
  * <p>The reader is the provider and its native user id, not an account: a check maps an account to its provider

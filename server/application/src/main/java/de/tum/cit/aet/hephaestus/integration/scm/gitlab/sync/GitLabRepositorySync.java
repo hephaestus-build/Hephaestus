@@ -341,10 +341,12 @@ public class GitLabRepositorySync {
                 repo = refreshed.get();
                 syncTargetProvider.reconcileSyncTargetIdentity(rtmId, repo.getNativeId(), repo.getNameWithOwner());
                 syncTargetProvider.clearRepositoryUnavailable(session.scopeId(), rtmId);
-                admission.runWrite(
-                        read,
-                        () -> syncTargetProvider.updateSyncTimestamp(
-                                rtmId, SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt));
+                admission.runWrite(read, () -> {
+                    syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
+                    // A project's visibility does not cover its repository, issues and merge requests, and Hephaestus
+                    // does not list GitLab members yet, so no GitLab proof waits for a sync that cannot end it.
+                    syncTargetProvider.recordReadersNotListable(rtmId);
+                });
                 availableRepos.add(repo);
                 availableTargetIds.put(repo.getId(), rtmId);
             } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {

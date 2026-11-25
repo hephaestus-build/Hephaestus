@@ -1014,6 +1014,28 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private record ExternalInspectionFixture(
             long administratorId, long providerId, long workspaceId, UUID jobId, UUID feedbackId) {}
 
+    /** An erasure admitted by the release before repository readers existed froze no selection for their store. */
+    @Test
+    void shouldCompleteAnErasureAdmittedBeforeRepositoryReadersHadAStore() {
+        var administrator = new Account("Reader store transition administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        long person = Objects.requireNonNull(accounts.saveAndFlush(new Account("Person admitted before readers"))
+                .getId());
+        var preview = personData.preview(administratorId, person, List.of());
+        UUID id = preview.request().getId();
+        personData.requestErasure(id, administratorId, true);
+        jdbc.update(
+                "UPDATE person_data_request SET selections_json=(CAST(selections_json AS jsonb)"
+                        + " - 'resource_reader')::text WHERE id=?",
+                id);
+
+        personData.run(id);
+
+        assertThat(personData.get(id).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+    }
+
     @Test
     void erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson() throws Exception {
         IdentityProvider scm = providers.saveAndFlush(

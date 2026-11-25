@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepo
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import java.util.Locale;
 import java.util.Objects;
@@ -58,6 +59,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
     private final RepositoryRepository repositoryRepository;
     private final TeamRepositoryPermissionRepository permissionRepository;
     private final GitHubAccessReader accessReader;
+    private final GitHubReaderRemovals readerRemovals;
 
     GitHubTeamMessageHandler(
             GitHubTeamProcessor teamProcessor,
@@ -67,6 +69,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             RepositoryRepository repositoryRepository,
             TeamRepositoryPermissionRepository permissionRepository,
             GitHubAccessReader accessReader,
+            GitHubReaderRemovals readerRemovals,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -82,6 +85,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         this.repositoryRepository = repositoryRepository;
         this.permissionRepository = permissionRepository;
         this.accessReader = accessReader;
+        this.readerRemovals = readerRemovals;
     }
 
     @Override
@@ -99,7 +103,8 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
      * a repository or removes it only names the pair. It stores the team's role there once a read of GitHub, made
      * before that transaction, confirms the access; a delivery that arrives again after a later removal therefore
      * grants nothing. It never removes access: the team may still reach the repository through a parent team, and the
-     * next sync's reconciliation, which reads the whole team, removes what is gone.
+     * next sync's reconciliation, which reads the whole team, removes what is gone. A confirmed removal still ends the
+     * repository's reader proof at once: the team may have given some members their only access.
      */
     void dispatchTeamEvent(GitHubTeamEventDTO event, Consumer<Runnable> once) {
         if (!isRepositoryAccessEvent(event)) {
@@ -108,6 +113,12 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         }
         Optional<String> role = confirmedRepositoryRole(event);
         if (role.isEmpty()) {
+            if (event.actionType() == GitHubEventAction.Team.REMOVED_FROM_REPOSITORY) {
+                // The mirror may hold no permission row to delete, so the proof itself ends; that only narrows.
+                once.accept(() -> readerRemovals.teamAccessRemoved(
+                        gitHubProviderId(),
+                        event.repository() == null ? null : event.repository().id()));
+            }
             log.debug("Left team repository access to the reconciliation: action={}", event.action());
             return;
         }
@@ -153,6 +164,13 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
                     readFailed.getClass().getSimpleName());
             return Optional.empty();
         }
+    }
+
+    private long gitHubProviderId() {
+        return Objects.requireNonNull(providerNamespaces
+                .findForMirror(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow(() -> new IllegalStateException("GitHub provider not configured"))
+                .getId());
     }
 
     private void grantRepositoryAccess(GitHubTeamEventDTO event, String role) {

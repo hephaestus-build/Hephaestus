@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -27,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubReaderRemovals;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -92,6 +95,7 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     // Repository access events read GitHub's current access; a plain mock answers for GitHub.
     private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
+    private final RepositoryReadersProvider readers = mock(RepositoryReadersProvider.class);
 
     private IdentityProvider gitProvider;
     private Organization testOrganization;
@@ -285,6 +289,21 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
         assertThat(storedPermission(team)).isPresent();
     }
 
+    /**
+     * GitHub confirms the team lost the repository, and the mirror holds no permission row to delete. The repository's
+     * reader proof still ends, so a listing that names the team's members does not stand.
+     */
+    @Test
+    void shouldEndTheReaderProofWhenGitHubConfirmsATeamLostTheRepositoryWithoutAMirrorRow() throws Exception {
+        Team team = storeFixtureTeam();
+        githubReportsRepositoryRole(null);
+
+        applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
+
+        assertThat(storedPermission(team)).isEmpty();
+        verify(readers).recordRepositoryReadersStale(required(gitProvider.getId()), 998279771L);
+    }
+
     @Test
     void shouldKeepTheRepositoryAccessWhenTheOldRemovalIsDeliveredAgain() throws Exception {
         Team team = storeFixtureTeam();
@@ -345,6 +364,7 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 repositoryRepository,
                 permissionRepository,
                 accessReader,
+                new GitHubReaderRemovals(readers, repositoryRepository),
                 deserializer,
                 transactionTemplate);
         accessHandler.dispatchTeamEvent(

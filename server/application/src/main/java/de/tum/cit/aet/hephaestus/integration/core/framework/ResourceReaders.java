@@ -57,8 +57,9 @@ public class ResourceReaders {
     private long proofGeneration;
 
     /**
-     * When the class or the reason last changed. Operators read how long a proof has waited from it; no decision reads
-     * it, so it takes the applying replica's clock.
+     * When the class or the proof state last changed. A pending proof that moves from one pending reason to another
+     * keeps waiting, so the time stays. Operators read how long a proof has waited from it; no decision reads it, so it
+     * takes the applying replica's clock.
      */
     @Column(name = "proof_changed_at", nullable = false)
     @ColumnDefault("now()")
@@ -145,6 +146,19 @@ public class ResourceReaders {
         proofGeneration++;
     }
 
+    /**
+     * The provider removed access that some readers may have had, such as a team's access to the repository, and the
+     * mirror cannot show whom it reached. A listing no longer proves the readers, and a listing that began before the
+     * removal does not apply.
+     */
+    public void readersInvalidated() {
+        if (visibilityClass == VisibilityClass.RESTRICTED) {
+            move(VisibilityClass.UNPROVEN, ProofReason.AWAITING_READERS);
+        } else {
+            proofGeneration++;
+        }
+    }
+
     /** The monitor now names another resource on the provider, so the old resource's readers prove nothing. */
     public void identityChanged() {
         move(VisibilityClass.UNPROVEN, ProofReason.AWAITING_READERS);
@@ -160,7 +174,7 @@ public class ResourceReaders {
     }
 
     private void move(VisibilityClass nextClass, ProofReason reason) {
-        if (nextClass != visibilityClass || reason != proofReason) {
+        if (nextClass != visibilityClass || reason.state() != proofState) {
             proofChangedAt = Instant.now();
         }
         visibilityClass = nextClass;
