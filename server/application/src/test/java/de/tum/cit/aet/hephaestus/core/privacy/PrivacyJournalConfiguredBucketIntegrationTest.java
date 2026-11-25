@@ -16,12 +16,14 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -32,10 +34,18 @@ import tools.jackson.databind.ObjectMapper;
  * store writes each synchronous fact there before the reply. The gate holds that write at the S3 boundary.
  */
 @Tag("integration")
+// The context's store points at this class's bucket, which closes after the class.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PrivacyJournalConfiguredBucketIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final JournalMinio MINIO = start(JournalMinio::new);
     private static final JournalPutGate GATE = start(() -> new JournalPutGate(MINIO.endpoint()));
+
+    @AfterAll
+    static void closeTheBucket() throws Exception {
+        GATE.close();
+        MINIO.close();
+    }
 
     @DynamicPropertySource
     static void journalBucket(DynamicPropertyRegistry registry) {

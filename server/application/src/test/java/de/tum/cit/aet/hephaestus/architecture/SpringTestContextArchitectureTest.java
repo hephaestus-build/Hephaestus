@@ -394,6 +394,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     // Its context runs the worker's poller, which would claim the review jobs of later classes in an unsharded run.
     private static final Set<String> DIRTY_CONTEXT_TESTS = names(
+            // Its journal bucket closes with the class, so no later class may reuse its context.
+            "core.privacy.PrivacyJournalConfiguredBucketIntegrationTest",
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
