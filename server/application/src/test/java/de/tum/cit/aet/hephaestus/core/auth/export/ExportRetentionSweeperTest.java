@@ -38,12 +38,12 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordSuccessAndTheExpiredCountWhenTheSweepRuns() {
-        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class))).thenReturn(ExportRetentionSweeper.BATCH, 4);
+        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class)))
+                .thenReturn(ExportRetentionSweeper.BATCH, 4);
 
         sweeper.sweep();
 
-        verify(ownerSweeps, times(2))
-                .expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class));
+        verify(ownerSweeps, times(2)).expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class));
 
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_retention", "outcome", "success")
@@ -59,10 +59,11 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldStartNoBatchAfterTheBudgetAndRecordThatWorkRemains() {
-        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class))).thenAnswer(invocation -> {
-            clock.advance(Duration.ofMinutes(1));
-            return ExportRetentionSweeper.BATCH;
-        });
+        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class)))
+                .thenAnswer(invocation -> {
+                    clock.advance(Duration.ofMinutes(1));
+                    return ExportRetentionSweeper.BATCH;
+                });
 
         sweeper.sweep();
 
@@ -82,8 +83,7 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
         sweeper.sweep();
 
-        verify(ownerSweeps, times(3))
-                .expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class));
+        verify(ownerSweeps, times(3)).expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class));
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_retention", "outcome", "success")
                         .counter()
@@ -93,7 +93,8 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordSuccessWhenNothingWasEligible() {
-        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class))).thenReturn(0);
+        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class)))
+                .thenReturn(0);
 
         sweeper.sweep();
 
@@ -111,7 +112,8 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordFailureAndPropagateWhenTheSweepFails() {
-        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class))).thenThrow(new IllegalStateException("db down"));
+        when(ownerSweeps.expire(eq(RowSweepRule.EXPIRED_EXPORTS), any(Instant.class)))
+                .thenThrow(new IllegalStateException("db down"));
 
         assertThatThrownBy(sweeper::sweep).isInstanceOf(IllegalStateException.class);
 

@@ -116,8 +116,7 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         assertThat(expireBatch()).isEqualTo(ExportRetentionSweeper.BATCH);
         assertThat(readyAmong(ids)).isEqualTo(1);
 
-        new ExportRetentionSweeper(ownerSweeps, new PrivacyJobMetrics(new SimpleMeterRegistry()), clock)
-                .sweep();
+        new ExportRetentionSweeper(ownerSweeps, new PrivacyJobMetrics(new SimpleMeterRegistry()), clock).sweep();
 
         assertThat(readyAmong(ids)).isZero();
     }
