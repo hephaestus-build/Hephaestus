@@ -485,6 +485,13 @@ groups:
           summary: Review attempts kept failing before their sandbox started, so they run again
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A stage that never ends has no sample: the attempt's deadline ends it, and HephaestusAgentJobsFailing reports that.
+      - alert: HephaestusReviewZeroEvaluated
+        expr: (max(max_over_time(agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus"}[1h])) > 0) > time() - 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: A review attempt had eligible practices and evaluated none in the last hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewStageSlow
         expr: >-
           (

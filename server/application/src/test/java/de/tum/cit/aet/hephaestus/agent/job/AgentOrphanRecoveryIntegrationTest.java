@@ -1010,7 +1010,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
-        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
+        assertThat(results()
+                        .measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT, Instant.now()))
                 .isEqualTo(ReviewJobStatus.TIMED_OUT);
 
         ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
@@ -1052,7 +1053,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             }));
             var handoff = pool.submit(() -> {
                 assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
-                return results.measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT);
+                return results.measured(
+                        jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT, Instant.now());
             });
             holder.get(30, TimeUnit.SECONDS);
             assertThat(handoff.get(30, TimeUnit.SECONDS)).isNull();
@@ -1086,7 +1088,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
         // The measuring attempt keeps what it measured and hands the review on to the run that composes it.
-        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
+        assertThat(results()
+                        .measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT, Instant.now()))
                 .isNull();
         ReviewJob waiting = jobRepository.findById(jobId).orElseThrow();
         assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
@@ -1130,7 +1133,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         acceptPublicReview(jobId);
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
-        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
+        assertThat(results()
+                        .measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT, Instant.now()))
                 .isNull();
         UUID composeRun = jobRepository.findById(jobId).orElseThrow().getRunId();
         String subject = Objects.requireNonNull(
@@ -1264,7 +1268,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         claimAgainAfterLoss(jobId);
         var callsBefore = usageCalls(jobId);
 
-        assertThat(results().measured(jobId, running, stranger, 0, TIMED_OUT)).isNull();
+        assertThat(results().measured(jobId, running, stranger, 0, TIMED_OUT, Instant.now()))
+                .isNull();
 
         ReviewJob kept = jobRepository.findById(jobId).orElseThrow();
         assertThat(kept.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);

@@ -31,6 +31,26 @@
 			"title": "Where does an attempt spend its time?",
 			"panels": [
 				{
+					"title": "Execution p95",
+					"description": "From execution start until the gateway validates the uploaded result.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le) (rate(agent_job_duration_seconds_bucket{job=\"hephaestus\",phase=\"execution\"}[1h])))"
+					],
+					"alias": ["Execution p95"],
+					"unit": "s",
+					"width": 6
+				},
+				{
+					"title": "Oldest due review",
+					"expr": [
+						"max by (band) (agent_run_oldest_due_age_seconds{job=\"hephaestus\",kind=\"review\"})"
+					],
+					"alias": ["{{band}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
 					"title": "Stage p95",
 					"description": "Each stage of an attempt.",
 					"expr": [
@@ -47,6 +67,29 @@
 					"expr": ["sum by (outcome) (increase(agent_job_total{job=\"hephaestus\"}[1h]))"],
 					"alias": ["{{outcome}}"],
 					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "How many practices did an attempt evaluate?",
+			"panels": [
+				{
+					"title": "Practices per attempt",
+					"description": "Means over one hour for attempts that reported coverage.",
+					"expr": [
+						"sum(rate(agent_review_practice_coverage_eligible_sum{job=\"hephaestus\"}[1h])) / sum(rate(agent_review_practice_coverage_eligible_count{job=\"hephaestus\"}[1h]))",
+						"sum(rate(agent_review_practice_coverage_evaluated_sum{job=\"hephaestus\"}[1h])) / sum(rate(agent_review_practice_coverage_evaluated_count{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["Eligible", "Evaluated"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Attempts with eligible practices that evaluated none",
+					"description": "Reported in the last hour.",
+					"expr": ["sum(increase(agent_review_zero_evaluated_total{job=\"hephaestus\"}[1h]))"],
+					"alias": ["Attempts"],
 					"width": 6
 				}
 			]
