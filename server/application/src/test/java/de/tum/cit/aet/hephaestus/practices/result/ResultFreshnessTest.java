@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Tag;
@@ -297,6 +298,41 @@ class ResultFreshnessTest {
         verify(items).read(item, Set.of(core, LINKED), null);
         verify(items).read(item, Set.of(core), null);
         verify(items, times(2)).read(eq(item), any(), any());
+    }
+
+    @Test
+    void shouldKeepFeedbackStaleWhenNeitherMirrorRevisionMatchesItsCapture() {
+        var comments = new SourceKind("scm.general-review-comments");
+        var threads = new SourceKind("scm.review-threads");
+        var changed = "b".repeat(64);
+        var commentsOnly = result();
+        var both = result();
+        capturedAll(Map.of(
+                commentsOnly, decision(CAPTURED_AT, Map.of(comments.value(), FINGERPRINT)),
+                both, decision(CAPTURED_AT, Map.of(comments.value(), FINGERPRINT, threads.value(), FINGERPRINT))));
+        var before = Map.of(comments, FINGERPRINT, threads, changed);
+        var after = Map.of(comments, changed, threads, FINGERPRINT);
+        var mirror = new AtomicReference<>(before);
+        when(items.read(eq(item), any(), any())).thenAnswer(call -> {
+            Set<SourceKind> kinds = call.getArgument(1);
+            var observed = mirror.get();
+            return new ProductItemQuery.FingerprintRead(
+                    kinds.stream().collect(Collectors.toMap(Function.identity(), observed::get)), null);
+        });
+        var refs = Map.of(7L, item);
+        assertThat(freshness.freshness(1, facts(List.of(both)), refs))
+                .containsEntry(both.getId(), Freshness.stale(CAPTURED_AT));
+
+        var actual = freshness.asOneRead(1, () -> {
+            assertThat(freshness.freshness(1, facts(List.of(commentsOnly)), refs))
+                    .containsEntry(commentsOnly.getId(), Freshness.current(CAPTURED_AT));
+            mirror.set(after);
+            return freshness.freshness(1, facts(List.of(both)), refs);
+        });
+
+        assertThat(freshness.freshness(1, facts(List.of(both)), refs))
+                .containsEntry(both.getId(), Freshness.stale(CAPTURED_AT));
+        assertThat(actual).containsEntry(both.getId(), Freshness.stale(CAPTURED_AT));
     }
 
     private void capturedAll(Map<Result, ObjectNode> decisions) {
