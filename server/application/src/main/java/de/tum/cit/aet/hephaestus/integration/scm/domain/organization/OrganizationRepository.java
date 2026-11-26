@@ -19,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code NonUniqueResultException} (ADR 0012).
  */
 public interface OrganizationRepository extends JpaRepository<Organization, Long> {
+    @Query("SELECT o.id FROM Organization o WHERE o.nativeId = :nativeId AND o.provider.id = :providerId")
+    Optional<Long> findIdByNativeIdAndProviderId(
+            @Param("nativeId") Long nativeId, @Param("providerId") Long providerId);
+
     Optional<Organization> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     Optional<Organization> findByLoginIgnoreCaseAndProviderId(String login, Long providerId);

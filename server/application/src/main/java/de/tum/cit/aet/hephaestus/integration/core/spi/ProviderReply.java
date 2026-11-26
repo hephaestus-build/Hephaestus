@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,7 +25,7 @@ public sealed interface ProviderReply {
     /** The provider says that the read resource does not exist. */
     record NotFound() implements ProviderReply {}
 
-    /** The provider limits this credential until {@code until}: nothing read now is an answer. */
+    /** The provider limits further reads with this credential until {@code until}. */
     record Throttled(Instant until) implements ProviderReply {}
 
     /** The provider refuses the credential itself. */
@@ -123,18 +125,18 @@ public sealed interface ProviderReply {
         Instant resetHeader = epoch(first(signal.headers(), "x-ratelimit-reset", "ratelimit-reset"));
         boolean primaryQuotaAvailable =
                 signal.headers().containsKey("x-ratelimit-reset") && remainingHeader != null && remainingHeader > 0;
-        Long retryAfterSeconds = seconds(signal.headers().get("retry-after"));
+        Instant retryAfter = retryAfter(signal.headers().get("retry-after"), now);
         boolean exhausted = (remainingHeader != null && remainingHeader <= 0)
                 || (signal.remaining() != null && signal.remaining() <= 0);
         boolean throttleInBody = signal.errors().stream().anyMatch(ProviderReply::isThrottle);
         int status = signal.status();
         boolean throttled = status == 429
                 || throttleInBody
-                || (status == 403 && (retryAfterSeconds != null || exhausted))
+                || (status == 403 && (retryAfter != null || exhausted))
                 || (status / 100 == 2 && !signal.errors().isEmpty() && exhausted);
         if (throttled) {
             List<Instant> deadlines = new ArrayList<>();
-            if (retryAfterSeconds != null) deadlines.add(now.plusSeconds(retryAfterSeconds));
+            if (retryAfter != null) deadlines.add(retryAfter);
             // The quota's reset applies when the quota is spent. A secondary limit leaves it, so its reset can be an
             // hour away from the real wait.
             if (exhausted || (status == 429 && !primaryQuotaAvailable)) {
@@ -195,6 +197,22 @@ public sealed interface ProviderReply {
 
     private static @Nullable Instant epoch(@Nullable String value) {
         Long seconds = seconds(value);
-        return seconds == null ? null : Instant.ofEpochSecond(seconds);
+        if (seconds == null || seconds < Instant.MIN.getEpochSecond()) return null;
+        return Instant.ofEpochSecond(Math.min(seconds, Instant.MAX.getEpochSecond()));
+    }
+
+    private static @Nullable Instant retryAfter(@Nullable String value, Instant now) {
+        if (value == null) return null;
+        String header = value.trim();
+        if (header.matches("[0-9]+")) {
+            Long seconds = seconds(header);
+            long available = Instant.MAX.getEpochSecond() - now.getEpochSecond();
+            return seconds == null || seconds > available ? Instant.MAX : now.plusSeconds(seconds);
+        }
+        try {
+            return DateTimeFormatter.RFC_1123_DATE_TIME.parse(header, Instant::from);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 }

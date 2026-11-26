@@ -422,8 +422,7 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
     void shouldRegisterAndRestoreAnEmptyGitHubRepositoryWhenItsInstallationBindsIt() {
         var fixture = fixture(IdentityProviderType.GITHUB);
         var repository = fixture.repository();
-        var snapshot = new ProvisioningListener.RepositorySnapshot(
-                repository.getNativeId(), repository.getNameWithOwner(), repository.getName(), false);
+        var snapshot = installationSnapshot(repository);
 
         monitorService.ensureRepositoryAndMonitorFromSnapshot(installationId(fixture.workspace()), snapshot);
         long itemId = repositoryItemId(fixture);
@@ -432,9 +431,21 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
         assertThat(repositoryItemIds(fixture)).containsExactly(itemId);
         monitorService.removeAllRepositoriesFromMonitor(installationId(fixture.workspace()), false);
         assertActive(fixture.workspace(), itemId, false);
-        monitorService.ensureRepositoryAndMonitorFromSnapshot(installationId(fixture.workspace()), snapshot);
+        monitorService.ensureRepositoryAndMonitorFromSnapshot(
+                installationId(fixture.workspace()), installationSnapshot(repository));
         assertThat(repositoryItemIds(fixture)).containsExactly(itemId);
         assertActive(fixture.workspace(), itemId, true);
+    }
+
+    private ProvisioningListener.RepositorySnapshot installationSnapshot(Repository repository) {
+        var receivedAt = jdbc.queryForObject(
+                "SELECT clock_timestamp()", (row, number) -> row.getTimestamp(1).toInstant());
+        return new ProvisioningListener.RepositorySnapshot(
+                repository.getNativeId(),
+                repository.getNameWithOwner(),
+                repository.getName(),
+                false,
+                Objects.requireNonNull(receivedAt));
     }
 
     @Test

@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTyp
 import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.StaleRepositoryMetadataException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -176,24 +177,24 @@ public class GitHubDataSyncService {
         this.commentSyncService = commentSyncService;
     }
 
-    private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
-        Long nativeId = target.nativeId();
+    private Optional<Repository> fetchRepositoryMetadata(
+            SyncTarget target, IdentityProvider provider, ReadersRead read) {
         if (syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
-            return fetchRepositoryMetadataById(target, provider, nativeId);
+            return fetchRepositoryMetadataById(provider, read);
         }
         try {
             return repositorySyncService.syncRepository(
-                    target.scopeId(), target.repositoryNameWithOwner(), provider, nativeId);
+                    read.scopeId(), target.repositoryNameWithOwner(), provider, read.repositoryNativeId(), read);
         } catch (RepositoryNotFoundOnGitProviderException | RepositoryIdentityMismatchException e) {
-            return fetchRepositoryMetadataById(target, provider, nativeId);
+            return fetchRepositoryMetadataById(provider, read);
         }
     }
 
-    private Optional<Repository> fetchRepositoryMetadataById(
-            SyncTarget target, IdentityProvider provider, long nativeId) {
-        String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), nativeId);
+    private Optional<Repository> fetchRepositoryMetadataById(IdentityProvider provider, ReadersRead read) {
+        String currentName = repositorySyncService.resolveRepositoryNameById(read.scopeId(), read.repositoryNativeId());
         try {
-            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider, nativeId);
+            return repositorySyncService.syncRepository(
+                    read.scopeId(), currentName, provider, read.repositoryNativeId(), read);
         } catch (RepositoryIdentityMismatchException e) {
             // A rename between the two requests is incomplete metadata, not proof of absence.
             return Optional.empty();
@@ -232,9 +233,8 @@ public class GitHubDataSyncService {
         if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
             return false;
         }
-        Instant metadataRequestedAt = Instant.now();
-        ReadersRead readersRead = syncTargetProvider.beginReadersProof(
-                syncTarget.id(), syncTarget.nativeId(), providerId, metadataRequestedAt);
+        ReadersRead readersRead =
+                syncTargetProvider.beginReadersProof(scopeId, syncTarget.id(), syncTarget.nativeId(), providerId);
         boolean repositoryCreatedDuringSync = false;
 
         // PAT workspaces start with only a RepositoryToMonitor entry — fetch and create the
@@ -246,12 +246,14 @@ public class GitHubDataSyncService {
                     safeNameWithOwner);
             Optional<Repository> syncedRepository;
             try {
-                syncedRepository = fetchRepositoryMetadata(syncTarget, provider);
+                syncedRepository = fetchRepositoryMetadata(syncTarget, provider, readersRead);
+            } catch (StaleRepositoryMetadataException e) {
+                return false;
             } catch (RepositoryNotFoundOnGitProviderException e) {
-                syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+                syncTargetProvider.recordRepositoryLoss(readersRead);
                 return false;
             } catch (InstallationNotFoundException e) {
-                syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+                syncTargetProvider.recordRepositoryLoss(readersRead);
                 throw e;
             } catch (Exception e) {
                 syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
@@ -270,7 +272,6 @@ public class GitHubDataSyncService {
                 return false;
             }
             repository = syncedRepository.get();
-            syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
             repositoryCreatedDuringSync = true;
         }
 
@@ -284,10 +285,9 @@ public class GitHubDataSyncService {
 
         try {
             if (!repositoryCreatedDuringSync) {
-                var syncedRepository = fetchRepositoryMetadata(syncTarget, provider);
+                var syncedRepository = fetchRepositoryMetadata(syncTarget, provider, readersRead);
                 if (syncedRepository.isPresent()) {
                     repository = syncedRepository.get();
-                    syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
                     log.debug("Synced repository metadata: scopeId={}, repoId={}", scopeId, repositoryId);
                 } else {
                     syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
@@ -300,14 +300,6 @@ public class GitHubDataSyncService {
             repositoryId = repository.getId();
             syncTargetProvider.reconcileSyncTargetIdentity(
                     syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
-            syncTargetProvider.updateSyncTimestamp(
-                    syncTarget.id(), SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
-            // The repository holds what this read stored; the shared row may already hold another workspace's read.
-            if (repository.isPublicOnProvider()) {
-                syncTargetProvider.recordRepositoryPublic(readersRead);
-            } else {
-                syncTargetProvider.recordRepositoryNotPublic(readersRead);
-            }
             syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
 
             // Backfill commits from local git clone. Uses local git, not the GitHub API, so
@@ -387,7 +379,9 @@ public class GitHubDataSyncService {
             int commitsMetadataEnriched = enrichCommitMetadata(syncTarget, repository);
 
             log.info(
-                    "Completed repository sync: scopeId={}, repoId={}, commitsBackfilled={}, commitsEnriched={}, commitsMetadataEnriched={}, collaborators={}, labels={}, milestones={}, issues={}, prs={}, issueStatus={}, prStatus={}",
+                    "Completed repository sync: scopeId={}, repoId={}, commitsBackfilled={}, commitsEnriched={},"
+                            + " commitsMetadataEnriched={}, collaborators={}, labels={}, milestones={}, issues={}, prs={},"
+                            + " issueStatus={}, prStatus={}",
                     scopeId,
                     repositoryId,
                     commitsBackfilled >= 0 ? commitsBackfilled : "skipped",
@@ -431,8 +425,10 @@ public class GitHubDataSyncService {
             }
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;
+        } catch (StaleRepositoryMetadataException e) {
+            return false;
         } catch (InstallationNotFoundException e) {
-            syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+            syncTargetProvider.recordRepositoryLoss(readersRead);
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = e instanceof RepositoryNotFoundOnGitProviderException
@@ -448,7 +444,7 @@ public class GitHubDataSyncService {
             switch (category) {
                 case NOT_FOUND -> {
                     if (e instanceof RepositoryNotFoundOnGitProviderException) {
-                        syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+                        syncTargetProvider.recordRepositoryLoss(readersRead);
                     } else {
                         // A missing child resource is not evidence that its repository is unavailable.
                         syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
@@ -580,7 +576,8 @@ public class GitHubDataSyncService {
                 // Cooperative cancellation is best-effort, checked between repositories.
                 if (handle != null && handle.isCancellationRequested()) {
                     log.info(
-                            "Aborting remaining syncs: reason=cancellationRequested, scopeId={}, reposProcessed={}, reposRemaining={}",
+                            "Aborting remaining syncs: reason=cancellationRequested, scopeId={}, reposProcessed={},"
+                                    + " reposRemaining={}",
                             scopeId,
                             reposProcessed,
                             syncTargets.size() - reposProcessed);
@@ -599,7 +596,8 @@ public class GitHubDataSyncService {
                 // until the next daily cron run.
                 if (rateLimitTracker.isCritical(scopeId)) {
                     log.info(
-                            "Rate limit critical during startup sync, waiting for reset: scopeId={}, remaining={}, totalRepos={}, reposProcessed={}, reposRemaining={}",
+                            "Rate limit critical during startup sync, waiting for reset: scopeId={}, remaining={},"
+                                    + " totalRepos={}, reposProcessed={}, reposRemaining={}",
                             scopeId,
                             rateLimitTracker.getRemaining(scopeId),
                             syncTargets.size(),
@@ -610,7 +608,8 @@ public class GitHubDataSyncService {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         log.info(
-                                "Startup sync interrupted while waiting for rate limit: scopeId={}, reposProcessed={}, reposRemaining={}",
+                                "Startup sync interrupted while waiting for rate limit: scopeId={}, reposProcessed={},"
+                                        + " reposRemaining={}",
                                 scopeId,
                                 reposProcessed,
                                 syncTargets.size() - reposProcessed);
@@ -618,7 +617,8 @@ public class GitHubDataSyncService {
                     }
                     if (handle != null && handle.isCancellationRequested()) {
                         log.info(
-                                "Aborting remaining syncs: reason=cancellationRequestedDuringRateLimitWait, scopeId={}, reposProcessed={}, reposRemaining={}",
+                                "Aborting remaining syncs: reason=cancellationRequestedDuringRateLimitWait,"
+                                        + " scopeId={}, reposProcessed={}, reposRemaining={}",
                                 scopeId,
                                 reposProcessed,
                                 syncTargets.size() - reposProcessed);

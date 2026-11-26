@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentNextController;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import jakarta.servlet.FilterChain;
@@ -58,6 +59,7 @@ final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        request.setAttribute(AgentNextController.REQUEST_STARTED_AT, System.nanoTime());
         Optional<AgentSandboxes.LiveSandbox> sandbox = authenticate(request);
         if (sandbox.isEmpty()) {
             accounting.gatewayRefused(SandboxGatewayRefusal.UNAUTHENTICATED);

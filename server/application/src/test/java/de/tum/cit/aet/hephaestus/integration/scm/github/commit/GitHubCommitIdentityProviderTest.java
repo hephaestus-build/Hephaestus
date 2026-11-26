@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Pause;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService.CommitActor;
@@ -56,7 +58,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
     private Map<Question, Answer> ask(List<CommitActor> actors) {
         when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(SHA, actors), null));
-        return provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION));
+        return provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION)).answers();
     }
 
     @Test
@@ -117,7 +119,8 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
         when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), null));
 
-        assertThat(provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION))).isEmpty();
+        assertThat(provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION)).answers())
+                .isEmpty();
     }
 
     @Test
@@ -127,9 +130,9 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
         when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), deadline));
 
-        assertThat(provider.answer("o/r", 1L, 9L, credential, Set.of(QUESTION)))
-                .as("a throttle is a wait: deferred, it spends no attempt of the five")
-                .containsEntry(QUESTION, new Answer.Deferred(deadline));
+        var batch = provider.answer("o/r", 1L, 9L, credential, Set.of(QUESTION));
+        assertThat(batch.answers()).isEmpty();
+        assertThat(batch.pause()).isEqualTo(new Pause(deadline, new CredentialGeneration(0L, 0L)));
     }
 
     @Test
@@ -149,10 +152,11 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
                                         new CommitActor("committer@example.com", null, false))),
                         deadline));
 
-        var answers = provider.answer("o/r", 7L, 9L, credential, new LinkedHashSet<>(List.of(QUESTION, committer)));
-
-        assertThat(answers)
-                .containsEntry(QUESTION, new Answer.Account(3L, 2L))
-                .containsEntry(committer, new Answer.Deferred(deadline));
+        var mixed = provider.answer("o/r", 7L, 9L, credential, new LinkedHashSet<>(List.of(QUESTION, committer)));
+        var answered = provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION));
+        assertThat(mixed.answers()).containsExactlyEntriesOf(Map.of(QUESTION, new Answer.Account(3L, 2L)));
+        assertThat(answered.answers()).isEqualTo(mixed.answers());
+        assertThat(mixed.pause()).isEqualTo(new Pause(deadline, new CredentialGeneration(0L, 0L)));
+        assertThat(answered.pause()).isEqualTo(mixed.pause());
     }
 }

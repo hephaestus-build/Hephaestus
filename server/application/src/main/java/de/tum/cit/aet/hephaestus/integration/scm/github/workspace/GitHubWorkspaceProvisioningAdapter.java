@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMo
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -208,13 +209,13 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     }
 
     @Override
-    public void onAccountRenamed(Long installationId, @Nullable String oldLogin, String newLogin) {
+    public void onAccountRenamed(Long installationId, @Nullable String oldLogin, String newLogin, Instant observedAt) {
         if (installationId == null || newLogin == null || newLogin.isBlank()) {
             log.warn("Skipped account rename: reason=invalidData, installationId={}", installationId);
             return;
         }
 
-        installationLifecycle.handleAccountRename(installationId, oldLogin, newLogin);
+        installationLifecycle.handleAccountRename(installationId, oldLogin, newLogin, observedAt);
     }
 
     @Override

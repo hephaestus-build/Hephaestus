@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener.Repos
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationRepositoriesEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -45,7 +46,16 @@ public class GitHubInstallationRepositoriesMessageHandler
     }
 
     @Override
+    protected void dispatchEvent(GitHubInstallationRepositoriesEventDTO event, Instant arrivedAt) {
+        handleOnce(() -> handleEvent(event, arrivedAt));
+    }
+
+    @Override
     protected void handleEvent(GitHubInstallationRepositoriesEventDTO event) {
+        handleEvent(event, Instant.EPOCH);
+    }
+
+    private void handleEvent(GitHubInstallationRepositoriesEventDTO event, Instant arrivedAt) {
         var installation = event.installation();
 
         if (installation == null) {
@@ -70,7 +80,7 @@ public class GitHubInstallationRepositoriesMessageHandler
         if (!added.isEmpty()) {
             List<RepositorySnapshot> addedSnapshots = added.stream()
                     .map(ref -> new RepositorySnapshot(
-                            Objects.requireNonNull(ref.id()), ref.fullName(), ref.name(), ref.isPrivate()))
+                            Objects.requireNonNull(ref.id()), ref.fullName(), ref.name(), ref.isPrivate(), arrivedAt))
                     .toList();
             provisioningListener.onRepositoriesAdded(installationId, addedSnapshots);
             log.info(

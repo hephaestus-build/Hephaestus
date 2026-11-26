@@ -14,12 +14,19 @@ public interface CommitIdentityProvider {
     /**
      * Asks the provider. It runs with no open transaction, and it returns an answer for each question it can answer.
      *
-     * @return the answer per question; a question with no entry has no answer
+     * @return the answers and any pause for the credential that made the request
      */
-    Map<Question, Answer> answer(
-            String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions);
+    Batch answer(String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions);
 
     record Question(String sha, String email) {}
+
+    record Batch(Map<Question, Answer> answers, @Nullable Pause pause) {}
+
+    record Pause(Instant until, CredentialGeneration credential, boolean alreadyStored) {
+        public Pause(Instant until, CredentialGeneration credential) {
+            this(until, credential, false);
+        }
+    }
 
     sealed interface Answer {
         /** The provider names this account, and {@code userId} is its local user. */
@@ -30,17 +37,6 @@ public interface CommitIdentityProvider {
 
         /** The provider names an account that was erased here. Nothing may link to it. */
         record Erased() implements Answer {}
-
-        /**
-         * The provider's budget is spent until {@code until}. The question stays open until then, and it costs no
-         * attempt.
-         */
-        record Deferred(Instant until, @Nullable CredentialGeneration generation) implements Answer {
-            /** The batch's original credential made the throttled request. */
-            public Deferred(Instant until) {
-                this(until, null);
-            }
-        }
 
         /** The credential changed during the read. Try again on the next run. */
         record RetryAfterCredentialChange() implements Answer {}

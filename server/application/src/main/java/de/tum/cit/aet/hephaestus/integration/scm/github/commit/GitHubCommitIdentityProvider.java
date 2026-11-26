@@ -35,21 +35,22 @@ public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
     }
 
     @Override
-    public Map<Question, Answer> answer(
+    public Batch answer(
             String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
         var shas = questions.stream().map(Question::sha).distinct().toList();
         var actors = commits.fetchCommitActors(nameWithOwner, scopeId, credential, shas);
-        // A throttled read is a wait: each question it left without an answer waits for GitHub's deadline, also one
-        // whose commit came back without a usable actor for its email, and spends no attempt.
         Instant until = actors.throttledUntil();
         Map<Question, Answer> answers = new HashMap<>();
         for (var question : questions) {
             var commitActors = actors.bySha().get(question.sha());
             var answer = commitActors == null ? null : answer(providerId, question.email(), commitActors);
             if (answer != null) answers.put(question, answer);
-            else if (until != null) answers.put(question, new Answer.Deferred(until));
         }
-        return answers;
+        var pause = until == null
+                ? null
+                : new Pause(
+                        until, new CredentialGeneration(credential.connectionId(), credential.credentialsGeneration()));
+        return new Batch(answers, pause);
     }
 
     /** Actors with the same email must agree. If they do not, GitHub gave no single answer. */

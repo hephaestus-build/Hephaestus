@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) (help steps back only when the person accepts)
+
 **Amends:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md) (a practice version gains an identity and a comparability class)
 
 **Builds on:** ADR 0124 (proposed in #4866, practices are the unit), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (four outcomes), [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (a workspace keeps its practices in one repository)
@@ -96,3 +98,14 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - Wood, Bruner and Ross, [The role of tutoring in problem solving](https://doi.org/10.1111/j.1469-7610.1976.tb00381.x), Journal of Child Psychology and Psychiatry, 1976. A tutor gives support where the learner needs it and withdraws it as the learner becomes able. This gives the help mode and fading.
 - Kalyuga, Ayres, Chandler and Sweller, [The expertise reversal effect](https://doi.org/10.1207/S15326985EP3801_4), Educational Psychologist, 2003. Guidance that helps a novice can hinder a more expert learner. This is why help steps back when a practice holds.
+
+## Update — 2026-11-26: help steps back only when the person accepts
+
+[ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) decision 18 changes decisions 9 and 11.
+Growth no longer changes the help mode on its own.
+After the evidence of decision 10, Hephaestus offers once, with that evidence, to give hints instead of explanations on that practice.
+The person's acceptance is an act with **Undo**, and it writes the help mode.
+A decline keeps the mode until new evidence comes.
+
+A Not met observation after a step-back never lowers help silently. Hephaestus says so and offers to go back.
+The reason is learner agency: the person decides how much help to take, and the evidence only starts the offer.

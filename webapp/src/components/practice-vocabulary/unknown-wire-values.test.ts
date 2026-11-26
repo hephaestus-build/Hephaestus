@@ -93,6 +93,15 @@ describe("the words for the kinds a scan and a reviewer read", () => {
 	});
 });
 
+it("names an earlier event for a duplicate pin and an active review for a duplicate request", () => {
+	expect(itemEventReasonSentence("CONCURRENT_DUPLICATE", "event")).toBe(
+		"An earlier event of the same kind already recorded this version of the work.",
+	);
+	expect(itemEventReasonSentence("CONCURRENT_DUPLICATE")).toBe(
+		"Another review of the same work was already starting.",
+	);
+});
+
 // The API types these enums as open strings: a newer server can send a value that this build has no
 // words for, and each surface says so instead of showing nothing or crashing.
 describe("an open enum value that this build does not know", () => {

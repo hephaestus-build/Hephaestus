@@ -16,7 +16,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Batch;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Pause;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
@@ -87,10 +89,10 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     }
 
     private Map<Question, Answer> ask(String body) {
-        return ask(HttpStatus.OK, new HttpHeaders(), body);
+        return ask(HttpStatus.OK, new HttpHeaders(), body).answers();
     }
 
-    private Map<Question, Answer> ask(HttpStatus status, HttpHeaders headers, String body) {
+    private Batch ask(HttpStatus status, HttpHeaders headers, String body) {
         var web = WebClient.builder()
                 .baseUrl("https://gitlab.example.test/api/graphql")
                 .filter((request, next) -> {
@@ -168,8 +170,7 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @Test
     void shouldDeferWithoutARequestWhenTheCircuitIsOpen() {
         doThrow(CircuitBreakerOpenException.class).when(clients).acquirePermission();
-        assertThat(ask(actor()))
-                .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
+        assertThat(ask(HttpStatus.OK, new HttpHeaders(), actor()).pause()).isNotNull();
         assertThat(calls).hasValue(0);
     }
 
@@ -180,11 +181,9 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
         headers.add("RateLimit-Remaining", "0");
         headers.add("RateLimit-Reset", Long.toString(reset.getEpochSecond()));
 
-        var answers = ask(HttpStatus.TOO_MANY_REQUESTS, headers, "{\"message\":\"Retry later\"}");
-
-        assertThat(answers)
-                .as("a throttle is a wait until GitLab's reset, never a miss that spends an attempt")
-                .containsEntry(QUESTION, new Answer.Deferred(reset, new CredentialGeneration(10L, 2L)));
+        var batch = ask(HttpStatus.TOO_MANY_REQUESTS, headers, "{\"message\":\"Retry later\"}");
+        assertThat(batch.answers()).isEmpty();
+        assertThat(batch.pause()).isEqualTo(new Pause(reset, new CredentialGeneration(10L, 2L)));
         verifyNoInteractions(users);
     }
 }

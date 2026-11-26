@@ -498,6 +498,10 @@ A pending GitLab occasion can gain its diff base only while its original source 
 Its first words, people, state, roles and expiry stay unchanged.
 A submitted review on an older commit does not attest the current pull request's diff.
 
+If the item leaves the workspace index, an unpinned GitLab occasion can stay open until its pending deadline.
+A ledger sweep after the deadline records `EXPIRED` with reason `PENDING_DEADLINE_EXCEEDED`.
+If the initial publication runs again after withdrawal while the occasion is open, it records `WITHHELD` with reason `ITEM_NOT_VISIBLE`.
+
 An absent, oversized, expired or erased original records `OCCASION_EVIDENCE_UNAVAILABLE` and is withheld before admission.
 Temporary source failures and corrupt retained records remain faults that can be retried.
 A manual request still captures the current work under its normal version checks.

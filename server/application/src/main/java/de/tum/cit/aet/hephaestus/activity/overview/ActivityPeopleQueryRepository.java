@@ -73,7 +73,10 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = r.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
         """;
     String PUBLIC_MONITOR = """
-        m.unavailable_since IS NULL AND m.repository_visibility_confirmed_at > :visibilityConfirmedAfter
+        m.unavailable_since IS NULL
+          AND m.repository_visibility_confirmed_at = m.public_observation_at
+          AND m.repository_visibility_confirmed_at > statement_timestamp() - make_interval(secs => :visibilityMaxAgeSeconds)
+          AND m.repository_visibility_confirmed_at <= statement_timestamp()
         """;
     String MONITOR_AUTHORITY = "EXISTS (SELECT 1 FROM repository_to_monitor rtm WHERE rtm.id = m.id AND "
             + MonitoredRepositoryScope.NATIVE_RTM_R + ")";
@@ -370,16 +373,16 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     List<RepositoryRow> findRepositories(
             @Param("workspace") long workspace,
             @Param("publicOnly") boolean publicOnly,
-            @Param("visibilityConfirmedAfter") Instant visibilityConfirmedAfter);
+            @Param("visibilityMaxAgeSeconds") double visibilityMaxAgeSeconds);
 
     default List<ActivityRepositoryDTO> repositories(long workspace) {
-        return findRepositories(workspace, false, Instant.EPOCH).stream()
+        return findRepositories(workspace, false, 0).stream()
                 .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
                 .toList();
     }
 
-    default List<ActivityRepositoryDTO> publicRepositories(long workspace, Instant visibilityConfirmedAfter) {
-        return findRepositories(workspace, true, visibilityConfirmedAfter).stream()
+    default List<ActivityRepositoryDTO> publicRepositories(long workspace, double visibilityMaxAgeSeconds) {
+        return findRepositories(workspace, true, visibilityMaxAgeSeconds).stream()
                 .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
                 .toList();
     }

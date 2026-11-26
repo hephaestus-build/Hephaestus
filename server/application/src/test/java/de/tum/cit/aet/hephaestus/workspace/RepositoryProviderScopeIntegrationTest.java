@@ -1525,7 +1525,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
             var metadata = mock(GitLabProjectResponse.class);
             when(projectSync.fetchProjectById(anyLong(), eq(repository.getNativeId())))
                     .thenReturn(Optional.of(metadata));
-            when(projectSync.persistProject(eq(metadata), any())).thenReturn(Optional.of(repository));
+            when(projectSync.persistProject(eq(metadata), any(), any())).thenReturn(Optional.of(repository));
         }
         var repositorySync = new GitLabRepositorySync(
                 syncTargets,

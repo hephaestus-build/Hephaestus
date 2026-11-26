@@ -28,7 +28,7 @@ public class CommitIdentityResolutionService {
 
     public record Result(String outcome, int changedLinks) {}
 
-    /** Applies an answer for the email of one queue row. {@link Answer.Deferred} never reaches this method. */
+    /** Applies a provider's answer to the email of one queue row. */
     @Transactional
     public Result apply(long resolutionId, long repositoryId, long providerId, String email, Answer answer) {
         if (resolutions.lockById(resolutionId).isEmpty()) {
@@ -49,7 +49,7 @@ public class CommitIdentityResolutionService {
             }
             case Answer.Erased ignored ->
                 finish(resolutionId, State.RESOLVED, "erased", write(repositoryId, email, NO_USER, "erased"));
-            case Answer.Deferred _, Answer.RetryAfterCredentialChange _ ->
+            case Answer.RetryAfterCredentialChange _ ->
                 throw new IllegalArgumentException("A deferred answer writes nothing");
         };
     }

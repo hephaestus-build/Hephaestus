@@ -34,7 +34,12 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -52,7 +57,12 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -74,7 +84,12 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();

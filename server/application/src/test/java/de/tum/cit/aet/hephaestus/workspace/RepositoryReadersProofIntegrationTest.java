@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import static de.tum.cit.aet.hephaestus.testconfig.RepositoryObservationTestFixtures.confirm;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -8,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProofReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProofState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
@@ -16,7 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
@@ -26,6 +28,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,8 +40,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final Instant REQUESTED = Instant.now().minusSeconds(600).truncatedTo(ChronoUnit.MICROS);
     private static final long REPOSITORY = 456L;
+
+    @Autowired
+    private RepositoryObservationStore observations;
 
     @Autowired
     private RepositoryToMonitorRepository monitors;
@@ -68,6 +74,12 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         long installation = ThreadLocalRandom.current().nextLong(1_000_000L, Long.MAX_VALUE / 2);
         Workspace workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaces, connections, WorkspaceTestFixtures.installationWorkspace(installation, slug), installation);
+        jdbc.update("""
+                INSERT INTO repository(provider_id, native_id, name, name_with_owner, html_url,
+                    visibility, is_archived, is_disabled, is_private)
+                VALUES (?, ?, 'project', 'course/project', 'https://github.com/course/project',
+                    'UNKNOWN', false, false, false) ON CONFLICT DO NOTHING
+                """, gitHub(), REPOSITORY);
         return monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, "course/" + slug, REPOSITORY));
     }
 
@@ -77,6 +89,11 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
                         + " WHERE id = ?",
                 String.class,
                 monitor.getId()));
+    }
+
+    private Instant databaseTime() {
+        return Objects.requireNonNull(jdbc.queryForObject("SELECT statement_timestamp()", OffsetDateTime.class))
+                .toInstant();
     }
 
     private long gitHub() {
@@ -89,20 +106,45 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
 
     /** A read of the monitored repository that begins now, as the GitHub sync begins one before it asks GitHub. */
     private ReadersRead read(RepositoryToMonitor monitor) {
-        return provider.beginReadersProof(monitor.getId(), REPOSITORY, gitHub(), REQUESTED);
+        return provider.beginReadersProof(scope(monitor), monitor.getId(), REPOSITORY, gitHub());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldKeepAccessLossWhenMetadataSuccessAndLossOverlap(boolean lossArrivesFirst) {
+        var monitor = monitor("access-loss-" + lossArrivesFirst);
+        ReadersRead success = read(monitor);
+        if (lossArrivesFirst) {
+            provider.recordRepositoryLoss(read(monitor));
+        }
+
+        confirm(observations, success, true);
+
+        if (!lossArrivesFirst) {
+            provider.recordRepositoryLoss(read(monitor));
+        }
+
+        var stored = monitors.findById(monitor.getId()).orElseThrow();
+        assertThat(stored.getUnavailableSince()).isNotNull();
+        assertThat(stored.getUnavailableRetryAt()).isNotNull();
+        assertThat(stored.getRepositoryVisibilityConfirmedAt()).isNull();
+        assertThat(proof(monitor)).isEqualTo("UNPROVEN FAILED RESOURCE_UNAVAILABLE");
     }
 
     @Test
     void shouldOpenARepositoryThatGitHubShowedPublicAndCloseItWhenGitHubShowsItNotPublic() {
         var monitor = monitor("public-then-private");
 
-        provider.recordRepositoryPublic(read(monitor));
+        var before = databaseTime();
+        var read = read(monitor);
+        assertThat(read.requestedAt()).isBetween(before, databaseTime());
+        confirm(observations, read, true);
         assertThat(proof(monitor)).isEqualTo("WORKSPACE PROVEN PUBLIC_ON_PROVIDER");
         assertThat(monitors.findById(monitor.getId()).orElseThrow().getReaders().getReadersSyncedAt())
                 .as("the proof counts from the request of the read that gave it")
-                .isEqualTo(REQUESTED);
+                .isEqualTo(read.requestedAt());
 
-        provider.recordRepositoryNotPublic(read(monitor));
+        confirm(observations, read(monitor), false);
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
     }
 
@@ -113,8 +155,8 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         ReadersRead publicRead = read(monitor);
         ReadersRead privateRead = read(monitor);
 
-        provider.recordRepositoryNotPublic(privateRead);
-        provider.recordRepositoryPublic(publicRead);
+        confirm(observations, privateRead, false);
+        confirm(observations, publicRead, true);
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
     }
@@ -124,16 +166,21 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
     void shouldKeepALossOfAccessWhateverTheReplicaClocksSay() {
         var monitor = monitor("clock-skew");
         var other = monitor("clock-skew-elsewhere");
-        provider.recordRepositoryPublic(read(other));
+        confirm(observations, read(other), true);
         ReadersRead started = read(monitor);
 
-        provider.recordRepositoryUnavailable(scope(monitor), monitor.getId());
-        provider.recordRepositoryPublic(new ReadersRead(
-                started.syncTargetId(),
-                REPOSITORY,
-                gitHub(),
-                started.generation(),
-                Instant.now().plusSeconds(86_400)));
+        provider.recordRepositoryLoss(read(monitor));
+        confirm(
+                observations,
+                new ReadersRead(
+                        started.scopeId(),
+                        started.syncTargetId(),
+                        REPOSITORY,
+                        gitHub(),
+                        started.generation(),
+                        Instant.now().plusSeconds(86_400),
+                        started.credential()),
+                true);
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN FAILED RESOURCE_UNAVAILABLE");
         assertThat(proof(other))
@@ -148,7 +195,7 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         ReadersRead readOfTheOldRepository = read(monitor);
         jdbc.update("UPDATE repository_to_monitor SET native_id = ? WHERE id = ?", REPOSITORY + 1, monitor.getId());
 
-        provider.recordRepositoryPublic(readOfTheOldRepository);
+        confirm(observations, readOfTheOldRepository, true);
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");
     }
@@ -157,9 +204,10 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
     void shouldNotLetAnotherWorkspaceMarkThisMonitorUnavailable() {
         var monitor = monitor("unavailable-scope");
         var stranger = monitor("unavailable-stranger");
-        provider.recordRepositoryPublic(read(monitor));
+        confirm(observations, read(monitor), true);
 
-        provider.recordRepositoryUnavailable(scope(stranger), monitor.getId());
+        provider.recordRepositoryLoss(
+                provider.beginReadersProof(scope(stranger), monitor.getId(), REPOSITORY, gitHub()));
 
         assertThat(proof(monitor)).isEqualTo("WORKSPACE PROVEN PUBLIC_ON_PROVIDER");
     }
@@ -186,7 +234,7 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         CompletableFuture<Void> widening;
         try {
             int holder = holderPid.get(30, TimeUnit.SECONDS);
-            widening = CompletableFuture.runAsync(() -> provider.recordRepositoryPublic(publicRead));
+            widening = CompletableFuture.runAsync(() -> confirm(observations, publicRead, true));
             await().atMost(Duration.ofSeconds(30))
                     .untilAsserted(() -> assertThat(jdbc.queryForObject(
                                     "SELECT count(*) FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid))",
@@ -215,10 +263,10 @@ class RepositoryReadersProofIntegrationTest extends AbstractWorkspaceIntegration
         transactions.executeWithoutResult(status -> {
             var held = monitors.findById(monitor.getId()).orElseThrow();
             assertThat(held.getReaders().getProofGeneration()).isEqualTo(publicRead.generation());
-            CompletableFuture.runAsync(() -> provider.recordRepositoryNotPublic(read(monitor)))
+            CompletableFuture.runAsync(() -> confirm(observations, read(monitor), false))
                     .join();
 
-            provider.recordRepositoryPublic(publicRead);
+            confirm(observations, publicRead, true);
         });
 
         assertThat(proof(monitor)).isEqualTo("UNPROVEN PENDING AWAITING_READERS");

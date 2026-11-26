@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -12,11 +13,14 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -30,6 +34,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -61,6 +66,10 @@ import reactor.core.scheduler.Scheduler;
 import reactor.test.scheduler.VirtualTimeScheduler;
 
 class GitHubRepositorySyncServiceTest extends BaseUnitTest {
+    private static ReadersRead unmonitoredRead() {
+        return new ReadersRead(7L, null, 123L, 100L, -1L, Instant.EPOCH);
+    }
+
     private MockWebServer upstream;
 
     @BeforeEach
@@ -92,7 +101,7 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 .build();
         return new GitHubRepositorySyncService(
                 clients,
-                mock(RepositoryRepository.class),
+                mock(RepositoryObservationStore.class),
                 mock(OrganizationRepository.class),
                 properties,
                 new GitHubExceptionClassifier(new SimpleMeterRegistry()),
@@ -114,13 +123,14 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                         repositoryMissing ? "null" : "{\"id\":\"R_test\"}",
                         repositoryMissing ? "[\"repository\"]" : "[\"repository\",\"defaultBranchRef\"]",
                         errorType);
-        var service = graphQlService(body, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        var service = graphQlService(body, mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
 
         if ((errorType.equals("NOT_FOUND") || errorType.equals("FORBIDDEN")) && repositoryMissing) {
-            assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+            assertThatThrownBy(() -> service.syncRepository(
+                            7L, "course/project", new IdentityProvider(), null, unmonitoredRead()))
                     .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
         } else {
-            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null, unmonitoredRead()))
                     .isEmpty();
         }
     }
@@ -128,12 +138,13 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(strings = {"NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED"})
     void shouldReportUnavailableWhenGitHubRefusesRepositoryAccess(String type) {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var service = graphQlService("""
                 {"data":{"repository":null},"errors":[{"type":"%s","path":["repository"],"message":"Synthetic access refusal"}]}
                 """.formatted(type), repositories, organizations);
-        assertThatThrownBy(() -> service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+        assertThatThrownBy(() -> service.syncRepository(
+                        7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
         verifyNoInteractions(repositories, organizations);
         assertThat(upstream.getRequestCount()).isEqualTo(1);
@@ -145,8 +156,8 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         var service = graphQlService(
                 """
                 {"data":{"repository":null},"errors":[{"type":"%s","path":["repository","defaultBranchRef"],"message":"Synthetic child refusal"}]}
-                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
-        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                """.formatted(type), mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isEmpty();
     }
 
@@ -156,8 +167,9 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         var service = graphQlService(
                 """
                 {"data":null,"errors":[{"type":"%s","message":"Synthetic access refusal"}]}
-                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
-        assertThatThrownBy(() -> service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                """.formatted(type), mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
+        assertThatThrownBy(() -> service.syncRepository(
+                        7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
     }
 
@@ -165,8 +177,8 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     void shouldWithholdUnavailableStateWhenForbiddenMeansRateLimited() {
         var service = graphQlService("""
                 {"data":{"repository":null},"errors":[{"type":"FORBIDDEN","path":["repository"],"message":"API rate limit exceeded"}]}
-                """, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
-        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                """, mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isEmpty();
     }
 
@@ -178,8 +190,8 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 {"data":{"repository":null},"errors":[
                   {"type":"%s","path":["repository"],"message":"Synthetic refusal"},
                   {"type":"RATE_LIMITED","path":["repository","defaultBranchRef"],"message":null}]}
-                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
-        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                """.formatted(type), mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isEmpty();
     }
 
@@ -189,16 +201,16 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 {"data":{"repository":null},"errors":[
                   {"type":"SOMETHING_NEW","path":["repository"],"message":"Synthetic root failure"},
                   {"type":"NOT_FOUND","path":["repository","defaultBranchRef"],"message":"Synthetic missing child"}]}
-                """, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
-        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                """, mock(RepositoryObservationStore.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null, unmonitoredRead()))
                 .isEmpty();
     }
 
     @Test
     void shouldPersistRepositoryWhenMonitoredIdentityMatches() {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
-        when(repositories.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repositories.observe(any(), any())).thenReturn(new Result(true, new Repository()));
         var service = graphQlService("""
                 {"data":{"repository":{"databaseId":123,"name":"project","nameWithOwner":"course/project",
                 "url":"https://github.com/course/project","isPrivate":false,"isArchived":false,
@@ -207,20 +219,20 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 """, repositories, organizations);
         var provider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
 
-        var repository =
-                service.syncRepository(7L, "course/project", provider, 123L).orElseThrow();
+        assertThat(service.syncRepository(7L, "course/project", provider, 123L, unmonitoredRead()))
+                .isPresent();
 
-        assertThat(repository.getNativeId()).isEqualTo(123L);
-        assertThat(repository.getNameWithOwner()).isEqualTo("course/project");
-        assertThat(repository.getProvider()).isSameAs(provider);
+        var observation = ArgumentCaptor.forClass(RepositoryObservationStore.Observation.class);
+        verify(repositories).observe(eq(unmonitoredRead()), observation.capture());
+        assertThat(observation.getValue().patch()).containsEntry("name_with_owner", "course/project");
         verify(organizations).upsert(33L, 100L, "course", "course", null, null);
     }
 
     @Test
     void shouldLetAFailedWriteReachTheCallerInsteadOfTreatingItAsAGitHubError() {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
-        when(repositories.save(any())).thenThrow(new DataIntegrityViolationException("duplicate repository"));
+        when(repositories.observe(any(), any())).thenThrow(new DataIntegrityViolationException("duplicate repository"));
         var service = graphQlService("""
                 {"data":{"repository":{"databaseId":123,"name":"project","nameWithOwner":"course/project",
                 "url":"https://github.com/course/project","isPrivate":false,"isArchived":false,
@@ -229,13 +241,13 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 """, repositories, organizations);
         var provider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
 
-        assertThatThrownBy(() -> service.syncRepository(7L, "course/project", provider, 123L))
+        assertThatThrownBy(() -> service.syncRepository(7L, "course/project", provider, 123L, unmonitoredRead()))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void shouldRejectReassignedNameBeforePersistingRepositoryOrOrganization() {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var service = graphQlService("""
                 {"data":{"repository":{"databaseId":124,
@@ -243,24 +255,31 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 """, repositories, organizations);
 
         assertThatThrownBy(() -> service.syncRepository(
-                        7L, "course/project", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L))
+                        7L,
+                        "course/project",
+                        TestEntities.gitProvider(100L, IdentityProviderType.GITHUB),
+                        123L,
+                        unmonitoredRead()))
                 .isInstanceOf(RepositoryIdentityMismatchException.class);
         verifyNoInteractions(repositories, organizations);
     }
 
     private GitHubRepositorySyncService graphQlService(
-            String body, RepositoryRepository repositories, OrganizationRepository organizations) {
+            String body, RepositoryObservationStore repositories, OrganizationRepository organizations) {
         return graphQlService(HttpStatus.OK, body, repositories, organizations);
     }
 
     private GitHubRepositorySyncService graphQlService(
-            HttpStatus status, String body, RepositoryRepository repositories, OrganizationRepository organizations) {
+            HttpStatus status,
+            String body,
+            RepositoryObservationStore repositories,
+            OrganizationRepository organizations) {
         return graphQlService(status, body, repositories, organizations, List.of(), List.of());
     }
 
     @Test
     void shouldWithdrawRenamedExcludedRepositoryBeforeStoringItsMetadata() {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var targets = mock(SyncTargetProvider.class);
         var filter = mock(RepositoryScopeFilter.class);
@@ -272,7 +291,11 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 """, repositories, organizations, List.of(filter), List.of(targets));
 
         assertThat(service.syncRepository(
-                        7L, "course/old-reports", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L))
+                        7L,
+                        "course/old-reports",
+                        TestEntities.gitProvider(100L, IdentityProviderType.GITHUB),
+                        123L,
+                        unmonitoredRead()))
                 .isEmpty();
 
         verifyNoInteractions(repositories, organizations);
@@ -282,7 +305,7 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     private GitHubRepositorySyncService graphQlService(
             HttpStatus status,
             String body,
-            RepositoryRepository repositories,
+            RepositoryObservationStore repositories,
             OrganizationRepository organizations,
             List<RepositoryScopeFilter> filters,
             List<SyncTargetProvider> targets) {
@@ -328,7 +351,7 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     private static GitHubRepositorySyncService syncService(
             GitHubGraphQlClientProvider clients,
             GitHubGraphQlSyncCoordinator coordinator,
-            RepositoryRepository repositories,
+            RepositoryObservationStore repositories,
             OrganizationRepository organizations,
             WebClient webClient,
             Scheduler timeouts) {
@@ -356,13 +379,17 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         var coordinator = mock(GitHubGraphQlSyncCoordinator.class);
         // The policy, not this test, owns the backoff: it allows two retries and then gives up.
         when(coordinator.handleGraphQlClassification(any())).thenReturn(true, true, false);
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var service = syncService(
                 clients, coordinator, repositories, organizations, WebClient.create(), VirtualTimeScheduler.create());
 
         assertThat(service.syncRepository(
-                        7L, "course/project", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L))
+                        7L,
+                        "course/project",
+                        TestEntities.gitProvider(100L, IdentityProviderType.GITHUB),
+                        123L,
+                        unmonitoredRead()))
                 .isEmpty();
 
         var asked = ArgumentCaptor.forClass(GraphQlClassificationContext.class);
@@ -392,13 +419,17 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                         .documentSource(new ResourceDocumentSource(new ClassPathResource("graphql/github/operations/")))
                         .build());
         var coordinator = mock(GitHubGraphQlSyncCoordinator.class);
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var clock = VirtualTimeScheduler.create();
         var service = syncService(clients, coordinator, repositories, organizations, webClient, clock);
 
         var synced = CompletableFuture.supplyAsync(() -> service.syncRepository(
-                7L, "course/project", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L));
+                7L,
+                "course/project",
+                TestEntities.gitProvider(100L, IdentityProviderType.GITHUB),
+                123L,
+                unmonitoredRead()));
         // The exchange is under way: only the virtual clock can end it now. The waits keep a broken test from hanging.
         assertThat(requested.await(1, TimeUnit.MINUTES)).isTrue();
         clock.advanceTimeBy(Duration.ofSeconds(2));
@@ -414,14 +445,15 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(ints = {403, 404, 429})
     void shouldClassifyHttpErrorsWithoutRetryingThemAsNetworkFailures(int status) {
-        var repositories = mock(RepositoryRepository.class);
+        var repositories = mock(RepositoryObservationStore.class);
         var organizations = mock(OrganizationRepository.class);
         var service = graphQlService(HttpStatus.valueOf(status), "{}", repositories, organizations);
         if (status == 429) {
-            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null, unmonitoredRead()))
                     .isEmpty();
         } else {
-            assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+            assertThatThrownBy(() -> service.syncRepository(
+                            7L, "course/project", new IdentityProvider(), null, unmonitoredRead()))
                     .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
         }
         assertThat(upstream.getRequestCount()).isEqualTo(1);

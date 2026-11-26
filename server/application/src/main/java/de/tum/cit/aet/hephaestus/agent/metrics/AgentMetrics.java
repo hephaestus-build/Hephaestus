@@ -54,6 +54,9 @@ public final class AgentMetrics {
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_ELIGIBLE = "agent.review.practice.coverage.eligible";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_EVALUATED = "agent.review.practice.coverage.evaluated";
+    public static final String AGENT_REVIEW_ZERO_EVALUATED = "agent.review.zero.evaluated";
+    public static final String AGENT_REVIEW_LAST_ZERO_EVALUATED_TIMESTAMP_SECONDS =
+            "agent.review.last_zero_evaluated.timestamp_seconds";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
     public static final String AGENT_REVIEW_PRACTICE_SCRIPTS = "agent.review.practice_scripts";
     public static final String ATTEMPT_KEY_SYNC_FAILURES = "attempt.key.sync.failures";
