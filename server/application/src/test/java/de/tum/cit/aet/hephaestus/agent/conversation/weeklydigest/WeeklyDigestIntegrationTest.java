@@ -744,7 +744,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         var next = transactionTemplate.execute(tx -> {
             assertThat(writeFence.holdForAccountWrite(accountId)).isTrue();
             var lease = runs.claimSubject(
-                            workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST))
+                            workspaceId,
+                            "conversation:" + conversationId,
+                            Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST))
                     .orElseThrow();
             assertThat(turns.start(workspaceId, lease.runId(), lease.epoch())).isPresent();
             return lease;

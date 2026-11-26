@@ -215,7 +215,8 @@ public class InboxItem {
     }
 
     private void moveTo(State next) {
-        if (!state.canTransitionTo(next)) throw new IllegalStateException("An inbox item cannot go from " + state + " to " + next);
+        if (!state.canTransitionTo(next))
+            throw new IllegalStateException("An inbox item cannot go from " + state + " to " + next);
         state = next;
     }
 }
