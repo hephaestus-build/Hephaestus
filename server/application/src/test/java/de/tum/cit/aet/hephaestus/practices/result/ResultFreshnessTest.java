@@ -119,10 +119,14 @@ class ResultFreshnessTest {
     @Test
     void shouldKeepTheDiffResultCurrentWhenAnotherPracticeNeedsAnExpiredOccasionRecord() {
         var source = mock(ScmItemService.class);
-        var reader = new ScmSourceFingerprints(
-                source, mock(ScmWorkCapture.class), mock(ScmItemTransactions.class));
+        var reader = new ScmSourceFingerprints(source, mock(ScmWorkCapture.class), mock(ScmItemTransactions.class));
         var query = new ProductItemQuery(
-                mock(ProductItemRepository.class), List.of(source), List.of(), List.of(), new JsonMapper(), List.of(reader));
+                mock(ProductItemRepository.class),
+                List.of(source),
+                List.of(),
+                List.of(),
+                new JsonMapper(),
+                List.of(reader));
         var occasion = UUID.randomUUID();
         var base = "a".repeat(40);
         var head = "b".repeat(40);
@@ -154,7 +158,9 @@ class ResultFreshnessTest {
                                 ReviewKind.ITEM,
                                 ReviewOrigin.EVENT,
                                 occasion,
-                                decision(CAPTURED_AT, Map.of(diff.value(), SourceFingerprint.git(diff, base + ":" + head))),
+                                decision(
+                                        CAPTURED_AT,
+                                        Map.of(diff.value(), SourceFingerprint.git(diff, base + ":" + head))),
                                 null),
                         new ResultSourceCapture(
                                 recordResult.getReviewId(),

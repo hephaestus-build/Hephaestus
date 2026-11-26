@@ -141,7 +141,10 @@ public class ResultFreshness implements FreshnessRead {
         }
         // Only a live result of work that still exists compares its sources: an ended one is stale and a scan's is
         // frozen, whatever the work holds now. Each piece of work is read once per occasion, for every kind its
-        // results compare, since a reader answers each kind on its own (ItemSource#recordFingerprints).
+        // results compare. A reader answers each kind on its own (ItemSource#recordFingerprints), and a read of fewer
+        // kinds does part of the same work, so a read that answers every kind of a result answers as a read of just
+        // those kinds would. A result it leaves a kind unanswered for reads its own kinds, so a source that fails
+        // fails only the results that compare it.
         var kindsByRead = new LinkedHashMap<WorkRead, Set<SourceKind>>();
         for (var result : rows)
             if (result.endedAt() == null && refs.containsKey(result.itemId()) && !frozen.contains(result.id()))
@@ -150,30 +153,36 @@ public class ResultFreshness implements FreshnessRead {
                         .addAll(Objects.requireNonNull(expected.get(result.id()))
                                 .keySet());
         var currentByRead = new HashMap<WorkRead, Map<SourceKind, String>>();
-        kindsByRead.forEach((read, kinds) -> currentByRead.put(
-                read,
-                kinds.isEmpty()
-                        ? Map.of()
-                        : items.read(
-                                        Objects.requireNonNull(refs.get(read.itemId())),
-                                        Set.copyOf(kinds),
-                                        read.occasion())
-                                .fingerprints()));
+        kindsByRead.forEach((read, kinds) -> currentByRead.put(read, currentFingerprints(refs, read, kinds)));
+        var currentByScope = new HashMap<ReadScope, Map<SourceKind, String>>();
         var states = new HashMap<UUID, Freshness>();
         for (var result : rows) {
             var readAt = capturedAt.get(result.id());
-            states.put(
-                    result.id(),
-                    result.endedAt() != null || !refs.containsKey(result.itemId())
-                            ? Freshness.stale(readAt)
-                            : frozen.contains(result.id())
-                                    ? Freshness.current(readAt)
-                                    : freshness(
-                                            expected.getOrDefault(result.id(), Map.of()),
-                                            currentByRead.getOrDefault(WorkRead.of(result, occasions), Map.of()),
-                                            readAt));
+            if (result.endedAt() != null || !refs.containsKey(result.itemId())) {
+                states.put(result.id(), Freshness.stale(readAt));
+                continue;
+            }
+            if (frozen.contains(result.id())) {
+                states.put(result.id(), Freshness.current(readAt));
+                continue;
+            }
+            var compared = expected.getOrDefault(result.id(), Map.of());
+            var read = WorkRead.of(result, occasions);
+            var answered = Objects.requireNonNull(currentByRead.get(read));
+            if (!answered.keySet().containsAll(compared.keySet()))
+                answered = currentByScope.computeIfAbsent(
+                        new ReadScope(read.itemId(), compared.keySet(), read.occasion()),
+                        scope -> currentFingerprints(refs, read, scope.kinds()));
+            states.put(result.id(), freshness(compared, answered, readAt));
         }
         return Map.copyOf(states);
+    }
+
+    private Map<SourceKind, String> currentFingerprints(Map<Long, ItemRef> refs, WorkRead read, Set<SourceKind> kinds) {
+        return kinds.isEmpty()
+                ? Map.of()
+                : items.read(Objects.requireNonNull(refs.get(read.itemId())), Set.copyOf(kinds), read.occasion())
+                        .fingerprints();
     }
 
     /**
