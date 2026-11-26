@@ -709,18 +709,22 @@ it("clears a revoked partial on DELETE while an older read is still in flight", 
 	const releaseOld = deferred();
 	const releaseNew = deferred();
 	server.use(
-		http.get("*/workspaces/acme/conversation", async () => {
-			if (fake.scopeEpoch === 0) {
+		http.get(
+			"*/workspaces/acme/conversation",
+			async () => {
 				oldStarted.resolve();
 				await releaseOld.promise;
 				return HttpResponse.json(stale);
-			}
+			},
+			{ once: true },
+		),
+		http.get("*/workspaces/acme/conversation", async () => {
 			await releaseNew.promise;
 			return HttpResponse.json(fake.conversation());
 		}),
 	);
 	const options = conversationOptions("acme");
-	const oldRead = queryClient.fetchQuery({ ...options, staleTime: 0 });
+	const oldRead = queryClient.query({ ...options, staleTime: 0 });
 	await oldStarted.promise;
 	try {
 		await userEvent.click(screen.getByRole("button", { name: /^Delete message/u }));
