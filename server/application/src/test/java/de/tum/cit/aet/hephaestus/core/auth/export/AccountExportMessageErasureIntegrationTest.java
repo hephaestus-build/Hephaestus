@@ -9,7 +9,10 @@ import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -22,11 +25,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -109,6 +114,9 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AccountExportWriter writer;
+
+    @Autowired
+    private PersonDataRegistry personData;
 
     private long seq;
 
@@ -263,6 +271,59 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
         CompletableFuture.allOf(purge, redact).get(20, TimeUnit.SECONDS);
         assertThat(read(firstExport, firstOwner).getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
         assertThat(read(secondExport, secondOwner).getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
+    }
+
+    @Test
+    void shouldCommitSourceExpiryAndConcurrentPersonErasure() throws Exception {
+        var scenario = data.scenario();
+        long owner = Objects.requireNonNull(scenario.account().getId());
+        UUID answer = entry(conversation(scenario.workspace().getId(), owner), "ANSWER", ERASED);
+        var transactions = new TransactionTemplate(transactionManager);
+        long first = Objects.requireNonNull(jdbc.queryForObject("SELECT nextval('account_export_id_seq')", Long.class));
+        long second =
+                Objects.requireNonNull(jdbc.queryForObject("SELECT nextval('account_export_id_seq')", Long.class));
+        transactions.executeWithoutResult(ignored -> {
+            ownerScope.ofJob(owner);
+            // A heap scan visits the higher ID first.
+            jdbc.update(
+                    ReadyExportFence.CTE
+                            + "INSERT INTO account_export(id, account_id, status, expires_at, payload)"
+                            + " SELECT id, ?, 'READY', now() + interval '1 day', '\\x01'"
+                            + " FROM fence CROSS JOIN (VALUES (0, ?::bigint), (1, ?::bigint)) exports(position, id)"
+                            + " ORDER BY position",
+                    owner,
+                    owner,
+                    second,
+                    first);
+        });
+
+        var store = personData.stores().stream()
+                .filter(candidate -> candidate.store().equals("account_export"))
+                .findFirst()
+                .orElseThrow();
+        var scope = new PersonScope(owner, List.of(), List.of());
+        var selection = new PersonDataSelection(List.of(
+                new PersonDataSelection.RowKey(Map.of("id", Long.toString(second))),
+                new PersonDataSelection.RowKey(Map.of("id", Long.toString(first)))));
+        var expiry = HeldTransaction.holdIn(transactions, jdbc, () -> {
+            ownerScope.ofJob(owner);
+            redaction.redact(List.of(answer));
+            // Pause at the deferred sweep's first lock, before it can ask for the higher ID.
+            jdbc.queryForObject("SELECT id FROM account_export WHERE id = ? FOR UPDATE", Long.class, first);
+        });
+        var erasure = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(ignored -> {
+            ownerScope.ofJob(owner);
+            jdbc.execute("SET LOCAL enable_indexscan = off");
+            jdbc.execute("SET LOCAL enable_bitmapscan = off");
+            assertThat(store.erase(selection, scope)).isEqualTo(2);
+        }));
+        expiry.commitAfter(erasure);
+        erasure.get(20, TimeUnit.SECONDS);
+        transactions.executeWithoutResult(ignored -> {
+            ownerScope.ofJob(owner);
+            assertThat(jdbc.queryForList("SELECT id FROM account_export WHERE id IN (?, ?)", Long.class, first, second))
+                    .isEmpty();
+        });
     }
 
     @Test

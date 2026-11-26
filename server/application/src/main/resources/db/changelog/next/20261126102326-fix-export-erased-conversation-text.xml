@@ -160,7 +160,8 @@ BEGIN
             INSERT INTO lifecycle_private.export_expiry_queue (transaction_id, account_id)
             VALUES (pg_current_xact_id(), subject_id) ON CONFLICT DO NOTHING;
         ELSE
-            -- The first deferred trigger drains this transaction's owners in one export row lock order.
+            -- The first deferred trigger drains this transaction's owners.
+            -- See "Account export locks" in docs/contributor/transactions.mdx.
             WITH owners AS (
                 DELETE FROM lifecycle_private.export_expiry_queue
                 WHERE transaction_id = pg_current_xact_id()

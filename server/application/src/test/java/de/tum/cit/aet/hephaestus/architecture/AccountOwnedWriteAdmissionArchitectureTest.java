@@ -166,7 +166,9 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         var erasure = classes.get(ERASURE_REPOSITORY).getMethod("deleteExports", Long.class);
         assertThat(exportDml(SourceSql.annotationSql(erasure, false)))
                 .as("Account erasure may delete exports after locking their account")
-                .containsExactly("DELETE FROM account_export WHERE account_id = :accountId");
+                .containsExactly(
+                        "WITH locked AS MATERIALIZED ( SELECT id FROM account_export WHERE account_id = :accountId"
+                                + " ORDER BY id FOR UPDATE ) DELETE FROM account_export WHERE id IN (SELECT id FROM locked)");
         assertThat(exportQueryViolations(classes.stream()
                         .flatMap(type -> type.getMethods().stream())
                         .filter(method -> !method.equals(erasure))))
