@@ -62,6 +62,9 @@ class SlackNoticeAdapter implements ActionAdapter {
         return posts.postNotice(
                 attempt,
                 new SlackPostAdapter.Post(
-                        notice.channelId(), notice.threadTs(), blocks, notice.text(), notice.messageTs(), null));
+                        new SlackPostAdapter.Destination(
+                                notice.channelId(), notice.threadTs(), notice.messageTs(), null),
+                        blocks,
+                        notice.text()));
     }
 }

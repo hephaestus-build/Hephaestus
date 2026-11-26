@@ -122,6 +122,12 @@ public class ConversationSlackMessages {
                 .flatMap(turn -> turns.findByIdAndWorkspaceId(turn, workspaceId));
     }
 
+    /** Whether a reply can still be attempted after a complete Slack readback found no post. */
+    @Transactional(readOnly = true)
+    public boolean hasQuestion(long workspaceId, UUID questionId) {
+        return !entries.findUnredactedIds(workspaceId, List.of(questionId)).isEmpty();
+    }
+
     /** Checks delivery while the question is locked in the transaction that admits the Slack reply. */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean admitReply(long workspaceId, UUID questionId, UUID turnId, Runnable requireDeliveryAllowed) {

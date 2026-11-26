@@ -31,7 +31,7 @@ public class ConversationSlackReplies {
     /** How long a reply whose post may have reached Slack waits before the history is read. */
     public static final Duration REREAD = Duration.ofMinutes(1);
 
-    /** One send, then reads of the Slack history while it stays unknown. */
+    /** Covers sends and the history reads that resolve unknown outcomes. */
     static final int MAX_ATTEMPTS = 3;
 
     private static final String REPLY = "slack_reply:";

@@ -183,9 +183,10 @@ public class SlackMessageService implements AutoCloseable {
 
     /**
      * Admits a post after connection setup, immediately before the write. A refusal fails with
-     * {@code not_admitted}. A 429 returns to the outbox for a fresh attempt when it supplies admission.
+     * {@code not_admitted}. A 429 returns to the outbox for a fresh attempt.
      */
-    public Posted postAdmitted(long workspaceId, Outgoing post, @Nullable BooleanSupplier admitAtSend) {
+    public Posted postAdmitted(long workspaceId, Outgoing post, BooleanSupplier admitAtSend) {
+        Objects.requireNonNull(admitAtSend);
         String channelId = post.channelId();
         String threadTs = post.threadTs();
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()

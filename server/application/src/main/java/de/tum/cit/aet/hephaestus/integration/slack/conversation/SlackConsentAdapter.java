@@ -70,12 +70,9 @@ class SlackConsentAdapter implements ActionAdapter {
                 attempt,
                 request.marker(),
                 new SlackPostAdapter.Post(
-                        request.channelId(),
-                        null,
+                        new SlackPostAdapter.Destination(request.channelId(), null, request.oldestTs(), null),
                         SlackConsentBlocks.activationNotice(),
-                        SlackConsentBlocks.activationFallbackText(),
-                        request.oldestTs(),
-                        null),
+                        SlackConsentBlocks.activationFallbackText()),
                 request.retry(),
                 20);
         if (result instanceof ActionResult.Done done && done.readbackRef() != null) {

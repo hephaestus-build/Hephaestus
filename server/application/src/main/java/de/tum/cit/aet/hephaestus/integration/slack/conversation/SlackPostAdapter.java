@@ -53,13 +53,13 @@ class SlackPostAdapter implements ActionAdapter {
 
     record Recipient(String teamId, String userId) {}
 
-    record Post(
+    record Destination(
             String channelId,
             @Nullable String threadTs,
-            List<LayoutBlock> blocks,
-            String text,
             String oldestTs,
             @Nullable Recipient recipient) {}
+
+    record Post(Destination destination, List<LayoutBlock> blocks, String text) {}
 
     record Receipt(String channelId, String ts, @Nullable Recipient recipient) {}
 
@@ -101,12 +101,18 @@ class SlackPostAdapter implements ActionAdapter {
         }
         long workspace = Objects.requireNonNull(attempt.workspaceId());
         var found = messages.slackTurn(workspace, payload.turnId());
-        if (found.isEmpty() || found.get().question().isRedacted())
-            return unavailable(attempt, ActionStopReason.WITHDRAWN);
+        if (found.isEmpty()) return unavailable(attempt, ActionStopReason.WITHDRAWN);
         var turn = found.get();
+        var destination = new Destination(
+                turn.channelId(),
+                turn.threadTs(),
+                SlackTs.ofInstant(turn.question().getCreatedAt()),
+                null);
+        if (attempt.writeStarted()) return readReply(attempt, workspace, payload.entryId(), destination);
+        if (turn.question().isRedacted()) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         if (!turn.turn().getStatus().isTerminal()) return new ActionResult.Defer(Duration.ofSeconds(1));
         if (turn.turn().getStatus() == ConversationTurn.Status.STOPPED)
-            return unavailable(attempt, ActionStopReason.WITHDRAWN);
+            return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         var reply = reply(turn);
         boolean answered = turn.turn().getStatus() == ConversationTurn.Status.DONE
                 && !reply.text().isBlank();
@@ -130,19 +136,23 @@ class SlackPostAdapter implements ActionAdapter {
                 + (answered && turn.firstAnswer()
                         ? " " + SlackConversationPosts.escape(SlackConversationPosts.aiLabel(workspaceName))
                         : "");
-        return post(
-                attempt,
-                payload.entryId(),
-                new Post(
-                        turn.channelId(),
-                        turn.threadTs(),
-                        blocks,
-                        fallback,
-                        SlackTs.ofInstant(turn.question().getCreatedAt()),
-                        null));
+        return post(attempt, payload.entryId(), new Post(destination, blocks, fallback));
     }
 
-    /** A write that may have reached Slack is only read back, never posted a second time. */
+    private ActionResult readReply(ActionAttempt attempt, long workspace, UUID questionId, Destination destination) {
+        var client = slack.getIfAvailable();
+        if (client == null || !client.isConnected(workspace))
+            return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
+        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+        var found = readback(
+                client, workspace, destination, message -> SlackConversationPosts.isPostOf(message, questionId), 1);
+        if (found != null) return found;
+        // Only complete history proves absence. A new attempt can send only after fresh admission.
+        return messages.hasQuestion(workspace, questionId)
+                ? new ActionResult.Retry(ConversationSlackReplies.REREAD)
+                : new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+    }
+
     ActionResult post(ActionAttempt attempt, UUID marker, Post post) {
         return post(
                 attempt,
@@ -176,24 +186,25 @@ class SlackPostAdapter implements ActionAdapter {
             int readbackPages) {
         var client = slack.getIfAvailable();
         long workspace = Objects.requireNonNull(attempt.workspaceId());
+        var destination = post.destination();
         if (client == null || ((attempt.writeStarted() || readBeforeWrite) && !client.isConnected(workspace)))
             return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
         if (attempt.writeStarted()) {
             if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
-            var found = readback(client, workspace, post, matches, readbackPages);
+            var found = readback(client, workspace, destination, matches, readbackPages);
             return found == null ? new ActionResult.Failed(ActionStopReason.REJECTED) : found;
         }
         if (readBeforeWrite) {
-            var found = readback(client, workspace, post, matches, readbackPages);
+            var found = readback(client, workspace, destination, matches, readbackPages);
             if (found != null) return found;
         }
         try {
             var posted = client.postAdmitted(
                     workspace,
                     new SlackMessageService.Outgoing(
-                            post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata),
+                            destination.channelId(), destination.threadTs(), post.blocks(), post.text(), metadata),
                     attempt.fence()::beginWrite);
-            return done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
+            return done(new Receipt(posted.channelId(), posted.ts(), destination.recipient()));
         } catch (SlackSendException failed) {
             if ("not_admitted".equals(failed.slackError())) return new ActionResult.Abandoned();
             if ("no_active_slack_connection".equals(failed.slackError()))
@@ -211,15 +222,24 @@ class SlackPostAdapter implements ActionAdapter {
     }
 
     private @Nullable ActionResult readback(
-            SlackMessageService client, long workspace, Post post, Predicate<Message> matches, int readbackPages) {
+            SlackMessageService client,
+            long workspace,
+            Destination destination,
+            Predicate<Message> matches,
+            int readbackPages) {
         try {
             var found = readbackPages == 1
                     ? client.readWorkspaceMessages(
-                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches)
+                            workspace, destination.channelId(), destination.threadTs(), destination.oldestTs(), matches)
                     : client.readWorkspaceMessages(
-                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches, readbackPages);
+                            workspace,
+                            destination.channelId(),
+                            destination.threadTs(),
+                            destination.oldestTs(),
+                            matches,
+                            readbackPages);
             if (!found.ts().isEmpty())
-                return done(new Receipt(post.channelId(), found.ts().getFirst(), post.recipient()));
+                return done(new Receipt(destination.channelId(), found.ts().getFirst(), destination.recipient()));
             return found.more() ? new ActionResult.Reread(ConversationSlackReplies.REREAD) : null;
         } catch (SlackSendException unreadable) {
             return new ActionResult.Reread(ConversationSlackReplies.REREAD);
