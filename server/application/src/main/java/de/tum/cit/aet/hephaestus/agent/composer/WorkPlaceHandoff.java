@@ -16,9 +16,9 @@ import tools.jackson.databind.node.ObjectNode;
  * @param notReached the review's practices with no public result
  * @param onWorkCopyForms the copy forms the work takes
  */
-record WorkPlaceHandoff(
+public record WorkPlaceHandoff(
         Map<String, byte[]> files, List<ObjectNode> results, List<String> notReached, List<String> onWorkCopyForms) {
-    WorkPlaceHandoff {
+    public WorkPlaceHandoff {
         files = Collections.unmodifiableMap(new TreeMap<>(files));
         results = List.copyOf(results);
         notReached = List.copyOf(notReached);
