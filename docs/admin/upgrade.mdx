@@ -305,7 +305,7 @@ The next call starts a new tunnel.
 
 Read the target release's migration guide.
 If it requires zero requests in `ERASING` or `FAILED`, run this query before the window.
-Run it again after the last server stops and before you take the final dump.
+Run it again after [the quiet check](#verify-that-all-writers-have-stopped) passes and before you take the final dump.
 
 ```bash
 app_sql() (
@@ -324,12 +324,69 @@ Require `on` from `SHOW`.
 Require zero rows from the query.
 If either check fails, stop before the dump or migration.
 
+#### Verify that all writers have stopped
+
+Wait for each server Pod to disappear, including Pods that are terminating.
+Stop any other role that writes to this database.
+Remove remaining sandbox claims as in [Planned node maintenance](./maintenance#planned-node-maintenance).
+Use your sandbox namespace in the cleanup commands.
+Confirm that no sandbox Pod or Job remains.
+
+Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
+Run the quiet check before you query for erasures.
+Require both workload lists to be empty.
+Require the block to exit successfully.
+Require `quiet.tsv` to contain three zeros for run leases, action leases and other app connections.
+
+```bash
+(
+  set -euo pipefail
+  : > "$work/quiet.tsv"
+  server_pods=$(kubectl -n "$namespace" get pods \
+    -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" -o name)
+  test -z "$server_pods"
+  if [[ -n "$sandbox_namespace" ]]; then
+    sandbox_workloads=$(kubectl -n "$sandbox_namespace" get pods,jobs -o name)
+    test -z "$sandbox_workloads"
+  fi
+  with_tunnel app_sql -At -F $'\t' -c "
+    SELECT
+      (SELECT count(*) FROM public.agent_run WHERE state = 'LEASED' AND leased_until > clock_timestamp()),
+      (SELECT count(*) FROM public.agent_action WHERE state = 'EXECUTING' AND leased_until > clock_timestamp()),
+      (SELECT count(*) FROM pg_stat_activity
+       WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid())
+  " > "$work/quiet.tsv"
+  test "$(cat "$work/quiet.tsv")" = $'0\t0\t0'
+)
+```
+
+If a lease remains, check its `leased_until` value.
+Set a timer to repeat the quiet check just after the last lease expires.
+During the rc.17 production upgrade, the quiet check resumed about 26 minutes after the last lease expired.
+If an app connection remains, find and stop its writer.
+Repeat the quiet check after that writer stops.
+
 #### Check for erasures before recovery
 
 1. Keep access closed.
-   Keep the source and target stopped.
-   Check the live database before you replace it with a restore point.
-2. Set `restore_point` to the verified restore point in UTC.
+   Pause deployment automation.
+   Wait for any active apply to finish.
+   Wait for the migration Job to stop.
+   Keep deployment automation paused through the restore decision.
+   For bundled PostgreSQL, set up the [database tunnel](#open-the-database-tunnel) if you have not done so.
+   For external PostgreSQL, use the same workload checks and run the SQL through your read-only app connection.
+2. Scale the server Deployment to zero with `kubectl`.
+   This works while Helm reports a pending revision.
+
+   ```bash
+   kubectl -n "$namespace" scale deployment --replicas=0 \
+     -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server"
+   ```
+
+   If no server Deployment exists, still check for server Pods.
+   [Verify that all writers have stopped](#verify-that-all-writers-have-stopped).
+   Continue only after the quiet check passes.
+3. Set `restore_point` to the verified restore point in UTC.
    For a logical archive, use its receipt's `start` time.
    Run the check through the read-only app connection from [Check for erasure requests](#check-for-erasure-requests).
 
@@ -344,56 +401,44 @@ If either check fails, stop before the dump or migration.
    SQL
    ```
 
-3. Require `on` from `SHOW`.
-   Require zero rows for the stopped-window restore path.
+4. Require the query command to exit successfully.
+   Require `on` from `SHOW`.
    Check the restricted incident record for other erasures after the restore point.
-   Use the stopped-window restore path only when you can confirm that no server processed data after the restore point.
 
-   If a migration names an erasure already present in the final source archive, follow the target release's migration guide.
-   Use that recovery only if no target server processed data after that archive.
-4. If an erasure ran on the target, keep the target database.
-   Do not restore the older archive.
+   Check whether the migration names an erasure already present in the final source archive.
+   Confirm that no target server processed data after that archive.
+   If the named erasure is in the archive and the target processed no data, follow the target release's migration guide.
+
+   For the stopped-window restore path, require zero rows.
+   Confirm that no server processed data after the restore point before you restore it.
+5. If an erasure ran on the target, keep the target database.
    Keep ordinary access closed.
    Let the erasure finish on a release that can use that database.
    Follow the migration guide for a failed request.
 
    Stop the server after the erasure finishes.
    Take and verify a new final restore point.
-5. If you cannot establish what the target processed, keep access closed.
+6. If you cannot establish what the target processed, stop before Helm rollback or database replacement.
+   Keep access closed.
    Preserve the current database.
-   Follow [Reapply erasures after a restore](./erasure-recovery) before you open access.
+   Check the retained database and the restricted incident record for erasures since the archive.
+   If the erasure history remains uncertain, keep the server stopped.
+   Leave reconciliation paused until you can account for the erasures.
+
+   Without a backup repository, recover on the retained database once you can account for the erasures.
+   Repair the cause of the migration failure.
+   Finish the migration against the retained database as in [phase 2 of Stopped schema upgrades](#stopped-schema-upgrades).
+   Keep the server stopped during that migration.
+   If an erasure ran, complete the recovery in step 5 before you reopen access.
+   Run the [read-only check for erasure requests](#check-for-erasure-requests) before you reopen access.
+
+   If you already restored a database and completed its migration with access closed, account for every erasure after its restore point.
+   Then follow [Reapply erasures after a restore](./erasure-recovery) before you open access.
 
 #### Take and verify the final archive
 
-1. Confirm that the server has stopped.
-   Confirm that its sandbox Pods and Jobs are gone.
-   Both commands must print no resources.
-
-   ```bash
-   kubectl -n "$namespace" get pods \
-     -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" -o name
-   if [[ -n "$sandbox_namespace" ]]; then
-     kubectl -n "$sandbox_namespace" get pods,jobs -o name
-   fi
-   ```
-
-2. Run the applicable [erasure check](#check-for-erasure-requests) again.
-   Define `app_sql` even if the target requires no erasure check.
-   Record the quiet state through that role.
-   Require three zeros.
-   The three columns are run leases, action leases and other app connections.
-
-   ```bash
-   with_tunnel app_sql -At -F $'\t' -c "
-     SELECT
-       (SELECT count(*) FROM public.agent_run WHERE state = 'LEASED' AND leased_until > clock_timestamp()),
-       (SELECT count(*) FROM public.agent_action WHERE state = 'EXECUTING' AND leased_until > clock_timestamp()),
-       (SELECT count(*) FROM pg_stat_activity
-        WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid())
-   " > "$work/quiet.tsv"
-   test "$(cat "$work/quiet.tsv")" = $'0\t0\t0'
-   ```
-
+1. [Verify that all writers have stopped](#verify-that-all-writers-have-stopped).
+2. Run the applicable [erasure check](#check-for-erasure-requests) again after the quiet check passes.
 3. Record the source inventory before the dump.
    Count the ordinary tables that the full dump includes.
    The count includes partition leaves and extension configuration tables.

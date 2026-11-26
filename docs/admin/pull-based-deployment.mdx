@@ -363,6 +363,8 @@ Take the final restore point while the source is stopped.
 If the bundled PostgreSQL has no backup repository, [take and verify the final logical archive](./upgrade#take-a-logical-restore-point-without-backups).
 
 Promote the target release after the final restore point passes its checks.
+If you approve the deployment through GitHub's `pending_deployments` API, include the `comment` field.
+With `gh api`, pass `-f comment=''` to send an empty comment.
 Restart the timer for phase 2 only after the channel names the target.
 A tick before that applies your edited file to the source release and starts the writers again.
 
@@ -407,7 +409,8 @@ Set `namespace` to its namespace.
 2. Wait for the active reconciler service to finish.
 3. Do steps 2 to 5 of [If migration fails](./upgrade#if-migration-fails): wait until the migration Job stops, and save its evidence.
 4. [Check for erasures before recovery](./upgrade#check-for-erasures-before-recovery).
-   Keep access closed until the check passes.
+   Keep reconciliation paused and access closed.
+   Continue to the Helm rollback only if the stopped-window restore checks pass.
    Read `helm history "$release" --namespace "$namespace"`.
    Record the failed revision.
 5. Set `phase_1_revision` to the stopped revision you recorded.
