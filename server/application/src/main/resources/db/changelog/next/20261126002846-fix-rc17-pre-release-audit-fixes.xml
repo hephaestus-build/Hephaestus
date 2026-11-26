@@ -38,6 +38,10 @@ ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
                 <constraints nullable="false"/>
             </column>
         </createTable>
+        <createIndex tableName="provider_credential_pause" indexName="ix_provider_credential_pause_workspace_connection">
+            <column name="workspace_id"/>
+            <column name="connection_id"/>
+        </createIndex>
         <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="provider_credential_pause" constraintName="sfk_provider_credential_pause_workspace" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
         <addForeignKeyConstraint baseColumnNames="connection_id,workspace_id" baseTableName="provider_credential_pause" constraintName="sfk_provider_credential_pause_connection_workspace" onDelete="CASCADE" referencedColumnNames="id,workspace_id" referencedTableName="connection"/>
     </changeSet>

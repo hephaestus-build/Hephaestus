@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import lombok.Getter;
@@ -13,7 +14,12 @@ import lombok.Setter;
  * A provider throttle pauses one credential generation. Every server checks the generation before a provider read.
  */
 @Entity
-@Table(name = "provider_credential_pause")
+@Table(
+        name = "provider_credential_pause",
+        indexes =
+                @Index(
+                        name = "ix_provider_credential_pause_workspace_connection",
+                        columnList = "workspace_id, connection_id"))
 @Getter
 @Setter
 @NoArgsConstructor
