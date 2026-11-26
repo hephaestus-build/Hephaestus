@@ -116,13 +116,14 @@ Option 4.
    3. **Shaped by:** the records and help settings that the turn read, each with its own actions.
    4. **Could not check:** each source that the turn tried to open and could not, with the reason in plain words when the stored result still holds it.
 
-   - Every turn also reads the conversation before it answers. The view says so in one fixed line. It lists earlier messages only when a search returned them.
+   - Every turn also reads the conversation and the page that the person asked from before it answers. The view says so in one fixed line. It lists earlier messages only when a search returned them.
    - Labels render from current rows at each view. A source that the owner can no longer read shows "No longer available", never its old title.
    - The list shows no tool name, prompt, reasoning, file path, model or internal ID.
    - Until the durable basis records how each source was read (#5277), the server takes **Cited**, **Read** and **Could not check** from the stored tool calls of the answer's turn and the error marks of their results. Then it takes them from `ConversationBasis.sourcesOf`.
    - A stored result can lose its resolved commit and its failure text. So before #5277, a repository shows its name without a commit, and a failure shows without its reason.
-   - When the stored calls show no source, the view says that Hephaestus opened nothing beyond the conversation.
-   - An answer whose turn stored no entries says "Hephaestus did not record what this answer used."
+   - While the stored calls are the only evidence, the fixed line says that the list shows what Hephaestus opened, not everything that it read.
+   - When none of the four groups lists a source, the view says that Hephaestus opened nothing beyond the conversation and the page.
+   - An answer whose turn stored no tool calls and no basis says "Hephaestus did not record what this answer used."
 9. **A message from Hephaestus says why it exists.** A check-in notice or a requested result carries its reason line and the agreement that allowed it, with that agreement's **Less often** and **Stop this check-in** ([ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) decision 8, [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) decision 16).
 10. **Hephaestus holds or yields on evidence.** When the person says that an answer or feedback is wrong, Hephaestus does these things:
     - It asks for the evidence that the person sees.
