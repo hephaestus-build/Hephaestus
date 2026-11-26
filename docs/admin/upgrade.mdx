@@ -432,7 +432,17 @@ Repeat the quiet check after that writer stops.
 
    Without a backup repository, recover on the retained database once you can account for the erasures.
    Repair the cause of the migration failure.
-   Finish the migration against the retained database as in [phase 2 of Stopped schema upgrades](#stopped-schema-upgrades).
+   Check the release status with `helm status "$release" --namespace "$namespace"`.
+   If the status is `pending-*`, do these steps:
+
+   - Identify the stopped phase-1 revision in `helm history`.
+   - Verify that the revision has all writers stopped and migration disabled.
+   - Verify that the revision's PostgreSQL can use the retained database.
+   - Stop if you cannot verify a compatible stopped revision.
+   - Roll back Helm to that revision to clear the pending state.
+   - Keep the retained database in place.
+
+   When Helm has no pending revision, finish [phase 2 of Stopped schema upgrades](#stopped-schema-upgrades) on the retained database.
    Keep the server stopped during that migration.
    If an erasure ran, complete the recovery in step 5 before you reopen access.
    Run the [read-only check for erasure requests](#check-for-erasure-requests) before you reopen access.
@@ -530,7 +540,32 @@ Before you start, rehearse this procedure on an isolated staging installation.
 
 1. Define the [database tunnel](#open-the-database-tunnel) functions.
    Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
-   [Check for erasures before recovery](#check-for-erasures-before-recovery).
+   Define this rename helper on the host.
+   The helper disables connections to the selected database before the rename.
+   It stops if a connection other than the exporter remains.
+
+   ```bash
+   retain_selected_db() (
+     set +x
+     set -euo pipefail
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -v "database=$database" -v "retained=$1" -f - <<'SQL'
+   ALTER DATABASE :"database" WITH ALLOW_CONNECTIONS false;
+   SELECT pid AS exporter_pid FROM pg_stat_activity
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor';
+   SELECT format(
+     'SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE pid = %s
+      AND datname = %L AND usename = %L', pid, datname, usename
+   ) FROM pg_stat_activity
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor'
+   \gexec
+   ALTER DATABASE :"database" RENAME TO :"retained";
+   SQL
+   )
+   ```
+
+   If `replacement.txt` already exists after an interruption, [resume the replacement](#resume-an-interrupted-database-replacement).
+   For a new replacement, [check for erasures before recovery](#check-for-erasures-before-recovery).
 2. Verify the SHA-256.
    Check that the archive names the selected database.
    Do both checks before you change the live database.
@@ -573,19 +608,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
        cat final.dump.sha256
        printf 'stage=archive-verified\n'
      } > replacement.txt)
-     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
-       -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
-   ALTER DATABASE :"database" WITH ALLOW_CONNECTIONS false;
-   SELECT pid AS exporter_pid FROM pg_stat_activity
-   WHERE datname = :'database' AND usename = 'hephaestus_monitor';
-   SELECT format(
-     'SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE pid = %s
-      AND datname = %L AND usename = %L', pid, datname, usename
-   ) FROM pg_stat_activity
-   WHERE datname = :'database' AND usename = 'hephaestus_monitor'
-   \gexec
-   ALTER DATABASE :"database" RENAME TO :"failed_db";
-   SQL
+     retain_selected_db "$failed_db"
      printf 'stage=database-retained\n' >> replacement.txt
    )
    ```
@@ -596,7 +619,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
    `replacement.txt` records the retained database, the archive checksum and the last completed stage.
    The catalog check must return `t`.
    This confirms that the retained database has connections disabled and the selected name is free.
-   If the selected name exists, keep that database for diagnosis as a possibly incomplete replacement.
+   If the selected name exists, follow [Resume an interrupted database replacement](#resume-an-interrupted-database-replacement).
    Stop if you cannot confirm the recorded state.
 
    ```bash
@@ -655,6 +678,66 @@ Before you start, rehearse this procedure on an isolated staging installation.
    Keep every source server stopped.
    Run the [read-only erasure check](#check-for-erasure-requests) on the selected database before you reopen access.
    Keep the failed database until the investigation and retention rules permit its removal.
+
+#### Resume an interrupted database replacement
+
+1. Keep access closed.
+   Keep reconciliation paused.
+   Verify that no server, sandbox or migration workload remains.
+   Confirm that only recovery commands could write after the erasure check in restore step 1.
+   Stop if you cannot confirm that history.
+2. Use the same restore directory.
+   Verify the archive checksum against `replacement.txt` and `receipt.txt`.
+   Verify the selected name against `replacement.txt`.
+   Read both database names from the maintenance database, even when the selected name cannot accept connections.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     cd -- "$work"
+     sha256sum --check final.dump.sha256
+     grep -Fx "$(cat final.dump.sha256)" receipt.txt
+     grep -Fx "$(cat final.dump.sha256)" replacement.txt
+     grep -Fx "database=$database" replacement.txt
+     failed_db=$(sed -n 's/^retained=//p' replacement.txt)
+     [[ "$failed_db" =~ ^heph_failed_[0-9]{8}T[0-9]{6}$ && "$failed_db" != "$database" ]]
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
+   SELECT datname, datallowconn FROM pg_database WHERE datname IN (:'database', :'failed_db');
+   SQL
+   )
+   ```
+
+3. Choose the next action from the catalog result.
+   Here `f` means that the database has connections disabled.
+   Use the catalog even when the stage in `replacement.txt` has yet to catch up.
+
+   | Selected name | Recorded retained name | Action |
+   | --- | --- | --- |
+   | Present, `f` | Absent | Pass the recorded retained name to `retain_selected_db`. After it succeeds, append `stage=database-retained` to `replacement.txt`. Continue at step 3 of the restore. |
+   | Absent | Present, `f` | Continue at step 3 of the restore. |
+   | Present | Present, `f` | If verification of this replacement finished, continue at step 4. Otherwise, retain the selected database under a new name with the commands below. |
+
+   Stop on any other result.
+
+   To retain an unverified replacement, choose an unused name with the `heph_partial_` prefix.
+   Record it before the rename.
+   Keep the original retained database unchanged.
+
+   ```bash
+   (
+     set -euo pipefail
+     quarantine_db="heph_partial_$(date -u +%Y%m%dT%H%M%S)"
+     test "$quarantine_db" != "$database"
+     printf 'partial=%s\n' "$quarantine_db" >> "$work/replacement.txt"
+     retain_selected_db "$quarantine_db"
+     printf 'stage=partial-retained\n' >> "$work/replacement.txt"
+   )
+   ```
+
+   After the rename succeeds, return to step 3 of [Restore the final logical archive](#restore-the-final-logical-archive).
+   The catalog check in that step requires the selected name to be free before it creates the database.
 
 ## Change a volume size
 
