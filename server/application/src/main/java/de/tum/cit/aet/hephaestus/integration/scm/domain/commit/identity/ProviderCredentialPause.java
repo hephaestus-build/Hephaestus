@@ -10,8 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * A provider limits the credential of one scope, its workspace, until {@code pausedUntil}. Every server reads it before
- * it asks the provider with that credential, so a throttle costs one request, and other credentials continue.
+ * A provider throttle pauses one credential generation. Every server checks the generation before a provider read.
  */
 @Entity
 @Table(name = "provider_credential_pause")
@@ -21,8 +20,14 @@ import lombok.Setter;
 public class ProviderCredentialPause {
 
     @Id
-    @Column(name = "workspace_id")
+    @Column(name = "connection_id")
+    private Long connectionId;
+
+    @Column(name = "workspace_id", nullable = false)
     private Long workspaceId;
+
+    @Column(name = "credentials_generation", nullable = false)
+    private long credentialsGeneration;
 
     @Column(name = "paused_until", nullable = false)
     private Instant pausedUntil;

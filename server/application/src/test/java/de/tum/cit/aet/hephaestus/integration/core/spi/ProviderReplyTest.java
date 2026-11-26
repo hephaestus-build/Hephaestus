@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply.BodyError;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply.Signal;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /** Every provider response that a read can meet, and the one class that it has: a throttle is never a miss. */
 @Tag("unit")
@@ -29,6 +32,13 @@ class ProviderReplyTest {
 
     private static BodyError error(@Nullable String type, String message) {
         return new BodyError(type, message, false);
+    }
+
+    private static Signal refusal(int status, Map<String, String> headers, String body) {
+        var httpHeaders = new HttpHeaders();
+        headers.forEach(httpHeaders::set);
+        return ProviderReply.signalOf(WebClientResponseException.create(
+                status, "", httpHeaders, body.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
     }
 
     static Stream<Arguments> responses() {
@@ -67,12 +77,11 @@ class ProviderReplyTest {
                         signal(403, Map.of("x-ratelimit-remaining", "0", "x-ratelimit-reset", RESET_EPOCH), List.of()),
                         new ProviderReply.Throttled(RESET)),
                 Arguments.of(
-                        "GitHub 403 secondary limit named in the body, with Retry-After",
-                        signal(
-                                403,
-                                Map.of("retry-after", "60"),
-                                List.of(error(null, "You have exceeded a secondary rate limit"))),
-                        new ProviderReply.Throttled(NOW.plusSeconds(60))),
+                        "GitHub 403 secondary limit named only in the body",
+                        refusal(403, Map.of("X-RateLimit-Remaining", "4000"), """
+                                {"message":"You have exceeded a secondary rate limit."}
+                                """),
+                        new ProviderReply.Throttled(NOW.plus(ProviderReply.UNNAMED_WAIT))),
                 Arguments.of(
                         "GitHub 429 with Retry-After and reset: the later deadline holds",
                         signal(
@@ -96,11 +105,13 @@ class ProviderReplyTest {
                         new ProviderReply.Throttled(NOW.plusSeconds(30))),
                 Arguments.of(
                         "a healthy 403 refuses the credential",
-                        signal(403, Map.of("x-ratelimit-remaining", "4000"), List.of()),
+                        refusal(403, Map.of("X-RateLimit-Remaining", "4000"), """
+                                {"message":"Resource not accessible by integration"}
+                                """),
                         new ProviderReply.AuthLost()),
                 Arguments.of(
                         "a 401 refuses the credential", signal(401, Map.of(), List.of()), new ProviderReply.AuthLost()),
-                Arguments.of("a real 404", signal(404, Map.of(), List.of()), new ProviderReply.NotFound()),
+                Arguments.of("a real 404", refusal(404, Map.of(), ""), new ProviderReply.NotFound()),
                 Arguments.of(
                         "a GraphQL NOT_FOUND of the whole read",
                         signal(200, Map.of(), List.of(error("NOT_FOUND", "Could not resolve to a Repository"))),

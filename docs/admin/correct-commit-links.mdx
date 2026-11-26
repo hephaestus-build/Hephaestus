@@ -6,7 +6,8 @@ page_type: how-to
 
 Correct commit links when the author, committer or contributor of a stored commit links to the wrong account, or to no account.
 The correction job asks GitHub or GitLab which account owns each commit email of each repository.
-It asks about 50 emails every 5 minutes, and stops a run when the rate limit of the provider is near.
+It asks about 50 emails every 5 minutes. When the provider limits a credential, the job moves on to another repository.
+
 GitHub answers several emails in one request. GitLab uses one request for each author email.
 GitLab leaves an email that appears only as a committer or a co-author unchanged.
 
@@ -29,7 +30,7 @@ The correction job runs by default.
    - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
    - `deferred`: the provider limited its rate, so the email waits until the provider's reset and spends no attempt.
      The wait is at least five minutes, one run of the job, and at most two hours. Every server keeps it.
-     The other repositories of that connection wait too. Other connections continue.
+     Repositories that use the throttled credential also wait. If you replace that credential, the job can retry the deferred emails on its next run.
 
 ## Check that it worked
 

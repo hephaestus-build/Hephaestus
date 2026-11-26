@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
@@ -101,6 +102,8 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
     @Nested
     class CommitActors {
 
+        private final ActiveScm credential = mock(ActiveScm.class);
+
         private static final String SHA = "a".repeat(40);
 
         @BeforeEach
@@ -123,7 +126,8 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             var request = mock(GraphQlClient.RequestSpec.class);
             var response = mock(ClientGraphQlResponse.class);
             var field = mock(ClientResponseField.class);
-            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
+            when(graphQlClientProvider.forCredential(eq(1L), eq(credential), any()))
+                    .thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.just(response));
             when(response.isValid()).thenReturn(true);
@@ -134,7 +138,8 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .doReturn(commit)
                     .when(field)
                     .toEntity(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any());
-            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA)).bySha();
+            return service.fetchCommitActors("owner/repo", 1L, credential, List.of(SHA))
+                    .bySha();
         }
 
         private static Map<String, Object> actor(String email, Map<String, Object> rest) {
@@ -193,10 +198,11 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         private CommitAuthorEnrichmentService.CommitActors readBody(String body, List<String> shas) {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
+            when(graphQlClientProvider.forCredential(eq(1L), eq(credential), any()))
+                    .thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.just(GitHubGraphQlTestResponses.decode(body)));
-            return service.fetchCommitActors("owner/repo", 1L, shas);
+            return service.fetchCommitActors("owner/repo", 1L, credential, shas);
         }
 
         @Test
@@ -325,10 +331,11 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         private CommitAuthorEnrichmentService.CommitActors refuse(WebClientResponseException refusal) {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
+            when(graphQlClientProvider.forCredential(eq(1L), eq(credential), any()))
+                    .thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.error(refusal));
-            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA, "b".repeat(40)));
+            return service.fetchCommitActors("owner/repo", 1L, credential, List.of(SHA, "b".repeat(40)));
         }
 
         private static WebClientResponseException refusal(int status, String header, String value, String body) {
@@ -355,23 +362,27 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         void shouldFindTheRefusalInsideTheTransportExceptionThatTheClientThrows() {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
+            when(graphQlClientProvider.forCredential(eq(1L), eq(credential), any()))
+                    .thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             // The GraphQL client wraps an HTTP error in its transport exception.
             when(request.execute())
                     .thenReturn(Mono.error(new GraphQlTransportException(
                             "refused", refusal(429, "Retry-After", "600", "{}"), mock(GraphQlRequest.class))));
 
-            var actors = service.fetchCommitActors("owner/repo", 1L, List.of(SHA));
+            var actors = service.fetchCommitActors("owner/repo", 1L, credential, List.of(SHA));
 
             assertThat(actors.throttled()).isTrue();
             assertThat(actors.throttledUntil()).isAfter(Instant.now().plusSeconds(500));
         }
 
         @Test
-        void shouldEndTheReadAtASecondaryLimit403() {
-            var actors = refuse(
-                    refusal(403, "Retry-After", "60", "{\"message\":\"You have exceeded a secondary rate limit.\"}"));
+        void shouldEndTheReadAtA403ThatNamesItsLimitOnlyInTheBody() {
+            var actors = refuse(refusal(
+                    403,
+                    "X-RateLimit-Remaining",
+                    "4000",
+                    "{\"message\":\"You have exceeded a secondary rate limit.\"}"));
 
             assertThat(actors.throttled()).isTrue();
             verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());

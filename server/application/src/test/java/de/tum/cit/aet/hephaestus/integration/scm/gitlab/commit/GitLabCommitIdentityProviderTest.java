@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -46,6 +49,9 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     private GitLabGraphQlClientProvider clients;
 
     @Mock
+    private ActiveScm credential;
+
+    @Mock
     private GitLabProperties properties;
 
     @Mock
@@ -60,8 +66,6 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         provider = new GitLabCommitIdentityProvider(clients, properties, users, suppression);
-        lenient().when(clients.isCircuitClosed()).thenReturn(true);
-        lenient().when(clients.getRateLimitRemaining(9L)).thenReturn(1000);
         lenient().when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
     }
 
@@ -82,14 +86,14 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
                 })
                 .build();
         lenient()
-                .when(clients.forScope(eq(9L), any()))
+                .when(clients.forCredential(eq(9L), eq(credential), any()))
                 .thenReturn(HttpGraphQlClient.builder(web)
                         .documentSource(new FragmentMergingDocumentSource(
                                 List.of(new ClassPathResource("graphql/gitlab/operations/")),
                                 List.of(".graphql"),
                                 List.of(new ClassPathResource("graphql/gitlab/fragments/GitLabUserFields.graphql"))))
                         .build());
-        return provider.answer("org/project", 7L, 9L, Set.of(QUESTION));
+        return provider.answer("org/project", 7L, 9L, credential, Set.of(QUESTION));
     }
 
     private static String commit(String fields) {
@@ -145,24 +149,15 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDeferWithoutARequestWhenTheBudgetIsCritical() {
-        when(clients.getRateLimitRemaining(9L)).thenReturn(0);
-        assertThat(ask(actor()))
-                .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
-        assertThat(calls).hasValue(0);
-        verifyNoInteractions(users);
-    }
-
-    @Test
     void shouldDeferWithoutARequestWhenTheCircuitIsOpen() {
-        when(clients.isCircuitClosed()).thenReturn(false);
+        doThrow(CircuitBreakerOpenException.class).when(clients).acquirePermission();
         assertThat(ask(actor()))
                 .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
         assertThat(calls).hasValue(0);
     }
 
     @Test
-    void shouldDeferUntilGitLabsResetWhenA429ArrivesAfterThePreflight() {
+    void shouldDeferUntilGitLabsResetWhenA429Arrives() {
         Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
         var headers = new HttpHeaders();
         headers.add("RateLimit-Remaining", "0");

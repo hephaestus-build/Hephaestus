@@ -2,6 +2,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
@@ -16,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +32,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Corrects commit links from the provider's own answer, one small batch per run. Progress lives in the queue table, so a
- * restart resumes. No transaction is open during a provider call, and a missing answer changes nothing.
+ * Corrects commit links from the provider's own answer. Each run skips deferred work and processes one batch that the
+ * provider can read. The queue survives a restart. No transaction is open during a provider call.
  */
 @Slf4j
 @Component
@@ -63,6 +69,7 @@ public class CommitIdentityResolutionJob {
     private final CommitIdentityResolutionProperties properties;
     private final List<CommitIdentityProvider> providers;
     private final RepositoryScopeProvider scopes;
+    private final ActiveScmConnections connections;
     private final MeterRegistry meterRegistry;
     private final AtomicLong pending;
 
@@ -73,6 +80,7 @@ public class CommitIdentityResolutionJob {
             CommitIdentityResolutionProperties properties,
             List<CommitIdentityProvider> providers,
             RepositoryScopeProvider scopes,
+            ActiveScmConnections connections,
             MeterRegistry meterRegistry) {
         this.resolutions = resolutions;
         this.pauses = pauses;
@@ -80,6 +88,7 @@ public class CommitIdentityResolutionJob {
         this.properties = properties;
         this.providers = providers;
         this.scopes = scopes;
+        this.connections = connections;
         this.meterRegistry = meterRegistry;
         // Created at 0: increase() ignores the first sample, so a counter born at its first loss would hide that loss.
         meterRegistry.counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "unanswered");
@@ -105,18 +114,20 @@ public class CommitIdentityResolutionJob {
         var provider = providers.stream()
                 .filter(candidate -> candidate.kind().name().equals(repository.getProviderType()))
                 .findFirst();
-        var scope = provider.flatMap(candidate ->
+        var access = provider.flatMap(candidate ->
                 scopes.getActiveScopesForRepository(repository.getNativeId(), repository.getProviderId()).stream()
+                        .flatMap(scopeId -> access(scopeId, repository).stream())
                         .findFirst());
-        if (scope.isEmpty()) {
+        if (access.isEmpty()) {
             emails.forEach(this::miss);
             return Turn.ANSWERED;
         }
-        long scopeId = scope.orElseThrow();
-        // Any server may have paused the credential: its deadline holds without a request.
-        var paused = pauses.pausedUntil(scopeId);
+        var selected = access.orElseThrow();
+        long scopeId = selected.scopeId();
+        var credential = selected.credential();
+        var paused = pauses.pausedUntil(scopeId, credential.connectionId(), credential.credentialsGeneration());
         if (paused.isPresent()) {
-            defer(repository, emails.stream().map(PendingEmail::getId).toList(), paused.get());
+            defer(repository, emails.stream().map(PendingEmail::getId).toList(), credential, paused.get());
             return Turn.DEFERRED;
         }
         var questions = emails.stream()
@@ -124,7 +135,7 @@ public class CommitIdentityResolutionJob {
                 .map(CommitIdentityResolutionJob::question)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         var answers = provider.orElseThrow()
-                .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, questions);
+                .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, credential, questions);
         List<Long> deferred = new ArrayList<>();
         Instant until = null;
         for (var email : emails) {
@@ -141,14 +152,31 @@ public class CommitIdentityResolutionJob {
         }
         if (until == null) return Turn.ANSWERED;
         Instant bounded = bounded(until);
-        pauses.pause(scopeId, bounded);
-        defer(repository, deferred, bounded);
+        pauses.pause(scopeId, credential.connectionId(), credential.credentialsGeneration(), bounded);
+        defer(repository, deferred, credential, bounded);
         return Turn.DEFERRED;
     }
 
-    private void defer(NextRepository repository, List<Long> ids, Instant until) {
+    private Optional<RepositoryAccess> access(long scopeId, NextRepository repository) {
+        try {
+            return connections
+                    .withToken(scopeId)
+                    .filter(credential -> credential.kind().name().equals(repository.getProviderType())
+                            && repository
+                                    .getServerUrl()
+                                    .equals(SourceProviderNamespaces.configuredUrl(credential.config())))
+                    .map(credential -> new RepositoryAccess(scopeId, credential));
+        } catch (CredentialUnreadableException | MissingCredentialKeyException ignored) {
+            // The connection records the unreadable credential. Another workspace may still have access.
+            return Optional.empty();
+        }
+    }
+
+    private record RepositoryAccess(long scopeId, ActiveScm credential) {}
+
+    private void defer(NextRepository repository, List<Long> ids, ActiveScm credential, Instant until) {
         if (ids.isEmpty()) return;
-        resolutions.defer(ids, until);
+        resolutions.defer(ids, credential.connectionId(), credential.credentialsGeneration(), until);
         meterRegistry
                 .counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "deferred")
                 .increment(ids.size());

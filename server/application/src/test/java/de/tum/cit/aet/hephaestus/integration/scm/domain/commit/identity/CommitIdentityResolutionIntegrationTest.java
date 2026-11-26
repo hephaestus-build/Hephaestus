@@ -9,10 +9,16 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.database.CommitIdentityResolutionSeedChange;
 import de.tum.cit.aet.hephaestus.core.database.GitLabCommitIdentityResolutionSeedChange;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
@@ -96,16 +102,23 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
     private final RepositoryScopeProvider scopes = mock(RepositoryScopeProvider.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final List<ActiveScm> askedCredentials = new ArrayList<>();
 
     private IdentityProvider github;
     private Function<Question, @Nullable Answer> provider = question -> null;
     private @Nullable CommitIdentityResolutionJob job;
 
-    /** The scope of every repository unless a test names another: a workspace, whose credential a pause keys. */
+    /** The workspace that monitors each repository unless a test names another. */
     private long scope;
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private ActiveScmConnections activeScm;
+
+    @Autowired
+    private ConnectionService connections;
 
     @BeforeEach
     void setUp() {
@@ -121,7 +134,19 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         workspace.setDisplayName("Commit identity test");
         workspace.setAccountLogin("identity");
         workspace.setAccountType(AccountType.ORG);
-        return Objects.requireNonNull(workspaces.saveAndFlush(workspace).getId());
+        Workspace saved = workspaces.saveAndFlush(workspace);
+        provisionPat(saved, "test-connection", "test-token");
+        return Objects.requireNonNull(saved.getId());
+    }
+
+    private void provisionPat(Workspace workspace, String instanceKey, String token) {
+        connections.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITHUB,
+                instanceKey,
+                new ConnectionConfig.GitHubPatConfig("identity", "https://github.com", Set.of()),
+                token,
+                UUID.randomUUID().toString());
     }
 
     @Test
@@ -417,6 +442,48 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldResumeDeferredWorkWithANewCredentialInTheSameWorkspace(boolean replaceToken) throws Exception {
+        User right = user("right");
+        long waiting = commit(repository(), null, null, EMAIL);
+        seed();
+        var old = activeScm.withToken(scope).orElseThrow();
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        provider = question -> new Answer.Deferred(reset);
+        run(50);
+        assertThat(attempts()).containsExactly(0);
+        assertThat(pauses.pausedUntil(scope, old.connectionId(), old.credentialsGeneration()))
+                .contains(reset);
+
+        if (replaceToken) {
+            assertThat(connections.rotateBearerToken(
+                            scope, IntegrationKind.GITHUB, new BearerToken("new-test-token", null), null))
+                    .isPresent();
+        } else {
+            var previous = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
+            connections.transition(
+                    previous,
+                    new ConnectionService.TransitionRequest(
+                            IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
+            provisionPat(workspaces.findById(scope).orElseThrow(), "other-connection", "new-test-token");
+        }
+        var replacement = activeScm.withToken(scope).orElseThrow();
+        assertThat(replacement).isNotEqualTo(old);
+        provider = question -> new Answer.Account(id(right), right.getNativeId());
+
+        job = null;
+        run(50);
+
+        assertThat(authorOf(waiting)).isEqualTo(right.getId());
+        assertThat(askedCredentials).containsExactly(old, replacement);
+        assertThat(attempts()).containsExactly(1);
+        assertThat(pauses.pausedUntil(scope, old.connectionId(), old.credentialsGeneration()))
+                .contains(reset);
+        assertThat(pauses.pausedUntil(scope, replacement.connectionId(), replacement.credentialsGeneration()))
+                .isEmpty();
+    }
+
     @Test
     void shouldCorrectAHealthyRepositoryBehindAThrottledOne() throws Exception {
         User wrong = user("wrong");
@@ -618,6 +685,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                     new CommitIdentityResolutionProperties(true, batchSize),
                     List.of(new TableProvider()),
                     scopes,
+                    activeScm,
                     meters);
         }
         var running = job;
@@ -637,7 +705,8 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
         @Override
         public Map<Question, Answer> answer(
-                String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
+                String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
+            askedCredentials.add(credential);
             Map<Question, Answer> answers = new HashMap<>();
             for (var question : questions) {
                 var answer = provider.apply(question);

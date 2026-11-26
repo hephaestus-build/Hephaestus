@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider;
@@ -11,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -57,20 +57,15 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
     }
 
     @Override
-    public Map<Question, Answer> answer(String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
+    public Map<Question, Answer> answer(
+            String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
         Map<Question, Answer> answers = new HashMap<>();
         for (var question : questions) {
             boolean readSucceeded = false;
             try {
-                if (!clients.isCircuitClosed()
-                        || clients.getRateLimitRemaining(scopeId) < GitLabSyncConstants.CRITICAL_REMAINING_THRESHOLD) {
-                    answers.put(question, new Answer.Deferred(deadline(scopeId)));
-                    continue;
-                }
-                clients.waitIfRateLimitLow(scopeId);
                 clients.acquirePermission();
                 var exchange = new ProviderReply.Exchange();
-                var response = clients.forScope(scopeId, exchange)
+                var response = clients.forCredential(scopeId, credential, exchange)
                         .documentName("GetCommitIdentity")
                         .variable("fullPath", nameWithOwner)
                         .variable("sha", question.sha())
@@ -78,6 +73,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                         .block(properties.graphqlTimeout());
                 var reply = response == null ? new ProviderReply.Failed("no response") : classify(exchange, response);
                 if (reply instanceof ProviderReply.Throttled throttled) {
+                    clients.recordSuccess();
                     deferRest(questions, answers, throttled.until());
                     break;
                 }
@@ -126,23 +122,19 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                     answers.put(question, new Answer.Account(local.getId(), nativeId));
                 }
             } catch (CircuitBreakerOpenException exception) {
-                answers.put(question, new Answer.Deferred(deadline(scopeId)));
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                for (var pending : questions) {
-                    answers.putIfAbsent(pending, new Answer.Deferred(deadline(scopeId)));
-                }
+                deferRest(questions, answers, Instant.now().plus(ProviderReply.UNNAMED_WAIT));
                 break;
             } catch (RuntimeException exception) {
-                if (!readSucceeded) clients.recordFailure(exception);
-                // A refused read: a throttle in its status or headers is a wait, never a miss.
+                // A throttle is local to this credential. The circuit breaker is shared.
                 var refusal = ProviderReply.refusalOf(exception);
                 if (refusal != null
                         && ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now())
                                 instanceof ProviderReply.Throttled throttled) {
+                    clients.recordSuccess();
                     deferRest(questions, answers, throttled.until());
                     break;
                 }
+                if (!readSucceeded) clients.recordFailure(exception);
                 log.warn(
                         "GitLab commit identity read failed: providerId={}, cause={}",
                         providerId,
@@ -169,12 +161,5 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
         int status = exchange.status() == 0 ? 200 : exchange.status();
         return ProviderReply.classify(
                 new ProviderReply.Signal(status, exchange.headers(), errors, null, null), Instant.now());
-    }
-
-    /** GitLab's reset when it reported one, else a minute: a closed circuit or a low budget recovers soon. */
-    private Instant deadline(long scopeId) {
-        Instant reset = clients.getRateLimitResetAt(scopeId);
-        Instant soon = Instant.now().plus(Duration.ofMinutes(1));
-        return reset != null && reset.isAfter(soon) ? reset : soon;
     }
 }

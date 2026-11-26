@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.time.Instant;
 import java.util.Map;
@@ -14,7 +15,8 @@ public interface CommitIdentityProvider {
      *
      * @return the answer per question; a question with no entry has no answer
      */
-    Map<Question, Answer> answer(String nameWithOwner, long providerId, long scopeId, Set<Question> questions);
+    Map<Question, Answer> answer(
+            String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions);
 
     record Question(String sha, String email) {}
 

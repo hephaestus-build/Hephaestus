@@ -18,18 +18,41 @@ ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
         <comment>A commit link correction that its provider deferred waits until the provider's deadline, on every server, and spends no attempt.</comment>
         <addColumn tableName="commit_identity_resolution">
             <column name="deferred_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="deferred_connection_id" type="BIGINT"/>
+            <column name="deferred_credentials_generation" type="BIGINT"/>
         </addColumn>
     </changeSet>
     <changeSet id="1795634098734-3" author="hephaestus">
-        <comment>A provider that limits a workspace's credential pauses it until the provider's deadline, for every server.</comment>
+        <comment>A provider throttle pauses the credential generation that received it, for every server.</comment>
         <createTable tableName="provider_credential_pause">
-            <column name="workspace_id" type="BIGINT">
+            <column name="connection_id" type="BIGINT">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="provider_credential_pausePK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="credentials_generation" type="BIGINT">
+                <constraints nullable="false"/>
             </column>
             <column name="paused_until" type="TIMESTAMP(6) WITH TIME ZONE">
                 <constraints nullable="false"/>
             </column>
         </createTable>
         <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="provider_credential_pause" constraintName="sfk_provider_credential_pause_workspace" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+        <addForeignKeyConstraint baseColumnNames="connection_id,workspace_id" baseTableName="provider_credential_pause" constraintName="sfk_provider_credential_pause_connection_workspace" onDelete="CASCADE" referencedColumnNames="id,workspace_id" referencedTableName="connection"/>
+    </changeSet>
+    <changeSet id="1795634098734-4" author="hephaestus">
+        <comment>Expose whether a stored SCM credential generation is still active without exposing the connection row.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION public.scm_credential_is_active(p_connection_id bigint, p_generation bigint)
+RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER
+RETURN EXISTS (
+    SELECT 1 FROM public.connection c
+    WHERE c.id = p_connection_id AND c.credentials_generation = p_generation AND c.state = 'ACTIVE'
+);
+        </sql>
+        <rollback>
+            <sql>DROP FUNCTION public.scm_credential_is_active(bigint, bigint)</sql>
+        </rollback>
     </changeSet>
 </databaseChangeLog>

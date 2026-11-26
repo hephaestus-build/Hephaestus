@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_BACKOFF;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
@@ -527,12 +528,12 @@ public class CommitAuthorEnrichmentService {
     /**
      * Reads every actor of the given commits, for callers that need GitHub's answer for an email. Each batch is one read
      * that {@link ProviderReply} classifies, so a throttle is never a miss, whatever form GitHub gives it. The read stops
-     * before a batch when the tracked quota is near its end, and at the first throttle; it never waits for the reset.
+     * at the first throttle and reports the deadline to the job.
      *
      * @return the actors per SHA, and the deadline when a throttle cut the read short; a SHA has no entry when GitHub
      *     gave no answer for that commit
      */
-    public CommitActors fetchCommitActors(String nameWithOwner, Long scopeId, List<String> shas) {
+    public CommitActors fetchCommitActors(String nameWithOwner, long scopeId, ActiveScm credential, List<String> shas) {
         Map<String, List<CommitActor>> actors = new HashMap<>();
         String[] parts = nameWithOwner.split("/", 2);
         if (parts.length != 2) {
@@ -541,14 +542,9 @@ public class CommitAuthorEnrichmentService {
         List<String> valid =
                 shas.stream().filter(sha -> SHA_PATTERN.matcher(sha).matches()).toList();
         for (int start = 0; start < valid.size(); start += BATCH_SIZE) {
-            if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
-                Instant reset = graphQlClientProvider.getRateLimitResetAt(scopeId);
-                Instant soon = Instant.now().plus(ProviderReply.UNNAMED_WAIT);
-                return new CommitActors(actors, reset != null && reset.isAfter(soon) ? reset : soon);
-            }
             List<String> batch = valid.subList(start, Math.min(start + BATCH_SIZE, valid.size()));
-            var reply =
-                    readActors(buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD), scopeId, batch, actors);
+            var reply = readActors(
+                    buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD), scopeId, credential, batch, actors);
             if (reply instanceof ProviderReply.Throttled throttled) return new CommitActors(actors, throttled.until());
             if (!(reply instanceof ProviderReply.Ok)) {
                 log.warn(
@@ -563,7 +559,11 @@ public class CommitAuthorEnrichmentService {
 
     /** One read of a batch, classified once. Answers of an {@code Ok} or a throttled reply go into {@code actors}. */
     private ProviderReply readActors(
-            String queryString, Long scopeId, List<String> batch, Map<String, List<CommitActor>> actors) {
+            String queryString,
+            long scopeId,
+            ActiveScm credential,
+            List<String> batch,
+            Map<String, List<CommitActor>> actors) {
         var exchange = new ProviderReply.Exchange();
         ClientGraphQlResponse response;
         try {
@@ -573,7 +573,7 @@ public class CommitAuthorEnrichmentService {
             return new ProviderReply.Throttled(Instant.now().plus(ProviderReply.UNNAMED_WAIT));
         }
         try {
-            var client = graphQlClientProvider.forScope(scopeId, exchange);
+            var client = graphQlClientProvider.forCredential(scopeId, credential, exchange);
             response = Mono.defer(() -> client.document(queryString).execute())
                     .retryWhen(Retry.backoff(TRANSPORT_MAX_RETRIES, TRANSPORT_INITIAL_BACKOFF)
                             .maxBackoff(TRANSPORT_MAX_BACKOFF)
@@ -581,11 +581,13 @@ public class CommitAuthorEnrichmentService {
                             .filter(ScmTransportErrors::isTransportError))
                     .block(GRAPHQL_TIMEOUT);
         } catch (RuntimeException failure) {
-            graphQlClientProvider.recordFailure(failure);
             var refusal = ProviderReply.refusalOf(failure);
-            return refusal != null
+            var reply = refusal != null
                     ? ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now())
                     : new ProviderReply.Failed(failure.getClass().getSimpleName());
+            if (reply instanceof ProviderReply.Throttled) graphQlClientProvider.recordSuccess();
+            else graphQlClientProvider.recordFailure(failure);
+            return reply;
         }
         if (response == null) {
             graphQlClientProvider.recordFailure(new IllegalStateException("No GraphQL response"));

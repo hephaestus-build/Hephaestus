@@ -2,18 +2,16 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService.CommitActor;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -36,7 +34,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
     private CommitAuthorEnrichmentService commits;
 
     @Mock
-    private GitHubGraphQlClientProvider graphQlClientProvider;
+    private ActiveScm credential;
 
     @Mock
     private GitHubUserProcessor users;
@@ -48,7 +46,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        provider = new GitHubCommitIdentityProvider(commits, graphQlClientProvider, users, suppression);
+        provider = new GitHubCommitIdentityProvider(commits, users, suppression);
     }
 
     private static GitHubUserDTO account(long databaseId) {
@@ -56,9 +54,9 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
     }
 
     private Map<Question, Answer> ask(List<CommitActor> actors) {
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+        when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(SHA, actors), null));
-        return provider.answer("o/r", 7L, 9L, Set.of(QUESTION));
+        return provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION));
     }
 
     @Test
@@ -116,33 +114,20 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
 
     @Test
     void shouldGiveNoAnswerWhenGitHubDoesNotReturnTheCommit() {
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+        when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), null));
 
-        assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION))).isEmpty();
-    }
-
-    @Test
-    void shouldDeferUntilTheTrackedResetWhenTheRateLimitStoppedTheRead() {
-        Instant reset = Instant.now().plus(Duration.ofMinutes(40));
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
-                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), null));
-        when(graphQlClientProvider.isRateLimitCritical(anyLong())).thenReturn(true);
-        when(graphQlClientProvider.getRateLimitResetAt(anyLong())).thenReturn(reset);
-
-        assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION)))
-                .containsEntry(QUESTION, new Answer.Deferred(reset));
-        verify(suppression, never()).isSuppressed(anyLong(), anyString(), any());
+        assertThat(provider.answer("o/r", 7L, 9L, credential, Set.of(QUESTION))).isEmpty();
     }
 
     @Test
     void shouldDeferEveryUnansweredCommitOfAThrottledReadThoughTheQuotaLooksFree() {
         // A secondary limit, or a throttle answered with HTTP 200, while the tracked primary quota still has room.
         Instant deadline = Instant.now().plus(Duration.ofMinutes(3));
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+        when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), deadline));
 
-        assertThat(provider.answer("o/r", 1L, 9L, Set.of(QUESTION)))
+        assertThat(provider.answer("o/r", 1L, 9L, credential, Set.of(QUESTION)))
                 .as("a throttle is a wait: deferred, it spends no attempt of the five")
                 .containsEntry(QUESTION, new Answer.Deferred(deadline));
     }
@@ -155,7 +140,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
         Question committer = new Question(SHA, "committer@example.com");
         Instant deadline = Instant.now().plus(Duration.ofMinutes(3));
         // Under the throttle, the committer's null user is no answer, and the author's account is one.
-        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+        when(commits.fetchCommitActors("o/r", 9L, credential, List.of(SHA)))
                 .thenReturn(new CommitAuthorEnrichmentService.CommitActors(
                         Map.of(
                                 SHA,
@@ -164,7 +149,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
                                         new CommitActor("committer@example.com", null, false))),
                         deadline));
 
-        var answers = provider.answer("o/r", 7L, 9L, new LinkedHashSet<>(List.of(QUESTION, committer)));
+        var answers = provider.answer("o/r", 7L, 9L, credential, new LinkedHashSet<>(List.of(QUESTION, committer)));
 
         assertThat(answers)
                 .containsEntry(QUESTION, new Answer.Account(3L, 2L))

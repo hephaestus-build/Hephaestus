@@ -54,7 +54,12 @@ public class ActiveScmConnections {
                             .flatMap(b -> b instanceof BearerToken read ? Optional.of(read) : Optional.empty())
                             .orElse(null)
                     : null;
-            return new ActiveScm(connection.getConfig(), bearer);
+            return new ActiveScm(
+                    connection.getId(),
+                    connection.getCredentialsGeneration(),
+                    connection.getKind(),
+                    connection.getConfig(),
+                    bearer);
         });
     }
 
@@ -70,5 +75,9 @@ public class ActiveScmConnections {
 
     /** The configuration of the active SCM connection and its personal access token, if any. */
     public record ActiveScm(
-            ConnectionConfig config, @Nullable BearerToken bearer) {}
+            long connectionId,
+            long credentialsGeneration,
+            IntegrationKind kind,
+            ConnectionConfig config,
+            @Nullable BearerToken bearer) {}
 }

@@ -70,9 +70,12 @@ public sealed interface ProviderReply {
         return null;
     }
 
-    /** The provider's refusal as a {@link Signal}: an HTTP error carries no GraphQL body. */
+    /** An HTTP 403 can name a throttle only in its error body, with no GraphQL envelope. */
     static Signal signalOf(WebClientResponseException refusal) {
-        return new Signal(refusal.getStatusCode().value(), headersOf(refusal.getHeaders()), List.of(), null, null);
+        int status = refusal.getStatusCode().value();
+        List<BodyError> errors =
+                status == 403 ? List.of(new BodyError(null, refusal.getResponseBodyAsString(), false)) : List.of();
+        return new Signal(status, headersOf(refusal.getHeaders()), errors, null, null);
     }
 
     /** The first value of each header, by its name in lower case, as a {@link Signal} holds them. */
