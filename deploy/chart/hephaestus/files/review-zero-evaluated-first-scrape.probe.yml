@@ -1,0 +1,20 @@
+rule_files:
+  - hephaestus-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: a zero-evaluated attempt before the first scrape fires the alert
+    interval: 30s
+    input_series:
+      - series: 'agent_review_zero_evaluated_total{job="hephaestus",instance="new-server:9090"}'
+        values: "_ 1x5"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A review attempt had eligible practices and evaluated none in the last hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
