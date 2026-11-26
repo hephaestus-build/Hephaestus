@@ -106,6 +106,7 @@ class SlackManifestTemplateTest extends BaseUnitTest {
                 new SlackChannelArchiveMessageHandler(lifecycle, deserializer),
                 new SlackGroupArchiveMessageHandler(lifecycle, deserializer),
                 new SlackChannelDeletedMessageHandler(lifecycle, deserializer),
+                new SlackGroupDeletedMessageHandler(lifecycle, deserializer),
                 new SlackChannelRenameMessageHandler(lifecycle, deserializer),
                 new SlackGroupRenameMessageHandler(lifecycle, deserializer));
         return handlers.stream().map(h -> h.key().eventType()).collect(Collectors.toCollection(LinkedHashSet::new));

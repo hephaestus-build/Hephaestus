@@ -45,7 +45,7 @@ public class SlackWorkspaceContentEraser {
         slackMonitoredChannelRepository.deleteByWorkspaceId(workspaceId);
         conversationEntries.redactSlackEntries(workspaceId);
         // The tool results that could have copied a channel message go with the messages they copied.
-        conversationEntries.redactCopyingToolResults(workspaceId);
+        conversationEntries.redactCopyingToolResults(workspaceId, null);
         conversations.clearSlackIdentities(workspaceId);
         slackParticipantConsentRepository.deleteByWorkspaceId(workspaceId);
     }

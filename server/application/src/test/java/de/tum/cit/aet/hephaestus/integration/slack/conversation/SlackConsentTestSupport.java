@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelActivation;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -29,7 +30,8 @@ public final class SlackConsentTestSupport {
                 mock(ConversationTurnCompletion.class),
                 mock(ModelLinkHosts.class),
                 mapper,
-                mock(WorkspaceSummaryQuery.class));
+                mock(WorkspaceSummaryQuery.class),
+                new OutboundEgressGuard(() -> false));
         return new SlackConsentAdapter(posts, activation, beans.getBeanProvider(SlackMessageService.class), mapper);
     }
 }

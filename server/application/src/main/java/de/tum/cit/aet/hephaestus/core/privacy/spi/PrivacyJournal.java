@@ -18,7 +18,7 @@ public interface PrivacyJournal {
      * Records one fact of a kind.
      *
      * @param refs the identifiers and states that the fact names, by name, such as {@code workspaceId}: numbers,
-     *     booleans, UUIDs, enum constants, {@link NativeId}s, {@link PersonIdentity}s or collections of these; never
+     *     booleans, UUIDs, instants, enum constants, {@link NativeId}s, {@link PersonIdentity}s or collections of these; never
      *     text
      */
     void record(PrivacyJournalKind kind, Map<String, Object> refs);

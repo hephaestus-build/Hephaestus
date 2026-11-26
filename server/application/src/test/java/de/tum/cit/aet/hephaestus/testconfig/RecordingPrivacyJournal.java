@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -12,8 +13,8 @@ import java.util.UUID;
 
 /**
  * A privacy journal that stores nothing and keeps each fact that a producer records, for a test to read. It refuses a
- * ref that could carry text, so every producer test that reads it also proves that the producer records ids and states
- * only.
+ * ref that could carry text, so every producer test that reads it also checks that the fact contains only
+ * identifiers, timestamps and states.
  */
 public final class RecordingPrivacyJournal implements PrivacyJournal {
     private final List<Fact> facts = new ArrayList<>();
@@ -21,20 +22,21 @@ public final class RecordingPrivacyJournal implements PrivacyJournal {
     @Override
     public void record(PrivacyJournalKind kind, Map<String, Object> refs) {
         refs.forEach((key, value) -> {
-            if (!isIdOrState(value)) {
-                throw new IllegalArgumentException("The ref " + key + " is not an id or a state");
+            if (!isRecoveryReference(value)) {
+                throw new IllegalArgumentException("The ref " + key + " is not a recovery reference");
             }
         });
         facts.add(new Fact(kind, Map.copyOf(refs)));
     }
 
-    private static boolean isIdOrState(Object value) {
+    private static boolean isRecoveryReference(Object value) {
         if (value instanceof Collection<?> values) {
-            return values.stream().allMatch(RecordingPrivacyJournal::isIdOrState);
+            return values.stream().allMatch(RecordingPrivacyJournal::isRecoveryReference);
         }
         return value instanceof Number
                 || value instanceof Boolean
                 || value instanceof UUID
+                || value instanceof Instant
                 || value instanceof Enum<?>
                 || value instanceof NativeId
                 || value instanceof PersonIdentity;

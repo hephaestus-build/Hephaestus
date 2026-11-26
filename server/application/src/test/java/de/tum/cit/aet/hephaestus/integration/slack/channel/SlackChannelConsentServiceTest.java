@@ -63,6 +63,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
 
     private static final long WS = 7L;
     private static final String CHANNEL = "C1";
+    private static final Instant DELETED_AT = Instant.parse("2026-01-02T00:00:00Z");
 
     @Mock
     private SlackMonitoredChannelRepository monitoredChannelRepository;
@@ -235,7 +236,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
 
         service().transition(WS, CHANNEL, ConsentState.REVOKED, null);
 
-        verify(ingestService).eraseChannel(WS, CHANNEL);
+        verify(ingestService).eraseChannel(eq(WS), eq(CHANNEL), any(Instant.class));
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
     }
 
@@ -342,7 +343,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
                 // Erasure fires iff the target is REVOKED.
                 if (target == ConsentState.REVOKED) {
                     // Single erasure choke point drives the raw + derived deletion; a revoke never re-announces.
-                    verify(ingestService).eraseChannel(WS, CHANNEL);
+                    verify(ingestService).eraseChannel(eq(WS), eq(CHANNEL), any(Instant.class));
                     verifyNoInteractions(slackMessageService);
                 } else {
                     verifyNoInteractions(ingestService);
@@ -518,9 +519,9 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         SlackMonitoredChannel c = channel(from, null);
         stubChannel(c);
 
-        service().revokeForPlatformEvent(WS, CHANNEL, "channel deleted in Slack");
+        service().revokeForPlatformEvent(WS, CHANNEL, DELETED_AT, "channel deleted in Slack");
 
-        verify(ingestService).eraseChannel(WS, CHANNEL);
+        verify(ingestService).eraseChannel(WS, CHANNEL, DELETED_AT);
         ArgumentCaptor<SlackChannelConsentEvent> captor = ArgumentCaptor.forClass(SlackChannelConsentEvent.class);
         verify(consentEventRepository).save(captor.capture());
         assertThat(captor.getValue().getFromState()).isEqualTo(from);
@@ -532,9 +533,9 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         SlackMonitoredChannel c = channel(ConsentState.REVOKED, null);
         stubChannel(c);
 
-        service().revokeForPlatformEvent(WS, CHANNEL, "channel deleted in Slack");
+        service().revokeForPlatformEvent(WS, CHANNEL, DELETED_AT, "channel deleted in Slack");
 
-        verify(ingestService, never()).eraseChannel(anyLong(), any());
+        verify(ingestService, never()).eraseChannel(anyLong(), any(), any());
         verify(consentEventRepository, never()).save(any());
     }
 
