@@ -201,7 +201,9 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .as("Slack handler registry must be discoverable and non-empty")
                 .isNotEmpty()
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message"))
-                .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"));
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"))
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "channel_deleted"))
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "group_deleted"));
 
         // Vacuous while no Slack webhook fixture is committed, and active the instant one lands: a fixture for a bolt
         // event with no handler will fail the
