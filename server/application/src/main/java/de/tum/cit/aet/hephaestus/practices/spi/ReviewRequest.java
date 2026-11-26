@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * @param occasions for an event review, the names of every occasion that joined its quiet window, the event's own
  *     included; they select the practices. Empty for any other origin.
+ * @param coalesced for an event review, the older occasions of its quiet window, which its review coalesces
  * @param commentAnswer for a request made by a comment on the work, where to answer it when no feedback does
  * @param scanRef for a scan, the branch the requester asks for; the scan is refused unless it is the default branch
  * @param expectedVersion for a scan, the version the requester expects; the scan is refused unless it pins that one
@@ -34,6 +35,7 @@ public record ReviewRequest(
         List<Long> practiceIds,
         boolean reuse,
         Set<ItemEventName> occasions,
+        Set<UUID> coalesced,
         @Nullable CommentAnswer commentAnswer,
         @Nullable String scanRef,
         @Nullable String expectedVersion,
@@ -44,5 +46,6 @@ public record ReviewRequest(
     public ReviewRequest {
         practiceIds = List.copyOf(practiceIds);
         occasions = occasions == null ? Set.of() : Set.copyOf(occasions);
+        coalesced = coalesced == null ? Set.of() : Set.copyOf(coalesced);
     }
 }

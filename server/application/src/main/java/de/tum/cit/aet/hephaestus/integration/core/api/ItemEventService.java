@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,6 +22,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -144,7 +146,17 @@ public class ItemEventService {
     /** The pinned occasions of the item that no review started and none withheld yet, oldest first. */
     @Transactional(readOnly = true)
     public List<Open> open(long workspaceId, long itemId) {
-        return repository.findOpen(workspaceId, itemId).stream()
+        return openRows(repository.findOpen(workspaceId, itemId));
+    }
+
+    /** The open occasions of this window, locked until the caller settles them. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Open> lockOpen(long workspaceId, long itemId, Collection<UUID> ids) {
+        return openRows(repository.lockOpen(workspaceId, itemId, ids));
+    }
+
+    private static List<Open> openRows(List<ItemEventRepository.OpenRow> rows) {
+        return rows.stream()
                 .map(row -> new Open(
                         row.getId(),
                         new ItemEventName(row.getName()),
@@ -257,7 +269,14 @@ public class ItemEventService {
             throw new IllegalArgumentException("Invalid item event evidence");
         if (repository.existsByWorkspaceIdAndItemIdAndNameAndItemVersion(
                 workspaceId, itemId, event.name().value(), itemVersion)) {
-            decide(workspaceId, event.id(), event.state(), ItemEventState.WITHHELD, ReviewRequestReason.COALESCED);
+            if (OccasionSettlement.next(
+                                    event.state(),
+                                    OccasionSettlement.Role.NEWEST,
+                                    OccasionSettlement.Outcome.DUPLICATE,
+                                    null)
+                            .orElse(null)
+                    instanceof OccasionSettlement.Next.Decide duplicate)
+                decide(workspaceId, event.id(), event.state(), duplicate.state(), duplicate.reason());
             observeSource(workspaceId, itemId, event.name());
             return false;
         }
@@ -307,7 +326,7 @@ public class ItemEventService {
         var record = row.getEvidence();
         if (record == null || expiresAt == null || !expiresAt.isAfter(clock.instant()))
             return RetainedEvidence.missing(ItemEventInput.EXPIRED);
-        return new RetainedEvidence(record, null, expiresAt);
+        return new RetainedEvidence(record, null, expiresAt, row.getItemVersion());
     }
 
     /**
@@ -315,11 +334,14 @@ public class ItemEventService {
      *
      * @param unretained {@link #NOT_RETAINED} for an occasion recorded without evidence, {@link #UNKNOWN} for no such
      *     pinned occasion, or the {@link ItemEventInput#unretained} reason that core or its source stated
+     * @param itemVersion the version that the ledger pinned for the occasion whose record this is, null while the
+     *     occasion is pending; a record that names another version is corrupt
      */
     public record RetainedEvidence(
             @Nullable String record,
             @Nullable String unretained,
-            @Nullable Instant expiresAt) {
+            @Nullable Instant expiresAt,
+            @Nullable String itemVersion) {
         public static final String NOT_RETAINED = "NOT_RETAINED";
         public static final String UNKNOWN = "UNKNOWN";
 
@@ -329,7 +351,7 @@ public class ItemEventService {
         }
 
         static RetainedEvidence missing(String reason) {
-            return new RetainedEvidence(null, reason, null);
+            return new RetainedEvidence(null, reason, null, null);
         }
     }
 
