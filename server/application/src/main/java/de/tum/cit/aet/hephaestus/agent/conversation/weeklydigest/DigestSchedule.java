@@ -131,10 +131,7 @@ public class DigestSchedule {
             var main = conversations.findOrCreateMain(workspaceId, accountId);
             // The item is bound to the consent it was scheduled under: a later opt-out and opt-in starts no turn for
             // it.
-            var payload = mapper.createObjectNode()
-                    .put(WEEK_START, window.weekStart().toString())
-                    .put(ZONE, window.zone().getId())
-                    .put(ENABLED_SINCE, since.get().toString());
+            var payload = DigestStarts.payload(mapper, window, since.get());
             return inbox.enqueue(
                             new InboxItems.NewItem(
                                     workspaceId,

@@ -20,26 +20,32 @@ A pull takes the physical sandbox write lock without waiting.
 Other pulls return no work while that claim commits.
 
 A question never waits behind a digest.
-The question's admission transaction stops every queued or running `SYSTEM` turn of the conversation and cancels its run at once, with no grace.
-A digest commits nothing until its end, so the cancel loses nothing.
-The digest's inbox item then waits for the next idle moment.
+After the question commits, `InboxItems` stops the conversation's queued and running `SYSTEM` turns, as the person's Stop does.
+A queued digest's run ends at once. A running digest gets the stop grace, and its holder stores nothing.
+The stop never runs inside the question's admission, because a digest that ends locks its turn before the conversation.
+The digest start pass first repairs a missed stop.
+The follow-up limit counts only the person's questions.
 
 `DigestSchedule` selects opted-in accounts on Monday and writes one inbox item per workspace and week on the main conversation.
-The item has the kind `SCHEDULE_DUE`, IDs only, and the week's contact cutoff as its deadline.
-Its key is the week's request ID, so a second pass writes nothing.
-The start policy in `InboxItems` decides each item, at once and then on a pass every 30 seconds:
+The item has the kind `SCHEDULE_DUE`, IDs and values only, and the week's contact cutoff as its deadline.
+It records the consent that it was scheduled under, so a later opt-out and opt-in starts no turn for it.
+Its key is `weekly-digest:<week start>`, so a second pass writes nothing.
+The start policy in `InboxItems` decides each item at once, then on the `DigestStarts` pass every 30 seconds:
 
-| The item | The thread | Decision | Reason |
+| The item | The thread or its turn | Decision | Reason |
 | --- | --- | --- | --- |
 | Pending, before its deadline | Idle: no person's turn queued or running, and no person's message in the last 2 minutes | The digest turn starts, and the item is claimed | `STARTED` |
 | Pending | A person's turn is queued or running, or a message is younger than 2 minutes | It waits | `DEFERRED_ACTIVE` |
-| Claimed | A question arrives | The digest turn stops, and the item is pending again | `CANCELLED_BY_MESSAGE` |
-| Claimed | Its turn ended `DONE` | Consumed | `DELIVERED` |
+| Claimed | A question stopped its turn | Pending again | `CANCELLED_BY_MESSAGE` |
+| Claimed | Its turn failed, or it is gone | Pending again | `NOT_STARTED` |
+| Claimed | Its turn ended `DONE` with an answer | Consumed | `DELIVERED` |
+| Claimed | Its turn ended `DONE` with no answer | Consumed | `NOTHING_TO_SAY` |
 | Pending | At its start, the facts are empty | Consumed | `NOTHING_TO_SAY` |
-| Pending | At its start, the person turned the digest off or is no longer available | Dropped | `NO_LONGER_ELIGIBLE` |
+| Pending or claimed | The consent changed, the person is no longer available, the message was erased, or admission refuses the captured facts | Dropped | `NO_LONGER_ELIGIBLE` |
 | Pending | Its deadline passed | Expired, with no model | `DEADLINE_PASSED` |
-| Pending | It started 5 times | Expired | `ATTEMPTS_SPENT` |
+| Pending | 5 of its turns ran and did not deliver it | Expired | `ATTEMPTS_SPENT` |
 
+A turn that a question stopped before it ran is not an attempt.
 The first turn of an item keeps the week's request ID. A later turn adds `#<n>`.
 The turn has the surface `SYSTEM` and a real `DIGEST` stimulus with its captured fact membership.
 It has no developer question.

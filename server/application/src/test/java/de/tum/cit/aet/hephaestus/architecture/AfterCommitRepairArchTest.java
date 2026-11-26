@@ -65,7 +65,7 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                     new Repair(
                             RepairKind.POLL,
                             "The digest start pass runs every 30 seconds and first stops the background turns of every thread in which a question waits (InboxItems.yieldWhereQuestionsWait).",
-                            "agent.conversation.weeklydigest.DigestSchedule.startDueDigests",
+                            "agent.conversation.weeklydigest.DigestStarts.startDueDigests",
                             true)),
             Map.entry(
                     "conversation.ConversationTurnWaits.publishWaits",
