@@ -82,24 +82,12 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
         ReviewJob expired = oldTerminalJob(workspace);
         ReviewJob live = oldTerminalJob(workspace);
         ReviewJob deleted = oldTerminalJob(workspace);
+        jobRepository.saveAllAndFlush(List.of(expired, live, deleted));
         Instant now = Instant.now();
         UUID expiredId = handoff(expired, now.minusSeconds(1));
         UUID liveId = handoff(live, now.plus(Duration.ofHours(1)));
         UUID deletedId = handoff(deleted, now.plus(Duration.ofHours(1)));
-        assertThat(handoffs.enrol(
-                        UUID.randomUUID(),
-                        live.getWorkspaceId(),
-                        live.getReviewId(),
-                        live.getId(),
-                        7L,
-                        null,
-                        WorkPlaceHandoffRow.Producer.LEGACY.name(),
-                        "{}",
-                        "d".repeat(64),
-                        now.plus(Duration.ofHours(1)),
-                        now))
-                .as("a second handoff of one review writes nothing")
-                .isZero();
+        Objects.requireNonNull(entityManager).flush();
 
         handoffs.deleteExpired(now, 1000);
         runtimeJdbc.update("DELETE FROM review_job WHERE id=?", deleted.getId());
@@ -115,19 +103,19 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
 
     private UUID handoff(ReviewJob job, Instant expiresAt) {
         UUID id = UUID.randomUUID();
-        assertThat(handoffs.enrol(
-                        id,
-                        job.getWorkspaceId(),
-                        job.getReviewId(),
-                        job.getId(),
-                        7L,
-                        "2222222222222222222222222222222222222222",
-                        WorkPlaceHandoffRow.Producer.LEGACY.name(),
-                        "{\"version\":1}",
-                        "d".repeat(64),
-                        expiresAt,
-                        Instant.now()))
-                .isEqualTo(1);
+        handoffs.save(WorkPlaceHandoffRow.builder()
+                .id(id)
+                .workspaceId(job.getWorkspaceId())
+                .reviewId(job.getReviewId())
+                .jobId(job.getId())
+                .itemId(7L)
+                .itemVersion("2222222222222222222222222222222222222222")
+                .producer(WorkPlaceHandoffRow.Producer.LEGACY)
+                .payload(objectMapper.createObjectNode().put("version", 1))
+                .payloadDigest("d".repeat(64))
+                .expiresAt(expiresAt)
+                .createdAt(Instant.now())
+                .build());
         return id;
     }
 

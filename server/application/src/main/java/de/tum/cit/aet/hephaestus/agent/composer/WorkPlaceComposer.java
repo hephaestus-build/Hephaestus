@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import java.util.LinkedHashMap;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -94,11 +95,13 @@ final class WorkPlaceComposer {
         var read = ReviewOnWork.read(arguments, turn.restable(), turn.lineNotes(), turn.witnesses());
         var review = read.review();
         if (review == null) return new Check(null, read.errors());
-        var policy = FeedbackTextPolicy.suppliedBy(session.quotes());
-        for (var piece : CompositionPackages.review(review, null).composition()) {
-            var refusal = policy.refusal(piece);
-            if (refusal != null) return new Check(null, List.of(refusal.rule().name() + " in " + refusal.field()));
-        }
+        var texts = new LinkedHashMap<String, String>();
+        var summary = review.summary();
+        if (summary != null) texts.put("summary", summary.body());
+        for (int index = 0; index < review.inline().size(); index++)
+            texts.put("notes[" + index + "]", review.inline().get(index).body());
+        var refusal = FeedbackTextPolicy.suppliedBy(session.quotes()).refusal(texts);
+        if (refusal != null) return new Check(null, List.of(refusal.rule().name() + " in " + refusal.field()));
         return new Check(review, List.of());
     }
 }

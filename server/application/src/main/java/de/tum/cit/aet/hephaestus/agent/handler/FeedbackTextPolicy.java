@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -97,7 +98,13 @@ public final class FeedbackTextPolicy {
             texts.put("page.body", page.body());
             texts.put("page.nextStep", page.nextStep());
         }
-        for (var text : texts.entrySet()) {
+        return refusal(texts);
+    }
+
+    /** The first model-written text, by its field such as {@code notes[1]}, that breaks a rule; null when none does. */
+    @Nullable
+    public Refusal refusal(Map<String, String> textsByField) {
+        for (var text : textsByField.entrySet()) {
             var rule = broken(text.getValue());
             if (rule != null) return new Refusal(rule, text.getKey());
         }

@@ -57,7 +57,6 @@ public class PracticeResultStaging {
     private final PracticeCatalogInjector catalog;
     private final ReviewJobRepository jobs;
     private final ApplicationEventPublisher events;
-    private final WorkPlaceHandoffEnrolment handoffs;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public StageResponseDTO stage(
@@ -186,10 +185,8 @@ public class PracticeResultStaging {
         retainSealBasis(identity, job, digest, staged);
         jobs.saveAndFlush(job);
         var review = assignments.review(job);
-        if (review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL) {
-            handoffs.enrol(job, review);
-            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
-        }
+        if (review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL)
+            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
     }
 
     private void retainSealBasis(

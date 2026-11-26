@@ -11,7 +11,11 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -20,7 +24,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * The work-place handoff of one sealed pull or merge request review (ADR 0121): the scoped copy that the composer of its
  * work place may read, and the producer that composes its copy on the work. The seal writes it in its own transaction,
- * once per review, and nothing changes it; {@link WorkPlaceHandoffRepository#enrol} is its only write.
+ * once per review, and nothing changes it.
  *
  * <p>The payload copies the review's public results and the parts of the work they cite, so it is person data. It is
  * erased with the review's jobs, exported without its payload, and deleted after {@code expires_at}.
@@ -38,6 +42,9 @@ import tools.jackson.databind.JsonNode;
             @Index(name = "ix_work_place_handoff_expiry", columnList = "expires_at")
         })
 @Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class WorkPlaceHandoffRow {
 
     /** Who composes the copy on the work of a review. It is decided at the seal and never changes. */
