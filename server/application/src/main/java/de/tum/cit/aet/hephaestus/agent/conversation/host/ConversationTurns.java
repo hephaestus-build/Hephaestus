@@ -79,6 +79,7 @@ public class ConversationTurns {
         // A suppressed or erased account can still end its run. The domain end omits its person data.
         account.ifPresent(accountId -> {
             var _ = writeFence.holdForAccountWrite(accountId);
+            conversations.shareHistory(sandbox.workspaceId(), accountId);
         });
     }
 

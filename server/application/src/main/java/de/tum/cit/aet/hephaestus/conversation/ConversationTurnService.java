@@ -245,6 +245,7 @@ public class ConversationTurnService {
                 turnId,
                 ConversationTurn.Surface.valueOf(running.getSurface()),
                 attempt,
+                running.getScopeEpoch(),
                 update);
         frames.forEach(events::publishEvent);
         return !frames.isEmpty();

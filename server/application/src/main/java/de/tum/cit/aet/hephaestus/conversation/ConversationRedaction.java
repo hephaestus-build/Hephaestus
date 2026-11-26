@@ -47,6 +47,7 @@ public class ConversationRedaction {
 
     private final PersonDataCopyFence copies;
     private final ConversationEntryRepository entries;
+    private final ConversationHistoryRemoval historyRemoval;
     private final ConversationTurnRepository turns;
     private final ErasedDigestTurns digestTurns;
     private final TurnRuns runs;
@@ -57,6 +58,14 @@ public class ConversationRedaction {
     @Transactional(readOnly = true)
     public boolean personErasedSince(Instant startedAt) {
         return copies.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt);
+    }
+
+    /** Redacts history and fences the running turns that can read it in one transaction. */
+    @Transactional
+    public boolean removeHistory(long workspaceId, long accountId, List<UUID> entryIds) {
+        if (!historyRemoval.fence(workspaceId, accountId, entryIds)) return false;
+        redactWithCopies(entryIds);
+        return true;
     }
 
     /** Redacts the entries and every copy of them, in any workspace. */

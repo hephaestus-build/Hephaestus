@@ -40,6 +40,9 @@ public interface TurnRuns {
      */
     void stopped(long workspaceId, UUID runId, boolean wasRunning);
 
+    /** Ends the run now, with no grace for its holder to store an answer. */
+    void cancel(long workspaceId, UUID runId);
+
     /**
      * Moves the queued runs of one conversation's turns to another conversation, whose turns they become: they then
      * wait behind its turns. A stopped turn whose holder may still end it keeps its run where it is.

@@ -123,7 +123,7 @@ public class TurnRunKind implements AgentRunHandler {
                                                         + " after its deadline"
                                                 : "a boundary refused it because its authority narrowed",
                                 null,
-                                progress.snapshot(turn.getWorkspaceId(), turn.getId(), turn.getAttempt())));
+                                progress.snapshotForSettlement(turn)));
             }
             default -> {
                 // The lost holder spent the turn's last retry.

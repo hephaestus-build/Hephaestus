@@ -21,6 +21,7 @@ erDiagram
         BIGINT account_id FK,UK "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
         TIMESTAMPTZ last_read_at
+        BIGINT scope_epoch "NOT NULL"
     }
 
     ConversationEntry {

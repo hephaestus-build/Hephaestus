@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Persistable;
@@ -95,6 +96,11 @@ public class Conversation implements Persistable<UUID> {
     @Nullable
     @Column(name = "last_read_at")
     private Instant lastReadAt;
+
+    /** The main conversation's removal generation. Only the removal transaction advances it. */
+    @Column(name = "scope_epoch", nullable = false, updatable = false)
+    @ColumnDefault("0")
+    private long scopeEpoch;
 
     @Transient
     private boolean fresh;

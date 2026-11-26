@@ -262,17 +262,14 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     @Test
-    void shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst() {
+    void shouldRefuseToStoreASearchResultWhenTheDeveloperDeletedTheQuotedMessageFirst() {
         ConversationTurnService.Submission asked = ask(main, "Rebase secret");
         ended(claim(asked), ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Noted"));
         ConversationTurn reading = runningTurn(main);
 
         entries.deleteMessage(workspace.getId(), asked.question().getId());
-        ConversationEntry result = ended(reading, searchResult(asked.question(), "Rebase secret"));
-
-        assertThat(stored(result).isRedacted()).isTrue();
-        assertThat(stored(result).getText()).doesNotContain("Rebase secret");
-        assertThat(payload(result).toString()).doesNotContain("Rebase secret");
+        assertThatThrownBy(() -> ended(reading, searchResult(asked.question(), "Rebase secret")))
+                .isInstanceOf(ConversationLeaseLostException.class);
     }
 
     @Test

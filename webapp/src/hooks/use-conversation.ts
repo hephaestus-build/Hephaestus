@@ -38,6 +38,8 @@ import {
 	conversationEntriesOptions,
 	conversationThreadOptions,
 	patchShownEntry,
+	rereadConversation,
+	rereadInOrder,
 } from "@/hooks/conversation-cache";
 import { usePageVisible } from "@/hooks/use-page-visible";
 
@@ -306,12 +308,16 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 			remove.mutate(
 				{ path: { workspaceSlug, entryId: entry.id } },
 				{
-					onSuccess: () =>
+					onSuccess: () => {
 						patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
 							...shown,
 							deleted: true,
 							text: "",
-						})),
+						}));
+						rereadInOrder(queryClient, workspaceSlug, async () =>
+							rereadConversation(queryClient, workspaceSlug),
+						);
+					},
 				},
 			);
 		},

@@ -7,10 +7,10 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,6 +41,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +83,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     void stubTimeline() {
         when(memberships.isActiveVisibleMember(WORKSPACE, ACCOUNT)).thenAnswer(call -> member.get());
         when(timeline.conversation(anyLong(), anyLong()))
-                .thenReturn(new ConversationDTO(null, 0, List.of(), List.of(), null, null));
+                .thenReturn(new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null));
         when(timeline.liveEntry(anyLong(), anyLong(), any()))
                 .thenAnswer(call -> Optional.of(entry(call.getArgument(2))));
     }
@@ -135,12 +136,35 @@ class ConversationLiveHubTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldDropAQueuedEventWhenRemovalCommitsBeforeTheWriterDrains() throws InterruptedException {
+        AtomicLong epoch = new AtomicLong();
+        when(timeline.scopeEpoch(WORKSPACE, ACCOUNT)).thenAnswer(call -> epoch.get());
+        when(timeline.conversation(WORKSPACE, ACCOUNT))
+                .thenAnswer(call -> new ConversationDTO(null, 0, epoch.get(), List.of(), List.of(), null, null));
+        emitter.holdSends();
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        assertThat(emitter.awaitHeld()).isTrue();
+
+        UUID stale = UUID.randomUUID();
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(stale)));
+        verify(timeline, timeout(WAIT.toMillis())).liveEntry(WORKSPACE, ACCOUNT, stale);
+        // The writer has not heard a scope notification.
+        epoch.incrementAndGet();
+        emitter.release();
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).hasSize(2));
+        assertThat(emitter.names()).containsExactly("snapshot", "snapshot");
+        assertThat(emitter.frames()).noneMatch(frame -> frame.contains(stale.toString()));
+    }
+
+    @Test
     void shouldSendAnEntryCommittedWhileTheSnapshotIsReadAfterTheSnapshotWhenAStreamOpens() {
         UUID committed = UUID.randomUUID();
         when(timeline.conversation(anyLong(), anyLong())).thenAnswer(call -> {
             hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
                     WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(committed)));
-            return new ConversationDTO(null, 0, List.of(), List.of(), null, null);
+            return new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null);
         });
 
         hub.subscribe(WORKSPACE, ACCOUNT);
@@ -173,7 +197,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
         verify(timeline, never()).liveEntry(anyLong(), eq(COLLEAGUE), any());
         verify(timeline, never()).liveTurn(anyLong(), eq(COLLEAGUE), any());
         verify(owners, never()).ofJob(COLLEAGUE);
-        verify(owners, times(2)).ofJob(ACCOUNT);
+        verify(owners, atLeastOnce()).ofJob(ACCOUNT);
     }
 
     @Test

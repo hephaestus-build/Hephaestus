@@ -4,6 +4,7 @@ import {
 	infiniteQueryOptions,
 	type QueryClient,
 	type QueryKey,
+	replaceEqualDeep,
 } from "@tanstack/react-query";
 
 import {
@@ -24,6 +25,7 @@ import type {
 	ProblemDetail,
 } from "@/api/types.gen";
 import { isRemovedEntry } from "@/lib/conversation-entry";
+import { isRecord } from "@/lib/is-record";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
 /**
@@ -89,7 +91,12 @@ function flatThread<Context>(
 /** The conversation's state: its active turns, threads and read marker. */
 export function conversationOptions(workspaceSlug: string) {
 	const read = getConversationOptions({ path: { workspaceSlug } });
-	return { ...read, queryFn: orderedRead(workspaceSlug, read.queryFn) };
+	return {
+		...read,
+		queryFn: orderedRead(workspaceSlug, read.queryFn),
+		structuralSharing: (previous: unknown, incoming: unknown) =>
+			readEpoch(incoming) < readEpoch(previous) ? previous : replaceEqualDeep(previous, incoming),
+	};
 }
 
 /** The loaded entries in the order they were written: the oldest page first. */
@@ -596,11 +603,36 @@ function cachedTurn(
 	return isEnded(question?.turnStatus) ? { order: Infinity } : {};
 }
 
+function readEpoch(value: unknown): number {
+	return isRecord(value) && typeof value.scopeEpoch === "number" ? value.scopeEpoch : 0;
+}
+
+/** Drops older partials as soon as an event shows that the conversation's scope advanced. */
+export function observeScopeEpoch(queryClient: QueryClient, workspaceSlug: string, epoch: number) {
+	queryClient.setQueryData<Conversation>(conversationKey(workspaceSlug), (current) => {
+		if (epoch <= readEpoch(current)) {
+			return;
+		}
+		const previous = current ?? { latestSeq: 0, threads: [], activeTurns: [] };
+		return {
+			...previous,
+			scopeEpoch: epoch,
+			activeTurns: previous.activeTurns.map((turn) => {
+				const { partial: _partial, ...rest } = turn;
+				return rest;
+			}),
+		};
+	});
+}
+
 /**
  * A state older than the one the cache shows, from a snapshot, a read or the live stream, such as a
  * send's answer that arrives after the turn started or ended.
  */
 function isStale(queryClient: QueryClient, workspaceSlug: string, turn: ConversationTurn): boolean {
+	if (readEpoch(turn) < readEpoch(queryClient.getQueryData(conversationKey(workspaceSlug)))) {
+		return true;
+	}
 	const { order } = cachedTurn(queryClient, workspaceSlug, turn);
 	return order !== undefined && turnOrder(turn) < order;
 }
@@ -609,6 +641,7 @@ export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn:
 	if (isStale(queryClient, workspaceSlug, turn)) {
 		return;
 	}
+	observeScopeEpoch(queryClient, workspaceSlug, readEpoch(turn));
 	if (turn.parentEntryId === undefined) {
 		queryClient.setQueryData<Pages<CursorPageDtoConversationEntry>>(
 			entriesKey(workspaceSlug),
@@ -639,6 +672,9 @@ export function applySubmission(
 	workspaceSlug: string,
 	{ question, turn }: { question: ConversationEntry; turn: ConversationTurn },
 ) {
+	if (readEpoch(turn) < readEpoch(queryClient.getQueryData(conversationKey(workspaceSlug)))) {
+		return;
+	}
 	if (isStale(queryClient, workspaceSlug, turn)) {
 		const { active } = cachedTurn(queryClient, workspaceSlug, turn);
 		applyEntry(queryClient, workspaceSlug, active ? withTurnOutcome(question, active) : question);
@@ -658,6 +694,9 @@ export async function applySnapshot(
 	workspaceSlug: string,
 	snapshot: Conversation,
 ): Promise<void> {
+	if (readEpoch(snapshot) < readEpoch(queryClient.getQueryData(conversationKey(workspaceSlug)))) {
+		return;
+	}
 	queryClient.setQueryData<Conversation>(conversationKey(workspaceSlug), snapshot);
 	// Patch before invalidating: a later `setQueryData` would mark the invalidated pages fresh again.
 	for (const summary of snapshot.threads) {

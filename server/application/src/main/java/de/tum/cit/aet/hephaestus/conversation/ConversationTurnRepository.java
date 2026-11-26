@@ -335,6 +335,43 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     @Query(value = "SELECT set_config('synchronous_commit', 'off', true)", nativeQuery = true)
     String commitWithoutFlushWait();
 
+    /** Running or stopped-but-held attempts can still settle an answer. Lock turns before cancelling their runs. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT t FROM ConversationTurn t WHERE t.workspaceId = :workspaceId AND t.accountId = :accountId
+              AND (t.status = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.RUNNING
+                   OR (t.status = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.STOPPED AND
+            """ + HELD_RUN + """
+                   )
+                   OR (t.status = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.QUEUED
+                      AND EXISTS (SELECT 1 FROM ConversationEntry e
+                                  WHERE e.workspaceId = t.workspaceId AND e.turnId = t.id AND e.id IN :entryIds)))
+            ORDER BY t.id
+            """)
+    List<ConversationTurn> lockForHistoryRemoval(
+            @Param("workspaceId") long workspaceId,
+            @Param("accountId") long accountId,
+            @Param("entryIds") List<UUID> entryIds);
+
+    /** Tests the frame against the current scope and attempt, including a normal stop's last partial. */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM conversation_turn t
+                JOIN conversation c ON c.workspace_id = t.workspace_id AND c.account_id = t.account_id
+                                   AND c.parent_conversation_id IS NULL
+                WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch
+                  AND t.status IN ('RUNNING', 'STOPPED')
+                  AND t.account_id = :accountId AND t.conversation_id = :conversationId AND c.scope_epoch = :scopeEpoch
+            )
+            """, nativeQuery = true)
+    boolean admitsFrame(
+            @Param("workspaceId") long workspaceId,
+            @Param("accountId") long accountId,
+            @Param("conversationId") UUID conversationId,
+            @Param("id") UUID id,
+            @Param("epoch") int epoch,
+            @Param("scopeEpoch") long scopeEpoch);
+
     /** A running attempt, as the read before its partial answer found it. */
     interface RunningAttempt {
         Instant getStartedAt();
@@ -346,6 +383,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
         Long getAccountId();
 
         String getSurface();
+
+        long getScopeEpoch();
     }
 
     /**
@@ -357,8 +396,10 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     @WorkspaceAgnostic("The worker holds the attempt's claim; the statement returns the turn's workspace")
     @Query(value = """
             SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.account_id AS accountId,
-                   t.surface AS surface, t.started_at AS startedAt
+                   t.surface AS surface, t.started_at AS startedAt, c.scope_epoch AS scopeEpoch
               FROM conversation_turn t
+              JOIN conversation c ON c.workspace_id = t.workspace_id AND c.account_id = t.account_id
+                                 AND c.parent_conversation_id IS NULL
             """ + LIVE_CLAIM + """
              WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId
                AND t.status = 'RUNNING'

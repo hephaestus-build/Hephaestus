@@ -97,6 +97,12 @@ public class TurnRunsAdapter implements TurnRuns {
         else runs.cancel(run);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancel(long workspaceId, UUID runId) {
+        runs.cancel(new AgentRunRef(runId, workspaceId));
+    }
+
     /**
      * Bounds the claim from the time it took the lease. Its run ends {@link #GRACE} after the work deadline, so its
      * holder can still end what it wrote, and the run reaper ends it then.

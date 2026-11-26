@@ -64,6 +64,7 @@ public class ConversationTimeline {
 
     @Transactional(readOnly = true)
     public ConversationDTO conversation(long workspaceId, long accountId) {
+        long scopeEpoch = scopeEpoch(workspaceId, accountId);
         Optional<Conversation> found = main(workspaceId, accountId);
         if (found.isEmpty()) {
             return ConversationDTO.NONE;
@@ -79,6 +80,7 @@ public class ConversationTimeline {
                         parentEntryId(main, turn.getConversationId()),
                         waiting.get(turn.getId()),
                         working.contains(turn.getId()),
+                        scopeEpoch,
                         progress.snapshot(turn)))
                 .toList();
         List<ConversationThreadSummaryDTO> threads =
@@ -88,6 +90,7 @@ public class ConversationTimeline {
         return new ConversationDTO(
                 main.getId(),
                 entries.findLatestShownSeq(workspaceId, main.getId()),
+                scopeEpoch,
                 active,
                 threads,
                 entries.findLatestAnswerAt(workspaceId, main.getId()),
@@ -126,6 +129,7 @@ public class ConversationTimeline {
 
     @Transactional(readOnly = true)
     public ConversationTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
+        long scopeEpoch = scopeEpoch(workspaceId, accountId);
         ConversationTurn turn = ownedTurn(workspaceId, accountId, turnId);
         Conversation conversation = conversation(workspaceId, turn.getConversationId());
         return turn(
@@ -133,6 +137,7 @@ public class ConversationTimeline {
                 conversation.getParentEntryId(),
                 waitingFor(turn),
                 working(workspaceId, List.of(turn)).contains(turn.getId()),
+                scopeEpoch,
                 progress.snapshot(turn));
     }
 
@@ -173,6 +178,7 @@ public class ConversationTimeline {
     /** The account's turn as the live stream sends it. Empty when it is another account's or the app does not show it. */
     @Transactional(readOnly = true)
     public Optional<ConversationTurnDTO> liveTurn(long workspaceId, long accountId, UUID turnId) {
+        long scopeEpoch = scopeEpoch(workspaceId, accountId);
         return turns.findByIdAndWorkspaceId(turnId, workspaceId)
                 .filter(turn ->
                         turn.getAccountId() == accountId && turn.getSurface() != ConversationTurn.Surface.SYSTEM)
@@ -183,6 +189,7 @@ public class ConversationTimeline {
                                 conversation.getParentEntryId(),
                                 waitingFor(turn),
                                 working(workspaceId, List.of(turn)).contains(turn.getId()),
+                                scopeEpoch,
                                 progress.snapshot(turn))));
     }
 
@@ -209,6 +216,10 @@ public class ConversationTimeline {
         Conversation conversation = conversation(workspaceId, entry.getConversationId());
         ConversationEntryDTO dto = views.dtos(conversation, List.of(entry)).getFirst();
         return dto.deleted() || ConversationEntryViews.shows(dto) ? Optional.of(dto) : Optional.empty();
+    }
+
+    public long scopeEpoch(long workspaceId, long accountId) {
+        return conversations.readScopeEpoch(workspaceId, accountId).orElse(0L);
     }
 
     private Optional<Conversation> main(long workspaceId, long accountId) {
@@ -277,6 +288,7 @@ public class ConversationTimeline {
             @Nullable UUID parentEntryId,
             ConversationTurn.@Nullable WaitingFor waitingFor,
             boolean working,
+            long scopeEpoch,
             @Nullable JsonNode partial) {
         boolean running = turn.getStatus() == ConversationTurn.Status.RUNNING;
         return new ConversationTurnDTO(
@@ -287,6 +299,7 @@ public class ConversationTimeline {
                 turn.getStatus(),
                 waitingFor,
                 turn.getAttempt(),
+                scopeEpoch,
                 turn.getSurface(),
                 running ? (working ? ConversationTurn.Phase.WORKING : ConversationTurn.Phase.STARTING) : null,
                 ConversationTurn.MAX_ATTEMPTS,

@@ -25,6 +25,11 @@ public record ConversationDTO(
                 requiredMode = RequiredMode.REQUIRED)
         long latestSeq,
 
+        @Schema(
+                description =
+                        "The conversation tree generation. A removal advances it and invalidates older partial answers.")
+        long scopeEpoch,
+
         @Schema(description = "Queued and running turns in the conversation and its threads, oldest first") @NonNull
         List<ConversationTurnDTO> activeTurns,
 
@@ -44,5 +49,5 @@ public record ConversationDTO(
         @Nullable
         Instant lastReadAt) {
 
-    static final ConversationDTO NONE = new ConversationDTO(null, 0, List.of(), List.of(), null, null);
+    static final ConversationDTO NONE = new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null);
 }

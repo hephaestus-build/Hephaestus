@@ -29,6 +29,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,7 +112,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 readOnly(transactionManager),
                 mapper,
                 meters,
-                () -> new SseEmitter(TIMEOUT_MS),
+                () -> new ConversationEventEmitter(TIMEOUT_MS),
                 QUEUE_CAPACITY);
     }
 
@@ -147,7 +148,9 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     private record Developer(long workspaceId, long accountId) {}
 
     /** One server-sent event, already written. */
-    private record Event(Set<ResponseBodyEmitter.DataWithMediaType> data) {}
+    private record Event(
+            Set<ResponseBodyEmitter.DataWithMediaType> data,
+            @Nullable Long scopeEpoch) {}
 
     /**
      * Opens a stream of the account's conversation in a workspace.
@@ -187,9 +190,9 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     public void turnChanged(ConversationLedgerEvents.TurnChanged change) {
         long workspaceId = change.workspaceId();
         long accountId = change.accountId();
-        if (watches(workspaceId, accountId)) {
+        if (isWatched(workspaceId, accountId)) {
             read(() -> owned(accountId, () -> timeline.liveTurn(workspaceId, accountId, change.turnId()))
-                    .ifPresent(turn -> fanOut(workspaceId, accountId, TURN, turn)));
+                    .ifPresent(turn -> fanOut(workspaceId, accountId, event(TURN, turn, turn.scopeEpoch()))));
         }
     }
 
@@ -197,20 +200,33 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     public void entryChanged(ConversationLedgerEvents.EntryChanged change) {
         long workspaceId = change.workspaceId();
         long accountId = change.accountId();
-        if (watches(workspaceId, accountId)) {
+        if (isWatched(workspaceId, accountId)) {
             change.entryIds()
-                    .forEach(entryId ->
-                            read(() -> owned(accountId, () -> timeline.liveEntry(workspaceId, accountId, entryId))
-                                    .ifPresent(entry -> fanOut(workspaceId, accountId, ENTRY, entry))));
+                    .forEach(entryId -> read(() -> owned(accountId, () -> {
+                                long scopeEpoch = timeline.scopeEpoch(workspaceId, accountId);
+                                return timeline.liveEntry(workspaceId, accountId, entryId)
+                                        .map(entry -> event(ENTRY, entry, scopeEpoch));
+                            })
+                            .ifPresent(event -> fanOut(workspaceId, accountId, event))));
         }
     }
 
     /** Another device of the developer moved the read marker. */
     @Override
     public void readChanged(ConversationLedgerEvents.ReadChanged change) {
-        if (watches(change.workspaceId(), change.accountId())) {
+        if (isWatched(change.workspaceId(), change.accountId())) {
             read(() -> fanOut(
-                    change.workspaceId(), change.accountId(), READ, new ConversationReadDTO(change.lastReadAt())));
+                    change.workspaceId(),
+                    change.accountId(),
+                    event(READ, new ConversationReadDTO(change.lastReadAt()), null)));
+        }
+    }
+
+    @Override
+    public void scopeChanged(ConversationLedgerEvents.ScopeChanged change) {
+        Set<Stream> watching = streams.get(new Developer(change.workspaceId(), change.accountId()));
+        if (watching != null) {
+            watching.forEach(stream -> read(() -> snapshot(stream)));
         }
     }
 
@@ -224,7 +240,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     @Scheduled(fixedRate = HEARTBEAT_INTERVAL_MS, initialDelay = HEARTBEAT_INTERVAL_MS)
     @WorkspaceAgnostic("Writes transport heartbeats to streams whose account is still a member")
     void heartbeat() {
-        Event ping = new Event(SseEmitter.event().comment("ping").build());
+        Event ping = new Event(SseEmitter.event().comment("ping").build(), null);
         allStreams()
                 .forEach(stream -> read(() -> {
                     if (admitted(stream)) {
@@ -234,7 +250,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     }
 
     /** Whether the developer has a stream open on this replica: only then is their change read. */
-    private boolean watches(long workspaceId, long accountId) {
+    private boolean isWatched(long workspaceId, long accountId) {
         return streams.containsKey(new Developer(workspaceId, accountId));
     }
 
@@ -270,22 +286,17 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     private void snapshot(Stream stream) {
         if (!stream.closed.get() && admitted(stream)) {
-            send(
-                    stream,
-                    event(
-                            SNAPSHOT,
-                            owned(
-                                    stream.accountId,
-                                    () -> timeline.conversation(stream.workspaceId, stream.accountId))));
+            var conversation =
+                    owned(stream.accountId, () -> timeline.conversation(stream.workspaceId, stream.accountId));
+            send(stream, event(SNAPSHOT, conversation, conversation.scopeEpoch()));
         }
     }
 
-    private void fanOut(long workspaceId, long accountId, String name, Object value) {
+    private void fanOut(long workspaceId, long accountId, Event event) {
         Set<Stream> watching = streams.get(new Developer(workspaceId, accountId));
         if (watching == null || watching.isEmpty()) {
             return;
         }
-        Event event = event(name, value);
         // One membership read for this delivery, never reused for a later one.
         boolean member = memberships.isActiveVisibleMember(workspaceId, accountId);
         List.copyOf(watching).forEach(stream -> {
@@ -312,11 +323,13 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     }
 
     /** Built once, sent to many streams: a built event is immutable, a builder is not. */
-    private Event event(String name, Object value) {
-        return new Event(SseEmitter.event()
-                .name(name)
-                .data(mapper.writeValueAsString(value))
-                .build());
+    private Event event(String name, Object value, @Nullable Long scopeEpoch) {
+        return new Event(
+                SseEmitter.event()
+                        .name(name)
+                        .data(mapper.writeValueAsString(value))
+                        .build(),
+                scopeEpoch);
     }
 
     private void send(Stream stream, Event event) {
@@ -354,6 +367,24 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 }
             }
             try {
+                if (stream.emitter instanceof ConversationEventEmitter response
+                        && !response.awaitInstalled(Duration.ofSeconds(2))) {
+                    close(stream);
+                    return;
+                }
+                Long epoch = event.scopeEpoch();
+                if (epoch != null
+                        && epoch
+                                != owned(
+                                                stream.accountId,
+                                                () -> timeline.scopeEpoch(stream.workspaceId, stream.accountId))
+                                        .longValue()) {
+                    synchronized (stream.queue) {
+                        stream.queue.clear();
+                    }
+                    read(() -> snapshot(stream));
+                    continue;
+                }
                 stream.emitter.send(event.data());
             } catch (IOException | RuntimeException gone) {
                 log.debug(

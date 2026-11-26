@@ -36,7 +36,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -62,6 +61,9 @@ import tools.jackson.databind.ObjectMapper;
  * result that could have copied a channel message goes with the Slack retention.
  */
 class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private ConversationHistoryRemoval historyRemoval;
 
     @Autowired
     private ConversationService conversations;
@@ -349,7 +351,8 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     /** Redaction that counts, after commit, the entries each erasure reported as changed. */
     private ConversationRedaction reportingRedaction() {
-        return new ConversationRedaction(copies, entryRepository, turnRows, digestTurns, turnRuns, reporting(), mapper);
+        return new ConversationRedaction(
+                copies, entryRepository, historyRemoval, turnRows, digestTurns, turnRuns, reporting(), mapper);
     }
 
     private ApplicationEventPublisher reporting() {
@@ -466,13 +469,14 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         AtomicInteger calls = new AtomicInteger();
         ConversationRedaction dying =
                 new ConversationRedaction(
-                        copies, entryRepository, turnRows, digestTurns, turnRuns, reporting(), mapper) {
+                        copies, entryRepository, historyRemoval, turnRows, digestTurns, turnRuns, reporting(), mapper) {
                     @Override
-                    public void redact(Collection<UUID> entryIds) {
-                        super.redact(entryIds);
+                    public boolean removeHistory(long workspaceId, long accountId, List<UUID> entryIds) {
+                        boolean removed = super.removeHistory(workspaceId, accountId, entryIds);
                         if (calls.incrementAndGet() == 3) {
                             throw new Crash();
                         }
+                        return removed;
                     }
                 };
 
@@ -561,7 +565,6 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                 .toList();
         CyclicBarrier samePage = new CyclicBarrier(2);
         AtomicReference<@Nullable String> leader = new AtomicReference<>();
-        CountDownLatch leaderCommitted = new CountDownLatch(1);
         Map<String, Collection<UUID>> firstPage = new ConcurrentHashMap<>();
         Map<String, Boolean> firstCommitted = new ConcurrentHashMap<>();
         Map<String, Map<UUID, Integer>> reportedBy =
@@ -573,29 +576,20 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                     new ConversationRedaction(
                                             copies,
                                             entryRepository,
+                                            historyRemoval,
                                             turnRows,
                                             digestTurns,
                                             turnRuns,
                                             reporting(Objects.requireNonNull(reportedBy.get(replica))),
                                             mapper) {
                                         @Override
-                                        public void redact(Collection<UUID> entryIds) {
-                                            if (firstPage.putIfAbsent(replica, List.copyOf(entryIds)) != null) {
-                                                super.redact(entryIds);
-                                                return;
-                                            }
+                                        public boolean removeHistory(long workspaceId, long accountId, List<UUID> ids) {
+                                            firstPage.put(replica, List.copyOf(ids));
                                             await(samePage);
-                                            boolean leads = leader.compareAndSet(null, replica);
-                                            if (!leads) {
-                                                await(leaderCommitted);
-                                            }
-                                            super.redact(entryIds);
-                                            afterCommit(() -> {
-                                                firstCommitted.put(replica, true);
-                                                if (leads) {
-                                                    leaderCommitted.countDown();
-                                                }
-                                            });
+                                            boolean advanced = super.removeHistory(workspaceId, accountId, ids);
+                                            if (advanced) leader.set(replica);
+                                            afterCommit(() -> firstCommitted.put(replica, true));
+                                            return advanced;
                                         }
                                     },
                                     5,
@@ -644,17 +638,6 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                 action.run();
             }
         });
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(30, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("the leader did not commit");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
     }
 
     private static void await(CyclicBarrier barrier) {

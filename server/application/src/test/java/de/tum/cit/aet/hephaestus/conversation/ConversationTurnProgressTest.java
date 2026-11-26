@@ -1,13 +1,16 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -20,7 +23,14 @@ class ConversationTurnProgressTest {
     private static final long ACCOUNT = 70;
 
     private final JsonMapper mapper = JsonMapper.shared();
-    private final ConversationTurnProgress reader = new ConversationTurnProgress(mapper);
+    private final ConversationRepository conversations = mock(ConversationRepository.class);
+    private final ConversationTurnProgress reader = new ConversationTurnProgress(mapper, conversations);
+
+    @BeforeEach
+    void currentScope() {
+        lenient().when(conversations.readScopeEpoch(WORKSPACE, ACCOUNT)).thenReturn(Optional.of(0L));
+    }
+
     private final UUID turnId = UUID.randomUUID();
     private final ConversationTurn turn = running(turnId, 1);
 
@@ -151,7 +161,7 @@ class ConversationTurnProgressTest {
                 ConversationTurn.Surface.APP,
                 1));
 
-        assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isEqualTo(mapper.readTree(answer("Pin")));
+        assertThat(reader.snapshotForSettlement(turn)).isEqualTo(mapper.readTree(answer("Pin")));
         reader.changed(new ConversationLedgerEvents.TurnChanged(
                 WORKSPACE,
                 CONVERSATION,
@@ -160,11 +170,11 @@ class ConversationTurnProgressTest {
                 ConversationTurn.Status.DONE,
                 ConversationTurn.Surface.APP,
                 1));
-        assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isNull();
+        assertThat(reader.snapshotForSettlement(turn)).isNull();
     }
 
     private List<ConversationLedgerEvents.ProgressChanged> send(ConversationTurnProgress.Update update) {
-        return reader.frames(WORKSPACE, CONVERSATION, ACCOUNT, turnId, ConversationTurn.Surface.APP, 1, update);
+        return reader.frames(WORKSPACE, CONVERSATION, ACCOUNT, turnId, ConversationTurn.Surface.APP, 1, 0, update);
     }
 
     private static ConversationTurnProgress.Update whole(long sequence, String text) {
@@ -217,6 +227,7 @@ class ConversationTurnProgressTest {
         ConversationTurn turn = mock(ConversationTurn.class);
         when(turn.getStatus()).thenReturn(ConversationTurn.Status.RUNNING);
         when(turn.getWorkspaceId()).thenReturn(WORKSPACE);
+        when(turn.getAccountId()).thenReturn(ACCOUNT);
         when(turn.getId()).thenReturn(turnId);
         when(turn.getAttempt()).thenReturn(attempt);
         return turn;
