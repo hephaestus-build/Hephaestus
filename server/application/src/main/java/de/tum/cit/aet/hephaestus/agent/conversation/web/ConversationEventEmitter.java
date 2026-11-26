@@ -81,10 +81,14 @@ class ConversationEventEmitter extends SseEmitter {
         try {
             write.get(WRITE_DEADLINE_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException timeout) {
-            throw abort(write, new SocketTimeoutException("The live stream write timed out"));
+            var failure = new SocketTimeoutException("The live stream write timed out");
+            failure.initCause(timeout);
+            throw abort(write, failure);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw abort(write, new InterruptedIOException("The live stream writer was interrupted"));
+            var failure = new InterruptedIOException("The live stream writer was interrupted");
+            failure.initCause(interrupted);
+            throw abort(write, failure);
         } catch (ExecutionException failed) {
             if (failed.getCause() instanceof RuntimeException failure) throw failure;
             if (failed.getCause() instanceof IOException failure) throw failure;
@@ -97,7 +101,9 @@ class ConversationEventEmitter extends SseEmitter {
         // The caller still holds the history lock. Abort before cancelling the task so it cannot resume the frame.
         try {
             try {
-                connection.setOption(StandardSocketOptions.SO_LINGER, 0);
+                if (connection.supportedOptions().contains(StandardSocketOptions.SO_LINGER)) {
+                    connection.setOption(StandardSocketOptions.SO_LINGER, 0);
+                }
             } finally {
                 connection.close();
             }

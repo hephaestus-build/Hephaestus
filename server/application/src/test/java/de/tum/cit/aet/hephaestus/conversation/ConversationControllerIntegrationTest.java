@@ -19,6 +19,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
@@ -746,7 +747,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private BufferedReader openLiveStream(Socket socket) throws IOException {
-        socket.connect(new InetSocketAddress("127.0.0.1", port));
+        socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
         socket.setSoTimeout(5_000);
         socket.getOutputStream()
                 .write(("GET /workspaces/ask-api/conversation/events HTTP/1.0\r\n"
