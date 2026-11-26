@@ -142,10 +142,7 @@ class PersonalPurseLedgerIntegrationTest extends AbstractWorkspaceIntegrationTes
         UUID source = UUID.fromString(column(ended, "source_id"));
         var before = ledger.personalSpend(ada, start(month), start(month.plusMonths(1)));
         var scope = new PersonScope(ada, List.of(), List.of());
-        PersonDataContributor store = catalog.contributors().stream()
-                .filter(contributor -> contributor.store().equals("llm_usage_event"))
-                .findFirst()
-                .orElseThrow();
+        var store = ledgerStore();
 
         var selection = store.select(scope);
         assertThat(store.export(selection, scope).toString()).contains(ended.toString(), open.toString());
@@ -162,6 +159,48 @@ class PersonalPurseLedgerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
+    void shouldOmitThePersonalAttemptIdFromOperatorExport() {
+        long account = accountId(persistUser("purse-export"));
+        UUID call = personal(account, "ENDED", "PRICED", "4.32", null, at(YearMonth.of(2031, 6), 2));
+        UUID source = UUID.fromString(column(call, "source_id"));
+        var scope = new PersonScope(account, List.of(), List.of());
+        var store = ledgerStore();
+
+        String export = store.export(store.select(scope), scope).toString();
+        assertThat(export).contains("4.32").doesNotContain(source.toString());
+    }
+
+    @Test
+    void shouldNullTheAttemptIdWhenErasureSettlesAPersonalCall() {
+        long account = accountId(persistUser("purse-erase-source"));
+        UUID call = personal(account, "OPEN", "UNPRICED", null, "0.50", at(YearMonth.of(2031, 7), 2));
+        var scope = new PersonScope(account, List.of(), List.of());
+        var store = ledgerStore();
+
+        store.erase(store.select(scope), scope);
+
+        assertThat(column(call, "call_state")).isEqualTo("SETTLED");
+        assertThat(column(call, "payer_account_id")).isNull();
+        assertThat(column(call, "source_id")).isNull();
+    }
+
+    @Test
+    void shouldLeaveAnInstanceProbeWithTheSameSourceIdUntouchedOnPersonalErasure() {
+        long account = accountId(persistUser("purse-erase-probe"));
+        Instant occurredAt = at(YearMonth.of(2031, 8), 2);
+        UUID call = personal(account, "OPEN", "UNPRICED", null, "0.50", occurredAt);
+        UUID probe = instanceProbe("1.00", occurredAt);
+        UUID source = UUID.fromString(column(call, "source_id"));
+        jdbc.update("UPDATE llm_usage_event SET source_id = ? WHERE id = ?", source, probe);
+        var scope = new PersonScope(account, List.of(), List.of());
+        var store = ledgerStore();
+
+        store.erase(store.select(scope), scope);
+
+        assertThat(column(probe, "source_id")).isEqualTo(source.toString());
+    }
+
+    @Test
     void shouldClearThePersonalConfirmationWhenTheChoiceChangesWithoutOne() {
         long ada = accountId(persistUser("purse-scope-cleared"));
         // Only an active account chooses how Hephaestus may use AI.
@@ -174,6 +213,13 @@ class PersonalPurseLedgerIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(jdbc.queryForObject(
                         "SELECT ai_personal_scope_at IS NULL FROM account WHERE id = ?", Boolean.class, ada))
                 .isTrue();
+    }
+
+    private PersonDataContributor ledgerStore() {
+        return catalog.contributors().stream()
+                .filter(contributor -> contributor.store().equals("llm_usage_event"))
+                .findFirst()
+                .orElseThrow();
     }
 
     private UUID personal(
