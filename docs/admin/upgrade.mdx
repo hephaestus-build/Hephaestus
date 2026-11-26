@@ -324,6 +324,10 @@ Require `on` from `SHOW`.
 Require zero rows from the query.
 If either check fails, stop before the dump or migration.
 
+For [external PostgreSQL](./external-database#connect-the-release), connect `psql` directly to the configured database as the app role.
+Set `PGOPTIONS='-c default_transaction_read_only=on'` for that session.
+Run the same `SHOW` and `SELECT` statements with `-v ON_ERROR_STOP=1`.
+
 #### Verify that all writers have stopped
 
 Wait for each server Pod to disappear, including Pods that are terminating.
@@ -388,7 +392,8 @@ Repeat the quiet check after that writer stops.
    Continue only after the quiet check passes.
 3. Set `restore_point` to the verified restore point in UTC.
    For a logical archive, use its receipt's `start` time.
-   Run the check through the read-only app connection from [Check for erasure requests](#check-for-erasure-requests).
+   Use the read-only app connection from [Check for erasure requests](#check-for-erasure-requests).
+   For external PostgreSQL, pass the options after `app_sql` to your direct `psql` connection.
 
    ```bash
    restore_point='<UTC restore point>'
@@ -563,6 +568,11 @@ Before you start, rehearse this procedure on an isolated staging installation.
           { print > (switches ? "database-properties.sql" : "database-create.sql") }' database.sql
      grep -qE "^CREATE DATABASE ($database|\"$database\") " database-create.sql
      failed_db="heph_failed_$(date -u +%Y%m%dT%H%M%S)"
+     (set -C; {
+       printf 'database=%s\nretained=%s\n' "$database" "$failed_db"
+       cat final.dump.sha256
+       printf 'stage=archive-verified\n'
+     } > replacement.txt)
      with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
        -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
    ALTER DATABASE :"database" WITH ALLOW_CONNECTIONS false;
@@ -576,8 +586,41 @@ Before you start, rehearse this procedure on an isolated staging installation.
    \gexec
    ALTER DATABASE :"database" RENAME TO :"failed_db";
    SQL
+     printf 'stage=database-retained\n' >> replacement.txt
+   )
+   ```
+
+3. Create the replacement database from the verified archive.
+   If the rename succeeded before an interruption, resume here with the same restore directory.
+   Keep all writers stopped and reconciliation paused.
+   `replacement.txt` records the retained database, the archive checksum and the last completed stage.
+   The catalog check must return `t`.
+   This confirms that the retained database has connections disabled and the selected name is free.
+   If the selected name exists, keep that database for diagnosis as a possibly incomplete replacement.
+   Stop if you cannot confirm the recorded state.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     umask 077
+     cd -- "$work"
+     failed_db=$(sed -n 's/^retained=//p' replacement.txt)
+     [[ "$failed_db" =~ ^heph_failed_[0-9]{8}T[0-9]{6}$ ]]
+     grep -Fx "database=$database" replacement.txt
+     grep -Fx "$(cat final.dump.sha256)" replacement.txt
+     sha256sum --check final.dump.sha256
+     can_create=$(with_tunnel admin_pg psql -X -w -At -v ON_ERROR_STOP=1 \
+       "$pg_host dbname=$maintenance_database" -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
+   SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'failed_db' AND NOT datallowconn)
+      AND NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database');
+   SQL
+     )
+     test "$can_create" = t
+     printf 'stage=ready-to-create\n' >> replacement.txt
      with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
        -f database-create.sql
+     printf 'stage=replacement-created\n' >> replacement.txt
      with_tunnel admin_pg pg_restore --no-password --exit-on-error --single-transaction \
        --dbname="$pg_host dbname=$database" final.dump
      if [[ -s database-properties.sql ]]; then
@@ -590,6 +633,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
      with_tunnel app_sql -At -F $'\t' -f row-counts.sql > restored-row-counts.tsv
      grep -E '^(event_publication|person_data_request|workspace)'$'\t' receipt.txt > expected-row-counts.tsv
      cmp expected-row-counts.tsv restored-row-counts.tsv
+     printf 'stage=restore-verified\n' >> replacement.txt
    )
    ```
 
@@ -605,7 +649,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
    Check that the restored row counts match the receipt.
    On any failure, leave the server stopped.
    Keep the failed database and any partial restore for diagnosis.
-3. After verification passes, apply the signed source release with the server stopped and migration enabled.
+4. After verification passes, apply the signed source release with the server stopped and migration enabled.
    The migration Job runs [database role setup](./helm-chart#database-roles) again.
    Wait for the Job to be `Complete`.
    Keep every source server stopped.

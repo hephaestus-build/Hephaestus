@@ -422,6 +422,7 @@ Set `namespace` to its namespace.
    Use the verified source chart and the values of the phase-1 revision for either path.
 7. Run the [read-only erasure check](./upgrade#check-for-erasure-requests) on the selected database before you reopen access.
    To retry the target, keep the restored source release stopped.
+   If `applied.json` already names the target, restore `applied-before-cutover.json` to `applied.json`.
    Check that the channel names the target.
    Resume the timer.
 
