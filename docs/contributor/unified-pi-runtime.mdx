@@ -710,7 +710,7 @@ The removal transaction holds that lock exclusively before it advances the epoch
 A removal therefore commits before the check or after the handoff.
 The SSE writer holds the lock for one event or reconnect snapshot.
 The model proxy hands one buffered request to the connected channel under the lock.
-It waits for the provider's response after the lock is released.
+The lock ends when the handoff returns, without waiting for the response.
 
 One `LISTEN` connection serves each server replica.
 `ConversationLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).

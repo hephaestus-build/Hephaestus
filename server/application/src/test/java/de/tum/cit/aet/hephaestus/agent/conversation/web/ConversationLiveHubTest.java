@@ -69,6 +69,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final OwnerScope owners = mock(OwnerScope.class);
     private final AtomicBoolean member = new AtomicBoolean(true);
+    private final AtomicLong epoch = new AtomicLong();
     private final RecordingEmitter emitter = new RecordingEmitter();
     private final ConversationLiveHub hub = new ConversationLiveHub(
             mock(ConversationLedgerNotifications.class),
@@ -89,7 +90,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
             ConversationScopeFence.Scope scope = call.getArgument(0);
             BooleanSupplier current = call.getArgument(1);
             Runnable handoff = call.getArgument(2);
-            if (timeline.scopeEpoch(scope.workspaceId(), scope.accountId()) != scope.epoch() || !current.getAsBoolean())
+            if (epoch.get() != scope.epoch() || !current.getAsBoolean())
                 return false;
             handoff.run();
             return true;
@@ -150,7 +151,6 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
     @Test
     void shouldDropAQueuedEventWhenRemovalCommitsBeforeTheWriterDrains() throws InterruptedException {
-        AtomicLong epoch = new AtomicLong();
         when(timeline.scopeEpoch(WORKSPACE, ACCOUNT)).thenAnswer(call -> epoch.get());
         when(timeline.conversation(WORKSPACE, ACCOUNT))
                 .thenAnswer(call -> new ConversationDTO(null, 0, epoch.get(), List.of(), List.of(), null, null));
