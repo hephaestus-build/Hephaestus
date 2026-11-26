@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
@@ -53,8 +54,10 @@ import org.springframework.graphql.client.GraphQlTransportException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 @Tag("unit")
@@ -103,7 +106,11 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 .when(responseHandler.handle(any(), anyString(), any()))
                 .thenReturn(new HandleResult(HandleResult.Action.CONTINUE, null));
 
-        service = new GitLabProjectSyncService(
+        service = newService(WebClient::builder);
+    }
+
+    private GitLabProjectSyncService newService(GitLabWebClients clients) {
+        return new GitLabProjectSyncService(
                 graphQlClientProvider,
                 responseHandler,
                 projectProcessor,
@@ -111,7 +118,40 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 gitLabProperties,
                 providerNamespaces,
                 new GitLabExceptionClassifier(new SimpleMeterRegistry()),
-                projectAdmission);
+                projectAdmission,
+                clients);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "OK, Public project, false",
+        "NOT_FOUND, 404 Project Not Found, true",
+        "NOT_FOUND, Gateway route missing, false",
+        "FORBIDDEN, API access required, false",
+        "UNAUTHORIZED, Access denied, false"
+    })
+    void shouldOnlyAcceptAProjectSpecificPublicMiss(HttpStatus status, String message, boolean missing) {
+        assertThat(publicProjectResponse(status, message).isPublicProjectMissing(42L))
+                .isEqualTo(missing);
+    }
+
+    @Test
+    void shouldLeavePublicProjectRateLimitingOnTheRetryPath() {
+        assertThatThrownBy(() -> publicProjectResponse(HttpStatus.TOO_MANY_REQUESTS, "Try later")
+                        .isPublicProjectMissing(42L))
+                .isInstanceOf(WebClientResponseException.TooManyRequests.class);
+    }
+
+    private GitLabProjectSyncService publicProjectResponse(HttpStatus status, String message) {
+        return newService(() -> WebClient.builder().exchangeFunction(request -> {
+            assertThat(request.url()).hasToString(gitLabProperties.defaultServerUrl() + "/api/v4/projects/42");
+            assertThat(request.headers().getFirst(HttpHeaders.AUTHORIZATION)).isNull();
+            assertThat(request.headers().getFirst("PRIVATE-TOKEN")).isNull();
+            return Mono.just(ClientResponse.create(status)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body("{\"message\":\"" + message + "\"}")
+                    .build());
+        }));
     }
 
     @ParameterizedTest

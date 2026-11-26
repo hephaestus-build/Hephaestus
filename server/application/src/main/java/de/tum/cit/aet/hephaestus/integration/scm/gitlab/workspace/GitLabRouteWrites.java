@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
+import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabProjectEventDTO.EVENT_PROJECT_DESTROY;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission.number;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission.text;
 
@@ -11,9 +12,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
@@ -23,6 +26,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -62,6 +66,7 @@ public class GitLabRouteWrites {
     private final GitLabProperties gitLabProperties;
     private final TransactionTemplate transaction;
     private final GitLabProjectAdmission projectAdmission;
+    private final RepositoryObservationStore observations;
 
     public GitLabRouteWrites(
             ConnectionCommands connectionCommands,
@@ -73,7 +78,8 @@ public class GitLabRouteWrites {
             SyncTargetProvider syncTargetProvider,
             GitLabProperties gitLabProperties,
             PlatformTransactionManager transactionManager,
-            GitLabProjectAdmission projectAdmission) {
+            GitLabProjectAdmission projectAdmission,
+            RepositoryObservationStore observations) {
         this.connectionCommands = connectionCommands;
         this.repositoryRepository = repositoryRepository;
         this.monitors = monitors;
@@ -84,6 +90,7 @@ public class GitLabRouteWrites {
         this.gitLabProperties = gitLabProperties;
         this.transaction = new TransactionTemplate(transactionManager);
         this.projectAdmission = projectAdmission;
+        this.observations = observations;
     }
 
     /**
@@ -179,15 +186,15 @@ public class GitLabRouteWrites {
     /**
      * Whether the project {@code payload} names, if any, is one GitLab reports inside the connected group, after storing
      * what GitLab reported. A created, renamed, moved or deleted project is looked up by its id, so a stale or invented
-     * path cannot move it. A project GitLab reports elsewhere, or not at all, only stops being monitored by this
-     * workspace: its shared row is left as last stored, since not being reported to one connection proves neither a
-     * deletion nor where it went.
+     * path cannot move it. A scoped access loss affects the receiving workspace. For a destroy event, a separate
+     * check can establish that a project this route monitors is no longer publicly accessible.
      */
     boolean admitProject(AdmittedRoute route, JsonNode payload, GitLabProjectAdmission.ConnectionRead read) {
         String eventName = text(payload, "event_name");
         if (eventName != null && eventName.startsWith("project_")) {
             Long nativeId = number(payload, "project_id");
-            return nativeId != null && admitProjectEvent(route, nativeId, read);
+            return nativeId != null
+                    && admitProjectEvent(route, nativeId, read, EVENT_PROJECT_DESTROY.equals(eventName));
         }
         JsonNode project = payload.path("project");
         String path = text(project, "path_with_namespace");
@@ -242,7 +249,8 @@ public class GitLabRouteWrites {
                 .orElse(false);
     }
 
-    private boolean admitProjectEvent(AdmittedRoute route, long nativeId, GitLabProjectAdmission.ConnectionRead read) {
+    private boolean admitProjectEvent(
+            AdmittedRoute route, long nativeId, GitLabProjectAdmission.ConnectionRead read, boolean destroy) {
         var metadata = projectAdmission.beginRepositoryReads(read).forRepository(nativeId);
         final GitLabProjectResponse reported;
         try {
@@ -250,14 +258,14 @@ public class GitLabRouteWrites {
                     .fetchProjectById(route.workspaceId(), nativeId)
                     .orElse(null);
         } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
-            transaction.executeWithoutResult(status -> {
-                if (holdActive(route) && DeliveryInbox.claim("gitlab.route.unavailable." + nativeId)) {
-                    syncTargetProvider.recordRepositoryLoss(metadata);
-                }
-            });
+            handleMissingProject(route, read, metadata, destroy, true);
             return false;
         }
-        boolean inside = reported != null && route.contains(reported.fullPath());
+        if (reported == null) {
+            handleMissingProject(route, read, metadata, destroy, false);
+            return false;
+        }
+        boolean inside = route.contains(reported.fullPath());
         Boolean applied = transaction.execute(status -> {
             if (!holdActive(route)) {
                 return false;
@@ -270,8 +278,7 @@ public class GitLabRouteWrites {
             }
             // The shared row may already carry another workspace's view of the move, so this workspace's monitor is
             // found by the project's id, not by the row's current path.
-            List<RepositoryToMonitor> own = ownMonitors(route, nativeId);
-            Repository stored = inside && reported != null
+            Repository stored = inside
                     ? projectAdmission
                             .discover(
                                     read,
@@ -284,10 +291,7 @@ public class GitLabRouteWrites {
                             .orElse(null)
                     : null;
             if (!inside) {
-                own.stream()
-                        .filter(monitor -> read.originalMonitors().values().stream()
-                                .anyMatch(ids -> ids.contains(monitor.getId())))
-                        .forEach(monitor -> syncTargetProvider.removeSyncTarget(monitor.getId()));
+                removeOriginalMonitors(route, read, nativeId);
             }
             if (stored == null) {
                 return false;
@@ -296,12 +300,62 @@ public class GitLabRouteWrites {
             return true;
         });
         if (!inside) {
-            log.info(
-                    "Skipped GitLab project event: reason={}, projectId={}",
-                    reported == null ? "projectNotReported" : "outsideConnectedGroup",
-                    nativeId);
+            log.info("Skipped GitLab project event: reason=outsideConnectedGroup, projectId={}", nativeId);
         }
         return Boolean.TRUE.equals(applied);
+    }
+
+    private void handleMissingProject(
+            AdmittedRoute route,
+            GitLabProjectAdmission.ConnectionRead read,
+            ReadersRead metadata,
+            boolean destroy,
+            boolean unavailable) {
+        long nativeId = metadata.repositoryNativeId();
+        var project = destroy && metadata.syncTargetId() != null && metadata.credential() != null
+                ? repositoryRepository
+                        .findByNativeIdAndProviderId(nativeId, route.providerId())
+                        .flatMap(repository -> projectAdmission.capture(read, repository))
+                        .filter(captured -> Objects.equals(metadata.syncTargetId(), captured.monitorId()))
+                        .orElse(null)
+                : null;
+        Instant checkedAt = project == null ? null : observations.databaseTime();
+        final boolean missing;
+        try {
+            missing = checkedAt != null && projectSyncService.isPublicProjectMissing(nativeId);
+        } catch (RuntimeException e) {
+            transaction.executeWithoutResult(status -> {
+                if (holdActive(route) && DeliveryInbox.claim("gitlab.route.public-check-retry." + nativeId)) {
+                    syncTargetProvider.recordRepositoryLoss(metadata);
+                }
+            });
+            throw e;
+        }
+        transaction.executeWithoutResult(status -> {
+            String step = unavailable ? "gitlab.route.unavailable." : "gitlab.route.project.";
+            if (!holdActive(route) || !DeliveryInbox.claim(step + nativeId)) return;
+
+            // The scoped loss takes the repository observation lock first.
+            if (unavailable) syncTargetProvider.recordRepositoryLoss(metadata);
+            if (missing && projectAdmission.hold(Objects.requireNonNull(project))) {
+                var current = projectAdmission.beginRepositoryReads(read).forRepository(nativeId);
+                if (Objects.equals(metadata.credential(), current.credential())
+                        && Objects.equals(metadata.syncTargetId(), current.syncTargetId())) {
+                    observations.restrictPublicAccess(
+                            route.providerId(), project.repositoryId(), Objects.requireNonNull(checkedAt));
+                }
+            }
+            if (!unavailable) removeOriginalMonitors(route, read, nativeId);
+        });
+        log.info("Skipped GitLab project event: reason=projectNotReported, projectId={}", nativeId);
+    }
+
+    private void removeOriginalMonitors(
+            AdmittedRoute route, GitLabProjectAdmission.ConnectionRead read, long nativeId) {
+        ownMonitors(route, nativeId).stream()
+                .filter(monitor ->
+                        read.originalMonitors().values().stream().anyMatch(ids -> ids.contains(monitor.getId())))
+                .forEach(monitor -> syncTargetProvider.removeSyncTarget(monitor.getId()));
     }
 
     private boolean projectAllowed(AdmittedRoute route, @Nullable Long nativeId) {
