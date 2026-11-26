@@ -1,11 +1,15 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github;
 
+import static de.tum.cit.aet.hephaestus.testconfig.RepositoryObservationTestFixtures.confirm;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.overview.ActivityPeopleRangeParams;
+import de.tum.cit.aet.hephaestus.activity.overview.ActivityPeopleService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFixtures;
@@ -13,12 +17,16 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProofReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.StaleRepositoryMetadataException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueTypeRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -42,12 +50,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncServi
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -55,6 +65,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -185,15 +197,115 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                 "owner":{"__typename":"Organization","databaseId":%d,"login":"outside-org-%d"}}}}
                 """.formatted(RATE_LIMIT, nativeId, name, name, 5_000_000L + repositoryId, repositoryId));
 
-        var synced =
-                repositories().syncRepository(workspaceId, name, IdentityProviderFixtures.gitHub(providers), nativeId);
+        var provider = IdentityProviderFixtures.gitHub(providers);
+        var metadata = context.getBean(SyncTargetProvider.class)
+                .beginRepositoryReads(workspaceId, Objects.requireNonNull(provider.getId()))
+                .forRepository(nativeId);
+        var synced = repositories().syncRepository(workspaceId, name, provider, nativeId, metadata);
 
         assertThat(synced).isPresent();
         assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
         assertThat(jdbc.queryForObject("""
-                        SELECT o.login FROM repository r JOIN organization o ON o.id = r.organization_id
-                        WHERE r.native_id = ? AND r.name_with_owner = ?
-                        """, String.class, nativeId, name)).isEqualTo("outside-org-" + repositoryId);
+            SELECT o.login FROM repository r JOIN organization o ON o.id = r.organization_id
+            WHERE r.native_id = ? AND r.name_with_owner = ?
+            """, String.class, nativeId, name)).isEqualTo("outside-org-" + repositoryId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldConfirmARecoveredRepositoryBeforeItsMirrorWrite(boolean privateRepository) {
+        var repository = context.getBean(RepositoryRepository.class)
+                .findById(repositoryId)
+                .orElseThrow();
+        var monitors = context.getBean(RepositoryToMonitorRepository.class);
+        var monitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                workspaces.findById(workspaceId).orElseThrow(),
+                repository.getNameWithOwner(),
+                repository.getNativeId()));
+        var syncTargets = context.getBean(SyncTargetProvider.class);
+        IdentityProvider provider = IdentityProviderFixtures.gitHub(providers);
+        syncTargets.recordRepositoryLoss(syncTargets.beginReadersProof(
+                workspaceId, monitor.getId(), repository.getNativeId(), Objects.requireNonNull(provider.getId())));
+        var read = syncTargets.beginReadersProof(
+                workspaceId, monitor.getId(), repository.getNativeId(), Objects.requireNonNull(provider.getId()));
+        var visibility = privateRepository ? Repository.Visibility.PRIVATE : Repository.Visibility.PUBLIC;
+        serveRepositoryMetadata(repository, visibility);
+
+        var synced = repositories()
+                .syncRepository(workspaceId, repository.getNameWithOwner(), provider, repository.getNativeId(), read);
+
+        assertThat(synced).get().extracting(Repository::getVisibility).isEqualTo(visibility);
+        var recovered = monitors.findById(monitor.getId()).orElseThrow();
+        assertThat(recovered.getUnavailableSince()).isNull();
+        assertThat(recovered.getUnavailableRetryAt()).isNull();
+        assertThat(recovered.getRepositoryVisibilityConfirmedAt())
+                .isEqualTo(privateRepository ? null : read.requestedAt());
+        assertThat(recovered.getReaders().getProofGeneration()).isGreaterThan(read.generation());
+        assertThat(recovered.getReaders().getProofReason())
+                .isEqualTo(privateRepository ? ProofReason.AWAITING_READERS : ProofReason.PUBLIC_ON_PROVIDER);
+        assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
+    }
+
+    @Test
+    void shouldKeepPublicActivityClosedAfterADelayedPublicResponse() {
+        var mirrors = context.getBean(RepositoryRepository.class);
+        var repository = mirrors.findById(repositoryId).orElseThrow();
+        var provider = IdentityProviderFixtures.gitHub(providers);
+        var workspace = workspaces.findById(workspaceId).orElseThrow();
+        jdbc.update(
+                "UPDATE workspace SET organization_id = ? WHERE id = ?",
+                organization().getId(),
+                workspaceId);
+        var monitor = context.getBean(RepositoryToMonitorRepository.class)
+                .saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                        workspace, repository.getNameWithOwner(), repository.getNativeId()));
+        var syncTargets = context.getBean(SyncTargetProvider.class);
+        long providerId = Objects.requireNonNull(provider.getId());
+        confirm(
+                context.getBean(RepositoryObservationStore.class),
+                syncTargets.beginReadersProof(workspaceId, monitor.getId(), repository.getNativeId(), providerId),
+                true);
+        var activity = context.getBean(ActivityPeopleService.class);
+        var range = new ActivityPeopleRangeParams(null, null, null);
+        assertThat(activity.publicPeople(workspaceId, range, Set.of(), true).repositories())
+                .hasSize(1);
+
+        var older = syncTargets.beginReadersProof(workspaceId, monitor.getId(), repository.getNativeId(), providerId);
+        var newer = syncTargets.beginReadersProof(workspaceId, monitor.getId(), repository.getNativeId(), providerId);
+        var sync = repositories();
+        serveRepositoryMetadata(repository, Repository.Visibility.PRIVATE);
+        assertThat(sync.syncRepository(
+                        workspaceId, repository.getNameWithOwner(), provider, repository.getNativeId(), newer))
+                .isPresent();
+        assertThat(activity.publicPeople(workspaceId, range, Set.of(), true).repositories())
+                .isEmpty();
+
+        serveRepositoryMetadata(repository, Repository.Visibility.PUBLIC);
+        var rejected = catchThrowable(() -> sync.syncRepository(
+                workspaceId, repository.getNameWithOwner(), provider, repository.getNativeId(), older));
+
+        assertSoftly(softly -> {
+            softly.assertThat(mirrors.findById(repositoryId).orElseThrow().getVisibility())
+                    .isEqualTo(Repository.Visibility.PRIVATE);
+            softly.assertThat(activity.publicPeople(workspaceId, range, Set.of(), true)
+                            .repositories())
+                    .isEmpty();
+            softly.assertThat(rejected).isInstanceOf(StaleRepositoryMetadataException.class);
+        });
+    }
+
+    private void serveRepositoryMetadata(Repository repository, Repository.Visibility visibility) {
+        serve("""
+            {"data":{%s,"repository":{"databaseId":%d,"name":"repo","nameWithOwner":"%s",
+            "url":"https://github.com/%s","isPrivate":%b,"visibility":"%s",
+            "isArchived":false,"isDisabled":false}}}
+            """.formatted(
+                        RATE_LIMIT,
+                        repository.getNativeId(),
+                        repository.getNameWithOwner(),
+                        repository.getNameWithOwner(),
+                        visibility == Repository.Visibility.PRIVATE,
+                        visibility));
     }
 
     @Test
@@ -414,7 +526,8 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         Organization organization = organization();
         String unreached = "IT_task-" + organization.getId();
         jdbc.update(
-                "INSERT INTO issue_type(native_id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
+                "INSERT INTO issue_type(native_id,name,color,is_enabled,organization_id,last_sync_at) VALUES"
+                        + " (?,?,?,true,?,now())",
                 unreached,
                 "Task",
                 "BLUE",
@@ -453,7 +566,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                 GitHubRepositorySyncService.class,
                 new GitHubRepositorySyncService(
                         clients,
-                        context.getBean(RepositoryRepository.class),
+                        context.getBean(RepositoryObservationStore.class),
                         context.getBean(OrganizationRepository.class),
                         context.getBean(GitHubSyncProperties.class),
                         context.getBean(GitHubExceptionClassifier.class),
@@ -461,7 +574,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         context.getBean("gitHubGraphQlWebClient", WebClient.class),
                         context.getBean(TransactionTemplate.class),
                         List.of(),
-                        List.of()));
+                        List.of(context.getBean(SyncTargetProvider.class))));
     }
 
     private GitHubTeamSyncService teams() {

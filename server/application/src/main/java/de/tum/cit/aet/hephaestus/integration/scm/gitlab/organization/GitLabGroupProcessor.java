@@ -52,11 +52,16 @@ public class GitLabGroupProcessor {
      *
      * @param group      the GitLab group GraphQL response
      * @param providerId the FK ID of the IdentityProvider entity
-     * @return the persisted Organization entity, or null if the response is invalid
+     * @return the persisted organization ID, or null if the response is invalid
      */
     @Transactional
+    public @Nullable Long processId(@Nullable GitLabGroupResponse group, Long providerId) {
+        var organization = process(group, providerId);
+        return organization == null ? null : organization.getId();
+    }
+
     @Nullable
-    public Organization process(@Nullable GitLabGroupResponse group, Long providerId) {
+    Organization process(@Nullable GitLabGroupResponse group, Long providerId) {
         if (group == null || group.id() == null || group.fullPath() == null || group.webUrl() == null) {
             log.warn("Skipped group processing: reason=nullOrMissingFields");
             return null;
@@ -70,15 +75,14 @@ public class GitLabGroupProcessor {
             return null;
         }
 
-        Organization organization = organizationRepository
-                .findByNativeIdAndProviderId(nativeId, providerId)
-                .orElseGet(() -> {
-                    Organization org = new Organization();
-                    org.setNativeId(nativeId);
-                    org.setProvider(providerNamespaces.referenceForMirror(providerId));
-                    org.setCreatedAt(Instant.now());
-                    return org;
-                });
+        var existing = organizationRepository.findByNativeIdAndProviderId(nativeId, providerId);
+        Organization organization = existing.orElseGet(() -> {
+            Organization org = new Organization();
+            org.setNativeId(nativeId);
+            org.setProvider(providerNamespaces.referenceForMirror(providerId));
+            org.setCreatedAt(Instant.now());
+            return org;
+        });
 
         // Update mutable fields
         organization.setLogin(group.fullPath());
@@ -88,7 +92,7 @@ public class GitLabGroupProcessor {
         organization.setLastSyncAt(Instant.now());
 
         Organization saved = organizationRepository.save(organization);
-        if (organization.getId() == null) {
+        if (existing.isEmpty()) {
             log.debug("Created organization from GitLab group: nativeId={}, login={}", nativeId, group.fullPath());
         } else {
             log.debug("Updated organization from GitLab group: nativeId={}, login={}", nativeId, group.fullPath());

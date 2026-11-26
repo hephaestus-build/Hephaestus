@@ -76,7 +76,7 @@ class GitHubAccountRenameRepositoryIdentityIntegrationTest extends BaseIntegrati
         var foreignBefore = state(foreignId);
         var outsideBefore = state(outsideId);
 
-        listener.handleAccountRename(installationId, oldLogin, newLogin);
+        listener.handleAccountRename(installationId, oldLogin, newLogin, Instant.EPOCH);
 
         var correctAfter = state(correctId);
         var foreignAfter = state(foreignId);

@@ -212,6 +212,7 @@ public class GitLabRouteWrites {
         if (Boolean.TRUE.equals(monitoredKnown)) {
             return true;
         }
+        var metadata = projectAdmission.beginRepositoryReads(read);
         GitLabProjectResponse reported =
                 projectSyncService.fetchProject(route.workspaceId(), path).orElse(null);
         if (reported == null
@@ -233,7 +234,8 @@ public class GitLabRouteWrites {
                                         .findByNativeIdAndProviderId(extractId(reported), route.providerId())
                                         .isPresent();
                             }
-                            Optional<Repository> stored = projectSyncService.persistProject(reported);
+                            Optional<Repository> stored = projectSyncService.persistProject(
+                                    reported, metadata.forRepository(extractId(reported)));
                             stored.ifPresent(repository -> monitorIfAllowed(route, repository));
                             return stored.isPresent();
                         })
@@ -241,6 +243,7 @@ public class GitLabRouteWrites {
     }
 
     private boolean admitProjectEvent(AdmittedRoute route, long nativeId, GitLabProjectAdmission.ConnectionRead read) {
+        var metadata = projectAdmission.beginRepositoryReads(read).forRepository(nativeId);
         final GitLabProjectResponse reported;
         try {
             reported = projectSyncService
@@ -249,11 +252,7 @@ public class GitLabRouteWrites {
         } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
             transaction.executeWithoutResult(status -> {
                 if (holdActive(route) && DeliveryInbox.claim("gitlab.route.unavailable." + nativeId)) {
-                    ownMonitors(route, nativeId).stream()
-                            .filter(monitor -> read.originalMonitors().values().stream()
-                                    .anyMatch(ids -> ids.contains(monitor.getId())))
-                            .forEach(monitor -> syncTargetProvider.recordRepositoryUnavailable(
-                                    route.workspaceId(), monitor.getId()));
+                    syncTargetProvider.recordRepositoryLoss(metadata);
                 }
             });
             return false;
@@ -280,7 +279,7 @@ public class GitLabRouteWrites {
                                     Objects.requireNonNull(reported.fullPath()),
                                     gitLabProperties.defaultServerUrl(),
                                     () -> projectSyncService
-                                            .persistProject(reported)
+                                            .persistProject(reported, metadata)
                                             .orElse(null))
                             .orElse(null)
                     : null;

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationTargetEventDTO;
+import java.time.Instant;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +52,16 @@ public class GitHubInstallationTargetMessageHandler
     }
 
     @Override
+    protected void dispatchEvent(GitHubInstallationTargetEventDTO event, Instant arrivedAt) {
+        handleOnce(() -> handleEvent(event, arrivedAt));
+    }
+
+    @Override
     protected void handleEvent(GitHubInstallationTargetEventDTO event) {
+        handleEvent(event, Instant.EPOCH);
+    }
+
+    private void handleEvent(GitHubInstallationTargetEventDTO event, Instant arrivedAt) {
         if (event.actionType() != GitHubEventAction.InstallationTarget.RENAMED) {
             return;
         }
@@ -77,7 +87,7 @@ public class GitHubInstallationTargetMessageHandler
             previousLogin = event.changes().login().from();
         }
 
-        provisioningListener.onAccountRenamed(installationId, previousLogin, newLogin);
+        provisioningListener.onAccountRenamed(installationId, previousLogin, newLogin, arrivedAt);
         upsertOrganization(event, installationId, newLogin);
 
         log.info("Processed installation_target rename: installationId={}", installationId);

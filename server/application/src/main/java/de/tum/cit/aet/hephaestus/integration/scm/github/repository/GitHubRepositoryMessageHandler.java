@@ -11,12 +11,16 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -51,12 +55,14 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
     private final ProvisioningListener provisioningListener;
     private final RepositoryRepository repositoryRepository;
+    private final RepositoryObservationStore observations;
     private final IdentityProviderLookup identityProviders;
     private final SyncTargetProvider syncTargetProvider;
 
     GitHubRepositoryMessageHandler(
             ProvisioningListener provisioningListener,
             RepositoryRepository repositoryRepository,
+            RepositoryObservationStore observations,
             IdentityProviderLookup identityProviders,
             SyncTargetProvider syncTargetProvider,
             EventPayloadDeserializer deserializer,
@@ -74,12 +80,22 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                 transactionTemplate);
         this.provisioningListener = provisioningListener;
         this.repositoryRepository = repositoryRepository;
+        this.observations = observations;
         this.identityProviders = identityProviders;
         this.syncTargetProvider = syncTargetProvider;
     }
 
     @Override
+    protected void dispatchEvent(GitHubRepositoryEventDTO event, Instant arrivedAt) {
+        handleOnce(() -> handleEvent(event, arrivedAt));
+    }
+
+    @Override
     protected void handleEvent(GitHubRepositoryEventDTO event) {
+        handleEvent(event, Instant.EPOCH);
+    }
+
+    private void handleEvent(GitHubRepositoryEventDTO event, Instant arrivedAt) {
         var repositoryRef = event.repository();
 
         if (repositoryRef == null) {
@@ -103,14 +119,17 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                 repositoryId);
 
         switch (action) {
-            case DELETED -> handleRepositoryDeleted(event, fullName, safeFullName);
-            case ARCHIVED -> handleRepositoryArchived(repositoryRef.id(), fullName, safeFullName, true);
-            case UNARCHIVED -> handleRepositoryArchived(repositoryRef.id(), fullName, safeFullName, false);
+            case DELETED -> handleRepositoryDeleted(event, fullName, safeFullName, arrivedAt);
+            case ARCHIVED ->
+                handleRepositoryArchived(
+                        repositoryRef.id(), fullName, safeFullName, true, repositoryRef.isPrivate(), arrivedAt);
+            case UNARCHIVED ->
+                handleRepositoryArchived(
+                        repositoryRef.id(), fullName, safeFullName, false, repositoryRef.isPrivate(), arrivedAt);
             // A transfer carries the same payload shape as a rename (only the changed component
             // differs: changes.owner vs changes.repository.name) and needs the identical healing.
-            case RENAMED, TRANSFERRED -> handleRepositoryMoved(event, safeFullName);
-            case PRIVATIZED -> handleVisibilityChanged(repositoryRef.id(), fullName, safeFullName, true);
-            case PUBLICIZED -> handleVisibilityChanged(repositoryRef.id(), fullName, safeFullName, false);
+            case RENAMED, TRANSFERRED -> handleRepositoryMoved(event, safeFullName, arrivedAt);
+            case PRIVATIZED -> handlePrivatized(repositoryRef.id(), fullName, arrivedAt);
             default ->
                 log.debug(
                         "Skipped repository event: reason=unhandledAction, action={}, repoName={}",
@@ -123,13 +142,14 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
      * Cleans up local state on repository deletion, via the ProvisioningListener SPI, preventing
      * future sync attempts from failing with NOT_FOUND errors.
      */
-    private void handleRepositoryDeleted(GitHubRepositoryEventDTO event, String fullName, String safeFullName) {
+    private void handleRepositoryDeleted(
+            GitHubRepositoryEventDTO event, String fullName, String safeFullName, Instant arrivedAt) {
         var installation = event.installation();
 
         if (installation == null || installation.id() == null) {
             log.warn("Cannot clean up deleted repository - missing installation ID: repoName={}", safeFullName);
             deleteRepository(
-                    event.repository() == null ? null : event.repository().id(), fullName, safeFullName);
+                    event.repository() == null ? null : event.repository().id(), fullName, safeFullName, arrivedAt);
             return;
         }
 
@@ -139,8 +159,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
         // The mirror row stays while another workspace monitors the repository. A deleted repository is visible to no
         // one, so the row stops showing it public, which narrows every workspace's monitor in the same write.
-        handleVisibilityChanged(
-                event.repository() == null ? null : event.repository().id(), fullName, safeFullName, true);
+        handlePrivatized(event.repository() == null ? null : event.repository().id(), fullName, arrivedAt);
 
         provisioningListener.onRepositoriesRemoved(
                 installationId,
@@ -153,20 +172,34 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
     /**
      * Fallback deletion when installation ID is not available.
      */
-    private void deleteRepository(@Nullable Long nativeId, String fullName, String safeFullName) {
+    private void deleteRepository(@Nullable Long nativeId, String fullName, String safeFullName, Instant arrivedAt) {
         findGitHubRepository(nativeId, fullName).ifPresent(repository -> {
-            repositoryRepository.delete(repository);
+            observations.observe(
+                    RepositoryObservationStore.providerEvent(githubProviderId(), repository.getNativeId(), arrivedAt),
+                    Observation.deleted());
             log.info("Deleted repository directly: repoName={}", safeFullName);
         });
     }
 
     private void handleRepositoryArchived(
-            @Nullable Long nativeId, String fullName, String safeFullName, boolean archived) {
+            @Nullable Long nativeId,
+            String fullName,
+            String safeFullName,
+            boolean archived,
+            boolean isPrivate,
+            Instant arrivedAt) {
         findGitHubRepository(nativeId, fullName)
                 .ifPresentOrElse(
                         repository -> {
-                            repository.setArchived(archived);
-                            repositoryRepository.save(repository);
+                            var read = RepositoryObservationStore.providerEvent(
+                                    githubProviderId(), repository.getNativeId(), arrivedAt);
+                            var patch = Map.<String, @Nullable Object>of("is_archived", archived);
+                            var stored = observations.observe(
+                                    read,
+                                    isPrivate
+                                            ? Observation.read(read, Repository.Visibility.PRIVATE, patch)
+                                            : Observation.metadata(patch));
+                            if (!stored.applied()) return;
                             log.info(
                                     "Updated repository archived status: repoName={}, archived={}",
                                     safeFullName,
@@ -176,6 +209,12 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                                 "Repository not found locally for archive update: repoName={}, archived={}",
                                 safeFullName,
                                 archived));
+    }
+
+    private long githubProviderId() {
+        return identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                .orElseThrow();
     }
 
     private Optional<Repository> findGitHubRepository(@Nullable Long nativeId, String nameWithOwner) {
@@ -205,7 +244,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
      * never reaches the old workspace's org filter; that case heals on the next reconcile pass, which
      * resolves the monitor by {@code nativeId}.
      */
-    private void handleRepositoryMoved(GitHubRepositoryEventDTO event, String safeNewFullName) {
+    private void handleRepositoryMoved(GitHubRepositoryEventDTO event, String safeNewFullName, Instant arrivedAt) {
         GitHubRepositoryRefDTO repositoryRef = event.repository();
         if (repositoryRef == null) {
             return;
@@ -236,26 +275,24 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
             return;
         }
 
-        resolveMovedRepository(providerId, nativeId, previousNameWithOwner)
-                .ifPresentOrElse(
-                        repository -> {
-                            repository.setName(newName);
-                            repository.setNameWithOwner(newFullName);
-                            repository.setHtmlUrl(GITHUB_SERVER_URL + "/" + newFullName);
-                            repositoryRepository.save(repository);
-                            log.info(
-                                    "Renamed repository: action={}, oldName={}, newName={}, nativeId={}",
-                                    event.action(),
-                                    safeOldFullName,
-                                    safeNewFullName,
-                                    nativeId);
-                        },
-                        () -> log.debug(
-                                "Repository not found locally for {}: oldName={}, newName={}, nativeId={}",
-                                event.action(),
-                                safeOldFullName,
-                                safeNewFullName,
-                                nativeId));
+        var resolved = resolveMovedRepository(providerId, nativeId, previousNameWithOwner);
+        if (resolved.isPresent()) {
+            var repository = resolved.orElseThrow();
+            var read = RepositoryObservationStore.providerEvent(providerId, repository.getNativeId(), arrivedAt);
+            var patch = RepositoryObservationStore.path(newFullName, newName, GITHUB_SERVER_URL + "/" + newFullName);
+            var result = observations.observe(
+                    read,
+                    repositoryRef.isPrivate()
+                            ? Observation.read(read, Repository.Visibility.PRIVATE, patch)
+                            : Observation.metadata(patch));
+            if (!result.applied()) return;
+            log.info(
+                    "Renamed repository: action={}, oldName={}, newName={}, nativeId={}",
+                    event.action(),
+                    safeOldFullName,
+                    safeNewFullName,
+                    nativeId);
+        }
 
         // Always attempt the monitor re-key, even when no domain row is mirrored yet: the monitor
         // is what the provider inbox filter is built from, so leaving it stale is the actual data-loss path.
@@ -277,27 +314,19 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                 : repositoryRepository.findByNameWithOwnerAndProviderId(previousNameWithOwner, providerId);
     }
 
-    private void handleVisibilityChanged(
-            @Nullable Long nativeId, String fullName, String safeFullName, boolean isPrivate) {
-        findGitHubRepository(nativeId, fullName)
-                .ifPresentOrElse(
-                        repository -> {
-                            repository.setVisibility(
-                                    isPrivate ? Repository.Visibility.PRIVATE : Repository.Visibility.PUBLIC);
-                            repositoryRepository.save(repository);
-                            log.info(
-                                    "Updated repository visibility: repoName={}, visibility={}",
-                                    safeFullName,
-                                    isPrivate ? "PRIVATE" : "PUBLIC");
-                        },
-                        () -> log.debug(
-                                "Repository not found locally for visibility update: repoName={}, private={}",
-                                safeFullName,
-                                isPrivate));
-        // The event is an answer of its own: it narrows also when the row already held the repository private, and so
-        // wrote nothing, or when no row is stored.
-        if (isPrivate && nativeId != null) {
-            syncTargetProvider.recordRepositoryPrivatized(nativeId);
+    private void handlePrivatized(@Nullable Long nativeId, String fullName, Instant arrivedAt) {
+        Long resolved = nativeId != null
+                ? nativeId
+                : findGitHubRepository(null, fullName)
+                        .map(Repository::getNativeId)
+                        .orElse(null);
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                .orElse(null);
+        if (providerId != null && resolved != null) {
+            observations.observe(
+                    RepositoryObservationStore.providerEvent(providerId, resolved, arrivedAt),
+                    Observation.privateRepository());
         }
     }
 }

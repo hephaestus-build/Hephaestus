@@ -156,12 +156,14 @@ CROSS JOIN (VALUES
 WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 ON CONFLICT (id) DO NOTHING;
 
--- Public reads require a current visibility confirmation, not just a repository marked PUBLIC.
+-- Public reads require a current confirmation from a public observation of the same monitor.
 INSERT INTO repository_to_monitor (id, name_with_owner, workspace_id, native_id, generated_paths,
-  repository_visibility_confirmed_at)
-SELECT id, name_with_owner, 9, native_id, '[]'::jsonb, now()
+  repository_visibility_confirmed_at, public_observation_at)
+SELECT id, name_with_owner, 9, native_id, '[]'::jsonb, statement_timestamp(), statement_timestamp()
 FROM repository WHERE id IN (930001, 930002, 930003)
-ON CONFLICT (id) DO UPDATE SET repository_visibility_confirmed_at = EXCLUDED.repository_visibility_confirmed_at;
+ON CONFLICT (id) DO UPDATE SET
+  repository_visibility_confirmed_at = EXCLUDED.repository_visibility_confirmed_at,
+  public_observation_at = EXCLUDED.public_observation_at;
 
 INSERT INTO issue (issue_type, id, native_id, provider_id, created_at, updated_at, comments_count, html_url,
   is_locked, number, state, title, is_draft, is_merged, commits, additions, deletions, changed_files,

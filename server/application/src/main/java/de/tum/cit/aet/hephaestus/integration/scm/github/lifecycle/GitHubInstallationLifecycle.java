@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -20,8 +22,12 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import java.time.Instant;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +51,7 @@ public class GitHubInstallationLifecycle {
     private final WorkspaceRepositoryMonitors monitors;
     private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
+    private final RepositoryObservationStore observations;
     private final IdentityProviderLookup identityProviders;
 
     private final ConnectionService connectionService;
@@ -59,6 +66,7 @@ public class GitHubInstallationLifecycle {
             WorkspaceRepositoryMonitors monitors,
             RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
+            RepositoryObservationStore observations,
             IdentityProviderLookup identityProviders,
             ConnectionService connectionService,
             WorkspaceLifecycleService workspaceLifecycleService,
@@ -70,6 +78,7 @@ public class GitHubInstallationLifecycle {
         this.monitors = monitors;
         this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
+        this.observations = observations;
         this.identityProviders = identityProviders;
         this.connectionService = connectionService;
         this.workspaceLifecycleService = workspaceLifecycleService;
@@ -239,7 +248,8 @@ public class GitHubInstallationLifecycle {
      * @param newLogin       the new account login
      */
     @Transactional
-    public void handleAccountRename(long installationId, @Nullable String previousLogin, String newLogin) {
+    public void handleAccountRename(
+            long installationId, @Nullable String previousLogin, String newLogin, Instant observedAt) {
         if (isBlank(newLogin)) {
             log.warn("Skipped account rename: reason=missingTargetLogin, installationId={}", installationId);
             return;
@@ -253,8 +263,8 @@ public class GitHubInstallationLifecycle {
                             String oldLogin = !isBlank(previousLogin) ? previousLogin : workspace.getAccountLogin();
                             workspaces.renameAccount(workspace.getId(), newLogin);
                             if (oldLogin != null) {
-                                retargetRepositoryMonitors(workspace, oldLogin, newLogin);
-                                renameTrackedRepositories(oldLogin, newLogin);
+                                var stale = renameTrackedRepositories(oldLogin, newLogin, observedAt);
+                                retargetRepositoryMonitors(workspace, oldLogin, newLogin, stale);
                             }
                         },
                         () -> log.warn(
@@ -264,7 +274,7 @@ public class GitHubInstallationLifecycle {
 
     // Private helpers
 
-    private void retargetRepositoryMonitors(Workspace workspace, String oldLogin, String newLogin) {
+    private void retargetRepositoryMonitors(Workspace workspace, String oldLogin, String newLogin, Set<String> stale) {
         if (workspace == null || isBlank(oldLogin) || isBlank(newLogin) || oldLogin.equalsIgnoreCase(newLogin)) {
             return;
         }
@@ -273,7 +283,7 @@ public class GitHubInstallationLifecycle {
         var existing = monitors.monitors(workspace.getId());
         existing.forEach(monitor -> {
             String current = monitor.getNameWithOwner();
-            if (current == null) {
+            if (current == null || stale.contains(current.toLowerCase(Locale.ENGLISH))) {
                 return;
             }
             String normalized = current.toLowerCase(Locale.ENGLISH);
@@ -299,9 +309,9 @@ public class GitHubInstallationLifecycle {
         });
     }
 
-    private void renameTrackedRepositories(String oldLogin, String newLogin) {
+    private Set<String> renameTrackedRepositories(String oldLogin, String newLogin, Instant observedAt) {
         if (isBlank(oldLogin) || isBlank(newLogin) || oldLogin.equalsIgnoreCase(newLogin)) {
-            return;
+            return Set.of();
         }
 
         String prefix = oldLogin + "/";
@@ -309,11 +319,13 @@ public class GitHubInstallationLifecycle {
                 .findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
         var repositories =
-                repositoryRepository.findByNameWithOwnerStartingWithIgnoreCaseAndProviderId(prefix, providerId);
+                repositoryRepository.findByNameWithOwnerStartingWithIgnoreCaseAndProviderIdOrderByNativeIdAsc(
+                        prefix, providerId);
         if (repositories.isEmpty()) {
-            return;
+            return Set.of();
         }
 
+        Set<String> stale = new HashSet<>();
         repositories.forEach(repository -> {
             String current = repository.getNameWithOwner();
             if (current == null) {
@@ -324,10 +336,13 @@ public class GitHubInstallationLifecycle {
                 return;
             }
             String suffix = current.substring(slashIndex);
-            repository.setNameWithOwner(newLogin + suffix);
-            repository.setHtmlUrl("https://github.com/" + repository.getNameWithOwner());
+            String path = newLogin + suffix;
+            var result = observations.observe(
+                    RepositoryObservationStore.providerEvent(providerId, repository.getNativeId(), observedAt),
+                    Observation.metadata(Map.of("name_with_owner", path, "html_url", "https://github.com/" + path)));
+            if (!result.applied()) stale.add(current.toLowerCase(Locale.ENGLISH));
         });
-        repositoryRepository.saveAll(repositories);
+        return stale;
     }
 
     private boolean isBlank(@Nullable String value) {
