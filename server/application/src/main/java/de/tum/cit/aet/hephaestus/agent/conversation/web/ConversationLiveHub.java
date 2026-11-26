@@ -397,9 +397,12 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                     read(() -> snapshot(stream));
                 }
             } catch (IOException | RuntimeException gone) {
+                Throwable cause = gone instanceof UncheckedIOException failure
+                        ? Objects.requireNonNullElse(failure.getCause(), gone)
+                        : gone;
                 log.debug(
                         "Hephaestus live stream closed while sending: {}",
-                        gone.getClass().getSimpleName());
+                        cause.getClass().getSimpleName());
                 close(stream);
                 return;
             }
