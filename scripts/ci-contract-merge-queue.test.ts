@@ -92,15 +92,21 @@ void test("PR and enqueue checks reject stale migration names before the downstr
 	};
 	const check = (event: Record<string, unknown>, eventName: string) => {
 		const github = { event_name: eventName, event };
-		assert.equal(expandExpressions(`\${{ ${String(order.get("if"))} }}`, { github }), "true");
+		const steps = { group_base: { outputs: { sha: git("merge-base", "main", "HEAD") } } };
+		const expressions = { github, steps };
+		assert.equal(expandExpressions(`\${{ ${String(order.get("if"))} }}`, expressions), "true");
 		const variables = {
 			...env,
-			EVENT_BASE: expandExpressions(order.getIn(["env", "EVENT_BASE"]), { github }),
+			EVENT_BASE: expandExpressions(order.getIn(["env", "EVENT_BASE"]), expressions),
+			QUEUE_PARENT: expandExpressions(order.getIn(["env", "QUEUE_PARENT"]), expressions),
 			ORDER_SCRIPT: path.resolve("scripts/reorder-migrations.ts"),
 		};
 		return spawnSync(
 			"bash",
-			["-ec", String(order.get("run")).replace("scripts/reorder-migrations.ts", '"$ORDER_SCRIPT"')],
+			[
+				"-ec",
+				String(order.get("run")).replaceAll("scripts/reorder-migrations.ts", '"$ORDER_SCRIPT"'),
+			],
 			{
 				cwd,
 				env: variables,
@@ -136,6 +142,21 @@ void test("PR and enqueue checks reject stale migration names before the downstr
 	assert.ok(
 		rejectedQueue.stderr.includes(`git mv -- ${migrationFile("04-pr")} ${migrationFile("06-pr")}`),
 		rejectedQueue.stderr,
+	);
+
+	git("switch", "-qc", "stale-queue", originalMain);
+	const staleFile = migrationFile("02-ahead");
+	const staleAhead = await add(staleFile);
+	git("commit", "--allow-empty", "-qm", "next queue entry adds no migrations");
+	const rejectedStaleQueue = check({ merge_group: { base_sha: staleAhead } }, "merge_group");
+	assert.equal(
+		rejectedStaleQueue.status,
+		1,
+		"the passing queue entry would merge the stale migration from the entry ahead of it",
+	);
+	assert.ok(
+		rejectedStaleQueue.stderr.includes(`git mv -- ${staleFile} ${migrationFile("04-ahead")}`),
+		rejectedStaleQueue.stderr,
 	);
 });
 

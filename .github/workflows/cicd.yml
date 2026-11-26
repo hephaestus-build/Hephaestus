@@ -267,11 +267,18 @@ jobs:
         with:
           install: "none"
 
+      # A passing group can merge entries ahead of it, so check the whole group before comparing
+      # its own additions with the preceding entry.
       - name: Check migration order against current main
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        run: node scripts/reorder-migrations.ts --check --from "$EVENT_BASE"
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || steps.group_base.outputs.sha }}
+          QUEUE_PARENT: ${{ github.event.merge_group.base_sha }}
+        run: |
+          node scripts/reorder-migrations.ts --check --from "$EVENT_BASE"
+          if [ -n "$QUEUE_PARENT" ] && [ "$QUEUE_PARENT" != "$EVENT_BASE" ]; then
+            node scripts/reorder-migrations.ts --check --from "$QUEUE_PARENT"
+          fi
 
       # Changesets that merged ahead of the Version PR in the queue stay unconsumed at its commit, and a
       # release there would ship changes without their notes. The group fails and names them, so the
@@ -1395,8 +1402,9 @@ jobs:
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
-      # The upgrade and startup checks use this commit's PostgreSQL image.
-      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.seeded-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false' }}
+      # Image inputs decide whether a PR aliases PostgreSQL. The `postgres` input below selects the
+      # additional image builds needed for upgrade and startup checks.
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
       dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false' }}
       application-artifact: server-build-${{ github.run_id }}

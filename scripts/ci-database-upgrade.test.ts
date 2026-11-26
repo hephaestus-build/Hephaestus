@@ -89,7 +89,7 @@ void test("a main push or merge group that changes the upgrade inputs runs it on
 	);
 	const docker = record(record(jobs.Docker, "Docker").with, "Docker.with");
 	assert.match(
-		String(docker.postgres_image_changed),
+		String(docker.postgres),
 		/needs\.detect-changes\.outputs\.seeded-upgrade == 'true'/u,
 	);
 
