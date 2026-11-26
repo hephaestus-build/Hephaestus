@@ -5234,10 +5234,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     item.itemId(),
                     ScmItemEvents.PULL_REQUEST_SYNCHRONIZED,
                     prepared.version().value(),
+                    null,
                     older.getOccurredAt().plusSeconds(1),
                     FoundBy.WEBHOOK,
                     null,
-                    null))));
+                    null,
+                    source.retain(item, prepared.version(), FoundBy.WEBHOOK)))));
             assertThat(events.findById(newer).orElseThrow().getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
             // Restore the unsettled occasion and close its window with a distinct event for the same version.
             jdbc.update(
