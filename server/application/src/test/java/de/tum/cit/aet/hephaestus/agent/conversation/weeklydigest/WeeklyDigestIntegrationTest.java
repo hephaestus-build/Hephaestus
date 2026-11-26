@@ -781,7 +781,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 ConversationTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null);
     }
 
-    private Map<String, Object> item(UUID conversationId) {
+    private Map<String, @Nullable Object> item(UUID conversationId) {
         return jdbcTemplate.queryForMap(
                 "SELECT state, reason, starts, attempts, turn_id FROM inbox_item WHERE workspace_id=?"
                         + " AND conversation_id=? AND source_key=?",
