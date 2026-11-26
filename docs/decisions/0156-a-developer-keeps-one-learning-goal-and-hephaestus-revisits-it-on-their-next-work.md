@@ -53,7 +53,7 @@ Option 7.
 2. **One visibility rule: only the owner reads a goal fact.**
    - A goal fact is anything that shows whether a person has a goal, or what it holds. That is the chosen practice, the note, the check-in date and its answers, each revisit with its status and reflection, and the journal facts of decision 10.
    - The goal module reads goal facts only for the owner: for the signed-in owner in their own app, and for the owner's own export.
-   - Row-level security binds the owner account to each transaction that reads a goal row. Every other reader gets no row.
+   - Row-level security checks the bound owner account and the goal operation at each row read. Binding the owner for a conversation or a staff request gives no access to goal rows.
    - Every other destination reads nothing of a goal, not even whether one exists:
      - a turn in the app, and a turn in Slack at each detail level;
      - a summary, the composer, a review and a notification;
@@ -146,8 +146,9 @@ Option 7.
       - A goal deletion names the goal and its revisits. Its replay deletes them.
       - A Forget names one revisit. Its replay applies the Forget row of decision 5: a `WORK` revisit keeps only its item key, and a `CHECK_IN` revisit goes.
     - Both fact kinds hold goal and revisit IDs only, never an account ID. So no person-data read of the journal finds them (decision 2). A replay finds the owner from the restored row.
-    - Goals need no journal bucket. Without one, the manual recovery of [ADR 0140](0140-privacy-facts-go-to-a-journal-and-a-restore-reapplies-them.md) decision 10 covers both kinds, from their log events with kind and IDs.
+    - Goals need no journal bucket. Without one, the manual recovery of [ADR 0140](0140-privacy-facts-go-to-a-journal-and-a-restore-reapplies-them.md) decision 10 covers both kinds. Only the restricted recovery log records their kinds and IDs.
     - Delete, Forget, the retention job and the end of a leaving window withdraw each export of the owner that is in flight or ready, in their own transaction. They take the export row lock that publication takes, so a bundle assembled before the erasure is never published. A withdrawn export keeps no payload. A replay withdraws the exports too. The owner can request a new one.
+    - The owner export reads goals only through the end of their leaving window. A bundle that includes such a goal expires by that window's deadline. The download checks the deadline even if the sweep has yet to run.
     - Goals stay off until both fact kinds exist.
 11. **The cascade table of [ADR 0128](0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md) decision 3 gets the dependent kind `GOAL_REVISIT`.**
     - A revisit holds a reference to an observation and no text of it, so its reference is a foreign key that clears when the observation goes, not a `basis_edge`.
@@ -207,7 +208,7 @@ Option 7.
 
 Not enforced yet. The implementing pull request adds these checks, and its review catches a missing one.
 
-One test for each destination of decision 2. Each seeds a goal with a marker in its note and a reflection, an open revisit and a due check-in:
+One test for each destination of decision 2. Each seeds a goal with a marker in its note and a reflection, an open revisit and a due check-in. The app turn, Slack history and staff export tests attempt a goal read with the account already bound. Each fails if the read point checks only the account:
 
 | Destination | Test | It fails when |
 | --- | --- | --- |
@@ -227,7 +228,7 @@ The other checks:
 - RevisitStatusTest has one case for each row of decision 6. It also covers a queued review, a timeout, a reused observation, an Off practice, an On request observation before and after release, two reviews that end in the reverse order of their work, an earlier practice version and **Remove mark**.
 - GoalErasureTest fails in these cases:
   - account erasure, Delete or Forget leaves the note or a reflection in any Hephaestus store, an export included;
-  - an export that was assembled before a Delete or a Forget is published after it;
+  - an export that was assembled before a Delete or a Forget is published after it, or an owner can download a bundle after its leaving deadline and before cleanup;
   - the end of the membership deletes the goal before its window ends, or keeps it after;
   - the retention job deletes a goal during a leaving window;
   - a restore serves a goal or a revisit that a fact deleted, or a Forget fact erases more than its revisit, or keeps a `CHECK_IN` revisit;
