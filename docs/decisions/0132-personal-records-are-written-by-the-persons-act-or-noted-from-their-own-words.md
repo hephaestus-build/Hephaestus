@@ -131,11 +131,12 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 ## Update — 2026-11-26: record kinds, the first save, and the typed read
 
-[ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) changes three decisions and adds one rule.
+[ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) changes four decisions and adds one rule.
 
 - **Decision 2.** A kind enters the schema with its first caller. `GOAL` is first, and `CORRECTION` is second. The other kinds come with the change that writes them.
 - **Decision 11.** The first save is the person's act in **What Hephaestus keeps in mind**, with **Undo**. The save in the conversation waits for the typed read below.
 - **Decision 1.** The person sets help settings in Settings. A turn sets one from the person's own words only after the typed read below opens.
+- **Decision 6.** **Forget** and **Not right** make every entry derived from the record stale. A stale entry stays in the owner's app view with a note. It never reaches a model, Slack or an export again.
 - **New rule: a record reaches a model turn only through a typed server read.** The read binds the record ID and its revision to the attempt's basis before the bytes leave the server. A record never goes into the context folder or its archive. The read stays off until the durable basis records it and a removal fences it.
 
 The reason: each copy path that the reviews of #5222 found came from a private fact that a model read before its basis existed.
