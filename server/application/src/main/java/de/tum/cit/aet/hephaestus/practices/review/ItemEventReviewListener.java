@@ -46,6 +46,7 @@ public class ItemEventReviewListener {
     private final ProductItemQuery items;
     private final WorkspaceQueries workspaces;
     private final ReviewService reviews;
+    private final ReviewRepository reviewRows;
     private final ResultCurrentness currentness;
     private final PracticeItemOptions itemOptions;
     private final Clock clock;
@@ -103,11 +104,16 @@ public class ItemEventReviewListener {
         if (state.isTerminal()) return List.of();
         var item = items.find(recorded.workspaceId(), recorded.itemId());
         if (item.isEmpty()) {
-            if (OccasionSettlement.next(
-                                    state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.WITHDRAWN, null)
+            var outcome = reviewRows
+                            .findCommittedEventIds(
+                                    recorded.workspaceId(), recorded.itemId(), List.of(recorded.eventId()))
+                            .contains(recorded.eventId())
+                    ? OccasionSettlement.Outcome.REPLAYED
+                    : OccasionSettlement.Outcome.WITHDRAWN;
+            if (OccasionSettlement.next(state, OccasionSettlement.Role.NEWEST, outcome, null)
                             .orElseThrow()
-                    instanceof OccasionSettlement.Next.Decide withdrawn)
-                decide(recorded.workspaceId(), recorded.eventId(), state, withdrawn.state(), withdrawn.reason());
+                    instanceof OccasionSettlement.Next.Decide decision)
+                decide(recorded.workspaceId(), recorded.eventId(), state, decision.state(), decision.reason());
             return List.of();
         }
         // The source pins the version later and offers the occasion again; the expiry bounds the wait.
@@ -243,9 +249,20 @@ public class ItemEventReviewListener {
             Instant holdUntil) {
         List<ItemEventService.Open> held = new ArrayList<>();
         ReviewRequestReason holdReason = null;
+        var committed = settlement.outcome() == OccasionSettlement.Outcome.ITEM_UNAVAILABLE
+                ? reviewRows.findCommittedEventIds(
+                        workspaceId,
+                        itemId,
+                        open.stream().map(ItemEventService.Open::id).toList())
+                : Set.<UUID>of();
         for (var waiting : open) {
-            var role = waiting.id().equals(newest) ? OccasionSettlement.Role.NEWEST : OccasionSettlement.Role.OLDER;
-            var next = OccasionSettlement.next(waiting.state(), role, settlement.outcome(), settlement.reason());
+            // A committed review proves its own occasion even when that occasion is older in this window.
+            boolean replay = committed.contains(waiting.id());
+            var role = replay || waiting.id().equals(newest)
+                    ? OccasionSettlement.Role.NEWEST
+                    : OccasionSettlement.Role.OLDER;
+            var outcome = replay ? new Settlement(OccasionSettlement.Outcome.REPLAYED, null) : settlement;
+            var next = OccasionSettlement.next(waiting.state(), role, outcome.outcome(), outcome.reason());
             if (next.isEmpty()) continue;
             switch (next.orElseThrow()) {
                 case OccasionSettlement.Next.Decide decide ->

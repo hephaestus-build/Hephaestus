@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -187,6 +188,12 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     Optional<Review> findByWorkspaceIdAndRequestKey(long workspaceId, UUID requestKey);
 
     Optional<Review> findByWorkspaceIdAndEventId(long workspaceId, UUID eventId);
+
+    @Query("""
+        SELECT r.eventId FROM Review r
+        WHERE r.workspaceId = :workspaceId AND r.itemId = :itemId AND r.eventId IN :eventIds
+        """)
+    Set<UUID> findCommittedEventIds(long workspaceId, long itemId, Collection<UUID> eventIds);
 
     boolean existsByWorkspaceIdAndBatchIdAndItemIdAndStatusNot(
             long workspaceId, UUID batchId, long itemId, ReviewStatus status);
