@@ -352,6 +352,45 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
+    /** Slack limits each Web API method on its own; a throttled history read does not throttle chat.postMessage. */
+    @Test
+    void shouldPostWhenOnlyAHistoryReadOfTheWorkspaceWasThrottled() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            var historyCalls = new AtomicInteger();
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    String path = request.getUrl().encodedPath();
+                    if (path.equals("/api/auth.test")) return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    if (path.equals("/api/conversations.history"))
+                        return historyCalls.getAndIncrement() == 0
+                                ? new MockResponse.Builder()
+                                        .code(429)
+                                        .addHeader("Retry-After", "30")
+                                        .addHeader("Content-Type", "application/json")
+                                        .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                                        .build()
+                                : json("{\"ok\":true,\"messages\":[],\"has_more\":false}");
+                    return json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
+            slackApi.start();
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+
+            try (SlackMessageService local = localService(config)) {
+                local.fetchHistoryPage(7L, "C1ABCDEFGH", "100.000001", "200.000001", null, 15);
+                assertThat(historyCalls).hasValue(2);
+
+                assertThat(local.postAdmitted(
+                                7L,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
+                                () -> true))
+                        .isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
+            }
+        }
+    }
+
     @Test
     void shouldReturnTheFirstPostThrottleToTheOutbox() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
