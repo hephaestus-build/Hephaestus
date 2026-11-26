@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -42,6 +43,7 @@ public class PiResultParser {
     private final DistributionSummary eligiblePractices;
     private final DistributionSummary evaluatedPractices;
     private final DistributionSummary practiceCoverageRatio;
+    private final Counter zeroEvaluatedReviews;
 
     public PiResultParser(ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.objectMapper = objectMapper;
@@ -55,6 +57,9 @@ public class PiResultParser {
         this.practiceCoverageRatio = DistributionSummary.builder(AgentMetrics.AGENT_REVIEW_PRACTICE_COVERAGE_RATIO)
                 .description("Fraction of eligible practices evaluated per review run.")
                 .maximumExpectedValue(1.0)
+                .register(meterRegistry);
+        this.zeroEvaluatedReviews = Counter.builder(AgentMetrics.AGENT_REVIEW_ZERO_EVALUATED)
+                .description("Review attempts reporting eligible practices and zero evaluated practices")
                 .register(meterRegistry);
     }
 
@@ -122,7 +127,10 @@ public class PiResultParser {
             output.put(PRACTICES_EVALUATED, evaluated);
             eligiblePractices.record(eligible);
             evaluatedPractices.record(evaluated);
-            if (eligible > 0) practiceCoverageRatio.record((double) evaluated / eligible);
+            if (eligible > 0) {
+                practiceCoverageRatio.record((double) evaluated / eligible);
+                if (evaluated == 0) zeroEvaluatedReviews.increment();
+            }
             log.info(
                     "Practice review coverage: evaluated={}, eligible={}, ratio={}",
                     evaluated,

@@ -348,6 +348,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
+        jdbc.update(
+                "UPDATE review_job SET execution_started_at = ? WHERE id = ? AND workspace_id = ?",
+                Timestamp.from(Instant.now().minusSeconds(10)),
+                job.getId(),
+                job.getWorkspaceId());
 
         measure(results(metrics), job, fence, SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
 
@@ -360,6 +365,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(RuntimeJobTestData.runState(jdbc, failed)).isEqualTo("ENDED");
         assertThat(metrics.find(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED).counters())
                 .allSatisfy(counter -> assertThat(counter.count()).isZero());
+        var execution = metrics.get(AgentMetrics.AGENT_JOB_DURATION)
+                .tag("phase", "execution")
+                .timer();
+        assertThat(execution.count()).isEqualTo(1);
+        assertThat(execution.totalTime(TimeUnit.SECONDS)).isGreaterThanOrEqualTo(10);
     }
 
     @Test

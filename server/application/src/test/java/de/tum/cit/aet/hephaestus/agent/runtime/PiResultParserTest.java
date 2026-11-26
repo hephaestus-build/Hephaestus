@@ -246,6 +246,29 @@ class PiResultParserTest extends BaseUnitTest {
     }
 
     @Test
+    void countsZeroEvaluatedOnlyWhenValidCoverageReportsEligiblePractices() {
+        var counter = meterRegistry.get("agent.review.zero.evaluated").counter();
+        assertThat(counter.count()).isZero();
+
+        parser.addPracticeCoverage(new HashMap<>(), null);
+        parser.addPracticeCoverage(new HashMap<>(), """
+                {"eligible":1,"evaluated":0,"outcomes":[]}
+                """.getBytes(UTF_8));
+        parser.addPracticeCoverage(new HashMap<>(), """
+                {"eligible":0,"evaluated":0,"outcomes":[]}
+                """.getBytes(UTF_8));
+        parser.addPracticeCoverage(new HashMap<>(), """
+                {"eligible":1,"evaluated":1,"outcomes":[{"practiceSlug":"a","outcome":"EVALUATED"}]}
+                """.getBytes(UTF_8));
+        assertThat(counter.count()).isZero();
+
+        parser.addPracticeCoverage(new HashMap<>(), """
+                {"eligible":1,"evaluated":0,"outcomes":[{"practiceSlug":"a","outcome":"NOT_REACHED"}]}
+                """.getBytes(UTF_8));
+        assertThat(counter.count()).isEqualTo(1);
+    }
+
+    @Test
     void rejectsIncompleteOrContradictoryPracticeCoverage() {
         String[] invalid = {
             "{\"eligible\":2,\"evaluated\":1,\"outcomes\":[]}",

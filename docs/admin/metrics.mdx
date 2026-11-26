@@ -70,6 +70,11 @@ ORDER BY c.workspace_id, p.slug, c.kind, c.change;
 | `agent_job_total`             | Counter   | `outcome` | Committed terminal transitions                                  |
 | `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, and total durations                   |
 | `agent_job_stage_duration_seconds` | Histogram | `stage`, `outcome` | Duration of one stage of a review attempt |
+| `agent_review_practice_coverage_eligible` and `agent_review_practice_coverage_evaluated` | Summary | none | Eligible and evaluated practices per attempt with valid reported coverage. Divide the change in `_sum` by the change in `_count` for the mean in a window |
+| `agent_review_zero_evaluated_total` | Counter | none | Attempts with valid coverage that reports one or more eligible practices and zero evaluated practices |
+
+The `execution` phase measures from the recorded execution start until the server receives the result.
+Attempts that lose their holder before they return a result have their own `agent_run_reaped_total` signal.
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
 `execution`, or `total`. Identifiers, model and provider names, server IDs, and exception text are not
