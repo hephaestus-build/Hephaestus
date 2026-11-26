@@ -224,6 +224,17 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
             nativeQuery = true)
     List<OpenRow> findOpen(@Param("workspaceId") long workspaceId, @Param("itemId") long itemId);
 
+    /** Locks the selected occasions in one order before a review settles its window. */
+    @Query(value = """
+        SELECT id, name, item_version AS itemVersion, state, reason, occurred_at AS occurredAt, decided_at AS decidedAt
+        FROM item_event
+        WHERE workspace_id = :workspaceId AND item_id = :itemId AND id IN (:ids)
+          AND item_version IS NOT NULL AND state IN ('RECORDED', 'WAITING')
+        ORDER BY id FOR UPDATE
+        """, nativeQuery = true)
+    List<OpenRow> lockOpen(
+            @Param("workspaceId") long workspaceId, @Param("itemId") long itemId, @Param("ids") Collection<UUID> ids);
+
     interface OpenRow {
         UUID getId();
 
@@ -304,8 +315,14 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
             @Param("retryAt") Instant retryAt);
 
     @Modifying
-    @Query(
-            "UPDATE ItemEvent e SET e.state = de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState.EXPIRED, e.reason = :reason, e.decidedAt = :now, e.retryAt = NULL WHERE e.state IN (de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState.RECORDED, de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState.WAITING) AND e.occurredAt < :before")
+    @Query(value = """
+        WITH due AS MATERIALIZED (
+            SELECT id FROM item_event WHERE state IN ('RECORDED', 'WAITING') AND occurred_at < :before
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE item_event SET state = 'EXPIRED', reason = :#{#reason.name()}, decided_at = :now, retry_at = NULL
+        FROM due WHERE item_event.id = due.id
+        """, nativeQuery = true)
     @WorkspaceAgnostic("Background reaper expires pending events across workspaces at the configured deadline")
     int expire(@Param("before") Instant before, @Param("now") Instant now, @Param("reason") ReviewRequestReason reason);
 

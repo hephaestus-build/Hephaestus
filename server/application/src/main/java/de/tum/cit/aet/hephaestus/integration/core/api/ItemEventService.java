@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,6 +22,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -144,7 +146,17 @@ public class ItemEventService {
     /** The pinned occasions of the item that no review started and none withheld yet, oldest first. */
     @Transactional(readOnly = true)
     public List<Open> open(long workspaceId, long itemId) {
-        return repository.findOpen(workspaceId, itemId).stream()
+        return openRows(repository.findOpen(workspaceId, itemId));
+    }
+
+    /** The open occasions of this window, locked until the caller settles them. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Open> lockOpen(long workspaceId, long itemId, Collection<UUID> ids) {
+        return openRows(repository.lockOpen(workspaceId, itemId, ids));
+    }
+
+    private static List<Open> openRows(List<ItemEventRepository.OpenRow> rows) {
+        return rows.stream()
                 .map(row -> new Open(
                         row.getId(),
                         new ItemEventName(row.getName()),

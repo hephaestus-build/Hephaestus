@@ -136,6 +136,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -157,6 +158,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -5107,6 +5109,43 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             var coalesced = events.findById(opened.getId()).orElseThrow();
             assertThat(coalesced.getState()).isEqualTo(ItemEventState.WITHHELD);
             assertThat(coalesced.getReason()).isEqualTo(ReviewRequestReason.COALESCED);
+        }
+
+        @Test
+        void shouldRetryWhenExpiryWinsTheLockOnAnOlderOccasion() throws Exception {
+            var prepared = prepare(
+                    IdentityProviderType.GITHUB,
+                    false,
+                    Map.of(),
+                    false,
+                    List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+            publish(prepared);
+            var older = event(prepared);
+            deliver(
+                    prepared,
+                    "synchronize",
+                    pullRequestPayload(prepared, "c".repeat(40), Instant.now()),
+                    "b".repeat(40));
+            var newest = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+            var request = eventRequest(prepared, newest, Set.of(older.getId()));
+
+            var expiry = HeldTransaction.holdIn(
+                    transactions,
+                    jdbc,
+                    () -> jdbc.update(
+                            "UPDATE item_event SET state = 'EXPIRED', reason = 'PENDING_DEADLINE_EXCEEDED', "
+                                    + "decided_at = now(), retry_at = NULL WHERE id = ?",
+                            older.getId()));
+            var refusal = CompletableFuture.supplyAsync(() -> catchThrowable(() -> service.request(request)));
+            expiry.commitAfter(refusal, () -> assertThat(refusal).isNotDone());
+
+            assertThat(refusal.get(20, TimeUnit.SECONDS))
+                    .isInstanceOfSatisfying(
+                            ReviewRequestRejected.class,
+                            rejected -> assertThat(rejected.reason())
+                                    .isEqualTo(ReviewRequestRejected.Reason.PRACTICES_CHANGED));
+            assertThat(itemReviews(prepared)).isEmpty();
+            assertThat(events.findById(newest.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
         }
 
         @Test

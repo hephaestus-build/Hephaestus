@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -101,7 +102,9 @@ public class ReviewServiceImpl implements ReviewService {
     private void settleRecorded(ReviewRequest request) {
         var eventId = request.eventId();
         if (eventId == null) return;
-        var open = events.open(request.workspaceId(), request.itemId());
+        var window = new HashSet<>(request.coalesced());
+        window.add(eventId);
+        var open = events.lockOpen(request.workspaceId(), request.itemId(), window);
         var ids = open.stream().map(ItemEventService.Open::id).collect(Collectors.toSet());
         if (!ids.contains(eventId))
             throw new ReviewRequestRejected(
@@ -114,7 +117,6 @@ public class ReviewServiceImpl implements ReviewService {
                     "An occasion of the window was decided while its review was recorded.");
         for (var waiting : open) {
             boolean newest = waiting.id().equals(eventId);
-            if (!newest && !request.coalesced().contains(waiting.id())) continue;
             settle(request, waiting, newest, OccasionSettlement.Outcome.RECORDED);
         }
     }
@@ -148,7 +150,9 @@ public class ReviewServiceImpl implements ReviewService {
                 && !events.decide(
                         request.workspaceId(), waiting.id(), waiting.state(), decide.state(), decide.reason()))
             throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
+                    newest
+                            ? ReviewRequestRejected.Reason.REQUEST_CONFLICT
+                            : ReviewRequestRejected.Reason.PRACTICES_CHANGED,
                     "The occasion was decided while its review was recorded.");
     }
 
