@@ -12,7 +12,9 @@ They can discuss that work in a private conversation.
 
 Code decides when Hephaestus speaks. It decides whether a result, a check-in or a withheld copy becomes a message, and when a notification may interrupt.
 Code also decides who may read it. A turn reads only what every reader of its output may read, so private context never reaches the work or a channel.
-The one stated exception is the person's own choice. At the **Full** Slack detail level, a Slack answer may also use their goals, notes and other help settings (ADR 0123).
+The one stated exception is the person's own choice. At the **Full** Slack detail level, a Slack answer may also use their other help settings and noted records (ADR 0123).
+
+A goal is not on that list. In its first release, no turn reads a goal, in the app or in Slack. A goal's note and reflections never reach a model (ADR 0156).
 
 The model writes the words inside those decisions. It never states a result that the rows do not hold.
 A model also judges work in a review, and it can propose a noted record from the person's own words. Code admits each judgement and each record before anyone reads it, and a model never decides dispatch, routing or readers.
@@ -52,7 +54,7 @@ The **copy on the work** is the copy that Hephaestus posts on the pull request o
 | Does a review result interrupt my conversation? | No. A result shows on its item card at once. Your message always goes first. |
 | Can my conversation change the copy on my work? | Only through a command that you confirm on a card, after a preview. The command never carries your reasons. |
 | What if the model is down? | Two hours after the seal, a copy that is not posting or waiting for approval is withheld. Nothing is posted in its place. |
-| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. A Slack owner can export direct messages, so Slack answers use your goals and notes only if you choose the **Full** detail level. |
+| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. A Slack owner can export direct messages, so Slack answers use your help settings and noted records only if you choose the **Full** detail level. They never use your goal. |
 
 ### The core loop
 
@@ -236,19 +238,19 @@ It shows the whole accepted design. The first release has one goal, its revisits
 | Monday | Web app | At first sign-in, one screen offers a rhythm and notifications. Sam picks "Monday focus", and the check-in saves. |
 | Monday | Ask Hephaestus | The header shows "Acme Web", one privacy line and the AI label. The answer starts in about two seconds and uses Acme Web's practices. |
 | Monday | Ask Hephaestus | Sam says "Short answers, command first." Hephaestus saves a help setting, with no card. Every later answer is short. |
-| Monday | Ask Hephaestus | Sam names a goal: small, reviewable pull requests. The entry says "Saved as a goal · Undo · Edit". |
+| Monday | Ask Hephaestus | Under a useful answer, **Make this your goal** opens the goal form. Sam chooses the practice of small, reviewable pull requests, adds a private note, and saves. |
 | Monday | Ask Hephaestus | After this first useful answer, a card offers the weekly reflection once. Sam accepts and picks Friday 16:00, and the check-in saves. |
 | Tuesday | Extension | Sam asks for a check of a draft. A task status card says "Checking your draft on PR #42 · about 2 minutes, up to 10 when busy". |
 | Tuesday | Extension | The result shows the cited line and one next step. Only Sam sees it. A card offers once to check drafts automatically. Sam accepts. |
 | Tuesday | GitHub | The review of the pull request seals. The composer posts the copy on the work with one Major problem. It holds nothing private about Sam. |
 | Tuesday | Ask Hephaestus | One message from Hephaestus explains two Minor problems and links them to Sam's goal. One notification follows. |
-| Wednesday | Slack | Sam read the export notice and chose the **Full** Slack detail level. So the answer to a direct message can use Sam's goal and every help setting. At **Notice** it uses only language and answer length. |
+| Wednesday | Slack | Sam read the export notice and chose the **Full** Slack detail level. So the answer to a direct message can use every help setting. At **Notice** it uses only language and answer length. No Slack answer uses Sam's goal. |
 | Thursday | Item card | Sam selects **Disagree** with a reason on a wrong detail. The acknowledgement comes at once. |
 | Friday | Ask Hephaestus | At 16:00 the weekly reflection names one change in the week's work and asks one question. |
 | Sunday | Our work | Sam sees the goal, the check-ins and where help stepped back. Under **What Hephaestus keeps in mind**, Sam forgets one wrong item. |
 
 Each card in the week is a real decision of Sam's, and each wait is real work.
-The goal and the help setting are Sam's own words, so they save with **Undo** and need no card.
+The help setting is Sam's own words, so it saves with **Undo** and needs no card. The goal saves from its form, by Sam's **Save**.
 An offer comes from Hephaestus, so it shows on a card, and Sam's acceptance saves the check-in.
 
 ### Month six and year three
@@ -333,7 +335,8 @@ The [practice pages](/user/practice-profile) exist. The design adds the item car
 
 The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the **check-in**, the **goal** and the **help settings**.
 Only the person creates a check-in. The first release has one: a date on a goal, answered in the app.
-A developer has one active goal in each workspace: one practice they choose, with a private note. Only their **Save** writes it.
+
+A developer has one active goal in each workspace: one practice they choose, with a private note. Only their **Save** writes it, and only they read it. No turn knows it in the first release.
 Code revisits the goal on the developer's next reviewed piece of work, from admitted observations ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
 
 Help settings carry no employer content, so they apply in every workspace. Hephaestus sets them from the person's own words, with no card.

@@ -106,7 +106,7 @@ Each control has its reverse, and a disabled option names who disabled it, for e
 
 The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the check-in.
 Only the person creates one.
-The first release has one check-in: a date on a goal (G7). The templates and the other places below wait ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
+The first release has one check-in: a date on a goal (G9). Its answer writes a check-in revisit. The templates and the other places below wait ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
 It appears in the conversation, on the practice page, as a notification, or in the Slack direct message when the person chooses Slack.
 
 | Template | What it does | When Hephaestus offers it |
@@ -152,7 +152,7 @@ Everyone else keeps the digest. Turning the reflection off restores the digest, 
 
 ## Goals
 
-A goal is the one practice that a developer chooses to grow in, with an optional private note.
+A [goal](./practice-feedback-language.mdx#mentoring-planned) is the one practice that a developer chooses to grow in, with an optional private note.
 [ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) owns the first release: one active goal per developer and workspace, revisits on the next relevant piece of work, and one check-in date.
 A workspace setting turns goals on. It is off by default.
 
@@ -163,12 +163,12 @@ A workspace setting turns goals on. It is off by default.
 | G1 | The developer chooses the practice and saves the goal. A turn can offer a goal after a useful answer about a practice. The offer opens the goal form with that practice chosen. Only the developer's **Save** writes the goal. | ADR 0132, ADR 0156 |
 | G2 | A developer has at most one active goal in each workspace. **Edit** changes the note and the check-in date, never the practice. A new practice means a new goal. | ADR 0156 |
 | G3 | **Close** moves the goal to **Past goals**. Its reverse is **Reopen**, when no other goal is active. **Delete** erases the goal and its revisits. | ADR 0156 |
-| G4 | The note and every reflection stay with the developer. Only they read them, in their app and in their own export. No model, summary, review, Slack message or staff path reads them. | ADR 0156 |
-| G5 | A turn in the app knows the chosen practice and the status of the open revisit, as one line from current rows. It knows no words of the developer. | ADR 0156 |
-| G6 | Code writes a revisit when a review of the chosen practice about the developer ends on a piece of work. The first review of that work must start after **Save**. One revisit is open at a time. A newer piece of work replaces an open revisit with no reflection. | ADR 0156 |
-| G7 | A revisit status renders from the rows of the owner's item card, by ordered rules. **You disagreed** is the developer's Disagreement. **Marked incorrect** is a workspace admin's mark. **Could not check** means that the newest review produced no observation. The other statuses are **Could not determine**, **Does not apply**, **Met on the first review**, **Met on a later review** and **Not met yet**. | ADR 0150, ADR 0156 |
-| G8 | The goal card asks "What did you learn?" and keeps the answer as a reflection, shown as "Your account". **Skip** ends the revisit. **Forget** erases it. | ADR 0156 |
-| G9 | The check-in is one date on the goal. From that date, in the account's time zone, the goal card asks "How is it going?". The answer carries the date that the card showed, so a stale tab cannot answer a moved check-in. Under **Pause**, the card does not ask and no marker shows. | ADR 0133, ADR 0156 |
+| G4 | Everything about the goal stays with the developer: the choice, the note, the check-in, each revisit with its status and each reflection. Only they read it, in their app and in their own export. No turn, model, summary, review, Slack message, notification or staff path reads it, or learns whether a goal exists. | ADR 0156 |
+| G5 | No turn knows the goal in the first release, in the app or in Slack. The goal card carries the loop. What the developer writes about the goal in the conversation is an ordinary conversation entry. | ADR 0156 |
+| G6 | Code writes a work revisit when a review of the chosen practice about the developer ends on a piece of work. The first review of that work must start after **Save**. One revisit is open at a time. Only work newer than each work with a revisit gets one, and it replaces an open revisit. Each piece of work gets at most one revisit. A work revisit references rows and can hold the developer's [reflection](./practice-feedback-language.mdx#mentoring-planned). | ADR 0156 |
+| G7 | A revisit status renders at each read from what the owner's item card may show now, by ordered rules. **Not available** means that the developer can no longer read the work. **You disagreed** is the developer's Disagreement. **Marked incorrect** is a workspace admin's mark. **Could not check** means that the newest review produced no observation. Withheld delivery, such as an unreleased On request observation, is never **Could not check**. The other statuses are **Could not determine**, **Does not apply**, **Met on the first review**, **Met on a later review** and **Not met yet**. | ADR 0137, ADR 0150, ADR 0156 |
+| G8 | The goal card asks "What did you learn?" and keeps the answer as a reflection, shown as "Your account". **Skip** ends the revisit with no reflection. **Forget** erases the revisit and keeps only the key of its work, so the card does not ask about that work again. | ADR 0156 |
+| G9 | The check-in is one date on the goal. From that date, in the account's time zone, the goal card asks "How is it going?". **Answer** or **Skip** writes a check-in revisit. Each carries the check-in version that the card showed, so a stale tab cannot answer a moved check-in. Under **Pause**, the card does not ask and no marker shows. | ADR 0133, ADR 0156 |
 | G10 | After 90 days without an act of the developer, the goal card asks "Keep this goal?". After 180 days, a retention job deletes the goal, except during a leaving window. After the membership ends, the goal stays in the developer's own export for the 30-day leaving window. | ADR 0126, ADR 0156 |
 
 [ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) decision 5 holds the full state table.
@@ -179,14 +179,14 @@ A workspace setting turns goals on. It is off by default.
 | --- | --- | --- |
 | Goal card on the practice page | For the chosen practice: the goal, its note, the open revisit with its status and question, and the check-in. For a practice with no goal: **Grow in this practice**, while no goal is active. | Save, Edit, Close, Delete, Skip, Forget, Keep |
 | **Past goals** on the practice page | Closed goals, with their answered revisits and reflections | Reopen, Delete, Forget |
-| Goal card in the conversation | The active goal, collapsed above the thread | The same as on the practice page |
+| Goal card in the conversation | The active goal, collapsed above the thread. It is not a conversation entry, and no turn reads it. | The same as on the practice page |
 | Marker in the navigation | A dot on **Practices** and on the conversation while a revisit is open or a check-in is due. It is not a notification. Under **Pause** it does not show. | Opens the goal card |
-| Goal offer in an answer | One control under the answer: **Make this your goal**, with **Not now**. One offer for each practice in 30 days. | Opens the goal form, or dismisses the offer |
+| Goal offer in an answer | One control under the answer in the app: **Make this your goal**, with **Not now**. It shows only while no goal is active. One offer for each practice in 30 days. | Opens the goal form, or dismisses the offer |
 
 The goal card has an empty state, a loading skeleton and an error state with **Try again**.
 Delete and Forget ask for confirmation.
-The goal form says: "Your note stays with you. Hephaestus coaches with the practice you choose."
-In Slack, the copy says: "Your goal comes with you to Slack once you grant Hephaestus full access there."
+The goal form says: "Only you see your goal and your note."
+Slack shows nothing of a goal.
 
 ### The coaching recipe
 
@@ -195,12 +195,12 @@ Each answer about a practice has this order. It takes precedence over any other 
 | ID | Step | Example |
 | --- | --- | --- |
 | R1 | Answer the question. | "The description lists the change but not how to check it." |
-| R2 | Give one hint and its reason, and cite the exact place. | "Under **Testing**, name the command you ran. A reviewer then repeats it in one step." |
+| R2 | Give one hint and its reason. Cite the exact place when the turn can read a source of the work. Otherwise, say where to look. | "Under **Testing**, name the command you ran. A reviewer then repeats it in one step." |
 | R3 | End with at most one question: an invitation to one next attempt, or to disagree. | "Try one line there. If the check is somewhere else, show me." |
-| R4 | On the chosen practice, on the developer's own current work, give the hint first. An example may use other work. When the developer asks for it after the hint, write sample text for them to adapt. **Just tell me** gets the sample on the first request. | "Here is a sample to adapt: …" |
-| R5 | The goal card asks the revisit and check-in questions. A turn does not repeat them. It cites a revisit's result with `link_result` and writes no outcome as text. | "Your goal card has a question about this pull request." |
+| R4 | When the developer asks for sample text, write it for them to adapt. Never write what they submit as their own work. The request in the turn decides: the first release has no help-style setting. | "Here is a sample to adapt: …" |
+| R5 | The goal card asks the revisit and check-in questions and links the feedback. A turn does not know them, so it does not ask them or cite a revisit. | — |
 
-R4 follows a field experiment in which students with an answer-giving tutor did better while assisted and worse afterwards ([Bastani et al., 2025](https://doi.org/10.1073/pnas.2422633122)).
+R2 and R3 follow a field experiment with high-school math students. Students with an answer-giving tutor did better while assisted and worse afterwards ([Bastani et al., 2025](https://doi.org/10.1073/pnas.2422633122)).
 
 ### Example: Sam's goal
 
@@ -210,10 +210,11 @@ Under the answer, **Make this your goal** opens the form with **State how to ver
 Sam adds a private note, "Say how I tested it, every time", picks a check-in date in two weeks, and saves.
 
 Sam opens pull request #61 with a **Testing** section. The first review admits Met.
-Code writes a revisit. The goal card shows **Met on the first review** and "What did you learn?".
+Code writes a work revisit. The goal card shows **Met on the first review**, links the observation, and asks "What did you learn?".
 
 A dot appears on **Practices**.
-Sam writes "Writing the command first made me run it". The card shows it as "Your account". No model reads it.
+Sam writes "Writing the command first made me run it". The card shows it as "Your account".
+No turn reads the goal, the revisit or the reflection. When Sam asks Hephaestus about the practice later, the answer is the same as for anyone.
 
 ### Deferred
 
@@ -230,7 +231,7 @@ The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) def
 | Help settings | The person, in words or in Settings |
 | Help style | The person |
 | Help mode | Growth computes it |
-| Help mode override: a goal's own help preference | The person, on the goal |
+| Help mode override: a goal's own help preference | Deferred. The person, on the goal |
 
 The UI shows the help mode in words, such as "I give a hint first", never as a level.
 
@@ -289,8 +290,8 @@ Each hard case has fixed behavior and a scenario test.
 | --- | --- |
 | Distress | A fixed reply with the support resources that the operator set. Hephaestus points to human support and is not a crisis service. No practice feedback in the same reply. Never a referral to the manager. 1.0 has no distress hold: the person's own Pause, Only when agreed and mutes stop contact. |
 | A manager asks about a person | The same refusal whether or not data exists |
-| A demand for the answer | "Just tell me" is one choice away. On request, Hephaestus writes sample text for the developer to adapt (R4). It never submits work for them. |
-| Dependence | Hephaestus points to people. On the goal's practice it gives a hint before the fix (R4). |
+| A demand for the answer | On request, Hephaestus writes sample text for the developer to adapt (R4). It never writes what they submit as their own work. |
+| Dependence | Hephaestus points to people. Each answer about a practice ends with one hint and an invitation to try (R2, R3). |
 | Instructions in repository content | Treated as data. Tasks hold no personal records and queue nothing. |
 | Harassment, or a topic outside work | A short, calm boundary, and a way back to the work |
 

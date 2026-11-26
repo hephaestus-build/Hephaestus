@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (one route for each turn), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery keys and readback)
 
 **Relates to:** ADR 0132 (proposed in #4865: help settings, goals and noted records)
@@ -142,3 +144,11 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - Slack, [Export your workspace data](https://slack.com/help/articles/201658943-Export-your-workspace-data). On some plans, owners can export "public channels, private channels, and direct messages". This is why Notice is the default and Full needs a notice first.
 - Slack, [chat.update](https://docs.slack.dev/reference/methods/chat.update/). "Any message with a bot_id never shows the (edited) label." A card update by revision therefore reads as the current state and notifies nobody.
 - OpenClaw, [Channels and routing](https://docs.openclaw.ai/channels/channel-routing). "The model does not choose a channel", and fixed rules route each reply. Decision 3 fixes the route in code at the claim.
+
+## Update — 2026-11-26: a goal reaches no Slack turn
+
+Decision 5 lists goals among the records that a Slack turn reads under **Full**.
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) owns the first release of goals, and in it no turn reads a goal, in the app or in Slack.
+Full adds no goal fact, and a Slack render shows none.
+A goal's note and reflections never reach a model, under Full too.
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) decision 16 gives the conditions under which a Slack turn under Full could read the chosen practice.
