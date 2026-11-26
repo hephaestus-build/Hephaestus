@@ -4326,6 +4326,39 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(admitted.getBaseVersion()).isEqualTo("a".repeat(40));
     }
 
+    @ParameterizedTest
+    @CsvSource({"false,EXPIRED,PENDING_DEADLINE_EXCEEDED", "true,WITHHELD,ITEM_NOT_VISIBLE"})
+    void shouldSettleAnUnpinnedGitLabOccasionAfterWithdrawal(
+            boolean replay, ItemEventState state, ReviewRequestReason reason) {
+        var prepared = prepare(IdentityProviderType.GITLAB, false);
+        withoutBase(prepared);
+        publish(prepared);
+        var pending = onlyEvent(prepared);
+        assertThat(pending.getItemVersion()).isNull();
+        assertThat(pending.getState()).isEqualTo(ItemEventState.RECORDED);
+        assertThat(incompletePublications(pending)).isEmpty();
+
+        jdbc.update(
+                "UPDATE item SET removed_at = now() WHERE workspace_id = ? AND id = ?",
+                prepared.item().workspaceId(),
+                prepared.item().itemId());
+        var deadline = pending.getOccurredAt().plus(ledger.pendingLapseAfter());
+        long offersBeforeSweep = offers(pending.getId());
+        reaper.advance(deadline.minusSeconds(1));
+        assertThat(offers(pending.getId())).isEqualTo(offersBeforeSweep);
+        assertThat(events.findById(pending.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.RECORDED);
+
+        if (replay) offerAgain(prepared, pending);
+        reaper.advance(deadline.plusSeconds(1));
+
+        var settled = events.findById(pending.getId()).orElseThrow();
+        assertThat(settled.getState()).isEqualTo(state);
+        assertThat(settled.getReason()).isEqualTo(reason);
+        assertThat(settled.getItemVersion()).isNull();
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(pending)).isEmpty();
+    }
+
     @Test
     void shouldRetireCurrentClaimsWhenReadinessPinsToAnExistingOccasion() {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
