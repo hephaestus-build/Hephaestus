@@ -77,6 +77,7 @@ ConversationEntryDTO.seq
 ConversationLinkDTO.itemId  # identifier
 ConversationThreadSummaryDTO.latestSeq
 ConversationThreadSummaryDTO.replyCount  # replies
+ConversationUsedSourceDTO.count  # files or searches of one answer
 ConversationTurnDTO.attempt
 ConversationTurnDTO.maxAttempts
 Coverage.maxEntries

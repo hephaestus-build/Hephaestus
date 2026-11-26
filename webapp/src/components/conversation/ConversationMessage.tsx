@@ -17,6 +17,8 @@ import { formatTime } from "@/lib/dates";
 import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
+import { AnswerUse } from "./AnswerUse";
+
 /** The developer the conversation belongs to, as their messages are signed. */
 export interface MessageAuthor {
 	name: string;
@@ -27,7 +29,8 @@ export interface MessageAuthor {
 type ShownMessage = Pick<
 	ConversationEntry,
 	"kind" | "surface" | "text" | "createdAt" | "editedAt" | "deleted" | "links"
->;
+> &
+	Partial<Pick<ConversationEntry, "used">>;
 
 /** Marks a message written in Slack, so the reader knows where the conversation happened. */
 function SurfaceMarker({ surface }: Pick<ConversationEntry, "surface">) {
@@ -219,6 +222,13 @@ export function ConversationMessage({
 						.map((link) => (
 							<LinkBody key={`${link.kind}:${link.id}`} link={link} workspaceSlug={workspaceSlug} />
 						))}
+				{!message.deleted && !streaming && message.used !== undefined && (
+					<AnswerUse
+						used={message.used}
+						links={message.links}
+						subject={messageSubject(message, developer)}
+					/>
+				)}
 				{children}
 				{rendersContent(actions) && <MessageFooter>{actions}</MessageFooter>}
 			</MessageContent>

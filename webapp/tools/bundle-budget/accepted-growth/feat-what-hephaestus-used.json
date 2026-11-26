@@ -1,0 +1,16 @@
+{
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/conversation.tsx?tsr-split=component",
+			"gzipBytes": 115712,
+			"acceptedBy": "branch feat/what-hephaestus-used",
+			"reason": "What Hephaestus used under each answer: the disclosure and the names of its sources (ADR 0157 decision 8)."
+		},
+		{
+			"load": "src/routes/-GlobalConversationPanel.tsx",
+			"gzipBytes": 118463,
+			"acceptedBy": "branch feat/what-hephaestus-used",
+			"reason": "What Hephaestus used under each answer: the disclosure and the names of its sources (ADR 0157 decision 8)."
+		}
+	]
+}

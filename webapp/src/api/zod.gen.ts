@@ -580,6 +580,11 @@ export const zContributor = z.object({
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
  */
+export const zConversationContextDocument = z.string();
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
 export const zConversationEntryKind = z.string();
 
 /**
@@ -684,6 +689,33 @@ export const zConversationTurnSurface = z.string();
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export const zConversationTurnWaitingFor = z.string();
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zConversationUsedSourceKind = z.string();
+
+/**
+ * A source that Hephaestus opened for an answer, or could not open
+ */
+export const zConversationUsedSource = z.object({
+	count: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	document: zConversationContextDocument.optional(),
+	kind: zConversationUsedSourceKind,
+	repository: z.string().optional(),
+});
+
+/**
+ * What Hephaestus opened for one answer, and what it could not open
+ */
+export const zConversationAnswerUse = z.object({
+	couldNotCheck: z.array(zConversationUsedSource),
+	read: z.array(zConversationUsedSource),
+	recorded: z.boolean(),
+});
 
 /**
  * The developer's vote on one of Hephaestus's messages
@@ -6429,6 +6461,7 @@ export const zConversationEntry = z.object({
 	turnError: z.string().optional(),
 	turnId: z.uuid().optional(),
 	turnStatus: zConversationTurnStatus.optional(),
+	used: zConversationAnswerUse.optional(),
 	vote: zConversationEntryVote.optional(),
 });
 

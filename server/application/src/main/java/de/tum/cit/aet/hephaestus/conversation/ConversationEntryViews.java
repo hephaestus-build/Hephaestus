@@ -99,6 +99,7 @@ class ConversationEntryViews {
                         .filter(turn -> turn.getWorkspaceId() == workspaceId)
                         .collect(Collectors.toMap(ConversationTurn::getId, Function.identity()));
         Map<UUID, WeeklyDigestDTO> digests = digests(conversation, rows);
+        Map<UUID, ConversationAnswerUseDTO> uses = uses(workspaceId, rows, links);
         Map<String, LaneAction> replies = actions.byKeys(
                 workspaceId,
                 rows.stream()
@@ -118,7 +119,8 @@ class ConversationEntryViews {
                             ? questionTurnById.get(turnId)
                             : null,
                     digests.get(row.getId()),
-                    slackDelivery(row, replies)));
+                    slackDelivery(row, replies),
+                    uses.get(row.getId())));
         }
         return mapped;
     }
@@ -221,7 +223,8 @@ class ConversationEntryViews {
             List<ConversationLinkDTO> links,
             @Nullable ConversationTurn questionTurn,
             @Nullable WeeklyDigestDTO digest,
-            ConversationEntry.@Nullable SlackDelivery slackDelivery) {
+            ConversationEntry.@Nullable SlackDelivery slackDelivery,
+            @Nullable ConversationAnswerUseDTO used) {
         return new ConversationEntryDTO(
                 entry.getId(),
                 entry.getConversationId(),
@@ -247,7 +250,48 @@ class ConversationEntryViews {
                 entry.getVote(),
                 links,
                 thread,
-                digest);
+                digest,
+                used);
+    }
+
+    /**
+     * What Hephaestus used for each answer among {@code rows}, by the id of the answer's last shown message: the sources
+     * that its turn's calls opened and could not open (ADR 0157 decision 8). A turn whose messages hold no stored entry
+     * recorded nothing.
+     */
+    private Map<UUID, ConversationAnswerUseDTO> uses(
+            long workspaceId, List<ConversationEntry> rows, Map<UUID, List<ConversationLinkDTO>> links) {
+        Map<UUID, UUID> lastShown = new HashMap<>();
+        Map<UUID, Boolean> recorded = new HashMap<>();
+        for (ConversationEntry row : rows) {
+            UUID turnId = row.getTurnId();
+            if (turnId == null || row.getKind() != ConversationEntry.Kind.ANSWER || row.isRedacted()) continue;
+            recorded.merge(turnId, row.getPayload() != null, Boolean::logicalOr);
+            if (!row.getText().isEmpty() || links.containsKey(row.getId())) lastShown.put(turnId, row.getId());
+        }
+        if (lastShown.isEmpty()) return Map.of();
+        // The page holds only shown messages, so an assistant entry that holds only calls is read on its own.
+        Map<UUID, List<ConversationAnswerUses.ToolUse>> calls = new HashMap<>();
+        for (var call : entries.findOpeningCalls(workspaceId, lastShown.keySet())) {
+            calls.computeIfAbsent(call.getTurnId(), turn -> new ArrayList<>())
+                    .add(new ConversationAnswerUses.ToolUse(call.getCallId(), call.getTool(), call.getPath()));
+        }
+        Map<UUID, List<ConversationAnswerUses.Outcome>> outcomes = new HashMap<>();
+        if (!calls.isEmpty()) {
+            for (var outcome : entries.findToolOutcomes(workspaceId, calls.keySet())) {
+                outcomes.computeIfAbsent(outcome.getTurnId(), turn -> new ArrayList<>())
+                        .add(new ConversationAnswerUses.Outcome(
+                                outcome.getCallId(), outcome.getTool(), outcome.getError()));
+            }
+        }
+        Map<UUID, ConversationAnswerUseDTO> uses = new HashMap<>();
+        lastShown.forEach((turnId, entryId) -> uses.put(
+                entryId,
+                ConversationAnswerUses.of(
+                        recorded.getOrDefault(turnId, false),
+                        calls.getOrDefault(turnId, List.of()),
+                        outcomes.getOrDefault(turnId, List.of()))));
+        return uses;
     }
 
     /** How a Slack question's reply stands: its outbox action, including its terminal outcome. */
