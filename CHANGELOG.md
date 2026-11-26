@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0-rc.18
+
+### Patch Changes
+
+- Hephaestus no longer starts questions or weekly digests after their start window has passed, including when a database migration ends. A weekly digest's cutoff follows local daylight saving time and stays fixed even if enqueueing takes longer than expected. Digests queued by earlier replicas during a rolling upgrade keep their scheduled cutoff. An overdue digest ends even while questions are waiting.
+
+  Questions and weekly digests get their full work time after a sandbox leases them. PostgreSQL time also determines whether a weekly digest can start.
+
+- A review occasion whose original work Hephaestus can no longer read no longer retries without end. It ends withheld with "The original work for this event is unavailable". Before, each such occasion left its event publication incomplete, so `HephaestusEventPublicationsOverdue` fired for `ItemEventReviewListener` and the backlog grew every hour. A removed item ends the same way, with its own reason. A pull request whose repository the workspace no longer monitors ends as not visible, never as removed work. A capture failure that can still pass stays retryable.
+
+  After the upgrade:
+
+  1. The server completes the stuck publications that still have attempts left. Each run sends up to 50 of them again, within the in-flight limit, and runs are five minutes apart. At full throughput, 4,000 publications take about seven hours. That is an estimate, not a guarantee.
+  2. Publications that used all ten attempts are exhausted, and the server does not retry them. Replay them with [Replay exhausted durable work](https://docs.hephaestus.build/admin/production-operations-runbook#replay-exhausted-durable-work) for `ItemEventReviewListener`.
+  3. Check that `event_publications_overdue` and `event_publications_exhausted` for the listener are 0. Also check that no `ItemEventRecorded` row in `event_publication` stays incomplete.
+
+  Do not delete rows from `event_publication`.
+
+- Practice reviews can record results when the sandbox blocks signals between the runner and its practice scripts.
+  A script that leaves a timer running after it returns no longer holds up the review.
+- Hephaestus withdraws a pending Slack reply if you delete its question before the send is authorized.
+  After a backup restore, replaying a Slack channel erasure removes tool results that copied channel content while the Slack deletion event was in transit.
+  Replaying a channel erasure also preserves data collected under consent granted after the erasure.
+  Update your Slack app manifest to receive deletion events for private channels.
+
 ## 1.0.0-rc.17
 
 ### Minor Changes
