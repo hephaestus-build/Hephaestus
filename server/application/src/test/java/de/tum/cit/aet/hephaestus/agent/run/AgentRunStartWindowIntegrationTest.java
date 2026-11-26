@@ -211,7 +211,7 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
                         conversation.getId(),
                         new ConversationTurnService.DigestRequest(
                                 requestId, "Weekly recap", JsonNodeFactory.instance.objectNode(), cutoff)))
-                .isTrue();
+                .isPresent();
         return turnRows.findByWorkspaceIdAndRequestId(workspace, requestId).orElseThrow();
     }
 

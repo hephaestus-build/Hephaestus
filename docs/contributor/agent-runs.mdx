@@ -16,12 +16,31 @@ Review jobs and conversation turns are on runs. Every transition that a caller m
 Its subject is `conversation:<id>`, the same subject as a requested `TURN`.
 The subject's unique lease prevents both from writing to the conversation at the same time.
 Both kinds share the conversation capacity limit, sandbox runner, admission and turn lifecycle.
-Queued digests yield to questions of the same conversation.
-A leased digest keeps its fence until it ends.
 A pull takes the physical sandbox write lock without waiting.
 Other pulls return no work while that claim commits.
 
-`DigestSchedule` selects opted-in accounts on Monday and enqueues one turn per workspace and week.
+A question never waits behind a digest.
+The question's admission transaction stops every queued or running `SYSTEM` turn of the conversation and cancels its run at once, with no grace.
+A digest commits nothing until its end, so the cancel loses nothing.
+The digest's inbox item then waits for the next idle moment.
+
+`DigestSchedule` selects opted-in accounts on Monday and writes one inbox item per workspace and week on the main conversation.
+The item has the kind `SCHEDULE_DUE`, IDs only, and the week's contact cutoff as its deadline.
+Its key is the week's request ID, so a second pass writes nothing.
+The start policy in `InboxItems` decides each item, at once and then on a pass every 30 seconds:
+
+| The item | The thread | Decision | Reason |
+| --- | --- | --- | --- |
+| Pending, before its deadline | Idle: no person's turn queued or running, and no person's message in the last 2 minutes | The digest turn starts, and the item is claimed | `STARTED` |
+| Pending | A person's turn is queued or running, or a message is younger than 2 minutes | It waits | `DEFERRED_ACTIVE` |
+| Claimed | A question arrives | The digest turn stops, and the item is pending again | `CANCELLED_BY_MESSAGE` |
+| Claimed | Its turn ended `DONE` | Consumed | `DELIVERED` |
+| Pending | At its start, the facts are empty | Consumed | `NOTHING_TO_SAY` |
+| Pending | At its start, the person turned the digest off or is no longer available | Dropped | `NO_LONGER_ELIGIBLE` |
+| Pending | Its deadline passed | Expired, with no model | `DEADLINE_PASSED` |
+| Pending | It started 5 times | Expired | `ATTEMPTS_SPENT` |
+
+The first turn of an item keeps the week's request ID. A later turn adds `#<n>`.
 The turn has the surface `SYSTEM` and a real `DIGEST` stimulus with its captured fact membership.
 It has no developer question.
 The context source renders that membership under the current evidence permissions.

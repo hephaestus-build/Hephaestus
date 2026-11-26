@@ -216,7 +216,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 "Write the opted-in weekly recap.",
                                 mapper.createObjectNode(),
                                 Instant.now().plus(Duration.ofHours(1)))))
-                .isTrue();
+                .isPresent();
         return turnRows.findByWorkspaceIdAndRequestId(workspace.getId(), request)
                 .orElseThrow();
     }

@@ -152,7 +152,8 @@ public class ConversationTurnService {
         if (entries.findByWorkspaceIdAndRequestId(workspaceId, requestId).isPresent()) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.REQUEST_ID_REUSED);
         }
-        if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {
+        // Background turns yield to the question once it commits (InboxItems.yieldToQuestion), so they do not count.
+        if (turns.countQueuedQuestions(workspaceId, conversationId) >= maxFollowUps) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.FOLLOW_UPS_FULL);
         }
         UUID runId = runs.enqueue(workspaceId, conversationId, owner);
@@ -170,9 +171,13 @@ public class ConversationTurnService {
 
     public record DigestRequest(String requestId, String text, ObjectNode facts, Instant startBy) {}
 
-    /** A digest is a system stimulus on the same conversation ledger, with no invented user question. */
+    /**
+     * A digest is a system stimulus on the same conversation ledger, with no invented user question.
+     *
+     * @return the digest's turn, or empty when the request id already has one
+     */
     @Transactional
-    public boolean submitDigest(long workspaceId, UUID conversationId, DigestRequest request) {
+    public Optional<UUID> submitDigest(long workspaceId, UUID conversationId, DigestRequest request) {
         ConversationService.holdWrite(
                 writeFence,
                 conversations
@@ -181,7 +186,7 @@ public class ConversationTurnService {
         Conversation conversation = entryService.lock(workspaceId, conversationId);
         if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
                         .isPresent()
-                || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
+                || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return Optional.empty();
         UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startBy());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));
@@ -196,7 +201,7 @@ public class ConversationTurnService {
                         turn.getId()));
         entryService.appended(conversation, List.of(stimulus));
         events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
-        return true;
+        return Optional.of(turn.getId());
     }
 
     /**

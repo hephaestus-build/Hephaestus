@@ -88,6 +88,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "agent_run",
             // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
             "agent_sandbox",
+            // A thread's inbox item: its kind, dedupe key, state, reason, times and the IDs its producer needs, never
+            // text. Deleting the conversation deletes its items.
+            "inbox_item",
             "commit_pull_request",
             "connection",
             "connection_activity",

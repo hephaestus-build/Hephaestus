@@ -61,6 +61,13 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                             "notification.NotificationRedeliveryJob.resubmitFailed",
                             true)),
             Map.entry(
+                    "conversation.InboxItems.yieldToQuestion",
+                    new Repair(
+                            RepairKind.POLL,
+                            "The digest start pass runs every 30 seconds and first stops the background turns of every thread in which a question waits (InboxItems.yieldWhereQuestionsWait).",
+                            "agent.conversation.weeklydigest.DigestSchedule.startDueDigests",
+                            true)),
+            Map.entry(
                     "conversation.ConversationTurnWaits.publishWaits",
                     new Repair(
                             RepairKind.RECONCILE,

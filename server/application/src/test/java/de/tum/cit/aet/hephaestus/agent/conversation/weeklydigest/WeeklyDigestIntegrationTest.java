@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.conversation.InboxItems;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -146,6 +147,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConversationTurnRepository turnRows;
+
+    @Autowired
+    private InboxItems inbox;
 
     @Autowired
     private ConversationTurnAccess turnAccess;
@@ -648,6 +652,157 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                         .isEqualTo(feedback.id().toString()));
     }
 
+    @Test
+    void shouldStartTheDigestAtOnceOnAnIdleThreadAndKeepOneItemForTheWeek() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var schedule = schedule(Clock.fixed(due(), ZoneOffset.UTC));
+        assertThat(schedule.enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        assertThat(item(stimulus.getConversationId()))
+                .containsEntry("state", "CLAIMED")
+                .containsEntry("reason", "STARTED")
+                .containsEntry("turn_id", stimulus.getTurnId())
+                .containsEntry("starts", 1)
+                .containsEntry("attempts", 0);
+
+        assertThat(schedule.enqueueDue()).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM inbox_item WHERE conversation_id=?",
+                        Integer.class,
+                        stimulus.getConversationId()))
+                .isOne();
+    }
+
+    @Test
+    void shouldStopAQueuedDigestForTheQuestionAndStartItAgainOnceTheThreadIsIdle() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var schedule = schedule(Clock.fixed(due(), ZoneOffset.UTC));
+        assertThat(schedule.enqueueDue()).isEqualTo(1);
+        var first = digestEntry().orElseThrow();
+        UUID conversationId = first.getConversationId();
+        UUID digestTurn = Objects.requireNonNull(first.getTurnId());
+        UUID digestRun = turnRows.findById(digestTurn).orElseThrow().getRunId();
+
+        var asked = turns.submit(workspaceId, conversationId, question("Why was my pull request flagged?"));
+
+        assertThat(asked.created()).isTrue();
+        assertThat(turnRows.findById(digestTurn).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.STOPPED);
+        assertThat(runState(digestRun)).isEqualTo("ENDED");
+
+        // While the question waits, the pass settles the stopped digest and leaves the item waiting, uncharged.
+        schedule.startDue();
+        assertThat(item(conversationId))
+                .containsEntry("state", "PENDING")
+                .containsEntry("reason", "DEFERRED_ACTIVE")
+                .containsEntry("attempts", 0);
+
+        turns.stop(workspaceId, asked.turn().getId());
+        schedule.startDue();
+        var again = entryRepository
+                .findByWorkspaceIdAndRequestId(workspaceId, requestId() + "#1")
+                .orElseThrow();
+        assertThat(again.getKind()).isEqualTo(ConversationEntry.Kind.DIGEST);
+        assertThat(item(conversationId))
+                .containsEntry("state", "CLAIMED")
+                .containsEntry("turn_id", again.getTurnId())
+                .containsEntry("starts", 2);
+    }
+
+    @Test
+    void shouldStopALeasedDigestForTheQuestionWithTheStopGraceSoTheQuestionIsTheNextClaim() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        UUID conversationId = stimulus.getConversationId();
+        UUID digestTurn = Objects.requireNonNull(stimulus.getTurnId());
+        var claim = Objects.requireNonNull(transactionTemplate.execute(tx -> {
+            assertThat(writeFence.holdForAccountWrite(accountId)).isTrue();
+            var leased = runs.claimSubject(
+                            workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST))
+                    .orElseThrow();
+            assertThat(turns.start(workspaceId, leased.runId(), leased.epoch())).isPresent();
+            return leased;
+        }));
+
+        var asked = turns.submit(workspaceId, conversationId, question("Can you look at my latest change?"));
+
+        assertThat(turnRows.findById(digestTurn).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.STOPPED);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT deadline <= now() + interval '31 seconds' FROM agent_run WHERE id=? AND workspace_id=?",
+                        Boolean.class,
+                        claim.runId(),
+                        workspaceId))
+                .as("the digest's holder gets the stop grace, not the rest of its work")
+                .isTrue();
+        // The holder settles within the grace and stores nothing; then the question is the next claim.
+        transactionTemplate.executeWithoutResult(
+                tx -> runs.end(claim.fence(), AgentRunStopReason.CANCELLED));
+        assertThat(transactionTemplate.execute(tx -> runs.claimSubject(
+                                workspaceId,
+                                "conversation:" + conversationId,
+                                Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST))
+                        .map(lease -> lease.runId())
+                        .orElse(null)))
+                .isEqualTo(asked.turn().getRunId());
+    }
+
+    @Test
+    void shouldLeaveTheDigestWaitingWhileTheQuestionRunsAndExpireItAtTheCutoff() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var main = conversations.findOrCreateMain(workspaceId, accountId);
+        var asked = turns.submit(workspaceId, main.getId(), question("What should I fix first?"));
+
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        assertThat(digestEntry()).as("no digest turn while the question waits").isEmpty();
+        assertThat(item(main.getId()))
+                .containsEntry("state", "PENDING")
+                .containsEntry("reason", "DEFERRED_ACTIVE");
+
+        turns.stop(workspaceId, asked.turn().getId());
+        schedule(Clock.fixed(week.contactCutoff().plusSeconds(1), ZoneOffset.UTC)).startDue();
+        assertThat(item(main.getId()))
+                .containsEntry("state", "EXPIRED")
+                .containsEntry("reason", "DEADLINE_PASSED");
+        assertThat(digestEntry()).as("a late digest is never written").isEmpty();
+    }
+
+    @Test
+    void shouldNotStartTheDigestAgainAfterTheDeveloperTurnedItOffAndOn() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var main = conversations.findOrCreateMain(workspaceId, accountId);
+        var asked = turns.submit(workspaceId, main.getId(), question("What changed this week?"));
+        var schedule = schedule(Clock.fixed(due(), ZoneOffset.UTC));
+        assertThat(schedule.enqueueDue()).isEqualTo(1);
+
+        // Opted out and in again: a new consent, which the item was not scheduled under.
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start().plusSeconds(60)));
+        turns.stop(workspaceId, asked.turn().getId());
+        schedule.startDue();
+        assertThat(item(main.getId()))
+                .containsEntry("state", "DROPPED")
+                .containsEntry("reason", "NO_LONGER_ELIGIBLE");
+        assertThat(digestEntry()).isEmpty();
+    }
+
+    private ConversationTurnService.Question question(String text) {
+        return new ConversationTurnService.Question(
+                ConversationTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null);
+    }
+
+    private Map<String, Object> item(UUID conversationId) {
+        return jdbcTemplate.queryForMap(
+                "SELECT state, reason, starts, attempts, turn_id FROM inbox_item WHERE workspace_id=?"
+                        + " AND conversation_id=? AND source_key=?",
+                workspaceId,
+                conversationId,
+                DigestSchedule.sourceKey(week));
+    }
+
+    private String runState(UUID runId) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT state FROM agent_run WHERE id=? AND workspace_id=?", String.class, runId, workspaceId));
+    }
+
     private static Set<UUID> sameWorkspace(long workspaceId, Collection<ResultFacts> results) {
         return results.stream()
                 .filter(result -> result.workspaceId() == workspaceId)
@@ -668,6 +823,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 conversations,
                 entries,
                 turns,
+                inbox,
+                eligibility(),
+                conversationAccess,
                 writeFence,
                 objectMapper,
                 transactionTemplate,
@@ -1034,7 +1192,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                             conversationId,
                             new ConversationTurnService.DigestRequest(
                                     requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
-                    .isTrue();
+                    .isPresent();
             var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
                     .orElseThrow();
             assertThat(runs.claimSubject(workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST)))
@@ -1076,7 +1234,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                             conversationId,
                             new ConversationTurnService.DigestRequest(
                                     requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
-                    .isTrue();
+                    .isPresent();
             var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
                     .orElseThrow();
             assertThat(runs.find(erasedRun).orElseThrow().getStartWithinSeconds())

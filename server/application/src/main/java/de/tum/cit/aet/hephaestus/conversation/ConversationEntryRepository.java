@@ -290,6 +290,10 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     boolean existsByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
 
+    /** Whether the person wrote in the conversation after {@code since}: the start policy's idle gate reads it. */
+    boolean existsByWorkspaceIdAndConversationIdAndKindAndCreatedAtAfter(
+            Long workspaceId, UUID conversationId, ConversationEntry.Kind kind, Instant since);
+
     Optional<ConversationEntry> findByWorkspaceIdAndConversationIdAndSlackTs(
             Long workspaceId, UUID conversationId, String slackTs);
 

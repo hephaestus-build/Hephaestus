@@ -200,13 +200,43 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             @Param("conversationId") @Nullable UUID conversationId,
             @Param("limit") int limit);
 
+    /** The person's queued questions of a conversation: background turns yield to a question, so they do not count. */
     @Query("""
             SELECT COUNT(t) FROM ConversationTurn t
             WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
               AND t.status = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.QUEUED
+              AND t.surface <> de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Surface.SYSTEM
             """)
-    long countQueuedByWorkspaceIdAndConversationId(
-            @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
+    long countQueuedQuestions(@Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
+
+    /** Whether a question of the person waits or runs in the conversation. */
+    @Query("""
+            SELECT COUNT(t) > 0 FROM ConversationTurn t
+            WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
+              AND t.status IN (de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.QUEUED,
+                               de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.RUNNING)
+              AND t.surface <> de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Surface.SYSTEM
+            """)
+    boolean existsActiveQuestion(@Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
+
+    /** A conversation in which a background turn is active while a question of the person waits. */
+    interface ThreadRef {
+        long getWorkspaceId();
+
+        UUID getConversationId();
+    }
+
+    @WorkspaceAgnostic("The start pass repairs a missed yield in every workspace, each under its turns' locks")
+    @Query(value = """
+            SELECT DISTINCT b.workspace_id AS "workspaceId", b.conversation_id AS "conversationId"
+            FROM conversation_turn b
+            WHERE b.surface = 'SYSTEM' AND b.status IN ('QUEUED', 'RUNNING')
+              AND EXISTS (SELECT 1 FROM conversation_turn q
+                          WHERE q.workspace_id = b.workspace_id AND q.conversation_id = b.conversation_id
+                            AND q.surface <> 'SYSTEM' AND q.status = 'QUEUED')
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<ThreadRef> findThreadsWithBackgroundBeforeQuestion(@Param("limit") int limit);
 
     /**
      * Locks queued turns and held turns, including stopped holders. A claim skips a locked row, so no turn of the conversation
