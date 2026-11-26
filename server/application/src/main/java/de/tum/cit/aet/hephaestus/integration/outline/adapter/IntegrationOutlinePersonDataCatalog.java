@@ -27,7 +27,7 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
         EXISTS (SELECT 1
           FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
           JOIN identity_provider p ON i."providerId"=p.id AND p.type='OUTLINE'
-          JOIN connection c ON c.config->>'serverUrl'=p.server_url AND c.kind='OUTLINE'
+          JOIN connection c ON c.outline_origin=p.outline_origin AND c.kind='OUTLINE'
           WHERE c.id=t.connection_id AND c.workspace_id=t.workspace_id
             AND COALESCE(i."teamId",'')""" + OutlinePersonTeam.SQL_MATCH;
 

@@ -40,7 +40,7 @@ final class OutlineCollaboratorPersonDataContributor implements PersonDataContri
                 SELECT t.id, jsonb_agg(DISTINCT i.subject ORDER BY i.subject)::text
                 FROM outline_document t
                 JOIN connection c ON c.id=t.connection_id AND c.workspace_id=t.workspace_id
-                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.outline_origin=c.outline_origin
                 JOIN jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
                   ON i."providerId"=p.id AND jsonb_exists(t.collaborator_subjects,i.subject)
                 WHERE c.kind='OUTLINE' AND COALESCE(i."teamId",'')""" + OutlinePersonTeam.SQL_MATCH + """

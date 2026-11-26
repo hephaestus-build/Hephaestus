@@ -70,6 +70,10 @@ public class Connection {
     @Nullable
     private String instanceKey;
 
+    @Nullable
+    @Column(name = "outline_origin", length = 512)
+    private String outlineOrigin;
+
     @Column(name = "display_name", length = 256)
     @Nullable
     private String displayName;
@@ -428,5 +432,8 @@ public class Connection {
                     + expected
                     + ")");
         }
+        outlineOrigin = config instanceof ConnectionConfig.OutlineConfig outline
+                ? ScmOrigin.of(outline.serverUrl()).orElse(null)
+                : null;
     }
 }

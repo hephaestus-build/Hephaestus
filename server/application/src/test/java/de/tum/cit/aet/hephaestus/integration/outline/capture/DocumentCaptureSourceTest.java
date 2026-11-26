@@ -71,6 +71,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -114,6 +115,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -136,6 +138,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 List.of(),
                 false,
                 collectionName,
+                null,
                 null,
                 null,
                 null);
@@ -309,7 +312,8 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                "https://docs.example/doc/release-guide-abc123");
+                "https://docs.example/doc/release-guide-abc123",
+                null);
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(linked, doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
 

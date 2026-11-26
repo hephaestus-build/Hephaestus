@@ -20,6 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
  * predicate the tenancy {@code StatementInspector} requires.
  */
 public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument, Long> {
+    String ERASED_GUARD = """
+        AND NOT EXISTS (SELECT 1 FROM IdentityRestriction s, IdentityProvider p, Connection c
+          WHERE s.kind=de.tum.cit.aet.hephaestus.core.privacy.IdentityRestriction.Kind.ERASED AND s.providerId=p.id AND c.id=d.connectionId AND c.workspace.id=:workspaceId
+            AND p.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.OUTLINE
+            AND p.outlineOrigin=c.outlineOrigin
+            AND (s.providerUserKey=d.createdBySubject OR s.providerUserKey=d.updatedBySubject
+              OR FUNCTION('jsonb_exists',d.collaboratorSubjects,s.providerUserKey)=TRUE)
+            AND s.teamKey""" + OutlinePersonTeam.JPQL_MATCH + ") ";
+
     /** AI readers exclude controlled native creator, editor and collaborator identities. Mirror writes do not. */
     String PERSON_PROJECTION_GUARD = """
             AND EXISTS (SELECT 1 FROM Connection active WHERE active.id=d.connectionId AND active.workspace.id=:workspaceId
@@ -28,31 +37,25 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
             AND NOT EXISTS (SELECT 1 FROM Identity i, IdentityProvider p, Connection c, Account a
               WHERE i.providerId=p.id AND i.account.id=a.id AND c.id=d.connectionId AND c.workspace.id=:workspaceId
                 AND p.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.OUTLINE
-                AND p.serverUrl=FUNCTION('jsonb_extract_path_text',c.config,'serverUrl')
+                AND p.outlineOrigin=c.outlineOrigin
                 AND i.teamKey=COALESCE(c.instanceKey,'')
                 AND a.aiChoice=de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice.NO_AI
                 AND (i.providerUserKey=d.createdBySubject OR i.providerUserKey=d.updatedBySubject
                   OR FUNCTION('jsonb_exists',d.collaboratorSubjects,i.providerUserKey)=TRUE))
-        AND NOT EXISTS (SELECT 1 FROM IdentityRestriction s, IdentityProvider p, Connection c
-          WHERE s.kind=de.tum.cit.aet.hephaestus.core.privacy.IdentityRestriction.Kind.ERASED AND s.providerId=p.id AND c.id=d.connectionId AND c.workspace.id=:workspaceId
-            AND p.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.OUTLINE
-            AND p.serverUrl=FUNCTION('jsonb_extract_path_text',c.config,'serverUrl')
-            AND (s.providerUserKey=d.createdBySubject OR s.providerUserKey=d.updatedBySubject
-              OR FUNCTION('jsonb_exists',d.collaboratorSubjects,s.providerUserKey)=TRUE)
-            AND s.teamKey""" + OutlinePersonTeam.JPQL_MATCH + ") ";
+        """ + ERASED_GUARD;
 
     String PERSON_PROJECTION_SQL_GUARD = """
             AND EXISTS (SELECT 1 FROM connection active WHERE active.id=d.connection_id AND active.workspace_id=:workspaceId
               AND active.kind='OUTLINE' AND active.state='ACTIVE')
             AND NOT EXISTS (SELECT 1 FROM identity i JOIN identity_provider p ON i.provider_id=p.id
               JOIN account a ON a.id=i.account_id JOIN connection c ON c.id=d.connection_id AND c.workspace_id=:workspaceId
-              WHERE p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl' AND i.team_key=COALESCE(c.instance_key,'')
+              WHERE p.type='OUTLINE' AND p.outline_origin=c.outline_origin AND i.team_key=COALESCE(c.instance_key,'')
                 AND a.ai_choice='NO_AI' AND (i.provider_user_key=d.created_by_subject OR i.provider_user_key=d.updated_by_subject
                   OR jsonb_exists(d.collaborator_subjects,i.provider_user_key)))
         AND NOT EXISTS (SELECT 1 FROM identity_restriction s
           JOIN identity_provider p ON s.provider_id=p.id
           JOIN connection c ON c.id=d.connection_id AND c.workspace_id=:workspaceId
-          WHERE s.kind='ERASED' AND p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+          WHERE s.kind='ERASED' AND p.type='OUTLINE' AND p.outline_origin=c.outline_origin
             AND (s.provider_user_key=d.created_by_subject OR s.provider_user_key=d.updated_by_subject
               OR jsonb_exists(d.collaborator_subjects,s.provider_user_key))
             AND s.team_key""" + OutlinePersonTeam.SQL_MATCH + ") ";
@@ -226,7 +229,8 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
      * a collection whose name was never captured leaves it null.
      */
     @Query(
-            "SELECT d.id AS id, d.title AS title, c.name AS collectionName FROM OutlineDocument d LEFT JOIN OutlineCollection c ON c.workspaceId = d.workspaceId AND c.connectionId = d.connectionId AND c.collectionId = d.collectionId WHERE d.workspaceId = :workspaceId AND d.id IN (:ids)")
+            "SELECT d.id AS id, d.title AS title, collection.name AS collectionName FROM OutlineDocument d LEFT JOIN OutlineCollection collection ON collection.workspaceId = d.workspaceId AND collection.connectionId = d.connectionId AND collection.collectionId = d.collectionId WHERE d.workspaceId = :workspaceId AND d.id IN (:ids) "
+                    + ERASED_GUARD)
     List<DocumentLabel> findLabels(@Param("workspaceId") long workspaceId, @Param("ids") Collection<Long> ids);
 
     interface DocumentLabel {
@@ -251,17 +255,34 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
     @Query(value = """
         SELECT d.id
         FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
-        JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+        JOIN identity_provider p ON p.type='OUTLINE' AND p.outline_origin=c.outline_origin
         WHERE p.id=:providerId AND c.kind='OUTLINE'
           AND (:subject IN (d.created_by_subject,d.updated_by_subject) OR jsonb_exists(d.collaborator_subjects,:subject))
           AND :teamId""" + OutlinePersonTeam.SQL_MATCH, nativeQuery = true)
     List<Long> findPersonSourceIds(
             @Param("providerId") long providerId, @Param("subject") String subject, @Param("teamId") String teamId);
 
+    interface CopySourceRow {
+        long getWorkspaceId();
+
+        String getOrigin();
+
+        String getTeam();
+    }
+
+    @WorkspaceAgnostic("Instance-admin person selection reads the source keys of previously selected document ids")
+    @Query("""
+            SELECT DISTINCT d.workspaceId AS workspaceId, c.outlineOrigin AS origin, COALESCE(c.instanceKey,'') AS team
+            FROM OutlineDocument d JOIN Connection c ON c.id=d.connectionId AND c.workspace.id=d.workspaceId
+            WHERE d.id IN :ids AND c.outlineOrigin IS NOT NULL
+            ORDER BY d.workspaceId, c.outlineOrigin, COALESCE(c.instanceKey,'')
+            """)
+    List<CopySourceRow> findCopySources(@Param("ids") Collection<Long> ids);
+
     @Query(value = """
         SELECT DISTINCT p.id AS providerId,authors.subject AS subject,COALESCE(c.instance_key,'') AS teamId
                 FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
-                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.outline_origin=c.outline_origin
                 CROSS JOIN LATERAL (
                     SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
                     UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))

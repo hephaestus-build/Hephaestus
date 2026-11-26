@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
@@ -25,6 +26,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -256,8 +258,10 @@ public class ConversationTurnContexts {
 
     /** The turn's context documents, each time in them in the developer's zone ({@link ContextTimes}). */
     private Map<String, byte[]> build(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
+        var outlineSources = new LinkedHashSet<OutlinePersonCopyScope.Source>();
         Map<String, byte[]> built = contextBuilder.build(new ConversationContextRequest(
-                turn.workspaceId(), turn.accountId(), turn.conversationId(), questionEntryId));
+                turn.workspaceId(), turn.accountId(), turn.conversationId(), questionEntryId, outlineSources::add));
+        turns.recordOutlineContext(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), outlineSources);
         Map<String, byte[]> local = new LinkedHashMap<>();
         built.forEach((key, bytes) -> local.put(key, local(bytes, zone)));
         return local;

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.documentation;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -181,7 +182,11 @@ public class OutlineDocumentProjector implements DocumentProjection {
                 collectionNames.get(new CollectionKey(doc.getConnectionId(), doc.getCollectionId())),
                 doc.getLastMaterializedAt(),
                 doc.getDocumentId(),
-                url);
+                url,
+                source.flatMap(connection -> Optional.ofNullable(connection.getOutlineOrigin()).map(
+                                origin -> new OutlinePersonCopyScope.Source(
+                                        origin, Objects.requireNonNullElse(connection.getInstanceKey(), ""))))
+                        .orElse(null));
     }
 
     /** Outline links a document as {@code <server>/doc/<slug>}. The mirrored slug is that last path segment. */

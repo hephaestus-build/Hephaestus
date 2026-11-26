@@ -141,6 +141,10 @@ public class DocumentCaptureSource implements ContentSource {
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize Outline documents context", e);
         }
+        for (ProjectedDocument doc : documents.subList(0, emitted)) {
+            var source = doc.outlineSource();
+            if (source != null) request.outlineSource().accept(source);
+        }
     }
 
     // Fall back to recency when no query matches; documentation enrichment must not require a matching user message.
