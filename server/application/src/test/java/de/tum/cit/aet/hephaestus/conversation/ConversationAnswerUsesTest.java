@@ -53,6 +53,16 @@ class ConversationAnswerUsesTest {
     }
 
     @Test
+    void shouldCountOneFileWhenAnInteriorPathSegmentNamesTheSameFile() {
+        var uses = List.of(new ToolUse("1", "read", "INDEX.md"), new ToolUse("2", "read", "inputs/../INDEX.md"));
+        var outcomes = List.of(new Outcome("1", "read", false), new Outcome("2", "read", false));
+
+        var used = ConversationAnswerUses.of(true, uses, outcomes, false, false);
+
+        assertThat(used.read()).containsExactly(new ConversationUsedSourceDTO(Kind.FILES, null, 1));
+    }
+
+    @Test
     void shouldKeepAFailedReadOfADocumentWithNoKnownName() {
         var uses = List.of(new ToolUse("read", "read", "inputs/context/missing.json"));
 

@@ -76,6 +76,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     private ConversationTurnRepository turnRepository;
 
     @Autowired
+    private ConversationTimeline timeline;
+
+    @Autowired
     private ConversationSituation situation;
 
     @Autowired
@@ -595,6 +598,82 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo("I will check your observations.")
                 .jsonPath("$.content[0].used")
                 .doesNotExist();
+    }
+
+    @Test
+    void shouldKeepTheReceiptWhenTheLastToolCallShowsNothing() {
+        ConversationTurn running = started(submit(main(), "What did my review say?"));
+        F f = new F();
+        UUID feedbackId = UUID.randomUUID();
+        turns.stop(running.getWorkspaceId(), running.getId());
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.STOPPED,
+                        List.of(
+                                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "I checked."),
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
+                                        "refused",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", feedbackId.toString())
+                                                .put("text", "Feedback the tool refused.")),
+                                f.result("refused", "show_feedback", true)),
+                        null,
+                        null));
+
+        var answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                running.getWorkspaceId(), running.getId(), ConversationEntry.Kind.ANSWER);
+        assertThat(answers).hasSize(2);
+        get("/entries")
+                .jsonPath("$.content[*].kind")
+                .isEqualTo(List.of("USER", "ANSWER"))
+                .jsonPath("$.content[1].text")
+                .isEqualTo("I checked.")
+                .jsonPath("$.content[1].used.cited")
+                .isEqualTo(false);
+        get("/entries?size=1&cursor=" + answers.getLast().getSeq())
+                .jsonPath("$.content[0].used.cited")
+                .isEqualTo(false);
+        var live = timeline.liveEntry(running.getWorkspaceId(), developer.getId(), answers.getFirst().getId());
+        assertThat(live).hasValueSatisfying(entry -> assertThat(entry.used()).isNotNull());
+    }
+
+    @Test
+    void shouldMarkAnAnswerCitedOnlyWhenTheTimelineShowsALink() {
+        ConversationTurn running = started(submit(main(), "What did my review say?"));
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
+                                        "link",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", " " + UUID.randomUUID())
+                                                .put("text", "Feedback with a padded ID.")),
+                                f.result("link", "show_feedback", false),
+                                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "I checked.")),
+                        null,
+                        null));
+
+        get("/entries")
+                .jsonPath("$.content[*].kind")
+                .isEqualTo(List.of("USER", "ANSWER"))
+                .jsonPath("$.content[1].used.cited")
+                .isEqualTo(false);
     }
 
     /** One opening call and its result, as the host stores them. */

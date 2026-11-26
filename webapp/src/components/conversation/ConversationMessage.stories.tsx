@@ -57,6 +57,45 @@ export const Answer: Story = {
 	},
 };
 
+/** Answers with the same opening still have distinct names for their disclosures. */
+export const AnswersWithMatchingOpenings: Story = {
+	args: {
+		message: {
+			...ANSWER,
+			text: "I checked your recent work and found one thing to change. Add a test for the retry.",
+			used: { recorded: true, cited: false, askedFromPage: false, read: [], couldNotCheck: [] },
+		},
+	},
+	render: (args) => {
+		const second = {
+			...ANSWER,
+			...args.message,
+			id: "2da6c819-75a8-4c84-bb79-dc051f4cead1",
+			seq: ANSWER.seq + 2,
+			turnId: "7d57316d-1eb8-43d3-ab40-373bed931d80",
+			text: "I checked your recent work and found one thing to change. Explain the cache limit.",
+		};
+		return (
+			<>
+				<ConversationMessage {...args} />
+				<ConversationMessage {...args} message={second} />
+			</>
+		);
+	},
+	play: async ({ canvas }) => {
+		const names = new Set<string>();
+		const triggers = canvas.getAllByRole("button", {
+			name: (name) => {
+				if (!name.startsWith("What Hephaestus used")) return false;
+				names.add(name);
+				return true;
+			},
+		});
+		await expect(triggers).toHaveLength(2);
+		await expect(names.size).toBe(2);
+	},
+};
+
 /** Written in Slack: the header says where, so the reader knows the conversation moved. */
 export const Slack: Story = {
 	args: { message: SLACK_QUESTION },
