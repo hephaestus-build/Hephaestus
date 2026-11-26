@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource.WEBHOOK;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +30,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -364,37 +366,57 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldChangeNothingAndSpendNoAttemptWhenTheRateLimitStopsTheRun() throws Exception {
+    void shouldChangeNothingAndSpendNoAttemptOfTheLastWhenTheRateLimitStopsTheRun() throws Exception {
         User wrong = user("wrong");
         long commit = commit(repository(), wrong, null, EMAIL);
         seed();
-        provider = question -> new Answer.Deferred();
+        // The email has one attempt left: a throttle must not take it.
+        jdbc.update("UPDATE commit_identity_resolution SET attempts = ?", CommitIdentityResolutionJob.MAX_ATTEMPTS - 1);
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return new Answer.Deferred(reset);
+        };
 
+        run(50);
+        // Another server, which never saw the throttle, reads the deadline from the row.
+        job = null;
         run(50);
 
         assertThat(authorOf(commit)).isEqualTo(wrong.getId());
         assertThat(states()).containsOnly("PENDING");
-        assertThat(attempts()).containsOnly(0);
+        assertThat(attempts()).containsOnly(CommitIdentityResolutionJob.MAX_ATTEMPTS - 1);
+        assertThat(asked)
+                .as("no server asks again before the provider's deadline")
+                .containsExactly(EMAIL);
+        assertThat(jdbc.queryForList("SELECT deferred_until FROM commit_identity_resolution", Timestamp.class))
+                .singleElement()
+                .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
     }
 
     @Test
-    void shouldPauseAThrottledRepositorySoTheNextOneIsCorrected() throws Exception {
+    void shouldCorrectAHealthyRepositoryBehindAThrottledOne() throws Exception {
         User wrong = user("wrong");
         User right = user("right");
         String throttledEmail = "throttled@example.com";
         Repository throttled = repository();
         Repository healthy = repository();
+        when(scopes.getActiveScopesForRepository(eq(throttled.getNativeId()), anyLong()))
+                .thenReturn(List.of(1L));
+        when(scopes.getActiveScopesForRepository(eq(healthy.getNativeId()), anyLong()))
+                .thenReturn(List.of(2L));
         long waiting = commit(throttled, wrong, null, throttledEmail);
         long corrected = commit(healthy, wrong, null, EMAIL);
         seed();
-        assertThat(resolutions.findNextRepositories(1).getFirst().getRepositoryId())
+        assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
                 .as("the throttled repository stands first in the queue")
                 .isEqualTo(throttled.getId());
         List<String> asked = new ArrayList<>();
         provider = question -> {
             asked.add(question.email());
             return question.email().equals(throttledEmail)
-                    ? new Answer.Deferred()
+                    ? new Answer.Deferred(Instant.now().plus(Duration.ofMinutes(40)))
                     : new Answer.Account(id(right), right.getNativeId());
         };
 
@@ -407,7 +429,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(right.getId());
         assertThat(authorOf(waiting)).isEqualTo(wrong.getId());
         assertThat(asked)
-                .as("the paused repository is not asked again before its pause ends")
+                .as("the throttled repository is not asked again before its deadline")
                 .containsExactly(throttledEmail, EMAIL);
         assertThat(jdbc.queryForObject(
                         "SELECT attempts FROM commit_identity_resolution WHERE repository_id = ?",
@@ -417,6 +439,35 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         assertThat(meters.counter("commit.identity.resolutions", "outcome", "deferred")
                         .count())
                 .isEqualTo(1);
+    }
+
+    @Test
+    void shouldSetAsideTheOtherRepositoriesOfAThrottledScopeWithoutAskingTheProvider() throws Exception {
+        User wrong = user("wrong");
+        String throttledEmail = "throttled@example.com";
+        Repository first = repository();
+        Repository sibling = repository();
+        commit(first, wrong, null, throttledEmail);
+        commit(sibling, wrong, null, EMAIL);
+        seed();
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return new Answer.Deferred(reset);
+        };
+
+        run(50);
+        run(50);
+
+        assertThat(asked).as("one request per server for the whole scope").containsExactly(throttledEmail);
+        assertThat(jdbc.queryForList(
+                        "SELECT deferred_until FROM commit_identity_resolution WHERE repository_id = ?",
+                        Timestamp.class,
+                        sibling.getId()))
+                .singleElement()
+                .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
+        assertThat(attempts()).containsOnly(0);
     }
 
     @Test

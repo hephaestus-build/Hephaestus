@@ -89,4 +89,8 @@ public class CommitIdentityResolution {
 
     @Column(name = "finished_at")
     private @Nullable Instant finishedAt;
+
+    /** The provider's deadline for a deferred email: the job does not ask again before it. */
+    @Column(name = "deferred_until")
+    private @Nullable Instant deferredUntil;
 }

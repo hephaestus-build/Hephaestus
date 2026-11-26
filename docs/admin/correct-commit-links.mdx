@@ -27,9 +27,9 @@ The correction job runs by default.
    - `erased`: the provider named an erased account, so the links are cleared.
    - `skipped`: another attempt already finished the email. No link changed.
    - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
-   - `deferred`: the provider limited its rate, so the email waits and spends no attempt.
-     The job pauses that repository for 10 minutes, and doubles the pause up to one hour while the limit lasts.
-     The other repositories continue.
+   - `deferred`: the provider limited its rate, so the email waits until the provider's reset and spends no attempt.
+     The wait is at least one minute and at most two hours, and every server keeps it.
+     The other repositories of that connection wait too. Other connections continue.
 
 ## Check that it worked
 

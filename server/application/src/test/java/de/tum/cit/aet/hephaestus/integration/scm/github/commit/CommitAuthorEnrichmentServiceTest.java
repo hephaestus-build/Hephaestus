@@ -249,9 +249,62 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             assertThat(actors.throttled())
                     .as("the NOT_FOUND of the first alias does not hide the throttle after it")
                     .isTrue();
-            assertThat(actors.bySha())
-                    .as("a named account stays an answer; a null user under a throttle waits")
-                    .containsOnlyKeys(named);
+            assertThat(actors.bySha()).containsOnlyKeys(named, nobody);
+            assertThat(Objects.requireNonNull(actors.bySha().get(named))
+                            .getFirst()
+                            .answered())
+                    .as("a named account stays an answer")
+                    .isTrue();
+            assertThat(Objects.requireNonNull(actors.bySha().get(nobody))
+                            .getFirst()
+                            .answered())
+                    .as("a null user under a throttle is no answer that no account owns the email")
+                    .isFalse();
+        }
+
+        @Test
+        void shouldReadAThrottleUnderACommitAliasAsAThrottleOfTheWholeBatch() {
+            String nobody = "c".repeat(40);
+            var actors = readBody("""
+                    {"data":{"repository":{
+                      "commit0":null,
+                      "commit1":{"author":{"email":"c@example.com","user":null},"committer":null,"authors":{"nodes":[]}}}},
+                     "errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded","path":["repository","commit0"]}]}
+                    """, List.of(SHA, nobody));
+
+            assertThat(actors.throttled()).isTrue();
+            assertThat(Objects.requireNonNull(actors.bySha().get(nobody))
+                            .getFirst()
+                            .answered())
+                    .as("the sibling's null user was cut short by the throttle")
+                    .isFalse();
+        }
+
+        @Test
+        void shouldFindAThrottleBehindANotFoundInAnInvalidResponse() {
+            var actors = readBody("""
+                    {"data":null,
+                     "errors":[{"type":"NOT_FOUND","message":"Could not resolve to a Repository"},
+                               {"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}
+                    """, List.of(SHA));
+
+            assertThat(actors.throttled())
+                    .as("the NOT_FOUND before it does not hide the throttle of an invalid response")
+                    .isTrue();
+            verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());
+        }
+
+        @Test
+        void shouldEndTheReadAtA403ThatNamesItsLimitOnlyByRetryAfter() {
+            var headers = new HttpHeaders();
+            headers.add("Retry-After", "120");
+            headers.add("X-RateLimit-Remaining", "4000");
+            var actors = refuse(WebClientResponseException.create(403, "Forbidden", headers, new byte[0], null));
+
+            assertThat(actors.throttled())
+                    .as("a secondary limit with an empty body is a wait, not an authorization miss")
+                    .isTrue();
+            assertThat(actors.throttledUntil()).isAfter(Instant.now().plusSeconds(100));
         }
 
         private CommitAuthorEnrichmentService.CommitActors refuse(WebClientResponseException refusal) {

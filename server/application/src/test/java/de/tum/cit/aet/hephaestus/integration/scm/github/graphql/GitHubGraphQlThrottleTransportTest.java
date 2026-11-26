@@ -62,7 +62,35 @@ class GitHubGraphQlThrottleTransportTest {
                 .build());
 
         assertThat(classification.category()).isEqualTo(Category.RATE_LIMITED);
+        assertThat(classification.rateLimitResetAt())
+                .as("the provider's deadline, not a blind backoff")
+                .isBetween(reset.minusSeconds(5), reset.plusSeconds(5));
+    }
+
+    @Test
+    void shouldKeepTheResetOfA429ThatNamesOnlyThePrimaryWindow() {
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+
+        var classification = classifyAnswer(new MockResponse.Builder()
+                .code(429)
+                .addHeader("X-RateLimit-Remaining", "0")
+                .addHeader("X-RateLimit-Reset", Long.toString(reset.getEpochSecond()))
+                .build());
+
+        assertThat(classification.category()).isEqualTo(Category.RATE_LIMITED);
         assertThat(classification.rateLimitResetAt()).isEqualTo(reset);
+    }
+
+    @Test
+    void shouldReadA403WithOnlyARetryAfterAsAThrottle() {
+        var classification = classifyAnswer(new MockResponse.Builder()
+                .code(403)
+                .addHeader("Retry-After", "120")
+                .addHeader("X-RateLimit-Remaining", "4000")
+                .build());
+
+        assertThat(classification.category()).isEqualTo(Category.RATE_LIMITED);
+        assertThat(classification.rateLimitResetAt()).isAfter(Instant.now().plusSeconds(100));
     }
 
     @Test

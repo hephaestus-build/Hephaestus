@@ -312,7 +312,7 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
                         Long.class,
                         scope.repositoryId()))
                 .isPositive();
-        assertThat(resolutions.findNextRepositories(1).getFirst().getRepositoryId())
+        assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
                 .isEqualTo(scope.repositoryId());
         // ShedLock stores UTC without a zone; this test session uses Europe/Berlin.
         await().atMost(Duration.ofSeconds(70))

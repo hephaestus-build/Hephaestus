@@ -17,6 +17,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,7 +57,7 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
 
     private Map<Question, Answer> ask(List<CommitActor> actors) {
         when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
-                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(SHA, actors), false));
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(SHA, actors), null));
         return provider.answer("o/r", 7L, 9L, Set.of(QUESTION));
     }
 
@@ -114,29 +117,57 @@ class GitHubCommitIdentityProviderTest extends BaseUnitTest {
     @Test
     void shouldGiveNoAnswerWhenGitHubDoesNotReturnTheCommit() {
         when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
-                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), false));
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), null));
 
         assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION))).isEmpty();
     }
 
     @Test
-    void shouldDeferWhenTheRateLimitStoppedTheRead() {
+    void shouldDeferUntilTheTrackedResetWhenTheRateLimitStoppedTheRead() {
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40));
         when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
-                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), false));
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), null));
         when(graphQlClientProvider.isRateLimitCritical(anyLong())).thenReturn(true);
+        when(graphQlClientProvider.getRateLimitResetAt(anyLong())).thenReturn(reset);
 
-        assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION))).containsEntry(QUESTION, new Answer.Deferred());
+        assertThat(provider.answer("o/r", 7L, 9L, Set.of(QUESTION)))
+                .containsEntry(QUESTION, new Answer.Deferred(reset));
         verify(suppression, never()).isSuppressed(anyLong(), anyString(), any());
     }
 
     @Test
     void shouldDeferEveryUnansweredCommitOfAThrottledReadThoughTheQuotaLooksFree() {
         // A secondary limit, or a throttle answered with HTTP 200, while the tracked primary quota still has room.
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(3));
         when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
-                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), true));
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(Map.of(), deadline));
 
         assertThat(provider.answer("o/r", 1L, 9L, Set.of(QUESTION)))
                 .as("a throttle is a wait: deferred, it spends no attempt of the five")
-                .containsEntry(QUESTION, new Answer.Deferred());
+                .containsEntry(QUESTION, new Answer.Deferred(deadline));
+    }
+
+    @Test
+    void shouldDeferAnEmailThatAThrottledCommitLeftWithoutAnAnswerAndAnswerTheNamedOne() {
+        var local = new User();
+        local.setId(3L);
+        when(users.ensureExists(any(), any())).thenReturn(local);
+        Question committer = new Question(SHA, "committer@example.com");
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(3));
+        // Under the throttle, the committer's null user is no answer, and the author's account is one.
+        when(commits.fetchCommitActors("o/r", 9L, List.of(SHA)))
+                .thenReturn(new CommitAuthorEnrichmentService.CommitActors(
+                        Map.of(
+                                SHA,
+                                List.of(
+                                        new CommitActor("someone@example.com", account(2L), true),
+                                        new CommitActor("committer@example.com", null, false))),
+                        deadline));
+
+        var answers = provider.answer("o/r", 7L, 9L, new LinkedHashSet<>(List.of(QUESTION, committer)));
+
+        assertThat(answers)
+                .containsEntry(QUESTION, new Answer.Account(3L, 2L))
+                .containsEntry(committer, new Answer.Deferred(deadline));
     }
 }

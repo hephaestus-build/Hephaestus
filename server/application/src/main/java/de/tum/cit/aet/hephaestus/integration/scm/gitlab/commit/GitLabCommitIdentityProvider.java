@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -59,7 +61,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
             try {
                 if (!clients.isCircuitClosed()
                         || clients.getRateLimitRemaining(scopeId) < GitLabSyncConstants.CRITICAL_REMAINING_THRESHOLD) {
-                    answers.put(question, new Answer.Deferred());
+                    answers.put(question, new Answer.Deferred(deadline(scopeId)));
                     continue;
                 }
                 clients.waitIfRateLimitLow(scopeId);
@@ -114,11 +116,11 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                     answers.put(question, new Answer.Account(local.getId(), nativeId));
                 }
             } catch (CircuitBreakerOpenException exception) {
-                answers.put(question, new Answer.Deferred());
+                answers.put(question, new Answer.Deferred(deadline(scopeId)));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 for (var pending : questions) {
-                    answers.putIfAbsent(pending, new Answer.Deferred());
+                    answers.putIfAbsent(pending, new Answer.Deferred(deadline(scopeId)));
                 }
                 break;
             } catch (RuntimeException exception) {
@@ -130,5 +132,12 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
             }
         }
         return answers;
+    }
+
+    /** GitLab's reset when it reported one, else a minute: a closed circuit or a low budget recovers soon. */
+    private Instant deadline(long scopeId) {
+        Instant reset = clients.getRateLimitResetAt(scopeId);
+        Instant soon = Instant.now().plus(Duration.ofMinutes(1));
+        return reset != null && reset.isAfter(soon) ? reset : soon;
     }
 }

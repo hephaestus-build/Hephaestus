@@ -11,11 +11,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -44,21 +44,19 @@ public class CommitIdentityResolutionJob {
 
     static final int MAX_ATTEMPTS = 5;
 
+    /** The longest that a provider's deadline holds an email, so a wrong reset cannot park the queue for good. */
+    static final Duration MAX_DEFERRAL = Duration.ofHours(2);
+
+    static final Duration MIN_DEFERRAL = Duration.ofMinutes(1);
+
+    /** How many repositories of paused scopes one run sets aside, at most, before it asks a provider. */
+    static final int MAX_SET_ASIDE_PER_RUN = 50;
+
     /**
-     * How long a repository with a deferred answer waits before the job asks for it again. It doubles while the
-     * provider still defers, so a lasting throttle costs few requests, and the other repositories run meanwhile.
+     * The deadline per scope that a provider gave on this server. The deferred rows carry it for every server; this
+     * map stops the reads of the scope's other repositories here, so a throttle costs one request per server.
      */
-    static final Duration FIRST_PAUSE = Duration.ofMinutes(10);
-
-    static final Duration MAX_PAUSE = Duration.ofHours(1);
-
-    /**
-     * The pause per repository ID. It lives in memory: the provider's rate limit state does too, and a restart or a
-     * second server costs at most one more request per repository.
-     */
-    private final Map<Long, Pause> paused = new ConcurrentHashMap<>();
-
-    private record Pause(Instant until, Duration length) {}
+    private final Map<Long, Instant> pausedScopes = new ConcurrentHashMap<>();
 
     private final CommitIdentityResolutionRepository resolutions;
     private final CommitIdentityResolutionService service;
@@ -91,19 +89,16 @@ public class CommitIdentityResolutionJob {
     @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT2M")
     @SchedulerLock(name = "commit-identity-resolution", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void run() {
-        Instant now = Instant.now();
-        Set<Long> waiting = paused.entrySet().stream()
-                .filter(entry -> entry.getValue().until().isAfter(now))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toSet());
-        resolutions.findNextRepositories(waiting.size() + 1).stream()
-                .filter(repository -> !waiting.contains(repository.getRepositoryId()))
-                .findFirst()
-                .ifPresent(this::resolve);
+        // A repository of a paused scope is set aside without a request, and the run takes the next due one.
+        for (int setAside = 0; setAside <= MAX_SET_ASIDE_PER_RUN; setAside++) {
+            var next = resolutions.findNextRepository();
+            if (next.isEmpty() || resolve(next.get())) break;
+        }
         pending.set(resolutions.countPending());
     }
 
-    private void resolve(NextRepository repository) {
+    /** @return true when it asked the provider; false when it set the repository aside for its paused scope */
+    private boolean resolve(NextRepository repository) {
         var emails = resolutions.findPendingEmails(repository.getRepositoryId(), properties.batchSize());
         var provider = providers.stream()
                 .filter(candidate -> candidate.kind().name().equals(repository.getProviderType()))
@@ -113,49 +108,61 @@ public class CommitIdentityResolutionJob {
                         .findFirst());
         if (scope.isEmpty()) {
             emails.forEach(this::miss);
-            return;
+            return true;
         }
+        long scopeId = scope.orElseThrow();
+        Instant paused = pausedScopes.get(scopeId);
+        if (paused != null && paused.isAfter(Instant.now())) {
+            defer(repository, emails.stream().map(PendingEmail::getId).toList(), paused);
+            return false;
+        }
+        pausedScopes.remove(scopeId);
         var questions = emails.stream()
                 .filter(email -> email.getEmail() != null)
                 .map(CommitIdentityResolutionJob::question)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         var answers = provider.orElseThrow()
-                .answer(repository.getNameWithOwner(), repository.getProviderId(), scope.orElseThrow(), questions);
-        int deferred = 0;
+                .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, questions);
+        List<Long> deferred = new ArrayList<>();
+        Instant until = null;
         for (var email : emails) {
             if (email.getEmail() == null) {
                 count(service.miss(email.getId(), MAX_ATTEMPTS, MAX_ATTEMPTS));
                 continue;
             }
-            if (answers.get(question(email)) instanceof Answer.Deferred) {
-                deferred++;
+            if (answers.get(question(email)) instanceof Answer.Deferred deferral) {
+                deferred.add(email.getId());
+                until = until == null || deferral.until().isAfter(until) ? deferral.until() : until;
                 continue;
             }
             apply(repository, email, answers);
         }
-        pauseOrResume(repository.getRepositoryId(), deferred);
+        if (until != null) {
+            Instant bounded = bounded(until);
+            pausedScopes.put(scopeId, bounded);
+            defer(repository, deferred, bounded);
+        }
+        return true;
     }
 
-    private void pauseOrResume(long repositoryId, int deferred) {
-        if (deferred == 0) {
-            paused.remove(repositoryId);
-            return;
-        }
-        var previous = paused.get(repositoryId);
-        var length = previous == null ? FIRST_PAUSE : min(previous.length().multipliedBy(2), MAX_PAUSE);
-        paused.put(repositoryId, new Pause(Instant.now().plus(length), length));
+    private void defer(NextRepository repository, List<Long> ids, Instant until) {
+        if (ids.isEmpty()) return;
+        resolutions.defer(ids, until);
         meterRegistry
                 .counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "deferred")
-                .increment(deferred);
+                .increment(ids.size());
         log.info(
-                "Paused commit link correction for a repository whose provider deferred: repositoryId={}, deferred={}, pause={}",
-                repositoryId,
-                deferred,
-                length);
+                "Deferred commit link correction until the provider's deadline: repositoryId={}, emails={}, until={}",
+                repository.getRepositoryId(),
+                ids.size(),
+                until);
     }
 
-    private static Duration min(Duration a, Duration b) {
-        return a.compareTo(b) <= 0 ? a : b;
+    private static Instant bounded(Instant until) {
+        Instant now = Instant.now();
+        Instant earliest = now.plus(MIN_DEFERRAL);
+        Instant latest = now.plus(MAX_DEFERRAL);
+        return until.isBefore(earliest) ? earliest : until.isAfter(latest) ? latest : until;
     }
 
     private void apply(NextRepository repository, PendingEmail email, Map<Question, Answer> answers) {

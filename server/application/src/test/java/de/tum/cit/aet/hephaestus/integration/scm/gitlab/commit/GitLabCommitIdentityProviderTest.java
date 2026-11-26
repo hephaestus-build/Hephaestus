@@ -139,7 +139,8 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @Test
     void shouldDeferWithoutARequestWhenTheBudgetIsCritical() {
         when(clients.getRateLimitRemaining(9L)).thenReturn(0);
-        assertThat(ask(actor())).containsEntry(QUESTION, new Answer.Deferred());
+        assertThat(ask(actor()))
+                .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
         assertThat(calls).hasValue(0);
         verifyNoInteractions(users);
     }
@@ -147,7 +148,8 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @Test
     void shouldDeferWithoutARequestWhenTheCircuitIsOpen() {
         when(clients.isCircuitClosed()).thenReturn(false);
-        assertThat(ask(actor())).containsEntry(QUESTION, new Answer.Deferred());
+        assertThat(ask(actor()))
+                .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
         assertThat(calls).hasValue(0);
     }
 }

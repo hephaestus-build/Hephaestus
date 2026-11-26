@@ -532,6 +532,10 @@ public class GitHubExceptionClassifier {
      * Checks if a 403 response is due to rate limiting.
      */
     private boolean isRateLimitResponse(WebClientResponseException e) {
+        // GitHub names a secondary limit by Retry-After, whatever the primary quota and the body say.
+        if (e.getHeaders().getFirst("Retry-After") != null) {
+            return true;
+        }
         // Check for rate limit headers
         List<String> rateLimitRemaining = e.getHeaders().get("X-RateLimit-Remaining");
         if (rateLimitRemaining != null && !rateLimitRemaining.isEmpty()) {
@@ -559,22 +563,11 @@ public class GitHubExceptionClassifier {
     }
 
     /**
-     * Extracts rate limit reset time from response headers.
+     * Extracts rate limit reset time from response headers. {@code Retry-After} comes first, as GitHub documents: a
+     * secondary limit names its own wait, and the primary window's reset can be an hour away.
      */
     @Nullable
     private Instant extractRateLimitReset(WebClientResponseException e) {
-        // Try X-RateLimit-Reset header (Unix timestamp)
-        List<String> resetHeader = e.getHeaders().get("X-RateLimit-Reset");
-        if (resetHeader != null && !resetHeader.isEmpty()) {
-            try {
-                long epochSeconds = Long.parseLong(resetHeader.get(0));
-                return Instant.ofEpochSecond(epochSeconds);
-            } catch (NumberFormatException ignored) {
-                // Fall through to other methods
-            }
-        }
-
-        // Try Retry-After header (seconds to wait)
         List<String> retryAfter = e.getHeaders().get("Retry-After");
         if (retryAfter != null && !retryAfter.isEmpty()) {
             try {
@@ -582,6 +575,16 @@ public class GitHubExceptionClassifier {
                 return Instant.now().plusSeconds(seconds);
             } catch (NumberFormatException ignored) {
                 // Retry-After might be a date, but we'll ignore that for simplicity
+            }
+        }
+
+        List<String> resetHeader = e.getHeaders().get("X-RateLimit-Reset");
+        if (resetHeader != null && !resetHeader.isEmpty()) {
+            try {
+                long epochSeconds = Long.parseLong(resetHeader.get(0));
+                return Instant.ofEpochSecond(epochSeconds);
+            } catch (NumberFormatException ignored) {
+                // No usable reset header
             }
         }
 

@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnric
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
 
+    /** The wait when GitHub limits the scope but names no reset. */
+    static final Duration UNKNOWN_DEADLINE = Duration.ofMinutes(10);
+
     private final CommitAuthorEnrichmentService commits;
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubUserProcessor users;
@@ -38,17 +43,21 @@ public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
     public Map<Question, Answer> answer(String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
         var shas = questions.stream().map(Question::sha).distinct().toList();
         var actors = commits.fetchCommitActors(nameWithOwner, scopeId, shas);
-        // A throttled read is a wait: its unanswered commits are deferred and spend no attempt.
-        boolean stopped = actors.throttled() || graphQlClientProvider.isRateLimitCritical(scopeId);
+        // A throttled read is a wait: each question it left without an answer waits for GitHub's deadline, also one
+        // whose commit came back without a usable actor for its email, and spends no attempt.
+        Instant until = actors.throttledUntil();
+        if (until == null && graphQlClientProvider.isRateLimitCritical(scopeId)) {
+            Instant reset = graphQlClientProvider.getRateLimitResetAt(scopeId);
+            until = reset != null && reset.isAfter(Instant.now())
+                    ? reset
+                    : Instant.now().plus(UNKNOWN_DEADLINE);
+        }
         Map<Question, Answer> answers = new HashMap<>();
         for (var question : questions) {
             var commitActors = actors.bySha().get(question.sha());
-            if (commitActors == null) {
-                if (stopped) answers.put(question, new Answer.Deferred());
-                continue;
-            }
-            var answer = answer(providerId, question.email(), commitActors);
+            var answer = commitActors == null ? null : answer(providerId, question.email(), commitActors);
             if (answer != null) answers.put(question, answer);
+            else if (until != null) answers.put(question, new Answer.Deferred(until));
         }
         return answers;
     }

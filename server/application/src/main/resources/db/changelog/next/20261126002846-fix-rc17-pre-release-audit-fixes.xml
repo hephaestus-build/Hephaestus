@@ -14,4 +14,10 @@ ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
     CHECK (hold_reason IS NULL OR hold_reason IN ('BUDGET', 'SANDBOX_ROOM'));
         </rollback>
     </changeSet>
+    <changeSet id="1795634098734-2" author="hephaestus">
+        <comment>A commit link correction that its provider deferred waits until the provider's deadline, on every server, and spends no attempt.</comment>
+        <addColumn tableName="commit_identity_resolution">
+            <column name="deferred_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

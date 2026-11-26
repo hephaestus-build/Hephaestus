@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,7 +28,10 @@ public interface CommitIdentityProvider {
         /** The provider names an account that was erased here. Nothing may link to it. */
         record Erased() implements Answer {}
 
-        /** The provider's budget is spent. The question stays open, and it costs no attempt. */
-        record Deferred() implements Answer {}
+        /**
+         * The provider's budget is spent until {@code until}. The question stays open until then, and it costs no
+         * attempt.
+         */
+        record Deferred(Instant until) implements Answer {}
     }
 }

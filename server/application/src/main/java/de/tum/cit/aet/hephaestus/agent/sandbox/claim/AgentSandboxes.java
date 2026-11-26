@@ -282,10 +282,33 @@ public class AgentSandboxes {
         return lease(sandbox, kinds, () -> {}, claimed);
     }
 
-    /** The domain fence precedes the sandbox, run and domain row locks. */
+    /**
+     * The domain fence precedes the sandbox, run and domain row locks. A claim that holds its run retires the sandbox:
+     * the lease revokes it, and deletes its claim after the commit, so its slot is free before the reaper's next tick.
+     */
     public Optional<AgentRunLease> lease(
             LiveSandbox sandbox, Set<AgentRunKind> kinds, Runnable beforeWrite, Predicate<AgentRunLease> claimed) {
         if (kinds.isEmpty()) return Optional.empty();
+        boolean[] retired = {false};
+        var leased = leaseInTransaction(sandbox, kinds, beforeWrite, claimed, retired);
+        if (retired[0]) deleteRevoked(sandbox);
+        return leased;
+    }
+
+    /** Whether the sandbox still serves: a revoked or deleted one answers no more runs. */
+    public boolean isLive(LiveSandbox sandbox) {
+        return sandboxes
+                .findLive(sandbox.workspaceId(), sandbox.subjectKey())
+                .filter(row -> row.getId().equals(sandbox.id()))
+                .isPresent();
+    }
+
+    private Optional<AgentRunLease> leaseInTransaction(
+            LiveSandbox sandbox,
+            Set<AgentRunKind> kinds,
+            Runnable beforeWrite,
+            Predicate<AgentRunLease> claimed,
+            boolean[] retired) {
         return Objects.requireNonNull(transactions.execute(status -> {
             beforeWrite.run();
             if (sandboxes
@@ -307,8 +330,10 @@ public class AgentSandboxes {
                 if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
                 else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
                 if (!claimed.test(leased)) {
-                    if (runs.isHeld(new AgentRunRef(leased.runId(), sandbox.workspaceId())))
+                    if (runs.isHeld(new AgentRunRef(leased.runId(), sandbox.workspaceId()))) {
                         revoke(sandbox, Revocation.RUN_HELD);
+                        retired[0] = true;
+                    }
                     return Optional.<AgentRunLease>empty();
                 }
                 sandboxes.used(sandbox.id(), sandbox.workspaceId());

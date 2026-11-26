@@ -350,8 +350,10 @@ A review that a hold or a backoff put back to a later time is not due, so its id
 The pass reads the due runs a page at a time until its room is used or the queue ends, so the reviews that a full pool holds do not hide the runs behind them.
 The claim applies the rule again while it holds the pool's row lock, so two servers that dispatched reviews of one pool at once admit only one.
 It records the pool on the job.
-A run that the rule refuses at its claim waits with the hold `MODEL_POOL` for one minute: it spends nothing and keeps its place in the claim order.
-The run is not due while it waits. The claim gives the sandbox back in the same transaction, and the dispatch starts a new one only once the pool admits the review.
+A run that the rule refuses at its claim waits with the hold `MODEL_POOL` for one minute, and it spends nothing.
+The run is not due while it waits. Then it rejoins the due runs in its creation order. A review that comes due during that minute can take room that opens meanwhile.
+The claim revokes the sandbox in the same transaction and deletes its claim after the commit, so its slot is free before the reaper's next tick.
+The sandbox's next pull answers `410`, and its driver stops. The dispatch starts a new sandbox only once the pool admits the review.
 A deferral would keep the run due, so its ready sandbox would ask for it again and again and hold its slot.
 A review that a pool takes runs at most as many practice sessions at once as the pool's room leaves it after the other running reviews, and at least one (`PI_SESSION_LIMIT`).
 Thus, a review wider than the room, which an idle pool takes alone, measures its practices in waves of that size.

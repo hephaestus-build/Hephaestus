@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
+import de.tum.cit.aet.hephaestus.testconfig.DuePublications;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -234,6 +235,7 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(ConversationReceipts.failed(jdbc)).isPositive();
         databaseBack(shown);
 
+        DuePublications.age(jdbc, ConversationReceiptsDue.class);
         failedPublications.resubmit(ResubmissionOptions.defaults().withMinAge(Duration.ZERO));
 
         assertThat(settled(shown)).isEqualTo("DELIVERED/POSTED/true/m7a1b2c3");

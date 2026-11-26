@@ -570,6 +570,15 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxes.authenticate(pooledToken))
                 .as("the held run's sandbox gives its pool slot back in the refused claim")
                 .isEmpty();
+        assertThat(claims.created)
+                .as("its claim is deleted after the commit, with no reaper tick")
+                .doesNotContainKey(claimName(pooledSandbox));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_sandbox WHERE id = ?", Long.class, pooledSandbox.id()))
+                .as("so the dispatch counts its slot as free at once")
+                .isZero();
+        assertThat(sandboxes.isLive(pooledSandbox)).isFalse();
+        assertThat(sandboxes.isLive(requeuedSandbox)).isTrue();
         assertThat(meters.counter("agent.sandbox.revoked", "reason", "run_held").count())
                 .isEqualTo(1.0);
         assertThat(repository.findLive(workspace, requeued))

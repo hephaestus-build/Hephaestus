@@ -38,23 +38,20 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         int getAttempts();
     }
 
-    /** The repositories with pending emails, the one with the fewest attempts and the oldest row first. */
+    /** The repository of the next due email. An email that its provider deferred is not due before its deadline. */
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """
-        SELECT n.repository_id AS repositoryId, r.provider_id AS providerId, r.native_id AS nativeId,
+        SELECT q.repository_id AS repositoryId, r.provider_id AS providerId, r.native_id AS nativeId,
                p.type AS providerType,
                r.name_with_owner AS nameWithOwner
-        FROM (SELECT q.repository_id, min(q.attempts) AS attempts, min(q.id) AS first_id
-              FROM commit_identity_resolution q
-              WHERE q.state = 'PENDING'
-              GROUP BY q.repository_id
-              ORDER BY 2, 3
-              LIMIT :limit) n
-        JOIN repository r ON r.id = n.repository_id
+        FROM commit_identity_resolution q
+        JOIN repository r ON r.id = q.repository_id
         JOIN identity_provider p ON p.id = r.provider_id
-        ORDER BY n.attempts, n.first_id
+        WHERE q.state = 'PENDING' AND (q.deferred_until IS NULL OR q.deferred_until <= clock_timestamp())
+        ORDER BY q.attempts, q.id
+        LIMIT 1
         """, nativeQuery = true)
-    List<NextRepository> findNextRepositories(@Param("limit") int limit);
+    Optional<NextRepository> findNextRepository();
 
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """
@@ -66,6 +63,7 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         JOIN git_commit gc ON gc.id = q.commit_id
         LEFT JOIN commit_contributor cc ON cc.id = q.contributor_id
         WHERE q.state = 'PENDING' AND q.repository_id = :repositoryId
+          AND (q.deferred_until IS NULL OR q.deferred_until <= clock_timestamp())
         ORDER BY q.attempts, q.id
         LIMIT :limit
         """, nativeQuery = true)
@@ -110,4 +108,14 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
     @Transactional
     @Query(value = "UPDATE commit_identity_resolution SET attempts = attempts + 1 WHERE id = :id", nativeQuery = true)
     int retryLater(@Param("id") long id);
+
+    /** The provider deferred these emails: they wait until its deadline, on every server, and spend no attempt. */
+    @WorkspaceAgnostic("Keyed update of rows of the instance-wide repair queue")
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE commit_identity_resolution SET deferred_until = :until
+        WHERE id IN (:ids) AND state = 'PENDING'
+        """, nativeQuery = true)
+    int defer(@Param("ids") List<Long> ids, @Param("until") Instant until);
 }

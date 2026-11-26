@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.notification;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.database.publication.EventPublicationStore;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.metrics.NotificationMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -32,13 +33,12 @@ public class OverduePublicationMeter {
 
     static final Duration OVERDUE_AFTER = Duration.ofHours(1);
 
-    private final NotificationPublicationConfiguration.PublicationCounts counts;
+    private final EventPublicationStore publications;
     private final MultiGauge overdue;
     private final MultiGauge exhausted;
 
-    public OverduePublicationMeter(
-            NotificationPublicationConfiguration.PublicationCounts counts, MeterRegistry meterRegistry) {
-        this.counts = counts;
+    public OverduePublicationMeter(EventPublicationStore publications, MeterRegistry meterRegistry) {
+        this.publications = publications;
         this.overdue = MultiGauge.builder(NotificationMetrics.EVENT_PUBLICATIONS_OVERDUE)
                 .description("Event publications still not completed one hour after they were published, by listener")
                 .register(meterRegistry);
@@ -52,7 +52,7 @@ public class OverduePublicationMeter {
         Map<String, Long> overdueByListener = new TreeMap<>();
         Map<String, Long> exhaustedByListener = new TreeMap<>();
         try {
-            for (var open : counts.byListener(OVERDUE_AFTER)) {
+            for (var open : publications.openByListener(NotificationRedeliveryJob.MAX_ATTEMPTS, OVERDUE_AFTER)) {
                 String listener = listenerName(open.listenerId());
                 add(exhaustedByListener, listener, open.exhausted());
                 add(overdueByListener, listener, open.overdue());

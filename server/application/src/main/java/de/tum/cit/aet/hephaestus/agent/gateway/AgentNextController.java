@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,9 +49,9 @@ public class AgentNextController {
     }
 
     /**
-     * The subject's next run, leased to this sandbox; {@code 204} when none came due while the request waited. Only
-     * the run kinds that this sandbox's kind drives are offered, and each kind moves its domain row in the transaction
-     * of the lease.
+     * The subject's next run, leased to this sandbox; {@code 204} when none came due while the request waited, and
+     * {@code 410} when the sandbox was retired meanwhile, so its driver stops. Only the run kinds that this sandbox's
+     * kind drives are offered, and each kind moves its domain row in the transaction of the lease.
      */
     @PostMapping("/next")
     public ResponseEntity<Assignment> next(@AuthenticationPrincipal AgentSandboxes.LiveSandbox sandbox) {
@@ -63,7 +64,9 @@ public class AgentNextController {
                 // Its gateway writes and renewals enforce the stored deadline even when this field is null.
                 .map(lease -> ResponseEntity.ok(new Assignment(
                         lease.runId(), lease.epoch(), lease.kind(), lease.leasedUntil(), lease.deadline())))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+                .orElseGet(() -> sandboxes.isLive(sandbox)
+                        ? ResponseEntity.noContent().build()
+                        : ResponseEntity.status(HttpStatus.GONE).build());
     }
 
     /** One claim of the subject's next run, while the drain admits claims. */

@@ -11,7 +11,13 @@ import com.tngtech.archunit.core.domain.JavaCodeUnit;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.domain.TryCatchBlock;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import de.tum.cit.aet.hephaestus.core.TransientFailures;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,7 +27,14 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.springframework.asm.ClassReader;
+import org.springframework.asm.ClassVisitor;
+import org.springframework.asm.Handle;
+import org.springframework.asm.Label;
+import org.springframework.asm.MethodVisitor;
+import org.springframework.asm.Opcodes;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.modulith.events.ApplicationModuleListener;
 
@@ -37,8 +50,9 @@ import org.springframework.modulith.events.ApplicationModuleListener;
  * the deepest calls in one build than in another, so an exception that a run does not find is no failure.
  *
  * <p>Limits: the walk follows direct calls, and an interface call to each production implementation, up to {@link
- * #DEPTH} calls deep. It cannot see a {@code catch} that rethrows, so it counts such a catch as settling. It proves no
- * behaviour: #5196 tracks a test per listener below that a permanent failure records its stop reason.
+ * #DEPTH} calls deep. A {@code catch} that throws its exception again passes the failure on, so it settles nothing;
+ * the bytecode of the listener's class shows it. It proves no behaviour: #5196 tracks a test per listener
+ * below that a permanent failure records its stop reason.
  */
 class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
 
@@ -145,8 +159,14 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
             Map.entry(
                     "integration.slack.interactivity.SlackInteractivityHandler.onOptOutConfirmation(integration.slack.interactivity.SlackInteractivityHandler$OptOutConfirmation)",
                     new Escape(
-                            Set.of("core.exception.JournalPendingException"),
-                            "#5196: the privacy journal is not ready")));
+                            Set.of(
+                                    "agent.conversation.turn.exception.ConversationRefusedException",
+                                    "core.exception.EntityNotFoundException",
+                                    "core.exception.JournalPendingException",
+                                    "integration.core.egress.OutboundEgressSuppressedException",
+                                    "integration.core.spi.FeedbackDeliveryException"),
+                            "#5196: the privacy journal is not ready, or the confirmation cannot be sent; the"
+                                    + " try-with-resources of the copy fence passes these on")));
 
     private record Escape(Set<String> exceptions, String reason) {}
 
@@ -214,15 +234,56 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
         return type.getName().startsWith(prefix) ? type.getName().substring(prefix.length()) : type.getName();
     }
 
+    @Test
+    void shouldCountACatchThatRethrowsAsNoSettlement() {
+        var fixture =
+                new ClassFileImporter().importClasses(PassThroughListener.class).get(PassThroughListener.class);
+        var walk = new Walk(fixture, transientTypes());
+
+        assertThat(walk.escapes(fixture.getMethod("rethrows", Object.class), Set.of(), 0))
+                .extracting(JavaClass::getSimpleName)
+                .as("a handler that throws again passes the failure on")
+                .containsExactly("EntityNotFoundException");
+        assertThat(walk.escapes(fixture.getMethod("settles", Object.class), Set.of(), 0))
+                .as("a handler that records the failure and returns settles it")
+                .isEmpty();
+    }
+
+    /** A listener-shaped fixture: one catch passes its failure on, the other settles it. */
+    @SuppressWarnings({"unused", "UnusedMethod", "UnusedVariable"}) // Read as bytecode only.
+    private static final class PassThroughListener {
+        private @Nullable String stop;
+
+        void rethrows(Object event) {
+            try {
+                throw new EntityNotFoundException("event");
+            } catch (EntityNotFoundException failure) {
+                stop = "seen";
+                throw failure;
+            }
+        }
+
+        void settles(Object event) {
+            try {
+                throw new EntityNotFoundException("event");
+            } catch (EntityNotFoundException failure) {
+                stop = "recorded";
+            }
+            if (stop == null) throw new IllegalStateException("unreachable in the fixture");
+        }
+    }
+
     /** One listener's walk: catches count only inside the listener's own class, the boundary that settles. */
     private static final class Walk {
         private final JavaClass boundary;
         private final Set<JavaClass> transientTypes;
         private final Map<String, Set<JavaClass>> raised = new HashMap<>();
+        private final Map<String, Set<String>> rethrown;
 
         Walk(JavaClass boundary, Set<JavaClass> transientTypes) {
             this.boundary = boundary;
             this.transientTypes = transientTypes;
+            this.rethrown = rethrowingCatches(boundary);
         }
 
         /** What escapes {@code unit} of the listener's class, given the types that enclosing catches settle. */
@@ -231,7 +292,10 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
             for (JavaAccess<?> access : unit.getAccessesFromSelf()) {
                 if (!(access instanceof JavaCall<?> call)) continue;
                 Set<JavaClass> caught = new HashSet<>(settled);
-                caught.addAll(caughtAround(unit, access));
+                Set<String> passedOn = rethrown.getOrDefault(unit.getName() + unit.getDescriptor(), Set.of());
+                caughtAround(unit, access).stream()
+                        .filter(type -> !passedOn.contains(type.getName()))
+                        .forEach(caught::add);
                 JavaClass constructed = call.getTargetOwner();
                 if (call.getName().equals("<init>") && isDomainFailure(constructed) && !settledBy(constructed, caught))
                     escaping.add(constructed);
@@ -277,6 +341,139 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
                     && type.getPackageName().startsWith(BASE_PACKAGE)
                     && inProduction(type)
                     && transientTypes.stream().noneMatch(other -> type.isAssignableTo(other.getName()));
+        }
+
+        /** Per method ({@code name + descriptor}), the caught types that one of its handlers throws again. */
+        private static Map<String, Set<String>> rethrowingCatches(JavaClass owner) {
+            Map<String, Set<String>> found = new HashMap<>();
+            String resource = owner.getName().replace('.', '/') + ".class";
+            try (InputStream in = owner.reflect().getClassLoader().getResourceAsStream(resource)) {
+                if (in == null) return found;
+                new ClassReader(in)
+                        .accept(
+                                new ClassVisitor(Opcodes.ASM9) {
+                                    @Override
+                                    public MethodVisitor visitMethod(
+                                            int access,
+                                            String name,
+                                            String descriptor,
+                                            @Nullable String signature,
+                                            String @Nullable [] exceptions) {
+                                        return new HandlerScan(
+                                                found.computeIfAbsent(name + descriptor, key -> new HashSet<>()));
+                                    }
+                                },
+                                ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return found;
+        }
+
+        /**
+         * Finds {@code throw caught}: a handler stores its exception in a local first, and a rethrow loads that local
+         * just before {@code athrow}. A handler that wraps the exception throws a new one, which escapes on its own.
+         */
+        private static final class HandlerScan extends MethodVisitor {
+            private final Set<String> rethrown;
+            private final Map<Label, List<String>> handlers = new HashMap<>();
+            private final Map<Integer, List<String>> caughtIn = new HashMap<>();
+            private List<String> starting = List.of();
+            private int loaded = -1;
+
+            HandlerScan(Set<String> rethrown) {
+                super(Opcodes.ASM9);
+                this.rethrown = rethrown;
+            }
+
+            @Override
+            public void visitTryCatchBlock(Label start, Label end, Label handler, @Nullable String type) {
+                if (type != null)
+                    handlers.computeIfAbsent(handler, key -> new ArrayList<>()).add(type.replace('/', '.'));
+            }
+
+            @Override
+            public void visitLabel(Label label) {
+                List<String> types = handlers.get(label);
+                if (types != null) starting = types;
+            }
+
+            @Override
+            public void visitVarInsn(int opcode, int local) {
+                if (opcode == Opcodes.ASTORE) {
+                    if (starting.isEmpty()) caughtIn.remove(local);
+                    else caughtIn.put(local, starting);
+                }
+                starting = List.of();
+                loaded = opcode == Opcodes.ALOAD ? local : -1;
+            }
+
+            @Override
+            public void visitInsn(int opcode) {
+                if (opcode == Opcodes.ATHROW) rethrown.addAll(caughtIn.getOrDefault(loaded, List.of()));
+                other();
+            }
+
+            @Override
+            public void visitIntInsn(int opcode, int operand) {
+                other();
+            }
+
+            @Override
+            public void visitTypeInsn(int opcode, String type) {
+                other();
+            }
+
+            @Override
+            public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+                other();
+            }
+
+            @Override
+            public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+                other();
+            }
+
+            @Override
+            public void visitInvokeDynamicInsn(
+                    String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
+                other();
+            }
+
+            @Override
+            public void visitJumpInsn(int opcode, Label label) {
+                other();
+            }
+
+            @Override
+            public void visitLdcInsn(Object value) {
+                other();
+            }
+
+            @Override
+            public void visitIincInsn(int local, int increment) {
+                other();
+            }
+
+            @Override
+            public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) {
+                other();
+            }
+
+            @Override
+            public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
+                other();
+            }
+
+            @Override
+            public void visitMultiANewArrayInsn(String descriptor, int dimensions) {
+                other();
+            }
+
+            private void other() {
+                starting = List.of();
+                loaded = -1;
+            }
         }
 
         private static Set<JavaClass> caughtAround(JavaCodeUnit unit, JavaAccess<?> access) {
