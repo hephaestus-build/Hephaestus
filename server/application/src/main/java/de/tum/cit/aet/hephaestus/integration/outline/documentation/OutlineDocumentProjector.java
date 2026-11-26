@@ -150,19 +150,20 @@ public class OutlineDocumentProjector implements DocumentProjection {
         Optional<Connection> source = connectionService.findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId());
         String url = source.map(connection -> documentUrl(connection, doc)).orElse(null);
         var outlineSource = source.map(connection -> {
-            String origin = connection.getOutlineOrigin();
-            if (origin == null) return null;
-            String team = connection.getInstanceKey();
-            var subjects = new LinkedHashSet<String>();
-            if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
-            if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
-            if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
-            subjects.stream()
-                    .filter(subject -> !subject.isBlank())
-                    .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
-                            "OUTLINE", origin, subject, team)));
-            return new ProjectedDocument.OutlineSource(origin, Objects.requireNonNullElse(team, ""));
-        }).orElse(null);
+                    String origin = connection.getOutlineOrigin();
+                    if (origin == null) return null;
+                    String team = connection.getInstanceKey();
+                    var subjects = new LinkedHashSet<String>();
+                    if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
+                    if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
+                    if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
+                    subjects.stream()
+                            .filter(subject -> !subject.isBlank())
+                            .forEach(subject -> personCopies.recordIdentity(
+                                    new PersonCopyIdentity("OUTLINE", origin, subject, team)));
+                    return new ProjectedDocument.OutlineSource(origin, Objects.requireNonNullElse(team, ""));
+                })
+                .orElse(null);
         boolean deleted = doc.isDeleted();
         String body = deleted ? null : doc.getBodyMarkdown();
         return new ProjectedDocument(

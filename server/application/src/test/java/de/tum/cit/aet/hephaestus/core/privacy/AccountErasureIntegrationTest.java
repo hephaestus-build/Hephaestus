@@ -2168,17 +2168,27 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 answer.getConversationId(),
                 new ConversationTurnService.Question(
-                        ConversationTurn.Surface.SYSTEM, "Load context", UUID.randomUUID().toString(), null, null));
+                        ConversationTurn.Surface.SYSTEM,
+                        "Load context",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
         var turn = claims.claimNext().orElseThrow();
         assertThat(turn.getId()).isEqualTo(submitted.turn().getId());
         UUID runId = Objects.requireNonNull(turn.getRunId());
         turnContext.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), runId, List.of());
         conversationTurns.end(
-                workspaceId, turn.getId(), turn.getAttempt(), runId,
+                workspaceId,
+                turn.getId(),
+                turn.getAttempt(),
+                runId,
                 new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null));
         assertThat(jdbc.update(
-                "UPDATE conversation_entry SET turn_id=? WHERE workspace_id=? AND id IN (?,?)",
-                turn.getId(), workspaceId, derived.toolResultId(), derived.messageId()))
+                        "UPDATE conversation_entry SET turn_id=? WHERE workspace_id=? AND id IN (?,?)",
+                        turn.getId(),
+                        workspaceId,
+                        derived.toolResultId(),
+                        derived.messageId()))
                 .isEqualTo(2);
     }
 

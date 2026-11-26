@@ -11,10 +11,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentEvents;
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentPermission;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Comparator;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -54,19 +54,24 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
         Set<Long> frozen = Set.copyOf(person.outlineDocumentIds());
         if (rows.stream().anyMatch(row -> !frozen.contains(row.getId())))
             throw new IllegalStateException("The frozen erasure is missing Outline documents");
-        return rows.stream().collect(Collectors.groupingBy(
-                OutlineDocumentRepository.PersonSourceDocument::getWorkspaceId,
-                Collectors.collectingAndThen(
-                        Collectors.mapping(row -> new Source(row.getOrigin(), row.getTeam()), Collectors.toSet()),
-                        sources -> sources.stream()
-                                .sorted(Comparator.comparing(Source::origin).thenComparing(Source::team))
-                                .toList())));
+        return rows.stream()
+                .collect(Collectors.groupingBy(
+                        OutlineDocumentRepository.PersonSourceDocument::getWorkspaceId,
+                        Collectors.collectingAndThen(
+                                Collectors.mapping(
+                                        row -> new Source(row.getOrigin(), row.getTeam()), Collectors.toSet()),
+                                sources -> sources.stream()
+                                        .sorted(Comparator.comparing(Source::origin)
+                                                .thenComparing(Source::team))
+                                        .toList())));
     }
 
     private List<OutlineDocumentRepository.PersonSourceDocument> matchingDocuments(PersonScope person) {
         return person.identities().stream()
-                .flatMap(identity -> repository.findPersonSourceIds(
-                        identity.providerId(), identity.subject(), identity.teamKey()).stream())
+                .flatMap(identity ->
+                        repository
+                                .findPersonSourceIds(identity.providerId(), identity.subject(), identity.teamKey())
+                                .stream())
                 .toList();
     }
 

@@ -11,5 +11,4 @@ public interface OutlinePersonCopyScope {
     Map<Long, List<Source>> sources(PersonScope person);
 
     boolean onlyOutline(PersonScope person);
-
 }
