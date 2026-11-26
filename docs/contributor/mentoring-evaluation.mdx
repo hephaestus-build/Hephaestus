@@ -198,6 +198,39 @@ The contact simulation checks contact timing and frequency over weeks of simulat
 A maintainer runs the planned `eval:simulate` task by hand on a laptop or a runner.
 The report and its docs never call the simulation calibrated, because it is not.
 
+## Journey evaluation
+
+One good answer does not make a mentor.
+The journey evaluation checks a sequence of turns as one unit, because the value of each step depends on the steps before it.
+[ADR 0157](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) decisions 16 and 19 own it.
+
+| Step | What must hold |
+| --- | --- |
+| First answer | It answers a real question about the person's own work first. **What Hephaestus used** names what it cited and read. |
+| Later attempt | The next review of the same practice shows on the goal's line, from rows. |
+| Disagreement | Hephaestus asks for the evidence, says what it is not sure about, and offers **Disagree**. A conversation alone changes no observation. |
+| Next step | One next step that the person can take, as a hint first when the person chose **Give me a hint first** |
+| Agreed follow-up | A fixed-text notice at the agreed time. The model runs only when the person opens it. |
+
+Two checks grade the journey:
+
+- **Scripted cases in CI** check the parts that code decides. They cover the state texts and the contents of **What Hephaestus used**. They also prove that no personal record reaches a forbidden destination.
+- **A blinded human review** scores each journey before a release that changes a part of the mentor core. The reviewer does not know which build wrote it.
+
+The review scores five dimensions:
+
+| Dimension | The journey passes when |
+| --- | --- |
+| Groundedness | Each claim about the work cites a row or a place in the work |
+| Usefulness | The person can act on the next step |
+| Calibration | Hephaestus says when it is not sure, and says "Could not check" when it did not check |
+| Agency | The person decides: the goal, the help style, the step-back and the follow-up |
+| Contact fit | Each contact comes from an agreement or a question, at the agreed time |
+
+The first useful week is the release walk of the journey.
+It runs the steps above on one synthetic account over seven simulated days, with a goal that the person saves, undoes and saves again.
+Learning outcomes are research questions. They need the person's consent, and no staff view counts the outcomes of one person.
+
 ## The release check
 
 Follow the [1.0 release check](./release-management.mdx#release-check-for-10) on the packaged candidate.
@@ -212,7 +245,7 @@ The **Tier** column says what a scenario needs: the packaged server alone (`pack
 | Scenario | What must hold | Decided in | Tier |
 | --- | --- | --- | --- |
 | First contact | Answer first. Workspace name, privacy line and AI label. No card before the answer. | ADR 0131 | sandbox |
-| Setting a goal in own words | One save with **Undo**, and the follow-up offer beside it | ADR 0132 | sandbox |
+| Setting a goal in own words | One save with **Undo**, and the follow-up offer beside it | ADR 0132, ADR 0157 | sandbox |
 | A result: available, shown or notified | The card at once. At most one message for each background turn. | ADR 0150, ADR 0120 | sandbox |
 | The check before review | A private check on request or by agreement, with one result panel | ADR 0120, ADR 0133 | sandbox |
 | The agreed follow-up | An explicit scope for each agreement, and its own notification kind | ADR 0133 | sandbox |
