@@ -59,6 +59,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
         @Nullable
         UUID getTurnId();
+
+        boolean getRedactionPending();
     }
 
     /** How many messages a conversation holds after a sequence number, and when the newest was written. */
@@ -633,6 +635,9 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                       SELECT t.id FROM conversation t
                       WHERE t.id IN (SELECT conversation_id FROM changed)
                          OR t.parent_conversation_id IN (SELECT conversation_id FROM changed))
+            ), targets AS (
+                SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
+                UNION SELECT id FROM covering
             ), updated AS (
             UPDATE conversation_entry e
                SET redacted_at = clock_timestamp(), text = '', search_text = '',
@@ -656,15 +661,17 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                         ELSE jsonb_build_array() END) WITH ORDINALITY AS blocks (b, n)
                                WHERE b ->> 'type' = 'toolCall'), jsonb_build_array()))
                    END
-             WHERE e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
-                            UNION SELECT id FROM covering)
-            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind, e.turn_id
+             WHERE e.id IN (SELECT id FROM targets)
+            RETURNING e.id, e.redacted_at
             )
-            SELECT u.id AS "id", u.workspace_id AS "workspaceId", u.conversation_id AS "conversationId",
-                   c.account_id AS "accountId", u.kind AS "kind", u.turn_id AS "turnId"
-            FROM updated u JOIN conversation c ON (c.id,c.workspace_id)=(u.conversation_id,u.workspace_id)
-            WHERE u.kind IN ('USER','ANSWER','DIGEST')
-            ORDER BY u.workspace_id, u.turn_id, u.id
+            SELECT e.id AS "id", e.workspace_id AS "workspaceId", e.conversation_id AS "conversationId",
+                   c.account_id AS "accountId", e.kind AS "kind", e.turn_id AS "turnId",
+                   (u.redacted_at IS NULL) AS "redactionPending"
+            FROM targets t JOIN conversation_entry e ON e.id=t.id
+            JOIN conversation c ON (c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+            LEFT JOIN updated u ON u.id=e.id
+            WHERE e.kind IN ('USER','ANSWER','DIGEST') OR u.redacted_at IS NULL
+            ORDER BY e.workspace_id, e.turn_id, e.id
             """, nativeQuery = true)
     List<EntryRef> redactWithCopies(
             @Param("ids") UUID[] ids,

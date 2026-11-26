@@ -52,6 +52,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -91,6 +92,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -1174,7 +1176,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var allStores = new PersonErasureAllStoresFixture(jdbc);
         var firstDerived = targetDerived.getFirst();
         long firstWorkspace = firstDerived.workspaceId();
-        recordNonOutlineContext(otherDerived.getFirst());
+        recordMixedContext(otherDerived.getFirst());
         var firstResult = practiceResultRepository
                 .findById(firstDerived.practiceResultIds().getFirst())
                 .orElseThrow();
@@ -1238,6 +1240,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var preservedSourceRows = otherSourceRows.snapshot();
         authoredVersion(workspaces.findById(firstWorkspace).orElseThrow(), "all-stores-authored", subject.account());
         var ownConversation = conversations.findOrCreateMain(firstWorkspace, subject.account());
+        UUID ownOutlineCopy = conversationEntries.append(firstWorkspace, ownConversation.getId(), entry(
+                ConversationEntry.Kind.TOOL_RESULT, "", ConversationLedgerFixtures.toolResult(
+                        ConversationLedgerFixtures.piId(), "outline", "read", PersonErasureAllStoresFixture.CANARY, false)))
+                .getId();
         conversationTurns.submit(
                 firstWorkspace,
                 ownConversation.getId(),
@@ -1471,8 +1477,30 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(suppression.isSourceSuppressed(-1L, "chat.thread", threadId))
                     .isFalse();
         }
+        var mixed = otherDerived.getFirst();
+        var ownerJdbc = PostgreSQLTestContainer.ownerJdbc();
+        ownerJdbc.execute("""
+                CREATE FUNCTION test_hold_provider_answer() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RETURN NULL; END $$;
+                CREATE TRIGGER test_hold_provider_answer BEFORE UPDATE OF redacted_at ON conversation_entry
+                   FOR EACH ROW WHEN (NEW.id='%s'::uuid AND NEW.redacted_at IS NOT NULL)
+                   EXECUTE FUNCTION test_hold_provider_answer();
+                """.formatted(mixed.messageId()));
+        try {
+            personData.run(requestId);
+            assertThat(conversationEntryRepository.findById(ownOutlineCopy)).isEmpty();
+            assertThat(conversationEntryRepository.findById(mixed.messageId()).orElseThrow().isRedacted()).isFalse();
+            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        } finally {
+            ownerJdbc.execute("DROP TRIGGER test_hold_provider_answer ON conversation_entry;"
+                    + " DROP FUNCTION test_hold_provider_answer();");
+        }
+
+        personData.requestErasure(requestId, administratorId, false);
         // The erasure waits for no server; the server that holds the folders removes them in its next pass.
         personData.run(requestId);
+        assertThat(conversationEntryRepository.findById(mixed.toolResultId()).orElseThrow().isRedacted()).isTrue();
+        assertThat(conversationEntryRepository.findById(mixed.messageId()).orElseThrow().isRedacted()).isTrue();
         worker.removeErasedFolders();
         targetFolders.forEach(path -> assertThat(path).doesNotExist());
         otherFolders.forEach(path -> assertThat(path).exists());
@@ -2161,7 +2189,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 mapper.createObjectNode().put("authorization", "credential-canary " + text));
     }
 
-    private void recordNonOutlineContext(DerivedConversation derived) {
+    private void recordMixedContext(DerivedConversation derived) {
         long workspaceId = derived.workspaceId();
         var answer = conversationEntryRepository.findById(derived.messageId()).orElseThrow();
         var submitted = conversationTurns.submit(
@@ -2176,7 +2204,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var turn = claims.claimNext().orElseThrow();
         assertThat(turn.getId()).isEqualTo(submitted.turn().getId());
         UUID runId = Objects.requireNonNull(turn.getRunId());
-        turnContext.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), runId, List.of());
+        turnContext.recordOutlineContext(
+                workspaceId, turn.getId(), turn.getAttempt(), runId,
+                List.of(new OutlinePersonCopyScope.Source("https://unrelated-outline.example.test", "other-team")));
         conversationTurns.end(
                 workspaceId,
                 turn.getId(),

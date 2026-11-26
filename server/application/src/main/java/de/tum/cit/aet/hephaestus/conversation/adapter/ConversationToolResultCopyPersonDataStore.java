@@ -208,6 +208,16 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
         for (var row : selection.rows()) {
             long workspaceId = workspace(row);
             var sources = outlineSources(row);
+            if (Boolean.parseBoolean(row.columns().getOrDefault("broad", "true"))) {
+                var toolResults = jdbc.query(
+                        """
+                    SELECT e.id FROM conversation_entry e
+                    WHERE e.workspace_id=:workspaceId AND e.redacted_at IS NULL AND %s
+                    """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
+                        Map.of("workspaceId", workspaceId),
+                        (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
+                redaction.redactPersonCopies(toolResults);
+            }
             if (!sources.isEmpty()) {
                 requireCopyProvenance(workspaceId, frozenScope);
                 var affected = jdbc.query(
@@ -222,20 +232,6 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                         Map.of("workspaceId", workspaceId, "sources", mapper.writeValueAsString(sources)),
                         (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
                 redaction.redact(affected);
-            }
-            if (Boolean.parseBoolean(row.columns().getOrDefault("broad", "true"))) {
-                var toolResults = jdbc.query(
-                        """
-                    SELECT e.id FROM conversation_entry e
-                    LEFT JOIN conversation_turn t ON t.id=e.turn_id AND t.workspace_id=e.workspace_id
-                    WHERE e.workspace_id=:workspaceId AND e.redacted_at IS NULL
-                      AND ((%s) OR (NOT :allSources AND e.kind IN ('ANSWER','DIGEST','SYSTEM')))
-                      AND (:allSources OR t.outline_context='[]'::jsonb)
-                    """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
-                        Map.of("workspaceId", workspaceId, "allSources", sources.isEmpty()),
-                        (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
-                if (sources.isEmpty()) redaction.redactPersonCopies(toolResults);
-                else redaction.redact(toolResults);
             }
             // A running turn may hold a physical copy even when it stored no ledger entry yet.
             contextChanges.changed(workspaceId);

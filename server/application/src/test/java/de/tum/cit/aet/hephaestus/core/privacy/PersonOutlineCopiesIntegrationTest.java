@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
@@ -33,6 +34,9 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.practices.groupdetail.ProductItemDirectoryQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.DriverManager;
+import org.springframework.dao.DataIntegrityViolationException;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
@@ -45,7 +49,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
-import javax.sql.DataSource;
 import liquibase.database.core.PostgresDatabase;
 import liquibase.database.jvm.JdbcConnection;
 import org.junit.jupiter.api.Test;
@@ -64,9 +67,6 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
-
-    @Autowired
-    private DataSource dataSource;
 
     @Autowired
     private PersonDataService service;
@@ -163,32 +163,50 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void upgradeBackfillsCanonicalKeysForStoredConnectionsAndAliases() throws Exception {
+    void oldOutlineWritersCannotCreateAnUnselectableConnectionOrProvider() {
         var fixture = fixture(true);
-        var alias = providers.saveAndFlush(
-                new IdentityProvider(IdentityProviderType.OUTLINE, "HTTPS://OUTLINE-INSTANCE.EXAMPLE.TEST:443/"));
-        jdbc.update(
-                "UPDATE identity_provider SET outline_origin=NULL WHERE id IN (?,?)",
-                fixture.provider(),
-                alias.getId());
-        jdbc.update(
-                "UPDATE connection SET outline_origin=NULL WHERE workspace_id=?",
-                fixture.first().document().getWorkspaceId());
-        try (var connection = dataSource.getConnection()) {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO connection (workspace_id,kind,state,instance_key,config,created_at,updated_at,version)
+                VALUES (?, 'OUTLINE','ACTIVE','late-team','{"type":"OUTLINE","serverUrl":"https://outline-instance.example.test/"}',now(),now(),0)
+                """, fixture.first().document().getWorkspaceId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_outline_connection_origin");
+        assertThatThrownBy(() -> jdbc.update(
+                        "INSERT INTO identity_provider(type,server_url,created_at) VALUES ('OUTLINE',?,now())",
+                        "https://late-outline.example.test/"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_outline_identity_origin");
+    }
+
+    @Test
+    void upgradeBackfillsCanonicalKeysForStoredConnectionsAndAliases() throws Exception {
+        var admin = PostgreSQLTestContainer.administrator();
+        try (var connection = DriverManager.getConnection(admin.jdbcUrl(), admin.username(), admin.password());
+                var sql = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            sql.execute(
+                    "CREATE TEMP TABLE connection(id bigint,kind text,config jsonb,outline_origin text) ON COMMIT DROP");
+            sql.execute(
+                    "CREATE TEMP TABLE identity_provider(id bigint,type text,server_url text,outline_origin text) ON COMMIT DROP");
+            sql.execute("""
+                    INSERT INTO connection VALUES (1,'OUTLINE',
+                        '{"serverUrl":"https://outline-instance.example.test/"}',null)
+                    """);
+            sql.execute("""
+                    INSERT INTO identity_provider VALUES (2,'OUTLINE','HTTPS://OUTLINE-INSTANCE.EXAMPLE.TEST:443/',null)
+                    """);
             var database = new PostgresDatabase();
             database.setConnection(new JdbcConnection(connection));
             new OutlineOriginBackfillChange().execute(database);
+            try (var keys = sql.executeQuery(
+                    "SELECT outline_origin FROM connection UNION ALL SELECT outline_origin FROM identity_provider")) {
+                assertThat(keys.next()).isTrue();
+                assertThat(keys.getString(1)).isEqualTo(ORIGIN);
+                assertThat(keys.next()).isTrue();
+                assertThat(keys.getString(1)).isEqualTo(ORIGIN);
+            }
             connection.commit();
         }
-        assertThat(jdbc.queryForObject(
-                        "SELECT outline_origin FROM identity_provider WHERE id=?", String.class, alias.getId()))
-                .isEqualTo(ORIGIN);
-        UUID request = admit(fixture, Key.INSTANCE);
-        service.run(request);
-        assertCopy(fixture.first(), fixture.first().answer(), true);
-        assertCopy(fixture.second(), fixture.second().answer(), true);
-        assertCopy(fixture.control(), fixture.control().answer(), false);
-        assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
     }
 
     @ParameterizedTest

@@ -350,6 +350,8 @@ public class PersonDataService {
                 tx.executeWithoutResult(status -> {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return;
+                    if (!completed(r).keySet().equals(inventory))
+                        throw new IllegalStateException("Erasure store receipts are incomplete");
                     hold.release(id);
                     r.complete(Instant.now());
                     requests.saveAndFlush(r);

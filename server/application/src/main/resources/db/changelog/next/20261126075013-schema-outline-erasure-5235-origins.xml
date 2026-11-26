@@ -20,4 +20,20 @@
         <customChange class="de.tum.cit.aet.hephaestus.integration.core.connection.OutlineOriginBackfillChange"/>
         <rollback><sql>SELECT 1</sql></rollback>
     </changeSet>
+    <changeSet id="1795679413316-5" author="hephaestus">
+        <comment>Reject new Outline rows that an older writer would leave outside erasure.</comment>
+        <sql>
+            ALTER TABLE connection ADD CONSTRAINT ck_outline_connection_origin
+                CHECK (kind &lt;&gt; 'OUTLINE' OR outline_origin IS NOT NULL
+                    OR (state &lt;&gt; 'ACTIVE' AND config-&gt;&gt;'serverUrl' IS NULL));
+            ALTER TABLE identity_provider ADD CONSTRAINT ck_outline_identity_origin
+                CHECK (type &lt;&gt; 'OUTLINE' OR outline_origin IS NOT NULL);
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE connection DROP CONSTRAINT ck_outline_connection_origin;
+                ALTER TABLE identity_provider DROP CONSTRAINT ck_outline_identity_origin;
+            </sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
