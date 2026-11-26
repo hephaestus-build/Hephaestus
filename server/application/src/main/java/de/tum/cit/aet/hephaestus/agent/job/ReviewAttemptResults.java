@@ -114,15 +114,19 @@ public class ReviewAttemptResults {
     }
 
     @Nullable
-    ReviewJobStatus measured(UUID jobId, ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result) {
-        AgentResult agentResult = practiceAgent.parseResult(result);
-
+    ReviewJobStatus measured(
+            UUID jobId, ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result, Instant receivedAt) {
         ReviewJob retained;
         try {
             retained = preparation.owned(jobId, fence);
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             return null;
         }
+        Instant startedAt = retained.getExecutionStartedAt();
+        if (startedAt != null && !receivedAt.isBefore(startedAt)) {
+            jobTelemetry.record(ReviewJobTelemetry.Phase.EXECUTION, Duration.between(startedAt, receivedAt));
+        }
+        AgentResult agentResult = practiceAgent.parseResult(result);
         // A server error is a defect here, not an outage, and another attempt would meet it again. The attempt keeps
         // what it staged and ends the rest, with no retry.
         boolean serverError = result.exitCode() == SandboxLayout.EXIT_SERVER_ERROR;

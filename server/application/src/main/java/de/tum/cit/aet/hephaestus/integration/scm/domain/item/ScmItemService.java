@@ -460,16 +460,25 @@ public class ScmItemService implements ItemSource {
             var reviewed = transactions.read(() -> workCapture.reviewedRepository(pinned, request.eventId()));
             preparation.fetch(() -> workCapture.fetch(reviewed));
         }
-        return capture(pinned, request, preparation);
+        return captureEach(pinned, List.of(request), preparation).getFirst();
     }
 
     /**
-     * Captures in one read-only snapshot that checks the pin again, reading the clone only through
-     * {@code preparation}. {@link ScmCapturePreparation#fromMirror} reads the synced mirror as it is, with no fetch.
+     * Each request's capture, in one read-only snapshot that checks the pin, its occasion and the work once for all of
+     * them, reading the clone only through {@code preparation}. {@link ScmCapturePreparation#fromMirror} reads the
+     * synced mirror as it is, with no fetch. Each request composes its own contribution, as its own capture would. A
+     * request that fails fails the whole read, as the first failing capture of a loop over the requests would; the
+     * contributions already composed are released.
+     *
+     * @param requests requests that read the same occasion, or none
      */
-    public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request, ScmCapturePreparation preparation) {
+    List<CaptureContribution> captureEach(
+            ItemSnapshot pinned, List<CaptureRequest> requests, ScmCapturePreparation preparation) {
+        if (requests.isEmpty()) return List.of();
+        var eventId = requests.getFirst().eventId();
+        if (requests.stream().anyMatch(request -> !Objects.equals(request.eventId(), eventId)))
+            throw new IllegalArgumentException("One capture reads one occasion");
         return transactions.snapshot(() -> {
-            var eventId = request.eventId();
             // An event review captures its retained occasion: the same record, checked against current access again.
             var occasion =
                     eventId == null || !ScmWorkCapture.retains(pinned.item().kind())
@@ -478,21 +487,34 @@ public class ScmItemService implements ItemSource {
             ItemSnapshot verified = occasion != null ? occasion.snapshot() : pinItem(pinned.item(), pinned.version());
             if (!verified.integration().equals(pinned.integration())
                     || !verified.roles().equals(pinned.roles())) throw versionUnavailable();
-            if (!request.sourceContractVersion().equals(ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE)
-                    || request.scriptContractVersion() != 3)
+            if (requests.stream()
+                    .anyMatch(request -> !request.sourceContractVersion()
+                                    .equals(ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE)
+                            || request.scriptContractVersion() != 3))
                 throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
             if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
-                    || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);
+                    || pinned.item().kind().equals(ScmItemEvents.FILE))
+                return requests.stream()
+                        .map(request -> captureTree(pinned, request))
+                        .toList();
             var work = occasion != null
                     ? new ScmWorkLookup.Work(occasion.work(), occasion.review())
                     : workLookup.current(pinned.item());
-            return workCapture.capture(
-                    pinned,
-                    request,
-                    work.work(),
-                    work.review(),
-                    occasion != null ? occasion.evidence() : null,
-                    preparation);
+            List<CaptureContribution> composed = new ArrayList<>();
+            try {
+                for (var request : requests)
+                    composed.add(workCapture.capture(
+                            pinned,
+                            request,
+                            work.work(),
+                            work.review(),
+                            occasion != null ? occasion.evidence() : null,
+                            preparation));
+            } catch (RuntimeException failure) {
+                CaptureContribution.release(composed, failure);
+                throw failure;
+            }
+            return List.copyOf(composed);
         });
     }
 

@@ -18,9 +18,15 @@ import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceAccess;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmSourceFingerprints;
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeReads;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
@@ -29,9 +35,11 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultQueryService;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -39,6 +47,7 @@ import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -51,7 +60,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -125,6 +136,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     JsonMapper json;
+
+    @Autowired
+    PracticeVersionService practiceVersions;
 
     @MockitoBean
     ScmItemSourceAccess source;
@@ -215,6 +229,67 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         seed(works.size());
 
         assertThat(workReads().get("reviews")).isPositive().isLessThanOrEqualTo(5);
+    }
+
+    /**
+     * Practices declare different sources, and a reader answers each source on its own. A standing that quotes the
+     * results of three practices on each piece of work therefore reads each piece once, for all their sources, rather
+     * than once for each practice's set of them.
+     */
+    @Test
+    void shouldReadEachPieceOfWorkOnceWhenThePracticesQuotedOnItReadDifferentSources() {
+        when(sourceFingerprints.fingerprints(any(), any(), any(), any())).thenAnswer(call -> {
+            Set<SourceKind> kinds = call.getArgument(1);
+            return kinds.stream().collect(Collectors.toMap(Function.identity(), kind -> "a".repeat(64)));
+        });
+        var at = Instant.now().minus(1, ChronoUnit.HOURS);
+        var diff = "scm.pull-request.diff";
+        var core = "scm.pull-request.core";
+        var sources = List.of(List.of(diff), List.of(diff, core), List.of(diff, core, "scm.pull-request.checks"));
+        for (int index = 0; index < sources.size(); index++) {
+            var practice = practiceReading("reads-sources-" + index, sources.get(index));
+            for (var work : works)
+                withCustody(data.resultWithDeclaredSources(
+                        new Scenario(scenario.workspace(), scenario.account(), practice, work.item()),
+                        ResultOutcome.MET,
+                        at.plusSeconds(index)));
+        }
+
+        clearInvocations(sourceFingerprints);
+        long started = System.nanoTime();
+        var read = standings.getStandings(scenario.workspace().getId());
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(read)
+                .filteredOn(standing -> standing.slug().startsWith("reads-sources-"))
+                .hasSize(sources.size())
+                .allSatisfy(standing -> assertThat(standing.strengths()).hasSize(works.size()));
+        assertThat(fingerprintReads()).isEqualTo(works.size());
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    }
+
+    /**
+     * An ended result's sources are stale whatever its work holds now, so reading whether they are current reads no
+     * work for it. Oldest first, the list's page holds only results that a later review of their work replaced.
+     */
+    @Test
+    void shouldReadNoWorkForTheEndedResultsOnTheReviewListPage() {
+        works = IntStream.range(0, 12).mapToObj(index -> onNewWork()).toList();
+        seed(2 * works.size());
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+
+        clearInvocations(sourceFingerprints);
+        long started = System.nanoTime();
+        var page =
+                reviewList.list(context, new OwnReviewFilter(null, null, null, null, null, true), PageRequest.of(0, 5));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(page.getContent())
+                .hasSize(5)
+                .allSatisfy(review -> assertThat(review.results())
+                        .allSatisfy(result -> assertThat(result.currentness()).isEqualTo(Currentness.STALE)));
+        assertThat(fingerprintReads()).isZero();
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
     }
 
     /**
@@ -497,18 +572,51 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                 newestProblem = result;
             }
             seeded++;
-            // Only capture writes custody receipts; the guard that refuses other writers stays on.
-            new TransactionTemplate(transactions).executeWithoutResult(status -> {
-                jdbc.execute("SET LOCAL session_replication_role=replica");
-                if (vouchedByJob) producedByJob(result);
-                else
-                    jdbc.update(
-                            "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
-                            completeCustody(),
-                            result.getWorkspaceId(),
-                            result.getId());
-            });
+            withCustody(result);
         }
+    }
+
+    private void withCustody(Result result) {
+        // Only capture writes custody receipts; the guard that refuses other writers stays on.
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role=replica");
+            if (vouchedByJob) producedByJob(result);
+            else
+                jdbc.update(
+                        "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
+                        completeCustody(),
+                        result.getWorkspaceId(),
+                        result.getId());
+        });
+    }
+
+    /** A practice of the scenario's workspace that declares {@code kinds} as the sources its review reads. */
+    private Practice practiceReading(String slug, List<String> kinds) {
+        var original = DefinitionTestFixtures.definition();
+        var definition = new PracticeDefinition(
+                original.name(),
+                original.reviewOn(),
+                original.appliesWhen(),
+                original.about(),
+                new PracticeReads(
+                        original.reads().contract(),
+                        kinds.stream()
+                                .map(kind -> new PracticeReadSource(new SourceKind(kind), ReadNeed.REQUIRED))
+                                .toList()),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                original.scan(),
+                original.lineNotes(),
+                original.guidance());
+        return practiceVersions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace().getId(),
+                slug,
+                scenario.item().getKind(),
+                definition,
+                null,
+                1,
+                scenario.account().getId()));
     }
 
     private UUID practicePageFeedback(Result bound, boolean delivered) {

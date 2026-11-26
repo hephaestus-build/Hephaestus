@@ -17,16 +17,15 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,7 +50,7 @@ public class CommitIdentityResolutionJob {
     static final int MAX_ATTEMPTS = 5;
 
     /** The longest that a provider's deadline holds an email, so a wrong reset cannot park the queue for good. */
-    static final Duration MAX_DEFERRAL = Duration.ofHours(2);
+    static final Duration MAX_DEFERRAL = Duration.ofDays(1);
 
     /** One pass of the job: a deadline shorter than that would bring the same email back first at the next pass. */
     static final Duration MIN_DEFERRAL = Duration.ofMinutes(5);
@@ -140,33 +139,40 @@ public class CommitIdentityResolutionJob {
                 .filter(email -> email.getEmail() != null)
                 .map(CommitIdentityResolutionJob::question)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        var answers = provider.orElseThrow()
+        var batch = provider.orElseThrow()
                 .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, credential, questions);
-        Map<Answer.Deferred, List<Long>> deferred = new HashMap<>();
+        var pause = batch.pause();
+        Instant until = pause == null ? null : pause.alreadyStored() ? pause.until() : bounded(pause.until());
+        if (pause != null && !pause.alreadyStored()) {
+            var generation = pause.credential();
+            pauses.pause(scopeId, generation.connectionId(), generation.generation(), Objects.requireNonNull(until));
+        }
+        List<Long> deferred = new ArrayList<>();
         for (var email : emails) {
             if (email.getEmail() == null) {
                 count(service.miss(email.getId(), MAX_ATTEMPTS, MAX_ATTEMPTS));
                 continue;
             }
-            var answer = answers.get(question(email));
-            if (answer instanceof Answer.Deferred deferral) {
-                deferred.computeIfAbsent(deferral, ignored -> new ArrayList<>()).add(email.getId());
+            var answer = batch.answers().get(question(email));
+            if (answer == null && pause != null) {
+                deferred.add(email.getId());
                 continue;
             }
             if (answer instanceof Answer.RetryAfterCredentialChange) {
                 count(new CommitIdentityResolutionService.Result("deferred", 0));
                 continue;
             }
-            apply(repository, email, answers);
+            apply(repository, email, answer);
         }
-        deferred.forEach((deferral, ids) -> {
-            var generation = deferral.generation();
-            long connectionId = generation == null ? credential.connectionId() : generation.connectionId();
-            long number = generation == null ? credential.credentialsGeneration() : generation.generation();
-            Instant until = bounded(deferral.until());
-            pauses.pause(scopeId, connectionId, number, until);
-            defer(repository, ids, connectionId, number, until);
-        });
+        if (pause != null) {
+            var generation = pause.credential();
+            defer(
+                    repository,
+                    deferred,
+                    generation.connectionId(),
+                    generation.generation(),
+                    Objects.requireNonNull(until));
+        }
         return deferred.isEmpty() ? Turn.ANSWERED : Turn.DEFERRED;
     }
 
@@ -207,8 +213,7 @@ public class CommitIdentityResolutionJob {
         return until.isBefore(earliest) ? earliest : until.isAfter(latest) ? latest : until;
     }
 
-    private void apply(NextRepository repository, PendingEmail email, Map<Question, Answer> answers) {
-        var answer = answers.get(question(email));
+    private void apply(NextRepository repository, PendingEmail email, @Nullable Answer answer) {
         if (answer == null) {
             miss(email);
             return;

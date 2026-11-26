@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 /** The runner reads a {@code 409} or {@code 204} with the result's ETag as confirmed, so only a measured result gets it. */
 class ReviewSandboxControllerTest extends BaseUnitTest {
     private static final String ETAG = "\"result-digest\"";
+    private static final Instant RECEIVED_AT = Instant.parse("2026-01-01T10:00:00Z");
 
     private final ReviewSandboxRuns reviews = mock(ReviewSandboxRuns.class);
     private final AgentRuns runs = mock(AgentRuns.class);
@@ -42,7 +44,7 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
         admittedUpload();
         doThrow(new CannotAcquireLockException("canceling statement due to lock timeout"))
                 .when(reviews)
-                .measured(any(), any());
+                .measured(any(), any(), any());
         var response = new MockHttpServletResponse();
 
         assertThatThrownBy(() -> upload(response)).isInstanceOf(CannotAcquireLockException.class);
@@ -63,7 +65,7 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
     private void admittedUpload() throws Exception {
         when(runs.isCurrent(any(), anyInt())).thenReturn(true);
         when(reviews.receive(eq(run), any(), any()))
-                .thenReturn(new SandboxGatewaySessions.ReceivedResult(Map.of(), ETAG));
+                .thenReturn(new SandboxGatewaySessions.ReceivedResult(Map.of(), ETAG, RECEIVED_AT));
     }
 
     private void upload(MockHttpServletResponse response) {

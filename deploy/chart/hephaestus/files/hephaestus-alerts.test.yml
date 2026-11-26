@@ -4,6 +4,45 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  - name: a slow practice profile route fires on its own, and a quiet or fast route stays silent
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/reviews",le="2.0"}'
+        values: "0x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/reviews",le="5.0"}'
+        values: "0+1x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/reviews",le="+Inf"}'
+        values: "0+1x70"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/reviews"}'
+        values: "0+1x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/overview",le="2.0"}'
+        values: "0+100x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/overview",le="+Inf"}'
+        values: "0+100x70"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-profile/overview"}'
+        values: "0+100x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-groups/standings",le="2.0"}'
+        values: "0x70"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-groups/standings",le="5.0"}'
+        values: "0 1x69"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-groups/standings",le="+Inf"}'
+        values: "0 1x69"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/practice-groups/standings"}'
+        values: "0 1x69"
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: HephaestusPracticeProfileRouteSlow
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusPracticeProfileRouteSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              uri: "/api/workspaces/{workspaceSlug}/practice-profile/reviews"
+            exp_annotations:
+              summary: "Practice profile route /api/workspaces/{workspaceSlug}/practice-profile/reviews takes more than 2 seconds at p95"
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: unresolved removal stays overdue through a retry and clears after resolution
     interval: 1m
     input_series:
@@ -940,6 +979,39 @@ tests:
             exp_annotations:
               summary: The server answered a review's results with its own error, so the review ended without them
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: zero evaluated before the first scrape fires for an hour even if the reporting pod leaves
+    interval: 1m
+    input_series:
+      - series: 'agent_review_zero_evaluated_total{job="hephaestus",instance="server-a:9090"}'
+        values: "_ _ _ _ _ 1x10 stale"
+      - series: 'agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus",instance="server-a:9090"}'
+        values: "_ _ _ _ _ 299x10 stale"
+      - series: 'agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus",instance="server-b:9090"}'
+        values: "0x75"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A review attempt had eligible practices and evaluated none in the last hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 30m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A review attempt had eligible practices and evaluated none in the last hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 65m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts: []
 
   - name: preparation retries that continue fire, a few retries do not
     interval: 1m

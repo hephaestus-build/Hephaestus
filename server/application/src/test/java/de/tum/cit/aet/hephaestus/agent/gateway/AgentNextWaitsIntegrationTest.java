@@ -118,7 +118,7 @@ class AgentNextWaitsIntegrationTest extends BaseIntegrationTest {
     private CompletableFuture<Optional<AgentRunLease>> next(
             AgentNextWaits replica, AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> kinds, AtomicInteger claims) {
         return CompletableFuture.supplyAsync(
-                () -> replica.claim(sandbox, kinds, () -> {
+                () -> replica.claim(sandbox, kinds, System.nanoTime(), remaining -> {
                     var lease = Objects.requireNonNull(transactions.execute(
                             status -> runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds)));
                     claims.incrementAndGet();

@@ -132,12 +132,13 @@ ADR 0133 (proposed in #4865) owns the templates and the exact choices.
 | K8 | Hephaestus never pauses or slows a check-in on its own. Silence is never read as dislike. | ADR 0133, ADR 0139 |
 | K9 | A delivery experiment never draws an agreed check-in. | ADR 0133, ADR 0149 |
 | K10 | A check-in never uses a result that a silent draw holds back. The item card and the practice page still show it. ADR 0149 (proposed in #4868) lists when the hold ends. | ADR 0133, ADR 0149 |
+| K11 | A due occurrence is a fixed-text notice, and no model writes it. The model runs only when the person opens it. | ADR 0133, ADR 0157 |
 
 ### Example: Monday focus
 
 On Monday at 09:00, Sam's Monday focus is due.
 The pre-check finds one review that waits on Sam, so the check-in goes on.
-One message names that review. It carries **Less often** and **Stop this check-in**.
+A fixed-text notice names that review. When Sam opens it, Hephaestus answers in an interactive turn. It carries **Less often** and **Stop this check-in**.
 In a week where nothing waits on Sam, the pre-check skips the week, and no model runs.
 
 ### The weekly reflection and the weekly digest
@@ -153,7 +154,7 @@ Everyone else keeps the digest. Turning the reflection off restores the digest, 
 
 | ID | Rule | Decided in |
 | --- | --- | --- |
-| G1 | A goal is in the person's own words. Hephaestus saves it at once: "Saved as a goal · Undo · Edit". | ADR 0132 |
+| G1 | A goal is in the person's own words. The person's act saves it at once, with **Undo**. A model never saves one. | ADR 0132, ADR 0157 |
 | G2 | The person can link a lesson to a goal, or remove the link. | ADR 0132 |
 | G3 | "Bring me one useful next step about this goal" turns on the goal follow-up for that goal, in that workspace. | ADR 0133 |
 | G4 | A goal follow-up comes at most once a day for each goal, and only in waking hours. | ADR 0133 |
@@ -168,8 +169,8 @@ An import never counts in a total, and a self-report never does either ([assessm
 In software engineering, help fades after three independent reviewed pieces of work that meet the practice (ADR 0130, proposed in #4863).
 Help on request never fades.
 
-When a practice holds, Hephaestus says once, with the evidence, that it steps back.
-It offers to raise the bar. It names the change in the work, never the person: "Your last three pull requests each say how to verify them."
+When a practice holds, Hephaestus offers once, with the evidence, to step back.
+The person decides. An acceptance changes the help mode, with **Undo**, and a direct request for more help always wins. It names the change in the work, never the person: "Your last three pull requests each say how to verify them."
 
 ## Help settings and the help mode
 
@@ -179,10 +180,16 @@ The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) def
 | --- | --- |
 | Help settings | The person, in words or in Settings |
 | Help style | The person |
-| Help mode | Growth computes it |
+| Help mode | The person, when they accept the offer that growth starts |
 | Help mode override: a goal's own help preference | The person, on the goal |
 
 The UI shows the help mode in words, such as "I give a hint first", never as a level.
+
+## Explanations, disagreement and referral
+
+[ADR 0157](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) decisions 8 to 13 own these rules.
+They cover what an answer shows about itself and how Hephaestus handles a disagreement.
+They also cover when Hephaestus names a person as the better help, and the states that a person sees.
 
 ## Tone
 

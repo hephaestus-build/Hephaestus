@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePrepar
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -74,12 +76,27 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         }
         if (!records.isEmpty()) {
             var held = occasion == null ? null : held(item, snapshot, occasion);
-            fingerprints.putAll(ItemSource.recordFingerprints(
-                    (pinned, request) -> source.capture(pinned, request, ScmCapturePreparation.fromMirror()),
+            var read = held != null ? occasion : null;
+            // Each source is still read alone, as ItemSource#recordFingerprints reads it, but in one capture that
+            // checks
+            // the pin and the occasion once for all of them.
+            var ordered = List.copyOf(records);
+            var contributions = source.captureEach(
                     held != null ? held : snapshot,
-                    records,
-                    held != null ? occasion : null,
-                    mapper));
+                    ordered.stream()
+                            .map(kind -> ItemSource.recordRequest(kind, read))
+                            .toList(),
+                    ScmCapturePreparation.fromMirror());
+            for (int index = 0; index < ordered.size(); index++) {
+                try {
+                    var fingerprint =
+                            ItemSource.recordFingerprint(mapper, ordered.get(index), contributions.get(index));
+                    if (fingerprint != null) fingerprints.put(ordered.get(index), fingerprint);
+                } catch (RuntimeException failure) {
+                    CaptureContribution.release(contributions.subList(index + 1, contributions.size()), failure);
+                    throw failure;
+                }
+            }
         }
         return Map.copyOf(fingerprints);
     }

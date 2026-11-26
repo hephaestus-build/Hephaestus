@@ -117,6 +117,14 @@ class ProviderReplyTest {
                         signal(429, Map.of("retry-after", "30"), List.of()),
                         new ProviderReply.Throttled(NOW.plusSeconds(30))),
                 Arguments.of(
+                        "GitLab 429 with a Retry-After HTTP date",
+                        signal(429, Map.of("retry-after", "Thu, 26 Nov 2026 06:00:00 GMT"), List.of()),
+                        new ProviderReply.Throttled(NOW.plus(Duration.ofHours(3)))),
+                Arguments.of(
+                        "GitLab 429 with a delay beyond the timestamp range",
+                        signal(429, Map.of("retry-after", Long.toString(Long.MAX_VALUE)), List.of()),
+                        new ProviderReply.Throttled(Instant.MAX)),
+                Arguments.of(
                         "a healthy 403 refuses the credential",
                         refusal(403, Map.of("X-RateLimit-Remaining", "4000"), """
                                 {"message":"Resource not accessible by integration"}

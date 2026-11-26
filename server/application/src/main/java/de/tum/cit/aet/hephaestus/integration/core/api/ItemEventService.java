@@ -257,7 +257,7 @@ public class ItemEventService {
 
     /**
      * Pins the exact version an unresolved occasion now has and offers it for review. An occasion whose version
-     * another occasion of the same name already holds is withheld as coalesced into it.
+     * another occasion of the same name already holds is withheld as a duplicate version.
      *
      * @param evidence the occasion's retained evidence completed with what the version adds, or an
      *     {@link ItemEventInput#unretained} statement when the source cannot complete it; it never introduces evidence

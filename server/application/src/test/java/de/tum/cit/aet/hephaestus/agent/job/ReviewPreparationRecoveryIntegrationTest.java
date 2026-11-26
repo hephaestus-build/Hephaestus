@@ -216,7 +216,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(ReviewAttemptPreparation.workDeadline(
                         Objects.requireNonNull(job.getExecutionStartedAt()), snapshot()));
 
-        replacement.measured(run, new SandboxResult(1, Map.of(), "", false, Duration.ZERO));
+        replacement.measured(run, new SandboxResult(1, Map.of(), "", false, Duration.ZERO), Instant.now());
 
         var queued = jobs.findById(job.getId()).orElseThrow();
         assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
@@ -258,7 +258,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 + Base64.getEncoder()
                         .encodeToString(MessageDigest.getInstance("SHA-256").digest(body)) + ":";
         var received = replacement.receive(run, new ByteArrayInputStream(body), digest);
-        replacement.measured(run, new SandboxResult(0, received.files(), "", false, Duration.ZERO));
+        replacement.measured(
+                run, new SandboxResult(0, received.files(), "", false, Duration.ZERO), received.receivedAt());
         var composing = jobs.findById(job.getId()).orElseThrow();
         assertThat(composing.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(composing.getRunId()).isNotEqualTo(fence.runId());
