@@ -51,9 +51,11 @@ public class Emails {
             withheld.set(refused);
             return false;
         };
-        Long workspace = notice.address(event).workspaceId();
+        EmailNotice.Address address = notice.address(event);
+        Long workspace = address.workspaceId();
+        List<Long> people = notice.dependsOnRecipient() ? List.of(address.recipientAccountId()) : List.of();
         Optional<CheckedAuthority> authority =
-                workspace == null ? Optional.empty() : generations.authorize(workspace, List.of(), ready);
+                workspace == null ? Optional.empty() : generations.authorize(workspace, people, ready);
         if (workspace == null ? !ready.getAsBoolean() : authority.isEmpty()) {
             metrics.record(notice.kind(), Objects.requireNonNull(withheld.get()).outcome());
             return;

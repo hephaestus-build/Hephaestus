@@ -42,8 +42,10 @@ public class AccountDirectoryService implements AccountDirectory {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean activeInstanceAdmin(long accountId) {
-        return accounts.isActiveInstanceAdmin(accountId);
+    public Standing standing(long accountId) {
+        return accounts.findStanding(accountId)
+                .map(row -> new Standing(row.getActive(), row.getInstanceAdmin()))
+                .orElse(new Standing(false, false));
     }
 
     @Override

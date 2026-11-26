@@ -33,34 +33,55 @@ ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_authorization_stamp
         <rollback><sql>SELECT 1;</sql></rollback>
     </changeSet>
     <changeSet id="1795633800000-1" author="hephaestus">
-        <comment>A person has an authorization generation on their account, which only a narrowing of their AI choice raises (KR-10, ADR 0134 decision 1). Every account starts at generation 0. A narrowing is a change to NO_AI, from CLOUD to IN_HOUSE_ONLY, or a cleared choice, which a workspace that requires a choice refuses. The trigger is installed with the column, whoever writes the choice.</comment>
+        <comment>A person has an authorization generation on their account, which only a narrowing of what the person may have done raises (KR-10, ADR 0134 decision 1). Every account starts at generation 0. A narrowing is an AI choice that changes to NO_AI, from CLOUD to IN_HOUSE_ONLY, from no choice to any choice, or back to no choice; an instance role that is taken away; and an account that stops being active, by a block or an erasure. A change of the AI choice from no choice counts, because a workspace where choosing is optional admits a model that a first choice can rule out. The trigger is installed with the column, whoever writes the row. Neither generation can fall: a stamp that a narrowing made stale must stay stale.</comment>
         <sql splitStatements="false"><![CDATA[
 ALTER TABLE account ADD COLUMN authority_generation bigint DEFAULT 0 NOT NULL,
     ADD CONSTRAINT ck_account_authority_generation CHECK (authority_generation >= 0);
-CREATE FUNCTION ai_choice_narrows_authority() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION person_narrows_authority() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     UPDATE public.account SET authority_generation = authority_generation + 1 WHERE id = NEW.id;
     RETURN NULL;
 END $$;
 -- AFTER, not BEFORE: a BEFORE row trigger makes PostgreSQL lock the row FOR UPDATE whenever an UPDATE lists a key
 -- column, as an entity flush does, and that lock blocks every foreign key check on the account until commit.
-CREATE TRIGGER account_ai_choice_narrows_authority AFTER UPDATE OF ai_choice ON public.account
-    FOR EACH ROW WHEN (NEW.ai_choice IS DISTINCT FROM OLD.ai_choice
-        AND (NEW.ai_choice IS NULL
-             OR NEW.ai_choice = 'NO_AI'
-             OR (NEW.ai_choice = 'IN_HOUSE_ONLY' AND OLD.ai_choice = 'CLOUD')))
-    EXECUTE FUNCTION ai_choice_narrows_authority();
+-- The inner UPDATE lists none of these columns, so it does not fire the trigger again.
+CREATE TRIGGER account_narrows_authority AFTER UPDATE OF ai_choice, app_role, status ON public.account
+    FOR EACH ROW WHEN (
+        (NEW.ai_choice IS DISTINCT FROM OLD.ai_choice
+            AND (OLD.ai_choice IS NULL
+                 OR NEW.ai_choice IS NULL
+                 OR NEW.ai_choice = 'NO_AI'
+                 OR (NEW.ai_choice = 'IN_HOUSE_ONLY' AND OLD.ai_choice = 'CLOUD')))
+        OR (OLD.app_role = 'APP_ADMIN' AND NEW.app_role <> 'APP_ADMIN')
+        OR (OLD.status = 'ACTIVE' AND NEW.status <> 'ACTIVE'))
+    EXECUTE FUNCTION person_narrows_authority();
+-- A CHECK cannot compare a row with its old version, so a trigger refuses a generation that falls.
+CREATE FUNCTION authority_generation_only_rises() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'An authorization generation never falls: % % from % to %',
+        TG_TABLE_NAME, OLD.id, OLD.authority_generation, NEW.authority_generation
+        USING ERRCODE = 'check_violation';
+END $$;
+CREATE TRIGGER account_authority_generation_only_rises AFTER UPDATE OF authority_generation ON public.account
+    FOR EACH ROW WHEN (NEW.authority_generation < OLD.authority_generation)
+    EXECUTE FUNCTION authority_generation_only_rises();
+CREATE TRIGGER workspace_authority_generation_only_rises AFTER UPDATE OF authority_generation ON public.workspace
+    FOR EACH ROW WHEN (NEW.authority_generation < OLD.authority_generation)
+    EXECUTE FUNCTION authority_generation_only_rises();
 ]]></sql>
         <rollback>
             <sql splitStatements="false"><![CDATA[
-DROP TRIGGER account_ai_choice_narrows_authority ON account;
-DROP FUNCTION ai_choice_narrows_authority();
+DROP TRIGGER workspace_authority_generation_only_rises ON workspace;
+DROP TRIGGER account_authority_generation_only_rises ON account;
+DROP FUNCTION authority_generation_only_rises();
+DROP TRIGGER account_narrows_authority ON account;
+DROP FUNCTION person_narrows_authority();
 ALTER TABLE account DROP COLUMN authority_generation;
 ]]></sql>
         </rollback>
     </changeSet>
     <changeSet id="1795633800000-2" author="hephaestus">
-        <comment>A stamp also holds the generation of each person whose authority the work depends on, such as a review's developers or a turn's owner, under "accounts". Unfinished work from before the upgrade gets the person it names at generation 0, where every person starts: a feedback send its developer, a Slack reply its asker, and a turn or digest its conversation's owner. A review's developers are not stored with its run; its model calls still check each developer's current AI choice, and its feedback is stamped when it is queued. The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
+        <comment>A stamp also holds the generation of each person whose authority the work depends on, such as a review's developers or a turn's owner, under "accounts". Unfinished work from before the upgrade gets the person it names at generation 0, where every person starts: a feedback send its developer, a Slack reply its asker, a weekly digest email its reader, and a turn or digest its conversation's owner. A review's developers are not stored with its run; its model calls still check each developer's current AI choice, and its feedback is stamped when it is queued. The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
         <sql splitStatements="false"><![CDATA[
 CREATE FUNCTION public.authorization_stamp_valid(stamp jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
     SELECT jsonb_typeof(stamp) = 'object'
@@ -85,7 +106,8 @@ ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_authorization_stamp
 ALTER TABLE agent_action DISABLE TRIGGER agent_action_authorization_stamp_fixed;
 UPDATE agent_action SET authorization_stamp = authorization_stamp
         || jsonb_build_object('accounts', jsonb_build_object(subject_account_id::text, 0))
-    WHERE kind IN ('DELIVER_FEEDBACK', 'EDIT_FEEDBACK', 'RETRACT_FEEDBACK', 'SLACK_POST')
+    WHERE (kind IN ('DELIVER_FEEDBACK', 'EDIT_FEEDBACK', 'RETRACT_FEEDBACK', 'SLACK_POST')
+           OR (kind = 'EMAIL' AND payload ->> 'kind' = 'WEEKLY_DIGEST'))
       AND workspace_id IS NOT NULL AND subject_account_id IS NOT NULL
       AND state IN ('PROPOSED', 'ADMITTED', 'EXECUTING');
 ALTER TABLE agent_action ENABLE TRIGGER agent_action_authorization_stamp_fixed;

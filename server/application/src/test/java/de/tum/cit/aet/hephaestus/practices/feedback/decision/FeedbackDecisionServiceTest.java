@@ -108,6 +108,7 @@ class FeedbackDecisionServiceTest {
     void setup() {
         when(privacy.holdForAccountWrite(anyLong())).thenReturn(true);
         when(memberships.activeRole(1, 3)).thenReturn(Optional.of(WorkspaceRole.ADMIN));
+        when(accounts.standing(3)).thenReturn(new AccountDirectory.Standing(true, false));
         when(digests.current(1, id)).thenReturn(digest());
         row = Feedback.builder()
                 .id(id)
@@ -192,6 +193,23 @@ class FeedbackDecisionServiceTest {
     }
 
     @Test
+    void shouldStampTheDecisionWithItsAdminAndItsDeveloperSoEitherNarrowingRefusesItsSend() {
+        service.decide(1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+
+        verify(generations).authorize(eq(1L), eq(List.of(2L, 3L)), any());
+    }
+
+    @Test
+    void shouldRefuseADecisionOfAnAdminWhoseAccountWasBlockedAfterTheRouteCheckedIt() {
+        when(accounts.standing(3)).thenReturn(new AccountDirectory.Standing(false, false));
+
+        assertThatThrownBy(() -> service.decide(
+                        1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest())))
+                .isInstanceOf(AccessForbiddenException.class);
+        verify(actions, never()).enqueue(any());
+    }
+
+    @Test
     void shouldAcceptAnInstanceAdminsDecisionOnlyWhileTheAccountIsStillAnInstanceAdmin() {
         when(memberships.activeRole(1, 3)).thenReturn(Optional.empty());
         SecurityContextHolder.getContext()
@@ -200,13 +218,13 @@ class FeedbackDecisionServiceTest {
                         .subject("3")
                         .claim("roles", List.of("app_admin"))
                         .build()));
-        when(accounts.activeInstanceAdmin(3)).thenReturn(true);
+        when(accounts.standing(3)).thenReturn(new AccountDirectory.Standing(true, true));
 
         service.decide(1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
         verify(actions).enqueue(any());
 
         // The token still names the instance role, but an admin removed it before this decision.
-        when(accounts.activeInstanceAdmin(3)).thenReturn(false);
+        when(accounts.standing(3)).thenReturn(new AccountDirectory.Standing(true, false));
         assertThatThrownBy(() -> service.decide(
                         1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest())))
                 .isInstanceOf(AccessForbiddenException.class);

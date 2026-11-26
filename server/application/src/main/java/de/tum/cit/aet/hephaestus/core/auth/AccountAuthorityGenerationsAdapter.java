@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The person's authorization generation; the trigger {@code ai_choice_narrows_authority} raises it. */
+/** The person's authorization generation; the trigger {@code account_narrows_authority} raises it. */
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor

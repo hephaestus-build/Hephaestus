@@ -24,7 +24,7 @@ public @interface AuthorityBearing {
     enum Generation {
         /** {@code workspace.authority_generation}. */
         WORKSPACE,
-        /** {@code account.authority_generation}: the person's own, such as their AI choice. */
+        /** {@code account.authority_generation}: the person's own, such as their AI choice, instance role or block. */
         ACCOUNT
     }
 }

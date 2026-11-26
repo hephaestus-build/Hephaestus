@@ -25,6 +25,15 @@ public interface EmailNotice<E> {
     Prepared prepare(E event);
 
     /**
+     * Whether the email carries words that Hephaestus wrote for its recipient, such as a weekly recap. Its stamp then
+     * holds the recipient's generation, so a narrowing of the recipient's AI choice, a block or an erasure refuses a
+     * queued email at its send (ADR 0134).
+     */
+    default boolean dependsOnRecipient() {
+        return false;
+    }
+
+    /**
      * @param key the natural key of this notification to this recipient; the same key enqueues nothing new
      * @param recipientAccountId the account the email addresses; its erasure deletes the email
      * @param workspaceId the workspace the email is about, or {@code null} for an account or instance notice

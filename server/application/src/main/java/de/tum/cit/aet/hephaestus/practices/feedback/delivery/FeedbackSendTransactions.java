@@ -468,35 +468,44 @@ public class FeedbackSendTransactions {
             copies.recordError(workspaceId, feedbackId, copyId, null, readback == null ? null : readback.name(), error);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean mayRestore(long workspaceId, UUID feedbackId, ActionAttempt owner) {
-        var row = store.lock(workspaceId, feedbackId);
-        return owns(owner)
-                && !visibility.withdrawn(workspaceId, feedbackId)
-                && store.check(row, true).allowed();
+    /** Whether a correction's provider write may start. */
+    public enum CorrectionAdmission {
+        /** The write may start now. */
+        ADMITTED,
+        /** A restore that the piece's withdrawal or the current delivery policy no longer asks for: skip the copy. */
+        NOT_DUE,
+        /** The attempt lost its action, the recipient cannot be held, or the send boundary refused: stop the attempt. */
+        REFUSED
     }
 
     /**
      * Admits one provider correction: holds the developer's person-data write fence in this transaction, which commits
-     * before the provider call, and admits the write at the send boundary. A refused hold withholds the feedback with
-     * {@code PERSON_SUPPRESSED}.
+     * before the provider call, and admits the write at the send boundary. A restore also needs the piece to be
+     * visible and the current delivery policy to permit it, checked under the same feedback lock, so nothing waits
+     * between the boundary and the provider call. A refused hold withholds the feedback with {@code PERSON_SUPPRESSED}.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean admitCorrection(long workspaceId, UUID feedbackId, ActionAttempt owner, boolean removal) {
+    public CorrectionAdmission admitCorrection(
+            long workspaceId, UUID feedbackId, ActionAttempt owner, boolean removal) {
         var recipient = feedback.developerOf(feedbackId, workspaceId);
-        if (recipient.isEmpty()) return false;
+        if (recipient.isEmpty()) return CorrectionAdmission.REFUSED;
         boolean admitted = privacy.holdForAccountWrite(recipient.get());
         var row = store.lock(workspaceId, feedbackId);
         if (row.getDeveloperId() != recipient.get())
             throw new IllegalStateException("The feedback changed its developer.");
-        if (!owns(owner)) return false;
+        if (!owns(owner)) return CorrectionAdmission.REFUSED;
         if (!admitted) {
             store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
-            return false;
+            return CorrectionAdmission.REFUSED;
         }
+        if (!removal
+                && (visibility.withdrawn(workspaceId, feedbackId)
+                        || !store.check(row, true).allowed())) return CorrectionAdmission.NOT_DUE;
         // The send boundary comes last, after the waits: a removal goes out whatever happened to the access since, a
         // restore adds content back and needs authority that still holds.
-        return removal ? owner.fence().beginRemoval() : owner.fence().beginWrite();
+        return (removal ? owner.fence().beginRemoval() : owner.fence().beginWrite())
+                ? CorrectionAdmission.ADMITTED
+                : CorrectionAdmission.REFUSED;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

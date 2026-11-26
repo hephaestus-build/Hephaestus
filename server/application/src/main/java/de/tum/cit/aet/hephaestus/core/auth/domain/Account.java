@@ -107,9 +107,9 @@ public class Account {
     private @Nullable Instant aiChoiceAt;
 
     /**
-     * The person's authorization generation (ADR 0134). Only the database writes it, when the AI choice narrows; a flush
-     * never writes it, so it cannot put back an older value. A boundary reads it fresh through {@code
-     * AuthorityGenerations}.
+     * The person's authorization generation (ADR 0134). Only the database writes it, when the AI choice, the instance
+     * role or the active status narrows, and it never falls. A flush never writes it, so it cannot put back an older
+     * value. A boundary reads it fresh through {@code AuthorityGenerations}.
      */
     @Column(name = "authority_generation", nullable = false, insertable = false, updatable = false)
     @ColumnDefault("0")

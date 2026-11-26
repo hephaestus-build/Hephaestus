@@ -38,6 +38,8 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -51,6 +53,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -408,20 +411,144 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRaiseThePersonsGenerationOnlyWhenTheirAiChoiceNarrows() {
-        chooseAi("CLOUD");
+    void shouldRaiseThePersonsGenerationOnlyWhenWhatTheyMayHaveDoneNarrows() {
+        activate(asker);
         long before = personGeneration();
 
+        // A first choice rules out the model that an optional choice admitted.
         chooseAi("IN_HOUSE_ONLY");
         assertThat(personGeneration()).isEqualTo(before + 1);
         chooseAi("CLOUD");
         assertThat(personGeneration()).isEqualTo(before + 1);
-        chooseAi("NO_AI");
-        assertThat(personGeneration()).isEqualTo(before + 2);
-        chooseAi(null);
-        assertThat(personGeneration()).isEqualTo(before + 3);
         chooseAi("IN_HOUSE_ONLY");
+        assertThat(personGeneration()).isEqualTo(before + 2);
+        chooseAi("NO_AI");
         assertThat(personGeneration()).isEqualTo(before + 3);
+        chooseAi("CLOUD");
+        assertThat(personGeneration()).isEqualTo(before + 3);
+        chooseAi(null);
+        assertThat(personGeneration()).isEqualTo(before + 4);
+        chooseAi("CLOUD");
+        assertThat(personGeneration()).isEqualTo(before + 5);
+
+        jdbc.update("UPDATE account SET app_role = 'APP_ADMIN' WHERE id = ?", asker);
+        assertThat(personGeneration()).isEqualTo(before + 5);
+        jdbc.update("UPDATE account SET app_role = 'USER' WHERE id = ?", asker);
+        assertThat(personGeneration()).isEqualTo(before + 6);
+        jdbc.update("UPDATE account SET status = 'BLOCKED' WHERE id = ?", asker);
+        assertThat(personGeneration()).isEqualTo(before + 7);
+        jdbc.update("UPDATE account SET status = 'ACTIVE' WHERE id = ?", asker);
+        assertThat(personGeneration()).isEqualTo(before + 7);
+        jdbc.update("UPDATE account SET status = 'DELETING' WHERE id = ?", asker);
+        assertThat(personGeneration()).isEqualTo(before + 8);
+    }
+
+    @Test
+    void shouldRefuseAGenerationThatFallsUnderTheApplicationsDatabaseRole() {
+        chooseAi("NO_AI");
+        assertThatThrownBy(() -> jdbc.update("UPDATE account SET authority_generation = 0 WHERE id = ?", asker))
+                .hasMessageContaining("never falls");
+        jdbc.update(
+                "UPDATE membership SET left_at = now() WHERE workspace_id = ? AND account_id = ?",
+                workspace.getId(),
+                asker);
+        assertThatThrownBy(() ->
+                        jdbc.update("UPDATE workspace SET authority_generation = 0 WHERE id = ?", workspace.getId()))
+                .hasMessageContaining("never falls");
+    }
+
+    /** The shapes of stamp that queued work carries, by whose authority the work depends on. */
+    enum Shape {
+        /** A send that an admin's decision, retry or recheck queued: the workspace, the developer and the admin. */
+        ADMIN_DECISION,
+        /** Work for one person, such as a policy's send, a turn's reply or a digest: the workspace and that person. */
+        PERSON,
+        /** Work that depends on no person's own authority, such as a Slack notice: the workspace alone. */
+        WORKSPACE
+    }
+
+    /** Each change that narrows authority, and the shapes of queued work that it refuses. */
+    enum Narrowing {
+        ADMIN_LOSES_THE_WORKSPACE_ROLE,
+        ADMIN_LEAVES_THE_WORKSPACE,
+        ADMIN_LOSES_THE_INSTANCE_ROLE,
+        ADMIN_IS_BLOCKED,
+        DEVELOPER_IS_REMOVED_FROM_THE_WORKSPACE,
+        DEVELOPER_IS_BLOCKED,
+        DEVELOPER_TURNS_AI_OFF,
+        DEVELOPER_MAKES_A_FIRST_AI_CHOICE,
+        DEVELOPERS_ERASURE_STARTS,
+        NOTHING_NARROWS;
+
+        /** A membership change raises the workspace's generation; a person's change raises only theirs. */
+        boolean refuses(Shape shape) {
+            return switch (this) {
+                case ADMIN_LOSES_THE_WORKSPACE_ROLE,
+                        ADMIN_LEAVES_THE_WORKSPACE,
+                        DEVELOPER_IS_REMOVED_FROM_THE_WORKSPACE -> true;
+                case ADMIN_LOSES_THE_INSTANCE_ROLE, ADMIN_IS_BLOCKED -> shape == Shape.ADMIN_DECISION;
+                case DEVELOPER_IS_BLOCKED,
+                        DEVELOPER_TURNS_AI_OFF,
+                        DEVELOPER_MAKES_A_FIRST_AI_CHOICE,
+                        DEVELOPERS_ERASURE_STARTS -> shape != Shape.WORKSPACE;
+                case NOTHING_NARROWS -> false;
+            };
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(Narrowing.class)
+    void shouldRefuseAtTheSendBoundaryEveryQueuedSendWhoseAuthorityNarrowedAndNoOther(Narrowing narrowing) {
+        User admin = persistUser("fence-admin-" + UUID.randomUUID().toString().substring(0, 8));
+        ensureMembership(workspace, admin, Membership.WorkspaceRole.ADMIN);
+        long actor = accountId(admin);
+        activate(asker);
+        activate(actor);
+        jdbc.update("UPDATE account SET app_role = 'APP_ADMIN' WHERE id = ?", actor);
+        var provider = new CopyOnWriteArrayList<UUID>();
+        var executor = sendingTo(provider);
+        var queued = new EnumMap<Shape, UUID>(Shape.class);
+        queued.put(
+                Shape.ADMIN_DECISION,
+                actions.enqueue(notice(generations.requestedNow(workspace.getId(), List.of(asker, actor)))));
+        queued.put(Shape.PERSON, actions.enqueue(notice(generations.requestedNow(workspace.getId(), List.of(asker)))));
+        queued.put(Shape.WORKSPACE, actions.enqueue(notice()));
+
+        switch (narrowing) {
+            case ADMIN_LOSES_THE_WORKSPACE_ROLE ->
+                jdbc.update(
+                        "UPDATE membership SET role = 'MEMBER' WHERE workspace_id = ? AND account_id = ?",
+                        workspace.getId(),
+                        actor);
+            case ADMIN_LEAVES_THE_WORKSPACE ->
+                jdbc.update(
+                        "UPDATE membership SET left_at = now() WHERE workspace_id = ? AND account_id = ?",
+                        workspace.getId(),
+                        actor);
+            case ADMIN_LOSES_THE_INSTANCE_ROLE ->
+                jdbc.update("UPDATE account SET app_role = 'USER' WHERE id = ?", actor);
+            case ADMIN_IS_BLOCKED -> jdbc.update("UPDATE account SET status = 'BLOCKED' WHERE id = ?", actor);
+            case DEVELOPER_IS_REMOVED_FROM_THE_WORKSPACE ->
+                jdbc.update(
+                        "DELETE FROM membership WHERE workspace_id = ? AND account_id = ?", workspace.getId(), asker);
+            case DEVELOPER_IS_BLOCKED -> jdbc.update("UPDATE account SET status = 'BLOCKED' WHERE id = ?", asker);
+            case DEVELOPER_TURNS_AI_OFF -> chooseAi("NO_AI");
+            case DEVELOPER_MAKES_A_FIRST_AI_CHOICE -> chooseAi("CLOUD");
+            case DEVELOPERS_ERASURE_STARTS -> jdbc.update("UPDATE account SET status = 'DELETING' WHERE id = ?", asker);
+            case NOTHING_NARROWS -> {}
+        }
+
+        for (var send : queued.entrySet()) {
+            ActionResult expected = narrowing.refuses(send.getKey())
+                    ? new ActionResult.Cancelled(ActionStopReason.AUTHORITY_CHANGED)
+                    : new ActionResult.Done(null);
+            assertThat(executor.runNow(send.getValue()))
+                    .as("%s, %s", narrowing, send.getKey())
+                    .contains(expected);
+        }
+        assertThat(provider).hasSize((int) Arrays.stream(Shape.values())
+                .filter(shape -> !narrowing.refuses(shape))
+                .count());
     }
 
     @Test
@@ -530,6 +657,11 @@ class AuthorityFenceTest extends AbstractWorkspaceIntegrationTest {
                         workspace.getId(),
                         "conversation:" + UUID.randomUUID()))
                 .doesNotThrowAnyException();
+    }
+
+    /** Makes the account active, as a sign-in does; a roster account starts unclaimed. */
+    private void activate(long account) {
+        jdbc.update("UPDATE account SET status = 'ACTIVE' WHERE id = ? AND status = 'UNCLAIMED'", account);
     }
 
     /** The member's AI choice, as their settings write it; {@code null} clears it. */

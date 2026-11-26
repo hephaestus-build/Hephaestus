@@ -30,12 +30,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Query(value = "SELECT authority_generation FROM account WHERE id = :accountId FOR SHARE", nativeQuery = true)
     Optional<Long> findAuthorityGenerationForShare(@Param("accountId") long accountId);
 
-    /** Whether the account is an active instance admin, read from the database rather than a loaded entity. */
+    /** The account's standing, read from the database rather than a loaded entity. */
     @Query(
-            value = "SELECT EXISTS (SELECT 1 FROM account WHERE id = :accountId AND app_role = 'APP_ADMIN'"
-                    + " AND status = 'ACTIVE')",
+            value = "SELECT status = 'ACTIVE' AS \"active\", app_role = 'APP_ADMIN' AS \"instanceAdmin\""
+                    + " FROM account WHERE id = :accountId",
             nativeQuery = true)
-    boolean isActiveInstanceAdmin(@Param("accountId") long accountId);
+    Optional<StandingRow> findStanding(@Param("accountId") long accountId);
+
+    interface StandingRow {
+        boolean getActive();
+
+        boolean getInstanceAdmin();
+    }
 
     Optional<Account> findByPasskeyUserHandle(String handle);
 

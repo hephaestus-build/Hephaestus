@@ -66,6 +66,11 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
     }
 
     @Override
+    public boolean dependsOnRecipient() {
+        return true;
+    }
+
+    @Override
     public EmailKind kind() {
         return EmailKind.WEEKLY_DIGEST;
     }

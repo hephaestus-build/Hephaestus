@@ -46,6 +46,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -323,15 +324,61 @@ class FeedbackSendTransactionsTest {
     @Test
     void shouldWithholdACorrectionWhenItCannotHoldTheRecipient() {
         when(privacy.holdForAccountWrite(2)).thenReturn(false);
-        assertThat(transactions.admitCorrection(1, id, owner, true)).isFalse();
+        assertThat(transactions.admitCorrection(1, id, owner, true))
+                .isEqualTo(FeedbackSendTransactions.CorrectionAdmission.REFUSED);
         verify(store).withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
     }
 
     @Test
     void shouldAdmitACorrectionOnlyForTheCurrentLeaseHolder() {
         when(privacy.holdForAccountWrite(2)).thenReturn(true);
-        assertThat(transactions.admitCorrection(1, id, owner, true)).isTrue();
-        assertThat(transactions.admitCorrection(1, id, expired, true)).isFalse();
+        assertThat(transactions.admitCorrection(1, id, owner, true))
+                .isEqualTo(FeedbackSendTransactions.CorrectionAdmission.ADMITTED);
+        assertThat(transactions.admitCorrection(1, id, expired, true))
+                .isEqualTo(FeedbackSendTransactions.CorrectionAdmission.REFUSED);
         verify(store, never()).withhold(any(), any());
+    }
+
+    @Test
+    void shouldCheckARestoreUnderTheFeedbackLockBeforeItsSendBoundary() {
+        var steps = new ArrayList<String>();
+        var restoring = new ActionAttempt(
+                UUID.randomUUID(),
+                1L,
+                ActionKind.RETRACT_FEEDBACK,
+                "feedback:" + id + ":2:RETRACT",
+                JsonNodeFactory.instance.objectNode(),
+                1,
+                1,
+                false,
+                null,
+                () -> steps.add("boundary"),
+                null);
+        when(actions.holds(restoring)).thenReturn(true);
+        when(store.lock(1, id)).thenAnswer(call -> {
+            steps.add("lock");
+            return row;
+        });
+        when(store.check(row, true)).thenAnswer(call -> {
+            steps.add("policy");
+            return new FeedbackCheck(
+                    FeedbackCheckStage.EGRESS,
+                    true,
+                    null,
+                    now,
+                    new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false));
+        });
+
+        assertThat(transactions.admitCorrection(1, id, restoring, false))
+                .isEqualTo(FeedbackSendTransactions.CorrectionAdmission.ADMITTED);
+        // Every check that can wait comes before the boundary, so the provider call follows it at once.
+        assertThat(steps).containsExactly("lock", "policy", "boundary");
+
+        // A withdrawn piece is not restored, and its restore never reaches the boundary.
+        steps.clear();
+        when(visibility.withdrawn(1, id)).thenReturn(true);
+        assertThat(transactions.admitCorrection(1, id, restoring, false))
+                .isEqualTo(FeedbackSendTransactions.CorrectionAdmission.NOT_DUE);
+        assertThat(steps).containsExactly("lock");
     }
 }

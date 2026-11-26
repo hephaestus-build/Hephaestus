@@ -97,12 +97,14 @@ public class FeedbackSendQueue {
     }
 
     /**
-     * The authority of a workspace admin's decision: it reads the stamp, then checks that the actor is still at least an
-     * admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside this transaction. An
-     * instance admin counts as a workspace admin, as {@code WorkspaceAccessService} grants it, while the account is
-     * still an active instance admin. It holds the actor's account and the workspace's generation before it reads the
-     * stamp, until the decision commits: a demotion either committed before and refuses, or waits for the decision. The
-     * send also depends on the feedback's developer, whose AI choice can narrow it; its own boundary checks that.
+     * The authority of a workspace admin's decision: it reads the stamp, then checks that the actor is still an active
+     * account and at least an admin, in the caller's transaction (ADR 0134). The route checked the role earlier, outside
+     * this transaction. An instance admin counts as a workspace admin, as {@code WorkspaceAccessService} grants it,
+     * while the account still holds the instance role. It holds the actor's account and the workspace's generation
+     * before it reads the stamp, until the decision commits: a demotion or block either committed before and refuses,
+     * or waits for the decision. The stamp names the actor and the feedback's developer, so a send that the decision
+     * queues is refused when the actor loses the workspace role or the instance role, or is blocked, and when the
+     * developer narrows their AI choice.
      *
      * @throws AccessForbiddenException when the actor is no longer an admin of the workspace
      */
@@ -111,17 +113,22 @@ public class FeedbackSendQueue {
         long workspaceId = row.getWorkspaceId();
         generations.accountHeld(actorAccountId);
         generations.workspaceHeld(workspaceId);
+        List<Long> people = row.getDeveloperId() == actorAccountId
+                ? List.of(actorAccountId)
+                : List.of(row.getDeveloperId(), actorAccountId);
         return generations
-                .authorize(workspaceId, List.of(row.getDeveloperId()), () -> isAdmin(workspaceId, actorAccountId))
+                .authorize(workspaceId, people, () -> isAdmin(workspaceId, actorAccountId))
                 .orElseThrow(() -> new AccessForbiddenException("Only a workspace admin can decide on feedback."));
     }
 
     private boolean isAdmin(long workspaceId, long actorAccountId) {
-        return memberships
-                        .activeRole(workspaceId, actorAccountId)
-                        .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
-                        .isPresent()
-                || (SecurityUtils.isSuperAdmin() && accounts.activeInstanceAdmin(actorAccountId));
+        var standing = accounts.standing(actorAccountId);
+        return standing.active()
+                && (memberships
+                                .activeRole(workspaceId, actorAccountId)
+                                .filter(role -> role.isAtLeast(WorkspaceRole.ADMIN))
+                                .isPresent()
+                        || (SecurityUtils.isSuperAdmin() && standing.instanceAdmin()));
     }
 
     /**

@@ -27,7 +27,10 @@ public interface AuthorityGenerations {
      */
     OptionalLong workspaceHeld(long workspaceId);
 
-    /** The person's authorization generation, which their AI choice raises; empty when the account no longer exists. */
+    /**
+     * The person's authorization generation, which a narrowing of their AI choice, instance role or active status raises;
+     * empty when the account no longer exists.
+     */
     OptionalLong account(long accountId);
 
     /** The person's authorization generation, held as {@link #workspaceHeld} holds the workspace's. */

@@ -55,7 +55,11 @@ class AuthoritySendFenceMigrationTest {
                        (gen_random_uuid(), %1$d, 'SLACK_POST', 'reply:b', 'reply:b', 'ADMITTED', 3,
                         now(), '{}', %3$d, now(), now()),
                        (gen_random_uuid(), %1$d, 'SLACK_NOTICE', 'notice:c', 'notice:c', 'ADMITTED', 3,
-                        now(), '{}', %3$d, now(), now());
+                        now(), '{}', %3$d, now(), now()),
+                       (gen_random_uuid(), %1$d, 'EMAIL', 'email:d', 'email:weekly_digest:d', 'ADMITTED', 3,
+                        now(), '{"kind": "WEEKLY_DIGEST", "event": {}}', %3$d, now(), now()),
+                       (gen_random_uuid(), %1$d, 'EMAIL', 'email:e', 'email:role_changed:e', 'ADMITTED', 3,
+                        now(), '{"kind": "ROLE_CHANGED", "event": {}}', %3$d, now(), now());
                 """.formatted(WORKSPACE, DEVELOPER, ASKER, conversation, turnRun, reviewRun));
 
         try (var connection =
@@ -68,14 +72,16 @@ class AuthoritySendFenceMigrationTest {
             PracticeMigrationFixture.upgradeOnly(liquibase, "prod", CHANGELOG);
 
             assertThat(PracticeMigrationFixture.column(database, """
-                    SELECT kind || ' ' || authorization_stamp::text FROM agent_action
-                    WHERE workspace_id = %d ORDER BY kind
+                    SELECT kind || ' ' || coalesce(payload ->> 'kind', '-') || ' ' || authorization_stamp::text
+                    FROM agent_action WHERE workspace_id = %d ORDER BY kind, payload ->> 'kind'
                     """.formatted(WORKSPACE)))
                     .as("a queued send names the person it depends on; a notice depends on no one's AI choice")
                     .containsExactly(
-                            "DELIVER_FEEDBACK {\"accounts\": {\"%d\": 0}, \"workspace\": 0}".formatted(DEVELOPER),
-                            "SLACK_NOTICE {\"workspace\": 0}",
-                            "SLACK_POST {\"accounts\": {\"%d\": 0}, \"workspace\": 0}".formatted(ASKER));
+                            "DELIVER_FEEDBACK - {\"accounts\": {\"%d\": 0}, \"workspace\": 0}".formatted(DEVELOPER),
+                            "EMAIL ROLE_CHANGED {\"workspace\": 0}",
+                            "EMAIL WEEKLY_DIGEST {\"accounts\": {\"%d\": 0}, \"workspace\": 0}".formatted(ASKER),
+                            "SLACK_NOTICE - {\"workspace\": 0}",
+                            "SLACK_POST - {\"accounts\": {\"%d\": 0}, \"workspace\": 0}".formatted(ASKER));
             assertThat(PracticeMigrationFixture.column(database, """
                     SELECT kind || ' ' || authorization_stamp::text FROM agent_run
                     WHERE workspace_id = %d ORDER BY kind

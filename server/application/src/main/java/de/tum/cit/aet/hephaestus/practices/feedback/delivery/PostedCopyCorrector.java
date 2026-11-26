@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -37,20 +36,30 @@ public class PostedCopyCorrector {
 
     /**
      * Brings each posted copy to what its marks and the piece's withdrawal now ask. Other copies stay untouched. Every
-     * removal goes first, so a restore that the send boundary refuses leaves no removal of the same attempt undone.
+     * removal goes first, so a restore that the send boundary refuses leaves no removal of the same attempt undone. A
+     * removal that the provider has not confirmed yet keeps every restore for a later attempt: the attempt then reads
+     * the removal back, and no refused restore can end the action before the removal settles.
      */
     public void correct(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner) {
-        if (!correct(attempt, target, owner, true)) return;
+        if (correct(attempt, target, owner, true) != Pass.SETTLED) return;
         correct(attempt, target, owner, false);
     }
 
-    /** @return whether the attempt still holds its action, so the next pass may run */
-    private boolean correct(
+    private enum Pass {
+        /** Every copy of the pass is settled. */
+        SETTLED,
+        /** A copy waits for the provider to confirm its correction. */
+        UNCONFIRMED,
+        /** The attempt no longer holds its action, or the send boundary refused. */
+        STOPPED
+    }
+
+    private Pass correct(
             FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, ActionAttempt owner, boolean removals) {
         var feedback = attempt.feedback();
         long workspaceId = feedback.getWorkspaceId();
         UUID feedbackId = feedback.getId();
-        @Nullable Boolean restoreAllowed = null;
+        var pass = Pass.SETTLED;
         for (var copy : attempt.copies()) {
             if (copy.getState() != FeedbackCopyState.POSTED && copy.getState() != FeedbackCopyState.RETRACTED) continue;
             // Read for each copy: a mark can change while this send writes the copies before it.
@@ -58,11 +67,10 @@ public class PostedCopyCorrector {
                     || copies.incorrectCopyIds(workspaceId, feedbackId).contains(copy.getId());
             if (remove == (copy.getState() == FeedbackCopyState.RETRACTED)) continue;
             if (remove != removals) continue;
-            if (!transactions.admitCorrection(workspaceId, feedbackId, owner, remove)) return false;
-            if (!remove) {
-                if (restoreAllowed == null) restoreAllowed = transactions.mayRestore(workspaceId, feedbackId, owner);
-                if (!restoreAllowed) continue;
-            }
+            // The admission is the last step before the provider call: nothing after it waits for a lock.
+            var admission = transactions.admitCorrection(workspaceId, feedbackId, owner, remove);
+            if (admission == FeedbackSendTransactions.CorrectionAdmission.REFUSED) return Pass.STOPPED;
+            if (admission == FeedbackSendTransactions.CorrectionAdmission.NOT_DUE) continue;
             if (copy.getExternalRef() == null
                     || (copy.getKind() == FeedbackCopyKind.SUMMARY && copy.getWriteKey() == null)) {
                 transactions.correctionError(
@@ -74,13 +82,16 @@ public class PostedCopyCorrector {
                         "The historical receipt cannot identify a safe provider update.");
                 continue;
             }
-            if (copy.getKind() == FeedbackCopyKind.SUMMARY) correctSummary(feedback, copy, target, remove, owner);
-            else correctNote(copy, target, remove, owner);
+            boolean confirmed = copy.getKind() == FeedbackCopyKind.SUMMARY
+                    ? correctSummary(feedback, copy, target, remove, owner)
+                    : correctNote(copy, target, remove, owner);
+            if (!confirmed) pass = Pass.UNCONFIRMED;
         }
-        return true;
+        return pass;
     }
 
-    private void correctSummary(
+    /** @return false while the provider has not confirmed the correction, so the attempt reads it back later */
+    private boolean correctSummary(
             Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
         if (copies.hasNewerSummaryReceipt(
                 copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
@@ -91,14 +102,14 @@ public class PostedCopyCorrector {
                     copy.getId(),
                     null,
                     "A newer piece of feedback owns this provider reference.");
-            return;
+            return true;
         }
         var matching = summaries.stream()
                 .filter(w -> w.kind() == target.integration().kind())
                 .toList();
         if (matching.size() != 1) {
             unsupported(copy, owner);
-            return;
+            return true;
         }
         String body = remove ? "This feedback was withdrawn." : Objects.requireNonNull(feedback.getBody());
         var result = matching.getFirst()
@@ -113,10 +124,11 @@ public class PostedCopyCorrector {
                                 null,
                                 // A withdrawal's words are not generated, so they carry no record.
                                 remove ? null : feedback.getProvenance()));
-        apply(copy, result, remove, owner);
+        return apply(copy, result, remove, owner);
     }
 
-    private void correctNote(FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
+    /** @return false while the provider has not confirmed the correction, as {@link #correctSummary} */
+    private boolean correctNote(FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
         if (copies.hasNewerSummaryReceipt(
                 copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
             transactions.correctionError(
@@ -126,14 +138,14 @@ public class PostedCopyCorrector {
                     copy.getId(),
                     null,
                     "A newer piece of feedback owns this provider reference.");
-            return;
+            return true;
         }
         var matching = notes.stream()
                 .filter(w -> w.kind() == target.integration().kind())
                 .toList();
         if (matching.size() != 1) {
             unsupported(copy, owner);
-            return;
+            return true;
         }
         if (!remove && (copy.getWriteKey() == null || copy.getWriteMarker() == null || copy.getBody() == null)) {
             transactions.correctionError(
@@ -143,7 +155,7 @@ public class PostedCopyCorrector {
                     copy.getId(),
                     null,
                     "The historical receipt cannot identify a safe provider update.");
-            return;
+            return true;
         }
         var receipt = new CopyReceipt(
                 copy.getId(), CopyDisposition.POSTED, copy.getExternalRef(), copy.getExternalUrl(), true, null);
@@ -154,18 +166,19 @@ public class PostedCopyCorrector {
                         target, List.of(new LineNoteWriter.RetractedNote(receipt, FeedbackSendService.line(copy))));
         var update =
                 updates.stream().filter(r -> r.copyId().equals(copy.getId())).findFirst();
-        if (update.isPresent()) apply(copy, update.get(), remove, owner);
-        else
-            transactions.correctionError(
-                    copy.getWorkspaceId(),
-                    copy.getFeedbackId(),
-                    owner,
-                    copy.getId(),
-                    FeedbackCopyReadback.TRANSIENT,
-                    " Correction receipt is unavailable.");
+        if (update.isPresent()) return apply(copy, update.get(), remove, owner);
+        transactions.correctionError(
+                copy.getWorkspaceId(),
+                copy.getFeedbackId(),
+                owner,
+                copy.getId(),
+                FeedbackCopyReadback.TRANSIENT,
+                " Correction receipt is unavailable.");
+        return false;
     }
 
-    private void apply(FeedbackCopy copy, CopyUpdateReceipt receipt, boolean remove, ActionAttempt owner) {
+    /** @return false when the provider left the correction unconfirmed */
+    private boolean apply(FeedbackCopy copy, CopyUpdateReceipt receipt, boolean remove, ActionAttempt owner) {
         if (!copy.getId().equals(receipt.copyId())
                 || (receipt.externalRef() != null && !Objects.equals(copy.getExternalRef(), receipt.externalRef())))
             throw new IllegalArgumentException("Correction must address the original copy.");
@@ -187,7 +200,7 @@ public class PostedCopyCorrector {
                         null,
                         "The provider copy no longer exists, so it stays retracted.");
         } else if (receipt.kind() == CopyUpdateKind.UNSUPPORTED) unsupported(copy, owner);
-        else
+        else {
             transactions.correctionError(
                     copy.getWorkspaceId(),
                     copy.getFeedbackId(),
@@ -195,6 +208,9 @@ public class PostedCopyCorrector {
                     copy.getId(),
                     FeedbackCopyReadback.TRANSIENT,
                     " Provider correction is not confirmed.");
+            return false;
+        }
+        return true;
     }
 
     private void unsupported(FeedbackCopy copy, ActionAttempt owner) {

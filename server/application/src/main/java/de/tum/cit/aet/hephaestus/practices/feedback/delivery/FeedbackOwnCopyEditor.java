@@ -92,8 +92,8 @@ public class FeedbackOwnCopyEditor {
                         workspace, feedbackId, owner, List.of(copy.getId()), FeedbackStopReason.DELIVERY_UNCONFIRMED);
                 continue;
             }
-            if (!owner.fence().beginWrite()
-                    || !transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of())) continue;
+            // The fence admits the write at the send boundary as its last step, so nothing waits before the edit.
+            if (!transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of())) continue;
             var update = update(attempt, target, copy, prior);
             if (!copy.getId().equals(update.copyId())
                     || (update.externalRef() != null && !prior.getExternalRef().equals(update.externalRef())))

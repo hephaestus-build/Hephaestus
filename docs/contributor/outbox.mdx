@@ -107,7 +107,10 @@ The action stores its stamp (`agent_action.authorization_stamp`), and a trigger 
 A turn's Slack reply keeps the stamp of the turn's run, and the next send of a feedback keeps the stamp of the send that it follows.
 `beginWrite` rereads the generations with `FOR SHARE` in its own transaction and refuses before it sets `write_started_at` when one moved on, such as when a member left or the developer turned AI off.
 The refusal names the generation that rose, and `authority_refused_total` counts it under that reason.
+Every adapter calls the fence as the last step before its provider call: nothing waits between them.
 A feedback send passes the boundary in the transaction that starts its copies, after every wait for the item and feedback rows, also for a draft with no copy to start.
+A correction passes it in the transaction that checks the correction: a restore's check of the withdrawal and the delivery policy comes before the boundary, under the same feedback lock.
+A restore waits for a later attempt while a removal of the same attempt is unconfirmed, so a refused restore cannot end the action before the removal settles.
 After a refused send, only a removal follows: a restore waits for a new authorized request.
 A narrowing raises the generation with an `UPDATE` of the workspace row, so it commits either before the admission, which then refuses, or after the admission commits.
 A write that only removes content, such as retracting a posted copy, calls `ActionAttempt.fence().beginRemoval()` instead: a narrowing never blocks a removal, only a write that adds content.

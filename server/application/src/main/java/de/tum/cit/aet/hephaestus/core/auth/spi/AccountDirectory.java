@@ -15,8 +15,14 @@ public interface AccountDirectory {
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
 
-    /** Whether the account is an active instance admin as committed now, never as a session's token says. */
-    boolean activeInstanceAdmin(long accountId);
+    /** The account's standing as committed now, never as a session's token says; neither active nor an admin when no account exists. */
+    Standing standing(long accountId);
+
+    /**
+     * @param active the account is active: not blocked, unclaimed or erased
+     * @param instanceAdmin the account holds the instance role
+     */
+    record Standing(boolean active, boolean instanceAdmin) {}
 
     /** Locks an account eligible for retention in the caller's transaction. */
     boolean holdForRetention(long accountId);

@@ -361,7 +361,9 @@ class FeedbackSendServiceTest {
      */
     @Test
     void shouldNotSendTheNotifyingWriteOnceTheLeaseHasLessThanTheWriteMarginLeft() {
-        var margin = new AtomicInteger(1);
+        // Each write passes the send boundary: the package's creation and both staged drafts are admitted, and the
+        // lease runs out before the write that notifies.
+        var margin = new AtomicInteger(3);
         var leased = new ActionAttempt(
                 owner.id(),
                 1L,
@@ -381,8 +383,9 @@ class FeedbackSendServiceTest {
                         FeedbackSendAction.POST,
                         List.of(copy(FeedbackCopyState.PLANNED), note(FeedbackCopyState.PLANNED)),
                         1));
+        // The package fence ends with the send boundary, which refuses once the lease has less than the margin left.
         when(transactions.fencePackage(anyLong(), any(), eq(leased), anyList(), anyList()))
-                .thenReturn(true);
+                .thenAnswer(call -> leased.fence().beginWrite());
         var steps = new ArrayList<String>();
         var staging = new StagingWriter(steps);
         var sender = new FeedbackSendService(

@@ -522,8 +522,9 @@ This section gives the mechanism for runs.
   So no stamp can be read after the check that it covers: a narrowing that commits after the read refuses the work at its next boundary.
   `TurnRunsAdapter.enqueue` passes the conversation owner's membership check this way.
   An admin's feedback decision, retry or recheck passes the actor's role check this way (`FeedbackSendQueue.asAdmin`): the route checked the role before the transaction began.
-  An instance admin counts as a workspace admin while the account is still an active instance admin, as `WorkspaceAccessService` grants it.
-  The decision holds the actor's account and the workspace's generation with `FOR SHARE` until it commits, so a demotion either committed before and refuses the decision, or waits for it.
+  The actor must be an active account. An instance admin counts as a workspace admin while the account still holds the instance role, as `WorkspaceAccessService` grants it.
+  The decision holds the actor's account and the workspace's generation with `FOR SHARE` before it reads the stamp, until it commits, so a demotion or a block either committed before and refuses the decision, or waits for it.
+  The stamp names the actor and the developer, so the send that the decision queues is refused after either one narrows.
   It takes the account before it locks the feedback, in the order of an account absorption.
   Work that checks no access of its own in its transaction, such as a review that an event selected, takes `requestedNow`.
   Work that continues stored work, such as a turn's Slack reply, takes `CheckedAuthority.inherited` with the stored stamp.
@@ -531,8 +532,14 @@ This section gives the mechanism for runs.
 - A continuation keeps the stamp of the run that it continues: it is the same work.
   `AgentRuns.resume`, which queues completed work again because something asks for it now, takes the stamp of now.
   A database trigger refuses a change of the stamp.
-- A person has a generation too: `account.authority_generation`, which the trigger `account_ai_choice_narrows_authority` raises when their AI choice narrows (to NO_AI, from CLOUD to IN_HOUSE_ONLY, or cleared).
-  A stamp holds it for each person the work depends on, under `accounts`: a review's developers, a turn's owner, a digest's reader, a feedback's developer.
+- A person has a generation too: `account.authority_generation`, which the trigger `account_narrows_authority` raises when what the person may have done narrows:
+  - their AI choice changes to NO_AI, from CLOUD to IN_HOUSE_ONLY, from no choice to any choice, or back to no choice. A first choice counts, because a workspace where choosing is optional admits a model that the choice can rule out;
+  - their instance role is taken away;
+  - their account stops being active, by a block or an erasure.
+  One generation covers all three, so each refuses all the work that names the person, also work that the change did not concern.
+  The person asks again, as after a workspace narrowing.
+  A stamp holds it for each person the work depends on, under `accounts`: a review's developers, a turn's owner, a digest's reader (the run, its Slack reply and its email), a feedback's developer, and the admin whose decision, retry or recheck queued a send.
+- Neither generation can fall. The triggers `account_authority_generation_only_rises` and `workspace_authority_generation_only_rises` refuse an update that lowers one, whatever role writes it, so a stamp that a narrowing made stale stays stale.
   A held check (`AuthorityGenerations.checkHeld`) takes the people's rows in account id order, then the workspace's.
   That is the order of an account absorption: its two accounts in id order, then the workspace that its membership changes raise.
   Every boundary compares those too, and a refusal names `ACCOUNT_AUTHORITY_NARROWED`.
