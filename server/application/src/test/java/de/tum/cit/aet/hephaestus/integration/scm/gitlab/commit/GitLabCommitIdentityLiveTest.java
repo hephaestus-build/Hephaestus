@@ -13,9 +13,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
-import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionProperties;
@@ -99,7 +99,7 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
     private RepositoryToMonitorRepository monitors;
 
     @Autowired
-    private BackfillStateProvider targets;
+    private SyncTargetProvider targets;
 
     @Autowired
     private UserRepository users;
@@ -188,9 +188,11 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
             Scope scope = scope(fixture);
             Captured captured = capture(scope, fixture.commit("transfer.txt"));
             fixture.transfer();
+            var metadata = targets.beginRepositoryReads(scope.workspaceId(), scope.providerId())
+                    .forRepository(fixture.projectId());
             var discovered = projects.fetchProjectById(scope.workspaceId(), fixture.projectId())
                     .orElseThrow();
-            Repository moved = projects.persistProject(discovered).orElseThrow();
+            Repository moved = projects.persistProject(discovered, metadata).orElseThrow();
             assertThat(moved.getId()).isEqualTo(scope.repositoryId());
             assertThat(moved.getNativeId()).isEqualTo(fixture.projectId());
             targets.reconcileSyncTargetIdentity(scope.monitorId(), moved.getNativeId(), moved.getNameWithOwner());

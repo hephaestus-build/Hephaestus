@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
+import static de.tum.cit.aet.hephaestus.testconfig.RepositoryObservationTestFixtures.confirm;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService;
@@ -73,6 +74,9 @@ import org.springframework.scheduling.concurrent.ConcurrentTaskExecutor;
 
 /** Real lifecycle trigger, full repository bodies and row writes; only provider responses are controlled. */
 class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    private RepositoryObservationStore observations;
+
     @Autowired
     private ConnectionQueries connectionQueries;
 
@@ -126,8 +130,9 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 persistUser("initial-owner"));
         first = monitoredRepository("initial-group/a", 901L);
         second = monitoredRepository("initial-group/b", 902L);
-        when(metadata.syncRepository(anyLong(), any(), any(), any())).thenAnswer(invocation -> {
+        when(metadata.syncRepository(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
             String name = invocation.getArgument(1);
+            confirm(observations, invocation.getArgument(4), false);
             return Optional.of(name.equals(first.getNameWithOwner()) ? first : second);
         });
         when(issues.syncForRepository(any(), any(), any(), any())).thenAnswer(invocation -> {
@@ -467,21 +472,21 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         assertThat(monitor)
                 .extracting(
                         RepositoryToMonitor::getRepositorySyncedAt,
-                        RepositoryToMonitor::getRepositoryVisibilityConfirmedAt,
                         RepositoryToMonitor::getIssuesSyncedAt,
                         RepositoryToMonitor::getPullRequestsSyncedAt)
                 .doesNotContainNull();
+        assertThat(monitor.getRepositoryVisibilityConfirmedAt()).isNull();
+        assertThat(monitor.getPublicObservationAt()).isNull();
         assertThat(monitor.getSyncErrorSummary()).isNull();
     }
 
     private void assertIssuesIncomplete(Repository repository) {
         RepositoryToMonitor monitor = monitor(repository);
         assertThat(monitor)
-                .extracting(
-                        RepositoryToMonitor::getRepositorySyncedAt,
-                        RepositoryToMonitor::getRepositoryVisibilityConfirmedAt,
-                        RepositoryToMonitor::getPullRequestsSyncedAt)
+                .extracting(RepositoryToMonitor::getRepositorySyncedAt, RepositoryToMonitor::getPullRequestsSyncedAt)
                 .doesNotContainNull();
+        assertThat(monitor.getRepositoryVisibilityConfirmedAt()).isNull();
+        assertThat(monitor.getPublicObservationAt()).isNull();
         assertThat(monitor.getIssuesSyncedAt()).isNull();
         assertThat(monitor.getRecentSyncError()).isEqualTo("Issue sync: ABORTED_ERROR");
         assertThat(monitor.getHistoricalBackfillSyncError()).isNull();

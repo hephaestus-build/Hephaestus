@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -45,6 +47,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -107,6 +110,9 @@ class GitLabRouteAdmissionTest {
     void setUp() {
         when(projectAdmission.captureConnection(WORKSPACE_ID, PROVIDER_ID))
                 .thenAnswer(invocation -> Optional.of(originalConnection));
+        lenient()
+                .when(projectAdmission.beginRepositoryReads(any()))
+                .thenReturn(new RepositoryReads(WORKSPACE_ID, PROVIDER_ID, Instant.EPOCH, Map.of()));
         GitLabProperties properties = mock(GitLabProperties.class);
         when(properties.defaultServerUrl()).thenReturn(ORIGIN + "/");
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
@@ -216,7 +222,7 @@ class GitLabRouteAdmissionTest {
 
             assertProjectNotAdmitted(projectEvent("project_rename", PROJECT_B, GROUP + "/a"));
             assertProjectNotAdmitted(projectEvent("project_transfer", PROJECT_B, GROUP + "/a"));
-            verify(projectSync, never()).persistProject(any());
+            verify(projectSync, never()).persistProject(any(), any());
             verify(syncTargets, never()).reconcileSyncTargetIdentity(anyLong(), any(), any());
             verify(syncTargets, never()).removeSyncTarget(anyLong());
         }
@@ -229,7 +235,7 @@ class GitLabRouteAdmissionTest {
                     .thenReturn(Optional.of(reported(PROJECT_A, GROUP + "/a")));
 
             assertProjectNotAdmitted(workEvent(PROJECT_B, GROUP + "/a"));
-            verify(projectSync, never()).persistProject(any());
+            verify(projectSync, never()).persistProject(any(), any());
         }
 
         @Test
@@ -256,7 +262,7 @@ class GitLabRouteAdmissionTest {
 
             assertProjectNotAdmitted(workEvent(PROJECT_A, GROUP + "/a"));
             assertProjectNotAdmitted(workEvent(PROJECT_A, GROUP + "/a"));
-            verify(projectSync, never()).persistProject(any());
+            verify(projectSync, never()).persistProject(any(), any());
             verify(repositoryMonitors, never()).monitorAllowed(any(), any());
         }
 
@@ -265,7 +271,7 @@ class GitLabRouteAdmissionTest {
             GitLabProjectResponse nested = reported(PROJECT_A, GROUP + "/sub/new");
             Repository stored = repository(PROJECT_A, GROUP + "/sub/new");
             when(projectSync.fetchProject(WORKSPACE_ID, GROUP + "/sub/new")).thenReturn(Optional.of(nested));
-            when(projectSync.persistProject(nested)).thenReturn(Optional.of(stored));
+            when(projectSync.persistProject(eq(nested), any())).thenReturn(Optional.of(stored));
             when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
                     .thenReturn(Optional.of(stored));
 
@@ -297,7 +303,7 @@ class GitLabRouteAdmissionTest {
             Repository stored = repository(PROJECT_A, GROUP + "/sub/current");
             when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
                     .thenReturn(Optional.of(stored));
-            when(projectSync.persistProject(current)).thenReturn(Optional.of(stored));
+            when(projectSync.persistProject(eq(current), any())).thenReturn(Optional.of(stored));
 
             assertProjectAdmitted(projectEvent("project_rename", PROJECT_A, GROUP + "/stale"));
             verify(repositoryMonitors).monitorAllowed(workspace, List.of(stored));
@@ -311,8 +317,8 @@ class GitLabRouteAdmissionTest {
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
                     .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
             assertProjectNotAdmitted(projectEvent("project_update", PROJECT_A, GROUP + "/a"));
-            verify(syncTargets).recordRepositoryUnavailable(WORKSPACE_ID, 60L);
-            verify(projectSync, never()).persistProject(any());
+            verify(syncTargets).recordRepositoryLoss(any());
+            verify(projectSync, never()).persistProject(any(), any());
         }
 
         @Test
@@ -343,7 +349,7 @@ class GitLabRouteAdmissionTest {
             assertProjectNotAdmitted(projectEvent("project_destroy", PROJECT_A, GROUP + "/a"));
             assertProjectNotAdmitted(projectEvent("project_destroy", PROJECT_A, GROUP + "/a"));
             verify(syncTargets, times(2)).removeSyncTarget(56L);
-            verify(projectSync, never()).persistProject(any());
+            verify(projectSync, never()).persistProject(any(), any());
             verify(repositoryRepository, never()).delete(any());
         }
 
@@ -372,7 +378,7 @@ class GitLabRouteAdmissionTest {
             when(connection.getState()).thenReturn(IntegrationState.ACTIVE, IntegrationState.SUSPENDED);
 
             assertProjectNotAdmitted(projectEvent("project_create", PROJECT_A, GROUP + "/a"));
-            verify(projectSync, never()).persistProject(any());
+            verify(projectSync, never()).persistProject(any(), any());
         }
     }
 

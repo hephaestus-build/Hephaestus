@@ -1,0 +1,422 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795647000000-1" author="hephaestus">
+        <comment>Narrow monitors of the exact provider repository. Native ids can coincide across provider instances.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.narrow_repository_monitors(p_provider_id bigint, p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    WITH monitor_source AS (
+        SELECT m.id, m.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor AS m
+        JOIN public.connection AS c ON c.workspace_id = m.workspace_id
+        JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.state IN ('ACTIVE', 'SUSPENDED') AND c.kind IN ('GITHUB', 'GITLAB')
+    )
+    UPDATE public.repository_to_monitor AS m
+    SET proof_generation = m.proof_generation + 1,
+        visibility_class = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE m.visibility_class END,
+        proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
+        proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END
+    FROM monitor_source AS source
+    WHERE m.id = source.id
+      AND source.provider_id = p_provider_id AND source.native_id = $2;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+CREATE OR REPLACE FUNCTION public.narrow_monitors_of_repository() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM public.narrow_repository_monitors(OLD.provider_id, OLD.native_id);
+    ELSE
+        PERFORM public.narrow_repository_monitors(NEW.provider_id, NEW.native_id);
+    END IF;
+    RETURN NULL;
+END
+$$;
+-- The previous server can still handle GitHub.com visibility events during a rolling upgrade.
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE sql AS $$
+    SELECT COALESCE((
+        SELECT public.narrow_repository_monitors(p.id, $1)
+        FROM public.identity_provider AS p
+        WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com'
+    ), 0)
+$$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+    github_provider_id bigint;
+BEGIN
+    -- GitHub visibility events were the only callers of the original single-argument function.
+    SELECT p.id INTO github_provider_id
+    FROM public.identity_provider AS p
+    WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com';
+
+    WITH monitor_source AS (
+        SELECT m.id, m.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor AS m
+        JOIN public.connection AS c ON c.workspace_id = m.workspace_id
+        JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.state IN ('ACTIVE', 'SUSPENDED') AND c.kind = 'GITHUB'
+    )
+    UPDATE public.repository_to_monitor AS m
+    SET proof_generation = m.proof_generation + 1,
+        visibility_class = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE m.visibility_class END,
+        proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
+        proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END
+    FROM monitor_source AS source
+    WHERE m.id = source.id
+      AND source.provider_id = github_provider_id AND source.native_id = $1;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+CREATE OR REPLACE FUNCTION public.narrow_monitors_of_repository() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    repository_provider_id bigint;
+    repository_number bigint;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        repository_provider_id := OLD.provider_id;
+        repository_number := OLD.native_id;
+    ELSE
+        repository_provider_id := NEW.provider_id;
+        repository_number := NEW.native_id;
+    END IF;
+
+    WITH monitor_source AS (
+        SELECT m.id, m.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor AS m
+        JOIN public.connection AS c ON c.workspace_id = m.workspace_id
+        JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.state IN ('ACTIVE', 'SUSPENDED') AND c.kind IN ('GITHUB', 'GITLAB')
+    )
+    UPDATE public.repository_to_monitor AS m
+    SET proof_generation = m.proof_generation + 1,
+        visibility_class = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE m.visibility_class END,
+        proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
+        proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END
+    FROM monitor_source AS source
+    WHERE m.id = source.id
+      AND source.provider_id = repository_provider_id AND source.native_id = repository_number;
+    RETURN NULL;
+END
+$$;
+DROP FUNCTION public.narrow_repository_monitors(bigint, bigint);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795687620000-1" author="hephaestus">
+        <comment>Apply repository observations with one credential-scoped proof and an independent order for mirror metadata.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.repository_to_monitor ADD COLUMN public_observation_at timestamptz;
+-- Existing queued deliveries precede this generation marker. New rows take the time of their insert.
+ALTER TABLE public.repository_to_monitor ADD COLUMN proof_generation_at timestamptz NOT NULL DEFAULT statement_timestamp();
+ALTER TABLE public.repository_to_monitor ALTER COLUMN proof_generation_at SET DEFAULT clock_timestamp();
+CREATE FUNCTION public.record_repository_proof_generation_time() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE public.repository_to_monitor
+    SET proof_generation_at = GREATEST(proof_generation_at, clock_timestamp())
+    WHERE id = NEW.id AND workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END
+$$;
+CREATE TRIGGER repository_proof_generation_changed AFTER UPDATE OF proof_generation ON public.repository_to_monitor
+    FOR EACH ROW WHEN (OLD.proof_generation IS DISTINCT FROM NEW.proof_generation)
+    EXECUTE FUNCTION public.record_repository_proof_generation_time();
+
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_provider_id bigint, p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    WITH monitor_source AS (
+        SELECT m.id, m.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor AS m
+        JOIN public.connection AS c ON c.workspace_id = m.workspace_id
+        JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.state IN ('ACTIVE', 'SUSPENDED') AND c.kind IN ('GITHUB', 'GITLAB')
+    )
+    UPDATE public.repository_to_monitor AS m
+    SET repository_visibility_confirmed_at = NULL, public_observation_at = NULL,
+        proof_generation = m.proof_generation + 1,
+        visibility_class = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE m.visibility_class END,
+        proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
+        proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END
+    FROM monitor_source AS source
+    WHERE m.id = source.id
+      AND source.provider_id = p_provider_id AND source.native_id = $2;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+
+ALTER TABLE public.repository ADD COLUMN metadata_observed_at timestamptz;
+-- Legacy writers stamped successful private reads. Rebuild confirmations from checked public reads.
+UPDATE public.repository_to_monitor SET repository_visibility_confirmed_at = NULL
+WHERE repository_visibility_confirmed_at IS NOT NULL;
+
+CREATE FUNCTION public.invalidate_repository_confirmations() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    scope bigint;
+    source_kind text;
+BEGIN
+    IF TG_TABLE_NAME = 'repository_to_monitor' THEN
+        UPDATE public.repository_to_monitor
+        SET repository_visibility_confirmed_at = NULL, public_observation_at = NULL,
+            proof_generation = GREATEST(proof_generation, OLD.proof_generation + 1),
+            visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS'
+        WHERE id = NEW.id AND workspace_id = NEW.workspace_id;
+        RETURN NULL;
+    END IF;
+    scope := CASE WHEN TG_OP = 'INSERT' THEN NEW.workspace_id ELSE OLD.workspace_id END;
+    source_kind := CASE WHEN TG_OP = 'INSERT' THEN NEW.kind ELSE OLD.kind END;
+    IF source_kind NOT IN ('GITHUB', 'GITLAB') THEN RETURN NULL; END IF;
+    UPDATE public.repository_to_monitor
+    SET repository_visibility_confirmed_at = NULL, public_observation_at = NULL, proof_generation = proof_generation + 1,
+        visibility_class = CASE WHEN visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE visibility_class END,
+        proof_state = CASE WHEN visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE proof_state END,
+        proof_reason = CASE WHEN visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE proof_reason END
+    WHERE workspace_id = scope;
+    RETURN NULL;
+END
+$$;
+CREATE TRIGGER repository_confirmation_connection_changed AFTER INSERT OR DELETE ON public.connection
+    FOR EACH ROW EXECUTE FUNCTION public.invalidate_repository_confirmations();
+CREATE TRIGGER repository_confirmation_identity_changed AFTER UPDATE OF native_id ON public.repository_to_monitor
+    FOR EACH ROW WHEN (OLD.native_id IS DISTINCT FROM NEW.native_id)
+    EXECUTE FUNCTION public.invalidate_repository_confirmations();
+CREATE TRIGGER repository_confirmation_credential_changed AFTER UPDATE ON public.connection
+    FOR EACH ROW WHEN (OLD.kind IN ('GITHUB', 'GITLAB') AND (
+        OLD.credentials_generation IS DISTINCT FROM NEW.credentials_generation
+        OR (OLD.lifecycle_generation IS DISTINCT FROM NEW.lifecycle_generation
+            AND NOT (OLD.state IN ('ACTIVE', 'SUSPENDED') AND NEW.state IN ('ACTIVE', 'SUSPENDED')))
+        OR OLD.config ->> 'serverUrl' IS DISTINCT FROM NEW.config ->> 'serverUrl'
+        OR (OLD.attention_problem IS DISTINCT FROM NEW.attention_problem AND NEW.attention_problem = 'CREDENTIAL_REVOKED')
+    )) EXECUTE FUNCTION public.invalidate_repository_confirmations();
+
+CREATE FUNCTION public.capture_repository_observations(p_workspace bigint, p_provider bigint, p_monitor bigint)
+RETURNS TABLE (connection_id bigint, credentials_generation bigint, lifecycle_generation bigint,
+               monitor_id bigint, native_id bigint, proof_generation bigint, observed_at timestamptz)
+LANGUAGE sql STABLE AS $$
+    SELECT c.id, c.credentials_generation, c.lifecycle_generation,
+           m.id, m.native_id, m.proof_generation, statement_timestamp()
+    FROM public.identity_provider AS p
+    LEFT JOIN public.connection AS c ON c.kind = p.type AND c.config ->> 'serverUrl' = p.server_url
+        AND c.workspace_id = p_workspace AND c.state = 'ACTIVE'
+    LEFT JOIN public.repository_to_monitor AS m ON m.workspace_id = c.workspace_id
+        AND (p_monitor IS NULL OR m.id = p_monitor)
+    WHERE p.id = p_provider
+    ORDER BY m.id
+$$;
+
+CREATE FUNCTION public.store_repository_observation(
+    p_workspace bigint, p_connection bigint, p_credential_generation bigint, p_lifecycle_generation bigint,
+    p_provider bigint, p_native bigint, p_monitor bigint, p_generation bigint,
+    p_observed_at timestamptz, p_observation text, p_visibility text, p_patch jsonb
+) RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+    current_row public.repository;
+    candidate public.repository;
+    monitor_current boolean := false;
+    monitor_native bigint;
+    metadata_current boolean := true;
+    mirror_current boolean;
+    written bigint;
+    constraint_name text;
+    kind text;
+BEGIN
+    IF p_workspace = 0 THEN
+        -- Verified provider events have no workspace credential. They cannot confirm access.
+        IF p_observation NOT IN ('PRIVATE', 'METADATA') THEN RETURN -1; END IF;
+    ELSE
+        SELECT c.kind INTO kind
+        FROM public.connection AS c
+        JOIN public.identity_provider AS p ON p.id = p_provider
+            AND p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.id = p_connection AND c.workspace_id = p_workspace AND c.state = 'ACTIVE'
+            AND c.credentials_generation = p_credential_generation AND c.lifecycle_generation = p_lifecycle_generation
+            AND (p_observation IN ('PRIVATE', 'NOT_FOUND') OR c.attention_problem IS DISTINCT FROM 'CREDENTIAL_REVOKED')
+        FOR SHARE OF c;
+        IF NOT FOUND THEN RETURN -1; END IF;
+    END IF;
+    IF p_observed_at IS NULL OR p_observed_at > statement_timestamp() THEN RETURN -1; END IF;
+
+    -- Serialize observations even before a mirror exists. The row lock also orders legacy writes.
+    PERFORM pg_advisory_xact_lock(hashtextextended('repository:' || p_provider || ':' || p_native, 0));
+    -- All observations lock the mirror before its monitors, including restrictions that change no fields.
+    SELECT r.* INTO current_row FROM public.repository AS r
+    WHERE r.provider_id = p_provider AND r.native_id = p_native
+    FOR NO KEY UPDATE;
+
+    IF p_monitor IS NOT NULL THEN
+        SELECT m.proof_generation = p_generation AND m.proof_generation_at <= p_observed_at, m.native_id
+        INTO monitor_current, monitor_native
+        FROM public.repository_to_monitor AS m
+        WHERE m.workspace_id = p_workspace AND m.id = p_monitor
+        FOR UPDATE OF m;
+        IF NOT FOUND OR monitor_native IS DISTINCT FROM p_native THEN RETURN -1; END IF;
+        metadata_current := monitor_current;
+    ELSIF p_workspace <> 0 THEN
+        -- A queued payload carries receipt time. A read of an unmonitored repository carries request time.
+        -- Compare that time with the latest generation of the monitor now bound to this source.
+        WITH monitor_source AS (
+            SELECT m.id, m.native_id, p.id AS provider_id
+            FROM public.repository_to_monitor AS m
+            JOIN public.connection AS c ON c.workspace_id = m.workspace_id AND c.id = p_connection
+            JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+            WHERE m.workspace_id = p_workspace
+        )
+        SELECT m.proof_generation_at < p_observed_at INTO metadata_current
+        FROM public.repository_to_monitor AS m
+        JOIN monitor_source AS source ON source.id = m.id
+        WHERE source.provider_id = p_provider AND source.native_id = p_native
+        FOR UPDATE OF m;
+        IF NOT FOUND THEN metadata_current := true; END IF;
+    END IF;
+
+    IF p_observation = 'NOT_FOUND' THEN
+        IF p_monitor IS NULL THEN RETURN -1; END IF;
+        WITH source AS (
+            SELECT m.id, m.native_id, p.id AS provider_id
+            FROM public.repository_to_monitor AS m
+            JOIN public.connection AS c ON c.workspace_id = m.workspace_id AND c.id = p_connection
+            JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        )
+        UPDATE public.repository_to_monitor AS m
+        SET unavailable_since = COALESCE(unavailable_since, statement_timestamp()),
+            unavailable_retry_at = CASE WHEN unavailable_since IS NULL THEN statement_timestamp()
+                ELSE statement_timestamp() + interval '1 day' END,
+            repository_visibility_confirmed_at = NULL, public_observation_at = NULL,
+            proof_generation = proof_generation + 1,
+            visibility_class = 'UNPROVEN', proof_state = 'FAILED', proof_reason = 'RESOURCE_UNAVAILABLE'
+        FROM source
+        WHERE m.id = source.id AND m.workspace_id = p_workspace
+            AND source.provider_id = p_provider AND source.native_id = p_native;
+        RETURN COALESCE(current_row.id, 0);
+    END IF;
+
+    mirror_current := metadata_current
+        AND (current_row.metadata_observed_at IS NULL OR current_row.metadata_observed_at < p_observed_at);
+    IF p_observation = 'PUBLIC' AND NOT monitor_current THEN RETURN -1; END IF;
+    IF p_patch IS NOT NULL AND mirror_current THEN
+        candidate := jsonb_populate_record(current_row, p_patch);
+        BEGIN
+            IF current_row.id IS NULL AND candidate.name_with_owner IS NOT NULL AND p_workspace <> 0 THEN
+                INSERT INTO public.repository (
+                    provider_id, native_id, name_with_owner, name, html_url, description, organization_id,
+                    default_branch, is_archived, is_disabled, visibility, is_private, created_at, updated_at,
+                    pushed_at, last_sync_at, metadata_observed_at
+                ) VALUES (
+                    p_provider, p_native, candidate.name_with_owner, candidate.name, candidate.html_url,
+                    candidate.description, candidate.organization_id, COALESCE(candidate.default_branch, 'main'),
+                    COALESCE(candidate.is_archived, false), COALESCE(candidate.is_disabled, false),
+                    COALESCE(p_visibility, 'UNKNOWN'), p_visibility = 'PRIVATE' AND p_visibility IS NOT NULL,
+                    COALESCE(candidate.created_at, statement_timestamp()),
+                    COALESCE(candidate.updated_at, statement_timestamp()),
+                    COALESCE(candidate.pushed_at, candidate.created_at, statement_timestamp()),
+                    candidate.last_sync_at, p_observed_at
+                ) ON CONFLICT DO NOTHING RETURNING id INTO written;
+            ELSIF current_row.id IS NOT NULL THEN
+                UPDATE public.repository
+                SET name_with_owner = candidate.name_with_owner, name = candidate.name,
+                    html_url = candidate.html_url, description = candidate.description,
+                    organization_id = candidate.organization_id, default_branch = candidate.default_branch,
+                    is_archived = candidate.is_archived, is_disabled = candidate.is_disabled,
+                    visibility = COALESCE(p_visibility, current_row.visibility),
+                    is_private = CASE WHEN p_visibility IS NULL THEN current_row.is_private
+                        ELSE p_visibility = 'PRIVATE' END,
+                    created_at = candidate.created_at, updated_at = candidate.updated_at,
+                    pushed_at = candidate.pushed_at, last_sync_at = candidate.last_sync_at,
+                    metadata_observed_at = p_observed_at
+                WHERE id = current_row.id RETURNING id INTO written;
+            END IF;
+        EXCEPTION WHEN unique_violation THEN
+            GET STACKED DIAGNOSTICS constraint_name = CONSTRAINT_NAME;
+            IF constraint_name <> 'uq_repository_provider_name_with_owner' THEN RAISE; END IF;
+        END;
+    END IF;
+
+    IF p_observation = 'PRIVATE' THEN
+        IF written IS NULL THEN
+            -- The path can lose its ordering check or collide. Narrow the known source even then.
+            UPDATE public.repository AS r
+            SET visibility = p_visibility, is_private = p_visibility = 'PRIVATE'
+            WHERE r.provider_id = p_provider AND r.native_id = p_native AND r.visibility = 'PUBLIC';
+        END IF;
+        -- Even an identical observation or a missing mirror invalidates every matching read.
+        -- The mirror trigger also protects writes from the previous server during upgrade.
+        PERFORM public.narrow_repository_monitors(p_provider, p_native);
+        IF monitor_current THEN
+            UPDATE public.repository_to_monitor
+            SET unavailable_since = NULL, unavailable_retry_at = NULL,
+                visibility_class = 'UNPROVEN', proof_state = 'PENDING', proof_reason = 'AWAITING_READERS'
+            WHERE id = p_monitor AND workspace_id = p_workspace;
+        END IF;
+        RETURN COALESCE(written, CASE WHEN p_patch IS NULL THEN COALESCE(current_row.id, 0) ELSE -1 END);
+    END IF;
+
+    IF p_observation = 'PUBLIC' AND written IS NOT NULL THEN
+        UPDATE public.repository_to_monitor
+        SET unavailable_since = NULL, unavailable_retry_at = NULL,
+            repository_visibility_confirmed_at = p_observed_at, public_observation_at = p_observed_at,
+            proof_generation = proof_generation + 1,
+            readers_synced_at = CASE WHEN kind = 'GITHUB' THEN p_observed_at ELSE readers_synced_at END,
+            visibility_class = CASE WHEN kind = 'GITHUB' THEN 'WORKSPACE' ELSE 'UNPROVEN' END,
+            proof_state = CASE WHEN kind = 'GITHUB' THEN 'PROVEN' ELSE 'PENDING' END,
+            proof_reason = CASE WHEN kind = 'GITHUB' THEN 'PUBLIC_ON_PROVIDER' ELSE 'AWAITING_READERS' END
+        WHERE id = p_monitor AND workspace_id = p_workspace;
+    END IF;
+    RETURN COALESCE(written, -1);
+END
+$$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP FUNCTION public.capture_repository_observations(bigint, bigint, bigint);
+DROP FUNCTION public.store_repository_observation(
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, timestamptz, text, text, jsonb
+);
+DROP TRIGGER repository_confirmation_credential_changed ON public.connection;
+DROP TRIGGER repository_confirmation_connection_changed ON public.connection;
+DROP TRIGGER repository_confirmation_identity_changed ON public.repository_to_monitor;
+DROP FUNCTION public.invalidate_repository_confirmations();
+DROP TRIGGER repository_proof_generation_changed ON public.repository_to_monitor;
+DROP FUNCTION public.record_repository_proof_generation_time();
+ALTER TABLE public.repository DROP COLUMN metadata_observed_at;
+CREATE OR REPLACE FUNCTION public.narrow_repository_monitors(p_provider_id bigint, p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    narrowed integer;
+BEGIN
+    WITH monitor_source AS (
+        SELECT m.id, m.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor AS m
+        JOIN public.connection AS c ON c.workspace_id = m.workspace_id
+        JOIN public.identity_provider AS p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        WHERE c.state IN ('ACTIVE', 'SUSPENDED') AND c.kind IN ('GITHUB', 'GITLAB')
+    )
+    UPDATE public.repository_to_monitor AS m
+    SET proof_generation = m.proof_generation + 1,
+        visibility_class = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE m.visibility_class END,
+        proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
+        proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END
+    FROM monitor_source AS source
+    WHERE m.id = source.id
+      AND source.provider_id = p_provider_id AND source.native_id = $2;
+    GET DIAGNOSTICS narrowed = ROW_COUNT;
+    RETURN narrowed;
+END
+$$;
+ALTER TABLE public.repository_to_monitor DROP COLUMN public_observation_at;
+ALTER TABLE public.repository_to_monitor DROP COLUMN proof_generation_at;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

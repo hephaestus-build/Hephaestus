@@ -9,7 +9,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
@@ -20,10 +19,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPag
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -129,9 +129,9 @@ public class GitLabGroupSyncService {
 
         // Top-level organization is extracted from the first page response (group fields are
         // inlined in GetGroupProjects query), eliminating a separate API call.
-        Organization topLevelOrganization = null;
+        Long topLevelOrganization = null;
 
-        List<Repository> syncedRepositories = new ArrayList<>();
+        var syncedRepositories = new LinkedHashMap<Long, Repository>();
         String cursor = null;
         String previousCursor = null;
         int pageCount = 0;
@@ -139,7 +139,7 @@ public class GitLabGroupSyncService {
         int projectsRedacted = 0;
         boolean hadApiFailure = false;
         int reportedTotalCount = -1;
-        Set<Long> excluded = new HashSet<>();
+        Set<Long> listedNativeIds = new HashSet<>();
 
         try {
             IdentityProvider provider = resolveProvider(serverUrl);
@@ -161,7 +161,7 @@ public class GitLabGroupSyncService {
                         log.warn("Interrupted while waiting for rate limit reset: scopeId={}", scopeId);
                         return GitLabSyncResult.aborted(
                                 GitLabSyncResult.Status.ABORTED_RATE_LIMIT,
-                                syncedRepositories,
+                                List.copyOf(syncedRepositories.values()),
                                 pageCount,
                                 projectsSkipped);
                     }
@@ -169,8 +169,8 @@ public class GitLabGroupSyncService {
 
                 int pageSize =
                         adaptPageSize(GROUP_PROJECTS_PAGE_SIZE, graphQlClientProvider.getRateLimitRemaining(scopeId));
+                var metadata = admission.beginRepositoryReads(read);
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-
                 ClientGraphQlResponse response = client.documentName(GET_GROUP_PROJECTS_DOCUMENT)
                         .variable("fullPath", groupFullPath)
                         .variable("first", pageSize)
@@ -212,7 +212,7 @@ public class GitLabGroupSyncService {
                     GitLabGroupResponse groupData =
                             Objects.requireNonNull(response).field("group").toEntity(GitLabGroupResponse.class);
                     if (groupData != null) {
-                        topLevelOrganization = groupProcessor.process(groupData, providerId);
+                        topLevelOrganization = groupProcessor.processId(groupData, providerId);
                     }
                     if (topLevelOrganization == null) {
                         log.warn(
@@ -225,7 +225,7 @@ public class GitLabGroupSyncService {
                     log.info(
                             "Synced group: scopeId={}, orgId={}, groupPath={}",
                             scopeId,
-                            topLevelOrganization.getId(),
+                            topLevelOrganization,
                             safeGroupPath);
                 }
 
@@ -240,24 +240,28 @@ public class GitLabGroupSyncService {
                         continue;
                     }
                     try {
-                        Organization root = Objects.requireNonNull(topLevelOrganization);
+                        Long root = Objects.requireNonNull(topLevelOrganization);
                         long nativeId = extractEntityId(project.id());
+                        listedNativeIds.add(nativeId);
                         var applied = admission.discover(
                                 read,
                                 nativeId,
                                 Objects.requireNonNull(project.fullPath()),
                                 provider.getServerUrl(),
                                 () -> {
-                                    Organization projectOrg = resolveProjectOrganization(project, root, providerId);
-                                    return Optional.ofNullable(
-                                            projectProcessor.processGraphQlResponse(project, projectOrg, provider));
+                                    Long projectOrg = resolveProjectOrganization(project, root, providerId);
+                                    return Optional.ofNullable(projectProcessor.processGraphQlResponse(
+                                            project, projectOrg, provider, metadata.forRepository(nativeId)));
                                 });
-                        if (applied.isEmpty()) {
-                            excluded.add(nativeId);
-                        } else if (applied.get().isPresent()) {
-                            syncedRepositories.add(applied.get().get());
-                        } else {
-                            projectsSkipped++;
+                        if (applied.isPresent()) {
+                            if (applied.get().isPresent()) {
+                                var stored = applied.get().get();
+                                if (stored.applied() && stored.repository() != null) {
+                                    syncedRepositories.put(nativeId, stored.repository());
+                                }
+                            } else {
+                                projectsSkipped++;
+                            }
                         }
                     } catch (Exception e) {
                         projectsSkipped++;
@@ -330,34 +334,29 @@ public class GitLabGroupSyncService {
                         safeGroupPath,
                         syncedRepositories.size());
                 return GitLabSyncResult.aborted(
-                        GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, totalPages, projectsSkipped);
+                        GitLabSyncResult.Status.ABORTED_ERROR,
+                        List.copyOf(syncedRepositories.values()),
+                        totalPages,
+                        projectsSkipped);
             }
 
             int projectsReconciled = 0;
             boolean directProjectsListed = true;
             if (!hadApiFailure && topLevelOrganization != null) {
-                Set<Long> seenNativeIds = new HashSet<>();
-                for (Repository repo : syncedRepositories) {
-                    seenNativeIds.add(repo.getNativeId());
-                }
-
-                List<Repository> reconciled = new ArrayList<>();
+                int recursivelySynced = syncedRepositories.size();
                 directProjectsListed = reconcileDirectProjects(
                         scopeId,
                         groupFullPath,
                         topLevelOrganization,
                         provider,
-                        seenNativeIds,
-                        reconciled,
                         read,
-                        excluded);
-                projectsReconciled = reconciled.size();
-                syncedRepositories.addAll(reconciled);
+                        syncedRepositories,
+                        listedNativeIds);
+                projectsReconciled = syncedRepositories.size() - recursivelySynced;
             }
 
             // Fewer projects than GitLab counted means some were never listed: the result is incomplete.
-            int totalProcessed = syncedRepositories.size() + projectsSkipped + projectsRedacted + excluded.size();
-            boolean projectsMissing = reportedTotalCount >= 0 && totalProcessed < reportedTotalCount;
+            boolean projectsMissing = listedNativeIds.size() + projectsRedacted < reportedTotalCount;
             if (projectsMissing) {
                 log.warn(
                         "Project connection overflow detected: groupPath={}, synced={}, skipped={}, redacted={}, "
@@ -380,22 +379,26 @@ public class GitLabGroupSyncService {
                     projectsReconciled,
                     totalPages);
 
+            var synced = List.copyOf(syncedRepositories.values());
             // API failure during pagination → report as aborted, not completed
             if (hadApiFailure) {
                 return GitLabSyncResult.aborted(
-                        GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, totalPages, projectsSkipped);
+                        GitLabSyncResult.Status.ABORTED_ERROR, synced, totalPages, projectsSkipped);
             }
             // Processing failures, redacted (null) projects and unlisted projects all mean an incomplete sync
             if (projectsSkipped > 0 || projectsRedacted > 0 || projectsMissing || !directProjectsListed) {
                 return GitLabSyncResult.withErrors(
-                        syncedRepositories, totalPages, projectsSkipped, projectsRedacted, projectsReconciled);
+                        synced, totalPages, projectsSkipped, projectsRedacted, projectsReconciled);
             }
-            return GitLabSyncResult.completed(syncedRepositories, totalPages, projectsRedacted, projectsReconciled);
+            return GitLabSyncResult.completed(synced, totalPages, projectsRedacted, projectsReconciled);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted during group project sync: scopeId={}, groupPath={}", scopeId, safeGroupPath);
             return GitLabSyncResult.aborted(
-                    GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, pageCount, projectsSkipped);
+                    GitLabSyncResult.Status.ABORTED_ERROR,
+                    List.copyOf(syncedRepositories.values()),
+                    pageCount,
+                    projectsSkipped);
         } catch (Exception e) {
             graphQlClientProvider.recordFailure(e);
             log.error(
@@ -405,27 +408,28 @@ public class GitLabGroupSyncService {
                     syncedRepositories.size(),
                     e);
             return GitLabSyncResult.aborted(
-                    GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, pageCount, projectsSkipped);
+                    GitLabSyncResult.Status.ABORTED_ERROR,
+                    List.copyOf(syncedRepositories.values()),
+                    pageCount,
+                    projectsSkipped);
         }
     }
 
     /**
-     * Reconciliation pass: fetches direct projects (excludeSubgroups) and adds any that were
-     * missing from the primary sync to {@code reconciled}, because {@code includeSubgroups: true} can
-     * silently drop direct projects ({@link GitLabSyncResult#projectsReconciled()}).
+     * Fetches direct projects because {@code includeSubgroups: true} can silently drop them.
+     * Each observation reaches the metadata writer with the snapshot taken for its page.
      *
      * @return whether every direct project was listed and processed; the projects recovered before
-     *     an incomplete pass stay in {@code reconciled}
+     *     an incomplete pass stay in {@code syncedRepositories}
      */
     private boolean reconcileDirectProjects(
             Long scopeId,
             String groupFullPath,
-            Organization topLevelOrganization,
+            Long topLevelOrganization,
             IdentityProvider provider,
-            Set<Long> seenNativeIds,
-            List<Repository> reconciled,
             GitLabProjectAdmission.ConnectionRead read,
-            Set<Long> excluded) {
+            Map<Long, Repository> syncedRepositories,
+            Set<Long> listedNativeIds) {
         String safeGroupPath = sanitizeForLog(groupFullPath);
         boolean listedToEnd = false;
         boolean projectMissed = false;
@@ -450,8 +454,8 @@ public class GitLabGroupSyncService {
 
                 int pageSize =
                         adaptPageSize(GROUP_PROJECTS_PAGE_SIZE, graphQlClientProvider.getRateLimitRemaining(scopeId));
+                var metadata = admission.beginRepositoryReads(read);
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-
                 ClientGraphQlResponse response = client.documentName(GET_GROUP_PROJECTS_DOCUMENT)
                         .variable("fullPath", groupFullPath)
                         .variable("first", pageSize)
@@ -482,24 +486,23 @@ public class GitLabGroupSyncService {
                     }
                     try {
                         long nativeId = extractEntityId(project.id());
-                        if (seenNativeIds.contains(nativeId)) {
-                            continue;
-                        }
+                        listedNativeIds.add(nativeId);
                         var applied = admission.discover(
                                 read,
                                 nativeId,
                                 Objects.requireNonNull(project.fullPath()),
                                 provider.getServerUrl(),
                                 () -> Optional.ofNullable(projectProcessor.processGraphQlResponse(
-                                        project, topLevelOrganization, provider)));
-                        if (applied.isEmpty()) {
-                            excluded.add(nativeId);
-                            seenNativeIds.add(nativeId);
-                        } else if (applied.get().isPresent()) {
-                            reconciled.add(applied.get().get());
-                            seenNativeIds.add(nativeId);
-                        } else {
-                            projectMissed = true;
+                                        project, topLevelOrganization, provider, metadata.forRepository(nativeId))));
+                        if (applied.isPresent()) {
+                            if (applied.get().isPresent()) {
+                                var stored = applied.get().get();
+                                if (stored.applied() && stored.repository() != null) {
+                                    syncedRepositories.put(nativeId, stored.repository());
+                                }
+                            } else {
+                                projectMissed = true;
+                            }
                         }
                     } catch (Exception e) {
                         projectMissed = true;
@@ -544,14 +547,6 @@ public class GitLabGroupSyncService {
 
                 Thread.sleep(gitLabProperties.paginationThrottle().toMillis());
             } while (reconPageCount < MAX_PAGINATION_PAGES);
-
-            if (!reconciled.isEmpty()) {
-                log.warn(
-                        "Reconciliation recovered {} direct project(s) missing from includeSubgroups query: "
-                                + "groupPath={} (GitLab bug https://gitlab.com/gitlab-org/gitlab/-/issues/33419)",
-                        reconciled.size(),
-                        safeGroupPath);
-            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted during reconciliation: groupPath={}", safeGroupPath);
@@ -571,10 +566,9 @@ public class GitLabGroupSyncService {
      * is used as fallback. This correctly handles nested group hierarchies like
      * {@code org/team/subteam/project}.
      */
-    private Organization resolveProjectOrganization(
-            GitLabProjectResponse project, Organization topLevelOrganization, Long providerId) {
+    private Long resolveProjectOrganization(GitLabProjectResponse project, Long topLevelOrganization, Long providerId) {
         if (project.group() != null) {
-            Organization subOrg = groupProcessor.process(project.group(), providerId);
+            Long subOrg = groupProcessor.processId(project.group(), providerId);
             if (subOrg != null) {
                 return subOrg;
             }

@@ -8,15 +8,18 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.StaleRepositoryMetadataException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -30,7 +33,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHOrganiza
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepositoryOwner;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -67,7 +69,7 @@ public class GitHubRepositorySyncService {
     private static final String QUERY_DOCUMENT = "GetRepository";
 
     private final GitHubGraphQlClientProvider graphQlClientProvider;
-    private final RepositoryRepository repositoryRepository;
+    private final RepositoryObservationStore observations;
     private final OrganizationRepository organizationRepository;
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
@@ -84,7 +86,7 @@ public class GitHubRepositorySyncService {
     @Autowired
     public GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
-            RepositoryRepository repositoryRepository,
+            RepositoryObservationStore observations,
             OrganizationRepository organizationRepository,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
@@ -95,7 +97,7 @@ public class GitHubRepositorySyncService {
             List<SyncTargetProvider> syncTargets) {
         this(
                 graphQlClientProvider,
-                repositoryRepository,
+                observations,
                 organizationRepository,
                 syncProperties,
                 exceptionClassifier,
@@ -109,7 +111,7 @@ public class GitHubRepositorySyncService {
 
     GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
-            RepositoryRepository repositoryRepository,
+            RepositoryObservationStore observations,
             OrganizationRepository organizationRepository,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
@@ -124,7 +126,7 @@ public class GitHubRepositorySyncService {
         this.syncTargets = List.copyOf(syncTargets);
         this.restClient = webClient.mutate().baseUrl("https://api.github.com").build();
         this.graphQlClientProvider = graphQlClientProvider;
-        this.repositoryRepository = repositoryRepository;
+        this.observations = observations;
         this.organizationRepository = organizationRepository;
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
@@ -139,11 +141,17 @@ public class GitHubRepositorySyncService {
      * @param nameWithOwner the full repository name (owner/repo)
      * @param provider the IdentityProvider entity representing the GitHub provider instance
      * @param expectedNativeId the monitored identity, or null until it has been captured
+     * @param read the repository snapshot taken before asking GitHub
      * @return the synced repository, or empty on a transient or incomplete response
      */
     public Optional<Repository> syncRepository(
-            Long scopeId, String nameWithOwner, IdentityProvider provider, @Nullable Long expectedNativeId) {
-        return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, 0);
+            Long scopeId,
+            String nameWithOwner,
+            IdentityProvider provider,
+            @Nullable Long expectedNativeId,
+            ReadersRead read) {
+        Objects.requireNonNull(read);
+        return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, read, 0);
     }
 
     /** Resolves a renamed repository through its stable REST id using this scope's credential. */
@@ -202,6 +210,7 @@ public class GitHubRepositorySyncService {
             String nameWithOwner,
             IdentityProvider provider,
             @Nullable Long expectedNativeId,
+            ReadersRead read,
             int retryAttempt) {
         String safeNameWithOwner = Objects.requireNonNull(sanitizeForLog(nameWithOwner));
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
@@ -252,7 +261,7 @@ public class GitHubRepositorySyncService {
                             safeNameWithOwner,
                             log))) {
                         return syncRepositoryWithRetry(
-                                scopeId, nameWithOwner, provider, expectedNativeId, retryAttempt + 1);
+                                scopeId, nameWithOwner, provider, expectedNativeId, read, retryAttempt + 1);
                     }
                     return Optional.empty();
                 }
@@ -316,8 +325,10 @@ public class GitHubRepositorySyncService {
             }
 
             // GitHub has answered: the write is its own short transaction, so no connection waits on GitHub.
-            Repository repository = Objects.requireNonNull(
-                    transactionTemplate.execute(status -> store(provider, repoData, githubDatabaseId)));
+            Result result = Objects.requireNonNull(
+                    transactionTemplate.execute(status -> store(provider, repoData, githubDatabaseId, read)));
+            if (!result.applied()) throw new StaleRepositoryMetadataException();
+            Repository repository = Objects.requireNonNull(result.repository());
             log.info(
                     "Synced repository: scopeId={}, repoId={}, repoName={}",
                     scopeId,
@@ -327,7 +338,8 @@ public class GitHubRepositorySyncService {
             return Optional.of(repository);
         } catch (InstallationNotFoundException
                 | RepositoryNotFoundOnGitProviderException
-                | RepositoryIdentityMismatchException e) {
+                | RepositoryIdentityMismatchException
+                | StaleRepositoryMetadataException e) {
             throw e;
         } catch (DataAccessException | TransactionException e) {
             // A failed write is not a GitHub error: the caller records it and the next sync stores the repository.
@@ -346,58 +358,41 @@ public class GitHubRepositorySyncService {
                     "repoName",
                     safeNameWithOwner,
                     log))) {
-                return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, retryAttempt + 1);
+                return syncRepositoryWithRetry(
+                        scopeId, nameWithOwner, provider, expectedNativeId, read, retryAttempt + 1);
             }
             return Optional.empty();
         }
     }
 
     /** Creates or updates the repository and its organization from GitHub's answer. */
-    private Repository store(IdentityProvider provider, GHRepository repoData, long githubDatabaseId) {
-        GHRepositoryOwner owner = repoData.getOwner();
-        Organization organization = ensureOrganization(owner, provider);
-        Repository repository = repositoryRepository
-                .findByNativeIdAndProviderId(githubDatabaseId, Objects.requireNonNull(provider.getId()))
-                .orElseGet(Repository::new);
-
-        repository.setNativeId(githubDatabaseId);
-        repository.setProvider(provider);
-        repository.setName(repoData.getName());
-        repository.setNameWithOwner(repoData.getNameWithOwner());
-        repository.setDescription(repoData.getDescription());
-        repository.setHtmlUrl(Objects.requireNonNull(repoData.getUrl()).toString());
-        repository.setOrganization(organization);
-
-        repository.setPrivate(repoData.getIsPrivate());
-        repository.setArchived(repoData.getIsArchived());
-        repository.setDisabled(repoData.getIsDisabled());
-
-        if (repoData.getCreatedAt() != null) {
-            repository.setCreatedAt(repoData.getCreatedAt().toInstant());
+    private Result store(IdentityProvider provider, GHRepository repoData, long githubDatabaseId, ReadersRead read) {
+        long providerId = Objects.requireNonNull(provider.getId());
+        if (read.repositoryNativeId() != githubDatabaseId || read.providerId() != providerId) {
+            return new Result(false, null);
         }
-        if (repoData.getUpdatedAt() != null) {
-            repository.setUpdatedAt(repoData.getUpdatedAt().toInstant());
-        }
-        if (repoData.getPushedAt() != null) {
-            repository.setPushedAt(repoData.getPushedAt().toInstant());
-        }
-
-        if (repoData.getDefaultBranchRef() != null) {
-            repository.setDefaultBranch(repoData.getDefaultBranchRef().getName());
-        } else {
-            repository.setDefaultBranch("main");
-        }
-
-        if (repoData.getVisibility() != null) {
-            repository.setVisibility(
-                    Repository.Visibility.valueOf(repoData.getVisibility().name()));
-        } else {
-            repository.setVisibility(Repository.Visibility.PRIVATE);
-        }
-
-        repository.setLastSyncAt(Instant.now());
-
-        return repositoryRepository.save(repository);
+        Long organizationId = ensureOrganization(repoData.getOwner(), provider);
+        Repository.Visibility visibility = repoData.getIsPrivate() || repoData.getVisibility() == null
+                ? Repository.Visibility.PRIVATE
+                : Repository.Visibility.valueOf(repoData.getVisibility().name());
+        var patch = RepositoryObservationStore.path(
+                repoData.getNameWithOwner(),
+                repoData.getName(),
+                Objects.requireNonNull(repoData.getUrl()).toString());
+        patch.put("description", repoData.getDescription());
+        patch.put("organization_id", organizationId);
+        patch.put("is_archived", repoData.getIsArchived());
+        patch.put("is_disabled", repoData.getIsDisabled());
+        if (repoData.getCreatedAt() != null)
+            patch.put("created_at", repoData.getCreatedAt().toInstant().toString());
+        if (repoData.getUpdatedAt() != null)
+            patch.put("updated_at", repoData.getUpdatedAt().toInstant().toString());
+        if (repoData.getPushedAt() != null)
+            patch.put("pushed_at", repoData.getPushedAt().toInstant().toString());
+        var branch = repoData.getDefaultBranchRef();
+        patch.put("default_branch", branch == null ? "main" : branch.getName());
+        patch.put("last_sync_at", read.requestedAt().toString());
+        return observations.observe(read, Observation.read(read, visibility, patch));
     }
 
     /**
@@ -405,7 +400,7 @@ public class GitHubRepositorySyncService {
      * Uses PostgreSQL upsert for thread-safe concurrent access.
      */
     @Nullable
-    private Organization ensureOrganization(GHRepositoryOwner owner, IdentityProvider provider) {
+    private Long ensureOrganization(GHRepositoryOwner owner, IdentityProvider provider) {
         if (owner == null) {
             return null;
         }
@@ -430,7 +425,7 @@ public class GitHubRepositorySyncService {
             organizationRepository.upsert(
                     databaseId, Objects.requireNonNull(provider.getId()), login, name, avatarUrl, url);
             return organizationRepository
-                    .findByNativeIdAndProviderId(databaseId, Objects.requireNonNull(provider.getId()))
+                    .findIdByNativeIdAndProviderId(databaseId, Objects.requireNonNull(provider.getId()))
                     .orElse(null);
         } else if (owner instanceof GHUser graphQlUser) {
             // User repositories - create a "virtual" organization from the user
@@ -451,7 +446,7 @@ public class GitHubRepositorySyncService {
             organizationRepository.upsert(
                     databaseId, Objects.requireNonNull(provider.getId()), login, name, avatarUrl, url);
             return organizationRepository
-                    .findByNativeIdAndProviderId(databaseId, Objects.requireNonNull(provider.getId()))
+                    .findIdByNativeIdAndProviderId(databaseId, Objects.requireNonNull(provider.getId()))
                     .orElse(null);
         }
 

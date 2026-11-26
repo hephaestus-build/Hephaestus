@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -76,7 +77,16 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
      * transaction. A slow provider API therefore holds no database connection and no workspace row lock.
      */
     @Override
+    protected void dispatchEvent(GitHubInstallationEventDTO event, Instant arrivedAt) {
+        handleEvent(event, arrivedAt);
+    }
+
+    @Override
     protected void handleEvent(GitHubInstallationEventDTO event) {
+        handleEvent(event, Instant.EPOCH);
+    }
+
+    private void handleEvent(GitHubInstallationEventDTO event, Instant arrivedAt) {
         var installation = event.installation();
         if (installation == null) {
             log.warn("Received installation event with missing data: action={}", event.action());
@@ -86,7 +96,7 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         ProviderStatus status = readsStatus(action) ? readStatus(installation.id(), action) : ProviderStatus.NOT_READ;
         if (action == GitHubEventAction.Installation.DELETED)
             installationLifecycle.removeAtProvidersBeforePurge(installation.id());
-        handleOnce(() -> apply(event, installation, action, status));
+        handleOnce(() -> apply(event, installation, action, status, arrivedAt));
     }
 
     /** GitHub's installation status, as read before the transaction. */
@@ -137,7 +147,8 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
             GitHubInstallationEventDTO event,
             GitHubInstallationEventDTO.GitHubInstallationDTO installation,
             GitHubEventAction.Installation action,
-            ProviderStatus status) {
+            ProviderStatus status,
+            Instant arrivedAt) {
         var account = installation.account();
         String accountLogin = account != null ? account.login() : null;
         Long installationId = installation.id();
@@ -170,7 +181,11 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         List<RepositorySnapshot> repositories = event.repositories() != null
                 ? event.repositories().stream()
                         .map(ref -> new RepositorySnapshot(
-                                Objects.requireNonNull(ref.id()), ref.fullName(), ref.name(), ref.isPrivate()))
+                                Objects.requireNonNull(ref.id()),
+                                ref.fullName(),
+                                ref.name(),
+                                ref.isPrivate(),
+                                arrivedAt))
                         .toList()
                 : Collections.emptyList();
 

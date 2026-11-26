@@ -56,6 +56,8 @@ erDiagram
         VARCHAR(32) proof_reason "NOT NULL"
         VARCHAR(16) proof_state "NOT NULL"
         BIGINT proof_generation "NOT NULL"
+        TIMESTAMPTZ public_observation_at
+        TIMESTAMPTZ proof_generation_at "NOT NULL"
     }
 
     ReviewScopeRepository {

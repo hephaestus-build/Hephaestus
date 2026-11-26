@@ -6,9 +6,10 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
@@ -109,6 +110,7 @@ public class GitLabProjectSyncService {
                     .captureConnection(scopeId, Objects.requireNonNull(provider.getId()))
                     .orElse(null);
             if (read == null) return Optional.empty();
+            var metadata = admission.beginRepositoryReads(read);
             ClientGraphQlResponse response = query(
                     () -> graphQlClientProvider.forScope(scopeId),
                     GET_PROJECT_DOCUMENT,
@@ -122,7 +124,9 @@ public class GitLabProjectSyncService {
                             extractEntityId(project.id()),
                             Objects.requireNonNull(project.fullPath()),
                             provider.getServerUrl(),
-                            () -> persistProject(project, provider).orElse(null)));
+                            () -> persistProject(
+                                            project, provider, metadata.forRepository(extractEntityId(project.id())))
+                                    .orElse(null)));
         } catch (GitLabSyncException e) {
             return Optional.empty();
         } catch (Exception e) {
@@ -183,16 +187,17 @@ public class GitLabProjectSyncService {
     }
 
     /** Stores {@code project} and its group as GitLab reported them, in the caller's transaction when there is one. */
-    public Optional<Repository> persistProject(GitLabProjectResponse project) {
-        return persistProject(project, resolveProvider());
+    public Optional<Repository> persistProject(GitLabProjectResponse project, ReadersRead read) {
+        return persistProject(project, resolveProvider(), read);
     }
 
     /** Keeps a fetched project on the caller's provider, including self-hosted GitLab instances. */
-    public Optional<Repository> persistProject(GitLabProjectResponse project, IdentityProvider provider) {
-        Organization organization = null;
+    public Optional<Repository> persistProject(
+            GitLabProjectResponse project, IdentityProvider provider, ReadersRead read) {
+        Long organization = null;
         GitLabGroupResponse groupData = project.group();
         if (groupData != null) {
-            organization = groupProcessor.process(groupData, Objects.requireNonNull(provider.getId()));
+            organization = groupProcessor.processId(groupData, Objects.requireNonNull(provider.getId()));
             if (organization == null) {
                 log.warn(
                         "Skipped project sync: reason=groupProcessingFailed, projectPath={}",
@@ -200,7 +205,8 @@ public class GitLabProjectSyncService {
                 return Optional.empty();
             }
         }
-        Repository repository = projectProcessor.processGraphQlResponse(project, organization, provider);
+        Result result = projectProcessor.processGraphQlResponse(project, organization, provider, read);
+        Repository repository = result != null && result.applied() ? result.repository() : null;
         if (repository != null) {
             log.info(
                     "Synced project: repoId={}, projectPath={}",

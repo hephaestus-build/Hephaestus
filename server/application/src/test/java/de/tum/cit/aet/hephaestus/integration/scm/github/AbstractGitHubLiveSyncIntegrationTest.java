@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterAll;
@@ -52,6 +55,9 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
 
     @Autowired
     protected RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private RepositoryReadersProvider repositoryReaders;
 
     @Autowired
     protected IdentityProviderRepository gitProviderRepository;
@@ -201,6 +207,12 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
 
     protected RepositoryToMonitor registerRepositoryToMonitor(GitHubTestFixtureService.CreatedRepository repository) {
         return registerRepositoryToMonitor(repository.fullName());
+    }
+
+    protected ReadersRead beginRepositoryRead(GitHubTestFixtureService.CreatedRepository repository) {
+        return repositoryReaders
+                .beginRepositoryReads(workspace.getId(), Objects.requireNonNull(githubProvider.getId()))
+                .forRepository(Objects.requireNonNull(repository.databaseId()));
     }
 
     protected List<String> seedOrganizationMembers() {

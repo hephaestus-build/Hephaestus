@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -15,7 +16,7 @@ public interface ProvisioningListener {
 
     void onRepositoriesRemoved(Long installationId, List<RepositoryRemoval> repositories);
 
-    void onAccountRenamed(Long installationId, @Nullable String oldLogin, String newLogin);
+    void onAccountRenamed(Long installationId, @Nullable String oldLogin, String newLogin, Instant observedAt);
 
     void onInstallationSuspended(Long installationId);
 
@@ -27,7 +28,7 @@ public interface ProvisioningListener {
      * Provider-agnostic snapshot of repository metadata from webhook payloads.
      * Contains the minimal information needed to create a Repository entity.
      */
-    record RepositorySnapshot(long id, String nameWithOwner, String name, boolean isPrivate) {}
+    record RepositorySnapshot(long id, String nameWithOwner, String name, boolean isPrivate, Instant observedAt) {}
 
     /** A removal keeps the native repository id carried by the payload; null only for a payload that omitted it. */
     record RepositoryRemoval(@Nullable Long nativeId, String nameWithOwner) {}

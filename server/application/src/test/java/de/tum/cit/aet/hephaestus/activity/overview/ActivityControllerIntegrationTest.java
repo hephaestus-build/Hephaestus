@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
+import static de.tum.cit.aet.hephaestus.testconfig.RepositoryObservationTestFixtures.confirm;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
@@ -63,6 +64,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedRev
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -71,6 +73,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsService;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -129,6 +133,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private static final String FROM = "2026-01-01T00:00:00Z";
     private static final String TO = "2026-02-01T00:00:00Z";
     private static final Instant DAY = Instant.parse("2026-01-10T12:00:00Z");
+
+    @Autowired
+    private RepositoryObservationStore observations;
 
     @Autowired
     private ConnectionRepository connections;
@@ -243,6 +250,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private SyncTargetProvider syncTargets;
 
     @Autowired
+    private GitLabProjectProcessor gitLabProjects;
+
+    @Autowired
     private PersonDataRegistry personDataRegistry;
 
     @Nested
@@ -257,7 +267,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             monitored.setPrivate(false);
             repositoryRepository.save(monitored);
             jdbc.update(
-                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), public_observation_at=now() WHERE workspace_id=?",
                     workspace.getId());
             jdbc.update(
                     "INSERT INTO instance_settings (id, silent_mode_engaged, version, public_activity_allowed) VALUES"
@@ -356,8 +366,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
             assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
             for (String state : List.of(
-                    "repository_visibility_confirmed_at=NULL",
-                    "repository_synced_at=now(), repository_visibility_confirmed_at=now()-interval '49 hours'",
+                    "repository_visibility_confirmed_at=NULL, public_observation_at=NULL",
+                    "repository_synced_at=now(), repository_visibility_confirmed_at=now()-interval '49 hours', public_observation_at=now()-interval '49 hours'",
+                    "repository_visibility_confirmed_at=now()+interval '1 hour', public_observation_at=now()+interval '1 hour'",
                     "unavailable_since=now()")) {
                 jdbc.update("UPDATE repository_to_monitor SET " + state + " WHERE workspace_id=?", workspace.getId());
                 var excluded = page();
@@ -379,7 +390,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         workspace.getId(),
                         ada.getId());
                 jdbc.update(
-                        "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(),"
+                        "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), public_observation_at=now(),"
                                 + " unavailable_since=NULL WHERE workspace_id=?",
                         workspace.getId());
                 assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
@@ -394,17 +405,164 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .findByWorkspaceIdAndNameWithOwner(workspace.getId(), monitored.getNameWithOwner())
                     .orElseThrow();
             assertThat(page().people()).hasSize(1);
-            syncTargets.recordRepositoryUnavailable(workspace.getId(), monitor.getId());
+            syncTargets.recordRepositoryLoss(syncTargets.beginReadersProof(
+                    workspace.getId(),
+                    monitor.getId(),
+                    monitored.getNativeId(),
+                    Objects.requireNonNull(monitored.getProvider().getId())));
             assertThat(page().people()).isEmpty();
             assertThat(page().repositories()).isEmpty();
             jdbc.update(
-                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now()-interval '49 hours'"
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now()-interval '49 hours', public_observation_at=now()-interval '49 hours'"
                             + " WHERE id=?",
                     monitor.getId());
-            syncTargets.clearRepositoryUnavailable(workspace.getId(), monitor.getId());
-            syncTargets.updateSyncTimestamp(
-                    monitor.getId(), SyncTargetProvider.SyncType.REPOSITORY_VISIBILITY, Instant.now());
+            confirm(
+                    observations,
+                    syncTargets.beginReadersProof(
+                            workspace.getId(),
+                            monitor.getId(),
+                            monitor.getNativeId(),
+                            Objects.requireNonNull(monitored.getProvider().getId())),
+                    true);
             assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+        }
+
+        @Test
+        void shouldKeepGitLabActivityClosedAfterADelayedGroupListing() {
+            var source = ensureGitLabProvider();
+            connectPublicSource(source);
+            monitored.setProvider(source);
+            repositoryRepository.saveAndFlush(monitored);
+            actorOnProvider(ada, source);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+
+            var monitor = repositoryToMonitorRepository
+                    .findByWorkspaceIdAndNameWithOwner(workspace.getId(), monitored.getNameWithOwner())
+                    .orElseThrow();
+            long providerId = Objects.requireNonNull(source.getId());
+            var older = syncTargets
+                    .beginRepositoryReads(workspace.getId(), providerId)
+                    .forRepository(monitor.getNativeId());
+            var newer = syncTargets.beginReadersProof(
+                    workspace.getId(), monitor.getId(), monitor.getNativeId(), providerId);
+            gitLabProjects.processGraphQlResponse(gitLabProject("private"), null, source, newer);
+            assertThat(page().people()).isEmpty();
+
+            var rejected = gitLabProjects.processGraphQlResponse(gitLabProject("public"), null, source, older);
+
+            var result = page();
+            assertThat(result.people()).isEmpty();
+            assertThat(result.repositories()).isEmpty();
+            assertThat(repositoryRepository
+                            .findById(monitored.getId())
+                            .orElseThrow()
+                            .getVisibility())
+                    .isEqualTo(Repository.Visibility.PRIVATE);
+            assertThat(Objects.requireNonNull(rejected).applied()).isFalse();
+        }
+
+        @Test
+        void shouldRefuseAnotherWorkspacesPublicAnswerAfterAnIdenticalPrivateRefresh() {
+            var provider = ensureGitLabProvider();
+            connectPublicSource(provider);
+            monitored.setProvider(provider);
+            repositoryRepository.saveAndFlush(monitored);
+            actorOnProvider(ada, provider);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+
+            var observer = createWorkspace(
+                    "private-observer", "Private observer", "observer-group", AccountType.ORG, persistUser("observer"));
+            connectActivitySource(observer, provider);
+            var observerMonitor = new RepositoryToMonitor();
+            observerMonitor.setWorkspace(observer);
+            observerMonitor.setNameWithOwner(monitored.getNameWithOwner());
+            observerMonitor.setNativeId(monitored.getNativeId());
+            long monitorId =
+                    repositoryToMonitorRepository.saveAndFlush(observerMonitor).getId();
+            long providerId = Objects.requireNonNull(provider.getId());
+
+            var privateAnswer = gitLabProject("private");
+            gitLabProjects.processGraphQlResponse(
+                    privateAnswer,
+                    null,
+                    provider,
+                    syncTargets.beginReadersProof(observer.getId(), monitorId, monitored.getNativeId(), providerId));
+            assertThat(page().people()).isEmpty();
+
+            var delayed = syncTargets
+                    .beginRepositoryReads(workspace.getId(), providerId)
+                    .forRepository(monitored.getNativeId());
+            var newer = syncTargets.beginReadersProof(observer.getId(), monitorId, monitored.getNativeId(), providerId);
+            assertThat(gitLabProjects.processGraphQlResponse(privateAnswer, null, provider, newer))
+                    .isNotNull();
+            var rejected = gitLabProjects.processGraphQlResponse(gitLabProject("public"), null, provider, delayed);
+
+            assertThat(page().people()).isEmpty();
+            assertThat(repositoryRepository
+                            .findById(monitored.getId())
+                            .orElseThrow()
+                            .getVisibility())
+                    .isEqualTo(Repository.Visibility.PRIVATE);
+            assertThat(Objects.requireNonNull(rejected).applied()).isFalse();
+        }
+
+        @Test
+        void shouldKeepAClosedAfterAnotherWorkspaceConfirmsTheGitLabProjectIsPublic() {
+            var source = ensureGitLabProvider();
+            connectPublicSource(source);
+            monitored.setProvider(source);
+            repositoryRepository.saveAndFlush(monitored);
+            actorOnProvider(ada, source);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+
+            Workspace b = createWorkspace("gitlab-b", "GitLab B", "gitlab-b", AccountType.ORG, persistUser("owner-b"));
+            connectActivitySource(b, source);
+            var otherMonitor = new RepositoryToMonitor();
+            otherMonitor.setWorkspace(b);
+            otherMonitor.setNameWithOwner(monitored.getNameWithOwner());
+            otherMonitor.setNativeId(monitored.getNativeId());
+            long otherId =
+                    repositoryToMonitorRepository.saveAndFlush(otherMonitor).getId();
+            long providerId = Objects.requireNonNull(source.getId());
+            long nativeId = monitored.getNativeId();
+            var a = syncTargets
+                    .beginRepositoryReads(workspace.getId(), providerId)
+                    .forRepository(nativeId);
+            gitLabProjects.processGraphQlResponse(gitLabProject("private"), null, source, a);
+
+            var freshB = syncTargets.beginReadersProof(b.getId(), otherId, nativeId, providerId);
+            gitLabProjects.processGraphQlResponse(gitLabProject("public"), null, source, freshB);
+
+            assertThat(repositoryRepository
+                            .findById(monitored.getId())
+                            .orElseThrow()
+                            .isPublicOnProvider())
+                    .isTrue();
+            assertThat(repositoryToMonitorRepository
+                            .findById(otherId)
+                            .orElseThrow()
+                            .getRepositoryVisibilityConfirmedAt())
+                    .isEqualTo(freshB.requestedAt());
+            assertThat(page().people()).isEmpty();
+            assertThat(page().repositories()).isEmpty();
+        }
+
+        private GitLabProjectResponse gitLabProject(String visibility) {
+            return new GitLabProjectResponse(
+                    "gid://gitlab/Project/" + monitored.getNativeId(),
+                    monitored.getNameWithOwner(),
+                    monitored.getName(),
+                    monitored.getHtmlUrl(),
+                    null,
+                    visibility,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         @Test
@@ -414,7 +572,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             other.setPrivate(false);
             repositoryRepository.save(other);
             jdbc.update(
-                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), public_observation_at=now() WHERE workspace_id=?",
                     workspace.getId());
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY, other);
@@ -477,7 +635,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             sharedMonitor.setNameWithOwner(monitored.getNameWithOwner());
             sharedMonitor.setNativeId(monitored.getNativeId());
             sharedMonitor = repositoryToMonitorRepository.save(sharedMonitor);
-            syncTargets.recordRepositoryUnavailable(other.getId(), sharedMonitor.getId());
+            syncTargets.recordRepositoryLoss(syncTargets.beginReadersProof(
+                    other.getId(),
+                    sharedMonitor.getId(),
+                    monitored.getNativeId(),
+                    Objects.requireNonNull(monitored.getProvider().getId())));
             UUID otherEvent = UUID.randomUUID();
             activityEventRepository.insertIfAbsent(
                     otherEvent,
@@ -1208,7 +1370,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             monitor.setNameWithOwner(unmonitored.getNameWithOwner());
             repositoryToMonitorRepository.save(monitor);
             jdbc.update(
-                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), public_observation_at=now() WHERE workspace_id=?",
                     workspace.getId());
             record(guest, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
             record(elsewhere, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY, unmonitored);
@@ -1602,6 +1764,21 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     IntegrationState.ACTIVE)) {
                 ConnectionFixtures.reachState(connection, state);
                 connection = connections.saveAndFlush(connection);
+                if (state == IntegrationState.ACTIVE) {
+                    assertThat(page().people()).isEmpty();
+                    var target = repositoryToMonitorRepository
+                            .findByWorkspaceIdAndNameWithOwner(workspace.getId(), monitored.getNameWithOwner())
+                            .orElseThrow();
+                    confirm(
+                            observations,
+                            syncTargets.beginReadersProof(
+                                    workspace.getId(),
+                                    target.getId(),
+                                    monitored.getNativeId(),
+                                    Objects.requireNonNull(
+                                            monitored.getProvider().getId())),
+                            true);
+                }
                 boolean available = state == IntegrationState.ACTIVE || state == IntegrationState.SUSPENDED;
                 assertThat(page().people()).hasSize(available ? 1 : 0);
                 get("/people", uri -> uri)
@@ -1779,6 +1956,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             "public-activity",
                             UUID.randomUUID().toString(),
                             "Source connected"));
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at = statement_timestamp(),"
+                            + " public_observation_at = statement_timestamp()"
+                            + " WHERE workspace_id = ?",
+                    workspace.getId());
         }
 
         private void assertErasedActivityHidden(User actor) {

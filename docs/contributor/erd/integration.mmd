@@ -565,6 +565,7 @@ erDiagram
         TIMESTAMPTZ last_sync_at
         BIGINT native_id UK "NOT NULL"
         BIGINT provider_id FK,UK "NOT NULL"
+        TIMESTAMPTZ metadata_observed_at
     }
 
     RepositoryCollaborator {

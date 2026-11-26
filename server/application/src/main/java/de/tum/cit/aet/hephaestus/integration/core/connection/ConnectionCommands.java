@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.Credential;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
@@ -52,9 +53,13 @@ public class ConnectionCommands {
 
     /** The caller holds the workspace row first; even a no-op event invalidates an in-flight catalog. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void fenceActiveInstallation(long workspaceId, long installationId) {
-        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
-                workspaceId, Long.toString(installationId));
+    public Optional<Credential> fenceActiveInstallation(long workspaceId, long installationId) {
+        return connectionRepository
+                .findActiveInstallationForUpdateAndIncrementVersion(workspaceId, Long.toString(installationId))
+                .map(connection -> new Credential(
+                        connection.getId(),
+                        connection.getCredentialsGeneration(),
+                        connection.getLifecycleGeneration()));
     }
 
     /** Holds the scoped connection row before an existing use case revalidates its captured authority. */

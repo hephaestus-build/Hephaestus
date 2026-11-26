@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +80,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
                 mock(),
                 mock(),
                 repositoryRepository,
+                mock(RepositoryObservationStore.class),
                 identityProviders,
                 connectionService,
                 workspaceLifecycleService,
@@ -218,7 +221,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
         workspace.setAccountLogin("acme");
         locked(workspace);
 
-        listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed");
+        listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed", Instant.EPOCH);
 
         assertThat(workspace.getAccountLogin()).isEqualTo("acme");
         verify(workspaceRepository, never()).save(workspace);
@@ -233,7 +236,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
         when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed"))
+        assertThatThrownBy(() -> listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed", Instant.EPOCH))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("IdentityProvider for GitHub not found");
 

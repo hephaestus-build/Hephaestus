@@ -15,10 +15,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +55,9 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     @Mock
     private EventPayloadDeserializer deserializer;
 
+    @Mock
+    private RepositoryObservationStore observations;
+
     private GitHubRepositoryMessageHandler handler;
 
     @BeforeEach
@@ -59,6 +65,7 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
         handler = new GitHubRepositoryMessageHandler(
                 provisioningListener,
                 repositoryRepository,
+                observations,
                 identityProviders,
                 syncTargetProvider,
                 deserializer,
@@ -94,6 +101,8 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     void renameUpdatesDomainRowAndHealsEveryMonitorByNativeId() {
         stubProvider();
         Repository repository = new Repository();
+        repository.setNativeId(NATIVE_ID);
+        when(observations.observe(any(), any())).thenReturn(new Result(true, repository));
         repository.setName("payload-fixture-repo");
         repository.setNameWithOwner(OLD_FULL_NAME);
         when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
@@ -101,10 +110,11 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
 
         handler.handleEvent(renamedEvent());
 
-        assertThat(repository.getName()).isEqualTo(NEW_NAME);
-        assertThat(repository.getNameWithOwner()).isEqualTo(NEW_FULL_NAME);
-        assertThat(repository.getHtmlUrl()).isEqualTo("https://github.com/" + NEW_FULL_NAME);
-        verify(repositoryRepository).save(repository);
+        verify(observations)
+                .observe(
+                        RepositoryObservationStore.providerEvent(PROVIDER_ID, NATIVE_ID, Instant.EPOCH),
+                        RepositoryObservationStore.Observation.metadata(RepositoryObservationStore.path(
+                                NEW_FULL_NAME, NEW_NAME, "https://github.com/" + NEW_FULL_NAME)));
         // The monitor re-key + consumer rebuild — without this the live feed stays frozen.
         verify(syncTargetProvider).reconcileSyncTargetsForRepository(PROVIDER_ID, NATIVE_ID, NEW_FULL_NAME);
         // Never by the stale name.
@@ -115,13 +125,15 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     void transferIntoTheOrgIsHealedLikeARename() {
         stubProvider();
         Repository repository = new Repository();
+        repository.setNativeId(NATIVE_ID);
+        when(observations.observe(any(), any())).thenReturn(new Result(true, repository));
         repository.setNameWithOwner("FelixTJDietrich/TestRepository");
         when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
                 .thenReturn(Optional.of(repository));
 
         handler.handleEvent(transferredEvent());
 
-        assertThat(repository.getNameWithOwner()).isEqualTo("HephaestusTest/TestRepository");
+        verify(observations).observe(any(), any());
         verify(syncTargetProvider)
                 .reconcileSyncTargetsForRepository(PROVIDER_ID, NATIVE_ID, "HephaestusTest/TestRepository");
     }
@@ -160,6 +172,8 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
         stubProvider();
         Repository repository = new Repository();
         repository.setNativeId(NATIVE_ID);
+        when(observations.observe(any(), any())).thenReturn(new Result(true, repository));
+        repository.setNativeId(NATIVE_ID);
         repository.setNameWithOwner(OLD_FULL_NAME);
         when(repositoryRepository.findByNameWithOwnerAndProviderId(OLD_FULL_NAME, PROVIDER_ID))
                 .thenReturn(Optional.of(repository));
@@ -170,7 +184,7 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
                 event.changes(),
                 null,
                 null));
-        assertThat(repository.getNameWithOwner()).isEqualTo(NEW_FULL_NAME);
+        verify(observations).observe(any(), any());
         assertThat(repository.getNativeId()).isEqualTo(NATIVE_ID);
         verify(repositoryRepository, never()).findByNativeIdAndProviderId(anyLong(), anyLong());
     }

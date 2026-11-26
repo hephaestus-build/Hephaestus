@@ -52,6 +52,24 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.20
+
+#### 🔴 Stop every role before the Outline erasure upgrade
+
+- **When:** in the window
+- **Action:** Follow the [stopped upgrade](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every role, run the migration, and start all roles on the new release.
+
+An older server can write Outline rows without the origin key that erasure uses.
+It can also run an erasure with the earlier selection rules.
+The migration fills the origin keys of existing Outline rows and rejects writes that omit the key.
+
+#### 🔴 Stop every role before reviews wait for a full model pool
+
+- **When:** in the window
+- **Action:** Stop all runtime roles and wait for all run and action leases to expire. See [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades).
+
+A review that its model pool cannot take at its start now waits with the new run hold `MODEL_POOL`. A server of the previous release cannot read a run with that hold, so the two releases must not run together.
+
 ### v1.0.0-rc.17
 
 #### 🔴 Stop every role before copied identities leave the review item detail

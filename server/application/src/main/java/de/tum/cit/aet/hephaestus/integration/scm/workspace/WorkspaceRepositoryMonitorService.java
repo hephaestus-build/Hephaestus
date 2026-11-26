@@ -19,7 +19,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationSuspensionTrac
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.events.RepositoryAboutToBeDeletedEvent;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -33,6 +38,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import io.micrometer.common.util.StringUtils;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -60,6 +66,7 @@ public class WorkspaceRepositoryMonitorService {
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
     private final PrivacyJournal journal;
+    private final RepositoryObservationStore observations;
     private final WorkspaceLocks workspaceLocks;
 
     private final WorkspaceLookup workspaceLookup;
@@ -109,7 +116,9 @@ public class WorkspaceRepositoryMonitorService {
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate,
             ManualRepositoryMonitorService manualAdds,
-            PrivacyJournal journal) {
+            PrivacyJournal journal,
+            RepositoryObservationStore observations) {
+        this.observations = observations;
         this.journal = journal;
         this.manualAdds = manualAdds;
         this.workspaceLocks = workspaceLocks;
@@ -370,21 +379,23 @@ public class WorkspaceRepositoryMonitorService {
         }
 
         Workspace workspace = workspaceOpt.get();
+        Long workspaceId = workspace.getId();
 
-        connectionCommands.fenceActiveInstallation(workspace.getId(), installationId);
+        var credential = connectionCommands
+                .fenceActiveInstallation(workspaceId, installationId)
+                .orElse(null);
+        if (credential == null) return;
 
         Long providerId = identityProviders
                 .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
                         "GitHub is not set up on this instance. Ask your" + " instance operator to set it up."));
 
+        // The inbox timestamp orders this payload. Only a pre-request generation can restore access.
+        var read =
+                new ReadersRead(workspaceId, null, snapshot.id(), providerId, -1L, snapshot.observedAt(), credential);
         if (ensureRepositoryFromSnapshot(
-                workspace,
-                providerId,
-                snapshot.id(),
-                snapshot.nameWithOwner(),
-                snapshot.name(),
-                snapshot.isPrivate())) {
+                workspace, read, snapshot.nameWithOwner(), snapshot.name(), snapshot.isPrivate())) {
             ensureRepositoryMonitorInternal(workspace, snapshot.id(), snapshot.nameWithOwner(), true);
         }
     }
@@ -418,6 +429,10 @@ public class WorkspaceRepositoryMonitorService {
                 status -> maintenanceQueries.findActiveInstallationSnapshot(installationId));
         if (captured == null || captured.isEmpty()) return false;
         var authority = captured.orElseThrow();
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                .orElseThrow();
+        var reads = observations.capture(authority.workspaceId(), providerId, null);
         var snapshots = enumerator.enumerate(installationId);
         if (snapshots.isEmpty()) {
             log.warn(
@@ -447,7 +462,8 @@ public class WorkspaceRepositoryMonitorService {
                 discardedEnumeration(installationId, authority, "connectionChanged");
                 return false;
             }
-            reconcileInstallationRepositories(workspace, installationId, snapshots, protectedRepositories, deferSync);
+            reconcileInstallationRepositories(
+                    workspace, installationId, reads, snapshots, protectedRepositories, deferSync);
             return true;
         }));
     }
@@ -465,12 +481,14 @@ public class WorkspaceRepositoryMonitorService {
     private void reconcileInstallationRepositories(
             Workspace workspace,
             long installationId,
+            RepositoryReads reads,
             List<InstallationRepositoryEnumerator.InstallationRepository> snapshots,
             @Nullable Collection<String> protectedRepositories,
             boolean deferSync) {
         // Filter before processing so excluded repositories do not acquire mirror rows.
         List<InstallationRepositoryEnumerator.InstallationRepository> allowedSnapshots = snapshots.stream()
                 .filter(s -> workspaceScopeFilter.isGitHubRepositoryAllowed(s.nameWithOwner()))
+                .sorted(Comparator.comparingLong(InstallationRepositoryEnumerator.InstallationRepository::id))
                 .toList();
 
         if (allowedSnapshots.size() < snapshots.size()) {
@@ -496,11 +514,6 @@ public class WorkspaceRepositoryMonitorService {
                         .map(name -> name.toLowerCase(Locale.ENGLISH))
                         .collect(Collectors.toSet());
 
-        Long providerId = identityProviders
-                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                .orElseThrow(() -> new IllegalStateException(
-                        "GitHub is not set up on this instance. Ask your" + " instance operator to set it up."));
-
         // Removal runs first so a path the installation now uses for another repository is free before it is
         // monitored. A monitor with a native id is kept by that id, so a renamed repository keeps its monitor.
         monitors.monitors(workspace.getId()).stream()
@@ -522,8 +535,7 @@ public class WorkspaceRepositoryMonitorService {
         allowedSnapshots.forEach(snapshot -> {
             if (ensureRepositoryFromSnapshot(
                     workspace,
-                    providerId,
-                    snapshot.id(),
+                    reads.forRepository(snapshot.id()),
                     snapshot.nameWithOwner(),
                     snapshot.name(),
                     snapshot.isPrivate())) {
@@ -664,23 +676,21 @@ public class WorkspaceRepositoryMonitorService {
 
     /** Whether the mirrored repository with this id now has the snapshot's path. */
     private boolean ensureRepositoryFromSnapshot(
-            Workspace workspace, long providerId, long nativeId, String nameWithOwner, String name, boolean isPrivate) {
+            Workspace workspace, ReadersRead read, String nameWithOwner, String name, boolean isPrivate) {
         if (StringUtils.isBlank(nameWithOwner)) {
             return false;
         }
-        boolean recorded = repositoryRepository.upsertFromSnapshot(
-                nativeId,
-                providerId,
-                nameWithOwner,
-                name,
-                isPrivate,
-                workspace.getOrganizationId() != null ? workspace.getOrganizationId() : null);
+        var patch = RepositoryObservationStore.path(nameWithOwner, name, GITHUB_SERVER_URL + "/" + nameWithOwner);
+        if (workspace.getOrganizationId() != null) patch.put("organization_id", workspace.getOrganizationId());
+        var observation =
+                isPrivate ? Observation.read(read, Repository.Visibility.PRIVATE, patch) : Observation.metadata(patch);
+        boolean recorded = observations.observe(read, observation).applied();
         if (!recorded) {
             log.warn(
-                    "Skipped repository from installation: reason=pathHeldByAnotherRepository, workspaceId={},"
+                    "Skipped repository from installation: reason=observationStale, workspaceId={},"
                             + " nativeId={}, repoName={}",
                     workspace.getId(),
-                    nativeId,
+                    read.repositoryNativeId(),
                     LoggingUtils.sanitizeForLog(nameWithOwner));
         }
         return recorded;

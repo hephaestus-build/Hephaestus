@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNames
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
@@ -248,13 +249,14 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
 
             Organization org = new Organization();
             org.setId(42L);
-            when(groupProcessor.process(any(GitLabGroupResponse.class), anyLong()))
-                    .thenReturn(org);
+            when(groupProcessor.processId(any(GitLabGroupResponse.class), anyLong()))
+                    .thenReturn(org.getId());
 
             Repository repo = new Repository();
             repo.setId(123L);
             repo.setNameWithOwner("my-org/my-project");
-            when(projectProcessor.processGraphQlResponse(any(), any(), any())).thenReturn(repo);
+            when(projectProcessor.processGraphQlResponse(any(), any(), any(), any()))
+                    .thenReturn(new Result(true, repo));
 
             Optional<Repository> result = service.syncProject(1L, "my-org/my-project");
 
@@ -262,8 +264,8 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
             assertThat(result.get().getId()).isEqualTo(123L);
             verify(graphQlClientProvider).acquirePermission();
             verify(graphQlClientProvider).recordSuccess();
-            verify(groupProcessor).process(groupData, TEST_PROVIDER_ID);
-            verify(projectProcessor).processGraphQlResponse(eq(projectData), eq(org), any());
+            verify(groupProcessor).processId(groupData, TEST_PROVIDER_ID);
+            verify(projectProcessor).processGraphQlResponse(eq(projectData), eq(org.getId()), any(), any());
         }
 
         @Test
@@ -286,13 +288,14 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
 
             Repository repo = new Repository();
             repo.setId(456L);
-            when(projectProcessor.processGraphQlResponse(any(), any(), any())).thenReturn(repo);
+            when(projectProcessor.processGraphQlResponse(any(), any(), any(), any()))
+                    .thenReturn(new Result(true, repo));
 
             Optional<Repository> result = service.syncProject(1L, "user/personal-project");
 
             assertThat(result).isPresent();
-            verify(groupProcessor, never()).process(any(), anyLong());
-            verify(projectProcessor).processGraphQlResponse(eq(projectData), eq(null), any());
+            verify(groupProcessor, never()).processId(any(), anyLong());
+            verify(projectProcessor).processGraphQlResponse(eq(projectData), eq(null), any(), any());
         }
 
         @Test
@@ -302,7 +305,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
             Optional<Repository> result = service.syncProject(1L, "non-existent/project");
 
             assertThat(result).isEmpty();
-            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any());
+            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any(), any());
         }
 
         @Test
@@ -354,12 +357,12 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                     null);
 
             mockGraphQlProjectResponse(projectData);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(null); // group processor rejects
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(null); // group processor rejects
 
             Optional<Repository> result = service.syncProject(1L, "my-org/proj");
 
             assertThat(result).isEmpty();
-            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any());
+            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any(), any());
         }
 
         @Test
