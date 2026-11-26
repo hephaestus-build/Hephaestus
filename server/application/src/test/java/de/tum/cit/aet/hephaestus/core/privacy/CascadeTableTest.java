@@ -478,11 +478,14 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.CITING_RECORD,
                     Action.KEEP,
-                    List.of(),
-                    "Only a conversation entry can be a cited source today (BasisKind), and nothing cites one until a"
-                            + " producer ships (#4924, #4932). A Slack disconnect redacts the entries written in Slack,"
-                            + " and the redaction writes their tombstones, so a record that cites one is stale. Each"
-                            + " other source kind adds its kind and its removal trigger with the producer that cites it."),
+                    List.of("core.privacy.BasisInvalidationIntegrationTest"
+                            + "#shouldMakeARecordThatCitesASlackMessageStaleWhenSlackIsDisconnected"),
+                    "A Slack disconnect redacts every entry written in Slack, and the redaction writes their"
+                            + " tombstones, so a record that cites one is stale. A Slack channel erasure, an Outline"
+                            + " disconnect or collection removal, an SCM mirror erasure and a repository removal redact"
+                            + " no conversation entry, so a citation stays as it is: only an entry can be a cited source"
+                            + " today (BasisKind). Each other source kind adds its kind and its removal trigger with the"
+                            + " producer that cites it (#4924, #4932)."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.CITING_RECORD,

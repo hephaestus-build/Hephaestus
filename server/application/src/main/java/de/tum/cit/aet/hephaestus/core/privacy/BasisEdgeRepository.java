@@ -12,15 +12,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 interface BasisEdgeRepository extends JpaRepository<BasisEdge, Long> {
 
-    /** Cites one source as the owner that the transaction binds. Without an owner, the row policy refuses it. */
+    /**
+     * Cites one source for {@code accountId}. The row policy refuses it unless the transaction binds that owner. The
+     * {@code basis_edge_bound} trigger refuses an entry that is not the owner's in the workspace.
+     */
     @Modifying
     @Query(value = """
             INSERT INTO basis_edge (workspace_id, account_id, dependent_kind, dependent_id, source_kind, source_id)
-            VALUES (:workspaceId, public.current_owner_account(), :dependentKind, :dependentId, :sourceKind, :sourceId)
-            ON CONFLICT (dependent_kind, dependent_id, source_kind, source_id) DO NOTHING
+            VALUES (:workspaceId, :accountId, :dependentKind, :dependentId, :sourceKind, :sourceId)
+            ON CONFLICT (workspace_id, dependent_kind, dependent_id, source_kind, source_id) DO NOTHING
             """, nativeQuery = true)
     void cite(
             @Param("workspaceId") long workspaceId,
+            @Param("accountId") long accountId,
             @Param("dependentKind") String dependentKind,
             @Param("dependentId") UUID dependentId,
             @Param("sourceKind") String sourceKind,

@@ -29,7 +29,7 @@
         </createTable>
     </changeSet>
     <changeSet id="1795551211195-2" author="hephaestus">
-        <addUniqueConstraint columnNames="dependent_kind, dependent_id, source_kind, source_id" constraintName="uk_basis_edge_dependent_source" tableName="basis_edge"/>
+        <addUniqueConstraint columnNames="workspace_id, dependent_kind, dependent_id, source_kind, source_id" constraintName="uk_basis_edge_dependent_source" tableName="basis_edge"/>
     </changeSet>
     <changeSet id="1795551211195-3" author="hephaestus">
         <createIndex indexName="idx_basis_edge_account" tableName="basis_edge">
@@ -76,7 +76,7 @@ CREATE TABLE public.source_tombstone (
         </rollback>
     </changeSet>
     <changeSet id="1795551211195-6" author="hephaestus">
-        <comment>A redacted entry is a removed source. An entry whose row goes takes its tombstone and the references of the record it is with it. An entry that moves to another account takes the references of its record along.</comment>
+        <comment>A redacted entry is a removed source. An entry whose row goes takes the references of the record it is; one that a surviving record cites keeps a tombstone until nothing cites it. An entry that moves to another account takes the references of its record along. A reference binds both entries to its workspace and owner.</comment>
         <sql splitStatements="false"><![CDATA[
 -- The function names its tables with the schema: person_row_sweep fires these triggers with an empty search path.
 CREATE FUNCTION public.basis_entry_removed() RETURNS trigger
@@ -95,22 +95,73 @@ CREATE FUNCTION public.basis_entry_moved() RETURNS trigger
     AS $$
 BEGIN
     UPDATE public.basis_edge SET account_id = NEW.account_id
-    WHERE dependent_kind = 'ENTRY' AND dependent_id = NEW.id AND account_id = OLD.account_id;
+    WHERE workspace_id = NEW.workspace_id AND dependent_kind = 'ENTRY' AND dependent_id = NEW.id
+      AND account_id = OLD.account_id;
     RETURN NULL;
 END
 $$;
 
+-- A deleted entry takes the references of the record it is. An entry that a surviving record still cites stays a
+-- removed source, so that record reads stale. Its tombstone goes once no reference names it and its row is gone.
 CREATE FUNCTION public.basis_entries_deleted() RETURNS trigger
     LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
+DECLARE
+    dropped_workspaces bigint[];
+    dropped_sources uuid[];
 BEGIN
-    DELETE FROM public.source_tombstone t USING gone
-    WHERE t.workspace_id = gone.workspace_id AND t.source_kind = 'ENTRY' AND t.source_id = gone.id;
-    DELETE FROM public.basis_edge e USING gone
-    WHERE e.dependent_kind = 'ENTRY' AND e.dependent_id = gone.id;
+    WITH dropped AS (
+        DELETE FROM public.basis_edge e USING gone
+        WHERE e.workspace_id = gone.workspace_id AND e.dependent_kind = 'ENTRY' AND e.dependent_id = gone.id
+        RETURNING e.workspace_id, e.source_id
+    )
+    SELECT array_agg(workspace_id), array_agg(source_id) INTO dropped_workspaces, dropped_sources FROM dropped;
+    INSERT INTO public.source_tombstone (workspace_id, source_kind, source_id, kind)
+    SELECT DISTINCT e.workspace_id, 'ENTRY', e.source_id, 'DELETED_SOURCE'
+    FROM public.basis_edge e JOIN gone ON e.workspace_id = gone.workspace_id AND e.source_id = gone.id
+    WHERE e.source_kind = 'ENTRY'
+    ON CONFLICT DO NOTHING;
+    DELETE FROM public.source_tombstone t
+    USING (SELECT g.workspace_id, g.id FROM gone g
+           UNION SELECT d.workspace_id, d.source_id
+                 FROM unnest(dropped_workspaces, dropped_sources) AS d (workspace_id, source_id)) AS c (workspace_id, id)
+    WHERE t.workspace_id = c.workspace_id AND t.source_kind = 'ENTRY' AND t.source_id = c.id
+      AND NOT EXISTS (SELECT FROM public.basis_edge e
+                      WHERE e.workspace_id = t.workspace_id AND e.source_kind = 'ENTRY' AND e.source_id = t.source_id)
+      AND NOT EXISTS (SELECT FROM public.conversation_entry x WHERE x.workspace_id = t.workspace_id AND x.id = t.source_id);
     RETURN NULL;
 END
 $$;
+
+-- A reference binds both entries to its workspace and owner: the owner's own conversation in that workspace. The row
+-- policy hides another person's entries, so the check also refuses a source the owner cannot read.
+CREATE FUNCTION public.basis_edge_bound() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    -- A reference of an owner that the transaction does not bind: the row policy refuses it and names that cause.
+    IF NEW.account_id IS DISTINCT FROM public.current_owner_account() THEN
+        RETURN NEW;
+    END IF;
+    IF NEW.dependent_kind = 'ENTRY' AND NOT EXISTS (
+        SELECT FROM public.conversation_entry d
+        WHERE d.id = NEW.dependent_id AND d.workspace_id = NEW.workspace_id AND d.account_id = NEW.account_id) THEN
+        RAISE EXCEPTION 'basis_edge: the dependent entry is not the owner''s in this workspace'
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    IF NEW.source_kind = 'ENTRY' AND NOT EXISTS (
+        SELECT FROM public.conversation_entry s
+        WHERE s.id = NEW.source_id AND s.workspace_id = NEW.workspace_id AND s.account_id = NEW.account_id) THEN
+        RAISE EXCEPTION 'basis_edge: the source entry is not the owner''s in this workspace'
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER basis_edge_bound
+    BEFORE INSERT ON public.basis_edge
+    FOR EACH ROW EXECUTE FUNCTION public.basis_edge_bound();
 
 CREATE TRIGGER conversation_entry_basis_removed
     AFTER UPDATE OF redacted_at ON public.conversation_entry
@@ -128,9 +179,11 @@ CREATE TRIGGER conversation_entry_basis_deleted
     FOR EACH STATEMENT EXECUTE FUNCTION public.basis_entries_deleted();
         ]]></sql>
         <rollback>
+            <sql>DROP TRIGGER basis_edge_bound ON public.basis_edge</sql>
             <sql>DROP TRIGGER conversation_entry_basis_deleted ON public.conversation_entry</sql>
             <sql>DROP TRIGGER conversation_entry_basis_moved ON public.conversation_entry</sql>
             <sql>DROP TRIGGER conversation_entry_basis_removed ON public.conversation_entry</sql>
+            <sql>DROP FUNCTION public.basis_edge_bound()</sql>
             <sql>DROP FUNCTION public.basis_entries_deleted()</sql>
             <sql>DROP FUNCTION public.basis_entry_moved()</sql>
             <sql>DROP FUNCTION public.basis_entry_removed()</sql>

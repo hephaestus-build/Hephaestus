@@ -10,13 +10,14 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.BasisInvalidation;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.BasisInvalidation.Ref;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.BasisKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -58,7 +59,13 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
     private OwnerScope ownerScope;
 
     @Autowired
-    private PersonDataRegistry registry;
+    private PersonDataService personData;
+
+    @Autowired
+    private AccountRepository accounts;
+
+    @Autowired
+    private SlackWorkspaceContentEraser slackContent;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -71,11 +78,12 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     private Workspace workspace;
     private Conversation main;
+    private User user;
     private long developer;
 
     @BeforeEach
     void setUpConversation() {
-        User user = persistUser("basis-developer");
+        user = persistUser("basis-developer");
         workspace = createWorkspace("basis", "Basis", "basis-org", AccountType.ORG, user);
         developer = accountId(user);
         main = conversations.findOrCreateMain(workspace.getId(), developer);
@@ -87,8 +95,8 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref answer = entry(answer("Alex reviews it."));
         Ref other = entry(answer("Sam merges it."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
-            basis.cite(workspace.getId(), other, List.of(entry(ask("Who merges?"))));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
+            basis.cite(workspace.getId(), developer, other, List.of(entry(ask("Who merges?"))));
         });
         assertThat(stale(developer, answer, other)).isEmpty();
 
@@ -118,8 +126,8 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref answer = entry(answer("Deploy on Monday."));
         Ref recap = entry(answer("Last week: deploy on Monday."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
-            basis.cite(workspace.getId(), recap, List.of(answer));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
+            basis.cite(workspace.getId(), developer, recap, List.of(answer));
         });
 
         entries.deleteMessage(workspace.getId(), question.id());
@@ -132,7 +140,7 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref question = entry(ask("Who reviews?"));
         Ref answer = entry(answer("Alex."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
         });
         entries.deleteMessage(workspace.getId(), question.id());
         long colleague = Objects.requireNonNull(persistAccount("Colleague").getId());
@@ -153,7 +161,8 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref answer = entry(answer("Alex."));
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager)
-                        .executeWithoutResult(status -> basis.cite(workspace.getId(), answer, List.of(question))))
+                        .executeWithoutResult(
+                                status -> basis.cite(workspace.getId(), developer, answer, List.of(question))))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("row-level security policy for table \"basis_edge\"");
     }
@@ -163,7 +172,7 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref question = entry(ask("Who reviews?"));
         Ref answer = entry(answer("Alex."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
         });
         entries.deleteMessage(workspace.getId(), question.id());
 
@@ -183,7 +192,7 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
         Ref question = entry(ask("Who reviews?"));
         Ref answer = entry(answer("Alex."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
         });
         long claimant = Objects.requireNonNull(persistAccount("Claimant").getId());
 
@@ -195,21 +204,127 @@ class BasisInvalidationIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .isEqualTo(claimant);
     }
 
+    /** Through the erasure workflow: preview, request and run, as an instance admin asks for it. */
     @Test
     void shouldDeleteTheReferencesOfThePersonWhenTheirDataIsErased() {
         Ref question = entry(ask("Who reviews?"));
         Ref answer = entry(answer("Alex."));
         asOwner(developer, () -> {
-            basis.cite(workspace.getId(), answer, List.of(question));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
         });
-        PersonDataContributor store = registry.stores().stream()
-                .filter(candidate -> candidate.store().equals("basis_edge"))
-                .findFirst()
-                .orElseThrow();
-        var scope = new PersonScope(developer, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        entries.deleteMessage(workspace.getId(), question.id());
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
 
-        asOwner(developer, () -> store.erase(store.select(scope), scope));
+        UUID request = personData
+                .preview(administratorId, developer, List.of())
+                .request()
+                .getId();
+        personData.requestErasure(request, administratorId, false);
+        personData.run(request);
 
+        assertThat(personData.get(request).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(owner.queryForObject("SELECT count(*) FROM basis_edge WHERE account_id = ?", Long.class, developer))
+                .isZero();
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM source_tombstone WHERE workspace_id = ? AND source_id IN (?, ?)",
+                        Long.class,
+                        workspace.getId(),
+                        question.id(),
+                        answer.id()))
+                .isZero();
+    }
+
+    /** A Slack disconnect redacts every entry written in Slack: a record that cites one is stale. */
+    @Test
+    void shouldMakeARecordThatCitesASlackMessageStaleWhenSlackIsDisconnected() {
+        Ref slackQuestion = entry(turns.submit(
+                        workspace.getId(),
+                        main.getId(),
+                        new ConversationTurnService.Question(
+                                ConversationTurn.Surface.SLACK,
+                                "Who reviews in Slack?",
+                                UUID.randomUUID().toString(),
+                                "17.01",
+                                null))
+                .question());
+        Ref answer = entry(answer("Alex, as in Slack."));
+        Ref other = entry(answer("Sam merges it."));
+        asOwner(developer, () -> {
+            basis.cite(workspace.getId(), developer, answer, List.of(slackQuestion));
+            basis.cite(workspace.getId(), developer, other, List.of(entry(ask("Who merges?"))));
+        });
+
+        slackContent.eraseWorkspace(workspace.getId());
+
+        assertThat(stale(developer, answer, other)).containsExactly(answer);
+    }
+
+    /** A source whose row goes stays a removed source while a record cites it, directly or through another record. */
+    @Test
+    void shouldKeepARecordStaleWhenTheRowOfWhatItCitesIsDeleted() {
+        Ref earlier = entry(answer("We deploy on Monday."));
+        Ref direct = entry(answer("Monday, as said."));
+        Ref question = entry(ask("What did we decide?"));
+        Ref answer = entry(answer("Deploy on Monday."));
+        Ref recap = entry(answer("Last week: deploy on Monday."));
+        asOwner(developer, () -> {
+            basis.cite(workspace.getId(), developer, direct, List.of(earlier));
+            basis.cite(workspace.getId(), developer, answer, List.of(question));
+            basis.cite(workspace.getId(), developer, recap, List.of(answer));
+        });
+        entries.deleteMessage(workspace.getId(), question.id());
+
+        owner.update("DELETE FROM conversation_entry WHERE id IN (?, ?)", earlier.id(), answer.id());
+
+        assertThat(stale(developer, direct, recap)).containsExactlyInAnyOrder(direct, recap);
+
+        owner.update("DELETE FROM conversation_entry WHERE id IN (?, ?)", direct.id(), recap.id());
+
+        // Nothing cites the deleted rows any more: their tombstones go too.
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM source_tombstone WHERE workspace_id = ? AND source_id IN (?, ?)",
+                        Long.class,
+                        workspace.getId(),
+                        earlier.id(),
+                        answer.id()))
+                .isZero();
+    }
+
+    /** A reference written while its owner's erasure runs could outlive it: the citation refuses it. */
+    @Test
+    void shouldRefuseACitationWhileTheOwnersAccountIsBeingDeleted() {
+        Ref question = entry(ask("Who reviews?"));
+        Ref answer = entry(answer("Alex."));
+        owner.update("UPDATE account SET status = 'DELETING' WHERE id = ?", developer);
+
+        assertThatThrownBy(() ->
+                        asOwner(developer, () -> basis.cite(workspace.getId(), developer, answer, List.of(question))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("being erased");
+        assertThat(owner.queryForObject("SELECT count(*) FROM basis_edge WHERE account_id = ?", Long.class, developer))
+                .isZero();
+    }
+
+    /** A reference binds both entries to its workspace: the same account's entries in another workspace are refused. */
+    @Test
+    void shouldRefuseACitationOfAnEntryOfAnotherWorkspace() {
+        Ref answer = entry(answer("Alex."));
+        Workspace second = createWorkspace("basis-two", "Basis two", "basis-two-org", AccountType.ORG, user);
+        Conversation secondMain = conversations.findOrCreateMain(second.getId(), developer);
+        Ref elsewhere = entry(
+                entries.append(second.getId(), secondMain.getId(), ConversationLedgerFixtures.hephaestus("Sam.")));
+
+        assertThatThrownBy(() ->
+                        asOwner(developer, () -> basis.cite(workspace.getId(), developer, answer, List.of(elsewhere))))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("the source entry is not the owner's in this workspace");
+        assertThatThrownBy(() ->
+                        asOwner(developer, () -> basis.cite(second.getId(), developer, answer, List.of(elsewhere))))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("the dependent entry is not the owner's in this workspace");
         assertThat(owner.queryForObject("SELECT count(*) FROM basis_edge WHERE account_id = ?", Long.class, developer))
                 .isZero();
     }

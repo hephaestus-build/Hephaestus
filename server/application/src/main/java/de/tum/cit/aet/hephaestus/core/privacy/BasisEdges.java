@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.BasisInvalidation;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.BasisKind;
 import java.util.Collection;
@@ -19,13 +21,24 @@ import org.springframework.transaction.annotation.Transactional;
 class BasisEdges implements BasisInvalidation {
 
     private final BasisEdgeRepository edges;
+    private final AccountRepository accounts;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void cite(long workspaceId, Ref dependent, Collection<Ref> sources) {
+    public void cite(long workspaceId, long ownerAccountId, Ref dependent, Collection<Ref> sources) {
+        // The owner's lifecycle lock comes before the reference, as for an export: an erasure that has begun refuses
+        // it.
+        boolean admitted = accounts.lockStatusForShare(ownerAccountId)
+                .map(Account.Status::valueOf)
+                .filter(status -> status != Account.Status.DELETING && status != Account.Status.DELETED)
+                .isPresent();
+        if (!admitted) {
+            throw new IllegalStateException("The owner is gone or being erased: no reference is written.");
+        }
         for (Ref source : sources) {
             edges.cite(
                     workspaceId,
+                    ownerAccountId,
                     dependent.kind().name(),
                     dependent.id(),
                     source.kind().name(),

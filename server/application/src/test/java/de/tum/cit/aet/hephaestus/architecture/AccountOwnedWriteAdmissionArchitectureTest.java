@@ -40,6 +40,9 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     .map(JavaFieldAccess::getOrigin)
                     .collect(Collectors.toUnmodifiableSet());
     private static final String EXPORT_TABLE = "account_export";
+    private static final String BASIS_TABLE = "basis_edge";
+    private static final String BASIS_EDGES = "de.tum.cit.aet.hephaestus.core.privacy.BasisEdges";
+    private static final String BASIS_REPOSITORY = "de.tum.cit.aet.hephaestus.core.privacy.BasisEdgeRepository";
     private static final Set<String> NON_WRITING_REPOSITORY_METHODS =
             Set.of("findByIdAndAccountId", "findStatus", "tryLockGeneration", "existsByAccountIdAndStatusIn");
 
@@ -58,7 +61,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .toList();
         assertThat(tables)
                 .as("Enroll each @PersonOwned store in this rule when it enters the person data inventory")
-                .containsExactly(EXPORT_TABLE);
+                .containsExactlyInAnyOrder(EXPORT_TABLE, BASIS_TABLE);
         assertThat(classes.stream()
                         .filter(type -> type.isAnnotatedWith(PersonDataStores.class))
                         .flatMap(type -> Arrays.stream(
@@ -87,6 +90,25 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .anyMatch(call ->
                         call.getTargetOwner().equals(writer) && call.getName().equals("admit"));
         assertThat(writer.getMethod("admit", long.class).getMethodCallsFromSelf())
+                .anyMatch(call -> call.getTargetOwner().isEquivalentTo(AccountRepository.class)
+                        && call.getName().equals("lockStatusForShare"));
+    }
+
+    /** A provenance reference is written only by the citation, which takes the owner's lifecycle lock first. */
+    @Test
+    void shouldWriteEveryReferenceBehindTheOwnersLifecycleLock() {
+        JavaClass edges = classes.get(BASIS_EDGES);
+        assertThat(classes.stream()
+                        .flatMap(type -> type.getMethodCallsFromSelf().stream())
+                        .filter(call -> call.getTargetOwner().getName().equals(BASIS_REPOSITORY))
+                        .filter(call -> call.getName().equals("cite"))
+                        .map(call -> call.getOriginOwner().getName())
+                        .distinct())
+                .as("Cite through BasisEdges, which admits the owner")
+                .containsExactly(BASIS_EDGES);
+        assertThat(edges.getMethods().stream()
+                        .filter(method -> method.getName().equals("cite"))
+                        .flatMap(method -> method.getMethodCallsFromSelf().stream()))
                 .anyMatch(call -> call.getTargetOwner().isEquivalentTo(AccountRepository.class)
                         && call.getName().equals("lockStatusForShare"));
     }

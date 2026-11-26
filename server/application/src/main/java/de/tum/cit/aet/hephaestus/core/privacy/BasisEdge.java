@@ -31,7 +31,7 @@ import org.jspecify.annotations.Nullable;
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uk_basis_edge_dependent_source",
-                        columnNames = {"dependent_kind", "dependent_id", "source_kind", "source_id"}),
+                        columnNames = {"workspace_id", "dependent_kind", "dependent_id", "source_kind", "source_id"}),
         indexes = @Index(name = "idx_basis_edge_account", columnList = "account_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

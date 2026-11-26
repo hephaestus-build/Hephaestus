@@ -17,8 +17,12 @@ public interface BasisInvalidation {
     /** A record in {@code basis_edge}: a source, or a record derived from sources. */
     record Ref(BasisKind kind, UUID id) {}
 
-    /** Records that {@code dependent} read {@code sources}. Citing a source again changes nothing. */
-    void cite(long workspaceId, Ref dependent, Collection<Ref> sources);
+    /**
+     * Records that {@code dependent} read {@code sources}, for the owner {@code ownerAccountId}, which the transaction
+     * must bind: the row policy refuses a reference of another owner. An owner whose erasure has begun is refused.
+     * Citing a source again changes nothing.
+     */
+    void cite(long workspaceId, long ownerAccountId, Ref dependent, Collection<Ref> sources);
 
     /** The records among {@code dependents} that a removed source reaches, directly or through a stale record. */
     Set<Ref> stale(long workspaceId, Collection<Ref> dependents);
