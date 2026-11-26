@@ -33,6 +33,9 @@ public class PracticePiAdapter {
 
     static final String PRACTICE_INPUT_TOKENS_ENV = "PI_PRACTICE_INPUT_TOKENS";
 
+    /** The practice sessions the runner may run at once: the calls its model pool lets this review hold. */
+    static final String SESSION_LIMIT_ENV = "PI_SESSION_LIMIT";
+
     /**
      * The shortest job timeout: more than the runner's shutdown buffer, so the runner has work time at all. No
      * program stage is reserved; the programs run inside the runner's own budget.
@@ -54,6 +57,7 @@ public class PracticePiAdapter {
         environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));
         environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
         environment.put(PRACTICE_INPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceInputTokens()));
+        environment.put(SESSION_LIMIT_ENV, Integer.toString(request.sessionLimit()));
         Double temperature = reviewProperties.samplingTemperature();
         if (temperature != null) {
             environment.put(SAMPLING_TEMPERATURE_ENV, temperature.toString());

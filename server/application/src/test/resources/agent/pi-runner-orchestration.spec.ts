@@ -2606,6 +2606,7 @@ if (scenario !== undefined && scenario !== "") {
 									stage === "scope-input-budget" || stage === "scope-compaction-input-budget"
 										? "4000"
 										: "100000000",
+								PI_SESSION_LIMIT: stage === "scope-session-limit" ? "1" : "64",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
 								LLM_PROXY_CLAIM: '{"x-agent-run":"run-1","x-agent-epoch":"1"}',

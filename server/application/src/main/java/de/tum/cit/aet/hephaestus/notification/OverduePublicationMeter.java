@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.notification;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.database.publication.EventPublicationStore;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.metrics.NotificationMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +14,6 @@ import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
-import org.springframework.modulith.events.core.EventPublicationRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -34,14 +33,12 @@ public class OverduePublicationMeter {
 
     static final Duration OVERDUE_AFTER = Duration.ofHours(1);
 
-    private final EventPublicationRepository publications;
-    private final Clock clock;
+    private final EventPublicationStore publications;
     private final MultiGauge overdue;
     private final MultiGauge exhausted;
 
-    public OverduePublicationMeter(EventPublicationRepository publications, Clock clock, MeterRegistry meterRegistry) {
+    public OverduePublicationMeter(EventPublicationStore publications, MeterRegistry meterRegistry) {
         this.publications = publications;
-        this.clock = clock;
         this.overdue = MultiGauge.builder(NotificationMetrics.EVENT_PUBLICATIONS_OVERDUE)
                 .description("Event publications still not completed one hour after they were published, by listener")
                 .register(meterRegistry);
@@ -55,12 +52,10 @@ public class OverduePublicationMeter {
         Map<String, Long> overdueByListener = new TreeMap<>();
         Map<String, Long> exhaustedByListener = new TreeMap<>();
         try {
-            for (var publication : publications.findIncompletePublicationsPublishedBefore(
-                    clock.instant().minus(OVERDUE_AFTER))) {
-                var counts = publication.getCompletionAttempts() >= NotificationRedeliveryJob.MAX_ATTEMPTS
-                        ? exhaustedByListener
-                        : overdueByListener;
-                counts.merge(listenerName(publication.getTargetIdentifier().getValue()), 1L, Long::sum);
+            for (var open : publications.openByListener(NotificationRedeliveryJob.MAX_ATTEMPTS, OVERDUE_AFTER)) {
+                String listener = listenerName(open.listenerId());
+                add(exhaustedByListener, listener, open.exhausted());
+                add(overdueByListener, listener, open.overdue());
             }
         } catch (RuntimeException e) {
             // Keep the last counts: a database blip must not read as "nothing is overdue".
@@ -71,6 +66,10 @@ public class OverduePublicationMeter {
         }
         overdue.register(rows(overdueByListener), true);
         exhausted.register(rows(exhaustedByListener), true);
+    }
+
+    private static void add(Map<String, Long> byListener, String listener, long rows) {
+        if (rows > 0) byListener.merge(listener, rows, Long::sum);
     }
 
     private static List<MultiGauge.Row<?>> rows(Map<String, Long> byListener) {

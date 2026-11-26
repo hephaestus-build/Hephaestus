@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -20,6 +21,8 @@ class CommitIdentityResolutionDefaultsTest extends BaseUnitTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(Defaults.class)
             .withBean(CommitIdentityResolutionRepository.class, () -> mock(CommitIdentityResolutionRepository.class))
+            .withBean(ProviderCredentialPauseRepository.class, () -> mock(ProviderCredentialPauseRepository.class))
+            .withBean(ActiveScmConnections.class, () -> mock(ActiveScmConnections.class))
             .withBean(CommitIdentityResolutionService.class, () -> mock(CommitIdentityResolutionService.class))
             .withBean(RepositoryScopeProvider.class, () -> mock(RepositoryScopeProvider.class))
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -405,6 +406,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var event = event(prepared);
         assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
         assertThat(event.getReason()).isEqualTo(reason);
+        // A permanent stop is recorded, so its durable listener completes the publication instead of retrying it.
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(jdbc.queryForList(
+                                "SELECT status FROM event_publication WHERE event_type=?"
+                                        + " AND serialized_event::jsonb->>'eventId'=? AND completion_date IS NULL",
+                                String.class,
+                                ItemEventRecorded.class.getName(),
+                                event.getId().toString()))
+                        .isEmpty());
         var refusal = catchThrowableOfType(
                 ReviewRequestRejected.class,
                 () -> service.request(request(prepared)

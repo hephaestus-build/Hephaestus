@@ -49,6 +49,9 @@ erDiagram
         BIGINT commit_id FK "NOT NULL"
         BIGINT contributor_id FK
         BIGINT repository_id FK "NOT NULL"
+        TIMESTAMPTZ deferred_until
+        BIGINT deferred_connection_id
+        BIGINT deferred_credentials_generation
     }
 
     CommitPullRequest {
@@ -402,6 +405,13 @@ erDiagram
         TIMESTAMPTZ body_evicted_at
         TIMESTAMPTZ archived_at
         BIGINT version "NOT NULL"
+    }
+
+    ProviderCredentialPause {
+        BIGINT connection_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+        BIGINT credentials_generation "NOT NULL"
+        TIMESTAMPTZ paused_until "NOT NULL"
     }
 
     ProviderEvent {
@@ -819,6 +829,8 @@ erDiagram
     Label }o--o{ IssueLabel : labeled
     Organization }o--o{ OrganizationMembership : belongs_to
     User }o--o{ OrganizationMembership : belongs_to
+    Connection }o--o{ ProviderCredentialPause : has
+    Workspace }o--o{ ProviderCredentialPause : has
     Issue }o--o{ PullRequestClosingIssue : has
     Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed

@@ -24,6 +24,8 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
 
         String getProviderType();
 
+        String getServerUrl();
+
         String getNameWithOwner();
     }
 
@@ -38,15 +40,23 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         int getAttempts();
     }
 
+    // A replacement credential can answer pending work without waiting for the old credential's deadline.
+    String DUE = """
+        (q.deferred_until IS NULL OR q.deferred_until <= clock_timestamp()
+            OR NOT public.scm_credential_is_active(q.deferred_connection_id, q.deferred_credentials_generation))
+        """;
+
+    /** The repository of the next due email. */
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """
         SELECT q.repository_id AS repositoryId, r.provider_id AS providerId, r.native_id AS nativeId,
-               p.type AS providerType,
+               p.type AS providerType, p.server_url AS serverUrl,
                r.name_with_owner AS nameWithOwner
         FROM commit_identity_resolution q
         JOIN repository r ON r.id = q.repository_id
         JOIN identity_provider p ON p.id = r.provider_id
-        WHERE q.state = 'PENDING'
+        WHERE q.state = 'PENDING' AND
+        """ + DUE + """
         ORDER BY q.attempts, q.id
         LIMIT 1
         """, nativeQuery = true)
@@ -62,6 +72,8 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         JOIN git_commit gc ON gc.id = q.commit_id
         LEFT JOIN commit_contributor cc ON cc.id = q.contributor_id
         WHERE q.state = 'PENDING' AND q.repository_id = :repositoryId
+          AND
+        """ + DUE + """
         ORDER BY q.attempts, q.id
         LIMIT :limit
         """, nativeQuery = true)
@@ -106,4 +118,20 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
     @Transactional
     @Query(value = "UPDATE commit_identity_resolution SET attempts = attempts + 1 WHERE id = :id", nativeQuery = true)
     int retryLater(@Param("id") long id);
+
+    /** The provider deferred these emails: they wait until its deadline, on every server, and spend no attempt. */
+    @WorkspaceAgnostic("Keyed update of rows of the instance-wide repair queue")
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE commit_identity_resolution
+        SET deferred_until = :until, deferred_connection_id = :connectionId,
+            deferred_credentials_generation = :generation
+        WHERE id IN (:ids) AND state = 'PENDING'
+        """, nativeQuery = true)
+    int defer(
+            @Param("ids") List<Long> ids,
+            @Param("connectionId") long connectionId,
+            @Param("generation") long generation,
+            @Param("until") Instant until);
 }

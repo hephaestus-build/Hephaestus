@@ -170,7 +170,6 @@ integration.slack de.tum.cit.aet.hephaestus.integration.slack.domain.SlackPartic
 integration.slack de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository reads identity_provider of integration.core x1
 integration.slack de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository reads identity_restriction of core x1
 integration.slack de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository reads identity_provider of integration.core x2
-notification de.tum.cit.aet.hephaestus.notification.NotificationPublicationConfiguration reads event_publication of core x1
 practices de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog reads identity of core x1
 practices de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog reads identity_provider of integration.core x1
 practices de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository reads item of integration.core x6

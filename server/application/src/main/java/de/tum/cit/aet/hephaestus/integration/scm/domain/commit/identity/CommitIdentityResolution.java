@@ -89,4 +89,14 @@ public class CommitIdentityResolution {
 
     @Column(name = "finished_at")
     private @Nullable Instant finishedAt;
+
+    /** A deferred email waits while the credential that received the deadline is still active. */
+    @Column(name = "deferred_connection_id")
+    private @Nullable Long deferredConnectionId;
+
+    @Column(name = "deferred_credentials_generation")
+    private @Nullable Long deferredCredentialsGeneration;
+
+    @Column(name = "deferred_until")
+    private @Nullable Instant deferredUntil;
 }
