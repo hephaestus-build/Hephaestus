@@ -199,64 +199,77 @@ Hephaestus tested `postgresql-client-18` and `libpq5` 18.6-0ubuntu0.26.04.1 with
 #### Open the database tunnel
 
 Run the commands on the host in Bash.
-For the first use, create a private directory at the absolute path in `work`:
 
-```bash
-work='/absolute/path/to/restore-point'
-(umask 077 && mkdir -m 700 -- "$work")
-```
+1. Choose an absolute path for the restore point.
+   Create a private directory there on first use.
+   Stop if the directory already exists on first use.
 
-Stop if the directory already exists on first use.
-Use the same directory when you reopen the tunnel for this restore point.
-Set `release_secret` to the Secret name from `secret.name`.
+   ```bash
+   work='/absolute/path/to/restore-point'
+   (umask 077 && mkdir -m 700 -- "$work")
+   ```
 
-Use one tunnel per database command.
-The helper starts the tunnel and saves its PID.
-It waits for the forwarding message before it runs the command.
-After success or failure, it stops only that tunnel.
+2. Set the namespace and Helm release name.
+   Set the namespace from `sandbox.namespace`.
+   With sandboxes disabled, set `sandbox_namespace=''`.
+   Select the PostgreSQL Service of the release.
+   Set the Secret name from `secret.name`.
+   Set the database name from `postgresql.database`.
 
-```bash
-set +x
-umask 077
-release_secret='<release-secret>'
-pg_host='host=127.0.0.1 port=15432 sslmode=require connect_timeout=5'
-secret() { kubectl -n hephaestus get secret "$release_secret" -o "jsonpath={.data.$1}" | base64 -d; }
-with_tunnel() (
-  set +x
-  set -euo pipefail
-  local forward_pid command_pid command_input status=0
-  exec {command_input}<&0
-  kubectl -n hephaestus port-forward --address 127.0.0.1 svc/hephaestus-postgresql 15432:5432 \
-    > "$work/port-forward.log" 2>&1 &
-  forward_pid=$!
-  printf 'Port-forward PID: %s\n' "$forward_pid" >&2
-  (
-    for attempt in {1..50}; do
-      grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log" && break
-      kill -0 "$forward_pid" 2>/dev/null || exit 1
-      sleep 0.2
-    done
-    grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log"
-    "$@"
-  ) <&"$command_input" &
-  command_pid=$!
-  exec {command_input}<&-
-  wait "$command_pid" || status=$?
-  kill "$forward_pid" 2>/dev/null || true
-  wait "$forward_pid" 2>/dev/null || true
-  exit "$status"
-)
-admin_pg() (
-  set +x
-  set -euo pipefail
-  PGUSER="$(secret DATABASE_ADMIN_USERNAME)"
-  PGPASSWORD="$(secret DATABASE_ADMIN_PASSWORD)"
-  test -n "$PGUSER"
-  test -n "$PGPASSWORD"
-  export PGUSER PGPASSWORD
-  "$@"
-)
-```
+3. Define the tunnel and credential helpers.
+   Use the same directory for each command of this restore point.
+   The tunnel helper saves the PID when it opens the tunnel.
+   It stops that PID after success or failure.
+
+   ```bash
+   set +x
+   umask 077
+   namespace='<release-namespace>'
+   release='<helm-release>'
+   sandbox_namespace='<sandbox-namespace>'
+   postgres_service='<postgresql-service>'
+   release_secret='<release-secret>'
+   database='<database-name>'
+   maintenance_database=postgres
+   if [[ "$database" == "$maintenance_database" ]]; then maintenance_database=template1; fi
+   pg_host='host=127.0.0.1 port=15432 sslmode=require connect_timeout=5'
+   secret() { kubectl -n "$namespace" get secret "$release_secret" -o "jsonpath={.data.$1}" | base64 -d; }
+   with_tunnel() (
+     set +x
+     set -euo pipefail
+     local forward_pid command_pid command_input status=0
+     exec {command_input}<&0
+     kubectl -n "$namespace" port-forward --address 127.0.0.1 "svc/$postgres_service" 15432:5432 \
+       > "$work/port-forward.log" 2>&1 &
+     forward_pid=$!
+     printf 'Port-forward PID: %s\n' "$forward_pid" >&2
+     (
+       for attempt in {1..50}; do
+         grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log" && break
+         kill -0 "$forward_pid" 2>/dev/null || exit 1
+         sleep 0.2
+       done
+       grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log"
+       "$@"
+     ) <&"$command_input" &
+     command_pid=$!
+     exec {command_input}<&-
+     wait "$command_pid" || status=$?
+     kill "$forward_pid" 2>/dev/null || true
+     wait "$forward_pid" 2>/dev/null || true
+     exit "$status"
+   )
+   admin_pg() (
+     set +x
+     set -euo pipefail
+     PGUSER="$(secret DATABASE_ADMIN_USERNAME)"
+     PGPASSWORD="$(secret DATABASE_ADMIN_PASSWORD)"
+     test -n "$PGUSER"
+     test -n "$PGPASSWORD"
+     export PGUSER PGPASSWORD
+     "$@"
+   )
+   ```
 
 Avoid `pg_isready`. Its disconnect can end this tunnel with `lost connection to pod`.
 A client can also close a tunnel after the command succeeds.
@@ -275,7 +288,7 @@ app_sql() (
   PGPASSWORD="$(secret DATABASE_APP_PASSWORD)"
   test -n "$PGPASSWORD"
   export PGPASSWORD PGOPTIONS='-c default_transaction_read_only=on'
-  psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=hephaestus user=hephaestus_app" "$@"
+  psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$database user=hephaestus_app" "$@"
 )
 with_tunnel app_sql -c 'SHOW default_transaction_read_only' \
   -c "SELECT id, state, created_at FROM person_data_request WHERE state IN ('ERASING', 'FAILED');"
@@ -287,63 +300,112 @@ If either check fails, stop before the dump or migration.
 
 #### Take and verify the final archive
 
-Confirm that the server and its sandboxes are gone.
-Check for live run leases, action leases and app connections.
-Require zero of each before you record the quiet state.
-The app role cannot read every schema, so dump as the database admin from the release Secret.
-The commands below keep credentials in the client environment.
+1. Confirm that the server has stopped.
+   Confirm that its sandbox Pods and Jobs are gone.
+   Both commands must print no resources.
 
-Define the functions from the preceding sections before you run this block.
-Set `expected_table_data` to the count in the verified archive inventory for your source release and installation.
+   ```bash
+   kubectl -n "$namespace" get pods \
+     -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" -o name
+   if [[ -n "$sandbox_namespace" ]]; then
+     kubectl -n "$sandbox_namespace" get pods,jobs -o name
+   fi
+   ```
 
-```bash
-(
-  set +x
-  set -euo pipefail
-  umask 077
-  cd -- "$work"
-  expected_table_data='<expected count>'
-  test ! -e final.dump
-  cat > row-counts.sql <<'SQL'
-SELECT 'workspace', count(*) FROM public.workspace
-UNION ALL SELECT 'person_data_request', count(*) FROM public.person_data_request
-UNION ALL SELECT 'event_publication', count(*) FROM public.event_publication
-ORDER BY 1;
-SQL
-  with_tunnel app_sql -At -F $'\t' -f row-counts.sql > row-counts.tsv
-  started=$(date -u +%FT%TZ)
-  with_tunnel admin_pg pg_dump "$pg_host dbname=hephaestus" \
-    --no-password --format=custom --file=final.dump
-  ended=$(date -u +%FT%TZ)
-  test -s final.dump
-  chmod 600 final.dump
-  test "$(stat -c %a final.dump)" = 600
-  sha256sum final.dump > final.dump.sha256
-  pg_restore --file=/dev/null final.dump
-  pg_restore --list final.dump > archive.list
-  table_data=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TABLE DATA ' archive.list)
-  test "$table_data" -gt 0
-  test "$table_data" -eq "$expected_table_data"
-  printf 'file=final.dump\nbytes=%s\nstart=%s\nend=%s\nquiet=server stopped, no live leases, no app connections\nTABLE_DATA=%s\n' \
-    "$(stat -c %s final.dump)" "$started" "$ended" "$table_data" > receipt.txt
-  cat final.dump.sha256 row-counts.tsv >> receipt.txt
-)
-```
+2. Run the applicable [erasure check](#check-for-erasure-requests) again.
+   Define `app_sql` even if the target requires no erasure check.
+   Record the quiet state through that role.
+   Require three zeros.
+   The three columns are run leases, action leases and other app connections.
 
-Define `app_sql` from the preceding section even if your migration requires no erasure query.
-Require the dump to exit successfully.
-Check that the file is nonempty and mode 600.
-Require the full read to exit successfully.
-Check that the `TABLE DATA` count matches the source inventory.
+   ```bash
+   with_tunnel app_sql -At -F $'\t' -c "
+     SELECT
+       (SELECT count(*) FROM public.agent_run WHERE state = 'LEASED' AND leased_until > clock_timestamp()),
+       (SELECT count(*) FROM public.agent_action WHERE state = 'EXECUTING' AND leased_until > clock_timestamp()),
+       (SELECT count(*) FROM pg_stat_activity
+        WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid())
+   " > "$work/quiet.tsv"
+   test "$(cat "$work/quiet.tsv")" = $'0\t0\t0'
+   ```
 
-The full read checks that the archive is readable.
-A restore rehearsal checks that PostgreSQL can apply it.
-Require a complete receipt before you start phase 2.
+3. Record the source inventory before the dump.
+   Count the ordinary tables that the full dump includes.
+   The count includes partition leaves and extension configuration tables.
+   Require a positive count.
+
+   ```bash
+   with_tunnel app_sql -At -c "
+     SELECT count(*) FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE c.relkind = 'r'
+       AND (EXISTS (SELECT 1 FROM pg_extension e WHERE c.oid = ANY(e.extconfig))
+         OR (n.nspname <> 'information_schema' AND left(n.nspname, 3) <> 'pg_'
+           AND NOT EXISTS (
+             SELECT 1 FROM pg_depend d
+             WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid
+               AND d.refclassid = 'pg_extension'::regclass AND d.deptype = 'e'
+           )))
+   " > "$work/source-table-data.count"
+   test "$(cat "$work/source-table-data.count")" -gt 0
+   ```
+
+4. Take the dump as the database admin.
+   The app role cannot read every schema.
+   Record the receipt after all checks pass.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     umask 077
+     cd -- "$work"
+     test "$(cat quiet.tsv)" = $'0\t0\t0'
+     expected_table_data=$(cat source-table-data.count)
+     test "$expected_table_data" -gt 0
+     test ! -e final.dump
+     cat > row-counts.sql <<'SQL'
+   SELECT 'workspace', count(*) FROM public.workspace
+   UNION ALL SELECT 'person_data_request', count(*) FROM public.person_data_request
+   UNION ALL SELECT 'event_publication', count(*) FROM public.event_publication
+   ORDER BY 1;
+   SQL
+     with_tunnel app_sql -At -F $'\t' -f row-counts.sql > row-counts.tsv
+     started=$(date -u +%FT%TZ)
+     with_tunnel admin_pg pg_dump "$pg_host dbname=$database" \
+       --no-password --format=custom --file=final.dump
+     ended=$(date -u +%FT%TZ)
+     test -s final.dump
+     chmod 600 final.dump
+     test "$(stat -c %a final.dump)" = 600
+     sha256sum final.dump > final.dump.sha256
+     pg_restore --file=/dev/null final.dump
+     pg_restore --list final.dump > archive.list
+     table_data=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TABLE DATA ' archive.list)
+     test "$table_data" -eq "$expected_table_data"
+     printf 'file=final.dump\nbytes=%s\nstart=%s\nend=%s\nserver_pods=0\nsandbox_workloads=0\n' \
+       "$(stat -c %s final.dump)" "$started" "$ended" > receipt.txt
+     printf 'run_leases=0\naction_leases=0\napp_connections=0\nsource_TABLE_DATA=%s\nTABLE_DATA=%s\n' \
+       "$expected_table_data" "$table_data" >> receipt.txt
+     cat final.dump.sha256 row-counts.tsv >> receipt.txt
+   )
+   ```
+
+5. Require the dump to exit successfully.
+   Check that the file is nonempty.
+   Check that its mode is 600.
+   Require the full archive read to exit successfully.
+   Check that the `TABLE DATA` count matches the source inventory.
+   Require a complete receipt before you start phase 2.
 
 ### Restore the final logical archive
 
-Use the archive and receipt from the final stopped window.
-An older restore point can bring back erased data.
+:::caution[CAUTION: Erased data]
+Restoring an older archive can bring back erased data.
+Select the archive from the final stopped window.
+Use the receipt that matches that archive.
+:::
+
 Keep the server stopped.
 Confirm that the failed migration Job has stopped.
 
@@ -353,8 +415,11 @@ Before you start, rehearse this procedure on an isolated staging installation.
 
 1. Define the [database tunnel](#open-the-database-tunnel) functions.
    Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
-2. Verify the SHA-256 and the archive's database name before you change the live database.
+2. Verify the SHA-256.
+   Check that the archive names the selected database.
+   Do both checks before you change the live database.
    Run the restore as the database admin.
+
    The block keeps the failed database under another name with connections disabled.
    The exporter can still hold a connection after the server stops.
    The block records its PIDs before it closes them.
@@ -369,37 +434,45 @@ Before you start, rehearse this procedure on an isolated staging installation.
      sha256sum --check final.dump.sha256
      grep -Fx "$(cat final.dump.sha256)" receipt.txt
      pg_restore --list final.dump > archive.list
-     grep -xE ';[[:space:]]+dbname:[[:space:]]+hephaestus' archive.list
+     test "$(sed -nE 's/^;[[:space:]]+dbname:[[:space:]]+//p' archive.list)" = "$database"
      pg_restore --file=/dev/null final.dump
      pg_restore --create --list final.dump > database-inventory.list
-     grep -E '^[0-9]+; [0-9]+ [0-9]+ (DATABASE( PROPERTIES)? - hephaestus|ACL - DATABASE hephaestus|COMMENT - DATABASE hephaestus|SECURITY LABEL - DATABASE hephaestus) ' \
-       database-inventory.list > database-only.list
+     awk -v db="$database" '
+       function matches_db(value) { return value == db || value == "\"" db "\"" }
+       $1 !~ /^[0-9]+;$/ { next }
+       $4 == "DATABASE" && $5 == "-" && matches_db($6) { print }
+       $4 == "DATABASE" && $5 == "PROPERTIES" && $6 == "-" && matches_db($7) { print }
+       $4 ~ /^(ACL|COMMENT)$/ && $5 == "-" && $6 == "DATABASE" && matches_db($7) { print }
+       $4 == "SECURITY" && $5 == "LABEL" && $6 == "-" && $7 == "DATABASE" && matches_db($8) { print }
+     ' database-inventory.list > database-only.list
      pg_restore --create --use-list=database-only.list --file=database.sql final.dump
-     awk '/^\\connect / { cut++; next }
-          { print > (cut ? "database-properties.sql" : "database-create.sql") }
-          END { if (cut != 1) exit 1 }' database.sql
-     grep -q '^CREATE DATABASE hephaestus ' database-create.sql
-     test -s database-properties.sql
-     failed_db="hephaestus_failed_$(date -u +%Y%m%dT%H%M%S)"
-     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=postgres" \
-       -v "failed_db=$failed_db" -f - <<'SQL'
-   ALTER DATABASE hephaestus WITH ALLOW_CONNECTIONS false;
+     : > database-create.sql
+     : > database-properties.sql
+     awk '/^\\connect[[:space:]]/ { if (++switches > 2) exit 1; next }
+          { print > (switches ? "database-properties.sql" : "database-create.sql") }' database.sql
+     grep -qE "^CREATE DATABASE ($database|\"$database\") " database-create.sql
+     failed_db="heph_failed_$(date -u +%Y%m%dT%H%M%S)"
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
+   ALTER DATABASE :"database" WITH ALLOW_CONNECTIONS false;
    SELECT pid AS exporter_pid FROM pg_stat_activity
-   WHERE datname = 'hephaestus' AND usename = 'hephaestus_monitor';
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor';
    SELECT format(
      'SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE pid = %s
       AND datname = %L AND usename = %L', pid, datname, usename
    ) FROM pg_stat_activity
-   WHERE datname = 'hephaestus' AND usename = 'hephaestus_monitor'
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor'
    \gexec
-   ALTER DATABASE hephaestus RENAME TO :"failed_db";
+   ALTER DATABASE :"database" RENAME TO :"failed_db";
    SQL
-     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=postgres" \
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
        -f database-create.sql
      with_tunnel admin_pg pg_restore --no-password --exit-on-error --single-transaction \
-       --dbname="$pg_host dbname=hephaestus" final.dump
-     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 --single-transaction \
-       "$pg_host dbname=hephaestus" -f database-properties.sql
+       --dbname="$pg_host dbname=$database" final.dump
+     if [[ -s database-properties.sql ]]; then
+       with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 --single-transaction \
+         "$pg_host dbname=$database" -f database-properties.sql
+     fi
      pg_restore --list final.dump > archive.list
      table_data=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TABLE DATA ' archive.list)
      grep -Fx "TABLE_DATA=$table_data" receipt.txt
@@ -412,18 +485,19 @@ Before you start, rehearse this procedure on an isolated staging installation.
    The SQL files keep the database settings and grants in the archive.
    One connection creates the database.
    Another connection applies the archive in a transaction.
-   A third connection restores the database grants and settings.
-   Separate connections let the client start each command with a fresh tunnel.
+   A separate command applies the remaining database grants and settings if the archive has them.
+   The split keeps the archive's restriction commands in their original order.
+   It removes the reconnect commands so each client starts with a fresh tunnel.
 
-   Require all three commands to succeed.
+   Require each command to succeed.
    Check that the archive inventory matches the receipt.
    Check that the restored row counts match the receipt.
    On any failure, leave the server stopped.
    Keep the failed database and any partial restore for diagnosis.
 3. After verification passes, apply the signed source release with the server stopped and migration enabled.
    The migration Job runs [database role setup](./helm-chart#database-roles) again.
-   Wait for the Job to be `Complete` before you start a server.
-   Verify readiness and authenticated reads after it starts.
+   Wait for the Job to be `Complete`.
+   Keep every source server stopped.
    Keep the failed database until the investigation and retention rules permit its removal.
 
 ## Change a volume size
@@ -514,7 +588,11 @@ It adds the steps of the reconciler to this procedure.
 6. If Helm reports a `pending-*` status, roll the release back: `helm rollback hephaestus <revision> --namespace hephaestus --wait`.
    After a stopped upgrade, use the phase-1 revision, which runs no server. After a rolling upgrade, use the previous revision.
 7. If you took a final logical archive, [restore that archive](#restore-the-final-logical-archive).
-   Otherwise, follow [Recover the live installation](./backup-restore#recover-the-live-installation) to restore the pre-upgrade backup.
+   For a target retry, keep the source stopped.
+   To return to the source, start it after the restore passes.
+   Verify readiness.
+   Verify authenticated reads.
+   For a repository backup, follow [Recover the live installation](./backup-restore#recover-the-live-installation) to restore the pre-upgrade backup.
    Use the previous chart, signed release lock, PostgreSQL image, extensions and encryption keys.
 8. Report the actual recovery point and time, and any lost writes.
 9. Keep the failed database until the investigation and your retention rules permit its removal.

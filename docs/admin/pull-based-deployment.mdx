@@ -349,9 +349,11 @@ Record the stopped phase-1 Helm revision from `helm history <release> --namespac
 
 Verify the backups, record the server count, and stop the source release as phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) describes.
 Use the verified source chart and your site values with `server.stopped=true`, or with `server.replicas=0` on a source chart without `server.stopped`.
-Wait until every source role Pod and sandbox Pod and Job is removed.
+Wait until every source role Pod, sandbox Pod and sandbox Job is gone.
+Take the final restore point while the source is stopped.
+If the bundled PostgreSQL has no backup repository, [take and verify the final logical archive](./upgrade#take-a-logical-restore-point-without-backups).
 
-Then promote the target release.
+Promote the target release after the final restore point passes its checks.
 Restart the timer for phase 2 only after the channel names the target.
 A tick before that applies your edited file to the source release and starts the writers again.
 
@@ -399,9 +401,15 @@ If a stopped cutover fails or remains pending:
    Otherwise, restore the final backup with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
    For that recovery path, put the egress values of step 3 in `/etc/hephaestus/chart.yaml`.
    Use the verified source chart and the values of the phase-1 revision for either path.
-7. To retry the target, resume the timer.
+7. To retry the target, keep the restored source release stopped.
+   Check that the channel names the target.
+   Resume the timer.
    To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
+   Set the source server count in your site values.
+   Clear `server.stopped` if the source chart has that option.
    Then do steps 10 and 11 of [If migration fails](./upgrade#if-migration-fails).
+   Verify readiness after the source starts.
+   Verify authenticated reads.
 8. If you used the backup recovery path, stop the timer again when the selected release runs.
    Do steps 8 to 13 of [Recover the live installation](./backup-restore#recover-the-live-installation) with the verified chart of that release.
    Skip its step 7: no server ran after the final restore point, so no erasure follows it.
