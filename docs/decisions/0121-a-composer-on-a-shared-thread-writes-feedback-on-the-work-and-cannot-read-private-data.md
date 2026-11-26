@@ -136,6 +136,11 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - A provider exposes reviewer replies that the composer must answer outside Automatic mode.
 - An isolation test fails after release.
 
+## Sources
+
+- Simon Willison, [The lethal trifecta for AI agents](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), 2025. An agent with private data, untrusted content and external communication can be tricked into "sending it to that attacker". The composer has two of the three and no private data.
+- Debenedetti et al., [Defeating Prompt Injections by Design](https://arxiv.org/abs/2503.18813), 2025. CaMeL extracts "the control and data flows from the (trusted) query". Then "the untrusted data … can never impact the program flow". Typed commands with IDs only follow that rule.
+
 ## Update — 2026-11-26: the shadow handoff and the cutover gate
 
 Decision 13 keeps `REVIEW_COMPOSE` as the producer until the cutover. The cutover runs in four steps:
@@ -176,8 +181,3 @@ Step 3 starts, and a workspace turns its rollout on, only when all of these hold
   - An uncertain write stays blocked until it is resolved.
 - **Cost.** The extra sandbox and queue cost of one composer turn for each open pull request is measured against interactive service (ADR 0147). The first-response time of interactive turns does not regress.
 - **Quality.** An Ichnaea composition run of the composer against `REVIEW_COMPOSE` gives no REGRESSION verdict. Ichnaea cannot prove isolation, an effect that happens once, or useful mentoring. The other lines of this gate cover the first two.
-
-## Sources
-
-- Simon Willison, [The lethal trifecta for AI agents](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), 2025. An agent with private data, untrusted content and external communication can be tricked into "sending it to that attacker". The composer has two of the three and no private data.
-- Debenedetti et al., [Defeating Prompt Injections by Design](https://arxiv.org/abs/2503.18813), 2025. CaMeL extracts "the control and data flows from the (trusted) query". Then "the untrusted data … can never impact the program flow". Typed commands with IDs only follow that rule.
