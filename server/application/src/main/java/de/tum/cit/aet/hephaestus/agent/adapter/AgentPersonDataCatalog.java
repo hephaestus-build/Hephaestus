@@ -35,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 @PersonDataStores({
     "review_job",
     "review_composition_basis",
+    "work_place_handoff",
     "composer_transcript_part",
     "llm_usage_event",
     "instance_llm_settings"
@@ -88,6 +89,17 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "job_id,workspace_id",
                         "",
                         -82),
+                // The work place's copy of a sealed review: the same jobs' public results and the work they cite.
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "work_place_handoff",
+                        "work_place_handoff",
+                        "t.job_id IN (" + SELECTED_JOBS + ")",
+                        "id,workspace_id,review_id,job_id,item_id,producer,payload_digest,expires_at,created_at",
+                        "id,workspace_id",
+                        "",
+                        -83),
                 new ComposerTranscriptStore(),
                 new AgentJobStore(),
                 new LedgerStore(

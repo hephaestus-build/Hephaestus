@@ -178,7 +178,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         mapper,
                         new PracticeCatalogInjector(mapper),
                         jobs,
-                        events),
+                        events,
+                        mock(WorkPlaceHandoffEnrolment.class)),
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));

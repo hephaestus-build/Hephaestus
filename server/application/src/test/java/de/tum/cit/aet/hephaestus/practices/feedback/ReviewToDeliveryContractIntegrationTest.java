@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionPlans;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.WorkPlaceScope;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
@@ -170,6 +171,7 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -643,6 +645,75 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(recorded())
                     .as("the sealed result counts once its review commits")
                     .isEqualTo(recordedBefore + 1);
+        }
+    }
+
+    @Test
+    void shouldHandTheWorkPlaceOneScopedCopyInTheSealsTransaction() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var seal = new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0);
+            Instant before = Instant.now();
+            admission.admit(review.identity(), seal, () -> {});
+
+            var row = jdbc.queryForMap(
+                    "SELECT id, job_id, item_id, producer, payload::text AS payload, payload_digest"
+                            + " FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            var expiresAt = jdbc.queryForObject(
+                    "SELECT expires_at FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    OffsetDateTime.class,
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(row.get("job_id")).isEqualTo(review.identity().jobId());
+            assertThat(row.get("item_id")).isEqualTo(review.item().itemId());
+            assertThat(row.get("producer")).isEqualTo("LEGACY");
+            assertThat(Objects.requireNonNull(expiresAt).toInstant())
+                    .isBefore(Instant.now().plus(WorkPlaceScope.COPY_DEADLINE).plusSeconds(1))
+                    .isAfter(before.plus(WorkPlaceScope.COPY_DEADLINE).minusSeconds(1));
+            var payload = mapper.readTree((String) row.get("payload"));
+            assertThat(payload.path("results"))
+                    .isNotEmpty()
+                    .allSatisfy(result -> assertThat(result.path("publicEligible").asBoolean()).isTrue());
+            assertThat(payload.path("files").propertyNames())
+                    .contains("INDEX.json")
+                    .noneMatch(path -> path.equals("INDEX.md")
+                            || path.startsWith("inputs/history/")
+                            || path.startsWith("composition/"));
+            assertThat(payload.path("files").propertyNames())
+                    .as("the text that the public result cites is in the copy")
+                    .anyMatch(path -> path.startsWith("context/staged/"));
+
+            // A repeated seal answers as the first one did and hands nothing again.
+            admission.admit(review.identity(), seal, () -> {});
+            assertThat(jdbc.queryForList(
+                            "SELECT id, payload_digest FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .singleElement()
+                    .satisfies(again -> {
+                        assertThat(again.get("id")).isEqualTo(row.get("id"));
+                        assertThat(again.get("payload_digest")).isEqualTo(row.get("payload_digest"));
+                    });
+        }
+    }
+
+    @Test
+    void shouldHandTheWorkPlaceNothingWhenNoResultMaySpeakOnTheWork() {
+        try (var review = claimedReview(FeedbackMode.OFF)) {
+            admission.stage(review.identity(), request(review));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+            assertThat(resultIds(review)).isNotEmpty();
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            Integer.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isZero();
         }
     }
 
