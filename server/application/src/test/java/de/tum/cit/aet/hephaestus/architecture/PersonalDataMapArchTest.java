@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
@@ -56,6 +57,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     @Autowired
     private List<PersonDataCatalog> catalogs;
+
+    @Autowired
+    private List<AccountErasureContributor> accountErasure;
 
     private static final Path REPOSITORY_ROOT = Path.of("../..");
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java/de/tum/cit/aet/hephaestus");
@@ -319,6 +323,11 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         Set<String> required = tableNames();
         required.removeAll(NOT_PERSONAL_DATA);
         required.removeAll(SECURITY_RETENTION.keySet());
+        // The personal goal uses account export and purge. A staff preview must not identify it.
+        required.remove("personal_goal");
+        assertThat(declared).doesNotContain("personal_goal");
+        assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
+                .contains("personal_goal.account_id");
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
