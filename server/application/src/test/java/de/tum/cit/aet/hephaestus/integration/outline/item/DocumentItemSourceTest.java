@@ -299,6 +299,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
                         null,
                         null,
                         null,
+                        null,
                         null)));
         var pinned = source.pin(item, null);
         var capture = source.capture(pinned, request());
@@ -327,6 +328,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
                 null,
                 List.of(),
                 false,
+                null,
                 null,
                 null,
                 null,

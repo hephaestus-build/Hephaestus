@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -47,12 +49,13 @@ public class ConversationPersonDataCatalog implements PersonDataCatalog {
     private final ConversationContextChanges contextChanges;
     private final ConversationSandboxCopies sandboxCopies;
     private final WorkspaceMemberships memberships;
+    private final Optional<OutlinePersonCopyScope> outline;
 
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new ConversationToolResultCopyPersonDataStore(
-                        jdbc, mapper, redaction, contextChanges, sandboxCopies, memberships),
+                        jdbc, mapper, redaction, contextChanges, sandboxCopies, memberships, outline),
                 new ConversationFeedbackCopyPersonDataStore(jdbc, mapper, redaction, copySources),
                 new ConversationEntryPersonDataStore(
                         jdbc,

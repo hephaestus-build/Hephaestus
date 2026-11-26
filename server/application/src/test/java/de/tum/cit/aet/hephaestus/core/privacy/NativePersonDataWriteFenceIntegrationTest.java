@@ -210,14 +210,14 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAWaitingWriterAfterTheErasureControlCommitsWithoutMatchingAnotherSlackTeam() throws Exception {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
-        var alias = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "HTTPS://SLACK.COM:443/"));
         var identity = new PersonIdentity(Objects.requireNonNull(provider.getId()), "UFENCE", "T1");
-        var aliasIdentity = new PersonIdentity(Objects.requireNonNull(alias.getId()), "UFENCE", "T1");
         var identities = List.of(identity);
         var request = requests.saveAndFlush(new PersonDataRequest());
         var locked = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var writerPid = new AtomicInteger();
+        var alias = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "HTTPS://SLACK.COM:443/"));
+        var aliasIdentity = new PersonIdentity(Objects.requireNonNull(alias.getId()), "UFENCE", "T1");
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var eraser = executor.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
                 fence.holdForErasure(identities);
@@ -243,10 +243,11 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
                     .executeWithoutResult(status -> assertThat(fence.holdForWrite(
                                     List.of(new PersonIdentity(aliasIdentity.providerId(), identity.subject(), "T2"))))
                             .isTrue());
-
         } finally {
             release.countDown();
+            providers.deleteById(aliasIdentity.providerId());
         }
+        assertThat(providers.findById(aliasIdentity.providerId())).isEmpty();
     }
 
     private boolean waitingForLock(int pid) {

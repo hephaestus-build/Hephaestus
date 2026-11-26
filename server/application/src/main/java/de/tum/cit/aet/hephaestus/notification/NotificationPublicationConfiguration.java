@@ -1,11 +1,8 @@
 package de.tum.cit.aet.hephaestus.notification;
 
+import de.tum.cit.aet.hephaestus.core.database.publication.EventPublicationStore;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -18,7 +15,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.modulith.events.core.EventPublicationRepository;
 import org.springframework.modulith.events.core.EventPublicationRepository.FailedCriteria;
 import org.springframework.modulith.events.core.EventSerializer;
@@ -37,12 +33,12 @@ public class NotificationPublicationConfiguration {
 
     @Bean
     static BeanPostProcessor fairNotificationRetries(
-            ObjectProvider<JdbcOperations> jdbc, ObjectProvider<EventSerializer> serializer) {
-        return new FairRetryPostProcessor(jdbc, serializer);
+            ObjectProvider<EventPublicationStore> store, ObjectProvider<EventSerializer> serializer) {
+        return new FairRetryPostProcessor(store, serializer);
     }
 
     private record FairRetryPostProcessor(
-            ObjectProvider<JdbcOperations> jdbc, ObjectProvider<EventSerializer> serializer)
+            ObjectProvider<EventPublicationStore> store, ObjectProvider<EventSerializer> serializer)
             implements BeanPostProcessor {
         @Override
         public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -52,7 +48,7 @@ public class NotificationPublicationConfiguration {
                 if (!invocation.getMethod().getName().equals("findFailedPublications")) {
                     return invocation.proceed();
                 }
-                return findFailed(jdbc.getObject(), serializer.getObject(), (FailedCriteria)
+                return findFailed(store.getObject(), serializer.getObject(), (FailedCriteria)
                         Objects.requireNonNull(invocation.getArguments()[0]));
             });
             return proxy.getProxy();
@@ -60,28 +56,19 @@ public class NotificationPublicationConfiguration {
     }
 
     private static List<TargetEventPublication> findFailed(
-            JdbcOperations jdbc, EventSerializer serializer, FailedCriteria criteria) {
-        Instant before = criteria.getPublicationDateReference();
-        long limit = criteria.getMaxItemsToRead();
-        String sql = """
-                SELECT id, serialized_event, event_type, listener_id, publication_date,
-                       last_resubmission_date, completion_attempts, status, completion_date
-                  FROM event_publication
-                 WHERE (status = 'FAILED' OR (status IS NULL AND completion_date IS NULL))
-                   AND completion_attempts < ?
-                """;
-        var arguments = new ArrayList<Object>();
-        arguments.add(NotificationRedeliveryJob.MAX_ATTEMPTS);
-        if (before != null) {
-            sql += " AND publication_date < ?";
-            arguments.add(Timestamp.from(before));
-        }
-        sql += " ORDER BY COALESCE(last_resubmission_date, publication_date), publication_date, id";
-        if (limit != -1) {
-            sql += " LIMIT ?";
-            arguments.add(limit);
-        }
-        return jdbc.query(sql, (row, index) -> new FailedPublication(row, serializer), arguments.toArray());
+            EventPublicationStore store, EventSerializer serializer, FailedCriteria criteria) {
+        // The backoff counts from the last attempt, before the batch limit: Modulith's minimum age counts from the
+        // publication, so servers that take turns would otherwise retry a row every few minutes.
+        return store
+                .failedDueForRetry(
+                        NotificationRedeliveryJob.MAX_ATTEMPTS,
+                        NotificationRedeliveryJob.FIRST_BACKOFF,
+                        NotificationRedeliveryJob.MAX_BACKOFF,
+                        criteria.getPublicationDateReference(),
+                        criteria.getMaxItemsToRead())
+                .stream()
+                .<TargetEventPublication>map(row -> new FailedPublication(row, serializer))
+                .toList();
     }
 
     private static final class FailedPublication implements TargetEventPublication {
@@ -94,23 +81,18 @@ public class NotificationPublicationConfiguration {
         private @Nullable Instant completionDate;
         private Status status;
 
-        FailedPublication(ResultSet row, EventSerializer serializer) throws SQLException {
-            identifier = Objects.requireNonNull(row.getObject("id", UUID.class));
-            publicationDate =
-                    Objects.requireNonNull(row.getTimestamp("publication_date")).toInstant();
-            target = PublicationTargetIdentifier.of(Objects.requireNonNull(row.getString("listener_id")));
-            String eventType = Objects.requireNonNull(row.getString("event_type"));
-            String serialized = Objects.requireNonNull(row.getString("serialized_event"));
+        FailedPublication(EventPublicationStore.StoredPublication row, EventSerializer serializer) {
+            identifier = row.id();
+            publicationDate = row.publicationDate();
+            target = PublicationTargetIdentifier.of(row.listenerId());
             event = SingletonSupplier.of(() -> serializer.deserialize(
-                    serialized,
+                    row.serializedEvent(),
                     ClassUtils.resolveClassName(
-                            eventType, NotificationPublicationConfiguration.class.getClassLoader())));
-            Timestamp resubmitted = row.getTimestamp("last_resubmission_date");
-            lastResubmissionDate = resubmitted == null ? null : resubmitted.toInstant();
-            completionAttempts = row.getInt("completion_attempts");
-            Timestamp completed = row.getTimestamp("completion_date");
-            completionDate = completed == null ? null : completed.toInstant();
-            String storedStatus = row.getString("status");
+                            row.eventType(), NotificationPublicationConfiguration.class.getClassLoader())));
+            lastResubmissionDate = row.lastResubmissionDate();
+            completionAttempts = row.completionAttempts();
+            completionDate = row.completionDate();
+            String storedStatus = row.status();
             status = storedStatus != null
                     ? Status.valueOf(storedStatus)
                     : completionDate == null ? Status.PROCESSING : Status.COMPLETED;

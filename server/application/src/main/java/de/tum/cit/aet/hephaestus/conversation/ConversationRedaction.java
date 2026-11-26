@@ -93,6 +93,8 @@ public class ConversationRedaction {
         entries.flush();
         List<ConversationEntryRepository.EntryRef> messages =
                 entries.redactWithCopies(ids, ERASED, true, withDerivedAnswers);
+        if (messages.stream().anyMatch(ConversationEntryRepository.EntryRef::getRedactionPending))
+            throw new IllegalStateException("A selected conversation entry was not redacted");
         // Tool results, summaries and system entries are never shown, so only messages change an open conversation.
         Map<Conversation, List<UUID>> byConversation = new LinkedHashMap<>();
         for (ConversationEntryRepository.EntryRef message : messages) {

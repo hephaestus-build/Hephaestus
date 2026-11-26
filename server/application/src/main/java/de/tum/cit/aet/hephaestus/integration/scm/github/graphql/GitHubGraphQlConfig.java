@@ -6,7 +6,9 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.credentials.GitHubCredentialRefusalFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHActor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
@@ -171,6 +173,7 @@ public class GitHubGraphQlConfig {
                 .exchangeStrategies(strategies)
                 // Outermost, so it sees the answer after every retry.
                 .filter(credentialRefusalFilter)
+                .filter(exchangeCapture())
                 .filter(rateLimitLoggingFilter())
                 .filter(retryFilter())
                 .filter(transportErrorRetryFilter())
@@ -194,6 +197,17 @@ public class GitHubGraphQlConfig {
                 List.of(".graphql", ".gql"),
                 fragmentFiles);
         return clientFactory.create(gitHubGraphQlWebClient, documentSource);
+    }
+
+    /** Records the final status and headers of a response for the caller that asked with an exchange. */
+    static ExchangeFilterFunction exchangeCapture() {
+        return (request, next) -> next.exchange(request)
+                .doOnNext(response -> request.attribute(GitHubGraphQlClientProvider.EXCHANGE_ATTRIBUTE)
+                        .filter(ProviderReply.Exchange.class::isInstance)
+                        .map(ProviderReply.Exchange.class::cast)
+                        .ifPresent(exchange -> exchange.record(
+                                response.statusCode().value(),
+                                ProviderReply.headersOf(response.headers().asHttpHeaders()))));
     }
 
     /**
@@ -249,19 +263,20 @@ public class GitHubGraphQlConfig {
     }
 
     /**
-     * Retries 5xx server errors and 429 (rate limited) responses with exponential backoff; see
-     * {@link #MAX_RETRIES} for the timing rationale.
+     * Retries 5xx server errors with exponential backoff; see {@link #MAX_RETRIES} for the timing rationale. A 429
+     * passes through like every 4xx: its {@code Retry-After} and reset headers reach the caller's classification, which
+     * waits until the provider's reset. A blind backoff here would discard them and can outlast the caller's timeout.
      */
-    private ExchangeFilterFunction retryFilter() {
+    static ExchangeFilterFunction retryFilter() {
         return (request, next) -> next.exchange(request)
                 .flatMap(response -> {
                     HttpStatusCode status = response.statusCode();
 
-                    if (status.is4xxClientError() && status.value() != 429) {
+                    if (status.is4xxClientError()) {
                         return Mono.just(response);
                     }
 
-                    if (status.is5xxServerError() || status.value() == 429) {
+                    if (status.is5xxServerError()) {
                         // Release the body to prevent a resource leak on the discarded response
                         return response.releaseBody().then(Mono.error(new RetryableException(status.value())));
                     }

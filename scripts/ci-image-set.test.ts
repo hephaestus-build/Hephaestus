@@ -644,7 +644,7 @@ void test("an image build scans only with the run's advisory snapshot", () => {
 		"head-images",
 		"unfiltered",
 		"ci-config",
-		"queue-upgrade",
+		"seeded-upgrade",
 		"queue-server-image",
 	];
 	for (const name of varied) {
@@ -720,7 +720,7 @@ void test("an image build scans only with the run's advisory snapshot", () => {
 			should_skip: coin(),
 			unfiltered: "false",
 			"queue-images-complete": "false",
-			"queue-upgrade": "false",
+			"seeded-upgrade": "false",
 			"queue-server-image": "false",
 		};
 	};
@@ -733,10 +733,11 @@ void test("an image build scans only with the run's advisory snapshot", () => {
 		should_skip: "false",
 		unfiltered: event === "push" || event === "workflow_dispatch" ? "true" : "false",
 		"queue-images-complete": event === "push" ? coin() : "false",
-		// Both follow server sources, which the server-image filter covers (or kubernetes, for the
-		// server image's startup check).
-		"queue-upgrade":
-			event === "merge_group" && chosen["server-image"] === "true" ? coin() : "false",
+		// A merge group that selects the upgrade also selects the server image.
+		"seeded-upgrade":
+			event === "push" || (event === "merge_group" && chosen["server-image"] === "true")
+				? coin()
+				: "false",
 		"queue-server-image":
 			event === "merge_group" && (chosen["server-image"] === "true" || chosen.kubernetes === "true")
 				? coin()

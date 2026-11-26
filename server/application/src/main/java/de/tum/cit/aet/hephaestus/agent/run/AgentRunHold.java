@@ -8,5 +8,10 @@ public enum AgentRunHold {
     /** The workspace's model budget is spent; raising the budget lifts it. */
     BUDGET,
     /** No sandbox had room for the run; it waits a growing interval for room. */
-    SANDBOX_ROOM
+    SANDBOX_ROOM,
+    /**
+     * The model's pool had no room for the review when its sandbox claimed it. The run is not due, the claim gives the
+     * sandbox back, and the dispatch starts a new one only once the pool admits the review.
+     */
+    MODEL_POOL
 }

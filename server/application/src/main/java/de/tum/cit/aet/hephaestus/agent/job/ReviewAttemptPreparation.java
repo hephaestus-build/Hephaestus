@@ -189,7 +189,8 @@ public class ReviewAttemptPreparation {
                     snapshot.model().reasoningEffort(),
                     jobToken,
                     snapshot.timeoutSeconds(),
-                    snapshot.model().forcedToolChoice());
+                    snapshot.model().forcedToolChoice(),
+                    sessionLimit(job));
 
             JsonNode previous = job.getCapture();
             Program published = null;
@@ -306,6 +307,16 @@ public class ReviewAttemptPreparation {
             @Nullable String image,
             List<String> command,
             Map<String, String> environment) {}
+
+    /**
+     * How many practices the runner may measure at once: as many as the model pool lets this review hold, so a review
+     * that the pool took alone runs its practices in waves instead of opening every session at once.
+     */
+    private int sessionLimit(ReviewJob job) {
+        int practices = Math.max(1, job.getInput().assignments().size());
+        Long pool = job.getCallPoolId();
+        return pool == null ? practices : ReviewPoolAdmission.sessionLimit(jobRepository.poolLoad(pool), practices);
+    }
 
     /** The adapter's stable execution plan. Credentials and request trace context are supplied separately. */
     private String programDigest(Program program) {

@@ -91,6 +91,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.DuePublications;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -1434,6 +1435,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(results.findById(current.getId()).orElseThrow().getEndedAt()).isNull();
         // The old failed publication must reread the now-reopened source, not replay its former closed version.
         changeChildState(setup.child().getId(), Issue.State.OPEN, progressContext(setup.fixture(), type), type);
+        DuePublications.age(jdbc, ItemSourceObserved.class);
         failedPublications.resubmit(ResubmissionOptions.defaults()
                 .withMinAge(Duration.ZERO)
                 .withMaxInFlight(1)
@@ -1544,6 +1546,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                                 null)))
                 .isEqualTo(1));
 
+        DuePublications.age(jdbc, ItemEventRecorded.class);
         failedPublications.resubmit(ResubmissionOptions.defaults()
                 .withMinAge(Duration.ZERO)
                 .withMaxInFlight(1)

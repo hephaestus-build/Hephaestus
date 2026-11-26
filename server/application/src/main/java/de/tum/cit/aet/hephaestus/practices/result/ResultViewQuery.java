@@ -99,10 +99,10 @@ public class ResultViewQuery {
             versions.findByWorkspaceIdAndIdIn(workspaceId, pinnedElsewhere)
                     .forEach(version -> versionById.put(Objects.requireNonNull(version.getId()), version));
         var reviewById = reviews
-                .findAllById(
+                .findByWorkspaceIdAndIdIn(
+                        workspaceId,
                         results.stream().map(ResultFacts::reviewId).distinct().toList())
                 .stream()
-                .filter(review -> review.getWorkspaceId() == workspaceId)
                 .collect(Collectors.toMap(Review::getId, Function.identity()));
         var itemById = references.referenced(
                 workspaceId,

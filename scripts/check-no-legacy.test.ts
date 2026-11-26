@@ -277,11 +277,17 @@ await describe("the retired short name", async () => {
 	const prompt = "server/application/src/main/resources/agent/conversation/system.md";
 	for (const [file, source] of [
 		[".changeset/answer.md", `${RETIRED_NAME} reads the thread.`],
+		["docs/decisions/0057-one-conversation.md", `${RETIRED_NAME} answered.`],
+		["AGENTS.md", `Explain ${RETIRED_NAME} in full.`],
+		[".agents/skills/example/SKILL.md", `Write about ${RETIRED_NAME}.`],
 		["docs/user/ask.mdx", `Ask ${RETIRED_NAME} about a review.`],
 		["webapp/src/components/Panel.tsx", `<p>${RETIRED_NAME}'s answer</p>`],
 		[server, `throw new IllegalStateException("${RETIRED_NAME} turn is running");`],
 		["webapp/src/components/Panel.test.tsx", `it("${RETIRED_NAME} answers", () => {});`],
-		[prompt, `- Use the name ${RETIRED_NAME} for yourself.`],
+		[
+			prompt,
+			`- Never call yourself ${RETIRED_NAME}, mentor, assistant or agent. Earlier "${RETIRED_NAME}" means you; use Hephaestus.`,
+		],
 		["docs/contributor/words.mdx", `\`${RETIRED_NAME}\` is retired as a name.`],
 		["webapp/src/Logo.tsx", `<span className="accent">${RETIRED_NAME}</span>aestus`],
 	] satisfies [string, string][]) {
@@ -293,27 +299,16 @@ await describe("the retired short name", async () => {
 		["CHANGELOG.md", `- ${RETIRED_NAME} reads the thread.`],
 		["MIGRATION.md", `${RETIRED_NAME} keeps its history.`],
 		[".changeset/pre/answer.md", `${RETIRED_NAME} reads the thread.`],
-		["docs/decisions/0057-one-conversation.md", `${RETIRED_NAME} answered.`],
 	] satisfies [string, string][]) {
 		await it(`permits ${source} in ${file}`, () => assert.deepEqual(retired(file, source), []));
 	}
-	await it("permits only the prompt line that tells the model the old name means it", () => {
-		const original = readFileSync(path.join(import.meta.dirname, "../", prompt), "utf8");
-		const line = original.split("\n").find((text) => text.includes(`"${RETIRED_NAME}"`)) ?? "";
-		assert.notEqual(line, "");
-		assert.deepEqual(retired(prompt, original), []);
-		assert.equal(retired(prompt, `${original}\n${line}\n`).length, 2);
-		assert.equal(retired("docs/user/ask.mdx", line).length, 1);
-	});
-	await it("permits the vocabulary page and the wordmark only as they are, line by line", () => {
-		for (const file of [
-			"docs/contributor/practice-feedback-language.mdx",
-			"webapp/src/components/brand/HephaestusLogo.tsx",
-			"webapp/scripts/export-assets.ts",
-		]) {
+	await it("accepts the shipped prompt and vocabulary without exceptions", () => {
+		for (const file of [prompt, "docs/contributor/practice-feedback-language.mdx"]) {
 			const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
 			assert.deepEqual(retired(file, original), [], file);
-			assert.equal(retired(file, `${original}\n${RETIRED_NAME} answers.\n`).length, 1, file);
+			const appended = `${original}\n${RETIRED_NAME} answers. Ask ${RETIRED_NAME} about a review.\n`;
+			const lines = retired(file, appended).map(({ line }) => line);
+			assert.deepEqual(lines, [original.split("\n").length + 1], file);
 		}
 	});
 });

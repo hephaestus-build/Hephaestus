@@ -72,8 +72,8 @@ jobs:
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       postgres-drill: ${{ steps.filter.outputs.postgres-drill }}
-      # Only a merge group runs the seeded upgrade, on the images that it builds.
-      queue-upgrade: ${{ (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
+      # Main checks the merged commit again against the releases available at the time of the push.
+      seeded-upgrade: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && steps.filter.outputs.database-upgrade == 'true' }}
       # Only a merge group starts the server image it builds, when the image or the chart's JVM options change.
       queue-server-image: ${{ (github.event_name == 'merge_group' && (steps.filter.outputs.server-image == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.kubernetes == 'true')) }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
@@ -266,6 +266,19 @@ jobs:
         uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
+
+      # A passing group can merge entries ahead of it, so check the whole group before comparing
+      # its own additions with the preceding entry.
+      - name: Check migration order against current main
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || steps.group_base.outputs.sha }}
+          QUEUE_PARENT: ${{ github.event.merge_group.base_sha }}
+        run: |
+          node scripts/reorder-migrations.ts --check --from "$EVENT_BASE"
+          if [ -n "$QUEUE_PARENT" ] && [ "$QUEUE_PARENT" != "$EVENT_BASE" ]; then
+            node scripts/reorder-migrations.ts --check --from "$QUEUE_PARENT"
+          fi
 
       # Changesets that merged ahead of the Version PR in the queue stay unconsumed at its commit, and a
       # release there would ship changes without their notes. The group fails and names them, so the
@@ -1212,7 +1225,7 @@ jobs:
         needs.detect-changes.outputs.kubernetes == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true' ||
-        needs.detect-changes.outputs.queue-upgrade == 'true'
+        needs.detect-changes.outputs.seeded-upgrade == 'true'
       ) && (
         needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.postgres-drill == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
@@ -1389,9 +1402,9 @@ jobs:
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
-      # A merge group aliases nothing, so the seeded upgrade and the server image startup need this
-      # group's own PostgreSQL image.
-      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false' }}
+      # Image inputs decide whether a PR aliases PostgreSQL. The `postgres` input below selects the
+      # additional image builds needed for upgrade and startup checks.
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
       dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false' }}
       application-artifact: server-build-${{ github.run_id }}
@@ -1401,7 +1414,7 @@ jobs:
 
       server: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
       agent: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
-      postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false') == 'true' }}
+      postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.seeded-upgrade == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.seeded-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false') == 'true' }}
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
   # A push to main that a merge group tested runs none: its commit is the group's. A push with no
@@ -1461,7 +1474,7 @@ jobs:
     if: >-
       !cancelled() && needs.Docker.result == 'success' &&
       needs.Docker.outputs.server-digest != '' && needs.Docker.outputs.postgres-digest != '' &&
-      needs.detect-changes.outputs.queue-upgrade == 'true' && needs.detect-changes.outputs.publishable == 'true'
+      needs.detect-changes.outputs.seeded-upgrade == 'true' && needs.detect-changes.outputs.publishable == 'true'
     uses: ./.github/workflows/release-upgrade.yml
     permissions:
       contents: read
@@ -1817,9 +1830,9 @@ jobs:
             exit 1
           fi
 
-          # A skipped upgrade is a missing verdict for a merge group that changes an upgrade input.
-          if [[ "${{ needs.detect-changes.outputs.queue-upgrade == 'true' && needs.Database-upgrade.result != 'success' }}" == "true" ]]; then
-            echo "This merge group requires a successful seeded upgrade; it was '${{ needs.Database-upgrade.result }}'."
+          # A selected upgrade must pass even if its image dependencies caused it to skip.
+          if [[ "${{ needs.detect-changes.outputs.seeded-upgrade == 'true' && needs.Database-upgrade.result != 'success' }}" == "true" ]]; then
+            echo "This change requires a successful seeded upgrade. The result was '${{ needs.Database-upgrade.result }}'."
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi

@@ -478,10 +478,10 @@ for (const scenario of [
 	});
 }
 
-await test("historical names keep their wording while other word replacements still apply", async () => {
+await test("word replacements apply to decision records", async () => {
 	const vale = await prepareVale();
 	try {
-		const filename = ".vale/fixtures/docs/decisions/historical-name.md";
+		const filename = ".vale/fixtures/docs/decisions/words.md";
 		const alerts = (valeAlerts(vale, [filename], "error").get(filename) ?? []).filter(
 			(alert) => alert.Check === "STE.Words",
 		);

@@ -115,7 +115,7 @@ groups:
         annotations:
           summary: An integration event outlived the handler timeout and returned to the inbox
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # A failed publication is retried every five minutes, up to ten attempts.
+      # A failed publication is retried with a backoff that doubles from five minutes to one hour, up to ten attempts.
       - alert: HephaestusEventPublicationsOverdue
         expr: max by (listener) (event_publications_overdue{job="hephaestus"}) > 0
         for: 15m

@@ -213,7 +213,7 @@ home for who does it.
 
 | Surface | Honours the tombstone | Why |
 | --- | --- | --- |
-| Mentor context (`MentorContextQueryRepository`) | Yes | Heph describes the developer's current work; citing something they cannot open is a wrong claim about their work. |
+| Mentor context (`MentorContextQueryRepository`) | Yes | Hephaestus describes the developer's current work; citing something they cannot open is a wrong claim about their work. |
 | Project-inventory evidence source (`WorkspaceInventoryContentSource`) | Yes | The "what else exists in this project" index staged into a review's evidence; listing work that is gone invites an observation about nothing. |
 | A review somebody asks for (`ManualReviewRequests`) | Yes | A review of deleted work is wrong by construction. Refused as `SignalStateReason.ARTIFACT_GONE` rather than 404'd by the ownership check: the workspace does monitor that artifact, so the asker gets the reason instead of an error status. |
 | A backfill or sweep campaign's scope (`ReviewBackfillScopeRepository`) | Yes | Predates this update — a campaign spends budget per artifact, so a tombstoned row never enters the scope rather than being refused per ask. |

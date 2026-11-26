@@ -6,10 +6,12 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentContentSource;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.outline.OutlinePersonSourceIdentityContributor;
@@ -54,6 +56,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                 .withBean(ConnectionService.class, () -> mock(ConnectionService.class))
                 .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
                 .withBean(GitProviderRegistry.class, () -> mock(GitProviderRegistry.class))
+                .withBean(IdentityProviderLookup.class, () -> mock(IdentityProviderLookup.class))
                 .withBean(AccountDirectory.class, () -> mock(AccountDirectory.class))
                 .withBean(PersonIdentityResolver.class, () -> mock(PersonIdentityResolver.class))
                 .withBean(PersonProcessingSuppression.class, () -> mock(PersonProcessingSuppression.class))
@@ -62,6 +65,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context)
                             .hasSingleBean(OutlinePersonSourceIdentityContributor.class)
+                            .hasSingleBean(OutlinePersonCopyScope.class)
                             .hasSingleBean(OutlineDocumentPermission.class)
                             .doesNotHaveBean(DocumentItemSource.class);
                 });
@@ -92,6 +96,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                 .withBean(ConnectionService.class, () -> mock(ConnectionService.class))
                 .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
                 .withBean(GitProviderRegistry.class, () -> mock(GitProviderRegistry.class))
+                .withBean(IdentityProviderLookup.class, () -> mock(IdentityProviderLookup.class))
                 .withBean(AccountDirectory.class, () -> mock(AccountDirectory.class))
                 .withBean(PersonIdentityResolver.class, () -> mock(PersonIdentityResolver.class))
                 .withBean(PersonProcessingSuppression.class, () -> mock(PersonProcessingSuppression.class))

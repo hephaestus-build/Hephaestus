@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,6 +9,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
@@ -55,6 +58,10 @@ public class IdentityProvider {
     @Column(name = "server_url", nullable = false, length = 512)
     private String serverUrl;
 
+    @Nullable
+    @Column(name = "outline_origin", length = 512)
+    private String outlineOrigin;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     @Nullable
@@ -63,6 +70,16 @@ public class IdentityProvider {
     public IdentityProvider(IdentityProviderType type, String serverUrl) {
         this.type = type;
         this.serverUrl = serverUrl;
+    }
+
+    @PrePersist
+    @PreUpdate
+    void storeOutlineOrigin() {
+        outlineOrigin = outlineOrigin(type.name(), serverUrl);
+    }
+
+    static @Nullable String outlineOrigin(String providerType, String serverUrl) {
+        return "OUTLINE".equals(providerType) ? ScmOrigin.of(serverUrl).orElse(null) : null;
     }
 
     public IntegrationKind kind() {
