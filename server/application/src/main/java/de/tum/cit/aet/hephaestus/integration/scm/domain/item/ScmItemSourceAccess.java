@@ -108,7 +108,8 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
                 if (source == null || item.parentId() != null || item.path() != null) return false;
                 var repository = facts.repository(source);
                 if (repository.isEmpty()) return false;
-                facts.authorize(item.workspaceId(), repository.orElseThrow());
+                // Monitoring or the connection can change between checks in the same batch.
+                access.authorize(item.workspaceId(), repository.orElseThrow());
                 return true;
             }
             if (item.kind().equals(ScmItemEvents.FILE)) {
@@ -165,8 +166,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
 
         abstract Optional<Repository> repository(long id);
 
-        abstract void authorize(long workspaceId, Repository repository);
-
         abstract List<PersonIdentity> contributors(long workspaceId, ItemKind kind, long source);
 
         abstract boolean personSuppressed(PersonIdentity identity);
@@ -198,11 +197,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         @Override
         public Optional<Repository> repository(long id) {
             return repositories.findById(id);
-        }
-
-        @Override
-        public void authorize(long workspaceId, Repository repository) {
-            access.authorize(workspaceId, repository);
         }
 
         @Override
@@ -243,7 +237,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         private final BySource<Boolean> suppressedSources;
         private final BySource<List<PersonIdentity>> people;
         private final Map<Long, Optional<Repository>> repositoryRows = new HashMap<>();
-        private final Map<Long, Outcome<Boolean>> authorized = new HashMap<>();
         private final Map<PersonIdentity, Boolean> suppressedPeople = new HashMap<>();
         private final Map<PersonIdentity, Outcome<Optional<Long>>> owners = new HashMap<>();
         private final Map<Long, Optional<AccountDirectory.AccountView>> accountRows = new HashMap<>();
@@ -309,19 +302,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         @Override
         public Optional<Repository> repository(long id) {
             return repositoryRows.computeIfAbsent(id, repositories::findById);
-        }
-
-        @Override
-        public void authorize(long workspaceId, Repository repository) {
-            checkWorkspace(workspaceId);
-            authorized
-                    .computeIfAbsent(
-                            repository.getId(),
-                            ignored -> Outcome.of(() -> {
-                                access.authorize(workspaceId, repository);
-                                return true;
-                            }))
-                    .get();
         }
 
         @Override
