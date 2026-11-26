@@ -70,26 +70,33 @@ public interface ItemSource {
             ObjectMapper mapper) {
         var fingerprints = new HashMap<SourceKind, String>();
         for (var kind : kinds) {
-            var contribution = stored.apply(
-                    current,
-                    new CaptureRequest(
-                            new UUID(0, 0),
-                            new UUID(0, 0),
-                            0,
-                            Set.of(kind),
-                            ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE,
-                            3,
-                            null,
-                            Set.of(kind),
-                            occasion));
-            var cleanup = contribution.cleanup();
-            try (cleanup) {
-                var fingerprint = SourceFingerprint.of(mapper, kind, contribution);
-                if (fingerprint != null) fingerprints.put(kind, fingerprint);
-            } catch (Exception failure) {
-                throw new IllegalStateException("Could not release the current source read", failure);
-            }
+            var fingerprint = recordFingerprint(mapper, kind, stored.apply(current, recordRequest(kind, occasion)));
+            if (fingerprint != null) fingerprints.put(kind, fingerprint);
         }
         return Map.copyOf(fingerprints);
+    }
+
+    /** The request of {@link #recordFingerprints} that reads {@code kind} alone, under {@code occasion}. */
+    static CaptureRequest recordRequest(SourceKind kind, @Nullable UUID occasion) {
+        return new CaptureRequest(
+                new UUID(0, 0),
+                new UUID(0, 0),
+                0,
+                Set.of(kind),
+                ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE,
+                3,
+                null,
+                Set.of(kind),
+                occasion);
+    }
+
+    /** The fingerprint of {@code kind} in its {@link #recordRequest} contribution, which it releases. */
+    static @Nullable String recordFingerprint(ObjectMapper mapper, SourceKind kind, CaptureContribution contribution) {
+        var cleanup = contribution.cleanup();
+        try (cleanup) {
+            return SourceFingerprint.of(mapper, kind, contribution);
+        } catch (Exception failure) {
+            throw new IllegalStateException("Could not release the current source read", failure);
+        }
     }
 }

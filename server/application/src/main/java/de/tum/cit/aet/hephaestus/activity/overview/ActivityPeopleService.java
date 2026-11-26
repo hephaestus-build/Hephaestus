@@ -75,7 +75,7 @@ public class ActivityPeopleService {
             ActivityPeopleRangeParams params,
             Set<String> repositoryKeys,
             boolean contributorsWithoutAccount) {
-        var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
+        var repositories = queries.publicRepositories(workspace, visibility.maxAgeSeconds());
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
         var scope = ActivityScope.published(
                 workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
@@ -210,7 +210,7 @@ public class ActivityPeopleService {
             ActivityPeopleRangeParams params,
             Set<String> repositoryKeys,
             boolean contributorsWithoutAccount) {
-        var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
+        var repositories = queries.publicRepositories(workspace, visibility.maxAgeSeconds());
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
         var scope = ActivityScope.published(
                 workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
@@ -228,7 +228,7 @@ public class ActivityPeopleService {
             Set<String> repositoryKeys,
             ActivityWorkFilterParams page,
             boolean contributorsWithoutAccount) {
-        var repositories = queries.publicRepositories(workspaceId, visibility.confirmedAfter());
+        var repositories = queries.publicRepositories(workspaceId, visibility.maxAgeSeconds());
         var selected = select(workspaceId, null, repositoryKeys, List.of(), repositories);
         var scope = ActivityScope.published(
                 workspaceId, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));

@@ -165,7 +165,7 @@ de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelProcessor -> d
 de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label x4
 de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x2
 de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x1
-de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x4
+de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x2
 de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle -> de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor x6
 de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle -> de.tum.cit.aet.hephaestus.workspace.Workspace x21
 de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1
@@ -216,10 +216,9 @@ de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.GitHubP
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x8
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator x2
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.User x8
-de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositoryMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x7
+de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositoryMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x5
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x10
-de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x1
-de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x23
+de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x3
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x5
 de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator x4
@@ -230,7 +229,7 @@ de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncServ
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncScheduler -> de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob x1
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x4
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x1
-de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x18
+de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x17
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDeletionSweepService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x8
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubBackfillRepair -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x9
 de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubHistoricalBackfillService -> de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue x2
@@ -316,8 +315,7 @@ de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberS
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x10
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x11
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x5
-de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x4
-de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x2
+de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x1
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x13
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team x4
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabMemberMessageHandler -> de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership x2
@@ -379,8 +377,6 @@ de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabP
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor$Stored -> de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread x3
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor$ThreadData -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.User x4
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x2
-de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor -> de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization x1
-de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x22
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x5
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x4
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabPushCommits -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1
@@ -430,7 +426,7 @@ de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission 
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x6
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository x8
-de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor x5
+de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor x3
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites -> de.tum.cit.aet.hephaestus.workspace.Workspace x3
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabSuspendedWebhookCleanup -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x3
 de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x9

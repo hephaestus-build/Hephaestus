@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -36,24 +38,26 @@ public class SandboxGatewaySessions {
     public static final long WORKSPACE_BYTE_BUDGET = 512L * 1024 * 1024;
     private final long workspaceByteBudget;
     private final List<SandboxResultListener> listeners;
+    private final Clock clock;
 
     public SandboxGatewaySessions() {
-        this(WORKSPACE_BYTE_BUDGET, List.of());
+        this(WORKSPACE_BYTE_BUDGET, List.of(), Clock.systemUTC());
     }
 
     @Autowired
     public SandboxGatewaySessions(ObjectProvider<SandboxResultListener> listeners) {
-        this(WORKSPACE_BYTE_BUDGET, listeners.orderedStream().toList());
+        this(WORKSPACE_BYTE_BUDGET, listeners.orderedStream().toList(), Clock.systemUTC());
     }
 
     SandboxGatewaySessions(long workspaceByteBudget) {
-        this(workspaceByteBudget, List.of());
+        this(workspaceByteBudget, List.of(), Clock.systemUTC());
     }
 
-    SandboxGatewaySessions(long workspaceByteBudget, List<SandboxResultListener> listeners) {
+    SandboxGatewaySessions(long workspaceByteBudget, List<SandboxResultListener> listeners, Clock clock) {
         if (workspaceByteBudget <= 0) throw new IllegalArgumentException("Workspace budget must be positive");
         this.workspaceByteBudget = workspaceByteBudget;
         this.listeners = List.copyOf(listeners);
+        this.clock = clock;
     }
 
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
@@ -74,7 +78,7 @@ public class SandboxGatewaySessions {
         return uploaded;
     }
 
-    public record ReceivedResult(Map<String, byte[]> files, String etag) {}
+    public record ReceivedResult(Map<String, byte[]> files, String etag, Instant receivedAt) {}
 
     private List<Consumer<Map<String, byte[]>>> bind(UUID jobId, int attempt, String image) {
         var bound = new ArrayList<Consumer<Map<String, byte[]>>>();
@@ -105,15 +109,14 @@ public class SandboxGatewaySessions {
         }
     }
 
-    private static ReceivedResult readUpload(InputStream input, String contentDigest, String outputRoot)
-            throws IOException {
+    private ReceivedResult readUpload(InputStream input, String contentDigest, String outputRoot) throws IOException {
         byte[] expected = parseDigest(contentDigest);
         var digest = sha256();
         var files = Map.copyOf(new SandboxOutputArchive().read(new DigestInputStream(input, digest), outputRoot));
         byte[] actual = digest.digest();
         if (!MessageDigest.isEqual(expected, actual))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Result digest does not match its body");
-        return new ReceivedResult(files, etag(actual));
+        return new ReceivedResult(files, etag(actual), clock.instant());
     }
 
     /** Jobs whose archives this server still holds, also when their attempt folders have already gone. */

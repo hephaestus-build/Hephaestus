@@ -50,7 +50,12 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var createdIssue = fixtureService.createIssue(repoInfo.nodeId(), issueTitle, issueBody);
 
         // 3. Sync repository first
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -81,7 +86,12 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var createdIssue = createIssueWithComment(repository);
 
         // 2. Sync repository first
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -132,7 +142,12 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var issue2 = fixtureService.createIssue(repoInfo.nodeId(), issueTitle2, "Second issue body");
 
         // 3. Sync repository first
-        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+        assertThat(repositorySyncService.syncRepository(
+                        workspace.getId(),
+                        repository.fullName(),
+                        githubProvider,
+                        repository.databaseId(),
+                        beginRepositoryRead(repository)))
                 .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();

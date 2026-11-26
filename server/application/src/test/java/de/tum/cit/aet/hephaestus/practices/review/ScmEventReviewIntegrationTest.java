@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventOffered;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -177,11 +178,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -2257,25 +2261,30 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     void shouldExpireAnOccasionPastItsDeadlineExactlyAsTheTableSays(ItemEventState state) {
         var prepared = prepare(IdentityProviderType.GITHUB, false);
         var occasion = waitingOccasion(prepared);
+        var initialReason = state == ItemEventState.RECORDED || state == ItemEventState.STARTED
+                ? null
+                : ReviewRequestReason.BUDGET_EXHAUSTED;
         jdbc.update(
                 "UPDATE item_event SET state = ?, reason = ? WHERE id = ?",
                 state.name(),
-                state == ItemEventState.WAITING || state == ItemEventState.WITHHELD || state == ItemEventState.EXPIRED
-                        ? ReviewRequestReason.BUDGET_EXHAUSTED.name()
-                        : null,
+                initialReason == null ? null : initialReason.name(),
                 occasion.getId());
 
-        // Its occurrence is a fact, so the deadline moves past it instead.
-        transactions.executeWithoutResult(ignored -> events.expire(
-                Instant.now().plus(Duration.ofDays(365)),
-                Instant.now(),
-                ReviewRequestReason.PENDING_DEADLINE_EXCEEDED));
+        var now = occasion.getOccurredAt().plus(ledger.pendingLapseAfter()).plusSeconds(1);
+        var sweep = new PendingItemEventReaper(
+                events,
+                ledger,
+                publisher,
+                Clock.fixed(now, clock.getZone()),
+                new MockEnvironment().withProperty(RuntimeRole.AGENT_ENABLED_PROPERTY, "true"));
+        transactions.executeWithoutResult(ignored -> sweep.sweep());
 
-        var expected = OccasionSettlement.next(
-                        state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.EXPIRED, null)
-                .map(next -> ((OccasionSettlement.Next.Decide) next).state())
-                .orElse(state);
-        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(expected);
+        var expected = (OccasionSettlement.Next.Decide)
+                OccasionSettlement.next(state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.EXPIRED, null)
+                        .orElse(new OccasionSettlement.Next.Decide(state, initialReason));
+        var settled = events.findById(occasion.getId()).orElseThrow();
+        assertThat(settled.getState()).isEqualTo(expected.state());
+        assertThat(settled.getReason()).isEqualTo(expected.reason());
     }
 
     private static ReviewRequest eventRequest(Prepared prepared, ItemEvent occasion, Set<UUID> coalesced) {
@@ -3832,7 +3841,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private long offers(UUID occasion) {
-        return applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion)
+        return Stream.concat(
+                        applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion),
+                        applicationEvents.stream(ItemEventOffered.class, ItemEventOffered::eventId, occasion))
                 .count();
     }
 
@@ -3911,7 +3922,13 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         ItemEventRecorded.class.getName(),
                         occasion.getId().toString()))
                 .containsExactly("FAILED");
-        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        var stillWaiting = events.findById(occasion.getId()).orElseThrow();
+        assertThat(OccasionSettlement.next(
+                        occasion.getState(), OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.FAULT, null))
+                .isEmpty();
+        assertThat(stillWaiting.getState()).isEqualTo(occasion.getState());
+        assertThat(stillWaiting.getReason()).isEqualTo(occasion.getReason());
+        assertThat(stillWaiting.getDecidedAt()).isEqualTo(occasion.getDecidedAt());
         assertThat(reviews.findByWorkspaceIdAndEventId(workspaceId, occasion.getId()))
                 .isEmpty();
     }
@@ -4214,7 +4231,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
         assertThat(pulls.findById(pull.getId()).orElseThrow().getBaseRefOid()).isEqualTo("a".repeat(40));
         var unresolved = events.findById(pending.getId()).orElseThrow();
-        assertThat(unresolved.getState()).isEqualTo(ItemEventState.RECORDED);
+        assertThat(OccasionSettlement.next(
+                        pending.getState(), OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.FAULT, null))
+                .isEmpty();
+        assertThat(unresolved.getState()).isEqualTo(pending.getState());
+        assertThat(unresolved.getReason()).isEqualTo(pending.getReason());
+        assertThat(unresolved.getDecidedAt()).isEqualTo(pending.getDecidedAt());
         assertThat(unresolved.getItemVersion()).isNull();
         var evidence = Objects.requireNonNull(unresolved.getEvidence());
         assertThat(evidence.path("work").path("body").asString()).isEqualTo("Inconsistent retained words");
@@ -4326,16 +4348,52 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(admitted.getBaseVersion()).isEqualTo("a".repeat(40));
     }
 
+    @ParameterizedTest
+    @CsvSource({"false,EXPIRED,PENDING_DEADLINE_EXCEEDED", "true,WITHHELD,ITEM_NOT_VISIBLE"})
+    void shouldSettleAnUnpinnedGitLabOccasionAfterWithdrawal(
+            boolean replay, ItemEventState state, ReviewRequestReason reason) {
+        var prepared = prepare(IdentityProviderType.GITLAB, false);
+        withoutBase(prepared);
+        publish(prepared);
+        var pending = onlyEvent(prepared);
+        assertThat(pending.getItemVersion()).isNull();
+        assertThat(pending.getState()).isEqualTo(ItemEventState.RECORDED);
+        assertThat(incompletePublications(pending)).isEmpty();
+
+        jdbc.update(
+                "UPDATE item SET removed_at = now() WHERE workspace_id = ? AND id = ?",
+                prepared.item().workspaceId(),
+                prepared.item().itemId());
+        var deadline = pending.getOccurredAt().plus(ledger.pendingLapseAfter());
+        long offersBeforeSweep = offers(pending.getId());
+        reaper.advance(deadline.minusSeconds(1));
+        assertThat(offers(pending.getId())).isEqualTo(offersBeforeSweep);
+        assertThat(events.findById(pending.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.RECORDED);
+
+        if (replay) offerAgain(prepared, pending);
+        reaper.advance(deadline.plusSeconds(1));
+
+        var settled = events.findById(pending.getId()).orElseThrow();
+        assertThat(settled.getState()).isEqualTo(state);
+        assertThat(settled.getReason()).isEqualTo(reason);
+        assertThat(settled.getItemVersion()).isNull();
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(pending)).isEmpty();
+    }
+
     @Test
     void shouldRetireCurrentClaimsWhenReadinessPinsToAnExistingOccasion() {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
         var item = prepared.item();
+        var workspace = workspaces.findById(item.workspaceId()).orElseThrow();
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
+        workspaces.saveAndFlush(workspace);
         long pullId = Objects.requireNonNull(item.sourceId());
         var pull = pulls.findById(pullId).orElseThrow();
         var author =
                 users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow();
         var scenario = new ReviewIntegrationData.Scenario(
-                workspaces.findById(item.workspaceId()).orElseThrow(),
+                workspace,
                 accounts.findById(account(author)).orElseThrow(),
                 practices
                         .findByWorkspaceIdAndSlug(item.workspaceId(), "event-test")
@@ -4349,6 +4407,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value(),
                         prepared.version().value())
                 .orElseThrow();
+        assertThat(original.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(original.getReason()).isEqualTo(ReviewRequestReason.GATE_WITHHELD);
+        assertThat(reviews.findByWorkspaceIdAndEventId(item.workspaceId(), original.getId()))
+                .isEmpty();
         synchronizeHead(prepared, "c".repeat(40), false);
         var intervening = source.pin(item, null).version();
         assertThat(intervening).isNotEqualTo(prepared.version());
@@ -4390,11 +4452,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         new GitLabMergeRequestReadinessReader.DiffRefs("b".repeat(40), "a".repeat(40))))
                 .isTrue();
 
-        var coalesced = events.findById(pending.getId()).orElseThrow();
-        assertThat(coalesced.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(coalesced.getReason()).isEqualTo(ReviewRequestReason.COALESCED);
-        assertThat(coalesced.getItemVersion()).isNull();
-        assertThat(coalesced.getOccurredAt()).isEqualTo(pending.getOccurredAt());
+        var duplicate = events.findById(pending.getId()).orElseThrow();
+        assertThat(duplicate.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(duplicate.getReason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE);
+        assertThat(duplicate.getItemVersion()).isNull();
+        assertThat(duplicate.getOccurredAt()).isEqualTo(pending.getOccurredAt());
         var retained = events.findById(original.getId()).orElseThrow();
         assertThat(retained.getItemVersion()).isEqualTo(prepared.version().value());
         assertThat(retained.getOccurredAt()).isEqualTo(original.getOccurredAt());
@@ -5074,6 +5136,45 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     @Nested
     @TestPropertySource(properties = "hephaestus.item-event-ledger.quiet-window=2m")
     class QuietWindow {
+        @Test
+        @ExtendWith(OutputCaptureExtension.class)
+        void shouldReofferAFailedWindowWithoutWritingAPublication(CapturedOutput output) {
+            var prepared = prepare(IdentityProviderType.GITHUB, false);
+            publish(prepared);
+            var occasion = event(prepared);
+            assertThat(occasion.getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
+            assertThat(incompletePublications(occasion)).isEmpty();
+            String retained = Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT evidence::text FROM item_event WHERE id=?", String.class, occasion.getId()));
+            jdbc.update(
+                    "UPDATE item_event SET evidence = jsonb_set(evidence, '{sourceId}', '0'),"
+                            + " decided_at=now()-interval '3 minutes' WHERE id=?",
+                    occasion.getId());
+
+            for (int offer = 0; offer < 2; offer++) {
+                closeWindows(prepared);
+                var waiting = events.findById(occasion.getId()).orElseThrow();
+                assertThat(waiting.getState()).isEqualTo(ItemEventState.WAITING);
+                assertThat(waiting.getRetryAt()).isAfter(clock.instant());
+                assertThat(incompletePublications(occasion)).isEmpty();
+            }
+            assertThat(itemReviews(prepared)).isEmpty();
+            assertThat(output.getAll()
+                            .lines()
+                            .filter(line ->
+                                    line.contains("The occasion offer failed and will be tried again from the ledger"))
+                            .count())
+                    .isEqualTo(2);
+
+            jdbc.update("UPDATE item_event SET evidence=CAST(? AS jsonb) WHERE id=?", retained, occasion.getId());
+            closeWindows(prepared);
+
+            assertThat(events.findById(occasion.getId()).orElseThrow().getState())
+                    .isEqualTo(ItemEventState.STARTED);
+            assertThat(itemReviews(prepared)).hasSize(1);
+            assertThat(incompletePublications(occasion)).isEmpty();
+        }
+
         @Test
         void shouldStartOneReviewAtTheNewestOccasionWhenTheWindowCloses() {
             var prepared = prepare(

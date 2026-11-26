@@ -28,6 +28,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Pause;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -123,6 +125,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
     private IdentityProvider github;
     private Function<Question, @Nullable Answer> provider = question -> null;
+    private @Nullable Instant batchDeadline;
     private @Nullable CommitIdentityResolutionJob job;
 
     /** The workspace that monitors each repository unless a test names another. */
@@ -429,20 +432,22 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(1);
     }
 
-    @Test
-    void shouldChangeNothingAndSpendNoAttemptOfTheLastWhenTheRateLimitStopsTheRun() throws Exception {
+    @ParameterizedTest
+    @ValueSource(ints = {3, 36})
+    void shouldChangeNothingAndSpendNoAttemptOfTheLastWhenTheRateLimitStopsTheRun(int hours) throws Exception {
         User wrong = user("wrong");
         long commit = commit(repository(), wrong, null, EMAIL);
         seed();
         // The email has one attempt left: a throttle must not take it.
         jdbc.update("UPDATE commit_identity_resolution SET attempts = ?", CommitIdentityResolutionJob.MAX_ATTEMPTS - 1);
-        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        Instant reset = Instant.now().plus(Duration.ofHours(hours)).truncatedTo(ChronoUnit.SECONDS);
         List<String> asked = new ArrayList<>();
         provider = question -> {
             asked.add(question.email());
-            return new Answer.Deferred(reset);
+            return throttle(reset);
         };
 
+        Instant earliestCap = Instant.now().truncatedTo(ChronoUnit.SECONDS).plus(Duration.ofHours(24));
         run(50);
         // Another server, which never saw the throttle, reads the deadline from the row.
         job = null;
@@ -456,7 +461,14 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(EMAIL);
         assertThat(jdbc.queryForList("SELECT deferred_until FROM commit_identity_resolution", Timestamp.class))
                 .singleElement()
-                .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
+                .satisfies(until -> {
+                    Instant actual = until.toInstant();
+                    if (hours == 3) assertThat(actual).isEqualTo(reset);
+                    else assertThat(actual).isBetween(earliestCap, Instant.now().plus(Duration.ofHours(24)));
+                    var credential = activeScm.withToken(scope).orElseThrow();
+                    assertThat(pauses.pausedUntil(scope, credential.connectionId(), credential.credentialsGeneration()))
+                            .contains(actual);
+                });
     }
 
     @ParameterizedTest
@@ -467,7 +479,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         seed();
         var old = activeScm.withToken(scope).orElseThrow();
         Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
-        provider = question -> new Answer.Deferred(reset);
+        provider = question -> throttle(reset);
         run(50);
         assertThat(attempts()).containsExactly(0);
         assertThat(pauses.pausedUntil(scope, old.connectionId(), old.credentialsGeneration()))
@@ -609,7 +621,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         provider = question -> {
             asked.add(question.email());
             return question.email().equals(throttledEmail)
-                    ? new Answer.Deferred(Instant.now().plus(Duration.ofMinutes(40)))
+                    ? throttle(Instant.now().plus(Duration.ofMinutes(40)))
                     : new Answer.Account(id(right), right.getNativeId());
         };
 
@@ -645,7 +657,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         List<String> asked = new ArrayList<>();
         provider = question -> {
             asked.add(question.email());
-            return new Answer.Deferred(reset);
+            return throttle(reset);
         };
         run(50);
         // A repository of the same credential comes due later, on another server that never saw the throttle.
@@ -666,6 +678,36 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .singleElement()
                 .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
         assertThat(attempts()).containsOnly(0);
+    }
+
+    @Test
+    void shouldPauseTheCredentialWhenAThrottledBatchAnsweredEveryEmail() throws Exception {
+        User right = user("right");
+        long answered = commit(repository(), null, null, EMAIL);
+        seed();
+        Instant reset = Instant.now().plus(Duration.ofHours(3)).truncatedTo(ChronoUnit.SECONDS);
+        provider = question -> {
+            throttle(reset);
+            return new Answer.Account(id(right), right.getNativeId());
+        };
+        run(50);
+        assertThat(authorOf(answered)).isEqualTo(right.getId());
+
+        long waiting = commit(repository(), null, null, "waiting@example.com");
+        seed();
+        job = null;
+        run(50);
+
+        assertThat(askedCredentials).hasSize(1);
+        assertThat(authorOf(waiting)).isNull();
+        assertThat(jdbc.queryForList(
+                        "SELECT state, attempts, deferred_until FROM commit_identity_resolution WHERE commit_id = ?",
+                        waiting))
+                .isNotEmpty()
+                .allSatisfy(row -> assertThat(row)
+                        .containsEntry("state", "PENDING")
+                        .containsEntry("attempts", 0)
+                        .containsEntry("deferred_until", Timestamp.from(reset)));
     }
 
     @Test
@@ -801,6 +843,11 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         assertThat(failure[0]).isNull();
     }
 
+    private @Nullable Answer throttle(Instant until) {
+        batchDeadline = until;
+        return null;
+    }
+
     private final class TableProvider implements CommitIdentityProvider {
         @Override
         public IntegrationKind kind() {
@@ -808,15 +855,24 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         }
 
         @Override
-        public Map<Question, Answer> answer(
+        public Batch answer(
                 String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
             askedCredentials.add(credential);
+            batchDeadline = null;
             Map<Question, Answer> answers = new HashMap<>();
             for (var question : questions) {
                 var answer = provider.apply(question);
                 if (answer != null) answers.put(question, answer);
             }
-            return answers;
+            Instant until = batchDeadline;
+            return new Batch(
+                    answers,
+                    until == null
+                            ? null
+                            : new Pause(
+                                    until,
+                                    new CredentialGeneration(
+                                            credential.connectionId(), credential.credentialsGeneration())));
         }
     }
 

@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -99,6 +99,9 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
     private ProductFeedbackIssueUpdates updates;
 
     @Autowired
+    private RepositoryObservationStore observations;
+
+    @Autowired
     private DestinationService destinations;
 
     @Autowired
@@ -154,9 +157,6 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
 
     @Autowired
     private AccountRepository accounts;
-
-    @Autowired
-    private RepositoryRepository repositories;
 
     @Autowired
     private OrganizationRepository organizations;
@@ -585,7 +585,7 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
         when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
         var service = new GitHubRepositorySyncService(
                 clients,
-                repositories,
+                observations,
                 organizations,
                 properties,
                 new GitHubExceptionClassifier(new SimpleMeterRegistry()),
@@ -598,7 +598,10 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow();
 
-        assertThat(service.syncRepository(workspace.getId(), "acme/old-reports", provider, PRIVATE_ID))
+        var read = syncTargets
+                .beginRepositoryReads(workspace.getId(), Objects.requireNonNull(provider.getId()))
+                .forRepository(PRIVATE_ID);
+        assertThat(service.syncRepository(workspace.getId(), "acme/old-reports", provider, PRIVATE_ID, read))
                 .isEmpty();
 
         assertThat(monitorsOf("acme/old-reports")).isZero();

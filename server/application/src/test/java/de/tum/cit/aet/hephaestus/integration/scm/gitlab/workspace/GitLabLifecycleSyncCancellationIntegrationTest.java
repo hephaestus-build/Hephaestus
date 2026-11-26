@@ -6,9 +6,13 @@ import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
@@ -38,13 +43,21 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone.GitLabMilestoneSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
@@ -52,6 +65,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweep
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabRepositorySync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
+import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -76,8 +90,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.core.task.SyncTaskExecutor;
+import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ConcurrentTaskExecutor;
+import reactor.core.publisher.Mono;
 
 /** Runs the lifecycle trigger over the one GitLab sync body and real job transactions; provider responses are controlled. */
 class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -131,6 +147,21 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private GitLabGroupProcessor groupProcessor;
+
+    @Autowired
+    private GitLabProjectProcessor projectProcessor;
+
+    @Autowired
+    private GitLabGraphQlResponseHandler graphQlResponseHandler;
+
+    @Autowired
+    private GitLabProperties gitLabProperties;
+
+    @Autowired
+    private SourceProviderNamespaces providerNamespaces;
 
     private final GitLabGroupSyncService groups = mock(GitLabGroupSyncService.class);
     private final GitLabIssueSyncService issues = mock(GitLabIssueSyncService.class);
@@ -543,6 +574,186 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(priorSuccessfulAt);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldApplyPrivateDirectMetadataWhenPerProjectRefreshFails(boolean staleRecursiveRead) {
+        publishFirstProject();
+        assertThat(repositoryRepository.findById(first.getId()).orElseThrow().isPublicOnProvider())
+                .isTrue();
+        var listingPasses = new ArrayList<Boolean>();
+        var clientProvider = mock(GitLabGraphQlClientProvider.class);
+        when(clientProvider.getRateLimitRemaining(workspace.getId())).thenReturn(100);
+        when(clientProvider.forScope(workspace.getId())).thenReturn(ScriptedGraphQlClient.of(request -> {
+            assertThat(request.document()).isEqualTo("GetGroupProjects");
+            boolean recursive = Boolean.TRUE.equals(request.variables().get("includeSubgroups"));
+            listingPasses.add(recursive);
+            if (recursive && staleRecursiveRead) {
+                // This refresh advances the generation after the listing took its snapshot and before its answer.
+                publishFirstProject();
+            }
+            return Mono.just(projectListing(recursive ? "public" : "private"));
+        }));
+        groupSync = new GitLabGroupSyncService(
+                clientProvider,
+                graphQlResponseHandler,
+                groupProcessor,
+                projectProcessor,
+                gitLabProperties,
+                providerNamespaces,
+                projectAdmission);
+        trigger = triggerWith(syncTargetProvider, discoveryConfig);
+        doThrow(new GitLabSyncException("Project refresh failed"))
+                .when(projects)
+                .fetchProjectById(workspace.getId(), first.getNativeId());
+
+        trigger.syncAllRepositories(workspace.getId());
+
+        assertThat(listingPasses).containsExactly(true, false);
+        verify(projects).fetchProjectById(workspace.getId(), first.getNativeId());
+        assertThat(lastJob().getStatus()).isEqualTo(SyncJobStatus.SUCCEEDED_WITH_WARNINGS);
+        assertThat(repositoryRepository.findById(first.getId()).orElseThrow().getVisibility())
+                .isEqualTo(Repository.Visibility.PRIVATE);
+    }
+
+    @Test
+    void stalePrivateProjectAnswerKeepsTheNewerRename() {
+        var provider = first.getProvider();
+        long providerId = Objects.requireNonNull(provider.getId());
+        long nativeId = first.getNativeId();
+        var older = syncTargetProvider
+                .beginRepositoryReads(workspace.getId(), providerId)
+                .forRepository(nativeId);
+        var newer = syncTargetProvider
+                .beginRepositoryReads(workspace.getId(), providerId)
+                .forRepository(nativeId);
+        String renamed = first.getNameWithOwner() + "-renamed";
+        projectProcessor.processGraphQlResponse(
+                new GitLabProjectResponse(
+                        "gid://gitlab/Project/" + nativeId,
+                        renamed,
+                        first.getName() + "-renamed",
+                        gitLabConfig.serverUrl() + "/" + renamed,
+                        null,
+                        "private",
+                        false,
+                        null,
+                        null,
+                        null,
+                        new GitLabProjectResponse.RepositoryInfo("release")),
+                null,
+                provider,
+                newer);
+
+        projectProcessor.processGraphQlResponse(projectMetadata("private"), null, provider, older);
+
+        var repository = repositoryRepository.findById(first.getId()).orElseThrow();
+        assertThat(repository.getNameWithOwner()).isEqualTo(renamed);
+        assertThat(repository.getDefaultBranch()).isEqualTo("release");
+        assertThat(repository.isPublicOnProvider()).isFalse();
+    }
+
+    @Test
+    void staleDuplicateDirectListingKeepsTheNewerRename() {
+        var source = first.getProvider();
+        long providerId = Objects.requireNonNull(source.getId());
+        long nativeId = first.getNativeId();
+        String renamed = first.getNameWithOwner() + "-renamed";
+        var transport = mock(GitLabGraphQlClientProvider.class);
+        when(transport.getRateLimitRemaining(workspace.getId())).thenReturn(100);
+        when(transport.forScope(workspace.getId())).thenReturn(ScriptedGraphQlClient.of(request -> {
+            if (Boolean.TRUE.equals(request.variables().get("includeSubgroups"))) {
+                return Mono.just(projectListing("public"));
+            }
+            // The direct query already took its snapshot. A separate refresh commits the rename first.
+            var newer = syncTargetProvider
+                    .beginRepositoryReads(workspace.getId(), providerId)
+                    .forRepository(nativeId);
+            projectProcessor.processGraphQlResponse(
+                    new GitLabProjectResponse(
+                            "gid://gitlab/Project/" + nativeId,
+                            renamed,
+                            first.getName() + "-renamed",
+                            gitLabConfig.serverUrl() + "/" + renamed,
+                            null,
+                            "private",
+                            false,
+                            null,
+                            null,
+                            null,
+                            new GitLabProjectResponse.RepositoryInfo("release")),
+                    null,
+                    source,
+                    newer);
+            return Mono.just(projectListing("private"));
+        }));
+        var service = new GitLabGroupSyncService(
+                transport,
+                graphQlResponseHandler,
+                groupProcessor,
+                projectProcessor,
+                gitLabProperties,
+                providerNamespaces,
+                projectAdmission);
+
+        var result =
+                service.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), gitLabConfig.serverUrl());
+
+        assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
+        verify(transport, times(2)).forScope(workspace.getId());
+        var repository = repositoryRepository.findById(first.getId()).orElseThrow();
+        assertThat(repository.getNameWithOwner()).isEqualTo(renamed);
+        assertThat(repository.getDefaultBranch()).isEqualTo("release");
+        assertThat(repository.isPublicOnProvider()).isFalse();
+    }
+
+    private void publishFirstProject() {
+        var provider = first.getProvider();
+        var read = syncTargetProvider.beginReadersProof(
+                workspace.getId(),
+                monitor(first).getId(),
+                first.getNativeId(),
+                Objects.requireNonNull(provider.getId()));
+        assertThat(projectProcessor.processGraphQlResponse(projectMetadata("public"), null, provider, read))
+                .isNotNull();
+    }
+
+    private ClientGraphQlResponse projectListing(String visibility) {
+        var response = mock(ClientGraphQlResponse.class, RETURNS_DEEP_STUBS);
+        when(response.isValid()).thenReturn(true);
+        when(response.getErrors()).thenReturn(List.of());
+        when(response.field("group").toEntity(GitLabGroupResponse.class))
+                .thenReturn(new GitLabGroupResponse(
+                        "gid://gitlab/Group/42",
+                        workspace.getAccountLogin(),
+                        workspace.getAccountLogin(),
+                        null,
+                        gitLabConfig.serverUrl() + "/" + workspace.getAccountLogin(),
+                        null,
+                        "public",
+                        null));
+        when(response.field("group.projects.count").getValue()).thenReturn(1);
+        when(response.field("group.projects.nodes").toEntityList(GitLabProjectResponse.class))
+                .thenReturn(List.of(projectMetadata(visibility)));
+        when(response.field("group.projects.pageInfo").toEntity(GitLabPageInfo.class))
+                .thenReturn(new GitLabPageInfo(false, null));
+        return response;
+    }
+
+    private GitLabProjectResponse projectMetadata(String visibility) {
+        return new GitLabProjectResponse(
+                "gid://gitlab/Project/" + first.getNativeId(),
+                first.getNameWithOwner(),
+                first.getName(),
+                first.getHtmlUrl(),
+                null,
+                visibility,
+                false,
+                null,
+                null,
+                null,
+                null);
+    }
+
     private ConnectionService activeDiscoveryConfig() {
         ConnectionService config = mock(ConnectionService.class);
         when(config.findActiveGitLabConfig(workspace.getId())).thenReturn(Optional.of(gitLabConfig));
@@ -587,7 +798,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
             var metadata = mock(GitLabProjectResponse.class);
             when(projects.fetchProjectById(anyLong(), eq(repository.getNativeId())))
                     .thenReturn(Optional.of(metadata));
-            when(projects.persistProject(eq(metadata), any()))
+            when(projects.persistProject(eq(metadata), any(), any()))
                     .thenAnswer(invocation -> repositoryRepository.findById(repository.getId()));
         }
         var repositorySync = new GitLabRepositorySync(

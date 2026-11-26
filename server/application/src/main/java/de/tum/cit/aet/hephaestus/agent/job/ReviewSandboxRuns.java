@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -190,7 +191,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
      * The attempt's result arrived: the steps after a review's sandbox run on it now, outside any transaction, and
      * they end the attempt, hand it on to its composition, or requeue it. Its inputs and its session go after them.
      */
-    void measured(SandboxRun run, SandboxResult result) {
+    void measured(SandboxRun run, SandboxResult result, Instant receivedAt) {
         ReviewJob job = job(run).orElseThrow(() -> new StaleRunException(run.fence()));
         var logScope = new ReviewJobLogScope(job, run.fence());
         try {
@@ -202,7 +203,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 throw measurements.restart(run, job, attempt, incomplete);
             }
             try {
-                results.measured(job.getId(), job, run.fence(), baseline, result);
+                results.measured(job.getId(), job, run.fence(), baseline, result, receivedAt);
             } catch (PessimisticLockingFailureException contention) {
                 // The session closes below, so the attempt ends without this result and its run requeues it.
                 log.warn(

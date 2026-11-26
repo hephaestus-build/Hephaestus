@@ -77,6 +77,15 @@ public class RepositoryToMonitor {
     @Nullable
     private Instant repositoryVisibilityConfirmedAt;
 
+    // Only the observation store supplies this proof during a rolling update.
+    @Column(insertable = false, updatable = false)
+    private @Nullable Instant publicObservationAt;
+
+    /** Database time of the current proof generation, used to order queued provider snapshots. */
+    @Column(nullable = false, insertable = false, updatable = false)
+    @Setter(AccessLevel.NONE)
+    private @Nullable Instant proofGenerationAt;
+
     /** Who on the provider can see this resource, as far as Hephaestus has proven it. */
     @Embedded
     @Setter(AccessLevel.NONE)

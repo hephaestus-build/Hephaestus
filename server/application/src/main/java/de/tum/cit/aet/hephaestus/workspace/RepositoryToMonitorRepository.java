@@ -27,15 +27,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
             """)
     List<RepositoryReadersCount> countByReadersProof();
 
-    /**
-     * Narrows every monitor of the repository with this native id in one statement, as the mirror row's trigger does:
-     * a public proof falls back to waiting, and every monitor's generation moves on.
-     */
-    @WorkspaceAgnostic("Bounded by the monitors of one repository: whether it is public is a fact about the repository,"
-            + " so its loss narrows every workspace's monitor of it")
-    @Query(value = "SELECT public.narrow_repository_monitors(:nativeId)", nativeQuery = true)
-    int narrowRepositoryMonitors(@Param("nativeId") long nativeId);
-
     boolean existsByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 
     Optional<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
@@ -60,20 +51,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
             + " m.workspace.id = :workspaceId AND m.id = :id AND m.unavailableSince IS NOT NULL"
             + " AND (m.unavailableRetryAt IS NULL OR m.unavailableRetryAt <= :now)")
     int reserveUnavailableRecheck(Long workspaceId, Long id, Instant now, Instant reservedUntil);
-
-    @Modifying
-    @Transactional
-    @Query("UPDATE RepositoryToMonitor m SET m.unavailableRetryAt = CASE WHEN m.unavailableSince"
-            + " IS NULL THEN cast(:now as Instant) ELSE cast(:retryAt as Instant) END,"
-            + " m.unavailableSince = COALESCE(m.unavailableSince, :now) WHERE m.workspace.id ="
-            + " :workspaceId AND m.id = :id")
-    int recordUnavailable(Long workspaceId, Long id, Instant now, Instant retryAt);
-
-    @Modifying
-    @Transactional
-    @Query("UPDATE RepositoryToMonitor m SET m.unavailableSince = NULL, m.unavailableRetryAt ="
-            + " NULL WHERE m.workspace.id = :workspaceId AND m.id = :id")
-    int clearUnavailable(Long workspaceId, Long id);
 
     @Modifying
     @Transactional
@@ -181,7 +158,8 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
      * count.
      */
     @WorkspaceAgnostic(
-            "deleteRepositoryIfOrphaned deletes a shared mirror repository only when no workspace monitors it, so it counts the monitors of every workspace")
+            "deleteRepositoryIfOrphaned deletes a shared mirror repository only when no workspace monitors it, so it"
+                    + " counts the monitors of every workspace")
     @Query(
             value = "SELECT COUNT(*) FROM repository_to_monitor rtm JOIN repository r ON"
                     + " r.name_with_owner = rtm.name_with_owner WHERE r.id = :repositoryId AND "

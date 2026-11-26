@@ -79,6 +79,11 @@ public class ReviewJobCompletionService {
         boolean admitted = ResultAdmissionService.isAdmitted(job);
         var output = job.getOutput();
         var outcome = output == null ? "" : output.path("outcome").asString();
+        // The composition claim clears the attempt clock. The measuring run's recorded outcome still proves it ran.
+        boolean executionStarted = job.getExecutionStartedAt() != null
+                || (admitted
+                        && output != null
+                        && output.path(ReviewJobTerminal.MEASURED).isObject());
         var reason = job.getStatus() == ReviewJobStatus.CANCELLED
                 ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
                         ? ReviewStopReason.NO_SANDBOX_ROOM
@@ -89,7 +94,7 @@ public class ReviewJobCompletionService {
                                 ? ReviewStopReason.PROVIDER_UNAVAILABLE
                                 : RefusalOutcome.AUTHORITY_CHANGED.name().equals(outcome)
                                         ? ReviewStopReason.AUTHORITY_CHANGED
-                                        : job.getExecutionStartedAt() == null
+                                        : !executionStarted
                                                         || Objects.equals(
                                                                 job.getExitCode(),
                                                                 SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
