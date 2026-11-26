@@ -68,6 +68,13 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                             "conversation.ConversationTimeline.conversation",
                             false)),
             Map.entry(
+                    "practices.review.ItemEventReviewListener.onOffered",
+                    new Repair(
+                            RepairKind.POLL,
+                            "The item event ledger keeps the next retry time. The pending event sweep offers due occasions again.",
+                            "integration.core.itemevent.PendingItemEventReaper.sweep",
+                            true)),
+            Map.entry(
                     "integration.core.sync.push.SyncPushService.onSyncStateChanged",
                     new Repair(
                             RepairKind.POLL,

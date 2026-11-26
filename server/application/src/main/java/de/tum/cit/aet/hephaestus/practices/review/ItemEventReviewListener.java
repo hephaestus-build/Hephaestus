@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventOffered;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemSourceObserved;
@@ -26,14 +27,21 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.modulith.events.ApplicationModuleListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ItemEventReviewListener {
+    private static final Logger log = LoggerFactory.getLogger(ItemEventReviewListener.class);
+
     private final ItemEventService events;
     private final ProductItemQuery items;
     private final WorkspaceQueries workspaces;
@@ -51,6 +59,25 @@ public class ItemEventReviewListener {
      */
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(ItemEventRecorded recorded) {
+        review(recorded);
+    }
+
+    /** A failed wake leaves the occasion for its next ledger retry. */
+    @Async
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @TransactionalEventListener
+    public void onOffered(ItemEventOffered offered) {
+        try {
+            review(offered.event());
+        } catch (RuntimeException failure) {
+            log.atWarn()
+                    .addKeyValue("event.name", "practice_review.occasion_offer_failed")
+                    .addKeyValue("error.type", failure.getClass().getName())
+                    .log("The occasion offer failed and will be tried again from the ledger");
+        }
+    }
+
+    private void review(ItemEventRecorded recorded) {
         long workspaceId = recorded.workspaceId();
         long itemId = recorded.itemId();
         // A publication sent again after the ledger dropped its occasion has nothing left to decide.

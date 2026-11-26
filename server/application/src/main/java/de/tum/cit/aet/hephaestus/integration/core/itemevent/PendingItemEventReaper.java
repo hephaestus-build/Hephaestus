@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.itemevent;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventOffered;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import java.time.Clock;
@@ -39,14 +40,15 @@ public class PendingItemEventReaper {
         repository.forgetExpiredEvidence(now, properties.sweepBatchSize());
         expire(now);
         repository.deleteUnreferenced(now.minus(properties.retainFor()), properties.sweepBatchSize());
-        if (reviewsEnabled()) offerDue(now, properties.sweepBatchSize());
+        if (reviewsEnabled()) offerDue(now, properties.sweepBatchSize(), false);
     }
 
     /** Offers the work due on the scenario clock without waiting for the wall-clock sweep. */
     @Transactional
     public void advance(Instant instant) {
         expire(instant);
-        if (reviewsEnabled()) offerDue(instant, Integer.MAX_VALUE);
+        // Evaluation waits on the durable publication after the scenario clock moves this occasion's retry time.
+        if (reviewsEnabled()) offerDue(instant, Integer.MAX_VALUE, true);
     }
 
     private void expire(Instant now) {
@@ -58,11 +60,12 @@ public class PendingItemEventReaper {
         return environment.getProperty(RuntimeRole.AGENT_ENABLED_PROPERTY, Boolean.class, false);
     }
 
-    private void offerDue(Instant now, int limit) {
+    private void offerDue(Instant now, int limit, boolean durable) {
         var due = repository.claimDue(now, limit);
         for (var event : due) {
             repository.attempted(event.getWorkspaceId(), event.getId(), now, now.plus(properties.pendingRetryAfter()));
-            publisher.publishEvent(new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId()));
+            var recorded = new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId());
+            publisher.publishEvent(durable ? recorded : new ItemEventOffered(recorded));
         }
     }
 }

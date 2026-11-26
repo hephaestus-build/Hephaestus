@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.itemevent;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventOffered;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import java.time.Clock;
 import java.time.Instant;
@@ -37,7 +38,8 @@ public class QuietWindowCloser {
         Instant now = clock.instant();
         for (var event : repository.findClosedWindows(now, properties.sweepBatchSize())) {
             repository.postponeWindow(event.getWorkspaceId(), event.getItemId(), now.plus(properties.quietWindow()));
-            publisher.publishEvent(new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId()));
+            publisher.publishEvent(new ItemEventOffered(
+                    new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId())));
         }
     }
 }
