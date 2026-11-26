@@ -52,13 +52,6 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
-#### 🔴 Stop every Hephaestus role before you upgrade Outline erasure
-
-An older server can write Outline rows without the canonical key that erasure uses.
-It can also run an erasure with the old selection rules.
-Follow the [stopped-upgrade steps](https://docs.hephaestus.build/admin/upgrade).
-Run the migration before you start all roles on the new release.
-
 ### v1.0.0-rc.17
 
 #### 🔴 Stop every role before copied identities leave the review item detail

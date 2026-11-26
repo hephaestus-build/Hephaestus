@@ -8,4 +8,4 @@ Erasure hides their titles in the item directory and removes their local documen
 It redacts context copies and their answers by Outline instance and team.
 If the saved selection misses a document or a relevant copy has no source key, erasure stops.
 A request that spans providers waits for the Slack and SCM copies too.
-Use a stopped upgrade when you install this release.
+**Operators:** Use a stopped upgrade when you install this release.
