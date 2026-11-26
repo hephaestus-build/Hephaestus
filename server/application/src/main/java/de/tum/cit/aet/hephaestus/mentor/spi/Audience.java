@@ -6,4 +6,7 @@ import org.jspecify.annotations.Nullable;
  * or null for the top level. App: no connection, and the owner's thread id. It never names where an effect is written;
  * {@link Route} does. */
 public record Audience(
-        Transport transport, @Nullable Long connectionId, String containerId, @Nullable String threadRoot) {}
+        Transport transport,
+        @Nullable Long connectionId,
+        String containerId,
+        @Nullable String threadRoot) {}

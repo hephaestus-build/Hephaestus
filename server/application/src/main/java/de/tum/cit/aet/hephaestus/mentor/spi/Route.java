@@ -37,7 +37,8 @@ public record Route(
                     Long.toString(linkedAccountId),
                     nativeAskerId)) {
                 byte[] bytes = part.getBytes(StandardCharsets.UTF_8);
-                digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+                digest.update(
+                        ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
                 digest.update(bytes);
             }
             return HexFormat.of().formatHex(digest.digest());

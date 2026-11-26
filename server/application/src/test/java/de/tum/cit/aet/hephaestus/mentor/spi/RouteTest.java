@@ -31,7 +31,10 @@ class RouteTest {
                 new Route(Transport.SLACK, "T1", "D1", null, "1700000000.000100", 7L, 11L, 43L, "U1"),
                 new Route(Transport.SLACK, "T1", "D1", null, "1700000000.000100", 7L, 11L, 42L, "U2"));
 
-        assertThat(others).extracting(Route::fingerprint).doesNotHaveDuplicates().doesNotContain(TOP_LEVEL.fingerprint());
+        assertThat(others)
+                .extracting(Route::fingerprint)
+                .doesNotHaveDuplicates()
+                .doesNotContain(TOP_LEVEL.fingerprint());
     }
 
     @Test
