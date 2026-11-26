@@ -21,7 +21,7 @@ A rule that main does not satisfy yet says "1.0 target".
 
 ## Decision drivers
 
-- A product module must not learn a provider's vocabulary. Review, Heph and evidence code stay the same for every provider.
+- A product module must not learn a provider's vocabulary. Review, Hephaestus and evidence code stay the same for every provider.
 - A boundary must fail the build, not rely on convention.
 - The cost of a new provider must stay close to the cost of its adapter.
 - Each server URL that an admin enters is an SSRF risk, and each webhook URL is public.
@@ -79,7 +79,7 @@ A rule that main does not satisfy yet says "1.0 target".
 
 ## Consequences
 
-- Good: review, Heph and evidence code never change for a new provider. The build fails when a provider type leaks.
+- Good: review, Hephaestus and evidence code never change for a new provider. The build fails when a provider type leaks.
 - Good: one boot check tells an operator which bean a declared capability lacks.
 - Good: a leaked database holds no Outline signing secret.
 - Bad: the open modules let a class inside `integration` reach another module's internals. Only the ArchUnit rules stop it.

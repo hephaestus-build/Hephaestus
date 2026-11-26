@@ -183,7 +183,7 @@ Decision defers to is withdrawn. The Compose role declarations are deleted in 2.
 
 ## Update — 2026-10-01 (issue #1158)
 
-The 2026-07-22 update's second point no longer holds. Heph sessions run on connected workers, and the
+The 2026-07-22 update's second point no longer holds. Hephaestus sessions run on connected workers, and the
 application server reaches them through the worker hub with no Docker client or local LLM proxy of its
 own, so `hephaestus.runtime.worker.enabled=false` on an application-server pod removes nothing that pod
 needs. The shipped Compose stacks now set it there: `application-worker` is the only container with
@@ -195,9 +195,9 @@ called unbuilt; it needed no new role.
 
 `agent_job` is renamed; see [ADR 0025](0025-agent-job-queue-on-postgresql.md#update--2026-10-14-2656-the-job-table-and-classes-are-renamed).
 
-## Update — 2026-10-09 (Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
-The 2026-10-01 update's "Heph sessions run on connected workers" now means one stateless Heph host per
+The 2026-10-01 update's "Hephaestus sessions run on connected workers" now means one stateless Hephaestus host per
 worker. A worker claims a queued turn from PostgreSQL and runs it in that host. The server role keeps
 the mentor HTTP API and the live stream (`GET …/mentor/events`), which reads PostgreSQL notifications.
 The "mentor SSE" of the Context and Decision sections is that stream. No mentor process state lives on
@@ -205,7 +205,7 @@ the server role, so no request affinity between server replicas exists.
 
 ## Update — 2026-10-28: one sandbox runtime ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 
-Reviews and Heph run on one agent runtime. The worker role creates Jobs only, for review agent Pods and for Heph's tools Pods. Heph's loop runs as its own Deployment, not inside the worker.
+Reviews and Hephaestus run on one agent runtime. The worker role creates Jobs only, for review agent Pods and for Hephaestus's tools Pods. Hephaestus's loop runs as its own Deployment, not inside the worker.
 The role selection of this decision stays.
 
 ## Update — 2026-11-09: superseded in part by ADR 0079

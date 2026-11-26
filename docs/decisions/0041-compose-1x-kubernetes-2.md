@@ -375,14 +375,14 @@ The [workspace ABI](../contributor/agent/agent-workspace-abi.mdx#session-transcr
 - [Cursor Continuity: Git at any scale](https://cursor.com/blog/git-at-any-scale)
 - [Cloudflare Code Mode](https://blog.cloudflare.com/code-mode/)
 
-## Update — 2026-10-09 (Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
-Supersedes the interactive parts of this decision. Heph has no per-developer session to keep warm or
+Supersedes the interactive parts of this decision. Hephaestus has no per-developer session to keep warm or
 resume, so the driver "interactive mentor sessions need stable identity, warm capacity, and
-suspend/resume" no longer holds. Each worker runs one stateless Heph host, and every turn rebuilds its
-session from PostgreSQL. Gateway capability 4 is now the Heph host's command channel
+suspend/resume" no longer holds. Each worker runs one stateless Hephaestus host, and every turn rebuilds its
+session from PostgreSQL. Gateway capability 4 is now the Hephaestus host's command channel
 (`/internal/llm/runtime/{hostId}/commands`) and its turn endpoints (`/internal/llm/turn/{id}/…`), not
-interactive frames. WSS carries no mentor frames. Heph no longer needs the Agent Sandbox CRD or its
+interactive frames. WSS carries no mentor frames. Hephaestus no longer needs the Agent Sandbox CRD or its
 warm pools.
 
 ## Update — 2026-10-24: the Kubernetes runtime
@@ -411,7 +411,7 @@ High availability for either is not a 1.0 promise.
 - A practice review attempt is one `batch/v1` Job, named after the job and the attempt, with `backoffLimit: 0`, so the Job controller never replaces its Pod.
   Its `activeDeadlineSeconds` is the attempt's upload deadline plus two minutes, so the Job ends without its worker.
   The TTL controller removes a finished Job after 15 minutes.
-- The Heph host and Heph's turn sandboxes are Pods.
+- The Hephaestus host and Hephaestus's turn sandboxes are Pods.
   The host ends when its command channel closes; a turn sandbox has its turn's deadline.
 - No sandbox kind uses Agent Sandbox or another CRD.
 - The sandbox backend has `launch`, `observe`, `running`, `transcript`, `kill`, `remove` and `list` ([ADR 0007](0007-sandbox-spi-shape.md#update--2026-10-24-one-attempt-runner-over-a-narrow-backend)).
@@ -423,7 +423,7 @@ Workers are a Deployment: two replicas by default, spread across nodes with `Sch
 A draining worker claims nothing new and serves its running attempts until its drain timeout.
 There is no StatefulSet, no per-worker Service and no workspace lease.
 The ledger decides custody: a review's sandbox belongs to its job while that job is queued or running.
-A Heph host or a turn sandbox belongs to its worker while that worker beats in `worker_registry`.
+A Hephaestus host or a turn sandbox belongs to its worker while that worker beats in `worker_registry`.
 Every worker removes what neither rule keeps.
 The sandbox namespace is the operator's, for one release alone.
 
@@ -531,7 +531,7 @@ The worker sizes the memory of each kind of sandbox Pod from measured use ([`doc
 
 **Why.**
 A memory volume's pages count against the Pod's memory limit.
-Each review or Heph host Pod therefore had to request 2 GiB more memory than its processes use, and the stager of each turn had to hold the whole turn workspace in memory.
+Each review or Hephaestus host Pod therefore had to request 2 GiB more memory than its processes use, and the stager of each turn had to hold the whole turn workspace in memory.
 Requests decide scheduling, so these files filled a node's memory requests while its memory stood mostly unused.
 Docker parity is no Kubernetes reason.
 
@@ -543,7 +543,7 @@ The Docker driver keeps its tmpfs mounts.
 
 ## Update — 2026-10-28: one sandbox runtime ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 
-Reviews and Heph run on one agent runtime, on Kubernetes only. The Docker sandbox backend goes before 1.0.
+Reviews and Hephaestus run on one agent runtime, on Kubernetes only. The Docker sandbox backend goes before 1.0.
 The Sandbox Gateway, the job folder, evidence admission and the sandbox boundary of this decision stay.
 
 ## Update — 2026-11-14: ended attempts leave at the next sweep

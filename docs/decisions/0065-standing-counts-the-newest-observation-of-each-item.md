@@ -23,7 +23,7 @@ Every reader of the live run sees the drop:
 
 - the standing and the trend on the Practice profile and the practice page,
 - the practice group standings and the bars of Practices across the workspace (ADR 0051),
-- Heph's profile context (`PracticeProfileContentSource`).
+- Hephaestus's profile context (`PracticeProfileContentSource`).
 
 ## Decision drivers
 
@@ -62,9 +62,9 @@ Feedback does not change. An ended result gets no new feedback (`FeedbackGate`).
 
 Revisit when a practice must lose standing at a work change, for example a practice about the current state of a branch.
 
-## Update — 2026-10-26 (shipped, and what Heph reads)
+## Update — 2026-10-26 (shipped, and what Hephaestus reads)
 
 [#3294](https://github.com/hephaestus-build/Hephaestus/pull/3294) ships this decision in `PracticeStandingService`.
-Heph's profile context does not count a result that a work change ended.
+Hephaestus's profile context does not count a result that a work change ended.
 It reads only results with current proof, as it already did for a live review that a requested review replaced.
-The Context above lists Heph among the readers by mistake.
+The Context above lists Hephaestus among the readers by mistake.

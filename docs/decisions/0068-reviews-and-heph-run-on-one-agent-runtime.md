@@ -1,4 +1,4 @@
-# ADR 0068: Reviews and Heph run on one agent runtime
+# ADR 0068: Reviews and Hephaestus run on one agent runtime
 
 **Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-10-27
@@ -6,7 +6,7 @@
 
 **Supersedes:**
 
-- [ADR 0057](0057-one-heph-conversation-per-developer.md) § The Heph host and § Context folder and turn sandbox, for where Heph's loop and tools run.
+- [ADR 0057](0057-one-heph-conversation-per-developer.md) § The Hephaestus host and § Context folder and turn sandbox, for where Hephaestus's loop and tools run.
   The ledger, the conversation model, the context model and delivery stay.
 - [ADR 0009](0009-worker-runtime-substrate-wss-control-channel.md), for the WSS control channel between the worker and the server.
 
@@ -30,7 +30,7 @@ Each ADR above has a dated update block that points here.
 
 ## Context
 
-In 1.0, reviews and Heph run on one agent runtime. The maintainer set this goal on 2026-10-27.
+In 1.0, reviews and Hephaestus run on one agent runtime. The maintainer set this goal on 2026-10-27.
 The runtime is the long-term design, not an interim step.
 Changes before 1.0 are cheap.
 Effort is not a criterion. Correctness, security, simplicity and fit on the reference node are.
@@ -43,22 +43,22 @@ Effort is not a criterion. Correctness, security, simplicity and fit on the refe
 | Webhook | Deployment | The provider signature secrets. It publishes to NATS. | A push event cannot be redelivered ([ADR 0008](0008-webhook-runtime-role.md)) |
 | Worker | Deployment | A Role in the sandbox namespace, the provider keys, the Git mirrors, the gateway and the LLM proxy, and the attempt token issuer | Kubernetes authority does not sit beside user sessions |
 | Review sandbox | A Job for each attempt | The review's runner and its tools | One sandbox runs the whole review |
-| Heph host | A bare Pod for each worker | The Heph turns of its worker | The stateless loop of [ADR 0057](0057-one-heph-conversation-per-developer.md) |
-| Turn sandbox | Bare Pods with a stager container, a pool of 2 | Nothing. No network. The worker reaches it through `pods/exec`. | `read`, `bash` and `load_context` for Heph |
+| Hephaestus host | A bare Pod for each worker | The Hephaestus turns of its worker | The stateless loop of [ADR 0057](0057-one-heph-conversation-per-developer.md) |
+| Turn sandbox | Bare Pods with a stager container, a pool of 2 | Nothing. No network. The worker reaches it through `pods/exec`. | `read`, `bash` and `load_context` for Hephaestus |
 | Isolation probe | A Job with 2 Pods for each run | Nothing | It proves the NetworkPolicy and Pod Security Admission on the running cluster |
 
 ### What went wrong on staging
 
 Most runtime defects on staging had one shape: a second mechanism for a thing that one mechanism already does.
 
-- **A bare Pod beside a Job.** The Heph host exited before its channel opened, and the worker deleted the Pod with its cause.
-- **One quota for two tiers.** Heph's host and pool held the shared ResourceQuota, and a review could not start.
+- **A bare Pod beside a Job.** The Hephaestus host exited before its channel opened, and the worker deleted the Pod with its cause.
+- **One quota for two tiers.** Hephaestus's host and pool held the shared ResourceQuota, and a review could not start.
 - **A probe gate beside readiness.** The worker claimed work before the probe passed, so every claim failed.
 - **One knob for two workloads.** A turn held the only slot for 3 hours, under a deadline meant for reviews.
 - **The API on hot paths.** A datastore stall of 1 minute on a slow disk stopped the lease tick. The tick shared a thread with an API `list()`.
 - **A cold start at every layer after a deploy.** One answer took 367 seconds. It waited for a restart, a 2-minute probe, the host start and a cold turn sandbox of 47 seconds.
 
-Today a review and a Heph turn also have these differences:
+Today a review and a Hephaestus turn also have these differences:
 
 - Two recovery models: a worker heartbeat, and a lease for each row.
 - Two token kinds.
@@ -73,7 +73,7 @@ Today a review and a Heph turn also have these differences:
 3. **Workspaces cannot see each other.** SQL tenancy stays the rule (non-negotiable 2). A process that serves several workspaces runs no workspace code.
 4. **PostgreSQL is the only truth for work.** Kubernetes holds bounded lifecycles only.
 5. **The install stays namespace-scoped,** and hot paths make few API writes. k3s keeps its datastore on the node's disk.
-6. **It fits one 16 GiB node by measured use, not by requests.** A person who waits for Heph waits no longer than today.
+6. **It fits one 16 GiB node by measured use, not by requests.** A person who waits for Hephaestus waits no longer than today.
 7. **A crash, an out-of-memory kill or a release costs as little work as possible.** A review runs a median of 10–16 minutes, and at most 3 hours. Each practice is staged when it ends, and the review seals once ([ADR 0063](0063-each-practice-is-staged-when-it-ends.md)). A lost attempt loses the practices that are not staged, and the seal.
 
 ## Considered options
@@ -81,17 +81,17 @@ Today a review and a Heph turn also have these differences:
 The options differ in where the trusted loop runs.
 In every option, untrusted tools run apart from the loop, with no credential.
 
-| | Review loop | Heph loop | Review tools | Heph tools |
+| | Review loop | Hephaestus loop | Review tools | Hephaestus tools |
 |---|---|---|---|---|
 | **X: an agent Pod for each attempt** | Review Pod | A Job for each turn, from a warm pool | Sidecar | Sidecar, with gateway egress |
-| **W: a Heph loop with a relay** | Review Pod | One Deployment | Sidecar | An agent Pod: a relay with a token, plus tools. The gateway brokers each tool call. |
-| **W′: a Heph loop that drives a tools Pod** (chosen) | Review Pod | One Deployment | Sidecar | A tools Pod with no token and no egress, driven by the Heph loop |
+| **W: a Hephaestus loop with a relay** | Review Pod | One Deployment | Sidecar | An agent Pod: a relay with a token, plus tools. The gateway brokers each tool call. |
+| **W′: a Hephaestus loop that drives a tools Pod** (chosen) | Review Pod | One Deployment | Sidecar | A tools Pod with no token and no egress, driven by the Hephaestus loop |
 | **Z: one loop host for every loop** | Shared host | Shared host | Tools Pod | Tools Pod |
 | **Y: one loop host for each active workspace** | The workspace's host | The workspace's host | Tools Pod | Tools Pod |
 
 Three off-the-shelf ways to run the Pods were also weighed: an operator, Kueue and kubernetes-sigs/agent-sandbox.
 
-### X: a Heph turn as a Job (rejected)
+### X: a Hephaestus turn as a Job (rejected)
 
 Each turn takes a warm agent Pod, runs its own loop in it and never returns the Pod to the pool.
 
@@ -99,33 +99,33 @@ Each turn takes a warm agent Pod, runs its own loop in it and never returns the 
 - **Memory.** Each running turn pays its own loop, about 136 MiB. In a shared loop, an extra turn costs about 3–10 MiB. One load test ran 90 turns in 364 MiB.
 - **Fit.** With 8 concurrent turns, X holds about 8 reviews on the reference node, against 10 for W′.
 
-### W: a Heph loop with a relay (rejected)
+### W: a Hephaestus loop with a relay (rejected)
 
-The Heph loop is warm. Each tools Pod also has a relay container that holds the turn's token.
+The Hephaestus loop is warm. Each tools Pod also has a relay container that holds the turn's token.
 The gateway brokers each tool call between the loop and the relay.
 
 - It adds a trusted program, a pool token, and a tool-call broker in the gateway.
-- It puts a token beside untrusted code in every Heph tools Pod.
-- Heph's tools get gateway egress, which they do not have today.
+- It puts a token beside untrusted code in every Hephaestus tools Pod.
+- Hephaestus's tools get gateway egress, which they do not have today.
 - Each tool call makes two extra hops through the gateway, about 5–15 ms.
 
 W′ keeps everything that W gains and drops these four costs.
 
 ### Z: one loop host for every loop (rejected)
 
-One long-lived process runs every review loop and every Heph loop. Tools run in tools Pods.
+One long-lived process runs every review loop and every Hephaestus loop. Tools run in tools Pods.
 
 - **Crash domain.** One out-of-memory kill or uncaught exception ends every running review and turn of the install. A poison review crashes the host on each retry, with its neighbours. Fault attribution to one attempt is not possible.
 - **Memory accounting.** V8 has one heap for each isolate. A review that grows, for example on a large diff, cannot be limited alone.
 - **Deploys.** Each release rolls the host. One choice is a drain of up to 3 hours. Another is cut reviews that restart from zero. The third is a new contract in PostgreSQL to save and resume a review. W′ needs none of these.
-- **Heph latency.** Heph's streaming shares one event loop and one garbage collector with the review loops.
+- **Hephaestus latency.** Hephaestus's streaming shares one event loop and one garbage collector with the review loops.
 - **Memory gain.** Z saves about 160 MiB for each concurrent review: the loop's code, paid once. On the reference node the model call pool binds before memory does (§ [Fit](#fit-by-measured-use)), so this gain does not become throughput. It is the main revisit trigger.
 
 A shared loop is not rejected on tenancy grounds.
 Non-negotiable 2 is SQL tenancy.
 Such a loop runs no workspace code and reads no local file except its code. It keeps sessions in memory.
 Thus, it is in the trust class of the other trusted processes.
-That is why the Heph loop of W′ is acceptable.
+That is why the Hephaestus loop of W′ is acceptable.
 
 ### Y: one loop host for each active workspace (rejected)
 
@@ -150,7 +150,7 @@ The built-in Job, TTL and ResourceQuota controllers do the work. GitLab Runner, 
 
 - **A second queue.** A claimed attempt would wait again, suspended, with a claim and a token. A resumed Job restarts its `activeDeadlineSeconds`, so the two deadlines drift.
 - **No fairness across workspaces.** Kueue shares between LocalQueues, one for each namespace. All sandboxes share one namespace on purpose. Fairness across workspaces belongs in the claim query, where the workspace is a column.
-- **A waiting person in a queue.** A Heph turn must not wait at admission.
+- **A waiting person in a queue.** A Hephaestus turn must not wait at admission.
 - **Cluster objects.** Cluster-scoped CRDs, webhooks with certificates, a controller of about 512 MiB, and a `Workload` write for each Job. Kueue is not at 1.0.
 
 What W′ takes from it is native: one ResourceQuota for each PriorityClass tier.
@@ -180,19 +180,19 @@ The loop reads the captured inputs itself, and every command runs in the credent
  server ──▶ PostgreSQL ◀── worker (Role · keys · mirrors · gateway)
                              │  one claim loop · creates Jobs only
                              │
- Heph loop (Deployment) ─────┼─▶ review agent Pod (Job for each review attempt)
+ Hephaestus loop (Deployment) ─────┼─▶ review agent Pod (Job for each review attempt)
    pulls turn assignments    │     ├ init   isolation, workspace
    from the gateway          │     ├ side   tools   UID A · no credential · /workspace read-only
    one AttemptJwt per turn   │     │                serves tool protocol v1 on a Unix socket
         │                    │     └ main   loop    UID B · attempt token in memory · gateway egress
         │                    │
         └── tool protocol v1 ┴─▶ tools Pod (Job for each turn attempt, from a small pool)
-            over TCP, dial-out       tools only · no token · no egress · ingress from the Heph loop only
+            over TCP, dial-out       tools only · no token · no egress · ingress from the Hephaestus loop only
 ```
 
 ### The attempt contract
 
-A review attempt and a Heph turn attempt are both a [runtime attempt](../contributor/practice-review-glossary.mdx#runtime-terms).
+A review attempt and a Hephaestus turn attempt are both a [runtime attempt](../contributor/practice-review-glossary.mdx#runtime-terms).
 
 - **The row.** `review_job` and `mentor_turn` keep their domain columns. Both carry `attempt` and `leased_until` on the database clock. `mentor_turn` has both today. A new changelog adds `leased_until` to `review_job`, which has only `attempt`.
 - **The token.** One `AttemptJwt` with `kind`, `workspace`, `id` and `attempt`. It reaches the model and its own attempt's endpoints only while that attempt holds the lease.
@@ -226,7 +226,7 @@ Each review attempt is one Job with one Pod:
 Each tool runs where its trust allows it.
 Coverage, admission and uploads come only from bytes that the loop read or verified itself.
 
-| Tool | Review agent Pod | Heph |
+| Tool | Review agent Pod | Hephaestus |
 |---|---|---|
 | `read` of captured inputs | The loop. It counts for coverage. | Documents (`INDEX.md`, `FIELDS.md`, `inputs/context/**`): the attempt's memory in the loop. Repositories: the tools Pod. |
 | `read` of scratch and spill files (`/tmp/**`) | The tools side. It never counts for coverage. | The tools Pod |
@@ -244,17 +244,17 @@ Coverage, admission and uploads come only from bytes that the loop read or verif
 A [tools Pod](../contributor/practice-review-glossary.mdx#runtime-terms) has the tools container of the review agent Pod and no other container.
 One Pod builder makes both.
 
-- It is a Job for one Heph turn attempt, in the conversations tier.
-- It has no token and no egress. It accepts ingress only from the Heph loop, on the tools port.
+- It is a Job for one Hephaestus turn attempt, in the conversations tier.
+- It has no token and no egress. It accepts ingress only from the Hephaestus loop, on the tools port.
 - The worker binds it to one attempt in PostgreSQL. It serves that attempt for its whole life and never goes back to the pool.
 - The worker writes a nonce for each Pod into the Pod spec. The tools server's `hello` must return that nonce, so a reused Pod IP cannot take the connection.
-- The loop serves Heph's documents from the attempt's memory, with Pi's paging and notices. It takes a tools Pod only at the turn's first `bash` or `load_context`, and then puts the documents into it.
+- The loop serves Hephaestus's documents from the attempt's memory, with Pi's paging and notices. It takes a tools Pod only at the turn's first `bash` or `load_context`, and then puts the documents into it.
 - A small pool of started tools Pods hides the start. The chart derives the pool size from Little's law with the measured rate of turns that use `bash` or `load_context`.
 - Pooled Pods carry the label of their owner worker. A worker deletes its old pool at start and checks room before it creates a Pod.
 
-### The Heph loop
+### The Hephaestus loop
 
-The [Heph loop](../contributor/practice-review-glossary.mdx#runtime-terms) is one long-lived Deployment that the chart manages, in the roles tier.
+The [Hephaestus loop](../contributor/practice-review-glossary.mdx#runtime-terms) is one long-lived Deployment that the chart manages, in the roles tier.
 
 - It runs in the **release namespace**, because its assignment credential reaches every workspace's turns. It has no service-account token and Restricted Pod security settings.
 - It pulls turn assignments from the gateway and gets one `AttemptJwt` for each turn attempt.
@@ -268,7 +268,7 @@ The [Heph loop](../contributor/practice-review-glossary.mdx#runtime-terms) is on
 - Its code is compiled JavaScript in the agent image, built once in CI. The worker no longer stages it.
 - On several nodes, 2 replicas with anti-affinity.
 
-Each attempt has its own workspace ([decision J](#j-heph-keeps-one-workspace-for-each-attempt)). `INDEX.md` lists the repositories that the conversation loaded earlier, with their commit and time, so Heph can load the right one at once.
+Each attempt has its own workspace ([decision J](#j-hephaestus-keeps-one-workspace-for-each-attempt)). `INDEX.md` lists the repositories that the conversation loaded earlier, with their commit and time, so Hephaestus can load the right one at once.
 
 `ContextChanged` keeps the turn attempt and its session.
 The loop deletes the turn's tools Job and takes a fresh one at the next tool call.
@@ -292,7 +292,7 @@ One framing, over a Unix socket in the review agent Pod and over TCP to a tools 
     The tools side does the same when a call times out or ends, so no call leaves a process behind.
   - `reset` ends every process of the tools user but the tools program, and clears `/tmp`.
     It finds them by user id in `/proc`. A process cannot leave the tools user, so `reset` also ends one that cleared its environment.
-    A review uses `reset` after a restart of the tools side or a stall. Heph deletes the Job instead.
+    A review uses `reset` after a restart of the tools side or a stall. Hephaestus deletes the Job instead.
   - `script.run {id, slug, inputs}`, for reviews with a custom program, on the program side only.
     It has exactly three callbacks, and the loop answers each of them.
     They are `model.call`, under the checks of [ADR 0055](0055-practice-scripts-use-one-result-contract.md), `read`, from the captured inputs, and `review`.
@@ -308,7 +308,7 @@ One framing, over a Unix socket in the review agent Pod and over TCP to a tools 
 The loop treats every byte from the tools side as untrusted:
 
 - It caps every frame and every stream.
-- It forwards only allowlisted callbacks, for its own attempt, within budget. For a review, that is model calls under ADR 0055 only, never submission or admission. For Heph, the allowlist is empty.
+- It forwards only allowlisted callbacks, for its own attempt, within budget. For a review, that is model calls under ADR 0055 only, never submission or admission. For Hephaestus, the allowlist is empty.
 - The tools side cannot write any path that the loop reads for coverage or uploads.
 
 `load_context` is not a tool operation.
@@ -317,14 +317,14 @@ The stager and `pods/exec` go.
 
 Rejected for v1:
 
-- **A PTY or a persistent shell.** No review or Heph workload is interactive. A PTY adds escape sequences and terminal state. A persistent shell adds hidden state, such as the directory, the environment and background jobs, that parallel calls race on.
+- **A PTY or a persistent shell.** No review or Hephaestus workload is interactive. A PTY adds escape sequences and terminal state. A persistent shell adds hidden state, such as the directory, the environment and background jobs, that parallel calls race on.
 - **MCP.** MCP serves a model-facing tool catalog across vendors, with capability negotiation. Here the tools side is untrusted infrastructure behind a fixed set of tools. v1 takes three ideas from MCP. An error result is data. A path replaces a large inline body. The client treats server annotations as untrusted.
 - **Background processes and input to a running command.** No workload runs a server, a watcher or a REPL.
 
 ### Network
 
 Tools never get a network route.
-Heph's tools have no egress. A review's tools reach only the gateway, which they share with the loop.
+Hephaestus's tools have no egress. A review's tools reach only the gateway, which they share with the loop.
 Access to the workspace's own repositories is a capability through the gateway.
 The worker checks visibility, builds the checkout with its own credential and streams it.
 The model names a resource that `INDEX.md` lists, never a host.
@@ -342,7 +342,7 @@ A loader is a fixed catalog that an operator approves. It uses `GET` only, and i
   A quota on limits would admit about half the reviews that the node holds.
   The scheduler places Pods by their requests, so the fit test checks the sum of requests against the allocatable memory.
   The limits bound each Pod's own peak, and the real headroom of the [fit](#fit-by-measured-use) covers peaks that coincide.
-- **The model call pool decides provider throughput.** The model proxy limits calls at the provider quota boundary and keeps an interactive reserve for Heph turns. The reserve does not bypass a shared provider limit.
+- **The model call pool decides provider throughput.** The model proxy limits calls at the provider quota boundary and keeps an interactive reserve for Hephaestus turns. The reserve does not bypass a shared provider limit.
 - **A cap on model calls in flight for each attempt,** at the proxy, for both kinds. No attempt can take more than its share.
 - **Review admission checks quota and provider demand** ([decision G](#g-review-pod-admission-checks-quota-and-provider-demand)). It reserves no model call.
 - **Informers** for Pods, Jobs and ResourceQuotas. No `list()` call on a claim or lease path.
@@ -357,7 +357,7 @@ All values are in MiB, at measured use, with 1 GiB of real headroom.
 | Platform at rest, measured | 6,042 | PostgreSQL uses about 950 of it |
 | Real headroom | 1,024 | The server's live set grows under load, and peaks coincide |
 | **Budget for agent work** | **7,130** | |
-| Heph loop | 210 | 136 with one turn, plus about 10 for each real turn |
+| Hephaestus loop | 210 | 136 with one turn, plus about 10 for each real turn |
 | 8 concurrent tools Pods in use, and a pool of 4 | 880 | About 90 in use and 40 idle (estimates) |
 | **Room for reviews** | **6,040** | |
 | Review agent Pod, practice concurrency 3 | 560 | Loop 270, tools 290: the sum of each container's maximum |
@@ -365,7 +365,7 @@ All values are in MiB, at measured use, with 1 GiB of real headroom.
 
 The model call pool binds first.
 The earlier throughput estimate at a pool of 32 calls and a reserve of 8 was about 9 reviews at practice concurrency 3.
-Thus, **about 9–10 reviews and 8 concurrent Heph turns** is an estimate for the benchmark to qualify.
+Thus, **about 9–10 reviews and 8 concurrent Hephaestus turns** is an estimate for the benchmark to qualify.
 These figures are not a Pod admission rule or a shipped capacity recommendation.
 
 | Option, 8 turns, concurrency 3 | Reviews that fit | Earlier throughput estimate, pool 32, reserve 8 |
@@ -381,7 +381,7 @@ The footprint benchmark measures them in the layers that build them, and the fit
 
 ### What goes
 
-- The Heph host, its WebSocket channel, its pings and its gateway session token.
+- The Hephaestus host, its WebSocket channel, its pings and its gateway session token.
 - The turn sandbox, the stager, `ExecSandboxes`, `KubernetesExecSandboxes`, `DockerExecSandboxes` and `pods/exec` in the worker's Role.
 - The WSS worker hub and `WorkerControlClient`.
 - The `worker_registry` recovery, in the layer that adds the lease to `review_job`.
@@ -397,19 +397,19 @@ Each layer updates the [threat model](../admin/threat-model.mdx) when it ships. 
 | Entry | Change |
 |---|---|
 | SB-1: privilege escalation and host escape | Every sandbox Pod runs in a user namespace (`hostUsers: false`), so its root is no user of the node ([decision C](#c-user-namespaces-are-required)). gVisor is optional hardening against the shared kernel ([decision E](#e-gvisor-is-optional-hardening)). It does not separate two containers of one Pod, because they share one gVisor kernel. |
-| SB-2: secret theft and proxy abuse | One `AttemptJwt` for each attempt, fenced on its lease. A cap on model calls in flight for each attempt. The tools container of a review agent Pod and every Heph tools Pod hold no credential. The Heph loop's assignment credential is a Secret in the release namespace, mounted only in the Heph loop and the worker. A worker holds more than any sandbox: the database login, every stored credential and each workspace's rows. Tenancy is an application check, so code execution in the worker reaches all of them. This decision keeps that process out of reach of a sandbox. It does not limit what the process holds. |
-| SB-3: exfiltration and cross-execution access | A Heph tools Pod has no egress. It accepts ingress only from the Heph loop, on the tools port. A review agent Pod keeps gateway-only egress. The only way out of an attempt is the delivered text, bounded by admission and by composition from admitted records. An injection canary evaluation measures it. |
+| SB-2: secret theft and proxy abuse | One `AttemptJwt` for each attempt, fenced on its lease. A cap on model calls in flight for each attempt. The tools container of a review agent Pod and every Hephaestus tools Pod hold no credential. The Hephaestus loop's assignment credential is a Secret in the release namespace, mounted only in the Hephaestus loop and the worker. A worker holds more than any sandbox: the database login, every stored credential and each workspace's rows. Tenancy is an application check, so code execution in the worker reaches all of them. This decision keeps that process out of reach of a sandbox. It does not limit what the process holds. |
+| SB-3: exfiltration and cross-execution access | A Hephaestus tools Pod has no egress. It accepts ingress only from the Hephaestus loop, on the tools port. A review agent Pod keeps gateway-only egress. The only way out of an attempt is the delivered text, bounded by admission and by composition from admitted records. An injection canary evaluation measures it. |
 | SB-4: persistence after execution | One cleanup rule: a Pod whose attempt holds no lease goes. Each Job has a deadline and a TTL. The worker deletes a Pod at the end, on `ContextChanged` and on an erasure, so person data leaves the node disk with the Pod. |
 | SB-6: tampered transport | Tool protocol v1 is a trust boundary. The loop caps frames, forwards only allowlisted callbacks for its own attempt, and uploads nothing that the tools side can write. A tools Pod proves its binding with a nonce. |
-| SB-7: a cluster that does not hold the boundary | `pods/exec` leaves the worker's Role. The probe checks the tools Pod policy: ingress from the Heph loop only, and no egress. The probe also checks that no sandbox Pod reaches the assignment path. A probe step runs as the user of the review's tools container. It gets no connection to the gateway. The program socket is outside its Pod spec. An unauthenticated gateway path gets `401` from any other caller. Every other address and DNS fail. Nothing listens on loopback. User namespaces are required, so the probe no longer reports them as a tier. |
+| SB-7: a cluster that does not hold the boundary | `pods/exec` leaves the worker's Role. The probe checks the tools Pod policy: ingress from the Hephaestus loop only, and no egress. The probe also checks that no sandbox Pod reaches the assignment path. A probe step runs as the user of the review's tools container. It gets no connection to the gateway. The program socket is outside its Pod spec. An unauthenticated gateway path gets `401` from any other caller. Every other address and DNS fail. Nothing listens on loopback. User namespaces are required, so the probe no longer reports them as a tier. |
 | New: a confused deputy | The loop acts with a token on bytes from the tools side. The callback allowlist bounds what tools can make it do. Coverage comes only from bytes that the loop read or verified. A hostile tools server test proves both on both transports. |
 | New: codemode in the review loop | Model-written code runs in Pi's QuickJS interpreter inside the review loop's process, beside the attempt token ([decision H](#h-codemode-stays-in-the-review-loop-as-quickjs)). The interpreter has no file, process or network binding, and a heap cap of 256 MiB. Its only exits are tool stubs. The cost: an escape from QuickJS and then from V8's WebAssembly sandbox gives the attacker that review's token. The token reaches only its own attempt, under the cap on model calls in flight. |
 | New: output floods | A tools side that streams without end cannot stop a loop: each `exec`, each attempt and each archive has a byte bound. |
-| New: the Heph loop | One trusted loop runs the Heph turns, in the trust class of the other trusted processes. It runs no workspace code, reads no local file except its code, and keeps sessions in memory. A tenancy test runs two turns of different workspaces, each with a hostile tools server and an injected prompt. It asserts that nothing crosses. |
+| New: the Hephaestus loop | One trusted loop runs the Hephaestus turns, in the trust class of the other trusted processes. It runs no workspace code, reads no local file except its code, and keeps sessions in memory. A tenancy test runs two turns of different workspaces, each with a hostile tools server and an injected prompt. It asserts that nothing crosses. |
 
 ### Glossary
 
-The [practice review glossary](../contributor/practice-review-glossary.mdx#runtime-terms) defines runtime attempt, review agent Pod, tools Pod, Heph loop and tool protocol v1. This ADR does not repeat their definitions.
+The [practice review glossary](../contributor/practice-review-glossary.mdx#runtime-terms) defines runtime attempt, review agent Pod, tools Pod, Hephaestus loop and tool protocol v1. This ADR does not repeat their definitions.
 
 ## Decisions
 
@@ -418,30 +418,30 @@ Each decision keeps the reasons that the recommendation gave.
 
 ### A. Adopt W′
 
-Reviews and Heph run on one agent runtime as this ADR describes:
+Reviews and Hephaestus run on one agent runtime as this ADR describes:
 
 - Each review loop runs in its review agent Pod.
-- The Heph loop runs as one Deployment.
-- Heph's tools run in tools Pods.
+- The Hephaestus loop runs as one Deployment.
+- Hephaestus's tools run in tools Pods.
 
 **Decided by the maintainer on 2026-10-28: adopt.**
 W′ is the only option with all of these properties:
 
 - A crash domain of one attempt for long work.
 - No deploy cost for reviews.
-- A warm Heph loop.
-- No token beside Heph's tools.
+- A warm Hephaestus loop.
+- No token beside Hephaestus's tools.
 
 Z's memory gain does not become throughput while the model pool binds first.
 [Consequences](#consequences) gives the costs of this decision.
 
-### B. Heph's tools get no network access
+### B. Hephaestus's tools get no network access
 
-A tools Pod has no egress at all. It accepts ingress only from the Heph loop, on the tools port.
+A tools Pod has no egress at all. It accepts ingress only from the Hephaestus loop, on the tools port.
 A review's tools reach only the gateway.
 
 **Decided by the maintainer on 2026-10-28: adopt.**
-A Heph tools Pod holds the developer's private context and untrusted content together. Any external channel then completes an exfiltration path.
+A Hephaestus tools Pod holds the developer's private context and untrusted content together. Any external channel then completes an exfiltration path.
 A domain allowlist does not close it: a code host, a package registry and DNS can each carry data out.
 Coding agents open the network to install and build. Hephaestus's agents install nothing.
 
@@ -476,7 +476,7 @@ The second step starts a real Pod with `hostUsers: false`, so it decides on the 
 **Decided by the maintainer on 2026-10-27.** Self-hosting in 1.0 is the Helm chart on k3s or Kubernetes only.
 
 The Docker sandbox backend goes in one layer with its replacement. Local development then runs sandboxes on kind or k3d, and the live suites run on the CI k3s and kind clusters.
-That layer comes before the review's tools sidecar and the Heph tools Pods, so the new Pod shapes are built once, for Kubernetes.
+That layer comes before the review's tools sidecar and the Hephaestus tools Pods, so the new Pod shapes are built once, for Kubernetes.
 This amends [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) § Supported deployment, which kept the driver until a decision after 1.0.
 
 The layer must meet these requirements:
@@ -566,7 +566,7 @@ A review claim creates no model call reservation.
 ### H. Codemode stays in the review loop as QuickJS
 
 Codemode runs in the review loop as Pi's QuickJS interpreter in a worker thread. The loop gets the worker grant and no other new grant.
-Heph never gets codemode: its loop serves more than one attempt. Heph runs code with `node`, `jq` and `rg` in its tools Pod.
+Hephaestus never gets codemode: its loop serves more than one attempt. Hephaestus runs code with `node`, `jq` and `rg` in its tools Pod.
 
 It rewords decision driver 2.
 
@@ -587,9 +587,9 @@ A run without the project's dependencies, secrets and services is not the develo
 
 **Consequence:** a practice that needs build results waits for the CI source.
 
-### J. Heph keeps one workspace for each attempt
+### J. Hephaestus keeps one workspace for each attempt
 
-Each Heph turn attempt gets a fresh workspace. There are no tools Pods that stay with a conversation and no snapshots in 1.0.
+Each Hephaestus turn attempt gets a fresh workspace. There are no tools Pods that stay with a conversation and no snapshots in 1.0.
 `INDEX.md` lists what the conversation loaded earlier.
 
 **Decided by the maintainer on 2026-10-28: adopt.**
@@ -600,7 +600,7 @@ Person data then never outlives a turn, also after an erasure or a consent chang
 ### K. One context budget and clearing rule for both loops
 
 Each practice's budget gains an input-token dimension beside its calls and output tokens. A practice that spends it ends as not reached, with the reason `budget`.
-Inside a review session and a Heph turn, older evidence-tool results become notes when the live context passes a threshold. Draft, result and admission tools stay whole.
+Inside a review session and a Hephaestus turn, older evidence-tool results become notes when the live context passes a threshold. Draft, result and admission tools stay whole.
 
 **Decided by the maintainer on 2026-10-28: adopt.** Reads, not output, drive the input tokens, and token cost dominates the cost of the Pods.
 
@@ -616,19 +616,19 @@ The pull requests that implement this ADR are the plan. These ordering constrain
   It adds no shim, no second path and no setting that only warns, and it keeps nothing "for one release".
 - The upgrade from 0.x to 1.0 has no mixed-version window. Thus, no layer carries expand and contract for it.
 - The Docker backend goes together with local sandboxes on kind or k3d ([decision D](#d-the-docker-sandbox-backend-goes-before-10)).
-  This layer comes before the review's tools sidecar and the Heph tools Pods.
-- The tools program and tool protocol v1 come before the review's tools sidecar and before the Heph loop Deployment.
+  This layer comes before the review's tools sidecar and the Hephaestus tools Pods.
+- The tools program and tool protocol v1 come before the review's tools sidecar and before the Hephaestus loop Deployment.
 - The lease on `review_job` and the deletion of the `worker_registry` recovery are one layer. It comes before the one claim loop and before the fence on the lease.
 - The hub goes in the layer that moves drain and cancellation to PostgreSQL.
-- The turn sandbox goes with the Heph tools Pods.
-- The Heph host and its channel go with the Heph loop Deployment.
+- The turn sandbox goes with the Hephaestus tools Pods.
+- The Hephaestus host and its channel go with the Hephaestus loop Deployment.
 - The clearing rule of decision K comes after the study of the review and feedback lifecycles.
 
 Each layer brings these proofs:
 
 - **The cap on model calls for each attempt** brings the input-token budget of decision K. Proof:
   - `PracticeInputBudgetTest`. A practice past its input budget ends as not reached, with the reason `budget`. Its siblings go on.
-- **Heph's tools Pods** bring these changes:
+- **Hephaestus's tools Pods** bring these changes:
   - Tool protocol v1.
   - Documents from the loop's memory, and a Pod only at the first `bash` or `load_context`.
   - The byte bounds on streams and archives.
@@ -640,7 +640,7 @@ Each layer brings these proofs:
   - `HephLoopPutStreamingTest`. A checkout of 400 MiB passes through the loop, which grows by less than 32 MiB. The tools side verifies its digest.
   - The load metrics `heph.turn.load.repeat` and `heph.turn.load.duration`, and one week of measured turn tool use on staging.
   - A chart fit test on `small-16gib`. A worker's rolling update fits the node, at about 12.3 of 15.4 GiB requested.
-    It fits once no worker has its own Heph pool.
+    It fits once no worker has its own Hephaestus pool.
     The profile then moves from `Recreate` to a rolling update, as `small` did.
 
 - **The review's tools sidecar** brings the tool placement, `grep` over `exec`, `find` with a Node glob, and codemode under decision H. Proofs:
@@ -649,11 +649,11 @@ Each layer brings these proofs:
   - The golden review on both fixtures: the same admitted results and problems, and the same coverage for each practice.
   - `HostileToolsServerTest`, extended with an unbounded stream, a slow reply, forged ids and a callback outside `script.run`.
   - The isolation probe step from the tools user.
-- **The clearing rule** brings an A/B run of the golden review and of a long Heph turn. It must keep the admitted results and lower the input tokens.
+- **The clearing rule** brings an A/B run of the golden review and of a long Hephaestus turn. It must keep the admitted results and lower the input tokens.
 - **The gVisor option** brings the benchmark of decision E.
 - **A nightly injection canary evaluation** on a live model starts with the review's tools sidecar.
   The corpus plants a canary in an uncited captured file and in another member's Slack message.
-  No canary may reach an admitted result, a composed copy, a Slack reply or a Heph answer.
+  No canary may reach an admitted result, a composed copy, a Slack reply or a Hephaestus answer.
 
 ## Consequences
 
@@ -661,8 +661,8 @@ Good:
 
 - One attempt contract, one tools program, one tool protocol, one Pod builder and one cleanup rule.
 - A review's crash, out-of-memory kill and exit stay on its own Pod. A release cuts no running review and no running turn.
-- Heph's loop is warm after every deploy. A tools Pod start hides behind the first model call.
-- Untrusted code runs apart from every credential. Heph's tools have no egress.
+- Hephaestus's loop is warm after every deploy. A tools Pod start hides behind the first model call.
+- Untrusted code runs apart from every credential. Hephaestus's tools have no egress.
 - The install stays namespace-scoped, and PostgreSQL stays the only truth.
 - The staging defects above lose their structural cause, not only their symptom.
 
@@ -670,7 +670,7 @@ Bad:
 
 - The trusted loop has two placements, one for each workload.
 - W′ holds about 4 fewer reviews than Z where memory binds. On the reference node, the model pool binds first.
-- A tool call crosses a socket or a TCP connection. For a review it costs microseconds, and for Heph about 0.1–1 ms.
+- A tool call crosses a socket or a TCP connection. For a review it costs microseconds, and for Hephaestus about 0.1–1 ms.
 - Required user namespaces exclude older default kernels.
 - The removal of the Docker backend changes the contributor loop.
 - This is a large change before 1.0. The maintainer accepted that cost.
@@ -686,8 +686,8 @@ Bad:
 - **Review loops become resumable for their own reasons.** Then most of Z's deploy cost goes.
 - **Repeated loads pass 30 % of follow-up loads, with a p95 over 2 s.** Then add a checkout cache in the worker. Tools Pods that stay with a conversation come only if the cache is not enough, measured.
 - **More than 2 % of sessions try to run Python.** Then add `python3`, with no package manager, to the tools image.
-- **More than 1 % of Heph `bash` calls time out, or a tool needs interaction.** Then reconsider background processes and input to a running command.
-- **More than 5 % of Heph turns compact during the turn or reach 40 calls.** Then reconsider subagents for Heph.
+- **More than 1 % of Hephaestus `bash` calls time out, or a tool needs interaction.** Then reconsider background processes and input to a running command.
+- **More than 5 % of Hephaestus turns compact during the turn or reach 40 calls.** Then reconsider subagents for Hephaestus.
 - **Questions about public libraries go unanswered, measured.** Then add a context loader for external documentation.
 - **Sandboxes must run on clusters that the worker cannot reach.** Then a runner that pulls through the gateway, not an operator.
 - **The cluster becomes the record of work.** [ADR 0025](0025-agent-job-queue-on-postgresql.md) and [ADR 0062](0062-the-item-is-the-review-scope.md) keep PostgreSQL as the record.
@@ -708,7 +708,7 @@ Fetched 2026-10-27.
 - [Helm custom resource definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/): Helm installs `crds/` once and does not upgrade or delete them.
 - [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox).
 - [Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/): when to add a custom resource.
-- [Heph capacity](../admin/runtime-roles.mdx#conversation-turn-capacity): 90 turns in 364 MiB, and one call in 4 seconds against 8 calls in 34 seconds each.
+- [Hephaestus capacity](../admin/runtime-roles.mdx#conversation-turn-capacity): 90 turns in 364 MiB, and one call in 4 seconds against 8 calls in 34 seconds each.
 
 ## Update — 2026-10-28: captured context stays on the loop's side
 
@@ -812,8 +812,8 @@ Cancellation and lease loss stop the wait.
 
 ## Update — 2026-11-08: the conversation loop runs as a Deployment
 
-This update amends § The tools Pod, § The Heph loop, § Capacity and § What goes for the layer that adds the Heph loop Deployment.
-The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls the Heph loop the **conversation loop**, and the chart and the code use that name.
+This update amends § The tools Pod, § The Hephaestus loop, § Capacity and § What goes for the layer that adds the Hephaestus loop Deployment.
+The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls the Hephaestus loop the **conversation loop**, and the chart and the code use that name.
 
 - **One pool for the installation, in PostgreSQL.** This replaces the § The tools Pod rule that pooled Pods carry the label of their owner worker.
   The table `conversation_tools_pod` records every tools Pod and the attempt that holds it.
@@ -830,7 +830,7 @@ The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls 
   A stop or a lost lease makes the attempt's next call answer `409`. Every worker seals the attempt's model calls in flight.
   The next lease call ends an attempt that its loop did not end in time.
   The loop has 30 seconds after a stop or after the deadline.
-- **Preferred anti-affinity.** § The Heph loop asks for 2 replicas with anti-affinity on several nodes.
+- **Preferred anti-affinity.** § The Hephaestus loop asks for 2 replicas with anti-affinity on several nodes.
   The anti-affinity is preferred, not required, so a cluster with one free node still runs both replicas.
   The single-node profile runs 1 replica, and a second one only during a rollout.
 - **The turn count is for the installation.** `conversationLoop.turns` replaces `worker.conversationTurns`.
@@ -858,7 +858,7 @@ The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls 
   The restarted loop then pulls the retry.
 - **Documents stay on the worker endpoints for now.** Each worker builds the documents of an attempt in its own memory.
   An attempt whose calls reach two workers can read two builds of its question.
-  A later layer can move the documents into the loop, as § The Heph loop decides.
+  A later layer can move the documents into the loop, as § The Hephaestus loop decides.
 
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
@@ -867,14 +867,14 @@ The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls 
 **Superseded:**
 
 - **Decision driver 2.** Model-chosen commands run in the same container as the sandbox token. The token is bounded: it names one subject, it ends with the sandbox, and it works only at the gateway. The maintainer accepted this on 2026-11-09.
-- **[Decision A](#a-adopt-w) and § Decision.** W′ goes. Each subject (a review, a conversation or an action task) gets one agent-sandbox `Sandbox` with one container. The container holds the one Node loop, the tools and the workspace. The review agent Pod, its sidecars and init containers, the Heph loop Deployment and the tools Pods go.
-- **§ Tool placement, § The tools Pod, § The Heph loop and § Tool protocol v1.** The loop and its tools share one container, so the split, the Unix-socket protocol, the nonce and the `setpriv` filter go.
+- **[Decision A](#a-adopt-w) and § Decision.** W′ goes. Each subject (a review, a conversation or an action task) gets one agent-sandbox `Sandbox` with one container. The container holds the one Node loop, the tools and the workspace. The review agent Pod, its sidecars and init containers, the Hephaestus loop Deployment and the tools Pods go.
+- **§ Tool placement, § The tools Pod, § The Hephaestus loop and § Tool protocol v1.** The loop and its tools share one container, so the split, the Unix-socket protocol, the nonce and the `setpriv` filter go.
 - **Coverage authority.** § Tool placement made coverage depend on which process read the bytes. In one container, a command can change a file before the loop reads it. For each read and each proved search, the loop reports the path and digest of each file. Admission compares each digest with the one that the server captured. A read with a changed digest gives no coverage, and a search over it proves no absence. Admission checks each citation against the captured bytes, never against the sandbox's files.
 - **§ The attempt contract.** The lease, the attempt and the epoch move to `agent_run`. The fence is `(run_id, lease_epoch)` with an unexpired lease. The token names the workspace, the subject and the sandbox, and it expires at the sandbox's `shutdownTime`. The signing keys of the attempt token stay.
 - **The 2026-11-08 update, "review loops renew their own leases".** The sandbox is the only writer of its run's lease. The worker's renewals go with the worker.
-- **§ Network and [decision B](#b-hephs-tools-get-no-network-access).** A sandbox can reach only the gateway port of the server. Thus, commands can reach the gateway too, with the token of their own subject. No sandbox has any other route.
+- **§ Network and [decision B](#b-hephaestuss-tools-get-no-network-access).** A sandbox can reach only the gateway port of the server. Thus, commands can reach the gateway too, with the token of their own subject. No sandbox has any other route.
 - **§ Capacity, § Fit by measured use and [decision G](#g-review-pod-admission-checks-quota-and-provider-demand).** The claim admits sandboxes by the counts in one capacity home, `hephaestus.agent.capacity.*`. The tier quotas that the chart derives, the resident-turn CPU rule, the 32-turn ceiling and `Recreate` on single-node profiles go.
-- **[Decision J](#j-heph-keeps-one-workspace-for-each-attempt).** A conversation keeps one sandbox while it is in use, and the server deletes it when it is idle. An erasure or a change of access deletes it at once. Its turns share the workspace.
+- **[Decision J](#j-hephaestus-keeps-one-workspace-for-each-attempt).** A conversation keeps one sandbox while it is in use, and the server deletes it when it is idle. An erasure or a change of access deletes it at once. Its turns share the workspace.
 - **Option W.** Its first reason, a token beside untrusted code, no longer decides. W stays rejected for its relay and its broker in the gateway.
 - **Option [kubernetes-sigs/agent-sandbox](#kubernetes-sigsagent-sandbox-rejected), rejected on 2026-10-28, is the chosen path from 2026-11-09.** ADR 0079 gives what changed and how it bounds the risks that this ADR named.
 

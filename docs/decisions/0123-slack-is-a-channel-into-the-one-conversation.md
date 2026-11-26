@@ -102,7 +102,7 @@ Option 4.
 ### What this changes in other ADRs
 
 - [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) supersedes ADR 0082. Its table lists how this ADR changes ADR 0082 decisions 5 and 6.
-- ADR 0082's revisit trigger "Team channels need Heph" is answered by decisions 9 to 12.
+- ADR 0082's revisit trigger "Team channels need Hephaestus" is answered by decisions 9 to 12.
 
 ## Consequences
 

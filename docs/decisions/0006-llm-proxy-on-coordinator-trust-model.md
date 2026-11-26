@@ -237,15 +237,15 @@ BYO remote-worker purpose. “BYO” is now a governed provider-key lookup behin
 credential-isolation driver in the Context above is unchanged and still binding: the sandbox receives
 no provider credential and can reach only the gateway.
 
-## Update — 2026-10-09 (Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 Supersedes the interactive half of the 2026-07-20 update and two sentences of § Admission and
-accounting. `DockerInteractiveSandboxAdapter` no longer exists. The Heph host on each worker reaches the
+accounting. `DockerInteractiveSandboxAdapter` no longer exists. The Hephaestus host on each worker reaches the
 proxy on its own worker's Sandbox Gateway, with a turn-scoped `TurnJwt` for each turn attempt. The
 proxy's authentication provider (`JobTokenAuthenticationProvider`) makes the token a `ProxyIdentity` of
 the turn. A model call needs the attempt to hold its lease on this worker; otherwise it gets `409`. The
 token reaches no review runtime path, and of the turn endpoints only those of its own turn.
-`ProxyRoutingService` bills each call to the turn attempt (`UsageSourceType.MENTOR_TURN`). A Heph turn
+`ProxyRoutingService` bills each call to the turn attempt (`UsageSourceType.MENTOR_TURN`). A Hephaestus turn
 is admitted when a worker claims it (`MentorAdmission`), not before a question is stored. The price is
 frozen on `mentor_turn.admission`. The ledger row is written when the turn ends, or by the lease reaper
 for an attempt that lost its lease. The credential-isolation invariant is unchanged: the host receives

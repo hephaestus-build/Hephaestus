@@ -80,7 +80,7 @@ The chart must meet these requirements for previews:
 
 - The chart accepts a 40-hex commit tag for the `application-server` and `webapp` images, and only in the preview profile.
 - NATS and PostgreSQL use the images that the chart pins.
-- The preview profile has no worker and no webhook server. Thus, a preview runs no practice review and no Heph turn.
+- The preview profile has no worker and no webhook server. Thus, a preview runs no practice review and no Hephaestus turn.
 - The preview profile needs about 3.5 GiB.
 - The preview profile bundles a PostgreSQL with its own volume.
 - The preview profile keeps the NetworkPolicies of the chart on.

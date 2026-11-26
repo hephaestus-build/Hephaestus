@@ -95,9 +95,9 @@ owns the current grants and limits.
 [Context and trust](../contributor/practice-script-runner.mdx#context-and-trust) owns the
 threat model.
 
-## Update — 2026-10-09 (Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
-The mentor runner is replaced by the Heph host, one long-lived process per worker. It runs with
+The mentor runner is replaced by the Hephaestus host, one long-lived process per worker. It runs with
 `--max-old-space-size=1024` under `--permission`, without `--expose-gc`. It may read `/workspace`,
 `/opt/pi-sdk`, its empty home and the practice-script library at `/opt/practice-scripts`, which the
 shared provider helper imports. It writes only Pi's agent directory and its temporary directory. It
