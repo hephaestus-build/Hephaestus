@@ -520,6 +520,67 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
+    void shouldSayWhatTheAnswerOpenedAndCouldNotOpenWithoutAPathOrATool() {
+        submit(main(), "Why did my review say that?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                f.call(
+                                        "call-read",
+                                        "read",
+                                        "path",
+                                        "/workspace/work/inputs/context/results_history.json"),
+                                f.result("call-read", "read", false),
+                                f.call("call-load", "load_context", "path", "repositories/acme/api@main"),
+                                f.result("call-load", "load_context", true),
+                                f.call("call-search", "search_conversation", "query", "verify"),
+                                f.result("call-search", "search_conversation", false),
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "Your last review found no test.")),
+                        null,
+                        null));
+
+        get("/entries")
+                .jsonPath("$.content[0].used")
+                .doesNotExist()
+                .jsonPath("$.content[-1:].text")
+                .isEqualTo(List.of("Your last review found no test."))
+                .jsonPath("$.content[-1:].used.recorded")
+                .isEqualTo(List.of(true))
+                .jsonPath("$.content[-1:].used.read[*].kind")
+                .isEqualTo(List.of("CONTEXT_DOCUMENT", "CONVERSATION_SEARCH"))
+                .jsonPath("$.content[-1:].used.read[0].document")
+                .isEqualTo(List.of("RESULTS_HISTORY"))
+                .jsonPath("$.content[-1:].used.couldNotCheck[0].kind")
+                .isEqualTo(List.of("REPOSITORY"))
+                .jsonPath("$.content[-1:].used.couldNotCheck[0].repository")
+                .isEqualTo(List.of("repositories/acme/api"));
+    }
+
+    /** One opening call and its result, as the host stores them. */
+    private static final class F {
+        ObjectNode call(String callId, String tool, String argument, String value) {
+            return ConversationLedgerFixtures.toolCall(
+                    ConversationLedgerFixtures.piId(),
+                    callId,
+                    tool,
+                    JsonNodeFactory.instance.objectNode().put(argument, value));
+        }
+
+        ObjectNode result(String callId, String tool, boolean error) {
+            return ConversationLedgerFixtures.toolResult(
+                    ConversationLedgerFixtures.piId(), callId, tool, error ? "Not found" : "Done", error);
+        }
+    }
+
+    @Test
     void shouldNotShowARefusedCallWhenAnotherTurnOnThePageUsedTheSameCallIdSuccessfully() {
         endWithFeedbackCall(started(submit(main(), "First question")), "Shown in the first turn.", false);
         endWithFeedbackCall(started(submit(main(), "Second question")), "Refused in the second turn.", true);

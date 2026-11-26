@@ -419,6 +419,7 @@ A destination matches a delivery strategy only by the place where feedback appea
 | **Thread** | A conversation that starts at one top-level message of the conversation. It is one level deep. Each message has at most one. A thread started in Slack also appears in Slack. UI and user docs say thread. | fork, branch, sub-chat |
 | **Message** (conversation) | One contribution to a conversation. It can be a question, an answer, or a weekly digest. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
+| **What Hephaestus used** | The list under an answer of what it cited, what it read and what it could not check. The server renders it from rows. **Shaped by** follows with the typed read of ADR 0157. | sources, citations, context, reasoning |
 
 The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox, the context folder, the context document and the context loader.
 [ADR 0082](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) owns the decisions behind these terms.
@@ -455,7 +456,6 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Personal record** | A goal, lesson, preference or context of the account owner | memory (for the record), note | ADR 0132 |
 | **Noted record** | A personal record that Hephaestus wrote from the person's own messages. It stays in its workspace and is never evidence. | inferred memory, profile fact | ADR 0132 |
 | **What Hephaestus keeps in mind** | The one list of everything that Hephaestus remembers about the person, with **Forget**, **Not right** and **Keep** | memories page, profile | ADR 0132 |
-| **What Hephaestus used** | The list under an answer of what it cited, what it read, what shaped it and what it could not check. The server renders it from rows. | sources, citations, context, reasoning | ADR 0131, ADR 0157 |
 | **Hephaestus noted** | The label of a noted record in **What Hephaestus keeps in mind**. It tells the person that Hephaestus wrote the line from their own words. | inferred, learned, AI-generated | ADR 0132 |
 | **Keep** | The person's act on a line of **What Hephaestus keeps in mind** that turns it into a person-authored record, under record retention | Save (alone) | ADR 0132 |
 | **Take along** | The person's confirmed act that transfers a person-authored record to their personal space | Keep and take along, export | ADR 0129 |

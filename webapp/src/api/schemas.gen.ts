@@ -2289,6 +2289,54 @@ export const ConversationSchema = {
 	required: ["activeTurns", "latestSeq", "threads"],
 } as const;
 
+export const ConversationAnswerUseSchema = {
+	type: "object",
+	description: "What Hephaestus opened for one answer, and what it could not open",
+	properties: {
+		couldNotCheck: {
+			type: "array",
+			description: "What the turn tried to open and could not",
+			items: {
+				$ref: "#/components/schemas/ConversationUsedSource",
+			},
+		},
+		read: {
+			type: "array",
+			description: "What the turn opened, in the order of its first use",
+			items: {
+				$ref: "#/components/schemas/ConversationUsedSource",
+			},
+		},
+		recorded: {
+			type: "boolean",
+			description:
+				"False when the turn stored no record of what it did. The app then says that Hephaestus did not record what the answer used.",
+		},
+	},
+	required: ["couldNotCheck", "read", "recorded"],
+} as const;
+
+export const ConversationContextDocumentSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"USER",
+		"WORKSPACE",
+		"RECENT_AUTHORED_WORK",
+		"ACTIVITY",
+		"MERGE_READINESS",
+		"REVIEW_ATTEMPTS",
+		"RESULTS_HISTORY",
+		"DELIVERED_FEEDBACK",
+		"PREPARED_CONVERSATION_FEEDBACK",
+		"PRACTICE_PROFILE",
+		"PRACTICE_CATALOG",
+		"SLACK_CONVERSATIONS",
+		"OUTLINE_DOCS",
+		"WEEKLY_DIGEST",
+	],
+} as const;
+
 export const ConversationEntrySchema = {
 	type: "object",
 	description: "One message of a Hephaestus conversation",
@@ -2376,6 +2424,11 @@ export const ConversationEntrySchema = {
 		turnStatus: {
 			$ref: "#/components/schemas/ConversationTurnStatus",
 			description: "The status of the turn this question asked; only on the developer's messages",
+		},
+		used: {
+			$ref: "#/components/schemas/ConversationAnswerUse",
+			description:
+				"What Hephaestus opened for this answer and what it could not open; only on the last message of an answer. Its links are what it cited.",
 		},
 		vote: {
 			$ref: "#/components/schemas/ConversationEntryVote",
@@ -2746,6 +2799,42 @@ export const ConversationTurnWaitingForSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
 	examples: ["CAPACITY"],
+} as const;
+
+export const ConversationUsedSourceSchema = {
+	type: "object",
+	description: "A source that Hephaestus opened for an answer, or could not open",
+	properties: {
+		count: {
+			type: "integer",
+			format: "int32",
+			description: "How many files or searches; 1 for a document or a repository",
+		},
+		document: {
+			$ref: "#/components/schemas/ConversationContextDocument",
+			description: "Which context document; only for CONTEXT_DOCUMENT",
+		},
+		kind: {
+			$ref: "#/components/schemas/ConversationUsedSourceKind",
+		},
+		repository: {
+			type: "string",
+			description: "The repository as the turn named it; only for REPOSITORY and REPOSITORY_FILES",
+		},
+	},
+	required: ["count", "kind"],
+} as const;
+
+export const ConversationUsedSourceKindSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"CONTEXT_DOCUMENT",
+		"REPOSITORY",
+		"REPOSITORY_FILES",
+		"CONTEXT_SEARCH",
+		"CONVERSATION_SEARCH",
+	],
 } as const;
 
 export const ConversationVoteRequestSchema = {
