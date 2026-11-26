@@ -11,11 +11,11 @@ public record ConversationContextRequest(
         UUID threadId,
         @Nullable UUID stimulusEntryId,
         BiConsumer<String, String> outlineSource) {
-    private static final BiConsumer<String, String> IGNORE_SOURCE = (origin, team) -> {};
-
     public ConversationContextRequest(long workspaceId, long developerId, UUID threadId, @Nullable UUID stimulusEntryId) {
-        this(workspaceId, developerId, threadId, stimulusEntryId, IGNORE_SOURCE);
+        this(workspaceId, developerId, threadId, stimulusEntryId, ConversationContextRequest::ignoreSource);
     }
+
+    private static void ignoreSource(String origin, String team) {}
 
     public ConversationContextRequest {
         Objects.requireNonNull(threadId, "threadId");
