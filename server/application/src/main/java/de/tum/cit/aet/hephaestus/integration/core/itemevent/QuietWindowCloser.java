@@ -40,9 +40,10 @@ public class QuietWindowCloser {
         for (var event : repository.findClosedWindows(now, properties.sweepBatchSize())) {
             repository.postponeWindow(event.getWorkspaceId(), event.getItemId(), now.plus(properties.quietWindow()));
             var recorded = new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId());
-            publisher.publishEvent(clock instanceof ControlledClock
-                    ? recorded
-                    : new ItemEventOffered(recorded.workspaceId(), recorded.eventId(), recorded.itemId()));
+            publisher.publishEvent(
+                    clock instanceof ControlledClock
+                            ? recorded
+                            : new ItemEventOffered(recorded.workspaceId(), recorded.eventId(), recorded.itemId()));
         }
     }
 }
