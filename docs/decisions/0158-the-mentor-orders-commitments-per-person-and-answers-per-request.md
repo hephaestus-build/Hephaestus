@@ -6,6 +6,8 @@
 
 **Supersedes:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md)
 
+**Amends:** [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work, in place of ADR 0120
+
 **Builds on:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (runs, leases and the outbox), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery identity and readback)
 
 **Relates to:** [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the shared composer), [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (contact), [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) (what the person saves)
@@ -49,14 +51,16 @@ Option 4.
    - The activity view shows the person their own requests, tasks and receipts, for that audience only.
    - Requests, attempts, tasks and effects hold the work and its delivery.
 2. **The person orders commitments. A request orders its answer.**
-   - Transitions that change a commitment or a control take the person's row lock, then the request's.
+   - Transitions that change a commitment or a control lock the person's mentor row, then the request. The mentor row is the runtime's own, not the account's authority row.
    - Reads, evidence work and model calls hold no such lock and run in parallel.
    - There is no total order across the app and Slack.
 3. **Each audience has its own inbox.** The key is the audience and its place: the app thread, the Slack DM, or the Slack thread root. Private words never move to another audience.
 4. **A question opens a request.**
    - A new question opens a request at version 1.
-   - An edit of the question raises the version, and work on an older version is fenced at its next commit.
-   - An edit that asks for a different outcome supersedes the request and opens a linked successor.
+   - An edit of an open request's question raises the version. Work on an older version is fenced at its next commit.
+   - An edit of a settled request is recorded and changes nothing.
+   - A delete fences the request and its unsent effects.
+   - An edit never opens a request. A new message that asks for a different outcome supersedes the request and opens a linked successor.
 5. **Work never cancels on a new question.**
    - A question steers its own request only.
    - Unrelated work keeps running or waits fairly.
@@ -75,6 +79,7 @@ Option 4.
    | A task result | Work to close on the request that asked for it. Its result and its callback commit together. |
 
    Questions, approvals, safety changes and outcomes are never coalesced.
+   A delivery receipt, a self-post or an acknowledgement never starts a second answer.
    The coordinator wakes from a typed event and checks the current authorization before it acts.
 8. **No system event speaks as the person.** An event reaches the model as a typed fact under its own provenance, never as a user-role message.
 9. **Every commit checks its claim.**
@@ -102,7 +107,7 @@ Option 4.
   - one transaction that commits a result with its effects
   - no lock across a provider call
   - a work budget that no retry resets
-- ADR 0079 § Interactive and proactive work, as ADR 0120 amended it, now points to this ADR.
+- ADR 0079 § Interactive and proactive work, which ADR 0120 amended, is amended by this ADR now.
 
 ## Consequences
 
