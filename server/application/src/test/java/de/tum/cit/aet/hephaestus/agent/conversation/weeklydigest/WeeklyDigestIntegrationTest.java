@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
@@ -111,6 +113,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -131,6 +134,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @MockitoBean
     DigestAdmission liveDigestAdmission;
+
+    @MockitoSpyBean
+    Clock jvmClock;
 
     @MockitoBean(name = "digestTransactionTransport")
     WeeklyDigestTransport transactionTransport;
@@ -230,7 +236,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     private Scenario scenario;
     private long workspaceId;
     private long accountId;
-    /** The full local week before the current one, so every fact in it is in the past. */
+    /** The week before the simulated scheduler pass. Its cutoff is ahead of the database clock. */
     private WeeklyDigestWindow week;
 
     /** One piece of feedback with the result and problem it rests on. */
@@ -272,7 +278,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         identity.setProviderId(Objects.requireNonNull(github.getId()));
         identity.setProviderUserKey("weekly-digest-" + accountId);
         identityRepository.saveAndFlush(identity);
-        week = WeeklyDigestWindow.previousWeek(Instant.now(), BERLIN);
+        week = WeeklyDigestWindow.previousWeek(Instant.now().plus(Duration.ofDays(7)), BERLIN);
 
         when(subscriptions.subscribedAccountIds()).thenReturn(List.of(accountId));
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
@@ -669,6 +675,12 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     private DigestAdmission eligibility() {
+        AgentRuns replay = mock(AgentRuns.class);
+        when(replay.conversationDeadlineClock()).thenReturn(due());
+        return eligibility(replay);
+    }
+
+    private DigestAdmission eligibility(AgentRuns runs) {
         return new DigestAdmission(
                 turnAccess,
                 conversationAccess,
@@ -676,7 +688,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 new WeeklyDigestAvailability(memberships, readiness, admission),
                 facts,
                 objectMapper,
-                Clock.fixed(due(), ZoneOffset.UTC));
+                runs);
     }
 
     private DigestDelivery delivery(List<WeeklyDigestTransport> transports) {
@@ -913,12 +925,175 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(written()).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldUseTheScheduledCutoffWhenAClaimFollowsTheSchedulerSample(boolean expired) {
+        if (expired) {
+            week = WeeklyDigestWindow.previousWeek(Instant.now().minus(Duration.ofDays(7)), BERLIN);
+            when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+        }
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var cutoff = week.contactCutoff();
+
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            // The scheduler sampled time before closing. The database clock may already be past closing.
+            assertThat(schedule(Clock.fixed(cutoff.minusSeconds(30), BERLIN)).enqueueDue())
+                    .isOne();
+            var stimulus = digestEntry().orElseThrow();
+            assertThat(Objects.requireNonNull(stimulus.getPayload())
+                            .path("startBy")
+                            .asString())
+                    .isEqualTo(cutoff.toString());
+            var turn = turnRows.findById(Objects.requireNonNull(stimulus.getTurnId()))
+                    .orElseThrow();
+            var run = runs.find(new AgentRunRef(turn.getRunId(), workspaceId)).orElseThrow();
+            var lease = runs.claimSubject(
+                    workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST));
+            if (expired) {
+                assertThat(run.getCreatedAt()).isAfter(cutoff);
+                assertThat(run.getStartWithinSeconds()).isOne();
+                assertThat(lease).as("the cutoff comes from the scheduled week").isEmpty();
+            } else {
+                assertThat(run.getCreatedAt()).isBefore(cutoff);
+                assertThat(run.getStartWithinSeconds())
+                        .as("the rollback reader has an expiry")
+                        .isNotNull();
+                assertThat(run.getAvailableAt().plusSeconds(Objects.requireNonNull(run.getStartWithinSeconds())))
+                        .isBetween(cutoff.minusSeconds(1), cutoff);
+                assertThat(lease)
+                        .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(run.getId()));
+            }
+        });
+    }
+
+    @Test
+    void shouldRefuseDigestAdmissionWhenTheJvmClockStillShowsAnOpenWindow() {
+        Instant databaseNow = runs.conversationDeadlineClock();
+        week = WeeklyDigestWindow.previousWeek(databaseNow.minus(Duration.ofDays(7)), BERLIN);
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+
+        assertThat(week.contactCutoff()).isBefore(databaseNow);
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isOne();
+        UUID turnId = Objects.requireNonNull(digestEntry().orElseThrow().getTurnId());
+
+        doReturn(due()).when(jvmClock).instant();
+        assertThat(eligibility().refuses(workspaceId, turnId)).isFalse();
+        assertThat(eligibility(runs).refuses(workspaceId, turnId)).isTrue();
+    }
+
+    @Test
+    void shouldRefuseToLeaseADigestWhenItsStimulusWasRedacted() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            redaction.redact(List.of(stimulus.getId()));
+            assertThat(runs.claimSubject(
+                            workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST)))
+                    .isEmpty();
+        });
+    }
+
+    @Test
+    void shouldLeaseTheNextDigestAfterPersonErasureEndsTheQueuedDigest() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            UUID conversationId =
+                    conversations.findOrCreateMain(workspaceId, accountId).getId();
+            var copy = entries.append(
+                    workspaceId,
+                    conversationId,
+                    new ConversationEntryDraft(
+                            ConversationEntry.Kind.TOOL_RESULT,
+                            ConversationEntry.Surface.SYSTEM,
+                            "",
+                            null,
+                            null,
+                            null,
+                            null));
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
+            UUID erasedTurnId = Objects.requireNonNull(stimulus.getTurnId());
+            var erasedRun = new AgentRunRef(
+                    turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
+
+            redaction.redactPersonCopies(List.of(copy.getId()));
+            assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
+                    .as("the erasure ends the digest turn in its own transaction")
+                    .isEqualTo(ConversationTurn.Status.STOPPED);
+            assertThat(runs.find(erasedRun).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
+
+            String requestId = requestId() + "-next";
+            assertThat(turns.submitDigest(
+                            workspaceId,
+                            conversationId,
+                            new ConversationTurnService.DigestRequest(
+                                    requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
+                    .isTrue();
+            var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
+                    .orElseThrow();
+            assertThat(runs.claimSubject(workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST)))
+                    .hasValueSatisfying(lease -> assertThat(lease.runId()).isEqualTo(next.getRunId()));
+        });
+    }
+
     @Test
     void shouldSkipADigestWhenLessThanOneSecondRemainsInItsDeliveryWindow() {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         var nearClosing = week.end().plus(Duration.ofHours(21)).minusMillis(500);
         assertThat(schedule(Clock.fixed(nearClosing, BERLIN)).enqueueDue()).isZero();
         assertThat(digestEntry()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldLeaseTheNextDigestAfterAnEarlierReplicaErasedTheQueuedDigest(boolean subjectClaim) {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
+            UUID erasedTurnId = Objects.requireNonNull(stimulus.getTurnId());
+            var erasedRun = new AgentRunRef(
+                    turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
+            // rc.16 erased the stimulus without changing the queued turn or run.
+            assertThat(jdbcTemplate.update("""
+                            UPDATE conversation_entry
+                               SET redacted_at = clock_timestamp(), payload = NULL, text = '', search_text = ''
+                             WHERE workspace_id = ? AND id = ?
+                            """, workspaceId, stimulus.getId())).isOne();
+
+            UUID conversationId = stimulus.getConversationId();
+            String requestId = requestId() + "-next";
+            assertThat(turns.submitDigest(
+                            workspaceId,
+                            conversationId,
+                            new ConversationTurnService.DigestRequest(
+                                    requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
+                    .isTrue();
+            var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
+                    .orElseThrow();
+            assertThat(runs.find(erasedRun).orElseThrow().getStartWithinSeconds())
+                    .as("the older writer set the relative window")
+                    .isPositive();
+
+            var kinds = Set.of(AgentRunKind.DIGEST);
+            var lease = subjectClaim
+                    ? runs.claimSubject(workspaceId, "conversation:" + conversationId, kinds)
+                    : runs.claim(kinds, List.of());
+            assertThat(lease)
+                    .as("the erased digest releases its queue position during the claim")
+                    .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(next.getRunId()));
+            assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
+                    .isEqualTo(ConversationTurn.Status.STOPPED);
+            assertThat(runs.find(erasedRun).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
+        });
     }
 
     private static WeeklyDigestTransport transport(WeeklyDigestPointer pointer, boolean reaches) {

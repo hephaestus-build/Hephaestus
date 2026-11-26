@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,11 +29,11 @@ public class ConversationTurnConfiguration {
     TurnContextLoads turnContextLoads(
             ConversationTurnAccess turns,
             ObjectProvider<ContextLoader> loaders,
-            Clock clock,
+            AgentRuns runs,
             PersonDataCopyFence copies,
             FabricLayout layout,
             AgentRunAuthority authority) {
-        return new TurnContextLoads(turns, loaders, clock, copies, layout, authority);
+        return new TurnContextLoads(turns, loaders, runs::conversationDeadlineClock, copies, layout, authority);
     }
 
     @Bean
@@ -43,12 +42,10 @@ public class ConversationTurnConfiguration {
             ConversationAccess conversations,
             PersonDataWriteFence writeFence,
             PersonDataCopyFence copyFence,
-            Clock clock,
             AgentRuns runs,
             ConversationTurnService turns,
             AgentSandboxes sandboxes,
             TransactionTemplate transactions) {
-        return new ConversationTurns(
-                rows, conversations, writeFence, copyFence, clock, runs, turns, sandboxes, transactions);
+        return new ConversationTurns(rows, conversations, writeFence, copyFence, runs, turns, sandboxes, transactions);
     }
 }

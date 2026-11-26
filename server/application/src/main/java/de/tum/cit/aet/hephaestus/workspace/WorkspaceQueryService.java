@@ -162,6 +162,11 @@ public class WorkspaceQueryService {
         return workspaceRepository.findIdsByStatus(Workspace.WorkspaceStatus.ACTIVE);
     }
 
+    /** The workspace roots, including those whose queued work still needs to be ended. */
+    public List<Long> findIds() {
+        return workspaceRepository.findIds();
+    }
+
     /**
      * Find a workspace by its slug.
      *

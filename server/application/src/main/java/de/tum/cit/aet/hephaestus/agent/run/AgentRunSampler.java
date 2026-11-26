@@ -41,13 +41,15 @@ public class AgentRunSampler {
     private record Subject(AgentRunKind kind, AgentRunBand band) {}
 
     private final AgentRunRepository runs;
+    private final AgentRunTiming timing;
     private final Map<Slot, AtomicLong> open = new HashMap<>();
     private final Map<Subject, AtomicLong> due = new HashMap<>();
     private final Map<Subject, AtomicLong> oldestDue = new HashMap<>();
     private final Counter failures;
 
-    AgentRunSampler(AgentRunRepository runs, MeterRegistry meters) {
+    AgentRunSampler(AgentRunRepository runs, MeterRegistry meters, AgentRunTiming timing) {
         this.runs = runs;
+        this.timing = timing;
         // Every series exists from the start, so an alert on a backlog that is still empty has a series to read.
         for (AgentRunKind kind : AgentRunKind.values()) {
             for (AgentRunBand band : AgentRunBand.values()) {
@@ -107,7 +109,7 @@ public class AgentRunSampler {
             Map<Slot, Long> counts = new HashMap<>();
             Map<Subject, Long> dueCounts = new HashMap<>();
             Map<Subject, Long> ages = new HashMap<>();
-            for (AgentRunRepository.OpenRow row : runs.open()) {
+            for (AgentRunRepository.OpenRow row : runs.open(timing.read(true))) {
                 AgentRunKind kind = AgentRunKind.valueOf(row.getKind());
                 AgentRunBand band = AgentRunBand.valueOf(row.getBand());
                 String hold = row.getHoldReason();

@@ -83,6 +83,13 @@ Check the [database prerequisites](./compatibility-policy#database-baseline-prer
 ## Upgrade a schema-compatible release
 
 [Verify the release chart](./kubernetes#verify-the-release-chart).
+
+Before a rolling upgrade from 1.0.0-rc.16, check that the server nodes and PostgreSQL have synchronized clocks.
+Do the same before a rollback to 1.0.0-rc.16.
+Keep the clocks synchronized until the old Pods finish draining or the rollback completes.
+If the server clock is ahead, rc.16 can end a turn from the newer release too early.
+If the PostgreSQL clock is ahead, the newer release can end a turn from rc.16 too early.
+
 Then apply the new chart, its profile, and your own values:
 
 ```bash

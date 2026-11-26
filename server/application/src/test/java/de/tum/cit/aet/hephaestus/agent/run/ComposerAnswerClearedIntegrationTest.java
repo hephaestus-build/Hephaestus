@@ -41,6 +41,9 @@ class ComposerAnswerClearedIntegrationTest extends BaseIntegrationTest {
     private AgentRunRepository repository;
 
     @Autowired
+    private AgentRunTiming timing;
+
+    @Autowired
     private WorkspaceRepository workspaces;
 
     @Autowired
@@ -195,7 +198,7 @@ class ComposerAnswerClearedIntegrationTest extends BaseIntegrationTest {
             @Override
             public void ended(AgentRunRef run, int lastEpoch, AgentRunStopReason reason) {}
         };
-        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry()).reap();
+        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), timing, runs).reap();
     }
 
     private void assertCleared(AgentRunLease lease) {

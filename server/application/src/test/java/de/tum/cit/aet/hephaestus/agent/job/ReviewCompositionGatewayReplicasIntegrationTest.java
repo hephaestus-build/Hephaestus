@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -172,7 +173,8 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
     @ValueSource(booleans = {false, true})
     void shouldKeepThePersistedWithholdingDecisionWhenCompositionMovesToAnotherServer(boolean stopFirst)
             throws Exception {
-        var run = leaseTheComposition();
+        var lease = leaseTheComposition();
+        var run = new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
         var firstCustody = new ReviewAttemptCustody(runs);
         var secondCustody = new ReviewAttemptCustody(runs);
         var closing = mock(CompositionClosing.class);
@@ -180,7 +182,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
         var secondClosed = new AtomicInteger();
         var firstKind = composition(firstCustody, closing, firstClosed);
         var secondKind = composition(secondCustody, closing, secondClosed);
-        Boolean claimed = transactions.execute(status -> firstKind.claimed(run));
+        Boolean claimed = transactions.execute(status -> firstKind.claimed(sandbox, lease));
         assertThat(claimed).isTrue();
         try (var second = gateway(secondKind, new SandboxGatewaySessions());
                 var first = gateway(firstKind, new SandboxGatewaySessions())) {
@@ -227,11 +229,11 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
 
     @Test
     void shouldAnswerBusyWithoutWithholdingWhileAnotherServerHoldsTheWithholdingLock() throws Exception {
-        var run = leaseTheComposition();
+        var lease = leaseTheComposition();
         var custody = new ReviewAttemptCustody(runs);
         var closing = mock(CompositionClosing.class);
         var kind = composition(custody, closing, new AtomicInteger());
-        Boolean claimed = transactions.execute(status -> kind.claimed(run));
+        Boolean claimed = transactions.execute(status -> kind.claimed(sandbox, lease));
         assertThat(claimed).isTrue();
         var recorded =
                 Objects.requireNonNull(jobs.findById(job.getId()).orElseThrow().getCapture());
@@ -283,25 +285,25 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
         }
     }
 
-    private SandboxRun leaseTheComposition() {
+    private AgentRunLease leaseTheComposition() {
         var reviewRuns = beans.getBean(ReviewRunKind.class);
-        transactions.executeWithoutResult(status -> {
+        return Objects.requireNonNull(transactions.execute(status -> {
             job.setAdmissionAttempt(job.getAttempt());
             job.setAdmissionDigest("a".repeat(64));
             jobs.saveAndFlush(job);
             assertThat(reviewRuns.continueToCompose(job.getId(), fence)).isPresent();
             job = jobs.findById(job.getId()).orElseThrow();
-            assertThat(runs.claimSubject(
+            var lease = runs.claimSubject(
                             job.getWorkspaceId(),
                             ReviewRunKind.subject(job.getReviewId()),
-                            Set.of(AgentRunKind.REVIEW_COMPOSE)))
-                    .isPresent();
+                            Set.of(AgentRunKind.REVIEW_COMPOSE))
+                    .orElseThrow();
             RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().plus(RuntimeJobTestData.LEASE));
             ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
             jobs.saveAndFlush(job);
             fence = RuntimeJobTestData.fence(jdbc, job);
-        });
-        return new SandboxRun(sandbox, fence, AgentRunKind.REVIEW_COMPOSE, 0);
+            return lease;
+        }));
     }
 
     private static void stopReplica(ConfigurableApplicationContext replica, ReviewAttemptCustody custody, UUID jobId) {

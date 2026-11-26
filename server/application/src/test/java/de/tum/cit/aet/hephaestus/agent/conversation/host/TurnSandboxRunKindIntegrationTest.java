@@ -57,9 +57,9 @@ import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
-import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -67,7 +67,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -123,7 +122,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private MeterRegistry meters;
 
-    private final MutableClock clock = new MutableClock(Instant.now(), ZoneOffset.UTC);
     private AgentSandboxes sandboxes;
     private ConversationTurns held;
     private TurnSandboxRunKind kind;
@@ -145,7 +143,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 beans.getBean(PersonDataCopyFence.class),
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -159,7 +156,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 meters);
     }
@@ -191,14 +187,20 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private SandboxRun claim() {
+        return claim(() -> {});
+    }
+
+    private SandboxRun claim(Runnable beforeLease) {
         var sandbox = sandbox();
         var lease = sandboxes
                 .lease(
                         sandbox,
                         Set.of(AgentRunKind.TURN),
-                        () -> kind.beforeWrite(sandbox),
-                        claimed -> kind.claimed(
-                                new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
+                        () -> {
+                            kind.beforeWrite(sandbox);
+                            beforeLease.run();
+                        },
+                        claimed -> kind.claimed(sandbox, claimed))
                 .orElseThrow();
         return new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
     }
@@ -213,7 +215,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 request,
                                 "Write the opted-in weekly recap.",
                                 mapper.createObjectNode(),
-                                Duration.ofHours(1))))
+                                Instant.now().plus(Duration.ofHours(1)))))
                 .isTrue();
         return turnRows.findByWorkspaceIdAndRequestId(workspace.getId(), request)
                 .orElseThrow();
@@ -248,8 +250,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                         sandbox,
                         Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST),
                         () -> digestKind.beforeWrite(sandbox),
-                        claimed -> digestKind.claimed(
-                                new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
+                        claimed -> digestKind.claimed(sandbox, claimed))
                 .orElseThrow();
         var run = new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
         assertThat(lease.kind()).isEqualTo(AgentRunKind.DIGEST);
@@ -284,14 +285,22 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldStartOnlyTheSubjectsNextQuestionAndBoundItsWork() {
         ConversationTurn first = ask("First");
         ConversationTurn second = ask("Second");
-        SandboxRun run = claim();
+        SandboxRun run = claim(() -> jdbc.execute("SELECT pg_sleep(2)"));
         assertThat(run.fence().runId()).isEqualTo(first.getRunId());
         assertThat(held.held(run, false).turnId()).isEqualTo(first.getId());
         assertThat(turnRows.findById(second.getId()).orElseThrow().getStatus())
                 .isEqualTo(ConversationTurn.Status.QUEUED);
-        assertThat(held.workDeadline(run)).isAfter(clock.instant());
-        assertThat(runs.find(run.fence().run()).orElseThrow().getDeadline())
-                .isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
+        Instant startedAt = Objects.requireNonNull(
+                turnRows.findById(first.getId()).orElseThrow().getStartedAt());
+        var leased = runs.find(run.fence().run()).orElseThrow();
+        Instant leasedAt = Objects.requireNonNull(leased.getStartedAt());
+        assertThat(leasedAt).isAfterOrEqualTo(startedAt.plusSeconds(2));
+        assertThat(held.workDeadline(run))
+                .as("the wait before leasing leaves the full model timeout")
+                .isEqualTo(leasedAt.plusSeconds(
+                        LlmCatalogTestFixtures.admittedConversationConfig().timeoutSeconds()))
+                .isAfter(runs.conversationDeadlineClock());
+        assertThat(leased.getDeadline()).isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
         assertThat(sandboxes.lease(
                         run.sandbox(),
                         Set.of(AgentRunKind.TURN),
@@ -317,7 +326,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 failures);
         var controller = new AgentNextController(
@@ -422,7 +430,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 meters);
         assertThat(probe.during(() -> slowKind.context(run)).isObject()).isTrue();
@@ -441,7 +448,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 copyFence,
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -476,7 +482,12 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldAllowOnlyTheEndAfterTheWorkDeadline() {
         ask("Question");
         SandboxRun run = claim();
-        clock.advance(Duration.between(clock.instant(), held.workDeadline(run)).plusMillis(1));
+        transactions.executeWithoutResult(status -> assertThat(runs.limit(
+                        run.fence(),
+                        runs.conversationDeadlineClock()
+                                .plus(TurnRunsAdapter.GRACE)
+                                .minusSeconds(1)))
+                .isTrue());
         assertThatThrownBy(() -> held.held(run, false)).isInstanceOf(ConversationTurns.StopException.class);
         assertThat(held.held(run, true).runId()).isEqualTo(run.fence().runId());
     }
@@ -566,7 +577,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 personFence,
                 copyFence,
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -616,7 +626,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 observedFence,
                 beans.getBean(PersonDataCopyFence.class),
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -628,7 +637,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                         sandbox,
                         Set.of(AgentRunKind.TURN),
                         () -> observed.beforeWrite(sandbox),
-                        lease -> kind.claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))));
+                        lease -> kind.claimed(sandbox, lease)));
                 try {
                     assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
                 } catch (InterruptedException interrupted) {

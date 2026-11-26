@@ -29,10 +29,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -154,16 +152,12 @@ class TurnContextControllerTest extends BaseUnitTest {
         loads = new TurnContextLoads(
                 rows,
                 beans.getBeanProvider(ContextLoader.class),
-                Clock.fixed(NOW, ZoneOffset.UTC),
+                () -> NOW,
                 copies,
                 layout,
                 mock(AgentRunAuthority.class));
         controller = new TurnContextController(
-                mock(ConversationTurnContexts.class),
-                turns,
-                loads,
-                mock(AgentRunAuthority.class),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                mock(ConversationTurnContexts.class), turns, loads, mock(AgentRunAuthority.class));
     }
 
     @AfterEach

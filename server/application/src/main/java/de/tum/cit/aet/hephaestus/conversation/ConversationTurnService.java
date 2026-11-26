@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The turn lifecycle on the ledger: submit, start, end, take-back and stop
@@ -168,7 +168,7 @@ public class ConversationTurnService {
         return new Submission(turn, question, true);
     }
 
-    public record DigestRequest(String requestId, String text, JsonNode facts, Duration startWithin) {}
+    public record DigestRequest(String requestId, String text, ObjectNode facts, Instant startBy) {}
 
     /** A digest is a system stimulus on the same conversation ledger, with no invented user question. */
     @Transactional
@@ -182,12 +182,18 @@ public class ConversationTurnService {
         if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
                         .isPresent()
                 || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
-        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startWithin());
+        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startBy());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));
         ConversationEntry stimulus = entryService.insert(
                 conversation,
-                ConversationEntryDraft.digest(request.text(), request.facts(), request.requestId(), turn.getId()));
+                ConversationEntryDraft.digest(
+                        request.text(),
+                        request.facts()
+                                .deepCopy()
+                                .put("startBy", request.startBy().toString()),
+                        request.requestId(),
+                        turn.getId()));
         entryService.appended(conversation, List.of(stimulus));
         events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
         return true;
@@ -394,8 +400,7 @@ public class ConversationTurnService {
     }
 
     /**
-     * Ends a queued turn that waited for a free Hephaestus longer than its start wait. The caller locked the turn and
-     * ends its run.
+     * Ends a queued turn whose time to start has passed. The caller locked the turn and ends its run.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void expireQueued(ConversationTurn locked, String error) {

@@ -12,8 +12,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import org.jspecify.annotations.Nullable;
@@ -54,19 +52,16 @@ public class TurnContextController {
     private final ConversationTurnContexts contexts;
     private final TurnContextLoads folder;
     private final AgentRunAuthority authority;
-    private final Clock clock;
 
     public TurnContextController(
             ConversationTurnContexts contexts,
             ConversationTurns turns,
             TurnContextLoads folder,
-            AgentRunAuthority authority,
-            Clock clock) {
+            AgentRunAuthority authority) {
         this.turns = turns;
         this.contexts = contexts;
         this.folder = folder;
         this.authority = authority;
-        this.clock = clock;
     }
 
     public record LoadRequest(@NotBlank @Size(max = 512) String path) {}
@@ -93,8 +88,7 @@ public class TurnContextController {
         Instant deadline = turns.workDeadline(run);
         // Spring cancels the response task at the work deadline, also when a client trickles archive reads.
         return new WebAsyncTask<>(
-                Math.max(1, Duration.between(clock.instant(), deadline).toMillis()),
-                () -> load(run, request, response, deadline));
+                Math.max(1, folder.timeLeft(deadline).toMillis()), () -> load(run, request, response, deadline));
     }
 
     private @Nullable ResponseEntity<?> load(

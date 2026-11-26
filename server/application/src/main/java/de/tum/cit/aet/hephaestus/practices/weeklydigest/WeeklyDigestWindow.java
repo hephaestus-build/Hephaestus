@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.profile.OverviewWindow;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
@@ -16,6 +17,8 @@ import java.util.Locale;
  * @param weekStart the Monday the week starts on
  */
 public record WeeklyDigestWindow(LocalDate weekStart, ZoneId zone) {
+
+    public static final LocalTime CONTACT_END = LocalTime.of(21, 0);
 
     private static final DateTimeFormatter DAY_MONTH = DateTimeFormatter.ofPattern("d MMMM", Locale.ENGLISH);
     private static final DateTimeFormatter DAY_MONTH_YEAR = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH);
@@ -38,6 +41,11 @@ public record WeeklyDigestWindow(LocalDate weekStart, ZoneId zone) {
 
     public Instant end() {
         return weekStart.plusWeeks(1).atStartOfDay(zone).toInstant();
+    }
+
+    /** The contact window closes on the Monday after the week this digest describes. */
+    public Instant contactCutoff() {
+        return weekStart.plusWeeks(1).atTime(CONTACT_END).atZone(zone).toInstant();
     }
 
     /** The Sunday the week ends on. */

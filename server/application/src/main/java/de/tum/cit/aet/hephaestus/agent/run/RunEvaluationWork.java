@@ -18,17 +18,20 @@ class RunEvaluationWork implements EvaluationWork {
     private final AgentRunRepository repository;
     private final AgentRunNotifications notifications;
     private final EvaluationObservations observer;
+    private final AgentRunTiming timing;
     private final AtomicBoolean subscribed = new AtomicBoolean();
 
     RunEvaluationWork(
             AgentRuns runs,
             AgentRunRepository repository,
             AgentRunNotifications notifications,
-            EvaluationObservations observer) {
+            EvaluationObservations observer,
+            AgentRunTiming timing) {
         this.runs = runs;
         this.repository = repository;
         this.notifications = notifications;
         this.observer = observer;
+        this.timing = timing;
     }
 
     @Override
@@ -42,7 +45,7 @@ class RunEvaluationWork implements EvaluationWork {
             claimable.add(id);
             items.add(new Item("agent_run", id, "CLAIMABLE", null));
         }
-        for (Row row : repository.findEvaluationWork(workspaceIds)) {
+        for (Row row : repository.findEvaluationWork(workspaceIds, timing.read(false))) {
             if (claimable.contains(row.getId())) continue;
             var due = row.getFutureDueAt();
             String state = "QUEUED".equals(row.getState()) && due == null ? "QUEUED_NOT_CLAIMABLE" : row.getState();

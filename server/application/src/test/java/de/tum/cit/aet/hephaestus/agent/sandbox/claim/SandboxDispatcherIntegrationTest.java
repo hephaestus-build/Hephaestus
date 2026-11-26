@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -379,7 +380,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
     /** A run kind that review sandboxes drive; the dispatch reads only its kind and its sandbox. */
     private record Driven(AgentRunKind kind, AgentSandboxKind sandbox) implements SandboxRunKind {
         @Override
-        public boolean claimed(SandboxRun run) {
+        public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
             return true;
         }
 

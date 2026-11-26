@@ -76,7 +76,7 @@ Authenticate as an instance administrator to call these routes:
 
 | Request | Body | Result |
 | --- | --- | --- |
-| `POST /internal/evaluation/clock` | `{"instant":"2030-01-01T00:00:00Z"}` | Sets the application clock and offers due item events, weekly digests and Slack thread events. Database leases and access token lifetimes use real time. |
+| `POST /internal/evaluation/clock` | `{"instant":"2030-01-01T00:00:00Z"}` | Sets the application clock and offers due item events, weekly digests and Slack thread events. See [run clocks](./agent-runs.mdx#clocks) for conversation deadlines and digest cutoffs. Access token lifetimes use real time. |
 | `POST /internal/evaluation/settle` | `{"timeoutMillis":10000}` | Returns the collector watermark and future due times. If the wait expires, the response sets `settled` to `false` and lists the blocking queues and IDs. |
 
 The collector receives one JSON event per POST. It acknowledges each event with a successful HTTP status.

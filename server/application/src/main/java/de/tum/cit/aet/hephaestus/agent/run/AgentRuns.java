@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.conversation.ErasedDigestTurns;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -69,6 +70,8 @@ public class AgentRuns {
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
     private final AuthorityGenerations generations;
+    private final AgentRunTiming timing;
+    private final ErasedDigestTurns erasedDigests;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -84,11 +87,15 @@ public class AgentRuns {
             AgentRunRepository runs,
             AgentCapacityProperties capacity,
             MeterRegistry meters,
-            AuthorityGenerations generations) {
+            AuthorityGenerations generations,
+            AgentRunTiming timing,
+            ErasedDigestTurns erasedDigests) {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
         this.generations = generations;
+        this.timing = timing;
+        this.erasedDigests = erasedDigests;
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
@@ -149,6 +156,29 @@ public class AgentRuns {
                 startWithin,
                 Duration.ZERO,
                 null);
+    }
+
+    /** Records the relative window that a server rolled back to the old reader still needs. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueueDigest(long workspaceId, String subject, Instant startBy) {
+        var stamp = generations.stamp(workspaceId);
+        Instant databaseNow = runs.databaseClock();
+        Instant contactNow = Objects.requireNonNullElse(timing.replayNow(), databaseNow);
+        Duration startWithin = Duration.ofSeconds(
+                Math.max(1, Duration.between(contactNow, startBy).toSeconds()));
+        return saveQueued(new AgentRun(
+                UUID.randomUUID(),
+                workspaceId,
+                AgentRunKind.DIGEST,
+                AgentRunBand.BACKGROUND,
+                subject,
+                stamp,
+                0,
+                0,
+                databaseNow,
+                startWithin,
+                Duration.ZERO,
+                null));
     }
 
     /**
@@ -225,7 +255,7 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef continueExpired(AgentRunFence fence, Duration delay, Duration executionWindow) {
-        if (runs.endExpiredForContinuation(fence.runId(), fence.workspaceId(), fence.epoch()) != 1)
+        if (runs.endExpiredForContinuation(fence.runId(), fence.workspaceId(), fence.epoch(), timing.read(false)) != 1)
             throw new StaleRunException(fence);
         int calls = runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch());
         TransactionCallbacks.afterCommit(() -> settled(calls));
@@ -269,7 +299,7 @@ public class AgentRuns {
             @Nullable Duration startWithin,
             Duration delay,
             @Nullable Duration executionWindow) {
-        AgentRun run = new AgentRun(
+        return saveQueued(new AgentRun(
                 UUID.randomUUID(),
                 workspaceId,
                 kind,
@@ -281,9 +311,12 @@ public class AgentRuns {
                 runs.databaseClock(),
                 startWithin,
                 delay,
-                executionWindow);
+                executionWindow));
+    }
+
+    private AgentRunRef saveQueued(AgentRun run) {
         runs.save(run);
-        wake(kind);
+        wake(run.getKind());
         return run.ref();
     }
 
@@ -299,6 +332,7 @@ public class AgentRuns {
 
     private Optional<AgentRunLease> claimNext(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
         if (kinds.isEmpty()) return Optional.empty();
+        if (kinds.contains(AgentRunKind.DIGEST)) cancelErasedDigests(timing.workspaceIds(), null);
         // Only the oldest queued run of a subject is offered, and a claim skips a locked one, so two claims never lease
         // two runs of one subject; the partial unique index on the leased subject refuses it if they did.
         return runs.claim(
@@ -306,7 +340,8 @@ public class AgentRuns {
                         excluded,
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        capacity.bandAging().toSeconds())
+                        capacity.bandAging().toSeconds(),
+                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
                 .map(this::leased);
     }
 
@@ -329,7 +364,7 @@ public class AgentRuns {
 
     /**
      * Leases the next run of these kinds of one subject, for the sandbox that serves only that subject, or none. The
-     * claim order and the rule of one leased run for each subject are the same as for {@link #claim}.
+     * same queue order and rule of one leased run apply within the subject as for {@link #claim}.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunLease> claimSubject(long workspaceId, String concurrencyKey, Set<AgentRunKind> kinds) {
@@ -343,14 +378,31 @@ public class AgentRuns {
             offered.removeIf(AgentRunKind::conversation);
             if (offered.isEmpty()) return Optional.empty();
         }
+        if (offered.contains(AgentRunKind.DIGEST)) {
+            UUID conversationId = AgentRunTiming.conversationId(concurrencyKey);
+            if (conversationId != null) cancelErasedDigests(List.of(workspaceId), conversationId);
+        }
         return runs.claimSubject(
                         workspaceId,
                         concurrencyKey,
                         offered.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        capacity.bandAging().toSeconds())
+                        timing.readSubjects(
+                                offered.contains(AgentRunKind.DIGEST), List.of(workspaceId), List.of(concurrencyKey)))
                 .map(this::leased);
+    }
+
+    /** Takes a batch of queued runs that an earlier replica left behind during erasure. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelErasedDigests() {
+        cancelErasedDigests(timing.workspaceIds(), null);
+    }
+
+    private void cancelErasedDigests(Collection<Long> workspaceIds, @Nullable UUID conversationId) {
+        for (var run : erasedDigests.stopQueued(workspaceIds, conversationId, AgentRunReaper.BATCH)) {
+            cancelInTransaction(new AgentRunRef(run.runId(), run.workspaceId()));
+        }
     }
 
     /** A queued run that its sandbox claims next. */
@@ -369,7 +421,8 @@ public class AgentRuns {
                         kinds.stream().map(AgentRunKind::name).toList(),
                         offset,
                         limit,
-                        capacity.bandAging().toSeconds())
+                        capacity.bandAging().toSeconds(),
+                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),
@@ -386,7 +439,11 @@ public class AgentRuns {
     public List<DueRun> dueOf(Set<AgentRunKind> kinds, Collection<Long> workspaceIds, Collection<String> subjectKeys) {
         if (kinds.isEmpty() || workspaceIds.isEmpty() || subjectKeys.isEmpty()) return List.of();
         return runs
-                .findDueOfSubjects(kinds.stream().map(AgentRunKind::name).toList(), workspaceIds, subjectKeys)
+                .findDueOfSubjects(
+                        kinds.stream().map(AgentRunKind::name).toList(),
+                        workspaceIds,
+                        subjectKeys,
+                        timing.readSubjects(kinds.contains(AgentRunKind.DIGEST), workspaceIds, subjectKeys))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),
@@ -409,7 +466,19 @@ public class AgentRuns {
                 fence.workspaceId(),
                 fence.epoch(),
                 capacity.leaseTtl().toSeconds(),
-                capacity.turnLeaseTtl().toSeconds());
+                capacity.turnLeaseTtl().toSeconds(),
+                timing.read(false));
+    }
+
+    /** The clock that bounds conversation work, including work replayed at a scenario time. */
+    public Instant conversationDeadlineClock() {
+        Instant replayNow = timing.replayNow();
+        return replayNow != null ? replayNow : runs.databaseClock();
+    }
+
+    /** The time the lease was taken, on the scenario clock during a replay. */
+    public Instant conversationWorkStart(Instant leasedAt) {
+        return Objects.requireNonNullElse(timing.replayNow(), leasedAt);
     }
 
     /**
@@ -554,6 +623,10 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean cancel(AgentRunRef run) {
+        return cancelInTransaction(run);
+    }
+
+    private boolean cancelInTransaction(AgentRunRef run) {
         if (runs.cancel(run.id(), run.workspaceId()) != 1) return false;
         settled(runs.settleOpenCallsOfRun(run.id(), run.workspaceId()));
         if (evaluation != null)
@@ -731,6 +804,7 @@ public class AgentRuns {
                 row.getConcurrencyKey(),
                 row.getAttempt(),
                 row.getLeaseEpoch(),
+                row.getLeasedAt(),
                 row.getLeasedUntil(),
                 row.getDeadline());
     }

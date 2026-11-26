@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
  * A claim that {@link AgentRuns} granted: the holder drives the run until {@code leasedUntil} unless it renews.
  *
  * @param attempt the attempts the run spent before this claim
+ * @param leasedAt the database time when this claim took the lease
  */
 public record AgentRunLease(
         UUID runId,
@@ -16,6 +17,7 @@ public record AgentRunLease(
         String concurrencyKey,
         int attempt,
         int epoch,
+        Instant leasedAt,
         Instant leasedUntil,
         @Nullable Instant deadline) {
 

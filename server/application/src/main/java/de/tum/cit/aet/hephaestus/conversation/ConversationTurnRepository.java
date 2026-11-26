@@ -179,6 +179,27 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             nativeQuery = true)
     Optional<ConversationTurn> lockClaimedByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
 
+    interface ErasedTurnRow {
+        UUID getId();
+
+        long getWorkspaceId();
+    }
+
+    /** Queued digests redacted by a replica that did not end their runs. Lock the turns before the runs. */
+    @Query(value = """
+            SELECT t.id AS id, t.workspace_id AS "workspaceId" FROM conversation_turn t
+            WHERE t.workspace_id IN (:workspaceIds)
+              AND (CAST(:conversationId AS uuid) IS NULL OR t.conversation_id = :conversationId)
+              AND t.status = 'QUEUED'
+              AND EXISTS (SELECT 1 FROM conversation_entry e WHERE e.workspace_id = t.workspace_id
+                            AND e.turn_id = t.id AND e.kind = 'DIGEST' AND e.redacted_at IS NOT NULL)
+            ORDER BY t.id LIMIT :limit FOR UPDATE OF t SKIP LOCKED
+            """, nativeQuery = true)
+    List<ErasedTurnRow> lockErasedQueuedDigests(
+            @Param("workspaceIds") Collection<Long> workspaceIds,
+            @Param("conversationId") @Nullable UUID conversationId,
+            @Param("limit") int limit);
+
     @Query("""
             SELECT COUNT(t) FROM ConversationTurn t
             WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
