@@ -225,7 +225,14 @@ export async function runCustomProgram(
 	// The program ends at its review (see answerReview), so its exit does not stop the session it handed to.
 	const handOff = { happened: false };
 	const reviewEnded = Promise.withResolvers<undefined>();
-	const processGone = Promise.withResolvers<string | null>();
+	const processGone = Promise.withResolvers<string | null | undefined>();
+	let killDeadline: ReturnType<typeof setTimeout> | undefined;
+	const forceStop = () => {
+		if (killDeadline === undefined) {
+			killDeadline = setTimeout(() => processGone.resolve(undefined), RETURN_MS);
+			child.kill();
+		}
+	};
 	const endProgram = () => {
 		ended = true;
 		stopped.abort(new UnratedError("deadline", "the program ended"));
@@ -247,7 +254,7 @@ export async function runCustomProgram(
 	const open = new Map<number, OpenRequest>();
 	let lastRequestId = -1;
 	const outstanding = new Map<OpenRequest, Promise<void>>();
-	const reply = (message: Exclude<HostMessage, { kind: "job" | "abort" | "meta-accepted" }>) => {
+	const reply = (message: Extract<HostMessage, { id: number }>) => {
 		if (open.has(message.id) && child.connected && !handOff.happened) {
 			child.send(message);
 		}
@@ -297,7 +304,7 @@ export async function runCustomProgram(
 	const limit = { reached: false };
 	const stopAtLimit = () => {
 		limit.reached = true;
-		child.kill();
+		forceStop();
 		reviewEnded.resolve(undefined);
 	};
 	let killLater: ReturnType<typeof setTimeout> | undefined;
@@ -308,7 +315,7 @@ export async function runCustomProgram(
 
 	const fail = (stopReason: StopReason, error: string) => {
 		settled ??= { failure: { stopReason, error: cut(error) } };
-		child.kill();
+		forceStop();
 	};
 
 	/**
@@ -332,8 +339,18 @@ export async function runCustomProgram(
 				request.call.abort(new UnratedError("cancelled", "the program ended at its review"));
 			}
 		}
-		child.kill();
+		// A sandbox can deny signals between its processes. The child exits on acceptance.
+		const handoffDeadline = setTimeout(forceStop, RETURN_MS);
 		try {
+			if (child.connected) {
+				child.send({ kind: "review-accepted" });
+			}
+			const exitSignal = await processGone.promise;
+			clearTimeout(handoffDeadline);
+			if (exitSignal === undefined) {
+				return;
+			}
+			call.throwIfAborted();
 			const candidate = await services.review(parsed.options, call);
 			settled ??= {
 				value: structuredClone(candidate),
@@ -342,6 +359,7 @@ export async function runCustomProgram(
 		} catch (error) {
 			settled ??= { failure: { stopReason: reasonOf(error), error: cut(messageOf(error)) } };
 		} finally {
+			clearTimeout(handoffDeadline);
 			open.delete(id);
 			endProgram();
 			reviewEnded.resolve(undefined);
@@ -431,7 +449,7 @@ export async function runCustomProgram(
 			settled = {
 				failure: { stopReason: "error", error: "the program sent a second final message" },
 			};
-			child.kill();
+			forceStop();
 			return;
 		}
 		if (settled !== undefined && aborted === undefined) {
@@ -514,11 +532,15 @@ export async function runCustomProgram(
 	const deadlineLimit = setTimeout(stopAtLimit, Math.max(0, job.deadline - Date.now()) + RETURN_MS);
 	child.send({ kind: "job", job: { ...job, modulePath } } satisfies HostMessage);
 	const exitSignal = await processGone.promise;
-	if (handOff.happened) {
+	if (exitSignal !== undefined && handOff.happened) {
 		await reviewEnded.promise;
 	}
 	clearTimeout(deadlineLimit);
 	clearTimeout(killLater);
+	clearTimeout(killDeadline);
+	if (exitSignal === undefined) {
+		throw new ProgramSettlementError("the program process did not exit after it was stopped");
+	}
 	const drainTimer = new AbortController();
 	try {
 		const drained = await Promise.race([

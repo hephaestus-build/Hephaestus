@@ -170,6 +170,7 @@ async function workspace(scripts: Record<string, string | null>): Promise<Worksp
 
 interface RunOptions {
 	review?: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
+	start?: typeof forkedProgram;
 	/** Answers the program's reads in place of the captured sources. */
 	answer?: EvidenceReader["answer"];
 	signal?: AbortSignal;
@@ -205,7 +206,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 				new EvidenceReader(ws.sources, receipts),
 				options.answer === undefined ? {} : { answer: options.answer },
 			),
-			start: forkedProgram,
+			start: options.start ?? forkedProgram,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
 				return options.review === undefined ? REVIEWED : options.review(reviewOptions, signal);
@@ -789,46 +790,50 @@ export default definePracticeScript({
 		);
 	});
 
-	void test("a program ends at its review: its process is gone while the model works, and code after it does not run", async () => {
+	void test("an accepted review proceeds after its script exits even when the host cannot signal it", async (t) => {
 		const ws = await workspace({
 			after: program(
 				"definePracticeScript",
 				`{ meta: {}, async run(ctx) {
-					ctx.log("pid " + process.pid);
 					const reviewed = await ctx.review({});
 					ctx.log("after the review");
 					return { ...reviewed, summary: "The program's own summary" };
 				} }`,
 			),
 		});
-		let alive: boolean | undefined;
-		const seen: string[] = [];
+		let signaled = false;
+		let childExited = false;
+		let stopChild: (() => void) | undefined;
+		t.after(() => {
+			if (!childExited) {
+				stopChild?.();
+			}
+		});
 		const { outcome, logs } = await run(ws, "after", {
-			log: (line) => {
-				seen.push(line);
+			start: (options) => {
+				const child = forkedProgram(options);
+				stopChild = child.kill;
+				child.onClose(() => {
+					childExited = true;
+				});
+				return Object.assign(child, {
+					kill() {
+						signaled = true;
+					},
+				});
 			},
 			review: async () => {
-				const pid = /pid (?<pid>\d+)/u.exec(seen.join("\n"))?.groups?.pid;
-				assert.ok(pid !== undefined, seen.join("\n"));
-				const running = () => {
-					try {
-						process.kill(Number(pid), 0);
-						return true;
-					} catch {
-						return false;
+				try {
+					assert.equal(childExited, true, "the script must exit before the model runs");
+					assert.equal(signaled, false, "a normal handoff must work without a signal");
+					return REVIEWED;
+				} finally {
+					if (!childExited) {
+						stopChild?.();
 					}
-				};
-				// The host ends the program while the model works: wait for that exit, not a fixed time.
-				const deadline = Date.now() + 10_000;
-				alive = running();
-				while (alive && Date.now() < deadline) {
-					await sleep(10);
-					alive = running();
 				}
-				return REVIEWED;
 			},
 		});
-		assert.equal(alive, false);
 		assert.ok(!logs.some((line) => line.includes("after the review")), logs.join("\n"));
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.equal(outcome.candidate?.summary, REVIEWED.summary);

@@ -48,6 +48,7 @@ export type AbortReason = "deadline" | "budget" | "cancelled";
 export type HostMessage =
 	| { kind: "job"; job: ChildJob }
 	| { kind: "meta-accepted" }
+	| { kind: "review-accepted" }
 	| { kind: "read-result"; id: number; value: ReadValue }
 	| { kind: "read-failed"; id: number; reason: UnratedReason; message: string }
 	| { kind: "review-failed"; id: number; reason: UnratedReason; message: string }

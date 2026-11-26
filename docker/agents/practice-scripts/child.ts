@@ -24,6 +24,7 @@ import { guardScriptImports } from "./lib/core/script-imports.ts";
 guardScriptImports();
 
 const send = process.send?.bind(process);
+const exit = process.exit.bind(process);
 if (send === undefined) {
 	throw new Error("The program child runs only as a process forked by the program host");
 }
@@ -52,6 +53,9 @@ process.on("message", (message: unknown) => {
 	if (message.kind === "meta-accepted") {
 		metaReply.resolve(undefined);
 		return;
+	}
+	if (message.kind === "review-accepted") {
+		return exit(0);
 	}
 	if (message.kind === "abort") {
 		stopped.abort(
