@@ -260,8 +260,9 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(Void.class);
     }
 
+    /** View as user is removed. A tab still open on it is refused and records no view. */
     @Test
-    void shouldRecordOnlyARefusalWhenAUserViewRequiresRecentSignIn() {
+    void shouldRefuseARequestThatStillCarriesTheRemovedUserViewHeaders() {
         Account admin = persistAdmin("Viewing Vera");
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug("stale-user-view");
@@ -274,26 +275,18 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
         webTestClient
                 .get()
                 .uri("/workspaces/stale-user-view/practices/standings")
-                .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
+                .headers(h -> h.setBearerAuth(tokenFor(admin, Instant.now())))
                 .header("X-User-View-Workspace", "stale-user-view")
                 .header("X-User-View-Account", "99")
                 .header("X-User-View-Reason", "Support")
                 .exchange()
                 .expectStatus()
                 .isForbidden()
-                .expectBody()
-                .jsonPath("$.type")
-                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+                .expectBody(Void.class);
 
         assertThat(authEventRepository.findByAccountSince(
                         persistedId(admin.getId()), Instant.now().minusSeconds(60)))
-                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.USER_VIEW)
-                .singleElement()
-                .satisfies(event -> {
-                    assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
-                    assertThat(event.getViewedActorId()).isNull();
-                    assertThat(event.getFailureReason()).isEqualTo(StepUpRequiredException.CODE);
-                });
+                .noneMatch(event -> event.getEventType() == AuthEvent.EventType.USER_VIEW);
     }
 
     /**

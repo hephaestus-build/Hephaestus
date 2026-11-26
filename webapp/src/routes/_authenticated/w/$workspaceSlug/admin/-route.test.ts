@@ -1,6 +1,6 @@
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, describe, expect, it, onTestFinished } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { isRecord } from "@/lib/is-record";
@@ -11,7 +11,6 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
-import { clearUserView, USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
 import { loadRouteCode, ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 // The workspace reviews practices, so its home is the Practice profile.
@@ -231,25 +230,6 @@ describe("workspace-admin route gate", () => {
 		mockMembership(null);
 		await expect(land("/w/tutors/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 		expect(targetReads).toBe(0);
-	});
-
-	it("does not elevate an instance administrator's user view", async () => {
-		server.use(http.get("*/user", () => HttpResponse.json(currentUser)));
-		sessionStorage.setItem(
-			USER_VIEW_STORAGE_KEY,
-			JSON.stringify({
-				operatorAccountId: currentUser.id,
-				workspaceSlug: "acme",
-				workspaceName: "Acme",
-				accountId: "7",
-				providerLogin: "ada",
-				name: "Ada",
-				unclaimed: false,
-				reason: "Support request",
-			}),
-		);
-		onTestFinished(clearUserView);
-		await expect(land("/w/tutors/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("does not extend instance administration to ordinary nonmember workspace pages", async () => {

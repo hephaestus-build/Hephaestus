@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.event.AiChoiceChangedEvent;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -46,6 +48,15 @@ public class AccountDirectoryService implements AccountDirectory {
         return accounts.findAllById(accountIds).stream()
                 .map(AccountDirectoryService::view)
                 .collect(Collectors.toUnmodifiableMap(AccountView::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AccountView> activeInstanceAdmins() {
+        return accounts.findAllById(accounts.findActiveAdministratorIds()).stream()
+                .map(AccountDirectoryService::view)
+                .sorted(Comparator.comparing(AccountView::displayName).thenComparingLong(AccountView::id))
+                .toList();
     }
 
     @Override

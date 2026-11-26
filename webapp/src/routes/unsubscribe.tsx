@@ -7,7 +7,7 @@ import { EmailUnsubscribePage } from "@/components/settings/EmailUnsubscribePage
 import environment from "@/environment";
 import { pageTitle } from "@/lib/page-title";
 
-// This capability must work independently of stale sessions, CSRF cookies and impersonation.
+// This capability must work independently of stale sessions and CSRF cookies.
 const anonymousClient = createClient({
 	baseUrl: environment.serverUrl,
 	credentials: "omit",

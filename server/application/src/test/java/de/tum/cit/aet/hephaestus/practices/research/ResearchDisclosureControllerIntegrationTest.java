@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureController.CloseResearchDisclosureDTO;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureController.RecordResearchRemovalsDTO;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureController.ReleaseResearchDatasetDTO;
@@ -200,28 +199,6 @@ class ResearchDisclosureControllerIntegrationTest extends RealAuthIntegrationTes
                 .expectBody()
                 .jsonPath("$.type")
                 .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
-        assertUnchanged(before);
-    }
-
-    @ParameterizedTest
-    @EnumSource(Entry.class)
-    void shouldRejectUserViewHeadersBeforeAnyResearchWrite(Entry entry) {
-        withdraw();
-        long before = researchAuditCount();
-        var request = request(entry, token(admin, Instant.now()))
-                .header(
-                        UserViewContextHolder.WORKSPACE_HEADER,
-                        course.workspace().getWorkspaceSlug())
-                .header(
-                        UserViewContextHolder.ACCOUNT_HEADER,
-                        String.valueOf(course.account().getId()))
-                .header(UserViewContextHolder.REASON_HEADER, "Research export is not a support view");
-        send(entry, request)
-                .expectStatus()
-                .isForbidden()
-                .expectHeader()
-                .doesNotExist(HttpHeaders.CONTENT_DISPOSITION)
-                .expectBody(Void.class);
         assertUnchanged(before);
     }
 

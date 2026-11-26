@@ -74,6 +74,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Long> findActiveVerifiedAdministratorIds();
 
     @Query("""
+        SELECT a.id FROM Account a
+         WHERE a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN
+           AND a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE
+         ORDER BY a.id
+        """)
+    List<Long> findActiveAdministratorIds();
+
+    @Query("""
         SELECT a.primaryEmail FROM Account a
          WHERE a.id = :accountId
            AND a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN

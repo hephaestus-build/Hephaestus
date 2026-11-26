@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -29,7 +31,14 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 // The conversation store deletes the person's conversations through OWN_CONVERSATIONS. An entry or a turn references
 // its conversation with the conversation's account and cascades on delete, so it goes with them.
-@ErasesColumns({"conversation.account_id", "conversation_entry.account_id", "conversation_turn.account_id"})
+// The account purge deletes a support share of the person or addressed to them (eraseAccount).
+@ErasesColumns({
+    "conversation.account_id",
+    "conversation_entry.account_id",
+    "conversation_turn.account_id",
+    "support_share.account_id",
+    "support_share.recipient_account_id"
+})
 @PersonDataStores({
     ConversationEntryRepository.COPIES_PERSON_DATA_STORE,
     "conversation_entry_feedback_copy",
@@ -37,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
     "conversation_turn",
     "conversation"
 })
-public class ConversationPersonDataCatalog implements PersonDataCatalog {
+public class ConversationPersonDataCatalog implements PersonDataCatalog, AccountErasureContributor {
 
     /** The person's conversations: the account's main conversations and their threads. */
     static final String OWN_CONVERSATIONS = "SELECT c.id FROM conversation c WHERE c.account_id = :account";
@@ -50,6 +59,18 @@ public class ConversationPersonDataCatalog implements PersonDataCatalog {
     private final ConversationSandboxCopies sandboxCopies;
     private final WorkspaceMemberships memberships;
     private final Optional<OutlinePersonCopyScope> outline;
+
+    /**
+     * A support share holds no text: ids, times and a digest. An account is kept as a tombstone, so the foreign keys of
+     * a share never cascade: the purge deletes the person's shares and the shares addressed to them. They join the
+     * erasure inventory with their delivery (#5364, ADR 0164).
+     */
+    @Override
+    public void eraseAccount(long accountId) {
+        jdbc.update(
+                "DELETE FROM support_share WHERE account_id = :account OR recipient_account_id = :account",
+                Map.of("account", accountId));
+    }
 
     @Override
     public List<PersonDataContributor> contributors() {

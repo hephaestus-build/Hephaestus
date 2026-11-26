@@ -216,11 +216,3 @@ export const NoConnectedAccount: Story = {
 		await expect(canvas.queryByRole("heading", { name: "Needs you" })).not.toBeInTheDocument();
 	},
 };
-
-/** In a user view the settings a link would open are the viewer's, so the state offers none. */
-export const NoConnectedAccountInUserView: Story = {
-	args: { account: { status: "none" } },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
-	},
-};

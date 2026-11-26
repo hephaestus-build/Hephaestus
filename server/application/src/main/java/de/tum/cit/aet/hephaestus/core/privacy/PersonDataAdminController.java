@@ -22,7 +22,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -127,23 +125,6 @@ public class PersonDataAdminController {
     @Operation(operationId = "adminGetPersonDataRequest", summary = "Get a person-data preview or erasure receipt")
     public ResponseEntity<PersonDataRequestDTO> get(@PathVariable UUID id) {
         return response(service.get(id));
-    }
-
-    @PostMapping(value = "/{id}/export", produces = "application/json")
-    @RequiresRecentSignIn
-    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "PERSON_DATA_EXPORTED")
-    @Operation(operationId = "adminExportPersonData", summary = "Download the preview's frozen scope as one JSON file")
-    @ApiResponse(
-            responseCode = "200",
-            description = "JSON file",
-            content = @Content(mediaType = "application/json", schema = @Schema(type = "string", format = "binary")))
-    public ResponseEntity<byte[]> export(@PathVariable UUID id) {
-        String bundle = mapper.writeValueAsString(service.export(id));
-        record(AuthEvent.EventType.PERSON_DATA_EXPORTED);
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=person-data.json")
-                .body(bundle.getBytes(StandardCharsets.UTF_8));
     }
 
     @PostMapping("/{id}/erase")

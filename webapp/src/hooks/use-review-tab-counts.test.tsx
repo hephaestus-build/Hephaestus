@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
-import { USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
 
 import { useReviewTabCounts } from "./use-review-tab-counts";
 
@@ -42,7 +41,7 @@ function countReads(status = 200) {
 function mountCounts() {
 	const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 	const hook = renderHook(
-		() => useReviewTabCounts("demo", { developerId: "7", practiceSlug: ["testing"] }),
+		() => useReviewTabCounts("demo", { practiceSlug: ["testing"], from: "2026-09-01" }),
 		{
 			wrapper: ({ children }: { children: ReactNode }) => (
 				<QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -87,8 +86,9 @@ describe("practice review tab totals", () => {
 				expect(url.searchParams.get("size")).toBe("1");
 				expect(url.searchParams.get("practiceSlug")).toBe("testing");
 			}
+			// A staff count names no person (ADR 0125).
 			expect(wire.reads.map((url) => url.searchParams.get("personId"))).toStrictEqual(
-				Array.from({ length: 8 }, () => "7"),
+				Array.from({ length: 8 }, () => null),
 			);
 		} finally {
 			cleanup();
@@ -118,48 +118,4 @@ describe("practice review tab totals", () => {
 			client.clear();
 		}
 	});
-
-	it.each([
-		{ status: 200, expected: initial },
-		{
-			status: 500,
-			expected: {
-				reviews: undefined,
-				results: undefined,
-				problems: undefined,
-				feedback: undefined,
-			},
-		},
-	])(
-		"does not repeat audited user-view reads after a $status response",
-		async ({ status, expected }) => {
-			sessionStorage.setItem(
-				USER_VIEW_STORAGE_KEY,
-				JSON.stringify({
-					operatorAccountId: 1,
-					workspaceSlug: "demo",
-					workspaceName: "Demo",
-					accountId: "7",
-					providerLogin: "developer",
-					name: "Developer",
-					unclaimed: false,
-					reason: "Inspect own synthetic fixture",
-				}),
-			);
-			const wire = countReads(status);
-			const { result, client } = mountCounts();
-			try {
-				await waitFor(() => expect(wire.reads).toHaveLength(4));
-				await waitFor(() => expect(client.isFetching()).toBe(0));
-				expect(result.current).toStrictEqual(expected);
-				await act(async () => {
-					await vi.advanceTimersByTimeAsync(MINUTE * 2);
-				});
-				expect(wire.reads).toHaveLength(4);
-			} finally {
-				cleanup();
-				client.clear();
-			}
-		},
-	);
 });

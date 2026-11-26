@@ -29,7 +29,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
     private static final Instant AT = Instant.parse("2026-01-01T00:00:00Z");
     private static final FeedbackQueryFilter ALL = new FeedbackQueryFilter(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     @Autowired
     private ReviewIntegrationData data;

@@ -76,7 +76,7 @@ class ListReviewsTool implements McpTool {
     @RequireAtLeastWorkspaceAdmin
     public McpSchema.CallToolResult call(Map<String, Object> arguments) {
         int page = Math.max(0, McpTools.optionalInt(arguments, "page", 0));
-        var filter = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null, null);
+        var filter = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null);
         Page<ReviewSummaryDTO> found = reviews.list(
                 WorkspaceContextHolder.getContext().id(),
                 filter.validated(),

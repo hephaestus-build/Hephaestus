@@ -70,7 +70,6 @@ getOwnPracticeStandings	/workspaces/{workspaceSlug}/practices/standings
 getOwnResult	/workspaces/{workspaceSlug}/practices/results/{resultId}
 getOwnReview	/workspaces/{workspaceSlug}/practice-profile/reviews/{reviewId}
 getPasskeyStatus	/user/passkeys
-getPerPersonResults	/workspaces/{workspaceSlug}/per-person-results
 getPractice	/workspaces/{workspaceSlug}/practices/{practiceSlug}
 getPracticeDefinitionOptions	/workspaces/{workspaceSlug}/practices/definition-options
 getPracticeGroup	/workspaces/{workspaceSlug}/practice-groups/{groupSlug}
@@ -104,7 +103,6 @@ getSlackUserPreferences	/user/slack/preferences
 getStoppedGitLabProjects	/workspaces/{workspaceSlug}/repositories/stopped
 getUserFeatures	/user/features
 getUserSettings	/user/settings
-getUserViewUser	/workspaces/{workspaceSlug}/user-view/users/{accountId}
 getUsersWithTeams	/workspaces/{workspaceSlug}/users
 getWorkspace	/workspaces/{workspaceSlug}
 getWorkspacePasskeyPolicy	/workspaces/{workspaceSlug}/passkey-policy
@@ -133,12 +131,14 @@ listOwnGroupReviews	/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/revi
 listOwnItemReviews	/workspaces/{workspaceSlug}/practices/items/{itemId}/reviews?size=10
 listOwnResults	/workspaces/{workspaceSlug}/practices/results
 listOwnReviews	/workspaces/{workspaceSlug}/practice-profile/reviews?size=10
+listOwnSupportShares	/user/support-shares
 listPracticeDrafts	/workspaces/{workspaceSlug}/practice-drafts
 listPracticeGroups	/workspaces/{workspaceSlug}/practice-groups
 listPracticeReleases	/workspaces/{workspaceSlug}/practices/releases
 listPracticeVersions	/workspaces/{workspaceSlug}/practices/{practiceSlug}/versions
 listPractices	/workspaces/{workspaceSlug}/practices
 listProductFeedbackNeedsAction	/admin/product-feedback/needs-action
+listReceivedSupportShares	/admin/support-shares
 listResultMarks	/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks
 listReviewBatches	/workspaces/{workspaceSlug}/practices/review-batches
 listReviewFeedback	/workspaces/{workspaceSlug}/practices/reviews/feedback?size=25
@@ -156,12 +156,12 @@ listSessions	/user/sessions
 listSlackChannelCandidates	/workspaces/{workspaceSlug}/slack/channels/candidates
 listSlackChannelConsentEvents	/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events
 listSlackChannels	/workspaces/{workspaceSlug}/slack/channels
-listUserViewUsers	/workspaces/{workspaceSlug}/user-view/users
 listWorkspaceConfigAuditEvents	/workspaces/{workspaceSlug}/config-audit
 listWorkspaces	/workspaces
 previewGroupAdoption	/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{catalogGroupSlug}
 previewPracticeAdoption	/workspaces/{workspaceSlug}/practice-catalog/adoption/{catalogPracticeSlug}
 read	/workspaces/{workspaceSlug}/connections/{id}
+readSupportShare	/admin/support-shares/{shareId}
 resolveReviewContext	/workspaces/{workspaceSlug}/practices/review-context?url={htmlUrl}
 workspaceGetLlmSettings	/workspaces/{workspaceSlug}/llm/settings
 workspaceListAvailableLlmModels	/workspaces/{workspaceSlug}/llm/available-models

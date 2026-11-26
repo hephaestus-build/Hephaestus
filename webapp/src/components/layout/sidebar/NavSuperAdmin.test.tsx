@@ -18,6 +18,7 @@ const DESTINATIONS: [path: string, entry: string][] = [
 	["/admin", "Overview"],
 	["/admin/users", "Users"],
 	["/admin/person-data", "Person data"],
+	["/admin/support-shares", "Support shares"],
 	["/admin/research", "Research datasets"],
 	["/admin/workspaces", "Workspaces"],
 	["/admin/github-installations", "GitHub installations"],

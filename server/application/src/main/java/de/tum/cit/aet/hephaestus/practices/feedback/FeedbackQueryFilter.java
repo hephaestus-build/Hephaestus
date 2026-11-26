@@ -24,10 +24,6 @@ public record FeedbackQueryFilter(
         @Nullable String itemKind,
         @Nullable String practiceSlug,
         @Nullable String groupSlug,
-
-        @Positive @Schema(type = "string", pattern = "^[1-9][0-9]*$") @Nullable
-        Long personId,
-
         @Nullable List<FeedbackDestination> destination,
         @Nullable List<FeedbackState> state,
         @Nullable FeedbackLocation location,

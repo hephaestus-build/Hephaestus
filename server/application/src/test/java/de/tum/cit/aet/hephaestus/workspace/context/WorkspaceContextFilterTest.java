@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -109,20 +108,6 @@ class WorkspaceContextFilterTest extends BaseUnitTest {
         verifyNoInteractions(chain, elevationAudit, memberships);
     }
 
-    /** A user view acts as the viewed account, so even the owner viewing as themselves does not open the space. */
-    @Test
-    void shouldRefuseAUserViewOfAPersonalSpace() throws Exception {
-        personalSpace(7L);
-        signIn(7L);
-        UserViewContextHolder.set(new UserViewContextHolder.View(1L, 7L));
-        var response = new MockHttpServletResponse();
-
-        filter.doFilter(get("/workspaces/" + PERSONAL_SLUG + "/personal-test/echo"), response, chain);
-
-        assertThat(response.getStatus()).isEqualTo(404);
-        verifyNoInteractions(chain, elevationAudit, memberships);
-    }
-
     /** An owner who is an instance admin and holds no active membership is never elevated into the space. */
     @Test
     void shouldNotElevateAnOwnerWithoutAMembership() throws Exception {
@@ -139,7 +124,6 @@ class WorkspaceContextFilterTest extends BaseUnitTest {
     @AfterEach
     void signOut() {
         SecurityContextHolder.clearContext();
-        UserViewContextHolder.clear();
     }
 
     private void personalSpace(long ownerId) {

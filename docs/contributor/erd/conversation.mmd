@@ -79,6 +79,20 @@ erDiagram
         UUID basis_id
     }
 
+    SupportShare {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        BIGINT recipient_account_id FK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+        UUID turn_id "NOT NULL"
+        VARCHAR(64) text_digest
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ revoked_at
+        INTEGER read_count "NOT NULL"
+        TIMESTAMPTZ last_read_at
+    }
+
     Account["Account · Core"]
     AgentRun["AgentRun · Agent"]
     Workspace["Workspace · Workspace (Tenancy)"]
@@ -98,6 +112,9 @@ erDiagram
     Workspace ||--o{ ConversationEntry : has
     Conversation ||--o{ ConversationTurn : has
     Workspace ||--o{ ConversationTurn : has
+    Account ||--o{ SupportShare : account_id
+    Account ||--o{ SupportShare : recipient_account_id
+    Workspace ||--o{ SupportShare : has
 
     %% Styling
     classDef primaryEntity stroke-width:2px

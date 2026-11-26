@@ -10,8 +10,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Metadata-only view of a workspace for the instance-admin overview. DELIBERATELY excludes any tenant
- * content (member lists, repo names, etc.) — an instance admin sees the shape of a workspace, and
- * reaches private user content via audited read-only user views. Owner is the oldest OWNER-role member.
+ * content (member lists, repo names, etc.): an instance admin sees the shape of a workspace, and never a person's
+ * private content (ADR 0164). Owner is the oldest OWNER-role member.
  */
 @Schema(description = "Metadata-only workspace summary for the instance-admin overview")
 public record AdminWorkspaceViewDTO(

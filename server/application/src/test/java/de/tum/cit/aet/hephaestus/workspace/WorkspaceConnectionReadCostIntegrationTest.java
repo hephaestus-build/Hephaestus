@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
@@ -196,24 +195,6 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
 
         assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
                 .isEmpty();
-    }
-
-    @Test
-    void shouldKeepAUserViewLimitedToItsWorkspace() {
-        workspace(owner, 0);
-        var viewed = workspace(owner, 1);
-        viewed.suspend();
-        workspaces.saveAndFlush(viewed);
-        UserViewContextHolder.set(
-                new UserViewContextHolder.View(viewed.getId(), Objects.requireNonNull(owner.getId())));
-        try {
-            var read = reads.measure(queries::findAccessibleWorkspaceListItems);
-            assertThat(read.value()).extracting(WorkspaceListItemDTO::id).containsExactly(viewed.getId());
-            assertThat(read.value().getFirst().providerType()).isEqualTo(IdentityProviderType.GITHUB);
-            assertThat(read.value().getFirst().status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
-        } finally {
-            UserViewContextHolder.clear();
-        }
     }
 
     @Test

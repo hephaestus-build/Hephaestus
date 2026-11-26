@@ -158,6 +158,20 @@ final class PersonErasureAllStoresFixture {
                 "READY",
                 "payload",
                 CANARY.getBytes(StandardCharsets.UTF_8));
+        row(
+                "support_share",
+                "account_id",
+                account,
+                "recipient_account_id",
+                account,
+                "workspace_id",
+                workspace,
+                "turn_id",
+                UUID.randomUUID(),
+                "created_at",
+                now,
+                "expires_at",
+                later);
         row("notification_subscription", "account_id", account, "kind", "WEEKLY_DIGEST", "enabled", true);
         UUID report = UUID.randomUUID();
         row(

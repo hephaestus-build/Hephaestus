@@ -123,6 +123,11 @@ const dangerZoneProps = {
 	},
 } satisfies SettingsPageProps["dangerZoneProps"];
 
+const supportSharesProps = {
+	state: { status: "ready", shares: [] },
+	onRevoke: fn(),
+} satisfies SettingsPageProps["supportSharesProps"];
+
 const defaultSlackPreferencesProps = {
 	workspaces: [
 		{
@@ -156,6 +161,7 @@ export const Default: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
+		supportSharesProps,
 		dangerZoneProps,
 		isLoading: false,
 	},
@@ -168,6 +174,7 @@ export const Default: Story = {
 			"Preferences",
 			"Research participation",
 			"Workspaces",
+			"Support shares",
 			"Danger zone",
 		]);
 		for (const link of links) {
@@ -213,6 +220,7 @@ export const AllTogglesDisabled: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
+		supportSharesProps,
 		dangerZoneProps,
 		isLoading: false,
 	},
@@ -234,6 +242,7 @@ export const Loading: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
+		supportSharesProps,
 		dangerZoneProps,
 		isLoading: true,
 	},
@@ -294,6 +303,7 @@ export const ResearchHidden: Story = {
 		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
+		supportSharesProps,
 		dangerZoneProps,
 		isLoading: false,
 	},

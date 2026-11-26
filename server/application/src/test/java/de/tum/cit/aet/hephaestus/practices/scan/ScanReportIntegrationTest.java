@@ -58,7 +58,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.RemovalGuardState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAttemptGuard;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
@@ -286,8 +285,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var scan = data.scan(scenario, status, Instant.now());
         if (!status.isTerminal())
             invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.valueOf(status.name()));
-        var adapter = new ReviewRuntimeQueryAdapter(
-                jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
+        var adapter = new ReviewRuntimeQueryAdapter(jobs, runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(anyLong(), anyCollection()))
                 .thenAnswer(call -> adapter.jobCounts(call.getArgument(0), call.getArgument(1)));
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
@@ -356,8 +354,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .param("ws", scan.getWorkspaceId())
                 .param("review", scan.getId())
                 .update();
-        var adapter = new ReviewRuntimeQueryAdapter(
-                jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
+        var adapter = new ReviewRuntimeQueryAdapter(jobs, runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())))
                 .thenAnswer(call -> adapter.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())));
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))

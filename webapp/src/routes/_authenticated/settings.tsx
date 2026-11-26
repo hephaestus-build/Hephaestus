@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useAccountDangerZone } from "@/hooks/use-account-danger-zone";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useLeaveWorkspace } from "@/hooks/use-leave-workspace";
+import { useOwnSupportShares } from "@/hooks/use-own-support-shares";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { toast } from "@/lib/toast";
 import type { Route as RootRoute } from "@/routes/__root";
@@ -102,6 +103,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function RouteComponent() {
 	const passkeys = usePasskeySettings();
 	const dangerZoneProps = useAccountDangerZone({ onAccountDeleted: openSignInAfterDeletion });
+	const supportSharesProps = useOwnSupportShares();
 	const leaveWorkspaceProps = useLeaveWorkspace();
 	const queryClient = useQueryClient();
 	const { linkAccount, isAppAdmin, linkedProviders } = useAuth();
@@ -602,6 +604,7 @@ function RouteComponent() {
 				slackPreferencesProps={slackPreferencesProps}
 				sessionsProps={{ state: sessionsState }}
 				leaveWorkspaceProps={leaveWorkspaceProps}
+				supportSharesProps={supportSharesProps}
 				dangerZoneProps={dangerZoneProps}
 			/>
 			<SignOutConfirmAccess

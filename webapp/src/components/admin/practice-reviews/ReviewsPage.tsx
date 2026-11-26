@@ -29,7 +29,6 @@ import {
 	ReviewFilters,
 } from "./ReviewFilters";
 import { loadingMoreRows, ReviewListEnd } from "./ReviewListEnd";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 import { REVIEW_SUMMARY_COLUMNS, ReviewSummaryRow } from "./ReviewSummaryRow";
 import { ReviewTabIntro } from "./ReviewTabIntro";
@@ -78,7 +77,6 @@ export interface ReviewsPageProps {
 	record?: ScopeRecordFilter;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	openReviewId?: string;
 }
 
@@ -98,7 +96,6 @@ export function ReviewsPage({
 	record,
 	groups,
 	practices,
-	people,
 	openReviewId,
 }: ReviewsPageProps) {
 	const rows = reviews.status === "ready" ? reviews.rows : [];
@@ -184,7 +181,6 @@ export function ReviewsPage({
 				onClearScope={() => onSearchChange(clearedScope())}
 				groups={groups}
 				practices={practices}
-				people={people}
 				total={reviews.status === "ready" ? reviews.total : undefined}
 			/>
 			{requestOutcome}

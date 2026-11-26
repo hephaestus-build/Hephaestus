@@ -26,11 +26,8 @@ import { PersonActivitySections, memberRepositoryState } from "./PersonActivityS
 export type ActivityAccount =
 	| { status: "loading" }
 	| { status: "error"; error: unknown; onRetry: () => void }
-	/**
-	 * The workspace knows no provider account for this person. `settingsLink` leads to where one is
-	 * connected, for a reader who can connect it.
-	 */
-	| { status: "none"; settingsLink?: ReactElement }
+	/** The workspace knows no provider account for this person. `settingsLink` leads to where one is connected. */
+	| { status: "none"; settingsLink: ReactElement }
 	| { status: "ready"; login: string };
 
 export interface ActivityPageProps {
@@ -92,7 +89,7 @@ export function ActivityPage({
 							{`Activity shows the work you do with your ${getProviderTerms(providerType).displayName} account. Connect it to see your activity here.`}
 						</EmptyDescription>
 					</EmptyHeader>
-					{settingsLink && <EmptyContent>{settingsLink}</EmptyContent>}
+					<EmptyContent>{settingsLink}</EmptyContent>
 				</Empty>
 			</PageLayout>
 		);

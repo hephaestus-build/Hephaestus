@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -67,8 +66,7 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
 
     @Override
     public boolean freshPasskeyProof() {
-        return UserViewContextHolder.get() == null
-                && isFresh(SecurityContextHolder.getContext().getAuthentication());
+        return isFresh(SecurityContextHolder.getContext().getAuthentication());
     }
 
     private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
@@ -141,10 +139,6 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
 
     @Override
     public void requireFresh() {
-        // A user view acts for another account, so its operator's proof never authorizes the action.
-        if (UserViewContextHolder.get() != null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This action is not available in a user view.");
-        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (!auth.assuranceEnforced()) {
             if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt) || jwt.hasClaim("sid")) {

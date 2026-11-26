@@ -13,7 +13,6 @@ import type {
 	FeatureFlags,
 	OffsetPageDtoFeedbackItem,
 	PasskeyStatus,
-	PerPersonResults,
 	ProductFeedbackSharing,
 	WorkspacePasskeyPolicy,
 	WorkspaceProviders,
@@ -79,10 +78,6 @@ export const handlers = [
 	// MCP clients are off by default, so the endpoint does not exist.
 	http.get("*/workspaces/:workspaceSlug/mcp-grants", () =>
 		HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 }),
-	),
-	// On, as in every workspace that ran practice reviews before the setting existed.
-	http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
-		HttpResponse.json({ enabled: true, canTurnOn: true } satisfies Wire<PerPersonResults>),
 	),
 	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 		HttpResponse.json(workspaceOnboarding()),
@@ -172,6 +167,8 @@ export const handlers = [
 		exportPolls.delete(String(exportPending.id));
 		return HttpResponse.json({ id: exportPending.id, status: "PENDING" }, { status: 202 });
 	}),
+	// The reader's support shares: none by default.
+	http.get("*/user/support-shares", () => HttpResponse.json([])),
 	http.get("*/user/exports/:id/download", () =>
 		HttpResponse.json(
 			{ account: currentUser, exportedAt: "2026-05-29T10:00:05Z" },

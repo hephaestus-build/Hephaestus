@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * ADR 0047: the Practice profile has one reader. Each of its reads serves the signed-in developer, or the account an
- * instance admin views through View as user, and never takes a person to read on behalf of. A handler parameter, a
+ * ADR 0047 and ADR 0125: the Practice profile has one reader. Each of its reads serves the signed-in developer and
+ * never takes a person to read on behalf of. A handler parameter, a
  * bound filter field or a path variable that names a person would let a caller ask for someone else's profile.
  */
 class PracticeProfileOneReaderArchitectureTest extends HephaestusArchitectureTest {

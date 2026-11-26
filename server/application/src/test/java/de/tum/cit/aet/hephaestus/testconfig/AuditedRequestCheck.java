@@ -48,8 +48,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * advisory: nothing reads it, and files from earlier runs stay until {@code clean}.
  *
  * <p>It checks only handlers that carry {@link Audited} directly. A handler that carries it through a
- * meta-annotation, such as {@code @UserViewRead}, is not checked, because its step-up and view rows are
- * written outside the handler call.
+ * meta-annotation is not checked, because such an annotation can write its rows outside the handler call.
  */
 @Aspect
 @TestComponent

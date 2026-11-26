@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFact;
@@ -27,8 +26,8 @@ class ReviewRuntimeQueryAdapterTest extends BaseUnitTest {
     private static final Instant TO = CREATED.plusSeconds(2000);
     private final ReviewRuntimeRepository runtime = mock(ReviewRuntimeRepository.class);
     private final ReviewTimingFactsQuery facts = mock(ReviewTimingFactsQuery.class);
-    private final ReviewRuntimeQueryAdapter adapter = new ReviewRuntimeQueryAdapter(
-            mock(ReviewJobRepository.class), mock(ReviewAssignmentQuery.class), runtime, facts);
+    private final ReviewRuntimeQueryAdapter adapter =
+            new ReviewRuntimeQueryAdapter(mock(ReviewJobRepository.class), runtime, facts);
 
     @Test
     void shouldExcludeUnknownIntervalsWhenPublicCompletionPredatesTheRunningContinuation() {

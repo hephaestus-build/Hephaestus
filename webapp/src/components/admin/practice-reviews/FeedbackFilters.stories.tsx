@@ -6,11 +6,10 @@ import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { clearedFeedbackFacets, FeedbackFilters } from "./FeedbackFilters";
-import { practiceGroups, workspaceMembers, workspacePractices } from "./fixtures";
+import { practiceGroups, workspacePractices } from "./fixtures";
 import { practiceFacetOptions } from "./ResultFilters";
 import { clearedScope } from "./review-scope";
 import type { FeedbackSearch } from "./review-search";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import { STORY_GROUPS } from "./story-scope-sources";
 
 const UNFILTERED = {
@@ -19,17 +18,6 @@ const UNFILTERED = {
 	withheldFamily: undefined,
 } satisfies FeedbackSearch;
 
-const PEOPLE: ReviewPeople = {
-	options: workspaceMembers.map(({ account }) => ({
-		accountId: account.id,
-		label: account.displayName ?? `#${account.id}`,
-		secondary: account.identities[0]?.login ?? undefined,
-	})),
-	capped: false,
-	named: true,
-	isLoading: false,
-	isError: false,
-};
 const PRACTICES: FacetSource = {
 	options: practiceFacetOptions(workspacePractices, practiceGroups),
 	isLoading: false,
@@ -53,7 +41,6 @@ const meta = {
 		onClearScope: fn(),
 		groups: STORY_GROUPS,
 		practices: PRACTICES,
-		people: PEOPLE,
 		total: 11,
 	},
 	// Controlled: `selected` on every facet comes back through the same `search` the choice is
@@ -122,21 +109,6 @@ export const ReportsAChosenDelivery: Story = {
 		const listbox = await screen.findByRole("listbox", { name: "Delivery options" });
 		await userEvent.click(await within(listbox).findByRole("option", { name: /^Delivered/u }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ state: ["DELIVERED"] });
-	},
-};
-
-/**
- * The person the list is filtered to may not be on the fetched member page; the facet names them from
- * the row that is on screen rather than showing a bare id.
- */
-export const FilteredToSomebodyOffThePage: Story = {
-	args: {
-		search: { ...UNFILTERED, developerId: "404" },
-		developerName: "Barbara Liskov",
-		total: 2,
-	},
-	play: async ({ canvas }) => {
-		await canvas.findByRole("combobox", { name: "Developer: Barbara Liskov" });
 	},
 };
 

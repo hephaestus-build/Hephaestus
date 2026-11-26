@@ -39,7 +39,7 @@ function ReviewsRoute() {
 	const updateSearch = (patch: Partial<ReviewsSearch>) => {
 		void setSearch((previous) => ({ ...previous, ...patch }), { replace: true });
 	};
-	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);
+	const { groups, practices } = useReviewScopeSources(workspaceSlug);
 	const listOptions = listReviewsInfiniteOptions({
 		path: { workspaceSlug },
 		query: reviewsQuery(search, REVIEW_PAGE_SIZE),
@@ -81,7 +81,6 @@ function ReviewsRoute() {
 			}
 			groups={groups}
 			practices={practices}
-			people={people}
 			record={record}
 			openReviewId={front?.kind === "review" ? front.id : undefined}
 		/>

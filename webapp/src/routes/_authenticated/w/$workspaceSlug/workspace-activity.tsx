@@ -52,7 +52,6 @@ import { problemDetailOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { carriedSearchParams, nonEmpty, useSearchState } from "@/lib/search-params";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
-import { useAuth } from "@/runtime/auth/AuthContext";
 import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
@@ -96,10 +95,8 @@ function WorkspaceActivity() {
 	const { workspaces } = useActiveWorkspaceSlug();
 	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
 	const providerType = toScmProviderType(workspace?.providerType);
-	// A user view reads the page as the member does and changes nothing on their behalf.
-	const readOnly = useAuth().userView !== undefined;
 	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
-	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
+	const isAdmin = hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 
 	const period = periodFromSearch(search);
 	const scope = { workspaceSlug, period, team: search.team, repo: search.repo };

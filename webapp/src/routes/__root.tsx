@@ -1,10 +1,4 @@
-import {
-	notifyManager,
-	type QueryCache,
-	type QueryClient,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import {
 	CatchBoundary,
 	createRootRouteWithContext,
@@ -18,23 +12,12 @@ import {
 	useRouter,
 } from "@tanstack/react-router";
 import { cn } from "cn";
-import {
-	lazy,
-	type ReactNode,
-	Suspense,
-	use,
-	useEffect,
-	useRef,
-	useState,
-	useSyncExternalStore,
-} from "react";
+import { lazy, type ReactNode, Suspense, use, useEffect, useRef, useState } from "react";
 
 import {
 	getIntegrationCatalogOptions,
 	getMemberOnboardingOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
-import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { PageError } from "@/components/common/PageError";
 import Footer from "@/components/layout/Footer";
@@ -58,7 +41,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { usePublicUsagePublished } from "@/hooks/use-public-usage-published";
@@ -69,7 +51,6 @@ import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { isConversationOutOfReach } from "@/lib/conversation-availability";
 import { isFeedbackShortcut, SIDEBAR_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
-import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { toast } from "@/lib/toast";
 import { WorkProviderContext } from "@/lib/work-provider-context";
@@ -77,7 +58,6 @@ import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
 import { useProviderColors } from "@/runtime/theme/provider-colors";
-import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
 import { isConversationPanelExcludedRoute } from "./-conversation-panel-route";
 import { showConversationUnavailable } from "./-conversation-unavailable";
@@ -145,7 +125,6 @@ function AppLayout({
 	surface: "standard" | "bleed" | "fullscreen";
 	pathname: string;
 }) {
-	const { userView } = useAuth();
 	const corner = useGetStartedCornerState(pathname);
 	const publicUsagePublished = usePublicUsagePublished();
 
@@ -167,14 +146,6 @@ function AppLayout({
 							)}
 						>
 							<HeaderContainer />
-							{userView && (
-								<UserViewBanner
-									name={userView.name}
-									workspace={userView.workspaceName}
-									unclaimed={userView.unclaimed}
-									onExit={exitUserView}
-								/>
-							)}
 							<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 								{surface === "standard" ? (
 									<StandardPageSurface className="flex-1">
@@ -219,8 +190,7 @@ function AppLayout({
 			</GetStartedCornerContext>
 			<Toaster />
 			<PublicLoginOverlay />
-			{userView && <UserViewConfirmAccess />}
-			{!userView && <FeatureFlagDevTools />}
+			<FeatureFlagDevTools />
 		</>
 	);
 }
@@ -243,13 +213,12 @@ const CORNER_ROOM = "5rem";
 
 /**
  * Whether the reader's Get started list can show in the bottom-right corner, and the card's state.
- * Only for the signed-in member's own workspace pages where Ask Hephaestus showed before: never in
- * a user view, which reads someone else's work, never for someone who is not a member, and not on
- * the conversation, admin, settings or legal pages. A list that the reader hid or finished loads
+ * Only for the signed-in member's own workspace pages where Ask Hephaestus showed before: never for
+ * someone who is not a member, and not on the conversation, admin, settings or legal pages. A list that the reader hid or finished loads
  * nothing; the account menu shows it again.
  */
 function useGetStartedCornerState(pathname: string) {
-	const { isAuthenticated, isLoading, userView, getUserId } = useAuth();
+	const { isAuthenticated, isLoading, getUserId } = useAuth();
 	const { workspaceSlug } = useActiveWorkspaceSlug();
 	const { role } = useWorkspaceAccess();
 	const accountId = getUserId();
@@ -267,7 +236,6 @@ function useGetStartedCornerState(pathname: string) {
 		setCard((current) => ({ ...current, open: false }));
 	}
 	const available =
-		!userView &&
 		!isLoading &&
 		isAuthenticated &&
 		accountId !== undefined &&
@@ -450,7 +418,6 @@ function HeaderContainer() {
 		session,
 		retrySession,
 		userProfile,
-		userView,
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
@@ -459,13 +426,9 @@ function HeaderContainer() {
 	const { pathname } = useLocation();
 	const getStartedCorner = use(GetStartedCornerContext);
 	const showConversationPanel =
-		!userView && !isLoading && isAuthenticated && !isConversationPanelExcludedRoute(pathname);
-
-	// The account menu signs the administrator out, so during a user view it names them.
-	const effectiveUsername = userView ? userProfile?.username : selfLogin;
-	const effectiveName = userView
-		? userProfile?.name
-		: (workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`));
+		!isLoading && isAuthenticated && !isConversationPanelExcludedRoute(pathname);
+	const effectiveName =
+		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
 
 	return (
 		<Header
@@ -475,12 +438,11 @@ function HeaderContainer() {
 			isProduction={environment.deployment.isProduction}
 			session={session}
 			name={effectiveName}
-			username={effectiveUsername}
+			username={selfLogin}
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
-			readOnly={Boolean(userView)}
 			feedbackDialog={
-				!userView && !isLoading && isAuthenticated ? (
+				!isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
 						key={`${getUserId() ?? ""}:${chromeWorkspaceSlug ?? ""}`}
 						workspaceSlug={chromeWorkspaceSlug}
@@ -525,50 +487,6 @@ function SidebarToggle() {
 				</span>
 			</TooltipContent>
 		</Tooltip>
-	);
-}
-
-/** The newest refusal, so a dismissed one still cached cannot hide a later one. */
-function latestStepUpRefusal(queryCache: QueryCache): unknown {
-	let latest: { error: unknown; at: number } | undefined;
-	for (const { state } of queryCache.getAll()) {
-		if (
-			state.status === "error" &&
-			(latest === undefined || state.errorUpdatedAt > latest.at) &&
-			stepUpChallengeOf(state.error) !== undefined
-		) {
-			latest = { error: state.error, at: state.errorUpdatedAt };
-		}
-	}
-	return latest?.error;
-}
-
-/** Every read in a user view needs a recent sign-in, so any page's refusal asks for one here. */
-function UserViewConfirmAccess() {
-	const queryCache = useQueryClient().getQueryCache();
-	const refusal = useSyncExternalStore(
-		(onStoreChange) => queryCache.subscribe(notifyManager.batchCalls(onStoreChange)),
-		() => latestStepUpRefusal(queryCache),
-	);
-	const [dismissed, setDismissed] = useState<unknown>();
-	const challenge = refusal === dismissed ? undefined : stepUpChallengeOf(refusal);
-	const confirmAccess = useConfirmAccess(challenge !== undefined);
-
-	return (
-		<ConfirmAccessDialog
-			open={challenge !== undefined}
-			onOpenChange={(open) => {
-				if (!open) {
-					setDismissed(refusal);
-				}
-			}}
-			maxAgeSeconds={challenge?.maxAgeSeconds}
-			providers={confirmAccess.providers}
-			loading={confirmAccess.loading}
-			error={confirmAccess.error}
-			onRetry={confirmAccess.retry}
-			onSignIn={confirmAccess.signIn}
-		/>
 	);
 }
 
@@ -620,8 +538,8 @@ function sidebarContextOf(pathname: string): SidebarContext {
 
 function AppSidebarContainer() {
 	const { pathname } = useLocation();
-	const { isAuthenticated, username, isAppAdmin, userView } = useAuth();
-	const waitingReports = useWaitingProductFeedback(isAppAdmin && !userView);
+	const { isAuthenticated, username, isAppAdmin } = useAuth();
+	const waitingReports = useWaitingProductFeedback(isAppAdmin);
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
@@ -669,13 +587,10 @@ function AppSidebarContainer() {
 	// The saved choice belongs to the signed-in account.
 	const onboarding = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
-		enabled: sidebarContext === "main" && isAuthenticated && isMember && !userView && hasWorkspace,
+		enabled: sidebarContext === "main" && isAuthenticated && isMember && hasWorkspace,
 	});
 	const showConversation =
-		isMember &&
-		!userView &&
-		onboarding.data !== undefined &&
-		!isConversationOutOfReach(onboarding.data);
+		isMember && onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data);
 
 	// Read only where the sidebar says "No workspace".
 	const workspaceCreation = useWorkspaceCreation({
@@ -704,7 +619,6 @@ function AppSidebarContainer() {
 			isAppAdmin={isAppAdmin}
 			waitingReports={waitingReports}
 			showConversation={showConversation}
-			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			awaitingApproval={awaitingApproval}
 			context={sidebarContext}

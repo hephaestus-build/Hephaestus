@@ -22,7 +22,6 @@ import {
 	setScopeFacets,
 	type TimeOrder,
 } from "./review-scope";
-import { type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
 import { type ReviewSortItem, ReviewSortSelect } from "./ReviewSortSelect";
 import { ShowTurnedOffSwitch } from "./ShowTurnedOffSwitch";
 
@@ -35,8 +34,6 @@ export interface ScopeFiltersProps {
 	groups: FacetSource;
 	/** Every practice, with its group. A chosen group narrows what the practice facet offers. */
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
-	personName?: string;
 	/**
 	 * The one review, item or result the scope is filtered to, by name — set by a "See
 	 * all" link or a link from before. A record picked with a crosshair is the selection bar's instead,
@@ -84,8 +81,6 @@ const RECORD_UNNAMED: Record<ScopeRecordFilter["facet"], string> = {
 	result: "one observation",
 };
 
-const DEVELOPER_TITLE = "Developer";
-
 const TIME_ORDER_ITEMS: readonly [ReviewSortItem<TimeOrder>, ...ReviewSortItem<TimeOrder>[]] = [
 	{ value: "NEWEST", label: "Newest first" },
 	{ value: "OLDEST", label: "Oldest first" },
@@ -127,7 +122,7 @@ function ScopeOrderSelect({
 }
 
 /**
- * The scope's own controls, in the order every tab shows them: developer, group, practice, date, and
+ * The scope's own controls, in the order every tab shows them: group, practice, date, and
  * on a list the time order.
  * A part this tab cannot apply has no control; `ScopePills` keeps it visible as a muted pill. The
  * practice facet leaves out the practices turned off today, until the reader asks for them.
@@ -139,8 +134,6 @@ function ScopeFacetControls({
 	dateTitle,
 	groups,
 	practices,
-	people,
-	personName,
 	ownOrder,
 }: ScopeFiltersProps) {
 	const applies = SCOPE_APPLIES[tab];
@@ -153,15 +146,6 @@ function ScopeFacetControls({
 		: inGroups.filter((option) => option.turnedOff !== true || chosen.includes(option.value));
 	return (
 		<>
-			{applies.includes("developer") && people.named && (
-				<ReviewPersonFacet
-					title={DEVELOPER_TITLE}
-					people={people}
-					selected={scope.developerId}
-					onChange={(developerId) => onChange({ developerId })}
-					fallbackName={personName}
-				/>
-			)}
 			{applies.includes("group") && (
 				<FacetMultiSelect
 					title="Group"
@@ -241,17 +225,11 @@ function ScopePills({
 	onChange,
 	groups,
 	practices,
-	people,
-	personName,
 	record,
 	notAppliedNote = "Not applied on this list",
 }: ScopeFiltersProps & { notAppliedNote?: string }) {
 	const applies = SCOPE_APPLIES[tab];
-	const developerLabel =
-		people.options.find((person) => person.accountId === scope.developerId)?.label ??
-		personName ??
-		(scope.developerId === undefined ? undefined : `#${scope.developerId}`);
-	const pills = scopePills(scope, { developerLabel, groups, practices }, onChange);
+	const pills = scopePills(scope, { groups, practices }, onChange);
 	const recordPill: ScopePill | undefined = record && {
 		key: "record",
 		facet: record.facet,
@@ -357,22 +335,12 @@ function practicesInGroups(
 function scopePills(
 	scope: ReviewScope,
 	names: {
-		developerLabel: string | undefined;
 		groups: FacetSource;
 		practices: FacetSource;
 	},
 	onChange: (patch: Partial<ReviewScope>) => void,
 ): ScopePill[] {
 	const pills: ScopePill[] = [];
-	if (names.developerLabel !== undefined) {
-		pills.push({
-			key: "developer",
-			facet: "developer",
-			title: DEVELOPER_TITLE,
-			value: names.developerLabel,
-			onClear: () => onChange({ developerId: undefined }),
-		});
-	}
 	for (const pill of facetPills("Group", names.groups.options, scope.groupSlug, (values) =>
 		onChange({ groupSlug: nonEmpty(values) }),
 	)) {

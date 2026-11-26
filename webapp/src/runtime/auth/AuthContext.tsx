@@ -10,11 +10,6 @@ import {
 } from "./guard";
 
 import { hasText } from "@/lib/text";
-import {
-	clearUserView,
-	getUserViewSession,
-	type UserViewSession,
-} from "@/runtime/user-view/session";
 
 export type { UserProfile } from "./auth-client";
 
@@ -32,8 +27,6 @@ export interface AuthContextType {
 	userRoles: string[];
 	isAppAdmin: boolean;
 	userProfile: UserProfile | undefined;
-	/** The read-only view this administrator opened, if one is active. */
-	userView: UserViewSession | undefined;
 	login: (idpHint?: string, returnTo?: string) => void;
 	/** Mints an admin session for the `dev` provider, which the server offers outside production only. */
 	devLogin: (username: string, returnTo?: string) => Promise<void>;
@@ -73,7 +66,6 @@ function linkAccount(providerAlias: string, returnTo?: string) {
 async function logout() {
 	try {
 		await authClient.logout();
-		clearUserView();
 	} catch {
 		toast.error("We could not confirm that you signed out. Try again.");
 	}
@@ -106,23 +98,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	}
 
 	const user = userQuery.data ?? null;
-	// The identity fetch has already dropped a view that belongs to anyone else.
-	const viewed = user ? getUserViewSession() : undefined;
 	const isLoading = userQuery.isPending;
 	const { isError } = userQuery;
 
 	const userProfile = user ? toUserProfile(user) : undefined;
 
-	const isAppAdmin = !viewed && computeIsAppAdmin(user);
+	const isAppAdmin = computeIsAppAdmin(user);
 
-	const hasRole = (role: string) => !viewed && (user?.roles ?? []).includes(role);
+	const hasRole = (role: string) => (user?.roles ?? []).includes(role);
 
-	// A viewed account without a workspace login must not inherit the operator's login.
-	const username = viewed ? (viewed.providerLogin ?? undefined) : (user?.username ?? undefined);
+	const username = user?.username ?? undefined;
 
-	const getUserId = () => (viewed !== undefined || user?.id == null ? undefined : String(user.id));
+	const getUserId = () => (user?.id == null ? undefined : String(user.id));
 
-	const getGitProviderId = () => (viewed ? undefined : (user?.gitProviderId ?? undefined));
+	const getGitProviderId = () => user?.gitProviderId ?? undefined;
 
 	const getUserProfilePictureUrl = () => {
 		if (hasText(user?.avatarUrl)) {
@@ -152,10 +141,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			void userQuery.refetch();
 		},
 		username,
-		userRoles: viewed ? [] : (user?.roles ?? []),
+		userRoles: user?.roles ?? [],
 		isAppAdmin,
 		userProfile,
-		userView: viewed,
 		login,
 		devLogin,
 		linkAccount,
@@ -164,7 +152,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		getUserId,
 		getGitProviderId,
 		getUserProfilePictureUrl,
-		linkedProviders: viewed ? [] : (userProfile?.linkedProviders ?? []),
+		linkedProviders: userProfile?.linkedProviders ?? [],
 	};
 
 	return <AuthContext value={value}>{children}</AuthContext>;

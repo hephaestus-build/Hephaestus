@@ -22,8 +22,8 @@ public record ReviewFeedbackDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Null for feedback on a practice page or in a conversation while the workspace"
-                        + " has per-person results for admins off")
+                description = "The developer of feedback on the work, which names them as the work does. Null for"
+                        + " feedback on a practice page or in a conversation (ADR 0125)")
         @Nullable
         ReviewPersonDTO person,
 

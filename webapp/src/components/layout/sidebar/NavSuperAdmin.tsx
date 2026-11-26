@@ -8,6 +8,7 @@ import {
 	MessageSquareText,
 	KeyRound,
 	LibraryBig,
+	LifeBuoy,
 	ScrollText,
 	ShieldCheck,
 	Settings2,
@@ -44,6 +45,12 @@ const ADMIN_NAV_GROUPS = [
 				label: "Person data",
 				icon: ShieldCheck,
 				tooltip: "Access and erasure requests",
+			},
+			{
+				to: "/admin/support-shares",
+				label: "Support shares",
+				icon: LifeBuoy,
+				tooltip: "Questions people shared with you",
 			},
 			{
 				to: "/admin/research",

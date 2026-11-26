@@ -152,10 +152,8 @@ Never write cleanup that another test depends on having run.
 - Workspace-scoped controllers carry `@WorkspaceScopedController` and take a `WorkspaceContext`.
   Authorization is declared, never assumed: `@RequireAtLeastWorkspaceAdmin`, `@RequireWorkspaceOwner`,
   `@PreAuthorize("hasAuthority('app_admin')")` for instance-admin routes.
-  A `/user-view` handler addressed at a user is a `GET` carrying `@UserViewRead`.
-  This annotation records the `USER_VIEW` row before the handler runs.
-  `UserViewArchitectureTest` enforces both requirements.
-  `docs/contributor/instance-admin.mdx` § Read-only user views has the mechanism. Admin mutations declare
+  No staff route returns a person's private content: `StaffRoutesReturnNoPrivateContentTest` enforces it,
+  and `docs/contributor/instance-admin.mdx` § Support shares has its one exception. Admin mutations declare
   `@Audited` or `@AuditExempt` — an ArchUnit rule enforces it.
 - Express lifecycle transitions as HTTP methods (`PATCH /workspaces/{slug}/status`), not RPC verbs.
 - Every error is an RFC-7807 `ProblemDetail` produced by a `@RestControllerAdvice` — the rules are in

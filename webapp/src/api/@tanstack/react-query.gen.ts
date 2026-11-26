@@ -105,7 +105,6 @@ export {
 	adminExportAuthEventsOptions,
 	adminExportAuthEventsQueryKey,
 } from "./react-query/adminExportAuthEvents.gen.js";
-export { adminExportPersonDataMutation } from "./react-query/adminExportPersonData.gen.js";
 export {
 	adminGetConfigurationReadinessOptions,
 	adminGetConfigurationReadinessQueryKey,
@@ -247,6 +246,7 @@ export { createPracticeGroupMutation } from "./react-query/createPracticeGroup.g
 export { createResultMarkMutation } from "./react-query/createResultMark.gen.js";
 export { createReviewBatchMutation } from "./react-query/createReviewBatch.gen.js";
 export { createReviewScheduleMutation } from "./react-query/createReviewSchedule.gen.js";
+export { createSupportShareMutation } from "./react-query/createSupportShare.gen.js";
 export { createWorkspaceMutation } from "./react-query/createWorkspace.gen.js";
 export { declineGitHubInstallationMutation } from "./react-query/declineGitHubInstallation.gen.js";
 export { declinePracticeReleaseMutation } from "./react-query/declinePracticeRelease.gen.js";
@@ -455,10 +455,6 @@ export {
 } from "./react-query/getPasskeyStatus.gen.js";
 export { getPasskeyVerificationOptionsMutation } from "./react-query/getPasskeyVerificationOptions.gen.js";
 export {
-	getPerPersonResultsOptions,
-	getPerPersonResultsQueryKey,
-} from "./react-query/getPerPersonResults.gen.js";
-export {
 	getPersonalGoalOptions,
 	getPersonalGoalQueryKey,
 } from "./react-query/getPersonalGoal.gen.js";
@@ -600,10 +596,6 @@ export {
 	getUsersWithTeamsOptions,
 	getUsersWithTeamsQueryKey,
 } from "./react-query/getUsersWithTeams.gen.js";
-export {
-	getUserViewUserOptions,
-	getUserViewUserQueryKey,
-} from "./react-query/getUserViewUser.gen.js";
 export { getWorkspaceOptions, getWorkspaceQueryKey } from "./react-query/getWorkspace.gen.js";
 export {
 	getWorkspacePasskeyPolicyOptions,
@@ -743,6 +735,10 @@ export {
 	listOwnReviewsQueryKey,
 } from "./react-query/listOwnReviews.gen.js";
 export {
+	listOwnSupportSharesOptions,
+	listOwnSupportSharesQueryKey,
+} from "./react-query/listOwnSupportShares.gen.js";
+export {
 	listPracticeDraftsOptions,
 	listPracticeDraftsQueryKey,
 } from "./react-query/listPracticeDrafts.gen.js";
@@ -763,6 +759,10 @@ export {
 	listProductFeedbackNeedsActionOptions,
 	listProductFeedbackNeedsActionQueryKey,
 } from "./react-query/listProductFeedbackNeedsAction.gen.js";
+export {
+	listReceivedSupportSharesOptions,
+	listReceivedSupportSharesQueryKey,
+} from "./react-query/listReceivedSupportShares.gen.js";
 export {
 	listResultMarksOptions,
 	listResultMarksQueryKey,
@@ -847,12 +847,6 @@ export {
 	listSlackChannelsQueryKey,
 } from "./react-query/listSlackChannels.gen.js";
 export {
-	listUserViewUsersInfiniteOptions,
-	listUserViewUsersInfiniteQueryKey,
-	listUserViewUsersOptions,
-	listUserViewUsersQueryKey,
-} from "./react-query/listUserViewUsers.gen.js";
-export {
 	listWorkspaceConfigAuditEventsInfiniteOptions,
 	listWorkspaceConfigAuditEventsInfiniteQueryKey,
 	listWorkspaceConfigAuditEventsOptions,
@@ -874,8 +868,13 @@ export {
 	previewPracticeAdoptionQueryKey,
 } from "./react-query/previewPracticeAdoption.gen.js";
 export { previewReviewScopeMutation } from "./react-query/previewReviewScope.gen.js";
+export { previewSupportShareMutation } from "./react-query/previewSupportShare.gen.js";
 export { purgeWorkspaceMutation } from "./react-query/purgeWorkspace.gen.js";
 export { readOptions, readQueryKey } from "./react-query/read.gen.js";
+export {
+	readSupportShareOptions,
+	readSupportShareQueryKey,
+} from "./react-query/readSupportShare.gen.js";
 export { recheckFeedbackDeliveryMutation } from "./react-query/recheckFeedbackDelivery.gen.js";
 export { recordResearchRemovalsMutation } from "./react-query/recordResearchRemovals.gen.js";
 export { recoverPasskeysMutation } from "./react-query/recoverPasskeys.gen.js";
@@ -919,6 +918,7 @@ export { retryProductFeedbackFilingMutation } from "./react-query/retryProductFe
 export { revokeMcpClientGrantMutation } from "./react-query/revokeMcpClientGrant.gen.js";
 export { revokeOtherSessionsMutation } from "./react-query/revokeOtherSessions.gen.js";
 export { revokeSessionMutation } from "./react-query/revokeSession.gen.js";
+export { revokeSupportShareMutation } from "./react-query/revokeSupportShare.gen.js";
 export { savePersonalGoalMutation } from "./react-query/savePersonalGoal.gen.js";
 export { savePracticeDraftMutation } from "./react-query/savePracticeDraft.gen.js";
 export { setCatalogGroupStatusMutation } from "./react-query/setCatalogGroupStatus.gen.js";
@@ -953,7 +953,6 @@ export { updateMemberOnboardingSettingsMutation } from "./react-query/updateMemb
 export { updateNotificationPreferencesMutation } from "./react-query/updateNotificationPreferences.gen.js";
 export { updateOutlineCollectionStateMutation } from "./react-query/updateOutlineCollectionState.gen.js";
 export { updatePasskeyProtectionMutation } from "./react-query/updatePasskeyProtection.gen.js";
-export { updatePerPersonResultsMutation } from "./react-query/updatePerPersonResults.gen.js";
 export { updatePracticeMutation } from "./react-query/updatePractice.gen.js";
 export { updatePracticeGroupMutation } from "./react-query/updatePracticeGroup.gen.js";
 export { updatePracticeReviewSettingsMutation } from "./react-query/updatePracticeReviewSettings.gen.js";

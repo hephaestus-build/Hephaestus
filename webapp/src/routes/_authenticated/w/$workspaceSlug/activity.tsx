@@ -33,7 +33,6 @@ import { problemDetailOf } from "@/lib/problem-detail";
 import { type ProviderType, toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState, carriedSearchParams } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
-import { useAuth } from "@/runtime/auth/AuthContext";
 import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/activity")({
@@ -65,7 +64,6 @@ function Activity() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
-	const { userView } = useAuth();
 	const { workspaces } = useActiveWorkspaceSlug();
 	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
 	const providerType = toScmProviderType(workspace?.providerType);
@@ -104,12 +102,10 @@ function Activity() {
 		enabled: scope.enabled && category !== undefined,
 	});
 
-	// A user view reads the developer's page; it never spends their workspace's budget.
-	const mayRequestReview = userView === undefined && workspace?.practicesEnabled === true;
+	const mayRequestReview = workspace?.practicesEnabled === true;
 	// From the reader's own membership, so this page makes no admin read: one would ask for a passkey.
 	const { isAdmin } = useWorkspaceAccess();
-	const practiceReviewsOff =
-		isAdmin && userView === undefined && workspace?.practicesEnabled === false;
+	const practiceReviewsOff = isAdmin && workspace?.practicesEnabled === false;
 	const queryClient = useQueryClient();
 	const reviewRequest = useRequestPracticeReview(workspaceSlug);
 	const requestKey = [...REQUEST_REVIEW_MUTATION_KEY, workspaceSlug];
@@ -190,7 +186,7 @@ function Activity() {
 					)
 				}
 				providerType={providerType}
-				account={accountOf(membership, login, userView === undefined)}
+				account={accountOf(membership, login)}
 				period={period}
 				onPeriodChange={(next) => {
 					void setSearch((previous) => ({ ...previous, ...periodSearch(next) }), {
@@ -232,7 +228,6 @@ function providerLogin(
 function accountOf(
 	membership: UseQueryResult<WorkspaceMembership, unknown>,
 	login: string | undefined,
-	offerSettings: boolean,
 ): ActivityAccount {
 	if (membership.isPending) {
 		return { status: "loading" };
@@ -251,7 +246,7 @@ function accountOf(
 	}
 	return {
 		status: "none",
-		settingsLink: offerSettings ? (
+		settingsLink: (
 			<Link
 				to="/settings"
 				hash="connected-accounts"
@@ -259,6 +254,6 @@ function accountOf(
 			>
 				Connect an account
 			</Link>
-		) : undefined,
+		),
 	};
 }

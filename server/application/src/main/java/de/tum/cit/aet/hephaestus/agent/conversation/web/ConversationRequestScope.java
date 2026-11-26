@@ -9,8 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The transaction that reads or changes the signed-in account's conversation, with that account bound as its owner. A
- * user view never gets here: {@code UserViewSessionFilter} refuses every conversation route.
+ * The transaction that reads or changes the signed-in account's conversation, with that account bound as its owner.
  */
 @Service
 @ConditionalOnServerRole

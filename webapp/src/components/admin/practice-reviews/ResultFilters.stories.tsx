@@ -8,7 +8,7 @@ import { practiceGroups, workspacePractices } from "./fixtures";
 import { clearedResultFacets, ResultFilters } from "./ResultFilters";
 import { clearedScope } from "./review-scope";
 import type { ResultsSearch } from "./review-search";
-import { STORY_GROUPS, STORY_PEOPLE, STORY_PRACTICES } from "./story-scope-sources";
+import { STORY_GROUPS, STORY_PRACTICES } from "./story-scope-sources";
 
 const UNFILTERED = {
 	outcome: undefined,
@@ -28,7 +28,6 @@ const meta = {
 		onClearScope: fn(),
 		groups: STORY_GROUPS,
 		practices: STORY_PRACTICES,
-		people: STORY_PEOPLE,
 		total: 12,
 	},
 	render: (args) => (
@@ -248,7 +247,6 @@ export const ScopeCarriedFromAnotherTab: Story = {
 		search: {
 			...UNFILTERED,
 			outcome: ["NOT_MET"],
-			developerId: STORY_PEOPLE.options[0]?.accountId,
 			practiceSlug: [workspacePractices[0]?.slug ?? ""],
 			from: "2026-09-01",
 			to: "2026-09-10",
@@ -257,18 +255,15 @@ export const ScopeCarriedFromAnotherTab: Story = {
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		const scope = canvas.getByRole("group", { name: "Applies to every tab" });
-		await expect(
-			within(scope).getByRole("combobox", { name: /^Developer(?::|$)/u }),
-		).toHaveTextContent(STORY_PEOPLE.options[0]?.label ?? "");
 		await expect(within(scope).getByRole("button", { name: /Recorded/u })).toHaveTextContent(
 			"1 Sep – 10 Sep 2026",
 		);
 
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
 		await expect(args.onReset).toHaveBeenCalledTimes(1);
-		await expect(
-			within(scope).getByRole("combobox", { name: /^Developer(?::|$)/u }),
-		).toHaveTextContent(STORY_PEOPLE.options[0]?.label ?? "");
+		await expect(within(scope).getByRole("button", { name: /Recorded/u })).toHaveTextContent(
+			"1 Sep – 10 Sep 2026",
+		);
 
 		await userEvent.click(within(scope).getByRole("button", { name: "Clear scope" }));
 		await expect(args.onClearScope).toHaveBeenCalledTimes(1);

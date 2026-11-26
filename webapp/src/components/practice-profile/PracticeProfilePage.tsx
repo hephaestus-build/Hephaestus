@@ -64,10 +64,8 @@ export interface PracticeProfilePageProps {
 	 */
 	firstRun?: Omit<ProfileFirstRunProps, "reviewed">;
 	state: LoadState;
-	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
+	/** The control that starts the guided tour; absent where the reader cannot take it. */
 	tourAction?: ReactNode;
-	/** Whether this workspace shows its admins practice results per person; absent while unknown. */
-	perPersonResults?: boolean;
 	/**
 	 * The offer to explain a feedback card, shown on the Open tab while the reader has exactly one card
 	 * and that card is open. It claims nothing about the reader's history, since older cards leave this
@@ -148,7 +146,6 @@ export function PracticeProfilePage({
 	state,
 	tourAction,
 	firstCardOffer,
-	perPersonResults,
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
 		const group = groups.find((candidate) => candidate.slug === groupSlug);
@@ -190,7 +187,6 @@ export function PracticeProfilePage({
 				groupCount={groups.length}
 				isLoading={isLoading}
 				tourAction={tourAction}
-				perPersonResults={perPersonResults}
 			/>
 			<Section
 				data-tour-slot="feedback"

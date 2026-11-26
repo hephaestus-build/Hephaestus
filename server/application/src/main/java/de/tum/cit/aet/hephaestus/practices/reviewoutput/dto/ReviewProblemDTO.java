@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.GroupRefDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
@@ -24,9 +23,6 @@ public record ReviewProblemDTO(
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         GroupRefDTO group,
-
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewPersonDTO person,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Severity severity,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String summary,

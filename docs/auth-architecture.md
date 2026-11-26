@@ -35,7 +35,7 @@ Outline support linking only, not sign-in.
 
 Each [`identity`](./auth-glossary.md) row keys an account to one provider user by
 `(provider_id, provider_user_key, team_key)`. Roster sync creates an unclaimed account for each new
-provider user, and sign-in claims it. User views, Slack identity resolution and account erasure use
+provider user, and sign-in claims it. Slack identity resolution and account erasure use
 this key rather than comparing login names.
 
 ## Key properties
@@ -66,9 +66,9 @@ this key rather than comparing login names.
   by `SystemSecrets` (AES-256-GCM, bound to its row, ADR 0104). This is **authentication** only; a workspace's SCM
   data source is a separate per-workspace `Connection` + group token/PAT. ADR 0017 records why the
   two are separate.
-- **A user view never switches authentication.** An instance administrator reads a workspace
-  member's private pages as themselves, even when the viewed user has no account — see
-  [read-only user views](./contributor/instance-admin.mdx#read-only-user-views).
+- **Nobody reads as another account.** No staff route returns a person's private content, and View as
+  user is removed (ADR 0164). A person shares one conversation turn with one instance admin — see
+  [support shares](./contributor/instance-admin.mdx#support-shares).
 - **GDPR.** `auth_event` is an append-only, monthly RANGE-partitioned (self-managed in-app by
   `pg_partman`, 12-month retention; see ADR 0018)
   audit log. Account deletion purges the account as soon as the deletion commits: the purge keeps an
@@ -133,7 +133,6 @@ sequenceDiagram
 - **Boundaries.** The client endpoints are exact `POST` matchers, CSRF-exempt only without the auth
   cookie, refuse requests that carry it, bound their bodies by pattern and answer `no-store`. The cookie
   `/auth/refresh` refuses `sid` tokens; `/auth/logout` with a `sid` bearer ends the client session.
-  User view mints nothing for installed clients.
 - **Visible and revocable.** The session list shows a client session once, as its client kind, with its
   latest JTI; revoking any JTI of the family ends the session. Cleanup removes expired handoffs and
   sessions past their deadline or revoked for a day, with their token rows.

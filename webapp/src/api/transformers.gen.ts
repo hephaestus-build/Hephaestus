@@ -46,6 +46,7 @@ import type {
 	CreateResultMarkResponse,
 	CreateReviewBatchResponse,
 	CreateReviewScheduleResponse,
+	CreateSupportShareResponse,
 	CreateWorkspaceResponse,
 	DeclineGitHubInstallationResponse,
 	EditMyProductFeedbackDraftResponse,
@@ -123,10 +124,12 @@ import type {
 	ListOwnItemReviewsResponse,
 	ListOwnResultsResponse,
 	ListOwnReviewsResponse,
+	ListOwnSupportSharesResponse,
 	ListPracticeGroupsResponse,
 	ListPracticesResponse,
 	ListPracticeVersionsResponse,
 	ListProductFeedbackNeedsActionResponse,
+	ListReceivedSupportSharesResponse,
 	ListResponse,
 	ListResultMarksResponse,
 	ListReviewBatchesResponse,
@@ -149,7 +152,9 @@ import type {
 	MarkConversationReadResponse,
 	MovePracticeResponse,
 	NotReviewedScanReportItem,
+	PreviewSupportShareResponse,
 	ReadResponse,
+	ReadSupportShareResponse,
 	RecheckFeedbackDeliveryResponse,
 	RefreshClientSessionResponse,
 	RegisterOutlineCollectionResponse,
@@ -166,6 +171,7 @@ import type {
 	ResolveReviewContextResponse,
 	RetryFeedbackResponse,
 	ReusedScanReportItem,
+	RevokeSupportShareResponse,
 	SetConversationVoteResponse,
 	SetGroupFeedbackModeResponse,
 	SetMemberHiddenResponse,
@@ -685,6 +691,48 @@ export const adminUpdateSilentModeResponseTransformer = async (
 	return data;
 };
 
+const supportShareMessageSchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	return data;
+};
+
+const supportShareTurnSchemaResponseTransformer = (data: any) => {
+	if (data.finishedAt) {
+		data.finishedAt = new Date(data.finishedAt);
+	}
+	data.queuedAt = new Date(data.queuedAt);
+	if (data.startedAt) {
+		data.startedAt = new Date(data.startedAt);
+	}
+	return data;
+};
+
+const supportShareReceivedSchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	data.expiresAt = new Date(data.expiresAt);
+	data.messages = data.messages.map((item: any) =>
+		supportShareMessageSchemaResponseTransformer(item),
+	);
+	if (data.turn) {
+		data.turn = supportShareTurnSchemaResponseTransformer(data.turn);
+	}
+	return data;
+};
+
+export const listReceivedSupportSharesResponseTransformer = async (
+	data: any,
+): Promise<ListReceivedSupportSharesResponse> => {
+	data = data.map((item: any) => supportShareReceivedSchemaResponseTransformer(item));
+	return data;
+};
+
+export const readSupportShareResponseTransformer = async (
+	data: any,
+): Promise<ReadSupportShareResponse> => {
+	data = supportShareReceivedSchemaResponseTransformer(data);
+	return data;
+};
+
 const adminWorkspaceViewSchemaResponseTransformer = (data: any) => {
 	data.createdAt = new Date(data.createdAt);
 	return data;
@@ -992,6 +1040,32 @@ const sessionViewSchemaResponseTransformer = (data: any) => {
 
 export const listSessionsResponseTransformer = async (data: any): Promise<ListSessionsResponse> => {
 	data = data.map((item: any) => sessionViewSchemaResponseTransformer(item));
+	return data;
+};
+
+const supportShareSchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	data.expiresAt = new Date(data.expiresAt);
+	if (data.lastReadAt) {
+		data.lastReadAt = new Date(data.lastReadAt);
+	}
+	if (data.revokedAt) {
+		data.revokedAt = new Date(data.revokedAt);
+	}
+	return data;
+};
+
+export const listOwnSupportSharesResponseTransformer = async (
+	data: any,
+): Promise<ListOwnSupportSharesResponse> => {
+	data = data.map((item: any) => supportShareSchemaResponseTransformer(item));
+	return data;
+};
+
+export const revokeSupportShareResponseTransformer = async (
+	data: any,
+): Promise<RevokeSupportShareResponse> => {
+	data = supportShareSchemaResponseTransformer(data);
 	return data;
 };
 
@@ -3193,6 +3267,28 @@ export const listSlackChannelConsentEventsResponseTransformer = async (
 
 export const updateStatusResponseTransformer = async (data: any): Promise<UpdateStatusResponse> => {
 	data = workspaceSchemaResponseTransformer(data);
+	return data;
+};
+
+export const createSupportShareResponseTransformer = async (
+	data: any,
+): Promise<CreateSupportShareResponse> => {
+	data = supportShareSchemaResponseTransformer(data);
+	return data;
+};
+
+const supportSharePreviewSchemaResponseTransformer = (data: any) => {
+	data.messages = data.messages.map((item: any) =>
+		supportShareMessageSchemaResponseTransformer(item),
+	);
+	data.turn = supportShareTurnSchemaResponseTransformer(data.turn);
+	return data;
+};
+
+export const previewSupportShareResponseTransformer = async (
+	data: any,
+): Promise<PreviewSupportShareResponse> => {
+	data = supportSharePreviewSchemaResponseTransformer(data);
 	return data;
 };
 

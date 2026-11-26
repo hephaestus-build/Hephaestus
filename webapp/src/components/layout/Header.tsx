@@ -40,7 +40,6 @@ export interface HeaderProps {
 	username?: string;
 	avatarUrl?: string;
 	workspaceSlug?: string;
-	readOnly?: boolean;
 	feedbackDialog?: React.ReactNode;
 	/** The Ask Hephaestus button and its panel, where Hephaestus can answer the reader on this page. */
 	conversation?: React.ReactNode;
@@ -72,7 +71,6 @@ export default function Header({
 	name,
 	username,
 	workspaceSlug,
-	readOnly = false,
 	feedbackDialog,
 	conversation,
 	onShowGetStarted,
@@ -180,42 +178,35 @@ export default function Header({
 										</DropdownMenuLabel>
 									</DropdownMenuGroup>
 									<DropdownMenuSeparator />
-									{!readOnly && (
-										<>
-											<DropdownMenuGroup>
-												{onShowGetStarted !== undefined && (
-													<DropdownMenuItem onClick={onShowGetStarted}>
-														<ListChecks aria-hidden />
-														<span>Get started</span>
-													</DropdownMenuItem>
-												)}
-												<DropdownMenuItem
-													render={
-														<Link
-															to="/settings"
-															search={{ chromeWorkspace: workspaceSlug }}
-															className="[&]:no-underline"
-														/>
-													}
-												>
-													<UserRoundCog />
-													<span>User settings</span>
-												</DropdownMenuItem>
-												<DropdownMenuItem
-													render={
-														<Link
-															to="/product-feedback"
-															search={{ chromeWorkspace: workspaceSlug }}
-														/>
-													}
-												>
-													<History aria-hidden />
-													<span>Your reports</span>
-												</DropdownMenuItem>
-											</DropdownMenuGroup>
-											<DropdownMenuSeparator />
-										</>
-									)}
+									<DropdownMenuGroup>
+										{onShowGetStarted !== undefined && (
+											<DropdownMenuItem onClick={onShowGetStarted}>
+												<ListChecks aria-hidden />
+												<span>Get started</span>
+											</DropdownMenuItem>
+										)}
+										<DropdownMenuItem
+											render={
+												<Link
+													to="/settings"
+													search={{ chromeWorkspace: workspaceSlug }}
+													className="[&]:no-underline"
+												/>
+											}
+										>
+											<UserRoundCog />
+											<span>User settings</span>
+										</DropdownMenuItem>
+										<DropdownMenuItem
+											render={
+												<Link to="/product-feedback" search={{ chromeWorkspace: workspaceSlug }} />
+											}
+										>
+											<History aria-hidden />
+											<span>Your reports</span>
+										</DropdownMenuItem>
+									</DropdownMenuGroup>
+									<DropdownMenuSeparator />
 									<DropdownMenuItem onClick={onLogout}>
 										<LogOut />
 										<span>Sign out</span>

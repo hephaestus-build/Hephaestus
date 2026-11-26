@@ -42,7 +42,7 @@ function ProblemsListRoute() {
 		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, problemsQueryResult.isError, problemsQueryResult.error);
-	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);
+	const { groups, practices } = useReviewScopeSources(workspaceSlug);
 	const record = useScopeRecordFilter(workspaceSlug, search);
 
 	return (
@@ -52,7 +52,6 @@ function ProblemsListRoute() {
 			problems={pagedListState(problemsQueryResult, (problem) => problem.id)}
 			groups={groups}
 			practices={practices}
-			people={people}
 			record={record}
 		/>
 	);

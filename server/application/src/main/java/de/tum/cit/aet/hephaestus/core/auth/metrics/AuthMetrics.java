@@ -123,7 +123,7 @@ public class AuthMetrics {
 
     /**
      * Count one rate-limit 429. {@code bucket} is the endpoint namespace
-     * ({@code oauth-authz}/{@code refresh}/{@code user-view}/{@code delete-user}) — bounded, no PII.
+     * ({@code oauth-authz}/{@code refresh}/{@code delete-user}) — bounded, no PII.
      * The per-(bucket) Counter is registered lazily; the namespace set is tiny so this is effectively
      * a fixed handful of meters.
      */

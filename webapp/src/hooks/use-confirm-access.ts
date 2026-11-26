@@ -8,8 +8,6 @@ import { currentUserQueryOptions } from "@/runtime/auth/guard";
 
 /** `returnTo` is where signing in again lands; by default the page that asked. */
 export function useConfirmAccess(enabled: boolean, returnTo?: string) {
-	// The operator's own identity, not AuthContext's, which hides linked providers while viewing as
-	// another user.
 	const [instanceProviders, currentUser] = useQueries({
 		queries: [
 			{ ...listIdentityProvidersOptions(), enabled },

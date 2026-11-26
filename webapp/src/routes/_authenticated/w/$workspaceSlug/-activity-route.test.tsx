@@ -34,7 +34,6 @@ import {
 	renderRouteAtWithRouter,
 	testQueryClient,
 } from "@/test/router-harness";
-import { storeUserView } from "@/test/user-view";
 import { switchWorkspace } from "@/test/workspace-switcher";
 
 beforeAll(
@@ -907,10 +906,6 @@ describe("Activity", () => {
 		);
 
 		it.each([
-			{
-				when: "an administrator views the page as the developer",
-				arrange: () => storeUserView({ workspaceSlug: "acme" }),
-			},
 			{
 				when: "the workspace reviews no practices",
 				arrange: () =>

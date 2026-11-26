@@ -131,7 +131,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         };
         long ws = scenario.workspace().getId();
         long itemId = Objects.requireNonNull(scenario.item().getId());
-        var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null, null);
+        var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null);
 
         var scan = scans.scan(scanned, ReviewStatus.COMPLETE, Instant.now());
         scans.result(scanned, scan);
@@ -170,11 +170,8 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
             var event = eventOfReview.get(result.getReviewId());
             if (event == null) {
                 assertThat(summary.startedBy()).isNull();
-                assertThat(Objects.requireNonNull(summary.requestedBy()).id())
-                        .isEqualTo(Long.toString(scenarioAccountId));
             } else {
                 assertThat(Objects.requireNonNull(summary.startedBy()).id()).isEqualTo(event);
-                assertThat(summary.requestedBy()).isNull();
             }
             var reviewed = summary.practices().stream()
                     .filter(practice ->
@@ -308,12 +305,10 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         get("/practices/reviews/" + r.getReviewId()).expectStatus().isNotFound().expectBody(Void.class);
     }
 
+    /** ADR 0125: who requested a review is usually whose work it is, so no staff read names them. */
     @Test
-    void shouldNameNoRequesterWhilePerPersonResultsAreOff() {
+    void shouldNameNoRequester() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
-        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
-                .param("ws", scenario.workspace().getId())
-                .update();
 
         get("/practices/reviews")
                 .expectStatus()
@@ -342,8 +337,6 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(result.getReviewId().toString())
                 .jsonPath("$.content[0].origin")
                 .isEqualTo("REQUEST")
-                .jsonPath("$.content[0].requestedBy.id")
-                .isEqualTo(Long.toString(scenarioAccountId))
                 .jsonPath("$.content[0].practices[0].practiceVersionId")
                 .isEqualTo(Long.toString(Objects.requireNonNull(
                         scenario.practice().getCurrentVersion().getId())))
@@ -459,21 +452,10 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(true);
     }
 
+    /** ADR 0125: the queue shows the waiting work, never whose work it is. */
     @Test
-    void shouldNameNoDeveloperInTheQueueWhilePerPersonResultsAreOff() {
+    void shouldNameNoDeveloperInTheQueue() {
         var review = data.queuedReviewOfOnePerson(scenario, scenarioAccountId);
-        get("/practices/reviews/queue")
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.head[0].reviewId")
-                .isEqualTo(review.getId().toString())
-                .jsonPath("$.head[0].person.accountId")
-                .isEqualTo(Long.toString(scenarioAccountId));
-
-        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
-                .param("ws", scenario.workspace().getId())
-                .update();
 
         get("/practices/reviews/queue")
                 .expectStatus()
@@ -482,7 +464,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.head[0].reviewId")
                 .isEqualTo(review.getId().toString())
                 .jsonPath("$.head[0].person")
-                .isEmpty();
+                .doesNotExist();
     }
 
     @Test

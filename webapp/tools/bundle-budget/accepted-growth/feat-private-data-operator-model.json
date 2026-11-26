@@ -1,0 +1,124 @@
+{
+	"accepted": [
+		{
+			"load": "src/components/support-share/SupportShareDialog.tsx",
+			"gzipBytes": 22428,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.feedback.tsx?tsr-split=component",
+			"gzipBytes": 66755,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.github-installations.tsx?tsr-split=component",
+			"gzipBytes": 11602,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.login-providers.tsx?tsr-split=component",
+			"gzipBytes": 40163,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.models.tsx?tsr-split=component",
+			"gzipBytes": 98798,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.person-data.tsx?tsr-split=component",
+			"gzipBytes": 38775,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.research.tsx?tsr-split=component",
+			"gzipBytes": 50798,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.settings.tsx?tsr-split=component",
+			"gzipBytes": 37820,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.support-shares.tsx?tsr-split=component",
+			"gzipBytes": 6325,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.users.tsx?tsr-split=component",
+			"gzipBytes": 24028,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/mcp.authorize.tsx?tsr-split=component",
+			"gzipBytes": 13646,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/settings.tsx?tsr-split=component",
+			"gzipBytes": 90842,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/verify-passkey.tsx?tsr-split=component",
+			"gzipBytes": 13682,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/members.tsx?tsr-split=component",
+			"gzipBytes": 66024,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/-PracticeRepositorySetting.tsx",
+			"gzipBytes": 248539,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/index.tsx?tsr-split=component",
+			"gzipBytes": 239008,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/settings.tsx?tsr-split=component",
+			"gzipBytes": 43836,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/conversation.tsx?tsr-split=component",
+			"gzipBytes": 120970,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/-GlobalConversationPanel.tsx",
+			"gzipBytes": 123718,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		},
+		{
+			"load": "src/routes/auth/error.tsx?tsr-split=component",
+			"gzipBytes": 7678,
+			"acceptedBy": "branch feat/private-data-operator-model",
+			"reason": "View as user left the root layout, so the entry shrank by about 5 kB and code it shared with the pages moved into the chunk that every page loads. Settings gains the Support shares section, the instance console gains the Support shares page, and the conversation gains Share with support. The share dialog loads on its first open."
+		}
+	]
+}

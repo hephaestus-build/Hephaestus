@@ -47,7 +47,7 @@ State each guarantee once on a surface, in positive form, with its qualifier bes
 - Feedback describes your work and how to improve it, without scores, grades or ranks.
 - AI writes the feedback and can make mistakes. Check it against your work, and decide what to do.
 - Workspace admins see practice results linked to the work. Those links can identify you even when names are hidden.
-- An instance admin can include your conversation in an audited export of your data.
+- Your conversation reaches an instance admin only when you share one of your questions with support.
 - You can turn off use of your Slack channel messages.
 
 **Audience lines**
@@ -132,8 +132,8 @@ The same gate runs the product copy rule in [Vale](./simplified-technical-englis
 It checks docs, UI text, and server strings.
 For agreed contact, write check-in instead of “nudge”.
 For unsolicited contact, write unprompted update.
-The current version still uses “View as user” and “Per-person results for admins” under the access rules in the [user guide](/user/privacy).
-Exact text from these controls remains valid until [their removal](https://github.com/hephaestus-build/Hephaestus/issues/4966).
+“View as user” and “Per-person results for admins” are removed ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)).
+Use these names only on a page that says that they are gone.
 
 *Habit* is retired for a practice or a repeated pattern in someone's work.
 *Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for activity.
@@ -358,7 +358,6 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. An observation recorded while the practice's feedback mode was Off is not eligible. | score, grade, rating |
 | **No standing yet** | What a developer surface shows for a practice or group that no review has given a standing in the window. The practice did not apply to the work, or no review decided it. It is not a fourth standing. **Not reviewed** (above, under Observations) is an item/practice pair, not this label. | Not reviewed, Nothing to report yet, not applicable |
 | **Early read** | A standing based on fewer than three decided pieces of work. | preliminary score, provisional grade |
-| **Per-person results for admins** | The workspace setting that decides whether workspace admins see who each practice result, problem and piece of feedback is about, and can filter by person. It is off for a new workspace. Only a workspace owner turns it on, and each change is audited. Feedback on the work always names its developer. | named results, admin visibility toggle, developer view |
 | **Practices across the workspace** | The page that counts, for each practice, the developers with current observations and the outcomes of those observations, without naming a developer. | course comparison, course figures, cohort view, benchmark, leaderboard |
 | **Current observation** | An observation from the last 90 days, recorded under the practice's current version, that nobody marked incorrect. Only current observations count on Practices across the workspace. | recent result, valid result |
 | **No current observations** | What Practices across the workspace shows for a practice or group with no current observation. Older or unverifiable observations can exist. | no data, no results yet, missing |
@@ -422,6 +421,7 @@ A destination matches a delivery strategy only by the place where feedback appea
 | **Message** (conversation) | One contribution to a conversation. It can be a question, an answer, or a weekly digest. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
 | **What Hephaestus used** | The list under an answer of what it cited, what it read and what it could not check. The server renders it from rows and counts sources without naming a repository or a path. **Shaped by** follows with the typed read of ADR 0157. | sources, citations, context, reasoning |
+| **Support share** | One question of a person's conversation, with Hephaestus's answers and the state of the turn. The person shares it with one instance admin for 7 days. The person sees an exact preview, can revoke the share, and sees each read. The share copies no text, so a deleted message leaves it. UI and user docs say **Share with support** and **Support shares**. | support snapshot, support access, view as user, impersonation |
 
 The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox, the context folder, the context document and the context loader.
 [ADR 0082](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) owns the decisions behind these terms.

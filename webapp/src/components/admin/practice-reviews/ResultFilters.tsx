@@ -19,7 +19,6 @@ import { type ListFacet, listFacet } from "./AppliedFacetPills";
 import { clearedScopeFilters, hasAppliedScope, readScope } from "./review-scope";
 import type { ResultsSearch } from "./review-search";
 import { ReviewFilterBar } from "./ReviewFilterBar";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { OwnOrder, ScopeRecordFilter } from "./ReviewScopeFilters";
 
 const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);
@@ -166,14 +165,8 @@ export interface ResultFiltersProps {
 	onClearScope: () => void;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	total: number | undefined;
 	record?: ScopeRecordFilter;
-	/**
-	 * The name of the developer `developerId` identifies. It must name *that* person: reading it off
-	 * the first row is right only while the filter is on.
-	 */
-	subjectName?: string;
 }
 
 export function ResultFilters({
@@ -183,10 +176,8 @@ export function ResultFilters({
 	onClearScope,
 	groups,
 	practices,
-	people,
 	total,
 	record,
-	subjectName,
 }: ResultFiltersProps) {
 	const outcome = listFacet("Outcome", OUTCOME_OPTIONS, search.outcome, (values) =>
 		onPatch({ outcome: nonEmpty(values) }),
@@ -204,8 +195,6 @@ export function ResultFilters({
 			dateTitle="Recorded"
 			groups={groups}
 			practices={practices}
-			people={people}
-			personName={subjectName}
 			record={record}
 			ownOrder={actionableOrder(search, onPatch)}
 			facets={

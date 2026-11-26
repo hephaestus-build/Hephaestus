@@ -385,6 +385,10 @@ Session.calls
 Settled.watermark  # last acknowledged evaluation observation sequence
 SlackUserWorkspacePreferencesDTO.activeMonitoredChannelCount  # channels
 SupportOccurrenceDTO.evidence  # opaque: the evidence of one observation
+SupportShareDTO.readCount  # reads of the caller's own share by its one recipient
+SupportSharePreviewDTO.validForDays
+SupportShareTurnDTO.attempt
+SupportShareTurnDTO.failedCallStatus  # an HTTP status
 SyncJobDTO.id  # identifier
 SyncJobDTO.itemsProcessed
 SyncJobDTO.itemsTotal

@@ -102,12 +102,12 @@ tags:
   name: Slack channel activation
 - description: The scopes of the workspace's Slack connection
   name: Slack connection
+- description: A person shares one of their turns with one instance admin
+  name: Support share
 - description: Integration sync observability and manual controls
   name: Sync
 - description: Team management within workspace
   name: Teams
-- description: Instance-admin-only read-only access to users
-  name: User view
 - description: Page load and interaction timings from the browser
   name: Web vitals
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
@@ -188,10 +188,6 @@ tags:
 - name: workspace
 - name: workspace-onboarding
 - name: workspace-passkey-policy
-- description: |-
-    Whether workspace admins see practice results per person. Every member may read it, because it decides who sees
-     their results.
-  name: workspace-per-person-results
 - name: workspace-registry
 paths:
   /.well-known/hephaestus-provenance-keys.json:
@@ -2024,39 +2020,6 @@ paths:
       summary: Start or resume the preview's audited erasure job
       tags:
       - Person Data
-  /admin/person-data/{id}/export:
-    post:
-      operationId: adminExportPersonData
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: string
-                format: binary
-          description: JSON file
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Download the preview's frozen scope as one JSON file
-      tags:
-      - Person Data
   /admin/practice-catalog:
     get:
       operationId: getInstanceCatalog
@@ -3473,6 +3436,67 @@ paths:
       summary: Engage or release the instance-wide silent mode
       tags:
       - Instance Settings
+  /admin/support-shares:
+    get:
+      operationId: listReceivedSupportShares
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupportShareReceived"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: List the support shares you can read now
+      tags:
+      - Support share
+  /admin/support-shares/{shareId}:
+    get:
+      description: "Each read counts, and the person sees the count and the time of\
+        \ the last read."
+      operationId: readSupportShare
+      parameters:
+      - in: path
+        name: shareId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportShareReceived"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Read a support share addressed to you
+      tags:
+      - Support share
   /admin/users:
     get:
       operationId: adminListUsers
@@ -6115,6 +6139,66 @@ paths:
       summary: Get current user's Slack preferences
       tags:
       - Slack User Preferences
+  /user/support-shares:
+    get:
+      operationId: listOwnSupportShares
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupportShare"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: "List your support shares, also the ended ones"
+      tags:
+      - Support share
+  /user/support-shares/{shareId}:
+    delete:
+      description: The recipient can no longer read it. It stays in your list as revoked.
+      operationId: revokeSupportShare
+      parameters:
+      - in: path
+        name: shareId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportShare"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Revoke a support share now
+      tags:
+      - Support share
   /web-vitals:
     post:
       operationId: reportWebVitals
@@ -10531,89 +10615,6 @@ paths:
       summary: Update workspace admin passkey policy
       tags:
       - workspace-passkey-policy
-  /workspaces/{workspaceSlug}/per-person-results:
-    get:
-      operationId: getPerPersonResults
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PerPersonResults"
-          description: OK
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Whether workspace admins see practice results per person
-      tags:
-      - workspace-per-person-results
-    patch:
-      description: Only a workspace owner turns it on. Any workspace admin turns it
-        off.
-      operationId: updatePerPersonResults
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdatePerPersonResults"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PerPersonResults"
-          description: The setting after the change
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: The caller is not an owner and asked to turn it on
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Turn per-person results for admins on or off
-      tags:
-      - workspace-per-person-results
   /workspaces/{workspaceSlug}/practice-catalog/adoption:
     get:
       operationId: listAdoptablePractices
@@ -13579,12 +13580,6 @@ paths:
           maxLength: 19
           pattern: "^[1-9][0-9]*$"
       - in: query
-        name: personId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - in: query
         name: practiceSlug
         required: false
         schema:
@@ -13685,13 +13680,6 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: personId
-        required: false
-        schema:
-          type: string
-          exclusiveMinimum: 0
-          pattern: "^[1-9][0-9]*$"
       - in: query
         name: destination
         required: false
@@ -13830,13 +13818,6 @@ paths:
         schema:
           type: string
       - in: query
-        name: personId
-        required: false
-        schema:
-          type: string
-          exclusiveMinimum: 0
-          pattern: "^[1-9][0-9]*$"
-      - in: query
         name: destination
         required: false
         schema:
@@ -13958,13 +13939,6 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: personId
-        required: false
-        schema:
-          type: string
-          exclusiveMinimum: 0
-          pattern: "^[1-9][0-9]*$"
       - in: query
         name: destination
         required: false
@@ -14445,12 +14419,6 @@ paths:
         schema:
           type: string
       - in: query
-        name: personId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - in: query
         name: outcome
         required: false
         schema:
@@ -14676,13 +14644,6 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: personId
-        required: false
-        schema:
-          type: integer
-          format: int64
-          exclusiveMinimum: 0
       - in: query
         name: outcome
         required: false
@@ -16906,6 +16867,112 @@ paths:
       summary: Update workspace lifecycle status
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/support-shares/turns/{turnId}:
+    post:
+      operationId: createSupportShare
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: turnId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportShareRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportShare"
+          description: The share
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The messages changed after the preview
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Share this turn with one instance admin for 7 days
+      tags:
+      - Support share
+  /workspaces/{workspaceSlug}/support-shares/turns/{turnId}/preview:
+    post:
+      operationId: previewSupportShare
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: turnId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportSharePreviewRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportSharePreview"
+          description: The preview
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The turn is not one of yours
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Show exactly what an instance admin would read if you share this turn
+      tags:
+      - Support share
   /workspaces/{workspaceSlug}/sync/progress:
     get:
       operationId: getWorkspaceSyncProgress
@@ -17205,107 +17272,6 @@ paths:
       summary: Update workspace Personal Access Token
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/user-view/users:
-    get:
-      operationId: listUserViewUsers
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 25
-          maximum: 100
-          minimum: 1
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OffsetPageDTOUserViewAccount"
-          description: OK
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: List workspace users and their linked account status
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{accountId}:
-    get:
-      operationId: getUserViewUser
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: accountId
-        required: true
-        schema:
-          type: string
-          maximum: 9223372036854776000
-          pattern: "^[1-9][0-9]*$"
-      - description: "Why the administrator views this account: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserViewAccount"
-          description: OK
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Confirm access to a workspace user
-      tags:
-      - User view
   /workspaces/{workspaceSlug}/users:
     get:
       operationId: getUsersWithTeams
@@ -20717,13 +20683,14 @@ components:
     FeedbackAnswer:
       type: object
       description: "A developer's answer to feedback: the resolution, and the explanation\
-        \ only for a disagreement"
+        \ only for a disagreement that the developer gave in the last 30 days"
       properties:
         comment:
           type:
           - string
           - "null"
-          description: Only for a disagreement
+          description: "Only for a disagreement, and only for 30 days after the developer\
+            \ gave it"
         createdAt:
           type: string
           format: date-time
@@ -21029,9 +20996,15 @@ components:
       - CONVERSATION
     FeedbackDisagreement:
       type: object
+      description: "A developer's current disagreement with feedback, as a workspace\
+        \ admin reads it on a result."
       properties:
         comment:
-          type: string
+          type:
+          - string
+          - "null"
+          description: "The developer's explanation, only for 30 days after they gave\
+            \ it (ADR 0125)"
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
         feedbackId:
@@ -23884,36 +23857,6 @@ components:
       - size
       - totalElements
       - totalPages
-    OffsetPageDTOUserViewAccount:
-      type: object
-      description: One numbered page of a list
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserViewAccount"
-        page:
-          type: integer
-          format: int32
-          description: "This page's number, from 0"
-        size:
-          type: integer
-          format: int32
-          description: The most rows a page holds
-        totalElements:
-          type: integer
-          format: int64
-          description: Rows in the whole list
-        totalPages:
-          type: integer
-          format: int32
-          description: Pages in the whole list
-      required:
-      - content
-      - page
-      - size
-      - totalElements
-      - totalPages
     OffsetPageDTOWorkspaceMembership:
       type: object
       description: One numbered page of a list
@@ -24346,19 +24289,6 @@ components:
       - recoveryRequired
       - verified
       - workspaceAdminRequired
-    PerPersonResults:
-      type: object
-      properties:
-        canTurnOn:
-          type: boolean
-          description: "Whether the caller may turn it on: only a workspace owner\
-            \ may"
-        enabled:
-          type: boolean
-          description: Whether workspace admins see practice results per person
-      required:
-      - canTurnOn
-      - enabled
     PersonDataProvider:
       type: object
       properties:
@@ -27869,10 +27799,6 @@ components:
           anyOf:
           - $ref: "#/components/schemas/ReviewProgress"
           - type: "null"
-        requestedBy:
-          anyOf:
-          - $ref: "#/components/schemas/AccountRef"
-          - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
         startedBy:
@@ -27901,7 +27827,6 @@ components:
       - origin
       - practices
       - progress
-      - requestedBy
       - results
       - startedBy
       - status
@@ -28078,10 +28003,6 @@ components:
           $ref: "#/components/schemas/ItemRef"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -28114,7 +28035,6 @@ components:
       - id
       - item
       - outcome
-      - person
       - practiceName
       - practiceSlug
       - recordedAt
@@ -28230,10 +28150,6 @@ components:
           anyOf:
           - $ref: "#/components/schemas/ReviewProgress"
           - type: "null"
-        requestedBy:
-          anyOf:
-          - $ref: "#/components/schemas/AccountRef"
-          - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
         runtime:
@@ -28269,7 +28185,6 @@ components:
       - origin
       - practices
       - progress
-      - requestedBy
       - results
       - runtime
       - startedBy
@@ -28314,11 +28229,13 @@ components:
         person:
           anyOf:
           - $ref: "#/components/schemas/ReviewPerson"
-            description: Null for feedback on a practice page or in a conversation
-              while the workspace has per-person results for admins off
+            description: "The developer of feedback on the work, which names them\
+              \ as the work does. Null for feedback on a practice page or in a conversation\
+              \ (ADR 0125)"
           - type: "null"
-          description: Null for feedback on a practice page or in a conversation while
-            the workspace has per-person results for admins off
+          description: "The developer of feedback on the work, which names them as\
+            \ the work does. Null for feedback on a practice page or in a conversation\
+            \ (ADR 0125)"
         replacesId:
           type:
           - string
@@ -28468,11 +28385,13 @@ components:
         person:
           anyOf:
           - $ref: "#/components/schemas/ReviewPerson"
-            description: Null for feedback on a practice page or in a conversation
-              while the workspace has per-person results for admins off
+            description: "The developer of feedback on the work, which names them\
+              \ as the work does. Null for feedback on a practice page or in a conversation\
+              \ (ADR 0125)"
           - type: "null"
-          description: Null for feedback on a practice page or in a conversation while
-            the workspace has per-person results for admins off
+          description: "The developer of feedback on the work, which names them as\
+            \ the work does. Null for feedback on a practice page or in a conversation\
+            \ (ADR 0125)"
         replacesId:
           type:
           - string
@@ -28954,10 +28873,6 @@ components:
           type:
           - string
           - "null"
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -29008,7 +28923,6 @@ components:
       - item
       - markedIncorrectAt
       - path
-      - person
       - practiceName
       - practiceSlug
       - recordedAt
@@ -29068,10 +28982,6 @@ components:
           type:
           - string
           - "null"
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -29126,7 +29036,6 @@ components:
       - item
       - markedIncorrectAt
       - path
-      - person
       - practiceName
       - practiceSlug
       - problem
@@ -29221,10 +29130,6 @@ components:
         jobId:
           type: string
           format: uuid
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         progress:
           anyOf:
           - $ref: "#/components/schemas/ReviewProgress"
@@ -29241,7 +29146,6 @@ components:
       - heldForBudget
       - item
       - jobId
-      - person
       - progress
       - reviewId
       - since
@@ -29382,10 +29286,6 @@ components:
           $ref: "#/components/schemas/ReviewOrigin"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -29429,7 +29329,6 @@ components:
       - markedIncorrectAt
       - origin
       - outcome
-      - person
       - practiceName
       - practiceSlug
       - problemCount
@@ -29538,10 +29437,6 @@ components:
           $ref: "#/components/schemas/ReviewOrigin"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
-        person:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewPerson"
-          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -29603,7 +29498,6 @@ components:
       - marks
       - origin
       - outcome
-      - person
       - practiceName
       - practiceSlug
       - practiceVersionId
@@ -29862,10 +29756,6 @@ components:
           anyOf:
           - $ref: "#/components/schemas/ReviewProgress"
           - type: "null"
-        requestedBy:
-          anyOf:
-          - $ref: "#/components/schemas/AccountRef"
-          - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
         startedBy:
@@ -29894,7 +29784,6 @@ components:
       - origin
       - practices
       - progress
-      - requestedBy
       - results
       - startedBy
       - status
@@ -31125,6 +31014,245 @@ components:
       - label
       - name
       - values
+    SupportShare:
+      type: object
+      description: "A share as the person who made it sees it: to whom, until when,\
+        \ and how often it was read."
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        includesText:
+          type: boolean
+        lastReadAt:
+          type: string
+          format: date-time
+        readCount:
+          type: integer
+          format: int32
+        recipient:
+          $ref: "#/components/schemas/SupportShareRecipient"
+        revokedAt:
+          type: string
+          format: date-time
+        state:
+          $ref: "#/components/schemas/SupportShareState"
+        turnId:
+          type: string
+          format: uuid
+        workspaceSlug:
+          type: string
+          description: The slug of the workspace of the shared turn
+      required:
+      - createdAt
+      - expiresAt
+      - id
+      - includesText
+      - readCount
+      - recipient
+      - state
+      - turnId
+      - workspaceSlug
+    SupportShareMessage:
+      type: object
+      description: "One message of a shared turn, exactly as the person saw it when\
+        \ they shared it."
+      properties:
+        author:
+          $ref: "#/components/schemas/SupportShareMessageAuthor"
+          description: "QUESTION: the person wrote it. ANSWER: Hephaestus wrote it."
+        createdAt:
+          type: string
+          format: date-time
+        entryId:
+          type: string
+          format: uuid
+        text:
+          type: string
+      required:
+      - author
+      - createdAt
+      - entryId
+      - text
+    SupportShareMessageAuthor:
+      type: string
+      enum:
+      - QUESTION
+      - ANSWER
+    SupportSharePreview:
+      type: object
+      description: "Exactly what the recipient will read, before the person shares\
+        \ it."
+      properties:
+        messages:
+          type: array
+          description: The messages that the share shows. Empty when the person shares
+            only diagnostics.
+          items:
+            $ref: "#/components/schemas/SupportShareMessage"
+        recipients:
+          type: array
+          description: The instance admins who can receive the share
+          items:
+            $ref: "#/components/schemas/SupportShareRecipient"
+        textDigest:
+          type: string
+          description: Confirms these exact messages when the person shares. Absent
+            without messages.
+        turn:
+          $ref: "#/components/schemas/SupportShareTurn"
+        validForDays:
+          type: integer
+          format: int32
+          description: How many days the recipient can read the share
+      required:
+      - messages
+      - recipients
+      - turn
+      - validForDays
+    SupportSharePreviewRequest:
+      type: object
+      properties:
+        includeText:
+          type: boolean
+          description: "Whether the share shows the turn's messages, or only its diagnostics"
+      required:
+      - includeText
+    SupportShareReceived:
+      type: object
+      description: |-
+        A share as its recipient reads it. The person chose to show their name and this turn; the share shows nothing
+         else about them.
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        includesText:
+          type: boolean
+        messages:
+          type: array
+          description: "The shared messages. Empty in the list, without text, or when\
+            \ the text is withheld."
+          items:
+            $ref: "#/components/schemas/SupportShareMessage"
+        sharedBy:
+          type: string
+          description: The person who shared the turn
+        textWithheld:
+          type: boolean
+          description: True when the person shared text that was deleted or changed
+            since. The share then shows no text.
+        turn:
+          $ref: "#/components/schemas/SupportShareTurn"
+          description: "The turn's diagnostics. Absent in the list, and when the turn\
+            \ no longer exists."
+        workspaceSlug:
+          type: string
+      required:
+      - createdAt
+      - expiresAt
+      - id
+      - includesText
+      - messages
+      - sharedBy
+      - textWithheld
+      - workspaceSlug
+    SupportShareRecipient:
+      type: object
+      description: An instance admin who can receive a support share.
+      properties:
+        accountId:
+          type: string
+        displayName:
+          type: string
+      required:
+      - accountId
+      - displayName
+    SupportShareRequest:
+      type: object
+      properties:
+        includeText:
+          type: boolean
+        recipientAccountId:
+          type: string
+          description: The instance admin who can read the share
+          pattern: "[1-9][0-9]{0,18}"
+        textDigest:
+          type: string
+          description: The preview's text digest; required when the share includes
+            text
+          maxLength: 64
+          minLength: 64
+      required:
+      - includeText
+      - recipientAccountId
+    SupportShareState:
+      type: string
+      enum:
+      - ACTIVE
+      - EXPIRED
+      - REVOKED
+    SupportShareTurn:
+      type: object
+      description: The diagnostics of one conversation turn. It holds no text.
+      properties:
+        attempt:
+          type: integer
+          format: int32
+        failedCall:
+          type: string
+          description: "The kind of the last model call that failed, as the LLM proxy\
+            \ names it"
+        failedCallStatus:
+          type: integer
+          format: int32
+          description: The status that the provider answered the failed call with
+        failureReason:
+          $ref: "#/components/schemas/ConversationTurnFailureReason"
+          description: "Why the turn failed, as a closed kind. Absent unless the turn\
+            \ failed."
+        finishedAt:
+          type: string
+          format: date-time
+        queuedAt:
+          type: string
+          format: date-time
+        runId:
+          type: string
+          format: uuid
+          description: "The run that executed the turn: the key of its server logs"
+        startedAt:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ConversationTurnStatus"
+        surface:
+          $ref: "#/components/schemas/ConversationTurnSurface"
+        turnId:
+          type: string
+          format: uuid
+        workspaceSlug:
+          type: string
+      required:
+      - attempt
+      - queuedAt
+      - runId
+      - status
+      - surface
+      - turnId
+      - workspaceSlug
     SyncJob:
       type: object
       description: One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass
@@ -31924,13 +32052,6 @@ components:
           description: Target mirror state
       required:
       - state
-    UpdatePerPersonResults:
-      type: object
-      properties:
-        enabled:
-          type: boolean
-      required:
-      - enabled
     UpdatePracticeGroupRequest:
       type: object
       properties:
@@ -32393,22 +32514,6 @@ components:
       - name
       - teams
       - url
-    UserViewAccount:
-      type: object
-      properties:
-        account:
-          $ref: "#/components/schemas/AccountRef"
-        accountId:
-          type: string
-          pattern: "^[1-9][0-9]*$"
-        providerLogin:
-          type:
-          - string
-          - "null"
-      required:
-      - account
-      - accountId
-      - providerLogin
     Value:
       type: object
       properties:
@@ -32945,10 +33050,6 @@ components:
           items:
             type: string
           uniqueItems: true
-        perPersonResultsForAdmins:
-          type: boolean
-          description: "Whether workspace admins see practice results per person.\
-            \ Every member reads it, because it decides who sees their results."
         practicesEnabled:
           type: boolean
           description: Whether practice reviews are on

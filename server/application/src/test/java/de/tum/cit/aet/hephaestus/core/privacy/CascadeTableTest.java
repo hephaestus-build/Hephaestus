@@ -491,6 +491,8 @@ class CascadeTableTest extends BaseUnitTest {
                     "GitHub product feedback repositories, public and private", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("GitHub/GitLab/Slack delivery destination", EnumSet.of(CascadeDependent.POSTED_SLACK_MESSAGE)),
             Map.entry("Application metrics", EnumSet.noneOf(CascadeDependent.class)),
+            // Ids, times and a digest, never an entry's words. No store names it until #5364.
+            Map.entry("PostgreSQL support shares", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Optional trace export and log collection", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("External avatar hosts and browser caches", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Container logs and support bundles", EnumSet.noneOf(CascadeDependent.class)),

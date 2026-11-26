@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -394,7 +393,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
                                 false)));
         when(facts.facts(workspace.getId(), List.of(first.getReviewId(), retained), from, to))
                 .thenReturn(new ReviewTimingFacts(0, 0, 0, 0, 0));
-        var adapter = new ReviewRuntimeQueryAdapter(jobs, mock(ReviewAssignmentQuery.class), runtimeRows, facts);
+        var adapter = new ReviewRuntimeQueryAdapter(jobs, runtimeRows, facts);
         var timing = adapter.timing(workspace.getId(), from, to, at.plusSeconds(10));
         assertThat(Objects.requireNonNull(timing.stages().get("ASKED")).count()).isEqualTo(2);
         assertThat(timing.waitingLong()).isZero();

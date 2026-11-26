@@ -7,22 +7,10 @@ import { expectPlaceholderRows } from "@/stories/loading-more";
 import { loadedList } from "@/stories/paged-list";
 import { StatefulPatch } from "@/stories/stateful";
 
-import { practiceGroups, reviewProblems, workspaceMembers, workspacePractices } from "./fixtures";
+import { practiceGroups, reviewProblems, workspacePractices } from "./fixtures";
 import { ProblemsListPage } from "./ProblemsListPage";
 import { groupFacetOptions, practiceFacetOptions } from "./ResultFilters";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 
-const PEOPLE: ReviewPeople = {
-	options: workspaceMembers.map(({ account }) => ({
-		accountId: account.id,
-		label: account.displayName ?? `#${account.id}`,
-		secondary: account.identities[0]?.login ?? undefined,
-	})),
-	capped: false,
-	named: true,
-	isLoading: false,
-	isError: false,
-};
 const GROUPS: FacetSource = {
 	options: groupFacetOptions(practiceGroups),
 	isLoading: false,
@@ -48,7 +36,6 @@ const meta = {
 		problems: loadedList(reviewProblems),
 		groups: GROUPS,
 		practices: PRACTICES,
-		people: PEOPLE,
 	},
 	render: (args) => (
 		<StatefulPatch initial={args.search}>
@@ -79,12 +66,8 @@ export const Default: Story = {
 	},
 };
 
-/** While the workspace shows admins results without names: no Developer column, no filter by person. */
-export const WithoutNames: Story = {
-	args: {
-		people: { ...PEOPLE, named: false },
-		problems: loadedList(reviewProblems.map((problem) => ({ ...problem, person: null }))),
-	},
+/** A staff list names no developer (ADR 0125): no Developer column, no filter by person. */
+export const NamesNoDeveloper: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText(`${reviewProblems.length} problems.`);
 		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();

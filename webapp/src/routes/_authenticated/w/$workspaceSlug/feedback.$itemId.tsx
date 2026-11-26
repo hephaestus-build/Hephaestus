@@ -10,7 +10,6 @@ import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { REVIEW_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
-import { useAuth } from "@/runtime/auth/AuthContext";
 import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 
 const ITEM_ID = /^[1-9]\d{0,18}$/u;
@@ -29,7 +28,6 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/feedback/
 });
 
 function ItemFeedbackRoute() {
-	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug } = Route.useParams();
 	const { itemId } = Route.useLoaderData();
 	const listOptions = listOwnItemReviewsInfiniteOptions({
@@ -46,7 +44,7 @@ function ItemFeedbackRoute() {
 	return (
 		<ItemFeedbackPage
 			feed={reviewFeedState(reviews)}
-			responses={readOnly ? undefined : responses}
+			responses={responses}
 			profileLink={
 				practicesEnabled === true ? (
 					<Link

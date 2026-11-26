@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795702297550-1" author="hephaestus">
+        <comment>A person shares one conversation turn with one instance admin (ADR 0164). The row holds ids, times and a digest, never text. It goes with the account that shares it, the account that receives it, and the workspace it names.</comment>
+        <createTable tableName="support_share">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="support_share_pkey"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recipient_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="turn_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text_digest" type="VARCHAR(64)"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column defaultValueNumeric="0" name="read_count" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_read_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+        <createIndex indexName="idx_support_share_account" tableName="support_share">
+            <column name="account_id"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex indexName="idx_support_share_recipient" tableName="support_share">
+            <column name="recipient_account_id"/>
+            <column name="expires_at"/>
+        </createIndex>
+        <createIndex indexName="idx_support_share_workspace" tableName="support_share">
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>ALTER TABLE public.support_share
+            ADD CONSTRAINT sfk_support_share_account FOREIGN KEY (account_id) REFERENCES public.account (id) ON DELETE CASCADE,
+            ADD CONSTRAINT sfk_support_share_recipient FOREIGN KEY (recipient_account_id) REFERENCES public.account (id) ON DELETE CASCADE,
+            ADD CONSTRAINT sfk_support_share_workspace FOREIGN KEY (workspace_id) REFERENCES public.workspace (id) ON DELETE CASCADE,
+            ADD CONSTRAINT ck_support_share_window CHECK (expires_at &gt; created_at),
+            ADD CONSTRAINT ck_support_share_reads CHECK (read_count &gt;= 0),
+            ADD CONSTRAINT ck_support_share_digest CHECK (text_digest IS NULL OR text_digest ~ '^[0-9a-f]{64}$')</sql>
+        <rollback>
+            <dropTable tableName="support_share"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795702297550-3" author="hephaestus">
+        <comment>Per-person results for admins are removed (ADR 0125, ADR 0164): the server no longer reads or writes the setting. Each workspace that had them on records one system change, so its owner can see why its admins no longer see names. The column stays for one release, because a server of the previous release reads it during the rolling upgrade. #5365 drops it.</comment>
+        <sql>INSERT INTO public.config_audit_event (workspace_id, actor_kind, entity_type, entity_id, action, changed_keys, old_value, new_value)
+SELECT id, 'SYSTEM', 'WORKSPACE_VISIBILITY', id::text, 'DELETED', ARRAY['perPersonResultsForAdmins'],
+       '{"perPersonResultsForAdmins":true}', NULL
+FROM public.workspace WHERE per_person_results_for_admins = true</sql>
+        <rollback>
+            <comment>The configuration audit trail is append-only, so the rows that record the removal stay. The column was never dropped.</comment>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

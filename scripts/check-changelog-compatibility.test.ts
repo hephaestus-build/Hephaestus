@@ -301,12 +301,14 @@ void test("reads the pending contractions from the first table after their headi
 	assert.deepEqual(pendingContractions("## Other\n\n| `table` | x |"), new Set());
 });
 
-void test("the migration workflow page lists no pending contraction for 1.0", () => {
+void test("the migration workflow page lists each pending contraction as a table or a column", () => {
 	const page = readFileSync(
 		new URL("../docs/contributor/database-migration.mdx", import.meta.url),
 		"utf8",
 	);
-	assert.deepEqual(pendingContractions(page), new Set());
+	for (const object of pendingContractions(page)) {
+		assert.match(object, /^[a-z0-9_]+(?:\.[a-z0-9_]+)?$/u);
+	}
 });
 
 void test("finds the stop-every-role entries of the upgrade from a previous version", () => {

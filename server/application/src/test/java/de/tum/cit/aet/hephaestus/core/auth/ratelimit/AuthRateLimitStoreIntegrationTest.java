@@ -44,7 +44,6 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 new AuthRateLimitProperties.Limit(2, Duration.ofHours(1)),
                 configured.refresh(),
                 configured.clientSession(),
-                configured.userView(),
                 configured.deleteUser(),
                 configured.export(),
                 configured.conversationTurns(),

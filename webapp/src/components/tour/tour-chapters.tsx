@@ -12,7 +12,7 @@ import {
 	REVIEWS_LEVEL,
 } from "@/components/practice-profile/practice-profile-search";
 import type { PracticeProfilePageProps } from "@/components/practice-profile/PracticeProfilePage";
-import { profileAudience } from "@/components/practice-profile/PracticeProfilePageHeader";
+import { PROFILE_AUDIENCE } from "@/components/practice-profile/PracticeProfilePageHeader";
 import {
 	firstRunApplies,
 	firstRunWords,
@@ -430,7 +430,7 @@ function howItWorks(facts: TourFacts): TourChapter {
 				body: (
 					<>
 						<p>It is feedback for learning. Your standing is not a grade.</p>
-						<p>{profileAudience()}</p>
+						<p>{PROFILE_AUDIENCE}</p>
 						<MeaningsForScreenReaders items={PROFILE_PARTS} />
 					</>
 				),

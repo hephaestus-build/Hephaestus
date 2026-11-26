@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackSendDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDetailDTO;
-import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackAnswerRead;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReasonCountDTO;
@@ -39,7 +39,7 @@ public class FeedbackReadService {
     private final FeedbackCopyRepository copies;
     private final FeedbackSendQueue sends;
     private final FeedbackDecisionRepository decisions;
-    private final FeedbackResponseRepository responses;
+    private final FeedbackAnswerRead answers;
     private final FeedbackContentDigest digests;
     private final ProductReferenceQuery references;
     private final ReviewRepository reviews;
@@ -113,15 +113,7 @@ public class FeedbackReadService {
     }
 
     private @Nullable FeedbackAnswerDTO answer(long workspaceId, UUID id) {
-        var answeredAt = responses.responseTimes(workspaceId, List.of(id)).stream()
-                .map(FeedbackResponseRepository.ResponseTime::answeredAt)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-        return responses
-                .findCurrent(workspaceId, id)
-                .map(response -> FeedbackAnswerDTO.of(response, answeredAt))
-                .orElse(null);
+        return answers.current(workspaceId, id);
     }
 
     public List<FeedbackDecisionDTO> decisionHistory(long workspaceId, UUID id) {
