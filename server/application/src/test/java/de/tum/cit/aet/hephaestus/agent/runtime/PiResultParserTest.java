@@ -248,6 +248,9 @@ class PiResultParserTest extends BaseUnitTest {
     @Test
     void countsZeroEvaluatedOnlyWhenValidCoverageReportsEligiblePractices() {
         var counter = meterRegistry.get("agent.review.zero.evaluated").counter();
+        var last = meterRegistry
+                .get("agent.review.last_zero_evaluated.timestamp_seconds")
+                .gauge();
         assertThat(counter.count()).isZero();
 
         parser.addPracticeCoverage(new HashMap<>(), null);
@@ -261,11 +264,13 @@ class PiResultParserTest extends BaseUnitTest {
                 {"eligible":1,"evaluated":1,"outcomes":[{"practiceSlug":"a","outcome":"EVALUATED"}]}
                 """.getBytes(UTF_8));
         assertThat(counter.count()).isZero();
+        assertThat(last.value()).isZero();
 
         parser.addPracticeCoverage(new HashMap<>(), """
                 {"eligible":1,"evaluated":0,"outcomes":[{"practiceSlug":"a","outcome":"NOT_REACHED"}]}
                 """.getBytes(UTF_8));
         assertThat(counter.count()).isEqualTo(1);
+        assertThat(last.value()).isPositive();
     }
 
     @Test

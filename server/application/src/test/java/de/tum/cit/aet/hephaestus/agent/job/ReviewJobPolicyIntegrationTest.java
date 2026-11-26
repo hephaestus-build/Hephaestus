@@ -91,6 +91,7 @@ import io.micrometer.tracing.Tracer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -348,13 +349,21 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
+        var receivedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS).minusSeconds(20);
         jdbc.update(
                 "UPDATE review_job SET execution_started_at = ? WHERE id = ? AND workspace_id = ?",
-                Timestamp.from(Instant.now().minusSeconds(10)),
+                Timestamp.from(receivedAt.minusSeconds(10)),
                 job.getId(),
                 job.getWorkspaceId());
 
-        measure(results(metrics), job, fence, SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
+        results(metrics)
+                .measured(
+                        job.getId(),
+                        jobs.findById(job.getId()).orElseThrow(),
+                        fence,
+                        0,
+                        new SandboxResult(SandboxLayout.EXIT_WORKSPACE_UNPREPARED, Map.of(), "", false, Duration.ZERO),
+                        receivedAt);
 
         var failed = jobs.findById(job.getId()).orElseThrow();
         assertThat(failed.getStatus())
@@ -369,7 +378,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .tag("phase", "execution")
                 .timer();
         assertThat(execution.count()).isEqualTo(1);
-        assertThat(execution.totalTime(TimeUnit.SECONDS)).isGreaterThanOrEqualTo(10);
+        assertThat(execution.totalTime(TimeUnit.SECONDS)).isEqualTo(10);
     }
 
     @Test
@@ -690,7 +699,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs.findById(job.getId()).orElseThrow(),
                 fence,
                 0,
-                new SandboxResult(exitCode, Map.of(), "", false, Duration.ZERO));
+                new SandboxResult(exitCode, Map.of(), "", false, Duration.ZERO),
+                Instant.now());
     }
 
     @Test

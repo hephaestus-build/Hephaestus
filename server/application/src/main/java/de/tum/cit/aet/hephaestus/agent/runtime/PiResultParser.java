@@ -8,9 +8,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -44,6 +47,7 @@ public class PiResultParser {
     private final DistributionSummary evaluatedPractices;
     private final DistributionSummary practiceCoverageRatio;
     private final Counter zeroEvaluatedReviews;
+    private final AtomicLong lastZeroEvaluated = new AtomicLong();
 
     public PiResultParser(ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.objectMapper = objectMapper;
@@ -60,6 +64,13 @@ public class PiResultParser {
                 .register(meterRegistry);
         this.zeroEvaluatedReviews = Counter.builder(AgentMetrics.AGENT_REVIEW_ZERO_EVALUATED)
                 .description("Review attempts reporting eligible practices and zero evaluated practices")
+                .register(meterRegistry);
+        Gauge.builder(
+                        AgentMetrics.AGENT_REVIEW_LAST_ZERO_EVALUATED_TIMESTAMP_SECONDS,
+                        lastZeroEvaluated,
+                        AtomicLong::get)
+                .description(
+                        "Unix time of this process's most recent review attempt with eligible practices and none evaluated")
                 .register(meterRegistry);
     }
 
@@ -129,7 +140,10 @@ public class PiResultParser {
             evaluatedPractices.record(evaluated);
             if (eligible > 0) {
                 practiceCoverageRatio.record((double) evaluated / eligible);
-                if (evaluated == 0) zeroEvaluatedReviews.increment();
+                if (evaluated == 0) {
+                    lastZeroEvaluated.accumulateAndGet(Instant.now().getEpochSecond(), Math::max);
+                    zeroEvaluatedReviews.increment();
+                }
             }
             log.info(
                     "Practice review coverage: evaluated={}, eligible={}, ratio={}",

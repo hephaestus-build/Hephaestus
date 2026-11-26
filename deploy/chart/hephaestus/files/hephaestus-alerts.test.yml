@@ -941,18 +941,20 @@ tests:
               summary: The server answered a review's results with its own error, so the review ended without them
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: a zero-evaluated review fires the alert and an hour without one clears it
+  - name: zero evaluated before the first scrape fires for an hour even if the reporting pod leaves
     interval: 1m
     input_series:
       - series: 'agent_review_zero_evaluated_total{job="hephaestus",instance="server-a:9090"}'
-        values: "0x4 1x70"
-      - series: 'agent_review_zero_evaluated_total{job="hephaestus",instance="server-b:9090"}'
+        values: "_ _ _ _ _ 1x10 stale"
+      - series: 'agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus",instance="server-a:9090"}'
+        values: "_ _ _ _ _ 299x10 stale"
+      - series: 'agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus",instance="server-b:9090"}'
         values: "0x75"
     alert_rule_test:
       - eval_time: 4m
         alertname: HephaestusReviewZeroEvaluated
         exp_alerts: []
-      - eval_time: 10m
+      - eval_time: 6m
         alertname: HephaestusReviewZeroEvaluated
         exp_alerts:
           - exp_labels:
@@ -960,7 +962,15 @@ tests:
             exp_annotations:
               summary: A review attempt had eligible practices and evaluated none in the last hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - eval_time: 70m
+      - eval_time: 30m
+        alertname: HephaestusReviewZeroEvaluated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A review attempt had eligible practices and evaluated none in the last hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 65m
         alertname: HephaestusReviewZeroEvaluated
         exp_alerts: []
 

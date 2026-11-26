@@ -114,8 +114,8 @@ public class ReviewAttemptResults {
     }
 
     @Nullable
-    ReviewJobStatus measured(UUID jobId, ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result) {
-        Instant receivedAt = Instant.now();
+    ReviewJobStatus measured(
+            UUID jobId, ReviewJob job, AgentRunFence fence, int endedBefore, SandboxResult result, Instant receivedAt) {
         ReviewJob retained;
         try {
             retained = preparation.owned(jobId, fence);

@@ -32,10 +32,11 @@
 			"panels": [
 				{
 					"title": "Execution p95",
-					"description": "From execution start until the server receives the attempt result.",
+					"description": "From execution start until the gateway validates the uploaded result.",
 					"expr": [
 						"histogram_quantile(0.95, sum by (le) (rate(agent_job_duration_seconds_bucket{job=\"hephaestus\",phase=\"execution\"}[1h])))"
 					],
+					"alias": ["Execution p95"],
 					"unit": "s",
 					"width": 6
 				},
@@ -88,6 +89,7 @@
 					"title": "Attempts with eligible practices that evaluated none",
 					"description": "Reported in the last hour.",
 					"expr": ["sum(increase(agent_review_zero_evaluated_total{job=\"hephaestus\"}[1h]))"],
+					"alias": ["Attempts"],
 					"width": 6
 				}
 			]
