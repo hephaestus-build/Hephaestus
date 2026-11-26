@@ -19,6 +19,18 @@ export const RESULT_TOOL_NAMES = [
 	"submit_result",
 ];
 
+export type VerificationStep = "verify_citation" | "prove_searches";
+
+export class VerificationTimeoutError extends Error {
+	override name = "VerificationTimeoutError";
+	readonly step: VerificationStep;
+
+	constructor(step: VerificationStep) {
+		super(`verification_timeout (${step}). Result verification did not finish in time.`);
+		this.step = step;
+	}
+}
+
 interface ResultToolOptions<T> {
 	sourceKinds: readonly string[];
 	contextRoot: string;
