@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
@@ -42,9 +44,13 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
+import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.ExportGenerationWorker;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -103,6 +109,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -131,8 +138,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
@@ -170,6 +179,18 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonDataService personData;
+
+    @Autowired
+    private ApplicationContext beans;
+
+    @Autowired
+    private ExportGenerationWorker exportWorker;
+
+    @Autowired
+    private AccountExportRepository accountExports;
+
+    @Autowired
+    private OwnerScope ownerScope;
 
     @Autowired
     private PrivacyJournal journal;
@@ -309,6 +330,118 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var order = registry.stores().stream().map(PersonDataContributor::store).toList();
         assertThat(order.indexOf("feedback")).isNotNegative();
         assertThat(order.indexOf("feedback_decision")).isGreaterThan(order.indexOf("feedback"));
+    }
+
+    @Test
+    void shouldKeepWithdrawnWordsOutOfFreshExportsBetweenCommittedErasureSteps() {
+        var admin = new Account("Erasure operator");
+        admin.setAppRole(Account.AppRole.APP_ADMIN);
+        long operator = Objects.requireNonNull(accounts.saveAndFlush(admin).getId());
+        long developer = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Feedback recipient")).getId());
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://withdrawal-erasure.example.test"));
+        users.saveAndFlush(TestUserFactory.createUser(42L, "erasure-subject", provider));
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("withdrawal-erasure"));
+        var affected = modelFixtures.work(workspace, "affected", "scm.pull_request", 71L);
+        var kept = modelFixtures.work(workspace, "kept", "scm.pull_request", 72L);
+        String withdrawnWords = "Feedback withdrawn before erasure.";
+        String keptWords = "Unrelated feedback for the same recipient.";
+        var withdrawn = modelFixtures.feedback(
+                modelFixtures.result(affected, developer, "Affected result"),
+                FeedbackDestination.PRACTICE_PAGE,
+                FeedbackState.DELIVERED,
+                withdrawnWords);
+        modelFixtures.feedback(
+                modelFixtures.result(kept, developer, "Unrelated result"),
+                FeedbackDestination.PRACTICE_PAGE,
+                FeedbackState.DELIVERED,
+                keptWords);
+        jdbc.update(
+                """
+                INSERT INTO person_evidence_copy(id,workspace_id,job_id,state,payload)
+                VALUES (?,?,?,'ERASED',CAST(? AS jsonb))
+                """,
+                UUID.randomUUID(),
+                workspace.getId(),
+                affected.job().getId(),
+                mapper.writeValueAsString(Map.of(
+                        "identities", List.of(new PersonCopyIdentity("GITLAB", provider.getServerUrl(), "42", null)),
+                        "repositories", List.of())));
+        assertThat(freshAccountExport(developer)).contains(withdrawnWords, keptWords);
+
+        jdbc.update("""
+                INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,actor_account_id,note)
+                VALUES (?,?,?,'WITHDRAW',?,'Withdraw the affected feedback')
+                """, UUID.randomUUID(), workspace.getId(), withdrawn.getId(), operator);
+        var preview = personData.preview(
+                operator, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
+        UUID requestId = preview.request().getId();
+        var selection = mapper.readTree(preview.request().getCountsJson());
+        assertThat(selection.path("feedback").asLong()).isOne();
+        assertThat(selection.path("feedback_decision").asLong()).isOne();
+        personData.requestErasure(requestId, operator, false);
+
+        // The service asks for journal proof after each committed step. Stop just before the feedback step.
+        var stores =
+                registry.stores().stream().map(PersonDataContributor::store).toList();
+        String previousStore = stores.get(stores.indexOf("feedback") - 1);
+        var shipping = mock(PrivacyJournalShipping.class);
+        when(shipping.erasurePending(requestId))
+                .thenAnswer(ignored -> Boolean.TRUE.equals(jdbc.queryForObject(
+                        "SELECT jsonb_exists(completed_json::jsonb, ?) FROM person_data_request WHERE id=?",
+                        Boolean.class,
+                        previousStore,
+                        requestId)));
+        erasureWithShipping(shipping).run(requestId);
+
+        var paused = personData.get(requestId).request();
+        assertThat(paused.getState()).isEqualTo(PersonDataRequest.State.ERASING);
+        assertThat(PersonDataStoreReceipt.counts(mapper, paused.getCompletedJson()))
+                .containsKey(previousStore)
+                .doesNotContainKey("feedback");
+        assertThat(freshAccountExport(developer))
+                .contains(keptWords, withdrawn.getId().toString())
+                .doesNotContain(withdrawnWords);
+
+        personData.run(requestId);
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(feedbackRepository.findByIdAndWorkspaceId(withdrawn.getId(), withdrawn.getWorkspaceId()))
+                .isEmpty();
+        assertThat(freshAccountExport(developer))
+                .contains(keptWords)
+                .doesNotContain(withdrawnWords, withdrawn.getId().toString());
+    }
+
+    private PersonDataService erasureWithShipping(PrivacyJournalShipping shipping) {
+        var service = new PersonDataService(
+                beans.getBean(PersonDataScopeResolver.class),
+                registry,
+                beans.getBean(PersonDataRequestRepository.class),
+                beans.getBean(PersonDataErasureHold.class),
+                issuedTokens,
+                beans.getBean(PlatformTransactionManager.class),
+                mapper,
+                jdbc,
+                beans.getBean(MeterRegistry.class),
+                journal,
+                shipping);
+        return PersonDataService.class.cast(
+                beans.getAutowireCapableBeanFactory().initializeBean(service, "personDataWithPausedJournal"));
+    }
+
+    private String freshAccountExport(long accountId) {
+        long exportId = Objects.requireNonNull(transactions.execute(status -> {
+            ownerScope.ofJob(accountId);
+            return accountExports.save(new AccountExport(accountId)).getId();
+        }));
+        exportWorker.generate(exportId, accountId);
+        var export = Objects.requireNonNull(transactions.execute(status -> {
+            ownerScope.ofJob(accountId);
+            return accountExports.findByIdAndAccountId(exportId, accountId).orElseThrow();
+        }));
+        assertThat(export.getStatus()).isEqualTo(AccountExport.Status.READY);
+        return new String(Objects.requireNonNull(export.getPayload()), StandardCharsets.UTF_8);
     }
 
     @Test
