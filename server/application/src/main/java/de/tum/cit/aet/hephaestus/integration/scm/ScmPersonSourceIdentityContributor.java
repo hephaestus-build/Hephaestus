@@ -7,7 +7,12 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceScope;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -76,38 +81,73 @@ public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityC
                     ? List.of()
                     : identitiesForSource(workspaceId, ScmItemEvents.PULL_REQUEST.value(), parents.getFirst());
         }
-        boolean connected = connectedToWorkspace(workspaceId, sourceId);
-        return jdbc.query(
-                "SELECT DISTINCT u.provider_id,u.native_id::text FROM (" + ROLES + """
+        return Objects.requireNonNull(
+                identitiesForSources(workspaceId, itemKind, List.of(sourceId)).get(sourceId));
+    }
+
+    /**
+     * {@link #identitiesForSource} of many issues or pull requests: their repositories and each repository's workspace
+     * connection are read once, and the people of every source in one query. A source's people count only while its
+     * repository is connected to the workspace or the workspace holds an item of it. A review's attribution is its pull
+     * request's, read one review at a time as above.
+     */
+    @Override
+    public Map<Long, List<PersonIdentity>> identitiesForSources(
+            long workspaceId, String itemKind, Collection<Long> sourceIds) {
+        if (!itemKinds().contains(itemKind)) throw new IllegalArgumentException("Unsupported SCM item kind");
+        if (!itemKind.equals(ScmItemEvents.ISSUE.value()) && !itemKind.equals(ScmItemEvents.PULL_REQUEST.value()))
+            return PersonSourceIdentityContributor.super.identitiesForSources(workspaceId, itemKind, sourceIds);
+        Map<Long, List<PersonIdentity>> identities = new LinkedHashMap<>();
+        sourceIds.forEach(id -> identities.put(id, new ArrayList<>()));
+        if (identities.isEmpty()) return identities;
+        var ids = new SqlArrayValue("bigint", identities.keySet().toArray());
+        Map<Long, RepositorySource> repositoryOf = new HashMap<>();
+        jdbc.query(
+                """
+                SELECT i.id,r.native_id,p.type,p.server_url FROM issue i
+                JOIN repository r ON r.id=i.repository_id JOIN identity_provider p ON p.id=r.provider_id
+                WHERE i.id=ANY(?)
+                """,
+                rs -> {
+                    repositoryOf.put(
+                            rs.getLong(1),
+                            new RepositorySource(
+                                    rs.getLong(2),
+                                    Objects.requireNonNull(rs.getString(3)),
+                                    ScmOrigin.of(rs.getString(4))));
+                },
+                ids);
+        Map<RepositorySource, Boolean> connectedRepository = new HashMap<>();
+        var connected = repositoryOf.entrySet().stream()
+                .filter(entry ->
+                        connectedRepository.computeIfAbsent(entry.getValue(), source -> connected(workspaceId, source)))
+                .map(Map.Entry::getKey)
+                .toArray();
+        jdbc.query(
+                "SELECT DISTINCT i.id,u.provider_id,u.native_id::text FROM (" + ROLES + """
                     ) roles JOIN issue i ON i.id=roles.source_id
                     JOIN repository r ON r.id=i.repository_id
                     JOIN identity_provider p ON p.id=r.provider_id
                     JOIN "user" u ON u.id=roles.user_id
-                    WHERE i.id=? AND (
-                        ?
+                    WHERE i.id=ANY(?) AND (
+                        i.id=ANY(?)
                         OR EXISTS (SELECT 1 FROM item a WHERE a.workspace_id=?
                             AND a.kind=? AND a.source_id=i.id)) AND i.issue_type=?
                     """,
-                (rs, row) -> new PersonIdentity(rs.getLong(1), Objects.requireNonNull(rs.getString(2)), null),
-                sourceId,
-                connected,
+                rs -> {
+                    Objects.requireNonNull(identities.get(rs.getLong(1)))
+                            .add(new PersonIdentity(rs.getLong(2), Objects.requireNonNull(rs.getString(3)), null));
+                },
+                ids,
+                new SqlArrayValue("bigint", connected),
                 workspaceId,
                 itemKind,
                 itemKind.equals(ScmItemEvents.PULL_REQUEST.value()) ? "PULL_REQUEST" : "ISSUE");
+        identities.replaceAll((id, people) -> List.copyOf(people));
+        return identities;
     }
 
-    private boolean connectedToWorkspace(long workspaceId, long sourceId) {
-        var sources = jdbc.query(
-                """
-                SELECT r.native_id,p.type,p.server_url FROM issue i
-                JOIN repository r ON r.id=i.repository_id JOIN identity_provider p ON p.id=r.provider_id
-                WHERE i.id=?
-                """,
-                (rs, row) -> new RepositorySource(
-                        rs.getLong(1), Objects.requireNonNull(rs.getString(2)), ScmOrigin.of(rs.getString(3))),
-                sourceId);
-        if (sources.isEmpty()) return false;
-        var source = sources.getFirst();
+    private boolean connected(long workspaceId, RepositorySource source) {
         if (source.origin().isEmpty()) return false;
         return jdbc
                 .query(

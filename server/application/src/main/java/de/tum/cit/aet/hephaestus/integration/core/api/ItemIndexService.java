@@ -43,6 +43,16 @@ public class ItemIndexService {
         return Map.copyOf(found);
     }
 
+    /** {@link #find} of many items in one read, keyed by id; an unknown id is absent. */
+    @Transactional(readOnly = true)
+    public Map<Long, IndexedItem> findAllIndexed(long workspaceId, Collection<Long> itemIds) {
+        var found = new HashMap<Long, IndexedItem>();
+        repository
+                .findByWorkspaceIdAndIdIn(workspaceId, List.copyOf(itemIds))
+                .forEach(item -> found.put(item.getId(), new IndexedItem(ref(item), item.getRemovedAt() != null)));
+        return Map.copyOf(found);
+    }
+
     /** The workspace's item, removed or not. */
     @Transactional(readOnly = true)
     public Optional<IndexedItem> find(long workspaceId, long itemId) {
