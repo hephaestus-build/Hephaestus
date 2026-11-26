@@ -395,13 +395,14 @@ If a stopped cutover fails or remains pending:
 4. Read `helm history <release> --namespace <namespace>`, and record the failed revision.
 5. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
    That revision runs the source release with every role stopped.
-6. Restore the final restore point of the cutover with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
-   Use the verified source chart and the values of the phase-1 revision.
-   Put the egress values of its step 3 in `/etc/hephaestus/chart.yaml`, because each tick applies that file.
+6. If you took a final logical archive, [restore that archive on the host](./upgrade#restore-the-final-logical-archive).
+   Otherwise, restore the final backup with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
+   For that recovery path, put the egress values of step 3 in `/etc/hephaestus/chart.yaml`.
+   Use the verified source chart and the values of the phase-1 revision for either path.
 7. To retry the target, resume the timer.
    To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
    Then do steps 10 and 11 of [If migration fails](./upgrade#if-migration-fails).
-8. When the selected release runs, stop the timer again.
+8. If you used the backup recovery path, stop the timer again when the selected release runs.
    Do steps 8 to 13 of [Recover the live installation](./backup-restore#recover-the-live-installation) with the verified chart of that release.
    Skip its step 7: no server ran after the final restore point, so no erasure follows it.
    Keep `/etc/hephaestus/chart.yaml` in step with the values of each step, because the next tick applies that file.

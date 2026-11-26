@@ -281,6 +281,8 @@ Rehearse a restore on a copy of the instance before you need one.
 
 ### Recover the live installation
 
+If you took a final logical archive during a stopped upgrade, follow [Restore the final logical archive](./upgrade#restore-the-final-logical-archive).
+
 A restore also reverses account suspensions, session revocations, recipient consent and deletions after the backup.
 Sessions issued after the backup must sign in again. Sessions revoked after it can become valid again.
 PostgreSQL loses the delivery history after the backup. Thus, the server cannot prevent duplicate external writes.
