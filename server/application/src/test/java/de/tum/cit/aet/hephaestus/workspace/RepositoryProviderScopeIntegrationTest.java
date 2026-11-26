@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumen
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -42,6 +44,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -58,10 +62,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweep
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabRepositorySync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.GitLabHistoricalBackfillService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
@@ -72,12 +79,14 @@ import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -104,10 +113,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private static final String NAME = "shared-org/shared-repo";
@@ -775,6 +786,74 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 result.cancel(true);
             }
         }
+    }
+
+    @Test
+    void shouldKeepTheReceivingMonitorWhenItsNewPublicObservationSupersedesTheDestroyCheck() {
+        Workspace own = workspace("destroy-public-read", persistUser("destroy-public-owner"));
+        own.setRepositorySelection(RepositorySelection.SELECTED);
+        workspaces.saveAndFlush(own);
+        String origin = gitLabProperties.defaultServerUrl();
+        IdentityProvider source = gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, origin)
+                .orElseGet(() -> provider(origin));
+        Connection connection = connect(own, source);
+        Repository repository = repository(source, NATIVE_ID, NAME);
+        long monitorId = monitor(own, NATIVE_ID).getId();
+        long providerId = Objects.requireNonNull(source.getId());
+        var observations = beans.getBean(RepositoryObservationStore.class);
+        var transport = mock(GitLabProjectSyncService.class);
+        when(transport.fetchProjectById(own.getId(), NATIVE_ID)).thenReturn(Optional.empty());
+        when(transport.isPublicProjectMissing(NATIVE_ID)).thenAnswer(invocation -> {
+            var newer = syncTargets.beginReadersProof(own.getId(), monitorId, NATIVE_ID, providerId);
+            assertThat(observations
+                            .observe(newer, Observation.read(newer, Repository.Visibility.PUBLIC, Map.of()))
+                            .applied())
+                    .isTrue();
+            return true;
+        });
+        var commands = beans.getBean(ConnectionCommands.class);
+        var manager = beans.getBean(PlatformTransactionManager.class);
+        var writes = new GitLabRouteWrites(
+                commands,
+                repositories,
+                beans.getBean(WorkspaceRepositoryMonitors.class),
+                beans.getBean(WorkspaceScopeFilter.class),
+                gitLabMonitors,
+                transport,
+                syncTargets,
+                gitLabProperties,
+                manager,
+                projectAdmission,
+                observations);
+        var admissionWithHeldPublicCheck = new GitLabRouteAdmission(
+                commands,
+                beans.getBean(IdentityProviderLookup.class),
+                repositories,
+                beans.getBean(GitLabTeamSyncService.class),
+                beans.getBean(GitLabUserService.class),
+                gitLabProperties,
+                beans.getBean(ObjectMapper.class),
+                manager,
+                projectAdmission,
+                writes);
+        ProviderEvent event = ProviderEvents.event(
+                "gitlab.?connection." + connection.getId() + ".project",
+                ("{\"event_name\":\"project_destroy\",\"project_id\":" + NATIVE_ID + "}")
+                        .getBytes(StandardCharsets.UTF_8),
+                new GitLabRouteCredential.Route(
+                                Objects.requireNonNull(connection.getId()),
+                                own.getId(),
+                                origin,
+                                42L,
+                                own.getAccountLogin())
+                        .headers());
+
+        assertThat(admissionWithHeldPublicCheck.admit(own.getId(), event, () -> {}))
+                .isFalse();
+        assertThat(repositories.findById(repository.getId()).orElseThrow().isPublicOnProvider())
+                .isTrue();
+        assertThat(monitors.findById(monitorId)).isPresent();
     }
 
     private static String inventoryResponse(SyncType phase, int iid, String title, boolean hasNext) {
