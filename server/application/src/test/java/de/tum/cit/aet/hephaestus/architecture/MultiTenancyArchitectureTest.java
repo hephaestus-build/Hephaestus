@@ -725,7 +725,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
          */
         static final Set<String> ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT = Set.of(
                 // ActivityEventListener handles CommentCreated, ReviewSubmitted events which carry full entity graphs
-                "ActivityEventListener");
+                "ActivityEventListener",
+                // Slots are shared, and the fanout takes each notification's workspace from its turn.
+                "ConversationTurnWaits");
 
         @Test
         void shouldNameOnlyExistingClassesInAsyncListenersWithPayloadContext() {
