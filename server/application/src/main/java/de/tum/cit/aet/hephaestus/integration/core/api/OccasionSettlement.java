@@ -99,7 +99,7 @@ public final class OccasionSettlement {
                         ? Optional.of(new Next.Decide(ItemEventState.WITHHELD, ReviewRequestReason.ITEM_NOT_VISIBLE))
                         : Optional.empty();
             case DUPLICATE ->
-                Optional.of(new Next.Decide(ItemEventState.WITHHELD, ReviewRequestReason.DUPLICATE_VERSION));
+                Optional.of(new Next.Decide(ItemEventState.WITHHELD, ReviewRequestReason.CONCURRENT_DUPLICATE));
             case EXPIRED ->
                 Optional.of(new Next.Decide(ItemEventState.EXPIRED, ReviewRequestReason.PENDING_DEADLINE_EXCEEDED));
         };

@@ -4389,7 +4389,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
         var duplicate = events.findById(pending.getId()).orElseThrow();
         assertThat(duplicate.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(duplicate.getReason()).isEqualTo(ReviewRequestReason.DUPLICATE_VERSION);
+        assertThat(duplicate.getReason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE);
         assertThat(duplicate.getItemVersion()).isNull();
         assertThat(duplicate.getOccurredAt()).isEqualTo(pending.getOccurredAt());
         var retained = events.findById(original.getId()).orElseThrow();

@@ -597,7 +597,7 @@ export function unreviewedVerdict(
 ): TraceVerdict {
 	const staleOff = event.reason === "PRACTICES_DISABLED" && practicesEnabled === true;
 	const reason =
-		event.reason === null || staleOff ? undefined : itemEventReasonSentence(event.reason);
+		event.reason === null || staleOff ? undefined : itemEventReasonSentence(event.reason, "event");
 	switch (event.state) {
 		case "WAITING": {
 			return {

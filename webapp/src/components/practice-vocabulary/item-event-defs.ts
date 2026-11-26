@@ -60,7 +60,6 @@ export const ITEM_EVENT_REASON_SENTENCES = {
 	REQUESTER_QUOTA_EXHAUSTED: "The person who asked has used their review requests for now.",
 	CONCURRENT_DUPLICATE: "Another review of the same work was already starting.",
 	COALESCED: "It was joined with another event on the same work into one review.",
-	DUPLICATE_VERSION: "An earlier event of the same kind already recorded this version of the work.",
 	OUT_OF_REVIEW_SCOPE: "The work is outside the workspace’s review scope.",
 	BOT_AUTHOR: BOT_REVIEW_REFUSAL_SENTENCE,
 	BOT_REVIEWER: BOT_REVIEW_REFUSAL_SENTENCE,
@@ -93,7 +92,13 @@ export const ITEM_EVENT_REASON_SENTENCES = {
 } satisfies Record<string, string>;
 
 /** Why a review did not start, or that the reason is one this build does not know. */
-export function itemEventReasonSentence(reason: ItemEventReason): string {
+export function itemEventReasonSentence(
+	reason: ItemEventReason,
+	context: "request" | "event" = "request",
+): string {
+	if (reason === "CONCURRENT_DUPLICATE" && context === "event") {
+		return "An earlier event of the same kind already recorded this version of the work.";
+	}
 	return definitionFor(
 		ITEM_EVENT_REASON_SENTENCES,
 		reason,
