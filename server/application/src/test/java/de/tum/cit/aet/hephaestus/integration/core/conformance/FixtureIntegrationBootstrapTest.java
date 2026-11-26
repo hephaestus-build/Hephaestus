@@ -30,11 +30,11 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewOn;
 import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.review.DormantBinding;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeItemEventCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
 import java.util.Map;
@@ -199,7 +199,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 null,
                 false,
                 new PracticeGuidance(null, null, null, null, null));
-        practice.setCurrentVersion(new PracticeVersion(practice, 1, new ObjectMapper().valueToTree(definition), null));
+        practice.setCurrentVersion(TestEntities.version(practice, 1, new ObjectMapper().valueToTree(definition), null));
         return practice;
     }
 }

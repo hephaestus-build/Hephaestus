@@ -9,6 +9,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** The admitted messages and destination of a Slack reply; delivery state belongs to the outbox. */
@@ -45,6 +46,10 @@ public class ConversationSlackMessages {
 
         public boolean inThread() {
             return threadTs != null;
+        }
+
+        public @Nullable String questionSlackTs() {
+            return question.getSlackTs();
         }
 
         /** Hephaestus's answer: the last message of the turn. Its Slack post carries the reply. */
@@ -119,6 +124,22 @@ public class ConversationSlackMessages {
         return entries.findByIdAndWorkspaceId(questionId, workspaceId)
                 .map(ConversationEntry::getTurnId)
                 .flatMap(turn -> turns.findByIdAndWorkspaceId(turn, workspaceId));
+    }
+
+    /** Whether a reply can still be attempted after a complete Slack readback found no post. */
+    @Transactional(readOnly = true)
+    public boolean hasQuestion(long workspaceId, UUID questionId) {
+        return !entries.findUnredactedIds(workspaceId, List.of(questionId)).isEmpty();
+    }
+
+    /** Checks delivery while the question is locked in the transaction that admits the Slack reply. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean admitReply(long workspaceId, UUID questionId, UUID turnId, Runnable requireDeliveryAllowed) {
+        boolean unchanged =
+                entries.lockUnredactedQuestion(workspaceId, questionId, turnId).isPresent();
+        if (!unchanged) return false;
+        requireDeliveryAllowed.run();
+        return true;
     }
 
     /** Binds an admitted ledger message to the Slack message that confirmed it. */

@@ -1,6 +1,6 @@
 # ADR 0053: A workspace address is a presentation origin, and sign-in stays on the apex
 
-**Status:** Accepted
+**Status:** Superseded by [0155](0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md)
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) (cookie session),

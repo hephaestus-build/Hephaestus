@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -212,6 +213,15 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
         assertThat(statuses(restored)).containsExactly(Map.entry("explain-why", PracticeSyncStatus.UPDATED));
         assertThat(practiceRow("explain-why")).containsEntry("reviewed_by", "HEPHAESTUS");
         assertThat(versionCount("explain-why")).isEqualTo(3);
+        // Each version keeps the practice's one key. Retiring changes the judgement, and restoring returns to it.
+        var identities = identities("explain-why");
+        assertThat(identities)
+                .extracting(row -> row.get("identity_key"))
+                .containsOnly(identities.getFirst().get("identity_key"));
+        assertThat(identities.get(1).get("comparability_class"))
+                .isNotEqualTo(identities.getFirst().get("comparability_class"));
+        assertThat(identities.get(2).get("comparability_class"))
+                .isEqualTo(identities.getFirst().get("comparability_class"));
     }
 
     /**
@@ -360,6 +370,15 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
                 Integer.class,
                 workspaceId(),
                 slug));
+    }
+
+    /** The identity of each version of the practice, oldest first. */
+    private List<Map<String, @Nullable Object>> identities(String slug) {
+        return jdbc.queryForList(
+                "SELECT v.identity_key, v.comparability_class FROM practice_version v JOIN practice p ON p.id = v.practice_id"
+                        + " WHERE p.workspace_id = ? AND p.slug = ? ORDER BY v.number",
+                workspaceId(),
+                slug);
     }
 
     private int versionCount(String slug) {

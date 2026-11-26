@@ -170,6 +170,8 @@ export function wirePractice(
 		feedbackMode: { effective: "OFF", override: "OFF", source: "WORKSPACE" },
 		catalogOrigin: { catalogSlug: null, localEdits: [], offeredDigest: null, state: "YOURS" },
 		editedIn: "HEPHAESTUS" as const,
+		identity: { key: `local/1/p-${slug}`, comparabilityClass: `sha256:${slug}` },
+		portable: false,
 		createdAt: "2026-09-01T09:00:00Z",
 		updatedAt: null,
 	};

@@ -21,14 +21,24 @@
   </p>
 </div>
 
-Hephaestus is an AI mentor for software engineering practices.
-It reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose.
-When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step.
-An observation can say when the evidence could not settle a question.
-You can talk it through, ask for an example, or disagree, in the app or in Slack.
+Hephaestus is an AI mentor that helps software developers grow in the engineering practices their team values.
 
-Hephaestus is software, and it can be wrong.
-You decide what to do with its feedback, and merge decisions stay with your reviewers.
+Developers grow by doing real work and getting feedback from people who know the craft: senior developers, reviewers, teachers and team leads.
+Hephaestus gives you feedback alongside them, on the practices your team chose, such as writing clear issues or testing a change.
+If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step.
+You can ask about the feedback in a conversation, and you decide what to do with it.
+
+## How it works
+
+1. **It reads your work.**
+   It reads pull requests, merge requests, issues and reviews from connected repositories.
+   It can also use selected Outline collections and new messages in Slack channels after it announces monitoring.
+2. **It gives feedback on your team's practices.**
+   If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step.
+   Feedback can appear on your work, on your Practice profile, or in a conversation.
+3. **It helps you take the next step.**
+   Ask Hephaestus why, ask for an example, or disagree.
+   Your Practice profile shows recurring feedback and what is going well.
 
 <div align="center">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-dark.png#gh-dark-mode-only" width="1280">
@@ -40,56 +50,50 @@ You decide what to do with its feedback, and merge decisions stay with your revi
   <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/public/img/user/practice-profile/overview.light.webp#gh-light-mode-only" width="1024">
 </div>
 
+## Who it is for
+
+- **Developers:** get feedback on your own work, see what is going well, and ask why.
+  Sign in at your team's Hephaestus address, then follow [Getting started](https://docs.hephaestus.build/user/getting-started).
+- **Team leads and mentors:** choose the practices your team values.
+  Hephaestus adds feedback on everyday work alongside the guidance you give.
+- **Educators:** use a workspace for a course or a project team.
+  A workspace admin chooses the practices you teach and can approve comments before they post.
+  [Set up your workspace](https://docs.hephaestus.build/user/workspace) shows how.
+- **Researchers:** Hephaestus is the research platform for a study at TUM.
+  The study asks whether and how AI-generated feedback improves how developers apply engineering practices.
+  [Run a research program](https://docs.hephaestus.build/admin/research-program) explains the setup.
+  Participants choose separately whether to allow research use of their data.
+- **Admins and self-hosters:** install the signed Helm chart on one Linux host or an existing Kubernetes cluster.
+  [First steps](https://docs.hephaestus.build/admin/first-steps) sets up sign-in, a repository, and a review model.
+
 ## Why an AI mentor
 
-Developers learn engineering practices by doing the work and getting feedback on it.
-That feedback comes from reviewers and mentors, and their time is scarce.
-In 37 Apache projects, a [2022 study](https://doi.org/10.1145/3540250.3549167) found that only about a quarter of pull requests received an implicit-mentoring comment.
-Such a comment explains a suggestion, an instruction, or a way to fix an error.
-
-Hephaestus gives this kind of feedback on the work it can assess.
-It takes one part of mentoring: coaching through feedback on how you apply a practice.
-The mentoring relationship stays with people.
-Hephaestus adds to your reviewers and mentors, so they can spend their time where judgment and relationships matter.
-
-## Never a grade
-
-Hephaestus is built to help you grow, not to grade you.
-It is not designed to grade, appraise or rank people, or to set allocation or pay ([Intended purpose](./docs/admin/intended-purpose.mdx)).
-
-- Your feedback has no score, grade or rank.
-- Your Practice profile shows your own feedback.
-  Workspace admins see practice results, each linked to the work it is about.
-  They see that your feedback exists, not what it says.
-  They can see who private feedback and results are about if a workspace owner turns on per-person results for admins.
-  Links to the work can still identify you when names are hidden.
-  The setting is off for new workspaces, and each change is recorded.
-- No workspace admin page shows your conversation with Hephaestus.
-  An instance admin can include it in an audited export of your data.
-- Feedback on the work is visible to everyone who can see that work, like any review comment.
-
-[Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) explains who can read your data, including the audited support access of instance admins.
+Developers learn engineering practices by doing the work and getting feedback on it, and the people who give that feedback have little time.
+A [2022 study](https://doi.org/10.1145/3540250.3549167) of 37 Apache projects found that only about a quarter of pull requests got a comment that explained why.
+Hephaestus adds feedback on everyday work alongside the guidance that reviewers and mentors give.
 
 ## Features
 
-- **Practices Your Team Chose**: Start from the catalog or write your own.
-  Each practice states what good work looks like.
+- **Your Team’s Practices**: Start from the catalog or write your own.
+  Each practice describes what good work looks like.
   The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
-  For each practice, feedback can be off. Feedback on the work can wait for a workspace admin's approval or go out automatically.
-- **Feedback on the Work**: A note on the pull request, merge request, or issue. By default, it posts only while the work is open.
-  It points to the evidence, says why, and suggests a next step.
-  When a later review shows that you fixed every problem a line note named, Hephaestus can resolve its thread.
-  Work drafted with a coding agent gets the same feedback.
-- **Feedback Grounded in Your Work**: A review checks its evidence before feedback can go out.
-  If it cannot capture the evidence it needs, it records no observation for that practice.
-- **Practice Profile**: See patterns across your work, what is going well, and where you stand on each practice.
-  No score, grade, or rank.
-- **Ask Hephaestus**: Ask why, ask for an example, or disagree, in the web app or in a Slack direct message.
-  You can turn on a weekly digest in your conversation in the app.
-- **Your Stack**: Works with GitHub, GitLab, Slack, and Outline.
-  Connect OpenAI, Azure OpenAI, Anthropic, or another provider that supports the required API.
-  Helm on your Kubernetes.
-  Each member chooses which models may handle their work: **In-house**, **Cloud**, or **No AI**.
+- **Feedback on Your Work**: Feedback can appear on your work, on your Practice profile, or in a conversation.
+  By default, comments on the work wait for a workspace admin’s approval and post while the work is open.
+  Workspace admins can let eligible comments post automatically, or turn off new feedback for a practice.
+- **Practice Profile**: Your Practice profile shows recurring feedback and what is going well in your reviewed work.
+  It appears when your workspace reviews practices.
+- **Ask Hephaestus**: Ask why, ask for an example, or disagree, in the web app.
+  When your workspace uses Slack, you can also ask in a direct message from your linked account.
+  Hephaestus answers when your workspace has a model that fits your AI choice.
+- **Built for Growth**: Feedback describes your work and how to improve it, without scores, grades or ranks.
+  AI writes the feedback and can make mistakes, so check it against your work and decide what to do.
+  Workspace admins see practice results linked to the work, and those links can identify you even when names are hidden.
+  An instance admin can include your conversation in an audited export of your data.
+  [Who can see what](https://docs.hephaestus.build/user/privacy#who-can-see-what) has the details.
+- **Connected Services**: Connect GitHub or GitLab for repository work.
+  Add Slack for conversations and team channels, or Outline for team documents.
+  Each member chooses **In-house**, **Cloud**, or **No AI** for reviews about their work and answers to their questions.
+  The [model provider guide](https://docs.hephaestus.build/admin/ai-providers) lists the supported services.
 
 [MIT](./LICENSE) ·
 [Helm chart](https://docs.hephaestus.build/admin/kubernetes) ·
@@ -119,11 +123,6 @@ It is not designed to grade, appraise or rank people, or to set allocation or pa
 - **Contribute:** start with the
   [local development guide](https://docs.hephaestus.build/contributor/local-development).
   It also shows how to explore the UI components in Storybook.
-
-## Where Hephaestus is going
-
-Practices apply to everyone who contributes to a project, people and coding agents alike.
-The same evidence-backed feedback can steer a coding agent, and it shows a team which practices it actually applies, so the team can refine them.
 
 ## Get help
 

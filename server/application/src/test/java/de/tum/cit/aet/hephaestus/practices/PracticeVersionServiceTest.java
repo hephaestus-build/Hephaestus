@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.practices.curated.PracticeIdentities;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.util.stream.Stream;
@@ -20,7 +21,9 @@ class PracticeVersionServiceTest extends BaseUnitTest {
             mock(PracticeVersionRepository.class),
             MAPPER,
             mock(PracticeDefinitionValidator.class),
-            mock(PracticeDrafts.class));
+            mock(PracticeDrafts.class),
+            mock(PracticeIdentities.class),
+            mock(PracticeReviewDigest.class));
 
     @ParameterizedTest
     @MethodSource("incompleteDefinitions")

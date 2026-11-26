@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionI
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
@@ -105,13 +107,13 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     /** An admitted review measures nothing again: its claim hands it on to the run that composes it. */
     @Override
-    public boolean claimed(SandboxRun run) {
-        var started = claims.claimLeased(run.fence());
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        var fence = lease.fence();
+        var started = claims.claimLeased(fence);
         if (started.isEmpty()
                 || !ResultAdmissionService.isContinuation(started.get().job())) return started.isPresent();
-        if (reviewRuns
-                .continueToCompose(started.get().job().getId(), run.fence())
-                .isEmpty()) throw new IllegalStateException("The claimed attempt lost its job under its lock");
+        if (reviewRuns.continueToCompose(started.get().job().getId(), fence).isEmpty())
+            throw new IllegalStateException("The claimed attempt lost its job under its lock");
         return false;
     }
 

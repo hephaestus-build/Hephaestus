@@ -97,10 +97,14 @@ public record ScmOccasionEvidence(
         return decision == null ? null : decision.deepCopy();
     }
 
+    /** Whether this record is of {@code item} at all; a record of other work is corrupt, not a version mismatch. */
+    boolean describes(ItemRef item) {
+        return kind.equals(item.kind().value()) && Objects.equals(item.sourceId(), sourceId);
+    }
+
     /** Whether this is the occasion of exactly {@code item} at exactly {@code requested}. */
     boolean matches(ItemRef item, ItemVersion requested) {
-        return kind.equals(item.kind().value())
-                && Objects.equals(item.sourceId(), sourceId)
+        return describes(item)
                 && requested.value().equals(itemVersion)
                 && (requested.baseVersion() == null || requested.baseVersion().equals(baseVersion));
     }

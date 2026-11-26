@@ -153,6 +153,11 @@ export const handlers = [
 	http.get("*/public/workspaces/:slug/activity", () => notFound()),
 	http.get("*/user/public-activity/workspaces/:slug/onboarding", () => notFound()),
 	http.get("*/user/public-activity", () => HttpResponse.json({ visible: true })),
+	// Hephaestus in numbers is off unless a test or story turns it on.
+	http.get("*/public/usage", () => notFound()),
+	http.get("*/admin/settings/public-usage", () =>
+		HttpResponse.json({ allowed: false, withdrawals: [] }),
+	),
 
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),

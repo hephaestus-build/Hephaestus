@@ -1,6 +1,6 @@
 display_information:
   name: Hephaestus
-  description: Hephaestus is an AI mentor for software engineering practices. It answers about your practice feedback and recent work.
+  description: Hephaestus is an AI mentor that helps you grow in the engineering practices your team values. Ask about your feedback and recent work.
 
 features:
   app_home:
@@ -8,7 +8,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: Hephaestus is an AI mentor for software engineering practices. In direct messages, it answers about your practice feedback and recent work.
+    agent_description: Hephaestus is an AI mentor for the engineering practices your team values. In direct messages, it answers about your feedback and work.
     suggested_prompts:
       - title: What needs attention?
         message: What software project practice should I focus on next?
@@ -54,6 +54,7 @@ settings:
       - channel_left
       - channel_rename
       - group_archive
+      - group_deleted
       - group_left
       - group_rename
       - app_home_opened

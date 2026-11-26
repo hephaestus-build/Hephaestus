@@ -23,6 +23,7 @@ public final class IntegrationCoreMetrics {
     public static final String OAUTH_STATE_NONCE_PRUNED = "oauth.state.nonce.pruned";
     public static final String WEBHOOK_PUBLISH = "webhook.publish";
     public static final String WEBHOOK_REJECTED = "webhook.rejected";
+    public static final String WEBHOOK_UNHANDLED = "webhook.unhandled";
 
     private IntegrationCoreMetrics() {}
 }

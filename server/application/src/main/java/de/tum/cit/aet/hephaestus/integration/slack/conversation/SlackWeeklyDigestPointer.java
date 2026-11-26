@@ -163,12 +163,13 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
                 attempt,
                 entryId,
                 new SlackPostAdapter.Post(
-                        channel,
-                        null,
+                        new SlackPostAdapter.Destination(
+                                channel,
+                                null,
+                                SlackTs.ofInstant(note.writtenAt()),
+                                new SlackPostAdapter.Recipient(teamId.get(), slackUserId.get())),
                         blocks(note, workspace.get()),
-                        text,
-                        SlackTs.ofInstant(note.writtenAt()),
-                        new SlackPostAdapter.Recipient(teamId.get(), slackUserId.get())));
+                        text));
     }
 
     /** Binds the confirmed DM reference in the action's end transaction, never during provider transport. */

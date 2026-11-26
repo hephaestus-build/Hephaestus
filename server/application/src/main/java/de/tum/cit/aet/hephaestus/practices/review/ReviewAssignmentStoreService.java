@@ -30,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -46,8 +45,8 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
     private final Clock clock;
     private final ReviewRuntimeQuery runtime;
     private final HistoryCustodyQuery custody;
-    private final JsonMapper json;
     private final ReuseCandidateQuery reuseCandidates;
+    private final ReviewItemCustody custodies;
 
     @Override
     @Transactional
@@ -152,12 +151,11 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 var detail = locked.getDetail() == null
                         ? JsonNodeFactory.instance.objectNode()
                         : (ObjectNode) locked.getDetail().deepCopy();
-                detail.set("custody", json.valueToTree(copied));
+                custodies.record(locked, detail, copied);
                 if (review.getKind() == ReviewKind.SCAN) detail.set("captureDecision", decision.facts());
                 var reusable = reusable(workspaceId, review, decision, member.getItemId());
                 if (reusable.isPresent()) {
-                    detail.set(
-                            "custody", json.valueToTree(reusable.orElseThrow().custody()));
+                    custodies.record(locked, detail, reusable.orElseThrow().custody());
                     locked.reuse(reusable.orElseThrow().result().getId());
                     assignment.finish();
                     reused.add(decision.practiceId());

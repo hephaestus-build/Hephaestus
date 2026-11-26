@@ -13,6 +13,7 @@ const configRecord = z.object({
 	deploymentEnvironment: z.string(),
 	commit: z.string(),
 	browserFaultReports: z.boolean(),
+	publicUsage: z.boolean(),
 });
 
 /** The element's text is JSON from this deployment's server. A record that does not parse is a packaging fault. */
@@ -65,6 +66,9 @@ const environment = {
 
 	/** The operator's switch for browser fault reports. Anonymous pages read it here, not from the reader's flags. */
 	browserFaultReports: record?.browserFaultReports ?? false,
+
+	/** Whether Hephaestus in numbers was on when the server wrote this page. */
+	publicUsage: record?.publicUsage ?? false,
 };
 
 export default environment;

@@ -148,11 +148,11 @@ The rest keeps running:
   Item event processing, privacy jobs and the follow-up of product feedback issues are such jobs.
   Provider reads without a sync job are such jobs too.
   The provider reads include the history backfill and the targeted Slack and Outline refreshes.
-- Queued work that waits past its start window still ends. A conversation turn waits at most 3 minutes, so a longer migration ends the waiting turns as not started.
+- Start windows continue during the migration. A conversation turn waiting for capacity has a 3-minute window. After it elapses, the reaper ends the turn as not started.
 
 During a long migration, alerts on waiting work can fire, such as `HephaestusInteractiveRunWaiting`, `HephaestusOutboxStalled` and `HephaestusProviderEventsWaiting`.
 
-When the barrier comes down, the servers start the waiting work again.
+When the barrier comes down, the servers can start work that is still within its time limits.
 This is also true when the migration fails or is killed.
 
 A migration waits in PostgreSQL's lock queue for the starts in progress, and no new start begins while it waits.

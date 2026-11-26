@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
@@ -8,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
-import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,7 +28,7 @@ public class DigestAdmission {
     private final WeeklyDigestAvailability availability;
     private final WeeklyDigestFacts facts;
     private final ObjectMapper mapper;
-    private final Clock clock;
+    private final AgentRuns runs;
 
     /** Ordinary questions keep their existing admission. Missing or no-longer-eligible digest work is refused. */
     @Transactional(readOnly = true)
@@ -45,7 +45,7 @@ public class DigestAdmission {
         var payload = WeeklyDigestPayload.fromJson(stimulus.payload(), mapper);
         if (payload.isEmpty()) return true;
         var window = payload.get().window();
-        var now = clock.instant();
+        var now = runs.conversationDeadlineClock();
         var current = facts.compose(workspaceId, accountId, window);
         return !DigestSchedule.isDue(now, window.zone())
                 || !WeeklyDigestWindow.previousWeek(now, window.zone())

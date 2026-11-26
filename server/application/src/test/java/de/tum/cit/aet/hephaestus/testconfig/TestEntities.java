@@ -136,11 +136,23 @@ public final class TestEntities {
                 "v6:" + "a".repeat(64));
     }
 
+    /**
+     * A version with the local key of its practice, as the service gives a practice of the workspace, for tests whose
+     * subject is not the identity.
+     */
+    public static PracticeVersion version(
+            Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId) {
+        Long practiceId = practice.getId();
+        String key = "local/" + practice.getWorkspace().getId() + "/" + (practiceId == null ? 0 : practiceId);
+        return new PracticeVersion(
+                practice, number, definition, createdByAccountId, false, null, key, "v6:" + "0".repeat(64));
+    }
+
     /** Database-generated metadata is supplied explicitly for detached unit-test rows. */
     public static PracticeVersion practiceVersion(long id, int number, JsonNode definition, String digest) {
         var practice = new Practice();
         practice.setWorkspace(workspace(1L));
-        var version = new PracticeVersion(practice, number, definition, null);
+        var version = version(practice, number, definition, null);
         ReflectionTestUtils.setField(version, "id", id);
         ReflectionTestUtils.setField(version, "name", definition.path("name").asString());
         ReflectionTestUtils.setField(version, "reviewDigest", digest);

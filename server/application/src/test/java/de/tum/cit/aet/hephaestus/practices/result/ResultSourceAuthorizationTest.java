@@ -30,6 +30,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCopiedIdentityRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
@@ -72,12 +74,16 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
     final ResultRepository results = mock(ResultRepository.class);
     final ReviewItemRepository assignments = mock(ReviewItemRepository.class);
     final HistoryCustodyQuery custody = mock(HistoryCustodyQuery.class);
+    /** Reads each member's copied identities from its detail, where these fixtures keep them. */
+    final ReviewItemCustody custodies =
+            Mockito.spy(new ReviewItemCustody(mock(ReviewItemCopiedIdentityRepository.class), json));
+
     final ResultSourceAuthorization authorization = new ResultSourceAuthorization(
             items,
             assignments,
             custody,
             results,
-            json,
+            custodies,
             catalog,
             suppression,
             people,
@@ -85,6 +91,26 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
             problems,
             itemRows,
             List.of(source));
+
+    @BeforeEach
+    void custodyFromDetail() {
+        // These fixtures keep each member's whole custody in its detail; the database keeps the identities as rows.
+        Mockito.lenient()
+                .doAnswer(call -> {
+                    Collection<ReviewItem> members = call.getArgument(1);
+                    var custody = new HashMap<ReviewItem.Id, HistoryCustody>();
+                    for (var member : members) {
+                        var node = member.getDetail() == null
+                                ? null
+                                : member.getDetail().path("custody");
+                        if (node != null && node.isObject())
+                            custody.put(ReviewItemCustody.id(member), json.convertValue(node, HistoryCustody.class));
+                    }
+                    return custody;
+                })
+                .when(custodies)
+                .custodies(anyLong(), any());
+    }
 
     @BeforeEach
     void availableSource() {
@@ -391,8 +417,14 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .set("custody", json.valueToTree(new HistoryCustody(false, false, List.of(), List.of(), List.of(job))));
         when(assignments.findByWorkspaceIdAndResultIdOrderByReviewIdAscPracticeIdAscItemIdAsc(1, history.getId()))
                 .thenReturn(List.of(
-                        ReviewItem.builder().detail(first).build(),
-                        ReviewItem.builder().detail(second).build()));
+                        ReviewItem.builder()
+                                .reviewId(UUID.randomUUID())
+                                .detail(first)
+                                .build(),
+                        ReviewItem.builder()
+                                .reviewId(UUID.randomUUID())
+                                .detail(second)
+                                .build()));
         assertThat(authorization.permitsHistory(1, history.getId(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .isFalse();
     }

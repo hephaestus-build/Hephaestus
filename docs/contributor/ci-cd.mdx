@@ -112,8 +112,8 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Build → Generated API                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. The [OpenAPI lint](#openapi-lint). `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `gate:openapi-lint`, `db:check-drift`, `db:generate-erd-docs` |
 | Build → Database migrations                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                                             | —                                                                        |
 | Build → PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr` and `test:postgres-init`, in one job beside `databaseTest`. **Re-run failed jobs** repeats all three drills                                         | `vp run test:postgres-restore`, `test:postgres-pitr`, `test:postgres-init` |
-| Browser tests → Webapp                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
-| Browser tests → Extension                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
+| Browser tests → Webapp                                                     | Playwright against the packaged JAR. A [server watch](#a-server-that-stops-answering) stops a hung run                                                                                                    | `vp run --filter webapp test:e2e`                                        |
+| Browser tests → Extension                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR. A [server watch](#a-server-that-stops-answering) stops a hung run                                        | `vp run test:extension:e2e`                                              |
 | Server tests → Unit, Architecture, Integration | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
@@ -1863,6 +1863,19 @@ The pull request check renders both upstream charts and compares their image sub
 
 The rescan also reads the selected k3s release's complete image list.
 It scans each image of that list except the images of the add-ons that `k3s-config.yaml` disables, because the host never pulls them.
+
+### A server that stops answering
+
+Each browser suite runs `scripts/e2e-server-watch.ts` beside the packaged server.
+It requests `/login` every 5 s, with a limit of 10 s.
+After three requests in a row get no answer, it does these steps:
+
+1. It writes the server's threads to `e2e-server-threads.json`, with virtual threads, and to `e2e-server-threads.txt`, with locks and Java-level deadlocks.
+2. It reports `The server stopped answering` as an annotation and in the job summary.
+3. It stops the server, so the remaining tests fail at once.
+
+The job uploads both dumps with the suite's results.
+Without the watch, each test waits for its own timeout, and the step runs until its 10-minute limit.
 
 ### Flaky tests
 

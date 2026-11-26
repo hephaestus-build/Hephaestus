@@ -2,17 +2,24 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
@@ -40,10 +47,13 @@ import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegra
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCopiedIdentityRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.ProblemComparison;
 import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
@@ -104,6 +114,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -117,6 +128,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -197,6 +210,12 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Autowired
     ReviewItemRepository memberRows;
+
+    @Autowired
+    ReviewItemCustody custodies;
+
+    @Autowired
+    ReviewItemCopiedIdentityRepository copiedIdentities;
 
     @Autowired
     ReviewPracticeRepository pinnedPractices;
@@ -948,6 +967,97 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .isNull();
     }
 
+    @Test
+    void shouldRecordEveryCopiedIdentityOfACaptureThatCopiedMoreThanTheDetailHolds() {
+        // About 90 identities filled the 8 KiB detail of a review item before they moved to their own rows.
+        var copies = IntStream.range(0, 100)
+                .mapToObj(n -> new PersonCopyIdentity("GITHUB", "https://github.com", "copied-" + n, null))
+                .toList();
+        var member = capturedMember(copies);
+
+        var detail = Objects.requireNonNull(member.getDetail());
+        assertThat(detail.path("custody").has("copiedIdentities")).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM review_item_copied_identity WHERE workspace_id=? AND review_id=?"
+                                + " AND practice_id=? AND item_id=?",
+                        Long.class,
+                        member.getWorkspaceId(),
+                        member.getReviewId(),
+                        member.getPracticeId(),
+                        member.getItemId()))
+                .isEqualTo(100L);
+        assertThat(custodies.read(member).orElseThrow().copiedIdentities()).containsExactlyInAnyOrderElementsOf(copies);
+    }
+
+    /**
+     * An erasure that deletes the member while a reader reads its custody. The reader sees the custody with every
+     * copied identity, or no custody at all: never a complete custody without its identities, which would authorize
+     * a retained result for no copied person. The reader has one database read, so the erasure commits either before
+     * it or after it.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldReadACustodyWholeOrNotAtAllWhileAnErasureDeletesItsMember(boolean erasedBeforeTheRead) {
+        var copies = List.of(
+                new PersonCopyIdentity("GITHUB", "https://github.com", "copied-a", null),
+                new PersonCopyIdentity("SLACK", "https://slack.com", "U-copied-b", "T-copied"));
+        var member = capturedMember(copies);
+        var reader = mock(ReviewItemCopiedIdentityRepository.class, delegatesTo(copiedIdentities));
+        Runnable erasure = () -> new TransactionTemplate(
+                        transactions, new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRES_NEW))
+                .executeWithoutResult(ignored -> jdbcTemplate.update(
+                        "DELETE FROM review_item WHERE workspace_id=? AND review_id=? AND practice_id=? AND item_id=?",
+                        member.getWorkspaceId(),
+                        member.getReviewId(),
+                        member.getPracticeId(),
+                        member.getItemId()));
+        doAnswer(call -> {
+                    if (erasedBeforeTheRead) erasure.run();
+                    var rows = delegatesTo(copiedIdentities).answer(call);
+                    if (!erasedBeforeTheRead) erasure.run();
+                    return rows;
+                })
+                .when(reader)
+                .findCustody(anyLong(), anyString());
+
+        var read = new TransactionTemplate(transactions)
+                .execute(ignored -> new ReviewItemCustody(reader, json).read(member));
+
+        if (erasedBeforeTheRead) assertThat(read).isEmpty();
+        else
+            assertThat(Objects.requireNonNull(read).orElseThrow().copiedIdentities())
+                    .containsExactlyInAnyOrderElementsOf(copies);
+        verify(reader).findCustody(anyLong(), anyString());
+        verifyNoMoreInteractions(reader);
+    }
+
+    private ReviewItem capturedMember(List<PersonCopyIdentity> copies) {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 1);
+        long workspaceId = scenario.workspace().getId();
+        when(custody.find(anyLong(), anyList()))
+                .thenAnswer(call -> new HistoryCustody(true, false, copies, List.of(), call.getArgument(1)));
+
+        assignments.capture(
+                workspaceId,
+                pending.review().getId(),
+                pending.jobId(),
+                1,
+                List.of(new ReviewCaptureDecision(
+                        scenario.practice().getId(),
+                        ReviewPracticeStatus.READY,
+                        null,
+                        JsonNodeFactory.instance.objectNode().put("status", "READY"))));
+
+        return memberRows
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        workspaceId,
+                        pending.review().getId(),
+                        scenario.practice().getId(),
+                        scenario.item().getId())
+                .orElseThrow();
+    }
+
     @ParameterizedTest
     @EnumSource(ResultOutcome.class)
     void shouldRecordCaptureFailureWithoutCreatingAResultForAnyClaimedOutcome(ResultOutcome outcome) {
@@ -1095,6 +1205,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 List.of(scenario.practice().getId()),
                 false,
+                Set.of(),
                 Set.of(),
                 null,
                 null,
@@ -1440,7 +1551,8 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(ended.getEndedAt()).isAfterOrEqualTo(at);
         var event = eventRows.findByIdAndWorkspaceId(eventId, workspace).orElseThrow();
         assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.ITEM_GONE);
+        // The item left the index, which a withdrawal does too: the stop claims only that it is no longer visible.
+        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
         assertThat(reviews.findByWorkspaceIdAndEventId(workspace, eventId)).isEmpty();
     }
 

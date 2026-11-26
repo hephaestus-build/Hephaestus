@@ -58,8 +58,8 @@ class SlackManifestTemplateTest extends BaseUnitTest {
         String manifest = Files.readString(MANIFEST, StandardCharsets.UTF_8);
 
         assertThat(manifest)
-                .contains("  description: Hephaestus is an AI mentor for software engineering practices.")
-                .contains("    agent_description: Hephaestus is an AI mentor for software engineering practices.")
+                .contains("  description: Hephaestus is an AI mentor that helps you grow")
+                .contains("    agent_description: Hephaestus is an AI mentor for the engineering practices")
                 .doesNotContainIgnoringCase("assistant");
     }
 
@@ -106,6 +106,7 @@ class SlackManifestTemplateTest extends BaseUnitTest {
                 new SlackChannelArchiveMessageHandler(lifecycle, deserializer),
                 new SlackGroupArchiveMessageHandler(lifecycle, deserializer),
                 new SlackChannelDeletedMessageHandler(lifecycle, deserializer),
+                new SlackGroupDeletedMessageHandler(lifecycle, deserializer),
                 new SlackChannelRenameMessageHandler(lifecycle, deserializer),
                 new SlackGroupRenameMessageHandler(lifecycle, deserializer));
         return handlers.stream().map(h -> h.key().eventType()).collect(Collectors.toCollection(LinkedHashSet::new));

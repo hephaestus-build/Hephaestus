@@ -329,6 +329,8 @@ public class ScmItemService implements ItemSource {
 
     private Retained occasion(ItemRef item, ItemVersion requested, UUID eventId) {
         var evidence = occasionEvidence.occasion(item, eventId);
+        // A record that names other work is corrupt: a fault that is retried, never a routine withholding.
+        if (!evidence.describes(item)) throw otherWork();
         if (!evidence.matches(item, requested)) throw versionUnavailable();
         items.require(item);
         PullRequestReview review = null;
@@ -343,9 +345,10 @@ public class ScmItemService implements ItemSource {
             work = workLookup
                     .find(item.kind(), Objects.requireNonNull(item.sourceId()))
                     .orElseThrow(ScmItemService::gone);
+        // The work of an occasion never changes: the pull request itself, or the one the review belongs to.
+        if (!Objects.equals(evidence.work().sourceId(), work.getId())) throw otherWork();
         // Current access, never the access the occasion had: the same connection must still authorize the work.
-        if (!authorize(workItem, work).equals(evidence.integration())
-                || !Objects.equals(evidence.work().sourceId(), work.getId())) throw versionUnavailable();
+        if (!authorize(workItem, work).equals(evidence.integration())) throw versionUnavailable();
         return new Retained(
                 evidence,
                 new ItemSnapshot(
@@ -357,6 +360,11 @@ public class ScmItemService implements ItemSource {
                         evidence.label()),
                 work,
                 review);
+    }
+
+    private static ItemCaptureException otherWork() {
+        return new ItemCaptureException(
+                ItemCaptureCode.CAPTURE_FAILED, "The occasion's retained record names other work");
     }
 
     private ItemSnapshot repository(ItemRef item, @Nullable ItemVersion requested) {

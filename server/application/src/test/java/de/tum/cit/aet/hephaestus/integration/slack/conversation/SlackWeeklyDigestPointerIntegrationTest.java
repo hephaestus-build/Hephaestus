@@ -1,10 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
+import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -13,7 +14,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestNotes;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestPointer;
@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
@@ -146,7 +147,8 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 completion,
                 linkHosts,
                 objectMapper,
-                workspaces);
+                workspaces,
+                new OutboundEgressGuard(() -> false));
         beans.addBean("post", adapter);
         executor = ActionTestSupport.withAdapter(context, adapter);
         pointer = new SlackWeeklyDigestPointer(
@@ -178,7 +180,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         ConversationEntry digest = digest();
         context.getBean(TransactionTemplate.class).executeWithoutResult(status -> {
             pointer.on(written(digest, WeeklyDigestPointer.SLACK));
-            verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+            verify(slack, never()).postAdmitted(anyLong(), any(), any());
             status.setRollbackOnly();
         });
         assertThat(noteDelivery(digest)).isNull();
@@ -216,19 +218,22 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     @Test
     void shouldPostOneNoteWithoutContentsAndLearnTheDmWhenADigestIsWritten() {
         ConversationEntry digest = digest();
-        when(slack.postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any()))
-                .thenReturn(new SlackMessageService.Posted(DM, "300.1"));
+        when(slack.postAdmitted(
+                        eq(workspace.getId()),
+                        argThat(post -> SLACK_USER.equals(post.channelId()) && post.threadTs() == null),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted(DM, "300.1")));
 
         enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
         enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<LayoutBlock>> blocks = ArgumentCaptor.forClass(List.class);
-        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(slack, times(1))
-                .postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), blocks.capture(), text.capture(), any());
-        assertThat(text.getValue()).isEqualTo("Your weekly digest for 5–11 October is ready in Hephaestus.");
-        String rendered = blocks.getValue().toString();
+        var outgoing = ArgumentCaptor.forClass(SlackMessageService.Outgoing.class);
+        verify(slack, times(1)).postAdmitted(eq(workspace.getId()), outgoing.capture(), any());
+        var post = outgoing.getValue();
+        assertThat(post.channelId()).isEqualTo(SLACK_USER);
+        assertThat(post.threadTs()).isNull();
+        assertThat(post.text()).isEqualTo("Your weekly digest for 5–11 October is ready in Hephaestus.");
+        String rendered = post.blocks().toString();
         assertThat(rendered)
                 .contains(
                         "*Your weekly digest is ready*\n5–11 October · Delivery team",
@@ -252,8 +257,11 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     @ValueSource(strings = {"user", "team"})
     void shouldNotBindThePostedDmWhenTheSlackRecipientChangesDuringThePost(String changed) {
         ConversationEntry digest = digest();
-        when(slack.postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any()))
-                .thenAnswer(invocation -> {
+        when(slack.postAdmitted(
+                        eq(workspace.getId()),
+                        argThat(post -> SLACK_USER.equals(post.channelId()) && post.threadTs() == null),
+                        any()))
+                .thenAnswer(admittedPost(invocation -> {
                     if (changed.equals("user")) {
                         when(identities.resolveSlackUserId(accountId, TEAM)).thenReturn(Optional.of("U2"));
                     } else {
@@ -265,13 +273,16 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                                         new ConnectionConfig.SlackConfig("T2", "not-a-key", null, Set.of()))));
                     }
                     return new SlackMessageService.Posted(DM, "300.2");
-                });
+                }));
 
         enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
         enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
         verify(slack, times(1))
-                .postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any());
+                .postAdmitted(
+                        eq(workspace.getId()),
+                        argThat(post -> SLACK_USER.equals(post.channelId()) && post.threadTs() == null),
+                        any());
         assertThat(noteDelivery(digest)).isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
         assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackTs())
                 .isNull();
@@ -296,7 +307,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 .thenReturn(Optional.of(Instant.now().plusSeconds(60)));
         enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         assertThat(noteDelivery(digest))
                 .as("the note was withdrawn before it was posted")
                 .isEqualTo(ConversationEntry.SlackDelivery.FAILED);
@@ -306,7 +317,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     void shouldPostNothingWhenTheNoteGoesByEmail() {
         enqueueAndDeliver(written(digest(), WeeklyDigestPointer.EMAIL));
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
     }
 
     @Test
@@ -318,7 +329,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 .thenReturn(new SlackMessageService.Matches(List.of("300.5"), false));
         settle(digest);
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         ConversationEntry settled = entryRepository.findById(digest.getId()).orElseThrow();
         assertThat(noteDelivery(digest)).isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
         assertThat(settled.getSlackTs()).isEqualTo("300.5");
@@ -331,7 +342,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.empty());
         settle(digest);
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackTs())
                 .isNull();
     }
@@ -343,7 +354,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
 
         settle(digest);
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         verify(slack, never()).readWorkspaceMessages(anyLong(), anyString(), any(), anyString(), any());
         assertThat(noteDelivery(digest)).isEqualTo(ConversationEntry.SlackDelivery.UNCERTAIN);
     }
@@ -358,7 +369,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
 
         settle(digest);
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         assertThat(noteDelivery(digest)).isEqualTo(ConversationEntry.SlackDelivery.FAILED);
     }
 
@@ -373,7 +384,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
 
         settle(digest);
 
-        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        verify(slack, never()).postAdmitted(anyLong(), any(), any());
         assertThat(noteDelivery(digest))
                 .as("a page without the note does not prove that Slack does not hold it")
                 .isEqualTo(ConversationEntry.SlackDelivery.UNCERTAIN);

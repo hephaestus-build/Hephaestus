@@ -54,6 +54,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         UUID getConversationId();
 
         long getAccountId();
+
+        String getKind();
+
+        @Nullable
+        UUID getTurnId();
     }
 
     /** How many messages a conversation holds after a sequence number, and when the newest was written. */
@@ -235,6 +240,29 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     Optional<ConversationEntry> findByWorkspaceIdAndTurnIdAndKind(
             Long workspaceId, UUID turnId, ConversationEntry.Kind kind);
+
+    interface LegacyDigestWindow {
+        UUID getId();
+
+        String getWeekStart();
+
+        String getZone();
+    }
+
+    @Query(value = """
+            SELECT e.id, e.payload #>> '{window,weekStart}' AS "weekStart", e.payload #>> '{window,zone}' AS zone
+              FROM conversation_turn t
+              JOIN conversation_entry e ON e.turn_id = t.id AND e.workspace_id = t.workspace_id
+             WHERE t.workspace_id IN (:workspaceIds)
+               AND (:allConversations OR t.conversation_id IN (:conversationIds))
+               AND t.status = 'QUEUED' AND e.kind = 'DIGEST' AND e.redacted_at IS NULL
+               AND e.payload ->> 'startBy' IS NULL
+               AND e.payload #>> '{window,weekStart}' IS NOT NULL AND e.payload #>> '{window,zone}' IS NOT NULL
+            """, nativeQuery = true)
+    List<LegacyDigestWindow> findLegacyDigestWindows(
+            @Param("workspaceIds") Collection<Long> workspaceIds,
+            @Param("conversationIds") Collection<UUID> conversationIds,
+            @Param("allConversations") boolean allConversations);
 
     /** The question of the account's ended turn on a surface, read with its owner check in one statement. */
     @Query("""
@@ -420,12 +448,21 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
+    interface CopyingToolResult {
+        UUID getId();
+
+        Instant getCreatedAt();
+    }
+
     /** The tool results of a workspace not erased yet that can copy anyone's data. */
     @Query(value = """
-            SELECT e.id FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND
+            SELECT e.id AS "id", e.created_at AS "createdAt" FROM conversation_entry e
+            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL
+              AND (CAST(:cutoff AS timestamptz) IS NULL OR e.created_at <= :cutoff)
+              AND
             """ + COPIES_PERSON_DATA, nativeQuery = true)
-    List<UUID> findUnredactedCopyingToolResultIds(@Param("workspaceId") long workspaceId);
+    List<CopyingToolResult> findUnredactedCopyingToolResults(
+            @Param("workspaceId") long workspaceId, @Param("cutoff") @Nullable Instant cutoff);
 
     /** The messages of the account's conversations as the app shows them, in every workspace, oldest first. */
     @WorkspaceAgnostic("The self-service export reads the account's own messages in every workspace")
@@ -524,6 +561,15 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
     String COPIES_PERSON_DATA_STORE = "conversation_entry_tool_result_copy";
 
+    @Query(value = """
+            SELECT id FROM conversation_entry
+            WHERE workspace_id = :workspaceId AND id = :entryId AND turn_id = :turnId
+              AND kind = 'USER' AND redacted_at IS NULL
+            FOR SHARE
+            """, nativeQuery = true)
+    Optional<UUID> lockUnredactedQuestion(
+            @Param("workspaceId") long workspaceId, @Param("entryId") UUID entryId, @Param("turnId") UUID turnId);
+
     /** Locks the main conversation row of each tree that holds one of these entries, in id order. */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """
@@ -612,12 +658,13 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                    END
              WHERE e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
                             UNION SELECT id FROM covering)
-            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind
+            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind, e.turn_id
             )
             SELECT u.id AS "id", u.workspace_id AS "workspaceId", u.conversation_id AS "conversationId",
-                   c.account_id AS "accountId"
+                   c.account_id AS "accountId", u.kind AS "kind", u.turn_id AS "turnId"
             FROM updated u JOIN conversation c ON (c.id,c.workspace_id)=(u.conversation_id,u.workspace_id)
             WHERE u.kind IN ('USER','ANSWER','DIGEST')
+            ORDER BY u.workspace_id, u.turn_id, u.id
             """, nativeQuery = true)
     List<EntryRef> redactWithCopies(
             @Param("ids") UUID[] ids,

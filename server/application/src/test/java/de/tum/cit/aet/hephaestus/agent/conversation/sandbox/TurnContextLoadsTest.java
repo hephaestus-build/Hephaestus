@@ -86,7 +86,7 @@ class TurnContextLoadsTest extends BaseUnitTest {
         folder = new TurnContextLoads(
                 turns,
                 beans.getBeanProvider(ContextLoader.class),
-                clock,
+                clock::instant,
                 copies,
                 layout,
                 mock(AgentRunAuthority.class));
@@ -147,7 +147,7 @@ class TurnContextLoadsTest extends BaseUnitTest {
                 AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED);
         doThrow(new AuthorityRefusedException(refusal)).when(authority).require(any(), any());
         try (var refusing = new TurnContextLoads(
-                turns, beans.getBeanProvider(ContextLoader.class), clock, copies, layout, authority)) {
+                turns, beans.getBeanProvider(ContextLoader.class), clock::instant, copies, layout, authority)) {
             assertThatThrownBy(() -> refusing.prepare(turn(), DEADLINE, "repos/github.com/acme/api"))
                     .isInstanceOf(AuthorityRefusedException.class);
         }

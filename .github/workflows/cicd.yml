@@ -536,6 +536,7 @@ jobs:
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
               - 'scripts/ci-browser.ts'
+              - 'scripts/e2e-server-watch.ts'
               - '.github/playwright-image.json'
               - '.java-version'
               - 'webapp/e2e/**'
@@ -569,6 +570,7 @@ jobs:
               - '.github/actions/setup-browsers/**'
             extension-e2e:
               - 'scripts/ci-browser.ts'
+              - 'scripts/e2e-server-watch.ts'
               - '.github/playwright-image.json'
               - '.java-version'
               - 'extension/**'

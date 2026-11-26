@@ -17,7 +17,8 @@ import org.springframework.data.repository.query.Param;
 /**
  * Every write of a run is a conditional update on the database clock. A write of a holder names its epoch and changes
  * nothing under another one. {@code clock_timestamp()} rather than {@code now()}: a lease is compared with the time of
- * the statement, not with the start of a transaction that may have waited for a lock.
+ * the statement, not with the start of a transaction that may have waited for a lock. Conversation work deadlines and
+ * digest contact cutoffs can use scenario time during an evaluation.
  */
 interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
@@ -28,7 +29,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                    cost_usd = NULL, unreported_calls = 1
             """;
 
-    /** A leased run as a claim or a lookup returns it. */
+    /** A leased run as a claim returns it. */
     interface LeaseRow {
         UUID getId();
 
@@ -44,6 +45,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
         int getLeaseEpoch();
 
+        Instant getLeasedAt();
+
         Instant getLeasedUntil();
 
         @Nullable
@@ -53,42 +56,81 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
         double getWaitedSeconds();
     }
 
+    /** Share the stimulus join between ledger order and the digest cutoff. Inline it so lookups use the run key. */
+    String TURN_STIMULI = """
+            WITH turn_stimuli AS NOT MATERIALIZED (
+                SELECT t.run_id, t.workspace_id, e.id, e.seq, e.kind, e.payload, e.redacted_at
+                  FROM conversation_turn t
+                  JOIN conversation_entry e ON e.turn_id = t.id AND e.workspace_id = t.workspace_id
+                 WHERE e.kind IN ('USER', 'DIGEST')
+            )
+            """;
+
     /** Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order. */
     String SUBJECT_PREDECESSOR = """
             CASE WHEN r.kind='TURN' AND s.kind='DIGEST' THEN FALSE
                  WHEN r.kind='DIGEST' AND s.kind='TURN' THEN TRUE
                  ELSE COALESCE((SELECT earlier.seq < question.seq
-                        FROM conversation_turn earlier_turn
-                        JOIN conversation_entry earlier ON earlier.turn_id = earlier_turn.id
-                            AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind IN ('USER','DIGEST')
-                        JOIN conversation_turn current_turn ON current_turn.run_id = r.id
-                            AND current_turn.workspace_id = r.workspace_id
-                        JOIN conversation_entry question ON question.turn_id = current_turn.id
-                            AND question.workspace_id = current_turn.workspace_id AND question.kind IN ('USER','DIGEST')
-                       WHERE earlier_turn.run_id = s.id AND earlier_turn.workspace_id = s.workspace_id),
+                        FROM turn_stimuli earlier
+                        JOIN turn_stimuli question ON question.run_id = r.id AND question.workspace_id = r.workspace_id
+                       WHERE earlier.run_id = s.id AND earlier.workspace_id = s.workspace_id),
                      (s.created_at, s.id) < (r.created_at, r.id)) END
             """;
 
-    /**
-     * The rule that orders the claim. A run is offered when it is due, its workspace is active, no run of its subject is
-     * leased, and no older run of its subject waits. Then: band, the fewest leased runs of its workspace, age. A run
-     * that has waited longer than {@code :agingSeconds} since it was due orders one band higher for each such wait, but
-     * never into the interactive band, so no queued work waits without bound and no batch work overtakes a person.
-     */
-    String CLAIMABLE = """
+    /** No run of this subject is leased or queued ahead of this one. */
+    String FIRST_OF_SUBJECT = """
+            NOT EXISTS (SELECT 1 FROM agent_run s
+                        WHERE s.workspace_id IS NOT DISTINCT FROM r.workspace_id AND s.concurrency_key = r.concurrency_key
+                          AND (s.state = 'LEASED' OR (s.state = 'QUEUED' AND (""" + SUBJECT_PREDECESSOR + """
+                          ))))
+            """;
+
+    String CONVERSATION_CLOCK = "COALESCE(CAST(:#{#time.replayNow()} AS timestamptz), clock_timestamp())";
+
+    /** Legacy digests use the same Java calendar rules as new writes. A cutoff always reaches SQL as a UTC instant. */
+    String DIGEST_WINDOW = """
+            SELECT CASE WHEN resolved.cutoff IS NULL THEN 'UNKNOWN'
+                        WHEN resolved.cutoff <=\s""" + CONVERSATION_CLOCK + """
+                        THEN 'ELAPSED' ELSE 'OPEN' END
+              FROM turn_stimuli e
+              CROSS JOIN LATERAL (
+                  SELECT CASE WHEN e.redacted_at IS NOT NULL THEN NULL
+                              WHEN e.payload ->> 'startBy' IS NULL THEN CAST(
+                                  CAST(:#{#time.legacyDigestCutoffs()} AS jsonb) ->> CAST(e.id AS text) AS timestamptz)
+                              WHEN e.payload ->> 'startBy' ~ '^[0-9T:.+-]+Z$' THEN
+                                  CASE WHEN pg_input_is_valid(e.payload ->> 'startBy', 'timestamp with time zone')
+                                       THEN CAST(e.payload ->> 'startBy' AS timestamptz) END
+                         END AS cutoff
+              ) resolved
+             WHERE e.run_id = r.id AND e.workspace_id = r.workspace_id AND e.kind = 'DIGEST'
+            """;
+
+    /** An unresolved window is neither claimable nor overdue. A concurrent old write can be read on the next pass. */
+    String START_WINDOW = """
+            COALESCE(CASE WHEN r.kind = 'DIGEST' THEN (
+            """ + DIGEST_WINDOW + """
+                ) END,
+                CASE WHEN (CASE WHEN r.kind = 'DIGEST' THEN r.created_at ELSE r.available_at END)
+                    + make_interval(secs => r.start_within_seconds) <= clock_timestamp()
+                THEN 'ELAPSED' ELSE 'OPEN' END)
+            """;
+
+    String PAST_DEADLINE = "(r.deadline IS NOT NULL AND r.deadline <= CASE WHEN r.kind IN ('TURN','DIGEST') THEN "
+            + CONVERSATION_CLOCK + " ELSE clock_timestamp() END)";
+
+    String WITHIN_START_LIMITS = "  AND NOT " + PAST_DEADLINE + "\n  AND " + START_WINDOW + " = 'OPEN'\n";
+
+    String READY_SUBJECT = """
             FROM agent_run r
             LEFT JOIN workspace w ON w.id = r.workspace_id AND w.status = 'ACTIVE'
             LEFT JOIN (SELECT workspace_id, count(*) AS leased FROM agent_run WHERE state = 'LEASED'
                        GROUP BY workspace_id) busy ON busy.workspace_id IS NOT DISTINCT FROM r.workspace_id
             WHERE (r.workspace_id IS NULL OR w.id IS NOT NULL)
               AND r.state = 'QUEUED' AND r.available_at <= clock_timestamp()
-              AND (r.deadline IS NULL OR r.deadline > clock_timestamp())
-              AND NOT EXISTS (SELECT 1 FROM agent_run s
-                              WHERE s.workspace_id IS NOT DISTINCT FROM r.workspace_id AND s.concurrency_key = r.concurrency_key
-                                AND (s.state = 'LEASED'
-                                     OR (s.state = 'QUEUED' AND (""" + SUBJECT_PREDECESSOR + """
-                                     ))))
-            """;
+              AND\s""" + FIRST_OF_SUBJECT;
+
+    /** A due run that is first of its subject remains eligible only until its deadline or start window elapses. */
+    String CLAIMABLE = READY_SUBJECT + WITHIN_START_LIMITS;
 
     /** A deferred run waits for its {@code deferred_until}; the run gauges still count it as due. */
     String NOT_DEFERRED = """
@@ -104,6 +146,10 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     /** A draft returns its report-specific sandbox while it waits. Its next attempt joins the other due drafts. */
     String DUE_SINCE = "GREATEST(r.available_at, CASE WHEN r.kind = 'DRAFT_REPORT' THEN r.deferred_until END)";
 
+    /**
+     * Order by band, then the fewest leased runs of a workspace, then age. Every {@code :agingSeconds} since the
+     * run was due, it moves up one band, up to the batch band.
+     */
     String ORDER = """
             ORDER BY CASE WHEN r.band = 'INTERACTIVE' THEN 0
                           ELSE GREATEST(1, (CASE r.band WHEN 'BATCH' THEN 1 ELSE 2 END)
@@ -115,9 +161,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                      ) ELSE r.created_at END, r.id
             """;
 
-    String CLAIM_ORDER = ORDER + """
+    String PICK_ONE = """
             LIMIT 1 FOR UPDATE OF r SKIP LOCKED
             """;
+
+    String CLAIM_ORDER = ORDER + PICK_ONE;
 
     /** The lease a claim or a renewal gives: a person waits on a turn, so it is taken back sooner. */
     String LEASE_SECONDS = "CASE WHEN r.kind IN ('TURN','DIGEST') THEN :turnTtlSeconds ELSE :ttlSeconds END";
@@ -138,19 +186,22 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      * starts their sandboxes, and each sandbox claims its own run.
      */
     @WorkspaceAgnostic("The dispatch reads the due runs of every workspace, in the claim's fair-share order")
-    @Query(value = """
+    @Query(
+            value = TURN_STIMULI + """
             SELECT r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
             """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
             """ + ORDER + """
             LIMIT :limit OFFSET :offset
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<DueRow> findDue(
             @Param("kinds") Collection<String> kinds,
             @Param("offset") int offset,
             @Param("limit") int limit,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("agingSeconds") long agingSeconds,
+            @Param("time") AgentRunTiming.Reading time);
 
     /**
      * The queued runs of these kinds and subjects that a claim would offer now, in no order: a replica wakes the
@@ -158,7 +209,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      */
     @WorkspaceAgnostic(
             "A replica holds the waiting requests of every workspace; each woken request claims its own subject")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
             """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
@@ -168,26 +219,31 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     List<DueRow> findDueOfSubjects(
             @Param("kinds") Collection<String> kinds,
             @Param("workspaceIds") Collection<Long> workspaceIds,
-            @Param("subjectKeys") Collection<String> subjectKeys);
+            @Param("subjectKeys") Collection<String> subjectKeys,
+            @Param("time") AgentRunTiming.Reading time);
 
+    // The start limit can pass while the claim orders its candidates and locks the picked row.
     String LEASE = """
+            , lease_time AS MATERIALIZED (SELECT id, clock_timestamp() AS leased_at FROM picked)
             UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL, deferred_until = NULL,
-                   leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """
+                   leased_until = lease_time.leased_at + make_interval(secs =>""" + LEASE_SECONDS + """
             ),
-                   started_at = COALESCE(r.started_at, clock_timestamp())
-              FROM picked WHERE r.id = picked.id
+                   started_at = COALESCE(r.started_at, lease_time.leased_at)
+              FROM lease_time WHERE r.id = lease_time.id
+            """ + WITHIN_START_LIMITS + """
             RETURNING r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind, r.band AS band,
                       r.concurrency_key AS "concurrencyKey", r.attempt AS attempt, r.lease_epoch AS "leaseEpoch",
-                      r.leased_until AS "leasedUntil", r.deadline AS deadline,
-                      EXTRACT(EPOCH FROM clock_timestamp() - r.available_at)::double precision AS "waitedSeconds"
+                      lease_time.leased_at AS "leasedAt", r.leased_until AS "leasedUntil", r.deadline AS deadline,
+                      EXTRACT(EPOCH FROM lease_time.leased_at - r.available_at)::double precision AS "waitedSeconds"
             """;
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
+            value = TURN_STIMULI + ", picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
                 AND (:#{#excluded.isEmpty()} OR r.id NOT IN (:excluded))
-            """ + CLAIM_ORDER + ")"
+            """
+                    + CLAIM_ORDER + ")"
                     + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claim(
@@ -195,13 +251,15 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("excluded") Collection<UUID> excluded,
             @Param("ttlSeconds") long ttlSeconds,
             @Param("turnTtlSeconds") long turnTtlSeconds,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("agingSeconds") long agingSeconds,
+            @Param("time") AgentRunTiming.Reading time);
 
-    /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
+    /** Only the first run of this subject can be eligible, so there is no fleet order to apply. */
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
+            value = TURN_STIMULI + ", picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
-            """ + CLAIM_ORDER + ")"
+            """
+                    + PICK_ONE + ")"
                     + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claimSubject(
@@ -210,7 +268,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("kinds") Collection<String> kinds,
             @Param("ttlSeconds") long ttlSeconds,
             @Param("turnTtlSeconds") long turnTtlSeconds,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("time") AgentRunTiming.Reading time);
 
     String KIND_CLAIM_LOCK = "hashtextextended('agent-run-claim:' || :kind, 0)";
 
@@ -254,7 +312,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
      * as one of a suspended workspace, never reads as a stalled queue.
      */
     @WorkspaceAgnostic("The runs of the whole instance; the gauges name no workspace")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT o.kind AS "kind", o.band AS "band", o.state AS "state", o.hold_reason AS "holdReason",
                    count(*) AS "runs",
                    count(due.id) FILTER (WHERE o.hold_reason IS NULL) AS "due",
@@ -268,13 +326,13 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
              WHERE o.state <> 'ENDED'
              GROUP BY o.kind, o.band, o.state, o.hold_reason
             """, nativeQuery = true)
-    List<OpenRow> open();
+    List<OpenRow> open(@Param("time") AgentRunTiming.Reading time);
 
     @Query(value = """
             UPDATE agent_run r SET leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """
             )
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch AND state = 'LEASED'
-               AND leased_until > clock_timestamp() AND (deadline IS NULL OR deadline > clock_timestamp())
+               AND leased_until > clock_timestamp() AND NOT\s""" + PAST_DEADLINE + """
             RETURNING leased_until
             """, nativeQuery = true)
     Optional<Instant> renew(
@@ -282,7 +340,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
             @Param("ttlSeconds") long ttlSeconds,
-            @Param("turnTtlSeconds") long turnTtlSeconds);
+            @Param("turnTtlSeconds") long turnTtlSeconds,
+            @Param("time") AgentRunTiming.Reading time);
 
     /** Moves an open run's deadline to {@code by} unless it is earlier already ({@link AgentRuns#endBy}). */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -458,74 +517,74 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = """
             SELECT id, COALESCE(workspace_id, 0) AS "workspaceId", kind, concurrency_key AS "concurrencyKey", attempt,
                    lease_epoch AS "leaseEpoch",
-                   (deadline IS NOT NULL AND deadline <= clock_timestamp()) AS "pastDeadline"
-              FROM agent_run WHERE kind = :kind AND state = 'LEASED'
-               AND (leased_until < clock_timestamp() OR deadline <= clock_timestamp())
+            """ + PAST_DEADLINE + """
+                   AS "pastDeadline"
+              FROM agent_run r WHERE kind = :kind AND state = 'LEASED'
+               AND (leased_until < clock_timestamp() OR\s""" + PAST_DEADLINE + """
+               )
                AND (:#{#skipped.isEmpty()} OR id NOT IN (:skipped))
              ORDER BY LEAST(leased_until, COALESCE(deadline, leased_until)), id LIMIT 1
             """, nativeQuery = true)
-    Optional<ExpiredRow> findExpired(@Param("kind") String kind, @Param("skipped") Collection<UUID> skipped);
+    Optional<ExpiredRow> findExpired(
+            @Param("kind") String kind,
+            @Param("skipped") Collection<UUID> skipped,
+            @Param("time") AgentRunTiming.Reading time);
 
-    /**
-     * A queued run that has been due longer than its start window while nothing of its subject was ahead of it: it
-     * waited for room, not for its subject. A run that waits behind its subject's leased or older run keeps waiting.
-     */
-    String NOT_STARTED = """
-            (r.state = 'QUEUED' AND r.start_within_seconds IS NOT NULL
-               AND r.available_at + make_interval(secs => r.start_within_seconds) <= clock_timestamp()
-               AND NOT EXISTS (SELECT 1 FROM agent_run s
-                               WHERE s.workspace_id IS NOT DISTINCT FROM r.workspace_id AND s.concurrency_key = r.concurrency_key
-                                 AND (s.state = 'LEASED'
-                                      OR (s.state = 'QUEUED' AND (""" + SUBJECT_PREDECESSOR + """
-                                      )))))
-            """;
-
-    String OVERDUE_QUEUED = "(r.state = 'QUEUED' AND r.deadline <= clock_timestamp()) OR " + NOT_STARTED;
+    /** A digest's contact window applies even while another run of its subject is ahead of it. */
+    String OVERDUE_QUEUED = "r.state = 'QUEUED' AND (" + PAST_DEADLINE + " OR (" + START_WINDOW + " = 'ELAPSED' AND "
+            + "(r.kind = 'DIGEST' OR " + FIRST_OF_SUBJECT + ")))";
 
     @WorkspaceAgnostic("The reaper ends queued runs past their deadline or start window in every workspace")
-    @Query(value = """
+    @Query(value = TURN_STIMULI + """
             SELECT r.id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind, r.concurrency_key AS "concurrencyKey", r.attempt,
                    r.lease_epoch AS "leaseEpoch",
-                   (r.deadline IS NOT NULL AND r.deadline <= clock_timestamp()) AS "pastDeadline"
+            """ + PAST_DEADLINE + """
+                   AS "pastDeadline"
               FROM agent_run r WHERE r.kind = :kind AND (""" + OVERDUE_QUEUED + """
                )
                AND (:#{#skipped.isEmpty()} OR r.id NOT IN (:skipped))
              ORDER BY r.available_at, r.id LIMIT 1
             """, nativeQuery = true)
-    Optional<ExpiredRow> findOverdueQueued(@Param("kind") String kind, @Param("skipped") Collection<UUID> skipped);
+    Optional<ExpiredRow> findOverdueQueued(
+            @Param("kind") String kind,
+            @Param("skipped") Collection<UUID> skipped,
+            @Param("time") AgentRunTiming.Reading time);
 
     /** The reaper's write: the expired holder's epoch fences it, so a renewal that won the race keeps its lease. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'QUEUED', leased_until = NULL,
+            UPDATE agent_run r SET state = 'QUEUED', leased_until = NULL,
                    deadline = CASE WHEN kind = 'DRAFT_REPORT' THEN deadline END, attempt = attempt + 1,
                    available_at = clock_timestamp() + make_interval(secs => :delaySeconds)
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch AND state = 'LEASED'
-               AND leased_until < clock_timestamp()
-            """, nativeQuery = true)
+               AND leased_until < clock_timestamp() AND NOT\s""" + PAST_DEADLINE, nativeQuery = true)
     int requeueExpired(
             @Param("runId") UUID runId,
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
-            @Param("delaySeconds") long delaySeconds);
+            @Param("delaySeconds") long delaySeconds,
+            @Param("time") AgentRunTiming.Reading time);
 
     /** Ends only the still-expired lease, spending its attempt once before its successor is inserted. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
+            UPDATE agent_run r SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
                    attempt = attempt + 1, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch AND state = 'LEASED'
-               AND leased_until < clock_timestamp() AND (deadline IS NULL OR deadline > clock_timestamp())
-            """, nativeQuery = true)
+               AND leased_until < clock_timestamp() AND NOT\s""" + PAST_DEADLINE, nativeQuery = true)
     int endExpiredForContinuation(
-            @Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
+            @Param("runId") UUID runId,
+            @Param("workspaceId") long workspaceId,
+            @Param("epoch") int epoch,
+            @Param("time") AgentRunTiming.Reading time);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = :reason,
+    @Query(value = TURN_STIMULI + """
+            UPDATE agent_run r SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = :reason,
                    attempt = attempt + CASE WHEN state = 'LEASED' THEN 1 ELSE 0 END, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch
-               AND ((state = 'LEASED' AND (leased_until < clock_timestamp() OR deadline <= clock_timestamp()))
+               AND ((state = 'LEASED' AND (leased_until < clock_timestamp() OR\s""" + PAST_DEADLINE + """
+                    ))
                     OR (state = 'QUEUED' AND id IN (SELECT r.id FROM agent_run r WHERE r.id = :runId AND (""" + OVERDUE_QUEUED + """
                ))))
             """, nativeQuery = true)
@@ -533,7 +592,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("runId") UUID runId,
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
-            @Param("reason") String reason);
+            @Param("reason") String reason,
+            @Param("time") AgentRunTiming.Reading time);
 
     /**
      * Settles the model calls that the claim {@code epoch} left open: each ends unverifiable and unpriced, never at zero
@@ -609,10 +669,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = """
         SELECT CAST(id AS text) AS id, state, CASE WHEN state = 'QUEUED'
             AND GREATEST(available_at, deferred_until) > transaction_timestamp()
-            AND (deadline IS NULL OR deadline > transaction_timestamp())
+            AND NOT\s""" + PAST_DEADLINE + """
             THEN GREATEST(available_at, deferred_until) END AS "futureDueAt"
-          FROM agent_run WHERE state IN ('QUEUED', 'LEASED')
+          FROM agent_run r WHERE state IN ('QUEUED', 'LEASED')
            AND workspace_id IN (:workspaceIds)
         """, nativeQuery = true)
-    List<EvaluationWork.Row> findEvaluationWork(@Param("workspaceIds") List<Long> workspaceIds);
+    List<EvaluationWork.Row> findEvaluationWork(
+            @Param("workspaceIds") List<Long> workspaceIds, @Param("time") AgentRunTiming.Reading time);
 }

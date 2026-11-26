@@ -163,6 +163,8 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         BOOLEAN tried "NOT NULL"
         VARCHAR(64) source_commit
+        VARCHAR(160) identity_key
+        VARCHAR(96) comparability_class
     }
 
     Problem {
@@ -339,6 +341,18 @@ erDiagram
         JSONB staged_payload
     }
 
+    ReviewItemCopiedIdentity {
+        BIGINT id PK
+        BIGINT item_id FK "NOT NULL"
+        BIGINT practice_id FK "NOT NULL"
+        VARCHAR(1024) provider_origin "NOT NULL"
+        VARCHAR(16) provider_type "NOT NULL"
+        UUID review_id FK "NOT NULL"
+        VARCHAR(255) subject "NOT NULL"
+        VARCHAR(255) team_id
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
     ReviewPractice {
         UUID review_id PK,FK,UK
         BIGINT practice_id PK,FK,UK
@@ -457,6 +471,7 @@ erDiagram
     ReviewPractice ||--o{ ReviewItem : reviewed
     Result ||--o{ ReviewItem : reviewed
     Workspace ||--o{ ReviewItem : reviewed
+    ReviewItem ||--o{ ReviewItemCopiedIdentity : reviewed
     Practice ||--o{ ReviewPractice : reviewed
     Review ||--o{ ReviewPractice : reviewed
     PracticeVersion ||--o{ ReviewPractice : reviewed

@@ -13,8 +13,10 @@ import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingSer
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Executes DM notices with the same fenced Slack transport as completed answers. */
@@ -38,6 +40,12 @@ class SlackNoticeAdapter implements ActionAdapter {
     }
 
     @Override
+    public boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode body) {
+        posts.requireWriteAllowed();
+        return true;
+    }
+
+    @Override
     public ActionResult execute(ActionAttempt attempt) {
         var recipient = attempt.nativeRecipient();
         if (recipient == null
@@ -54,6 +62,9 @@ class SlackNoticeAdapter implements ActionAdapter {
         return posts.postNotice(
                 attempt,
                 new SlackPostAdapter.Post(
-                        notice.channelId(), notice.threadTs(), blocks, notice.text(), notice.messageTs(), null));
+                        new SlackPostAdapter.Destination(
+                                notice.channelId(), notice.threadTs(), notice.messageTs(), null),
+                        blocks,
+                        notice.text()));
     }
 }

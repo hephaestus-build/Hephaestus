@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,12 @@ public class GitLabSubjectParser implements SubjectParser {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITLAB;
+    }
+
+    @Override
+    public String unhandledEventLabel(String eventToken) {
+        GitLabEventType type = GitLabEventType.fromString(eventToken);
+        return type == null ? "other" : type.getValue();
     }
 
     @Override

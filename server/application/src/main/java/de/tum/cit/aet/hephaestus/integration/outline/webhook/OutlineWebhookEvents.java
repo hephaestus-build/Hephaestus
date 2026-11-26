@@ -10,6 +10,13 @@ import java.util.stream.Stream;
  */
 public final class OutlineWebhookEvents {
 
+    static final String DOCUMENT_PREFIX = "documents.";
+    static final String COLLECTION_PREFIX = "collections.";
+
+    static boolean hasHandler(String event) {
+        return event.startsWith(DOCUMENT_PREFIX) || event.startsWith(COLLECTION_PREFIX);
+    }
+
     /** Dotted document event names as Outline emits and subscribes them. */
     public static final List<String> DOCUMENT_EVENTS = List.of(
             "documents.create",

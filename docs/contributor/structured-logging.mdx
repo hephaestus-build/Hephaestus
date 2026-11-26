@@ -177,6 +177,10 @@ The agent runner uses the diagnostic events and typed fields in `pi-diagnostics.
 Do not add prompts, model replies, tool output, credentials, or arbitrary exception text to those records.
 The server admits only records that match that contract.
 
+For each submission check, `practice.verification_step` records the step name and its duration in milliseconds.
+The `verify_citation` step includes any read of a pinned Git object. The `prove_searches` step includes the wait for the search worker to stop.
+A timeout also records `practice.result_refused` with the reason `verification_timeout` and the step name.
+
 ## Verify the emitted record
 
 `RedactionContractTest` loads the production encoder configuration and parses its actual bytes.

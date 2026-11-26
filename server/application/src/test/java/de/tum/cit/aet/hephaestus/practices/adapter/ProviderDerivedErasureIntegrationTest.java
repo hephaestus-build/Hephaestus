@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
@@ -89,6 +91,25 @@ class ProviderDerivedErasureIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldEraseOnlyTheThreadRowsWhenSlackIsDisconnected() {
         assertErases(THREAD, ws -> conversations.eraseAllConversationForWorkspace(ws));
+    }
+
+    /** A Slack channel erasure passes the channel's threads (SlackChannelErasure): only their rows go. */
+    @Test
+    void shouldEraseOnlyTheRowsOfTheErasedThreadsWhenASlackChannelIsErased() {
+        Scenario erasedThread = on(THREAD);
+        Derived erased = derive(erasedThread);
+        Derived kept = derive(on(THREAD));
+
+        conversations.eraseForThreads(
+                scenario.workspace().getId(),
+                List.of(Objects.requireNonNull(erasedThread.item().getSourceId())));
+
+        assertThat(exists("result", erased.result())).isFalse();
+        assertThat(exists("feedback", erased.feedback())).isFalse();
+        assertThat(exists("result", kept.result())).isTrue();
+        assertThat(exists("feedback", kept.feedback())).isTrue();
+        derived.values()
+                .forEach(rows -> assertThat(exists("result", rows.result())).isTrue());
     }
 
     private void assertErases(ItemKind erasedKind, Consumer<Long> erasure) {

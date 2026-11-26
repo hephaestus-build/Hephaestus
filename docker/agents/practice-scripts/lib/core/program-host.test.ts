@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { after, describe, test } from "node:test";
+import { after, describe, test, type TestContext } from "node:test";
 // oxlint-disable-next-line no-restricted-imports -- fake reviews and tools take real time, which the host's timeouts and cancellation are tested against
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -170,6 +170,7 @@ async function workspace(scripts: Record<string, string | null>): Promise<Worksp
 
 interface RunOptions {
 	review?: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
+	start?: typeof forkedProgram;
 	/** Answers the program's reads in place of the captured sources. */
 	answer?: EvidenceReader["answer"];
 	signal?: AbortSignal;
@@ -205,7 +206,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 				new EvidenceReader(ws.sources, receipts),
 				options.answer === undefined ? {} : { answer: options.answer },
 			),
-			start: forkedProgram,
+			start: options.start ?? forkedProgram,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
 				return options.review === undefined ? REVIEWED : options.review(reviewOptions, signal);
@@ -221,6 +222,106 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 	);
 	return { outcome, reviews, logs, staged };
 }
+
+/** Deny process signals in the host while keeping a rescue timer for the old runtime. */
+function blockedSignals(t: TestContext, workingStop: "exit" | "disconnect" | "none" = "exit") {
+	let exitSignal: string | null | undefined;
+	const start: typeof forkedProgram = (options) => {
+		const child = forkedProgram(options);
+		const { send, kill, disconnect } = child;
+		const rescue = new AbortController();
+		void (async () => {
+			try {
+				await sleep(6500, undefined, { signal: rescue.signal });
+			} catch {
+				return;
+			}
+			kill();
+		})();
+		child.onClose((signal) => {
+			exitSignal = signal;
+			rescue.abort();
+		});
+		t.after(() => {
+			rescue.abort();
+			if (exitSignal === undefined) {
+				kill();
+			}
+		});
+		return Object.assign(child, {
+			kill: () => undefined,
+			send(message: Parameters<typeof send>[0]) {
+				if (workingStop === "exit" || message.kind !== "exit") {
+					send(message);
+				}
+			},
+			disconnect() {
+				if (workingStop !== "none") {
+					disconnect();
+				}
+			},
+		});
+	};
+	return { start, exitSignal: () => exitSignal };
+}
+
+void describe("script shutdown with signals denied", { concurrency: true }, () => {
+	void test("a result with a live timer closes cleanly", async (t) => {
+		const ws = await workspace({
+			timer: readThen("setInterval(() => {}, 1000);", MET),
+		});
+		const child = blockedSignals(t);
+		const { outcome } = await run(ws, "timer", child);
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.equal(outcome.candidate?.outcome, "MET");
+		assert.equal(child.exitSignal(), null, "the result must close without a signal");
+	});
+
+	void test("a protocol error closes through IPC disconnect if the exit message is lost", async (t) => {
+		const ws = await workspace({
+			malformed: program(
+				"definePracticeScript",
+				`{ meta: {}, async run() { process.send("{"); return Promise.withResolvers().promise; } }`,
+			),
+		});
+		const child = blockedSignals(t, "disconnect");
+		const { outcome } = await run(ws, "malformed", child);
+		assert.equal(outcome.error, "the program sent a message that is not JSON");
+		assert.equal(child.exitSignal(), null, "the protocol error must close without a signal");
+	});
+
+	void test("a deadline closes a waiting script even if it ignores cancellation", async (t) => {
+		const ws = await workspace({
+			waiting: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) { ctx.log("waiting"); return Promise.withResolvers().promise; } }`,
+			),
+		});
+		const child = blockedSignals(t);
+		const { outcome, logs } = await run(ws, "waiting", { ...child, deadlineMs: 2000 });
+		assert.ok(logs.includes("waiting"));
+		assert.equal(outcome.stopReason, "deadline");
+		assert.equal(child.exitSignal(), null, "the deadline must close without a signal");
+	});
+
+	void test("an exhausted shutdown records the failed steps and a sibling keeps its result", async (t) => {
+		const ws = await workspace({
+			stuck: program(
+				"definePracticeScript",
+				`{ meta: {}, async run() { process.send("{"); return Promise.withResolvers().promise; } }`,
+			),
+			sibling: null,
+		});
+		const child = blockedSignals(t, "none");
+		const [stuck, sibling] = await Promise.all([
+			run(ws, "stuck", child),
+			run(ws, "sibling", { review: async () => REVIEWED }),
+		]);
+		assert.equal(stuck.outcome.status, "failed");
+		assert.match(stuck.outcome.error ?? "", /IPC exit, IPC disconnect, SIGTERM, and SIGKILL/u);
+		assert.equal(sibling.outcome.status, "ok", sibling.outcome.error);
+	});
+});
 
 function reportEntry(slug: string, outcome: ProgramOutcome) {
 	return executionEntrySchema.parse({
@@ -789,46 +890,50 @@ export default definePracticeScript({
 		);
 	});
 
-	void test("a program ends at its review: its process is gone while the model works, and code after it does not run", async () => {
+	void test("an accepted review proceeds after its script exits even when the host cannot signal it", async (t) => {
 		const ws = await workspace({
 			after: program(
 				"definePracticeScript",
 				`{ meta: {}, async run(ctx) {
-					ctx.log("pid " + process.pid);
 					const reviewed = await ctx.review({});
 					ctx.log("after the review");
 					return { ...reviewed, summary: "The program's own summary" };
 				} }`,
 			),
 		});
-		let alive: boolean | undefined;
-		const seen: string[] = [];
+		let signaled = false;
+		let childExited = false;
+		let stopChild: (() => void) | undefined;
+		t.after(() => {
+			if (!childExited) {
+				stopChild?.();
+			}
+		});
 		const { outcome, logs } = await run(ws, "after", {
-			log: (line) => {
-				seen.push(line);
+			start: (options) => {
+				const child = forkedProgram(options);
+				stopChild = child.kill;
+				child.onClose(() => {
+					childExited = true;
+				});
+				return Object.assign(child, {
+					kill() {
+						signaled = true;
+					},
+				});
 			},
 			review: async () => {
-				const pid = /pid (?<pid>\d+)/u.exec(seen.join("\n"))?.groups?.pid;
-				assert.ok(pid !== undefined, seen.join("\n"));
-				const running = () => {
-					try {
-						process.kill(Number(pid), 0);
-						return true;
-					} catch {
-						return false;
+				try {
+					assert.equal(childExited, true, "the script must exit before the model runs");
+					assert.equal(signaled, false, "a normal handoff must work without a signal");
+					return REVIEWED;
+				} finally {
+					if (!childExited) {
+						stopChild?.();
 					}
-				};
-				// The host ends the program while the model works: wait for that exit, not a fixed time.
-				const deadline = Date.now() + 10_000;
-				alive = running();
-				while (alive && Date.now() < deadline) {
-					await sleep(10);
-					alive = running();
 				}
-				return REVIEWED;
 			},
 		});
-		assert.equal(alive, false);
 		assert.ok(!logs.some((line) => line.includes("after the review")), logs.join("\n"));
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.equal(outcome.candidate?.summary, REVIEWED.summary);

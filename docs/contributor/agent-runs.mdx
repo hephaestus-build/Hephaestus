@@ -165,13 +165,22 @@ A repeated holder end succeeds only for the same epoch and reason.
 
 ## Clocks
 
-A run has two clocks, and the reaper enforces both:
+A run has two time limits. Dispatch, gateway wake and claim check both limits. The lease write checks again after it picks a row.
+Live runs use the database clock. During a [replay](./mentoring-evaluation.mdx#internal-evaluation-controls), conversation work deadlines and digest contact cutoffs use the controlled clock. Lease lifetimes use the database clock in both modes.
 
-- **Start window** (`start_within_seconds`): how long a run may wait for room once it is due.
-  If no run of its subject is leased or queued earlier, a queued run past this window ends as `NOT_STARTED`.
-  Otherwise it waits for its subject.
-  A requeue makes the run due again, so a retry gets the same window.
+- The **start window** (`start_within_seconds`) limits how long a run can wait for room after it is due.
+  The reaper checks this window when a run is first in its subject. It checks a digest at any queue position.
+  When the window elapses, the reaper ends the run as `NOT_STARTED`.
+  A question gets the same window when a requeue makes it due again.
+  Java resolves the Monday contact cutoff in the person's time zone. The digest stimulus stores the cutoff as a UTC instant.
+  While a rolling upgrade still has an earlier writer, the reader resolves the UTC instant from the week and time zone on each old stimulus.
+  A new writer also records the relative start window so a rollback to an earlier server can still expire the digest.
+  Enqueue latency and retries do not move this cutoff.
+  Erasing a digest stimulus stops its turn and cancels its run in the erasure transaction.
+  A claim and the reaper also stop queued digests that an earlier server erased without ending the run.
 - **Deadline** (`deadline`): it bounds the current claim.
+  A live conversation attempt stores its absolute work limit from the turn's database start plus the model timeout.
+  The run deadline includes the grace to end the attempt.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
   Within a claim it only moves earlier (`AgentRuns.endBy`). A review or turn requeue clears it, so the next claim sets its own.
   The trigger `guard_agent_run` refuses any other change.
@@ -569,7 +578,7 @@ A conditional fence that loses to another reaper or a renewal throws `StaleRunEx
 The reaper treats that transaction's rollback as an expected no-op, without a failure signal.
 Other failures keep their failure signal.
 At the kind's limit, or past its deadline, a run ends.
-A queued run past its deadline or start window also ends.
+A queued run that passes either [time limit](#clocks) ends in the same transaction as its domain row.
 A run whose take-back fails is skipped until the next tick, so it cannot hold back the runs behind it.
 
 `agent.run.continued` and the `continued` reaper outcome count a committed continuation. The event also names `run.next_id`.

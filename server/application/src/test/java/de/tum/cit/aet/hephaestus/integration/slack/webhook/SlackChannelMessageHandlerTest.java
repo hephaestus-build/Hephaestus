@@ -11,9 +11,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -91,8 +93,10 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         mock(ProviderEventStore.class),
                         threadRepository,
                         monitoredChannelRepository,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 true, // conversation-ingest capability on
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
@@ -126,8 +130,10 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         mock(ProviderEventStore.class),
                         threadRepository,
                         monitoredChannelRepository,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 false, // conversation-ingest capability OFF
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),

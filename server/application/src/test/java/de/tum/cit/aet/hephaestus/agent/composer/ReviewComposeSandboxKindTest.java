@@ -36,12 +36,14 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,6 +104,16 @@ class ReviewComposeSandboxKindTest {
             fence,
             AgentRunKind.REVIEW_COMPOSE,
             1);
+    private final AgentRunLease lease = new AgentRunLease(
+            fence.runId(),
+            fence.workspaceId(),
+            run.kind(),
+            run.sandbox().subjectKey(),
+            run.attempt(),
+            fence.epoch(),
+            Instant.EPOCH,
+            Instant.EPOCH.plusSeconds(60),
+            null);
     private final ResultAdmissionService.Composing composing = new ResultAdmissionService.Composing(
             RuntimeReviewTestData.job(),
             new ResultAdmissionService.AdmissionIdentity(UUID.randomUUID(), 7L, 1, fence.runId()),
@@ -338,7 +350,7 @@ class ReviewComposeSandboxKindTest {
     void shouldLeaseNothingWhenTheClaimEndedOrRequeuedTheRun() {
         when(claims.claimLeased(fence)).thenReturn(Optional.empty());
 
-        assertThat(kind.claimed(run)).isFalse();
+        assertThat(kind.claimed(run.sandbox(), lease)).isFalse();
     }
 
     private void claim(@Nullable CompositionStop withholdOnly) {
@@ -349,7 +361,7 @@ class ReviewComposeSandboxKindTest {
         when(admission.composing(fence)).thenReturn(composing);
         when(jobs.findByRunIdAndWorkspaceId(eq(fence.runId()), eq(fence.workspaceId())))
                 .thenReturn(Optional.of(composing.job()));
-        assertThat(kind.claimed(run)).isTrue();
+        assertThat(kind.claimed(run.sandbox(), lease)).isTrue();
     }
 
     private ReviewCompositionContinuation.Restored restored() {

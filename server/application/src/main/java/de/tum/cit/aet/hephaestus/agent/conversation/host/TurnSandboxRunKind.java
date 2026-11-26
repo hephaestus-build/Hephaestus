@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -18,9 +19,7 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.context.annotation.Profile;
@@ -47,7 +46,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     private final ConversationTurnAccess rows;
     private final ConversationTurnService turnService;
     private final ConversationTurnCompletion completion;
-    private final Clock clock;
     private final ObjectMapper mapper;
     private final Counter claimFailures;
 
@@ -60,7 +58,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             ConversationTurnAccess rows,
             ConversationTurnService turnService,
             ConversationTurnCompletion completion,
-            Clock clock,
             ObjectMapper mapper,
             MeterRegistry meters) {
         this.starter = starter;
@@ -71,7 +68,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
         this.rows = rows;
         this.turnService = turnService;
         this.completion = completion;
-        this.clock = clock;
         this.mapper = mapper;
         this.claimFailures = Counter.builder(AgentMetrics.CONVERSATION_TURN_CLAIM_FAILURE)
                 .description("Conversation turns the gateway could not start or admit")
@@ -98,8 +94,8 @@ public class TurnSandboxRunKind implements SandboxRunKind {
      * longer waits takes its run with it; admission that declines a turn ends both.
      */
     @Override
-    public boolean claimed(SandboxRun run) {
-        AgentRunFence claim = run.fence();
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        AgentRunFence claim = lease.fence();
         Optional<ConversationTurnStarter.StartedTurn> started;
         try {
             started = starter.startClaimed(claim);
@@ -112,8 +108,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             return false;
         }
         ConversationTurn turn = started.get().turn();
-        Instant workDeadline = clock.instant().plusSeconds(started.get().llm().timeoutSeconds());
-        turnRuns.limit(claim.workspaceId(), turn.getId(), claim.runId(), claim.epoch(), workDeadline);
+        turnRuns.setWorkDeadline(lease, turn.getId(), started.get().llm().timeoutSeconds());
         return true;
     }
 

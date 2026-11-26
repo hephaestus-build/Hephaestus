@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewInvocationFence;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
@@ -53,6 +54,7 @@ public class ResultAdmissionWriter {
     private final ResultRepository results;
     private final ResultProofMapper proof;
     private final JsonMapper json;
+    private final ReviewItemCustody custodies;
     private final Clock clock;
 
     public AdmissionReceipt admitLocked(
@@ -165,7 +167,7 @@ public class ResultAdmissionWriter {
                 ? json.createObjectNode()
                 : (ObjectNode) member.getDetail().deepCopy();
         detail.put("admissionAttempt", attempt);
-        detail.set("custody", json.valueToTree(copyAuthority));
+        custodies.record(member, detail, copyAuthority);
         return detail;
     }
 

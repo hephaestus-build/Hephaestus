@@ -26,7 +26,13 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 // The stores delete the person's results and feedback through RESULT_IDS and FEEDBACK_IDS. A basis row names the
 // developer of its feedback (sfk_feedback_basis_feedback_person).
-@ErasesColumns({"result.person_account_id", "feedback.person_account_id", "feedback_basis.person_account_id"})
+// A review item's copied identities are deleted by CopiedIdentityPersonDataStore, and with their review item.
+@ErasesColumns({
+    "result.person_account_id",
+    "feedback.person_account_id",
+    "feedback_basis.person_account_id",
+    "review_item_copied_identity.subject"
+})
 @PersonDataStores({
     "practice_version",
     "feedback_response",
@@ -37,6 +43,7 @@ import tools.jackson.databind.ObjectMapper;
     "feedback_decision",
     "feedback",
     "result_mark",
+    "review_item_copied_identity",
     "review_item",
     "problem",
     "problem_lineage",
@@ -240,6 +247,10 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -180),
+                        // Last, after every store whose rows a copy authorizes: the copies that remain stay with
+                        // their review items until then. A review item that an earlier store deletes takes its copies
+                        // with it through the cascade, as its detail list did before the copies had their own table.
+                        new CopiedIdentityPersonDataStore(jdbc, mapper, identities, 1000),
                         new ScanReportReferencePersonDataStore(
                                 reports,
                                 jdbc,

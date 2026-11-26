@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemSourceObserved;
+import de.tum.cit.aet.hephaestus.integration.core.api.OccasionSettlement;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -15,6 +17,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -42,13 +46,17 @@ public class ItemEventReviewListener {
     /**
      * Each step that can fetch from the provider runs with no transaction: the stale results' source reads, and the
      * review request. Every decision about the occasions is made under the workspace lock, and a failure leaves the
-     * event's publication incomplete, so it is sent again.
+     * event's publication incomplete, so it is sent again. A capture failure that ends the occasion is not such a
+     * failure: {@link OccasionSettlement} records it as the occasion's stop.
      */
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(ItemEventRecorded recorded) {
         long workspaceId = recorded.workspaceId();
         long itemId = recorded.itemId();
-        var event = events.find(workspaceId, recorded.eventId()).orElseThrow();
+        // A publication sent again after the ledger dropped its occasion has nothing left to decide.
+        var found = events.find(workspaceId, recorded.eventId());
+        if (found.isEmpty()) return;
+        var event = found.orElseThrow();
         var stale = event.name().value().startsWith("scm.") ? currentness.stale(workspaceId, itemId) : Set.<UUID>of();
         var window = transactions.write(() -> {
             lockWorkspace(workspaceId);
@@ -68,12 +76,11 @@ public class ItemEventReviewListener {
         if (state.isTerminal()) return List.of();
         var item = items.find(recorded.workspaceId(), recorded.itemId());
         if (item.isEmpty()) {
-            decide(
-                    recorded.workspaceId(),
-                    recorded.eventId(),
-                    state,
-                    ItemEventState.WITHHELD,
-                    ReviewRequestReason.ITEM_GONE);
+            if (OccasionSettlement.next(
+                                    state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.WITHDRAWN, null)
+                            .orElseThrow()
+                    instanceof OccasionSettlement.Next.Decide withdrawn)
+                decide(recorded.workspaceId(), recorded.eventId(), state, withdrawn.state(), withdrawn.reason());
             return List.of();
         }
         // The source pins the version later and offers the occasion again; the expiry bounds the wait.
@@ -90,7 +97,13 @@ public class ItemEventReviewListener {
         if (window.isEmpty()) return List.of();
         var closes = events.windowCloses(window);
         if (closes.isAfter(clock.instant())) {
-            events.hold(recorded.workspaceId(), recorded.itemId(), window, ReviewRequestReason.QUIET_WINDOW, closes);
+            apply(
+                    recorded.workspaceId(),
+                    recorded.itemId(),
+                    window,
+                    window.getLast().id(),
+                    new Settlement(OccasionSettlement.Outcome.QUIET, null),
+                    closes);
             return List.of();
         }
         return window;
@@ -98,12 +111,13 @@ public class ItemEventReviewListener {
 
     /**
      * The readiness edge of a window: one review at its newest occasion runs what every occasion of the window selects
-     * and is ready, and the older occasions are coalesced into it. A practice that an earlier review of the item still
-     * measures holds the window until that review ends.
+     * and is ready, and the older occasions are coalesced into it. The review's own transaction decides them
+     * ({@link OccasionSettlement.Outcome#RECORDED}). A practice that an earlier review of the item still measures holds
+     * the window until that review ends.
      */
     private void edge(long workspaceId, long itemId, List<ItemEventService.Open> window) {
         var newest = window.getLast();
-        ReviewRequestRejected refusal = null;
+        RuntimeException refusal = null;
         try {
             reviews.request(ReviewRequest.builder()
                     .workspaceId(workspaceId)
@@ -114,41 +128,59 @@ public class ItemEventReviewListener {
                     .eventId(newest.id())
                     .practiceIds(List.of())
                     .occasions(window.stream().map(ItemEventService.Open::name).collect(Collectors.toSet()))
+                    .coalesced(window.stream()
+                            .map(ItemEventService.Open::id)
+                            .filter(id -> !id.equals(newest.id()))
+                            .collect(Collectors.toSet()))
                     .build());
-        } catch (ReviewRequestRejected rejected) {
-            refusal = rejected;
+        } catch (ReviewRequestRejected | ItemCaptureException stopped) {
+            refusal = stopped;
         }
-        var outcome = refusal;
+        // A recorded or replayed review has decided its own window. An older occasion that it did not coalesce stays
+        // open, and the ledger offers it again.
+        if (refusal == null) return;
+        var settlement = settlement(refusal);
         transactions.run(() -> {
             lockWorkspace(workspaceId);
             var ids = window.stream().map(ItemEventService.Open::id).collect(Collectors.toSet());
-            // Another edge of the item may have decided some of these occasions since the window was read.
+            // Another offer of the item may have decided some of these occasions since the window was read.
             var open = events.open(workspaceId, itemId).stream()
                     .filter(waiting -> ids.contains(waiting.id()))
                     .toList();
-            if (!open.isEmpty()) settle(workspaceId, itemId, newest.id(), open, outcome);
-        });
-    }
-
-    private void settle(
-            long workspaceId,
-            long itemId,
-            UUID newest,
-            List<ItemEventService.Open> open,
-            @Nullable ReviewRequestRejected refusal) {
-        if (refusal == null) {
-            coalesce(workspaceId, newest, open, ItemEventState.STARTED, null);
-            return;
-        }
-        if (refusal.eventReason() == ReviewRequestReason.REVIEW_IN_PROGRESS) {
-            events.hold(
+            // The refusal was for the window's newest occasion. Once another offer decided it, it decides nothing.
+            if (open.stream().noneMatch(waiting -> waiting.id().equals(newest.id()))) return;
+            apply(
                     workspaceId,
                     itemId,
                     open,
-                    ReviewRequestReason.REVIEW_IN_PROGRESS,
+                    newest.id(),
+                    settlement,
                     clock.instant().plus(events.quietWindow()));
-            return;
-        }
+        });
+    }
+
+    private record Settlement(
+            OccasionSettlement.Outcome outcome, @Nullable ReviewRequestReason reason) {}
+
+    /** The outcome of a refused request. A fault fails the publication, which is sent again. */
+    private static Settlement settlement(RuntimeException stop) {
+        if (stop instanceof ItemCaptureException capture)
+            return switch (capture.code()) {
+                case ITEM_REMOVED ->
+                    new Settlement(OccasionSettlement.Outcome.ITEM_UNAVAILABLE, ReviewRequestReason.ITEM_GONE);
+                case ITEM_NOT_VISIBLE ->
+                    new Settlement(OccasionSettlement.Outcome.ITEM_UNAVAILABLE, ReviewRequestReason.ITEM_NOT_VISIBLE);
+                // An unavailable pin says nothing about whether the work changed: a replaced connection reaches it too.
+                case VERSION_UNAVAILABLE, OCCASION_EVIDENCE_UNAVAILABLE ->
+                    new Settlement(OccasionSettlement.Outcome.OCCASION_UNAVAILABLE, null);
+                case SOURCE_NOT_READY, CONSENT_WITHHELD, CAPTURE_FAILED, CHECKOUT_UNVERIFIED -> throw capture;
+            };
+        var refusal = (ReviewRequestRejected) stop;
+        if (refusal.eventReason() == ReviewRequestReason.REVIEW_IN_PROGRESS)
+            return new Settlement(OccasionSettlement.Outcome.HOLD, null);
+        // The pin wraps the newest occasion's missing record as an ineligible request: the older ones keep theirs.
+        if (refusal.eventReason() == ReviewRequestReason.OCCASION_EVIDENCE_UNAVAILABLE)
+            return new Settlement(OccasionSettlement.Outcome.OCCASION_UNAVAILABLE, null);
         ReviewRequestReason reason = switch (refusal.reason()) {
             case WORKSPACE_INACTIVE -> ReviewRequestReason.WORKSPACE_INACTIVE;
             case BUDGET_UNAVAILABLE -> ReviewRequestReason.BUDGET_EXHAUSTED;
@@ -164,29 +196,40 @@ public class ItemEventReviewListener {
                 throw new IllegalStateException("An item review cannot compete with a scan", refusal);
             case TRIAL_ACTIVE -> throw new IllegalStateException("Only a trial counts the active trials", refusal);
         };
-        // A refusal that can pass keeps the whole window waiting, so its occasions still select when it is retried.
-        if (refusal.reason().transientReason())
-            for (var waiting : open) decide(workspaceId, waiting.id(), waiting.state(), ItemEventState.WAITING, reason);
-        else coalesce(workspaceId, newest, open, ItemEventState.WITHHELD, reason);
+        // A refusal that can pass keeps the whole window waiting, so its occasions still select when it is retried. A
+        // conflict concerns the newest occasion's version only.
+        var outcome = refusal.reason().transientReason()
+                ? OccasionSettlement.Outcome.WAIT
+                : refusal.reason() == ReviewRequestRejected.Reason.REQUEST_CONFLICT
+                        ? OccasionSettlement.Outcome.REFUSED_NEWEST
+                        : OccasionSettlement.Outcome.REFUSED;
+        return new Settlement(outcome, reason);
     }
 
-    /** Decides the window's newest occasion and coalesces every older one into it. */
-    private void coalesce(
+    /** Applies {@link OccasionSettlement#next} to each open occasion of the window, under the workspace lock. */
+    private void apply(
             long workspaceId,
-            UUID newest,
+            long itemId,
             List<ItemEventService.Open> open,
-            ItemEventState decision,
-            @Nullable ReviewRequestReason reason) {
+            UUID newest,
+            Settlement settlement,
+            Instant holdUntil) {
+        List<ItemEventService.Open> held = new ArrayList<>();
+        ReviewRequestReason holdReason = null;
         for (var waiting : open) {
-            if (waiting.id().equals(newest)) decide(workspaceId, waiting.id(), waiting.state(), decision, reason);
-            else
-                decide(
-                        workspaceId,
-                        waiting.id(),
-                        waiting.state(),
-                        ItemEventState.WITHHELD,
-                        ReviewRequestReason.COALESCED);
+            var role = waiting.id().equals(newest) ? OccasionSettlement.Role.NEWEST : OccasionSettlement.Role.OLDER;
+            var next = OccasionSettlement.next(waiting.state(), role, settlement.outcome(), settlement.reason());
+            if (next.isEmpty()) continue;
+            switch (next.orElseThrow()) {
+                case OccasionSettlement.Next.Decide decide ->
+                    decide(workspaceId, waiting.id(), waiting.state(), decide.state(), decide.reason());
+                case OccasionSettlement.Next.Hold hold -> {
+                    held.add(waiting);
+                    holdReason = hold.reason();
+                }
+            }
         }
+        if (!held.isEmpty()) events.hold(workspaceId, itemId, held, Objects.requireNonNull(holdReason), holdUntil);
     }
 
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)

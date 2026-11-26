@@ -1,0 +1,128 @@
+# ADR 0154: A conversation stores no output of a context tool
+
+**Status:** Proposed
+**Date:** 2026-11-25
+**Authors:** Felix T.J. Dietrich
+
+**Builds on:** [ADR 0128](0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md) (refer, never copy), [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) (the ledger is Hephaestus's memory), [ADR 0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) (1.0 is a stopped cutover)
+
+## Context
+
+A conversation turn reads its sources with context tools: `read`, `bash`, `load_context`, and the retired `fetch_context`.
+At `turn/end` the server stores each tool result as the agent sends it, output included (`conversation_entry.payload`).
+A later turn replays the stored entries from the newest summary on.
+
+The model sees that output for one more turn only.
+When a later turn completes, the agent appends a note for each earlier result (`staleContextResults` in `turn.ts`).
+A failed or stopped turn appends no notes, so its raw outputs stay in the replay.
+An end that the server refuses as too large is sent again with notes (`withContextNotes`), which shows that a turn can do without its stored outputs.
+
+When a source is erased, the copies of its words must go too.
+Today a Slack disconnect and a person erasure redact the stored outputs, and the Slack copy retention redacts aged ones.
+Other source erasures leave them.
+A fence that erases them in the erasing transaction must order its locks against every turn write, eraser and listener.
+Each design for it on #5118 opened a new interleaving. [#5158](https://github.com/hephaestus-build/Hephaestus/issues/5158) records them.
+
+## Decision drivers
+
+- An erasure is correct by construction, not by a lock order that each new eraser must keep.
+- The words of a source have one home: the source (data minimisation).
+- An answer reads current data, not a stale output.
+- The replay path stays byte-stable for the provider's prompt cache.
+
+## Considered options
+
+1. **A lock fence around the stored outputs.** Each design opened a new interleaving. Each new eraser, turn path or listener can add one.
+2. **Re-render a reference from the source at replay.** A `bash` output has no single source. A re-render also changes stored bytes between turns, which breaks the prompt cache.
+3. **Cite each source with `basis_edge` and hide stale outputs on read** (ADR 0128). Pi's `read` and `bash` tools do not report which items they read, so a citation cannot be complete. The words also stay in the database until a sweep runs.
+4. **The agent sends a note, and the server checks it byte for byte.** Two derivations, in TypeScript and Java, must agree on trimming, cutting, surrogates and the time format. A mismatch fails every attempt that hits it.
+5. **The server writes the note.** Chosen.
+
+## Decision
+
+1. A stored context-tool result holds no output.
+   Its message is exactly `{role, toolCallId, toolName, content, isError, timestamp}` and an optional numeric `durationMs`, with no `details`.
+   Its `content` is one text block, which the server writes.
+2. At `turn/end` the agent sends each context-tool result with empty `content` and no `details`.
+   The server refuses an end that holds any other content or `details` for such a result, with a clear error.
+   It also refuses an end with a `context_edit` whose `replacement` is not null, because Pi replays a replacement as the result's content.
+   After `staleContextResults` goes, Pi writes only null replacements.
+   It never truncates or rewrites output into a note.
+3. The server derives the note from one call: the call with the result's `toolCallId`.
+   It looks for that call in the nearest assistant message before the result.
+   Pi pairs a result with its call in that message.
+   A provider can use the same call id again in a later response.
+   An end whose result has no such call there, or two, is refused.
+   The note forms:
+   - ``[read <path>, read at <time>. This result is from an earlier turn and may be out of date; read it again for current data.]``
+   - ``[bash `<command>`, run at <time>. This result is from an earlier turn and may be out of date; run it again for current data.]``
+   - ``[load_context <path>, loaded at <time>. Each turn has a new context folder: load it again before you read the repository.]``
+   - ``[fetch_context, run at <time>. This result is from an earlier turn; read the context folder for current data.]``, for stored rows only.
+
+   `<path>` and `<command>` are the call's string arguments, cut at 200 Unicode code points with `…`.
+   A missing argument gives `an earlier path` or an empty command.
+   `<time>` is the result's timestamp, formatted as `Ddd YYYY-MM-DD HH:MM UTC` with an English weekday.
+   Only the server derives notes, so the agent's `staleContextResults` and `withContextNotes` go.
+4. A summary that the attempt appends after its question is an overflow summary, and can quote an output.
+   The server does not store it.
+   The path builder links the stored entries itself, so a dropped summary leaves no gap in the replay path.
+   A summary that the attempt appends before its question reads only stored entries, and is stored.
+5. One migration converts the stored rows, in batches by id:
+   - It rewrites each unredacted context-tool result, `fetch_context` included, to its note, and removes its `details`. It takes the call by `toolCallId` from the nearest assistant entry before the result, as decision 3 does. A result with no such call there, or with two, gets the note with `an earlier path` or an empty command. A redacted row stays as it is.
+   - Each unredacted summary that can quote such a result gets a marker as its text, in the payload and in `text`.
+     The marker is ``[This summary quoted tool outputs that are no longer stored. Read the sources again for current data.]``
+     The summary keeps its `firstKeptEntryId`, and the row stays unredacted.
+     So the replay still starts at that summary, and its size stays bounded.
+     The next compaction updates the summary from the marker.
+   - A summary can quote such a result when its range covers the result.
+     A thread reads its main conversation up to its parent entry.
+     So a thread summary can quote any result of its main conversation.
+     This matches the rule of `ConversationRedaction`.
+   - It runs in the stopped cutover of ADR 0096, so no old writer stores output after it.
+   - A restored database runs it again before the server serves, because the migrator applies every changeset that the database lacks.
+   - It cannot be undone: the old outputs are the copies that this decision removes.
+6. This ADR covers the output of context tools only. Other stored words keep their rules:
+   - Hephaestus's own words keep the conversation retention. They are an answer, its thinking blocks, a tool call's arguments, and the command that a note repeats.
+     They can repeat a source (cascade table, `DERIVED_ANSWER`, #4979).
+   - The person erasure keeps its step for copying tool results (`ConversationToolResultCopyPersonDataStore`) unchanged.
+     It selects the notes, and from them the answers and digests of their turn and after them.
+     It searches the note's conversation and its threads, and also takes the summaries that cover those answers.
+     Its receipt also fences running turns, and its preparation removes the sandbox copies.
+   - An entry written in a Slack channel belongs to the channel. A Slack disconnect or a channel erasure redacts it with the summaries that cover it (ADR 0128 decision 7).
+   - A `search_conversation` result quotes the developer's own entries and goes with them.
+
+## Consequences
+
+- Good: a source erasure has no stored tool output to erase. The context change revokes the sandboxes, which hold the only live output.
+- Good: no stored row holds the output of a context tool after the migration.
+  So #5158 removes the redaction of copying tool results from two paths: the Slack copy retention and the Slack disconnect.
+  Both select rows by tool name (`COPIES_PERSON_DATA`) and redact only those rows and their summaries. If they stay, they redact each note.
+  The person erasure keeps its step (decision 6).
+  The notes lead it to the answers that can repeat the person's data.
+- Good: an answer that needs a file reads its current version.
+- Bad: a turn reads a file again when the previous turn read it. This costs one tool call and its tokens.
+  Every later turn already pays this cost today.
+- Bad: no running check measures answer quality. The release evaluation cases of [ADR 0142](0142-a-maintainer-signs-a-manual-release-check-and-an-offline-simulation-checks-contact.md) include short multi-turn cases, but `eval:golden` does not exist yet. We accept the risk until they run. Then one case asks a follow-up question about a file that the previous turn read.
+- Bad: the migration removes stored outputs for good.
+
+## Confirmation
+
+Not enforced yet: the #5158 pull request adds these checks, and its review confirms each one.
+
+- A server test: `turn/end` refuses a context-tool result with output, one with `details`, and one with a note that carries extra text.
+  It also refuses a `context_edit` with a replacement, and it accepts a result with `durationMs`.
+- A server test: `turn/end` drops an overflow summary and keeps a pre-prompt summary. The next turn's context holds the question, and a turn forced over its threshold compacts again.
+- A server test: `turn/end` takes each note from the call in the nearest assistant message.
+  It does so also when an earlier message used the same call id.
+- A database test: on seeded rows, each context-tool output, a truncated `read` with `details` and a `fetch_context` result become notes. A covering summary and a thread summary hold the marker and keep their `firstKeptEntryId`.
+  The next turn's context starts at the covering summary.
+  A redacted row stays, and no other row changes.
+- `CascadeTableTest`: the `SOURCE_ERASURE × CONVERSATION_COPY` cell cites these tests for the scope that they prove.
+
+## Revisit trigger
+
+A release evaluation case shows answers that degrade because a turn lacks the previous turn's outputs.
+
+## Sources
+
+- [GDPR Art. 5(1)(c)](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679): data minimisation. An output that nothing reads is not necessary for the purpose.

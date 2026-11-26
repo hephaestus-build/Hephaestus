@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
@@ -377,6 +378,8 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThat(journal.facts())
                 .containsExactly(new RecordingPrivacyJournal.Fact(
                         PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", 7L, "connectionId", 55L)));
+        // Running Hephaestus turns may hold what the connection made readable.
+        verify(eventPublisher).publishEvent(new AgentContextChangedEvent(7L));
     }
 
     @Test

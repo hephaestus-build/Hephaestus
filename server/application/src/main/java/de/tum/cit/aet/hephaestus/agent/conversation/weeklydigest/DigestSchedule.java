@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
 import java.time.Clock;
 import java.time.DayOfWeek;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -37,7 +36,6 @@ import tools.jackson.databind.ObjectMapper;
 public class DigestSchedule {
     private static final Logger log = LoggerFactory.getLogger(DigestSchedule.class);
     static final LocalTime DUE = LocalTime.of(9, 0);
-    static final LocalTime TOO_LATE = LocalTime.of(21, 0);
 
     private final WeeklyDigestSubscriptions subscriptions;
     private final WeeklyDigestAvailability availability;
@@ -59,7 +57,7 @@ public class DigestSchedule {
         var local = now.atZone(zone);
         return local.getDayOfWeek() == DayOfWeek.MONDAY
                 && !local.toLocalTime().isBefore(DUE)
-                && local.toLocalTime().isBefore(TOO_LATE);
+                && local.toLocalTime().isBefore(WeeklyDigestWindow.CONTACT_END);
     }
 
     @Bean
@@ -86,13 +84,12 @@ public class DigestSchedule {
             ZoneId zone = accounts.timeZone(accountId).orElse(AccountDirectory.DEFAULT_TIME_ZONE);
             if (!isDue(now, zone)) continue;
             WeeklyDigestWindow window = WeeklyDigestWindow.previousWeek(now, zone);
-            Duration startWithin =
-                    Duration.between(now, now.atZone(zone).with(TOO_LATE).toInstant());
-            if (startWithin.compareTo(Duration.ofSeconds(1)) < 0) continue;
+            Instant startBy = window.contactCutoff();
+            if (now.plusSeconds(1).isAfter(startBy)) continue;
             for (var membership : availability.memberships(accountId)) {
                 long workspaceId = membership.workspaceId();
                 try {
-                    if (enqueue(workspaceId, accountId, window, startWithin)) queued++;
+                    if (enqueue(workspaceId, accountId, window, startBy)) queued++;
                 } catch (RuntimeException failure) {
                     log.atWarn()
                             .addKeyValue("event.name", "digest.enqueue.failed")
@@ -105,7 +102,7 @@ public class DigestSchedule {
         return queued;
     }
 
-    private boolean enqueue(long workspaceId, long accountId, WeeklyDigestWindow window, Duration startWithin) {
+    private boolean enqueue(long workspaceId, long accountId, WeeklyDigestWindow window, Instant startBy) {
         String requestId = requestId(workspaceId, accountId, window);
         if (entries.exists(workspaceId, requestId)
                 || !availability.available(workspaceId, accountId)
@@ -126,7 +123,7 @@ public class DigestSchedule {
                                     + " from inputs/context/weekly_digest.json. Summarize only its visible facts."
                                     + " Do not add assessments or deliver new feedback. Invite a reply if useful.",
                             payload.get().toJson(mapper),
-                            startWithin));
+                            startBy));
         }));
     }
 }

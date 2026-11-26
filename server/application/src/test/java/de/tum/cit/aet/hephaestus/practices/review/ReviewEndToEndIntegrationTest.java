@@ -435,16 +435,13 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         for (var row : queued) {
             long workspaceId = ((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue();
             String subject = (String) Objects.requireNonNull(row.get("concurrency_key"));
+            var sandbox =
+                    new AgentSandboxes.LiveSandbox(UUID.randomUUID(), workspaceId, subject, AgentSandboxKind.REVIEW);
             // The lease and the claim commit together, as the gateway's next does.
             var run = transactions.execute(status -> agentRuns
                     .claimSubject(workspaceId, subject, Set.of(AgentRunKind.REVIEW_COMPOSE))
-                    .map(lease -> new SandboxRun(
-                            new AgentSandboxes.LiveSandbox(
-                                    UUID.randomUUID(), workspaceId, subject, AgentSandboxKind.REVIEW),
-                            lease.fence(),
-                            AgentRunKind.REVIEW_COMPOSE,
-                            lease.attempt()))
-                    .filter(composeKind::claimed)
+                    .filter(lease -> composeKind.claimed(sandbox, lease))
+                    .map(lease -> new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))
                     .orElse(null));
             if (run == null) continue;
             var composing = composeKind.prepare(run);
@@ -1075,6 +1072,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 null,
                 Arrays.stream(practices).map(Practice::getId).toList(),
                 false,
+                Set.of(),
                 Set.of(),
                 null,
                 null,

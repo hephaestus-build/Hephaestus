@@ -17,8 +17,10 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService
 import java.time.Duration;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Confirms the public announcement before the domain can enable ingestion. */
@@ -42,6 +44,12 @@ class SlackConsentAdapter implements ActionAdapter {
     }
 
     @Override
+    public boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode body) {
+        posts.requireWriteAllowed();
+        return true;
+    }
+
+    @Override
     public ActionResult execute(ActionAttempt attempt) {
         long workspace = Objects.requireNonNull(attempt.workspaceId());
         var request = mapper.treeToValue(attempt.payload(), SlackConsentAnnouncement.class);
@@ -62,12 +70,9 @@ class SlackConsentAdapter implements ActionAdapter {
                 attempt,
                 request.marker(),
                 new SlackPostAdapter.Post(
-                        request.channelId(),
-                        null,
+                        new SlackPostAdapter.Destination(request.channelId(), null, request.oldestTs(), null),
                         SlackConsentBlocks.activationNotice(),
-                        SlackConsentBlocks.activationFallbackText(),
-                        request.oldestTs(),
-                        null),
+                        SlackConsentBlocks.activationFallbackText()),
                 request.retry(),
                 20);
         if (result instanceof ActionResult.Done done && done.readbackRef() != null) {

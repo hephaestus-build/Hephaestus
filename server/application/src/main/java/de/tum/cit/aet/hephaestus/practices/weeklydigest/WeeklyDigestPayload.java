@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * What a weekly digest entry stores in {@code conversation_entry.payload}: the week and which feedback and changes it held.
@@ -19,7 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 public record WeeklyDigestPayload(
         WeeklyDigestWindow window, List<UUID> feedbackIds, List<WeeklyDigestChangeKey> changeKeys) {
 
-    public JsonNode toJson(ObjectMapper mapper) {
+    public ObjectNode toJson(ObjectMapper mapper) {
         return mapper.valueToTree(this);
     }
 

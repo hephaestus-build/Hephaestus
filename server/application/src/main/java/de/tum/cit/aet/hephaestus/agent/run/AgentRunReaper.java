@@ -53,15 +53,21 @@ public class AgentRunReaper {
     private final TransactionTemplate transactions;
     private final Map<AgentRunKind, AgentRunHandler> handlers = new EnumMap<>(AgentRunKind.class);
     private final MeterRegistry meters;
+    private final AgentRunTiming timing;
+    private final AgentRuns lifecycle;
 
     AgentRunReaper(
             AgentRunRepository runs,
             TransactionTemplate transactions,
             List<AgentRunHandler> handlers,
-            MeterRegistry meters) {
+            MeterRegistry meters,
+            AgentRunTiming timing,
+            AgentRuns lifecycle) {
         this.runs = runs;
         this.transactions = transactions;
         this.meters = meters;
+        this.timing = timing;
+        this.lifecycle = lifecycle;
         for (AgentRunHandler handler : handlers) {
             if (this.handlers.put(handler.kind(), handler) != null)
                 throw new IllegalStateException("Two handlers for runs of kind " + handler.kind());
@@ -83,8 +89,15 @@ public class AgentRunReaper {
     public void reap() {
         for (AgentRunHandler handler : handlers.values()) {
             String kind = handler.kind().name();
-            drain(skipped -> runs.findExpired(kind, skipped), row -> takeBack(handler, row));
-            drain(skipped -> runs.findOverdueQueued(kind, skipped), row -> endOverdue(handler, row));
+            drain(skipped -> runs.findExpired(kind, skipped, timing.read(false)), row -> takeBack(handler, row));
+            if (handler.kind() == AgentRunKind.DIGEST) {
+                transactions.executeWithoutResult(_ -> lifecycle.cancelErasedDigests());
+            }
+            // A legacy write after this read remains eligible for the next tick's lookup.
+            var windows = timing.read(handler.kind() == AgentRunKind.DIGEST);
+            drain(
+                    skipped -> runs.findOverdueQueued(kind, skipped, timing.refresh(windows)),
+                    row -> endOverdue(handler, row, windows));
         }
     }
 
@@ -134,7 +147,10 @@ public class AgentRunReaper {
                 }
                 if (outcome instanceof AgentRunHandler.Requeue) {
                     long backoff = handler.retryAfter(row.getAttempt() + 1).toSeconds();
-                    if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
+                    if (!taken(
+                            status,
+                            runs.requeueExpired(
+                                    lost.runId(), lost.workspaceId(), lost.epoch(), backoff, timing.read(false))))
                         return;
                     settle(lost);
                     observe(row, EvaluationObservations.RunState.REQUEUED, null);
@@ -147,7 +163,10 @@ public class AgentRunReaper {
             } else {
                 handler.ended(lost.run(), lost.epoch(), reason);
             }
-            if (!taken(status, runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name()))) return;
+            if (!taken(
+                    status,
+                    runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name(), timing.read(false))))
+                return;
             settle(lost);
             observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
@@ -157,20 +176,27 @@ public class AgentRunReaper {
         });
     }
 
-    private void endOverdue(AgentRunHandler handler, AgentRunRepository.ExpiredRow row) {
+    private void endOverdue(
+            AgentRunHandler handler, AgentRunRepository.ExpiredRow row, AgentRunTiming.Reading windows) {
         AgentRunKind kind = handler.kind();
         transactions.executeWithoutResult(status -> {
             var run = new AgentRunRef(row.getId(), row.getWorkspaceId());
             handler.lock(run);
             var reason = row.getPastDeadline() ? AgentRunStopReason.DEADLINE : AgentRunStopReason.NOT_STARTED;
             handler.ended(run, row.getLeaseEpoch(), reason);
-            if (!taken(status, runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), reason.name())))
-                return;
+            if (!taken(
+                    status,
+                    runs.endExpired(
+                            row.getId(),
+                            row.getWorkspaceId(),
+                            row.getLeaseEpoch(),
+                            reason.name(),
+                            timing.refresh(windows)))) return;
             observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)
                     .addKeyValue("run.stop_reason", reason.name())
-                    .log("Queued run waited past its start window; the run ended");
+                    .log("Queued run passed its time limit and ended");
         });
     }
 

@@ -86,7 +86,10 @@ export function applyUserViewHeaders(request: Request): Request {
 		path === "/user/consent" ||
 		path === "/user/features" ||
 		path === "/user/identities" ||
-		path === "/identity-providers"
+		path === "/identity-providers" ||
+		// The public figures of the server: the same for every reader, so a view of another account has no say.
+		path === "/public/usage" ||
+		path.startsWith("/public/usage/")
 	) {
 		return request;
 	}

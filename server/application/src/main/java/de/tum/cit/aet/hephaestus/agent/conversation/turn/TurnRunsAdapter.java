@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.turn;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -12,7 +13,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -37,7 +37,6 @@ public class TurnRunsAdapter implements TurnRuns {
 
     private final AgentRuns runs;
     private final WorkspaceMemberships memberships;
-    private final Clock clock;
 
     /** The subject of a conversation's runs: also the subject of its sandbox. */
     public static String subject(UUID conversationId) {
@@ -57,10 +56,8 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin) {
-        return runs.enqueue(
-                        workspaceId, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
-                .id();
+    public UUID enqueueDigest(long workspaceId, UUID conversationId, Instant startBy) {
+        return runs.enqueueDigest(workspaceId, subject(conversationId), startBy).id();
     }
 
     @Override
@@ -96,18 +93,20 @@ public class TurnRunsAdapter implements TurnRuns {
     @Transactional(propagation = Propagation.MANDATORY)
     public void stopped(long workspaceId, UUID runId, boolean wasRunning) {
         AgentRunRef run = new AgentRunRef(runId, workspaceId);
-        if (wasRunning) runs.endBy(run, clock.instant().plus(GRACE));
+        if (wasRunning) runs.endBy(run, runs.conversationDeadlineClock().plus(GRACE));
         else runs.cancel(run);
     }
 
     /**
-     * Bounds the claim that starts a turn's attempt: its run ends {@link #GRACE} after {@code workDeadline}, so its
+     * Bounds the claim from the time it took the lease. Its run ends {@link #GRACE} after the work deadline, so its
      * holder can still end what it wrote, and the run reaper ends it then.
      */
-    @Transactional
-    public void limit(long workspaceId, UUID turnId, UUID runId, int epoch, Instant workDeadline) {
-        if (!runs.limit(new AgentRunFence(runId, workspaceId, epoch), workDeadline.plus(GRACE)))
-            throw new ConversationLeaseLostException(turnId, epoch);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void setWorkDeadline(AgentRunLease lease, UUID turnId, int timeoutSeconds) {
+        Instant deadline = runs.conversationWorkStart(lease.leasedAt())
+                .plusSeconds(timeoutSeconds)
+                .plus(GRACE);
+        if (!runs.limit(lease.fence(), deadline)) throw new ConversationLeaseLostException(turnId, lease.epoch());
     }
 
     /** Renews the attempt's claim of its turn's run; false once it lost the run, or the run passed its deadline. */

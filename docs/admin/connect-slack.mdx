@@ -37,6 +37,8 @@ The manifest sets these addresses:
 | `settings.event_subscriptions.request_url` | `https://<host>/webhooks/slack` | Slack sends messages and app events. |
 | `settings.interactivity.request_url` | `https://<host>/webhooks/slack/interactivity` | Slack sends the buttons that members press in the App Home tab. |
 
+If you already installed the app, add `group_deleted` to its bot event subscriptions to receive private channel deletions.
+
 ## Set the Helm values and Secret keys
 
 1. Type the client secret, then the signing secret. The shell does not show them:
@@ -130,8 +132,8 @@ Until then, the Slack page of the workspace shows **Permissions missing** and na
 
 ## What the app says about itself
 
-The manifest describes Hephaestus as an AI mentor for software engineering practices, so a person knows that it is AI.
-Slack shows the app's description and agent description before a person writes to the app.
-An app made from an earlier manifest can still call Hephaestus an AI system or an AI assistant.
-To update it, copy `display_information.description` and `features.agent_view.agent_description` from the current manifest into the app settings.
+The manifest's `display_information.description` and `features.agent_view.agent_description` say that Hephaestus is an AI mentor, so a person knows that it is AI.
+Slack shows both before a person writes to the app.
+An app made from an earlier manifest keeps its earlier wording, also the earlier mentor wording.
+To update it, copy both fields from the [current manifest](./slack-app-manifest-template.yml) into the app settings.
 A description change needs no new scope and no reinstall.

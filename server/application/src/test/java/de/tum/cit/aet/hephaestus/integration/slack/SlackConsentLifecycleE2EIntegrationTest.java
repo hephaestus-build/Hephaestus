@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.slack;
 
+import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.ReviewJobService;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
@@ -239,9 +240,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(inv ->
                         new SlackMessageService.ConversationLookup.Found(new SlackMessageService.SlackConversationInfo(
                                 inv.getArgument(1), "channel", false, true, false)));
-        when(slackMessageService.postMessage(eq(workspaceId), any(), any(), any(), any(), any()))
-                .thenAnswer(inv -> new SlackMessageService.Posted(
-                        inv.getArgument(1), Instant.now().getEpochSecond() + ".123456"));
+        when(slackMessageService.postAdmitted(eq(workspaceId), any(), any()))
+                .thenAnswer(admittedPost(inv -> new SlackMessageService.Posted(
+                        inv.getArgument(1, SlackMessageService.Outgoing.class).channelId(),
+                        Instant.now().getEpochSecond() + ".123456")));
         ConnectionService connectionService = mock(ConnectionService.class);
         when(connectionService.findSlackConfig(workspaceId))
                 .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(TEAM, null, null, Set.of())));
@@ -258,8 +260,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         mock(ProviderEventStore.class),
                         threadRepository,
                         monitoredChannelRepository,
+                        mock(SlackChannelConsentEventRepository.class),
                         conversationFeedbackErasure,
                         messageRepository,
+                        mock(ConversationEntryService.class),
                         (kind, refs) -> {}),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager),
@@ -331,10 +335,11 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         // Activation opens the monitoring period at the later of the post and the request: never before the post.
         assertThat(currentChannel(C1).getIngestAfter()).isNotNull().isAfterOrEqualTo(announcedAt);
 
-        var fallbackText = ArgumentCaptor.forClass(String.class);
-        verify(slackMessageService)
-                .postMessage(eq(workspaceId), eq(C1), isNull(), any(), fallbackText.capture(), any());
-        assertThat(fallbackText.getValue())
+        var announcement = ArgumentCaptor.forClass(SlackMessageService.Outgoing.class);
+        verify(slackMessageService).postAdmitted(eq(workspaceId), announcement.capture(), any());
+        assertThat(announcement.getValue().channelId()).isEqualTo(C1);
+        assertThat(announcement.getValue().threadTs()).isNull();
+        assertThat(announcement.getValue().text())
                 .contains("Hephaestus is now active in this channel")
                 .contains("does not read earlier history");
         assertThat(auditToStates(C1))
@@ -462,7 +467,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         // The earlier post confirms disclosure; the monitoring period still starts at the retry request.
         assertThat(active.getIngestAfter()).isEqualTo(requestedAt);
         assertThat(active.getLastHistorySyncedTs()).isEqualTo(SlackTs.ofInstant(requestedAt));
-        verify(slackMessageService, never()).postMessage(eq(workspaceId), any(), any(), any(), any(), any());
+        verify(slackMessageService, never()).postAdmitted(eq(workspaceId), any(), any());
         // A history window fetched before the retry cannot reopen the failed interval when it finishes late.
         assertThat(monitoredChannelRepository.advanceHistoryWatermark(
                         workspaceId, C1, SlackTs.ofInstant(postedAt.plusSeconds(1800)), requestedAt.plusSeconds(1)))

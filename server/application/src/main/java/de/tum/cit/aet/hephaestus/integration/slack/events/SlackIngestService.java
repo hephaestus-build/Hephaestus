@@ -334,8 +334,8 @@ public class SlackIngestService {
      * consent and deletes the channel's content now, rather than waiting for the retention sweep.
      */
     @Transactional
-    public void eraseChannel(long workspaceId, String channelId) {
+    public void eraseChannel(long workspaceId, String channelId, Instant erasedAt) {
         if (!DeliveryInbox.claim("slack.channel.erase")) return;
-        channelErasure.erase(workspaceId, channelId);
+        channelErasure.erase(workspaceId, channelId, erasedAt);
     }
 }

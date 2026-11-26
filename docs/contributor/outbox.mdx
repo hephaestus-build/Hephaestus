@@ -98,7 +98,14 @@ Just before the provider call, the adapter calls `ActionAttempt.fence().beginWri
 It sets `write_started_at` in its own short transaction.
 It refuses when another claim took the action, when an erasure deleted it, or when less than 60 seconds of the lease are left.
 The provider call must end within those 60 seconds.
-If it refuses, the adapter must not call the provider and returns `Abandoned`.
+If the lease check refuses, the adapter must not call the provider and returns `Abandoned`.
+For a new Slack reply, admission runs after credential lookup and connection setup, immediately before the HTTP write.
+The write transaction locks the question and checks that it is still present and unredacted.
+For a Slack post, the same transaction checks Silent Mode after the source check.
+It checks the remaining lease again before it sets the write marker.
+After that transaction commits, the gateway calls Slack without another settings read.
+If the source check refuses, the executor ends the action as `CANCELLED` with `WITHDRAWN`.
+A Slack 429 defers the action so the next attempt checks its source again.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.mdx)).
 
 ## What an adapter returns
@@ -171,8 +178,20 @@ A lost notification leaves the committed action due for the executor of any repl
 Slack enqueues one `SLACK_POST` when the turn ends, in the transaction that stores its admitted entries.
 The adapter reads those entries and posts one complete message.
 [Slack metadata](https://docs.slack.dev/messaging/message-metadata/) carries the question id, or the digest id.
-An attempt after an unknown write only reads the history with `include_all_metadata=true`.
-Unreadable or incomplete history stays uncertain. It does not authorize a second post.
+A reply attempt with a write marker reads Slack history with `include_all_metadata=true`.
+It uses the result and the question state to decide what the outbox does next.
+
+| Write marker | History readback | Question still exists | Question was removed |
+| --- | --- | --- | --- |
+| Absent | Skipped | Attempt the post with fresh admission. | Withdraw the reply. |
+| Present | Matching post found | Confirm delivery. | Confirm delivery. |
+| Present | Complete history, no match | Retry. The outbox clears the marker so the next attempt needs fresh admission. The last attempt ends as `FAILED/ATTEMPTS_EXHAUSTED`. | Withdraw the reply. |
+| Present | Incomplete history, no match | Keep the marker and read again. | Keep the marker and read again. |
+| Present | Unreadable history | Keep the marker and read again. | Keep the marker and read again. |
+
+If Slack or the destination is no longer configured, an attempt with a marker ends as `UNCERTAIN`.
+The attempt limit also ends readback as `UNCERTAIN` if history still does not prove presence or absence.
+For a Slack digest or notice, a complete readback with no match ends the action after an unknown write.
 
 ## Retention and erasure
 

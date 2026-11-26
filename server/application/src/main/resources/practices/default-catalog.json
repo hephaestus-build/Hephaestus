@@ -19,6 +19,7 @@
 				{
 					"slug": "scope-one-reviewable-change",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "scope-one-reviewable-change" },
 					"definition": {
 						"name": "Keep the change reviewable",
 						"reviewOn": {
@@ -73,6 +74,7 @@
 				{
 					"slug": "describe-what-and-why",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "describe-what-and-why" },
 					"definition": {
 						"name": "Describe what changed and why",
 						"reviewOn": {
@@ -119,6 +121,7 @@
 				{
 					"slug": "states-how-to-verify-the-change",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "states-how-to-verify-the-change" },
 					"definition": {
 						"name": "State how to verify the change",
 						"reviewOn": {
@@ -182,6 +185,7 @@
 				{
 					"slug": "ready-and-traceable-handoff",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "ready-and-traceable-handoff" },
 					"definition": {
 						"name": "Make the change’s status clear and link its issue",
 						"reviewOn": {
@@ -237,6 +241,7 @@
 				{
 					"slug": "commit-subjects-explain-each-change",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "commit-subjects-explain-each-change" },
 					"definition": {
 						"name": "Write commit subjects a reviewer can follow",
 						"reviewOn": {
@@ -292,6 +297,7 @@
 				{
 					"slug": "honours-linked-issue-acceptance-criteria",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "honours-linked-issue-acceptance-criteria" },
 					"definition": {
 						"name": "Say which acceptance criteria are done",
 						"reviewOn": {
@@ -364,6 +370,7 @@
 				{
 					"slug": "engaging-with-inline-review-comments",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "engaging-with-inline-review-comments" },
 					"definition": {
 						"name": "Respond to each review comment",
 						"reviewOn": {
@@ -433,6 +440,7 @@
 				{
 					"slug": "merged-past-unresolved-review-threads",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "merged-past-unresolved-review-threads" },
 					"definition": {
 						"name": "Resolve open threads before merging",
 						"reviewOn": {
@@ -505,6 +513,7 @@
 				{
 					"slug": "issue-states-an-actionable-problem",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "issue-states-an-actionable-problem" },
 					"definition": {
 						"name": "State a problem a maintainer can act on",
 						"reviewOn": {
@@ -548,6 +557,7 @@
 				{
 					"slug": "issue-scoped-to-single-concern",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "issue-scoped-to-single-concern" },
 					"definition": {
 						"name": "Keep the issue to one concern",
 						"reviewOn": {
@@ -591,6 +601,7 @@
 				{
 					"slug": "issue-has-checkable-outcome",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "issue-has-checkable-outcome" },
 					"definition": {
 						"name": "Define a checkable outcome",
 						"reviewOn": {
@@ -634,6 +645,7 @@
 				{
 					"slug": "issue-points-to-relevant-context",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "issue-points-to-relevant-context" },
 					"definition": {
 						"name": "Point the issue to the context it depends on",
 						"reviewOn": {
@@ -685,6 +697,7 @@
 				{
 					"slug": "leaves-useful-specific-review-comments",
 					"kind": "scm.pull_request_review",
+					"identity": { "domain": "software-engineering", "key": "leaves-useful-specific-review-comments" },
 					"definition": {
 						"name": "Leave specific, actionable review comments",
 						"reviewOn": {
@@ -747,6 +760,7 @@
 				{
 					"slug": "reviews-respectfully-asks-rather-than-demands",
 					"kind": "scm.pull_request_review",
+					"identity": { "domain": "software-engineering", "key": "reviews-respectfully-asks-rather-than-demands" },
 					"definition": {
 						"name": "Comment on the code, not the person",
 						"reviewOn": {
@@ -801,6 +815,7 @@
 				{
 					"slug": "reviews-substantively-with-understanding",
 					"kind": "scm.pull_request_review",
+					"identity": { "domain": "software-engineering", "key": "reviews-substantively-with-understanding" },
 					"definition": {
 						"name": "Explain consequential review judgments",
 						"reviewOn": {
@@ -872,6 +887,7 @@
 				{
 					"slug": "ships-tests-with-the-change",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "ships-tests-with-the-change" },
 					"definition": {
 						"name": "Include tests with the change",
 						"reviewOn": {
@@ -931,6 +947,7 @@
 				{
 					"slug": "keeps-the-test-suite-honest",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "keeps-the-test-suite-honest" },
 					"definition": {
 						"name": "Keep the test suite honest",
 						"reviewOn": {
@@ -1032,6 +1049,7 @@
 				{
 					"slug": "removes-duplication-instead-of-copy-pasting",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "removes-duplication-instead-of-copy-pasting" },
 					"definition": {
 						"name": "Factor out duplication instead of copy-pasting",
 						"reviewOn": {
@@ -1079,6 +1097,7 @@
 				{
 					"slug": "keeps-functions-small-and-single-purpose",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "keeps-functions-small-and-single-purpose" },
 					"definition": {
 						"name": "Keep functions small and single-purpose",
 						"reviewOn": {
@@ -1167,6 +1186,7 @@
 				{
 					"slug": "leaves-the-code-clean-with-intent-revealing-comments",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "leaves-the-code-clean-with-intent-revealing-comments" },
 					"definition": {
 						"name": "Leave the code clean and comment the why",
 						"reviewOn": {
@@ -1229,6 +1249,7 @@
 				{
 					"slug": "logs-through-the-platform-logger",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "logs-through-the-platform-logger" },
 					"definition": {
 						"name": "Log through the platform logger, not print",
 						"reviewOn": {
@@ -1327,6 +1348,7 @@
 				{
 					"slug": "handles-errors-instead-of-swallowing-them",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "handles-errors-instead-of-swallowing-them" },
 					"definition": {
 						"name": "Handle errors instead of swallowing them",
 						"reviewOn": {
@@ -1416,6 +1438,7 @@
 				{
 					"slug": "validates-inputs-and-edge-cases-at-the-boundary",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "validates-inputs-and-edge-cases-at-the-boundary" },
 					"definition": {
 						"name": "Validate inputs and edge cases at the boundary",
 						"reviewOn": {
@@ -1505,6 +1528,7 @@
 				{
 					"slug": "avoids-unsafe-panics-and-chosen-crashes",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "avoids-unsafe-panics-and-chosen-crashes" },
 					"definition": {
 						"name": "Avoid crashing on recoverable problems",
 						"reviewOn": {
@@ -1603,6 +1627,7 @@
 				{
 					"slug": "validates-and-escapes-untrusted-input",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "validates-and-escapes-untrusted-input" },
 					"definition": {
 						"name": "Neutralize untrusted input before a dangerous sink",
 						"reviewOn": {
@@ -1650,6 +1675,7 @@
 				{
 					"slug": "avoids-insecure-defaults-and-over-broad-permissions",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "avoids-insecure-defaults-and-over-broad-permissions" },
 					"definition": {
 						"name": "Avoid insecure defaults and over-broad permissions",
 						"reviewOn": {
@@ -1712,6 +1738,7 @@
 				{
 					"slug": "changes-dependencies-deliberately",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "changes-dependencies-deliberately" },
 					"definition": {
 						"name": "Change dependencies deliberately",
 						"reviewOn": {
@@ -1850,6 +1877,7 @@
 				{
 					"slug": "records-significant-decisions-with-rationale",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "records-significant-decisions-with-rationale" },
 					"definition": {
 						"name": "Record significant decisions and the rationale",
 						"reviewOn": {
@@ -1908,6 +1936,7 @@
 				{
 					"slug": "documents-public-api-and-behaviour-changes",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "documents-public-api-and-behaviour-changes" },
 					"definition": {
 						"name": "Document public API and behaviour changes",
 						"reviewOn": {
@@ -1967,6 +1996,7 @@
 				{
 					"slug": "change-keeps-linked-docs-consistent",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "change-keeps-linked-docs-consistent" },
 					"definition": {
 						"name": "Keep linked wiki docs consistent with the change",
 						"reviewOn": {
@@ -2029,6 +2059,7 @@
 				{
 					"slug": "published-decisions-name-the-alternatives",
 					"kind": "docs.document",
+					"identity": { "domain": "software-engineering", "key": "published-decisions-name-the-alternatives" },
 					"definition": {
 						"name": "Say what else you considered",
 						"reviewOn": {
@@ -2076,6 +2107,7 @@
 				{
 					"slug": "commits-are-atomic-and-cohesive",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "commits-are-atomic-and-cohesive" },
 					"definition": {
 						"name": "Keep each commit to one logical change",
 						"reviewOn": {
@@ -2131,6 +2163,7 @@
 				{
 					"slug": "excludes-generated-and-build-artifacts",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "excludes-generated-and-build-artifacts" },
 					"definition": {
 						"name": "Track generated files only when justified",
 						"reviewOn": {
@@ -2213,6 +2246,7 @@
 				{
 					"slug": "breaks-large-work-into-trackable-subtasks",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "breaks-large-work-into-trackable-subtasks" },
 					"definition": {
 						"name": "Break large work into trackable subtasks",
 						"reviewOn": {
@@ -2256,6 +2290,7 @@
 				{
 					"slug": "triages-the-issue-with-labels-and-ownership",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "triages-the-issue-with-labels-and-ownership" },
 					"definition": {
 						"name": "Classify the issue the way the project classifies issues",
 						"reviewOn": {
@@ -2298,6 +2333,7 @@
 				{
 					"slug": "issue-closed-with-unmet-outcome",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "issue-closed-with-unmet-outcome" },
 					"definition": {
 						"name": "Confirm the outcome before closing the issue",
 						"reviewOn": {
@@ -2335,6 +2371,7 @@
 				{
 					"slug": "closed-issue-outcome-recorded",
 					"kind": "scm.issue",
+					"identity": { "domain": "software-engineering", "key": "closed-issue-outcome-recorded" },
 					"definition": {
 						"name": "Record the outcome of a closed issue",
 						"reviewOn": {
@@ -2379,6 +2416,7 @@
 				{
 					"slug": "links-the-change-to-its-issue",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "links-the-change-to-its-issue" },
 					"definition": {
 						"name": "Link the change to the issue it implements",
 						"reviewOn": {
@@ -2430,6 +2468,7 @@
 				{
 					"slug": "merge-confirms-the-linked-issue-outcome",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "merge-confirms-the-linked-issue-outcome" },
 					"definition": {
 						"name": "Confirm the linked issue's outcome",
 						"reviewOn": {
@@ -2497,6 +2536,7 @@
 				{
 					"slug": "defers-review-asks-into-tracked-work",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "defers-review-asks-into-tracked-work" },
 					"definition": {
 						"name": "Track the review asks you defer",
 						"reviewOn": {
@@ -2568,6 +2608,7 @@
 				{
 					"slug": "merges-only-after-approval",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "merges-only-after-approval" },
 					"definition": {
 						"name": "Merge only after someone else approved",
 						"reviewOn": {
@@ -2619,6 +2660,7 @@
 				{
 					"slug": "plans-the-work-in-an-issue-first",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "plans-the-work-in-an-issue-first" },
 					"definition": {
 						"name": "Record the plan before the first commit",
 						"reviewOn": {
@@ -2683,6 +2725,7 @@
 				{
 					"slug": "keeps-views-free-of-networking-and-persistence",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "keeps-views-free-of-networking-and-persistence" },
 					"definition": {
 						"name": "Keep networking and persistence out of views",
 						"reviewOn": {
@@ -2753,6 +2796,7 @@
 				{
 					"slug": "owns-state-at-the-right-level",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "owns-state-at-the-right-level" },
 					"definition": {
 						"name": "Own SwiftUI state at the right level",
 						"reviewOn": {
@@ -2823,6 +2867,7 @@
 				{
 					"slug": "makes-ui-accessible-by-default",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "makes-ui-accessible-by-default" },
 					"definition": {
 						"name": "Make the UI accessible by default",
 						"reviewOn": {
@@ -2893,6 +2938,7 @@
 				{
 					"slug": "uses-structured-concurrency-safely",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "uses-structured-concurrency-safely" },
 					"definition": {
 						"name": "Use structured concurrency safely",
 						"reviewOn": {
@@ -2963,6 +3009,7 @@
 				{
 					"slug": "ships-a-preview-with-each-new-view",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "ships-a-preview-with-each-new-view" },
 					"definition": {
 						"name": "Ship a preview with each new view",
 						"reviewOn": {
@@ -3018,6 +3065,7 @@
 				{
 					"slug": "declares-permissions-truthfully-at-point-of-use",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "declares-permissions-truthfully-at-point-of-use" },
 					"definition": {
 						"name": "Declare permissions truthfully and ask at the point of use",
 						"reviewOn": {
@@ -3073,6 +3121,7 @@
 				{
 					"slug": "uses-adaptive-colors-for-every-appearance",
 					"kind": "scm.pull_request",
+					"identity": { "domain": "software-engineering", "key": "uses-adaptive-colors-for-every-appearance" },
 					"definition": {
 						"name": "Use adaptive colors so every appearance works",
 						"reviewOn": {
@@ -3152,6 +3201,7 @@
 				{
 					"slug": "asks-answerable-questions",
 					"kind": "chat.thread",
+					"identity": { "domain": "software-engineering", "key": "asks-answerable-questions" },
 					"definition": {
 						"name": "Ask questions a teammate can answer",
 						"reviewOn": {
@@ -3190,6 +3240,7 @@
 				{
 					"slug": "gives-actionable-answers",
 					"kind": "chat.thread",
+					"identity": { "domain": "software-engineering", "key": "gives-actionable-answers" },
 					"definition": {
 						"name": "Give answers people can act on",
 						"reviewOn": {
@@ -3228,6 +3279,7 @@
 				{
 					"slug": "posts-clear-status-and-blocker-updates",
 					"kind": "chat.thread",
+					"identity": { "domain": "software-engineering", "key": "posts-clear-status-and-blocker-updates" },
 					"definition": {
 						"name": "Post clear status and blocker updates",
 						"reviewOn": {
@@ -3266,5 +3318,5 @@
 			]
 		}
 	],
-	"version": "2.0.1"
+	"version": "2.1.0"
 }

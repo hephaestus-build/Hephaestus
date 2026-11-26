@@ -12,8 +12,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The parser collapses any well-formed {@code outline.<sub>.<event>} subject onto the single logical
- * key {@code EventTypeKey(OUTLINE, "document")} and rejects malformed subjects. The round-trip case
+ * The parser maps document and collection subjects to {@code EventTypeKey(OUTLINE, "document")}. The round-trip case
  * proves a subject the deriver emits is (a) matched by the consumer's subscription filter prefix and
  * (b) parses back to the handler's key — publisher and consumer agree.
  */

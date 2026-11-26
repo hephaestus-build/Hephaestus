@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import java.io.Serial;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -187,8 +189,16 @@ class ActionStore {
 
     /** Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean beginWrite(UUID id, long epoch, Duration margin) {
-        return actions.beginWrite(id, epoch, margin.toSeconds()) == 1;
+    public boolean beginWrite(Claim claim, Duration margin, BooleanSupplier sourceIsCurrent) {
+        if (actions.lockForWrite(claim.id(), claim.workspaceId(), claim.epoch(), margin.toSeconds())
+                .isEmpty()) return false;
+        if (!sourceIsCurrent.getAsBoolean()) throw new SourceWithdrawn();
+        return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1;
+    }
+
+    static final class SourceWithdrawn extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
     }
 
     /**

@@ -28,6 +28,19 @@ public record PracticeDTO(
                         + " here, except for its feedback mode and position")
         PracticeEditedIn editedIn,
 
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                nullable = true,
+                description = "The identity of the current version. The upgrade and every write give each version one,"
+                        + " so it is null only for a version written outside them")
+        @Nullable
+        PracticeIdentityDTO identity,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the identity comes from the catalog, so it means the same in other workspaces")
+        boolean portable,
+
         Instant createdAt,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, nullable = true) @Nullable

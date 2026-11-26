@@ -23,15 +23,19 @@ describe("user view request context", () => {
 		expect(request.headers.get("X-User-View-Reason")).toBe("Check%20practice%20page");
 	});
 
-	it.each(["/auth/refresh", "/api/user", "/api/identity-providers", "/api/user/identities"])(
-		"keeps the administrator's own request %s outside the viewed identity",
-		(path) => {
-			storeUserView();
-			const request = applyUserViewHeaders(new Request(`https://example.test${path}`));
+	it.each([
+		"/auth/refresh",
+		"/api/user",
+		"/api/identity-providers",
+		"/api/user/identities",
+		"/api/public/usage",
+		"/api/public/usage/2025-10",
+	])("keeps the administrator's own request %s outside the viewed identity", (path) => {
+		storeUserView();
+		const request = applyUserViewHeaders(new Request(`https://example.test${path}`));
 
-			expect(request.headers.has("X-User-View-Account")).toBe(false);
-		},
-	);
+		expect(request.headers.has("X-User-View-Account")).toBe(false);
+	});
 
 	it.each([
 		"/workspaces/engineering/practices/standings",

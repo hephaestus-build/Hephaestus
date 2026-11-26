@@ -9,15 +9,15 @@ export function AboutHeroSection() {
 				About <HephaestusWordmark />
 			</h1>
 			<p className="mx-auto max-w-2xl text-xl leading-relaxed text-pretty text-muted-foreground">
-				Hephaestus is the open-source AI mentor for software engineering practices. It reads your
-				pull requests, merge requests, issues and code reviews where they happen, and checks them
-				against the practices that your team chose. When a review finds a problem it can support,
-				Hephaestus can point to the work, explain what to improve, and suggest a next step. An
-				observation can say when the evidence could not settle a question.
+				Hephaestus is an AI mentor that helps software developers grow in the engineering practices
+				their team values.
 			</p>
 			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
-				In a conversation, you can ask Hephaestus why, ask for an example, or disagree. Your
-				feedback has no score, grade or rank. Hephaestus is software, and it can be wrong.
+				Developers grow by doing real work and getting feedback from people who know the craft:
+				senior developers, reviewers, teachers and team leads. Hephaestus gives you feedback
+				alongside them, on the practices your team chose. If a review finds a problem it can
+				support, Hephaestus can show you the evidence and suggest a next step. You can ask about the
+				feedback in a conversation, and you decide what to do with it.
 			</p>
 		</section>
 	);

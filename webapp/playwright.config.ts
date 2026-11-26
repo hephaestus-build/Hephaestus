@@ -20,7 +20,8 @@ export default defineConfig({
 	],
 	use: {
 		baseURL: E2E_BASE_URL,
-		trace: "on-first-retry",
+		// The failed attempt is the one to read: a retry can pass, and a hang begins in the first attempt.
+		trace: "retain-on-first-failure",
 		screenshot: "only-on-failure",
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

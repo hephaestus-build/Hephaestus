@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.slack.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -164,7 +163,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                         Long.class,
                         workspace.getId()))
                 .isEqualTo(1L);
-        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
+        verify(slackMessageService, never()).postAdmitted(anyLong(), any(), any());
 
         // Audit row: the admin requested activation; the action must confirm it separately.
         var events = consentEventRepository.findByWorkspaceIdAndSlackChannelIdOrderByCreatedAtAscIdAsc(
@@ -194,7 +193,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                         .orElseThrow()
                         .getConsentState())
                 .isEqualTo(ConsentState.PENDING);
-        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
+        verify(slackMessageService, never()).postAdmitted(anyLong(), any(), any());
     }
 
     @Test

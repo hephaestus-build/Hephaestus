@@ -1,8 +1,7 @@
 /**
  * The GitHub App guide is the operator's registration template, so what it prescribes has to be what
  * the server actually consumes. A permission it omits is a sync that silently returns nothing, and a
- * subscription it adds ahead of a consumer is stored in the provider event inbox and then dropped —
- * paying retention that the deliveries Hephaestus does read would otherwise have.
+ * subscription it adds ahead of a consumer can crowd older failures out of the redelivery scan.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -149,7 +148,7 @@ void test("the manifest subscribes to exactly the events the server consumes", a
 	assert.deepEqual(
 		[...events].toSorted(),
 		[...handled].filter((event) => !DELIVERED_UNSUBSCRIBED.has(event)).toSorted(),
-		"a subscribed event with no handler pays inbox storage to be dropped, and a handled event with no subscription only ever arrives through scheduled sync",
+		"a subscribed event with no handler fills the delivery list, and a handled event with no subscription only ever arrives through scheduled sync",
 	);
 });
 

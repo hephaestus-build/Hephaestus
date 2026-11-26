@@ -19,7 +19,6 @@ import java.nio.file.Path;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +40,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -63,7 +63,7 @@ public class TurnContextLoads implements AutoCloseable {
 
     private final ConversationTurnAccess turns;
     private final ObjectProvider<ContextLoader> loaders;
-    private final Clock clock;
+    private final Supplier<Instant> deadlineClock;
     private final PersonDataCopyFence copies;
     private final FabricLayout layout;
     private final AgentRunAuthority authority;
@@ -75,13 +75,13 @@ public class TurnContextLoads implements AutoCloseable {
     public TurnContextLoads(
             ConversationTurnAccess turns,
             ObjectProvider<ContextLoader> loaders,
-            Clock clock,
+            Supplier<Instant> deadlineClock,
             PersonDataCopyFence copies,
             FabricLayout layout,
             AgentRunAuthority authority) {
         this.turns = turns;
         this.loaders = loaders;
-        this.clock = clock;
+        this.deadlineClock = deadlineClock;
         this.copies = copies;
         this.layout = layout;
         this.authority = authority;
@@ -266,7 +266,7 @@ public class TurnContextLoads implements AutoCloseable {
 
     private Load prepare(TurnAttempt turn, Instant deadline, ContextLoader loader, String path) {
         try {
-            if (!loading.tryAcquire(Math.max(0, left(deadline).toMillis()), TimeUnit.MILLISECONDS)) {
+            if (!loading.tryAcquire(Math.max(0, timeLeft(deadline).toMillis()), TimeUnit.MILLISECONDS)) {
                 throw new Abandoned(new TimeoutException("No load permit before the deadline"));
             }
         } catch (InterruptedException interrupted) {
@@ -282,20 +282,13 @@ public class TurnContextLoads implements AutoCloseable {
         }
         var permit = prepared.whenComplete((loaded, failure) -> loading.release());
         log.trace("Load permit held until the load ends: {}", permit);
+        boolean transferred = false;
         try {
-            return prepared.get(Math.max(0, left(deadline).toMillis()), TimeUnit.MILLISECONDS);
+            Load load = prepared.get(Math.max(0, timeLeft(deadline).toMillis()), TimeUnit.MILLISECONDS);
+            transferred = true;
+            return load;
         } catch (TimeoutException | InterruptedException waited) {
             if (waited instanceof InterruptedException) Thread.currentThread().interrupt();
-            // The preparation owns capture admission until its late archive and source directory are removed.
-            var discarded = prepared.thenAccept(load -> {
-                if (load instanceof Prepared archive) archive.close();
-            });
-            discarded.exceptionally(failure -> {
-                log.warn(
-                        "Could not remove an abandoned load archive: {}",
-                        failure.getClass().getSimpleName());
-                return null;
-            });
             throw new Abandoned(waited);
         } catch (ExecutionException failed) {
             if (failed.getCause() instanceof RuntimeException cause) {
@@ -303,6 +296,20 @@ public class TurnContextLoads implements AutoCloseable {
                 throw cause;
             }
             throw new CompletionException(failed);
+        } finally {
+            if (!transferred) {
+                // The preparation owns capture admission until its late archive and source directory are removed.
+                prepared.handle((load, failure) -> {
+                            if (load instanceof Prepared archive) archive.close();
+                            return null;
+                        })
+                        .exceptionally(failure -> {
+                            log.warn(
+                                    "Could not remove an abandoned load archive: {}",
+                                    failure.getClass().getSimpleName());
+                            return null;
+                        });
+            }
         }
     }
 
@@ -313,11 +320,12 @@ public class TurnContextLoads implements AutoCloseable {
 
     /** Whether a load outlived its turn's deadline or its attempt's lease; reads the lease at most every 2 s. */
     private BooleanSupplier abandoned(TurnAttempt turn, Instant deadline) {
-        var checked = new AtomicReference<Instant>(clock.instant());
+        var checked = new AtomicReference<Instant>(deadlineClock.get());
         var lost = new AtomicBoolean();
         return () -> {
-            if (left(deadline).isNegative() || lost.get()) return true;
-            Instant now = clock.instant();
+            if (lost.get()) return true;
+            Instant now = deadlineClock.get();
+            if (!now.isBefore(deadline)) return true;
             Instant last = checked.get();
             if (Duration.between(last, now).compareTo(LEASE_CHECK) >= 0 && checked.compareAndSet(last, now)) {
                 lost.set(!turns.hasLiveLease(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId()));
@@ -326,8 +334,8 @@ public class TurnContextLoads implements AutoCloseable {
         };
     }
 
-    private Duration left(Instant deadline) {
-        return Duration.between(clock.instant(), deadline);
+    public Duration timeLeft(Instant deadline) {
+        return Duration.between(deadlineClock.get(), deadline);
     }
 
     static ObjectNode refusal(String code, String detail) {

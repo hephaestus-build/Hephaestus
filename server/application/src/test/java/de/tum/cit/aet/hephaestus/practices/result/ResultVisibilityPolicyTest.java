@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.model.ResultMark;
@@ -22,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
@@ -128,7 +128,7 @@ class ResultVisibilityPolicyTest {
     @Test
     void aChangedStandardMakesProofStale() {
         var r = result();
-        var old = new PracticeVersion(
+        var old = TestEntities.version(
                 practice, 1, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(old, "reviewDigest", "v6:" + "b".repeat(64));
         assertThat(ResultVisibilityPolicy.freshness(
@@ -223,7 +223,7 @@ class ResultVisibilityPolicyTest {
         r.end(ResultEndReason.REPLACED, edge.plusSeconds(1));
         var oldVersion = practice.getCurrentVersion();
         when(versions.findAt(1L, List.of(1L), edge)).thenReturn(List.of(oldVersion));
-        var changed = new PracticeVersion(
+        var changed = TestEntities.version(
                 practice, 2, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(changed, "reviewDigest", "v6:" + "b".repeat(64));
         practice.setCurrentVersion(changed);

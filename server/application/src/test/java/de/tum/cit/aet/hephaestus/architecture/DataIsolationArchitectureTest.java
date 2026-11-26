@@ -76,6 +76,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Practice catalog entities
             "Practice", // has direct Workspace field
             "Result", // direct workspace_id scalar
+            "ReviewItemCopiedIdentity", // direct workspace_id scalar
             // Hephaestus conversation ledger — every table carries a direct workspace_id scalar
             "Conversation",
             "ConversationEntry",

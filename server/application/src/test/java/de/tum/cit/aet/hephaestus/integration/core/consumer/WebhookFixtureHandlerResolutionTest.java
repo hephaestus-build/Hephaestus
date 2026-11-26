@@ -124,7 +124,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
     /** Slack has no committed webhook fixtures today; every registered bolt event has a handler. */
     private static final Map<String, String> SLACK_ACK_DROP_ALLOWLIST = Map.of();
 
-    /** Every Outline event collapses onto the single {@code document} handler key, so none is ever dropped. */
+    /** Every Outline fixture is a document or collection event with the same handler key. */
     private static final Map<String, String> OUTLINE_ACK_DROP_ALLOWLIST = Map.of();
 
     @Test
@@ -201,7 +201,9 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .as("Slack handler registry must be discoverable and non-empty")
                 .isNotEmpty()
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message"))
-                .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"));
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"))
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "channel_deleted"))
+                .contains(new EventTypeKey(IntegrationKind.SLACK, "group_deleted"));
 
         // Vacuous while no Slack webhook fixture is committed, and active the instant one lands: a fixture for a bolt
         // event with no handler will fail the

@@ -97,8 +97,8 @@ public class ConversationTurnStarter {
         if (digests.refuses(turn.getWorkspaceId(), turn.getId())) return decline(turn, DigestAdmission.REFUSED);
         if (turn.getSurface() != ConversationTurn.Surface.SYSTEM)
             meters.counter(AgentMetrics.CONVERSATION_TURN_STARTED).increment();
-        Instant startedAt = turn.getStartedAt();
-        if (turn.getSurface() != ConversationTurn.Surface.SYSTEM && turn.getAttempt() == 1 && startedAt != null) {
+        Instant startedAt = Objects.requireNonNull(turn.getStartedAt());
+        if (turn.getSurface() != ConversationTurn.Surface.SYSTEM && turn.getAttempt() == 1) {
             // A retry waited since its lease expired, which the row does not keep.
             Timer.builder(AgentMetrics.CONVERSATION_TURN_QUEUE_WAIT)
                     .description("From a question to the start of its first attempt")

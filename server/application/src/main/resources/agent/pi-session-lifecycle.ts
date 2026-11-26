@@ -1,3 +1,5 @@
+import { addAbortListener } from "node:events";
+
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
 import { diagnose, errorKind } from "./pi-diagnostics.ts";
@@ -39,6 +41,22 @@ export function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 		release(undefined);
 	}, timeoutMs);
 	return { elapsed, timer, expired: () => expired };
+}
+
+export async function awaitAbortable<T>(
+	signal: AbortSignal,
+	operation: () => Promise<T>,
+): Promise<T> {
+	signal.throwIfAborted();
+	const { promise, reject } = Promise.withResolvers<never>();
+	const listener = addAbortListener(signal, () => reject(signal.reason));
+	try {
+		const result = await Promise.race([operation(), promise]);
+		signal.throwIfAborted();
+		return result;
+	} finally {
+		listener[Symbol.dispose]();
+	}
 }
 
 /** A session that would not stop, so no later session may start. Its class is its diagnostic name. */

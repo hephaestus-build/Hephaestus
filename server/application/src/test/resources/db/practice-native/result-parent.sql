@@ -21,4 +21,13 @@ INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_
 VALUES('00000000-0000-0000-0000-000000978011',978001,978004,978005,'READY');
 INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version)
 VALUES('00000000-0000-0000-0000-000000978011',978001,978004,978006,'native-v1');
+-- The fixture also runs on schemas before ADR 0130. Where versions have an identity, it gets the local one. The DO body
+-- is single-quoted: the Spring script splitter respects quotes but not dollar quotes.
+DO 'BEGIN
+  IF EXISTS (SELECT FROM information_schema.columns
+             WHERE table_schema=''public'' AND table_name=''practice_version'' AND column_name=''identity_key'') THEN
+    UPDATE practice_version SET identity_key=''local/978001/978004'', comparability_class=review_digest
+    WHERE id=978005 AND identity_key IS NULL;
+  END IF;
+END';
 COMMIT;

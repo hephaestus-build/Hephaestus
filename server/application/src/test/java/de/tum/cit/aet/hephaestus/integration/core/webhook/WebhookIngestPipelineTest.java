@@ -12,7 +12,12 @@ import static org.mockito.Mockito.verify;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationMessageDispatcher;
+import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
+import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandlerRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
+import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
@@ -20,6 +25,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectParser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -73,11 +82,9 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     void refusesALargeDeliveryThatDoesNotFitAfterItsSignature() {
         WebhookInFlightBudget budget = new WebhookInFlightBudget(1024, 1024, Duration.ofMillis(1));
         MeterRegistry meters = new SimpleMeterRegistry();
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF")),
-                publisher,
-                objectMapper,
                 List.of(),
                 budget,
                 meters);
@@ -104,11 +111,9 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @DisplayName("a small delivery with a valid signature does not wait for the budget")
     void aSmallDeliveryDoesNotCountAgainstTheBudget() {
         WebhookInFlightBudget budget = new WebhookInFlightBudget(1024, 1024, Duration.ofMillis(1));
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF")),
-                publisher,
-                objectMapper,
                 List.of(),
                 budget,
                 new SimpleMeterRegistry());
@@ -129,11 +134,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @DisplayName("verified webhook is published to the inbox with kind-derived subject + dedup-id")
     void publishesOnVerified() {
         SubjectKeyDeriver deriver = stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF");
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(deriver),
-                publisher,
-                objectMapper);
+                List.of());
 
         Map<String, String> headers = headers("X-GitHub-Event", "push", "X-GitHub-Delivery", "DEADBEEF");
         ResponseEntity<?> resp = pipeline.handle(
@@ -158,11 +162,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     void publishesOutlineOnVerified() {
         // Real Outline deriver so the body → subject/dedup derivation is exercised end to end through
         // the pipeline.
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.OUTLINE, new VerificationResult.Verified())),
                 List.of(new OutlineSubjectKeyDeriver(objectMapper)),
-                publisher,
-                objectMapper);
+                List.of());
 
         byte[] body =
                 "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\",\"payload\":{\"id\":\"doc-9\"}}"
@@ -184,7 +187,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @Test
     void anAuthenticatedRouteNeedsNoSharedPathDeriver() {
         // GitLab's connection route derives its own subject and dedup id; the kind has no SubjectKeyDeriver bean.
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(List.of(), List.of(), publisher, objectMapper);
+        WebhookIngestPipeline pipeline = pipeline(List.of(), List.of(), List.of());
 
         ResponseEntity<?> resp = pipeline.publishAuthenticated(
                 IntegrationKind.GITLAB,
@@ -208,11 +211,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void invalidSignatureBlocksPublish() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Invalid("signature-mismatch"))),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "s", "d")),
-                publisher,
-                objectMapper);
+                List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
@@ -223,7 +225,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void missingVerifier() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(List.of(), List.of(), publisher, objectMapper);
+        WebhookIngestPipeline pipeline = pipeline(List.of(), List.of(), List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.SLACK, "{}".getBytes(StandardCharsets.UTF_8), headers());
@@ -234,11 +236,8 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void missingDeriver() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
-                List.of(),
-                publisher,
-                objectMapper);
+        WebhookIngestPipeline pipeline = pipeline(
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())), List.of(), List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
@@ -249,11 +248,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void shouldAnswer503AndNameTheCauseWhenTheInboxCannotStore(CapturedOutput output) {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
-                publisher,
-                objectMapper);
+                List.of());
         doThrow(new CannotGetJdbcConnectionException("database down"))
                 .when(publisher)
                 .receive(any(), any(), any(), any(), any());
@@ -267,11 +265,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void invalidJsonBlocksPublish() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "s", "d")),
-                publisher,
-                objectMapper);
+                List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.GITHUB, "not json".getBytes(StandardCharsets.UTF_8), headers());
@@ -283,11 +280,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @ParameterizedTest
     @MethodSource("payloadsThatCannotBeStoredAsUtf8Text")
     void shouldRejectPayloadsThatCannotBeReadAsPostgresUtf8Text(byte[] body) {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
-                publisher,
-                objectMapper);
+                List.of());
 
         var response = pipeline.handle(IntegrationKind.GITHUB, body, headers());
 
@@ -313,11 +309,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void shouldKeepValidNonAsciiUtf8PayloadsUnchanged() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
-                publisher,
-                objectMapper);
+                List.of());
         byte[] body = "{\"message\":\"Grüße 🌍 \\\\u0000\"}".getBytes(StandardCharsets.UTF_8);
 
         var response = pipeline.handle(IntegrationKind.GITHUB, body, headers());
@@ -339,11 +334,9 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 throw new CannotGetJdbcConnectionException("database down");
             }
         };
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.SLACK, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.SLACK, "slack.T.C.message", "slack-Ev1")),
-                publisher,
-                objectMapper,
                 List.of(gate));
 
         ResponseEntity<?> resp = pipeline.handle(
@@ -368,11 +361,9 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 return Decision.drop("not-consented");
             }
         };
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.SLACK, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.SLACK, "slack.T.C.message", "slack-Ev1")),
-                publisher,
-                objectMapper,
                 List.of(gate));
 
         ResponseEntity<?> resp = pipeline.handle(
@@ -388,11 +379,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @Test
     @DisplayName("stale-timestamp verdict → 401")
     void shouldRejectWith401WhenTimestampIsStale() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.SLACK, new VerificationResult.StaleTimestamp(900L))),
                 List.of(),
-                publisher,
-                objectMapper);
+                List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.SLACK, "{}".getBytes(StandardCharsets.UTF_8), headers());
@@ -406,14 +396,13 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @Test
     void respondImmediatelyShortCircuits() {
         byte[] echoBody = "challenge-ack".getBytes(StandardCharsets.UTF_8);
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(
                         IntegrationKind.SLACK,
                         new VerificationResult.RespondImmediately(
                                 200, "text/plain", echoBody, Map.of("X-Challenge", "ack")))),
                 List.of(),
-                publisher,
-                objectMapper);
+                List.of());
 
         ResponseEntity<?> resp =
                 pipeline.handle(IntegrationKind.SLACK, "{}".getBytes(StandardCharsets.UTF_8), headers());
@@ -439,8 +428,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                         "Unexpected token in " + new String(request.body(), StandardCharsets.UTF_8));
             }
         };
-        WebhookIngestPipeline pipeline =
-                new WebhookIngestPipeline(List.of(throwing), List.of(), publisher, objectMapper);
+        WebhookIngestPipeline pipeline = pipeline(List.of(throwing), List.of(), List.of());
         Logger logger = (Logger) LoggerFactory.getLogger(WebhookIngestPipeline.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -468,11 +456,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void shouldKeepMissingSignatureCoarseAndBlockPublish() {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+        WebhookIngestPipeline pipeline = pipeline(
                 List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.MissingSignature())),
                 List.of(),
-                publisher,
-                objectMapper);
+                List.of());
 
         ResponseEntity<?> response = pipeline.handle(IntegrationKind.GITHUB, new byte[0], headers());
 
@@ -482,7 +469,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void shouldReturnSafeDetailWhenRequestBodyCannotBeRead() throws IOException {
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(List.of(), List.of(), publisher, objectMapper);
+        WebhookIngestPipeline pipeline = pipeline(List.of(), List.of(), List.of());
         WebhookController controller = new WebhookController(pipeline, new IntegrationKindRouting());
         HttpServletRequest request = mock(HttpServletRequest.class);
         doThrow(new IOException("private request data")).when(request).getInputStream();
@@ -495,28 +482,74 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void duplicateVerifierRejected() {
-        assertThatThrownBy(() -> new WebhookIngestPipeline(
+        assertThatThrownBy(() -> pipeline(
                         List.of(
                                 stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified()),
                                 stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
                         List.of(),
-                        publisher,
-                        objectMapper))
+                        List.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate WebhookSignatureVerifier");
     }
 
     @Test
     void duplicateDeriverRejected() {
-        assertThatThrownBy(() -> new WebhookIngestPipeline(
+        assertThatThrownBy(() -> pipeline(
                         List.of(),
                         List.of(
                                 stubDeriver(IntegrationKind.GITHUB, "s", "d"),
                                 stubDeriver(IntegrationKind.GITHUB, "s", "d")),
-                        publisher,
-                        objectMapper))
+                        List.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate SubjectKeyDeriver");
+    }
+
+    private WebhookIngestPipeline pipeline(
+            List<WebhookSignatureVerifier> verifiers,
+            List<SubjectKeyDeriver> derivers,
+            List<WebhookPublishGate> gates) {
+        return pipeline(
+                verifiers,
+                derivers,
+                gates,
+                WebhookInFlightBudget.forHeap(Runtime.getRuntime().maxMemory()),
+                new SimpleMeterRegistry());
+    }
+
+    private WebhookIngestPipeline pipeline(
+            List<WebhookSignatureVerifier> verifiers,
+            List<SubjectKeyDeriver> derivers,
+            List<WebhookPublishGate> gates,
+            WebhookInFlightBudget budget,
+            MeterRegistry meters) {
+        var registry = new IntegrationMessageHandlerRegistry(List.of(
+                handler(IntegrationKind.GITHUB, "repository.push"),
+                handler(IntegrationKind.GITLAB, "push"),
+                handler(IntegrationKind.SLACK, "message"),
+                handler(IntegrationKind.OUTLINE, "document")));
+        var dispatcher = new IntegrationMessageDispatcher(
+                registry,
+                List.of(
+                        new GitHubSubjectParser(),
+                        new GitLabSubjectParser(),
+                        new SlackSubjectParser(),
+                        new OutlineSubjectParser()));
+        return new WebhookIngestPipeline(
+                verifiers, derivers, publisher, dispatcher, objectMapper, gates, budget, meters);
+    }
+
+    private static IntegrationMessageHandler handler(IntegrationKind kind, String eventType) {
+        return new IntegrationMessageHandler() {
+            @Override
+            public EventTypeKey key() {
+                return new EventTypeKey(kind, eventType);
+            }
+
+            @Override
+            public void onMessage(ProviderEvent event) {
+                throw new AssertionError("The receiver must not run the handler");
+            }
+        };
     }
 
     // Stubs

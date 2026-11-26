@@ -520,6 +520,43 @@ tests:
               summary: GitHub events failed every delivery attempt and were not received
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: GitHub App subscription drift fires for extra and missing events and clears after both are fixed
+    interval: 1m
+    input_series:
+      - series: 'github_app_subscription_drift{job="hephaestus",namespace="heph",instance="server-a",change="extra"}'
+        values: "NaN 0 2 0"
+      - series: 'github_app_subscription_drift{job="hephaestus",namespace="heph",instance="server-b",change="extra"}'
+        values: "NaN 0 2 0"
+      - series: 'github_app_subscription_drift{job="hephaestus",namespace="heph",instance="server-a",change="missing"}'
+        values: "NaN 0 1 0"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusGitHubAppSubscriptionDrift
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: HephaestusGitHubAppSubscriptionDrift
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusGitHubAppSubscriptionDrift
+        exp_alerts:
+          - exp_labels:
+              namespace: heph
+              change: extra
+              severity: warning
+            exp_annotations:
+              summary: GitHub App webhook subscriptions differ from the manifest
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              namespace: heph
+              change: missing
+              severity: warning
+            exp_annotations:
+              summary: GitHub App webhook subscriptions differ from the manifest
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 3m
+        alertname: HephaestusGitHubAppSubscriptionDrift
+        exp_alerts: []
+
   - name: a crossed budget cap fires, an unchanged count does not
     interval: 1m
     input_series:

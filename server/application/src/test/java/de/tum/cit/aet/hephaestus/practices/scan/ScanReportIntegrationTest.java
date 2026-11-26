@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
@@ -16,11 +17,19 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeQueryAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceStatementInspector;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
@@ -33,7 +42,9 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
@@ -72,6 +83,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -97,12 +109,16 @@ import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class ScanReportIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ScanReportTestData data;
+
+    @Autowired
+    ReviewItemCustody custodies;
 
     @Autowired
     ResultRetentionService retention;
@@ -175,6 +191,15 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
 
     @MockitoBean
     PersonIdentityResolver people;
+
+    @Autowired
+    PersonDataService erasures;
+
+    @Autowired
+    IdentityProviderRepository identityProviders;
+
+    @Autowired
+    AccountRepository accounts;
 
     @Autowired
     ReviewRuntimeRepository runtimeRows;
@@ -1014,10 +1039,16 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
         var copy = new PersonCopyIdentity("GITHUB", "https://github.com", "copied-person", null);
         var detail = (ObjectNode) Objects.requireNonNull(member.getDetail()).deepCopy();
-        detail.set(
-                "custody",
-                json.valueToTree(new HistoryCustody(
-                        true, false, List.of(copy), List.of(), List.of(Objects.requireNonNull(member.getJobId())))));
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(ignored -> custodies.record(
+                        member,
+                        detail,
+                        new HistoryCustody(
+                                true,
+                                false,
+                                List.of(copy),
+                                List.of(),
+                                List.of(Objects.requireNonNull(member.getJobId())))));
         member.setDetail(detail);
         membership.saveAndFlush(member);
         when(people.providers())
@@ -1034,5 +1065,252 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                                 null, List.of(new PersonIdentity(8, "different-person", null)), List.of()))
                         .rows())
                 .isEmpty();
+    }
+
+    /**
+     * An Outline capture records the team of each person it copied. A request without a team covers the person in every
+     * team, as the receipt store reads it: export finds the copy, erasure deletes it, and the result it authorizes is
+     * selected.
+     */
+    @Test
+    void shouldExportAndEraseATeamKeyedOutlineCopyForARequestWithoutATeam() {
+        var scan = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(60));
+        var result = data.result(scenario, scan);
+        var member = membership
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        scan.getWorkspaceId(), scan.getId(), result.getPracticeId(), result.getItemId())
+                .orElseThrow();
+        var copy = new PersonCopyIdentity("OUTLINE", "https://outline.example", "outline-person", "team-1");
+        var detail = (ObjectNode) Objects.requireNonNull(member.getDetail()).deepCopy();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(ignored -> custodies.record(
+                        member,
+                        detail,
+                        new HistoryCustody(
+                                true,
+                                false,
+                                List.of(copy),
+                                List.of(),
+                                List.of(Objects.requireNonNull(member.getJobId())))));
+        member.setDetail(detail);
+        membership.saveAndFlush(member);
+        when(people.providers())
+                .thenReturn(List.of(new PersonIdentityResolver.Provider(9, "OUTLINE", "https://outline.example")));
+        var person = new PersonScope(null, List.of(new PersonIdentity(9, "outline-person", null)), List.of());
+        var copies = personData.contributors().stream()
+                .filter(c -> c.store().equals("review_item_copied_identity"))
+                .findFirst()
+                .orElseThrow();
+        var results = personData.contributors().stream()
+                .filter(c -> c.store().equals("result"))
+                .findFirst()
+                .orElseThrow();
+
+        var selection = copies.select(person);
+
+        assertThat(copies.export(selection, person))
+                .singleElement()
+                .satisfies(row -> assertThat(row.toString()).contains("outline-person", "team-1"));
+        assertThat(results.select(person).rows())
+                .anySatisfy(key -> assertThat(key.columns().get("id"))
+                        .isEqualTo(result.getId().toString()));
+        Long erased = new TransactionTemplate(transactions).execute(ignored -> copies.erase(selection, person));
+        assertThat(erased).isEqualTo(1L);
+        assertThat(custodies.read(member).orElseThrow().copiedIdentities()).isEmpty();
+    }
+
+    /**
+     * An instance-only erasure of an Outline person whose copy names a team, admitted on this release. It reaches the
+     * copy, its review item and the result that the copy authorizes, and the request completes.
+     */
+    @Test
+    void shouldEraseATeamKeyedOutlineCopyAndItsProofForAnInstanceOnlyErasure() {
+        var scan = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(60));
+        var result = data.result(scenario, scan);
+        var member = membership
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        scan.getWorkspaceId(), scan.getId(), result.getPracticeId(), result.getItemId())
+                .orElseThrow();
+        String origin = "https://outline-" + UUID.randomUUID() + ".example";
+        long provider = Objects.requireNonNull(identityProviders
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.OUTLINE, origin))
+                .getId());
+        var detail = (ObjectNode) Objects.requireNonNull(member.getDetail()).deepCopy();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(ignored -> custodies.record(
+                        member,
+                        detail,
+                        new HistoryCustody(
+                                true,
+                                false,
+                                List.of(new PersonCopyIdentity("OUTLINE", origin, "outline-person", "team-1")),
+                                List.of(),
+                                List.of(Objects.requireNonNull(member.getJobId())))));
+        member.setDetail(detail);
+        membership.saveAndFlush(member);
+        var identities = List.of(new PersonIdentity(provider, "outline-person", null));
+        when(people.providers()).thenReturn(List.of(new PersonIdentityResolver.Provider(provider, "OUTLINE", origin)));
+        when(people.resolve(isNull(), anyList()))
+                .thenReturn(new PersonScope(null, identities, List.of(), List.of(), List.of(), List.of(), List.of()));
+        var administrator = new Account("Upgrade erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        UUID id = erasures.preview(administratorId, null, identities).request().getId();
+        var preview = erasures.get(id);
+        assertThat(preview.request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
+        erasures.requestErasure(id, administratorId, true);
+
+        erasures.run(id);
+
+        assertThat(erasures.get(id).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.sql("SELECT count(*) FROM result WHERE id=:id")
+                        .param("id", result.getId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM review_item WHERE review_id=:review")
+                        .param("review", scan.getId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql(
+                                "SELECT count(*) FROM review_item_copied_identity WHERE review_id=:review AND subject=:subject")
+                        .param("review", scan.getId())
+                        .param("subject", "outline-person")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    /**
+     * A preview that the earlier release made froze no selection for the copies. This release refuses it, so the
+     * erasure it admits always comes from a selection that this release made and an admin saw.
+     */
+    @Test
+    void shouldRefuseAPreviewThatTheEarlierReleaseMade() {
+        var scan = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(60));
+        var result = data.result(scenario, scan);
+        var member = membership
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        scan.getWorkspaceId(), scan.getId(), result.getPracticeId(), result.getItemId())
+                .orElseThrow();
+        String origin = "https://outline-" + UUID.randomUUID() + ".example";
+        long provider = Objects.requireNonNull(identityProviders
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.OUTLINE, origin))
+                .getId());
+        var detail = (ObjectNode) Objects.requireNonNull(member.getDetail()).deepCopy();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(ignored -> custodies.record(
+                        member,
+                        detail,
+                        new HistoryCustody(
+                                true,
+                                false,
+                                List.of(new PersonCopyIdentity("OUTLINE", origin, "outline-person", "team-1")),
+                                List.of(),
+                                List.of(Objects.requireNonNull(member.getJobId())))));
+        member.setDetail(detail);
+        membership.saveAndFlush(member);
+        var identities = List.of(new PersonIdentity(provider, "outline-person", null));
+        when(people.providers()).thenReturn(List.of(new PersonIdentityResolver.Provider(provider, "OUTLINE", origin)));
+        when(people.resolve(isNull(), anyList()))
+                .thenReturn(new PersonScope(null, identities, List.of(), List.of(), List.of(), List.of(), List.of()));
+        var administrator = new Account("Upgrade erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        UUID id = erasures.preview(administratorId, null, identities).request().getId();
+        // As the earlier release froze it: no copy store.
+        Map<String, PersonDataSelection> frozen = new HashMap<>(json.readValue(
+                jdbc.sql("SELECT selections_json FROM person_data_request WHERE id=:id")
+                        .param("id", id)
+                        .query(String.class)
+                        .single(),
+                new TypeReference<Map<String, PersonDataSelection>>() {}));
+        frozen.remove("review_item_copied_identity");
+        jdbc.sql("UPDATE person_data_request SET selections_json=:frozen WHERE id=:id")
+                .param("frozen", json.writeValueAsString(frozen))
+                .param("id", id)
+                .update();
+
+        assertThatThrownBy(() -> erasures.requestErasure(id, administratorId, true))
+                .hasMessageContaining("Create a new preview");
+        assertThat(erasures.get(id).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
+        assertThat(jdbc.sql("SELECT count(*) FROM result WHERE id=:id")
+                        .param("id", result.getId())
+                        .query(Long.class)
+                        .single())
+                .isOne();
+    }
+
+    /**
+     * Two scans that both covered files X and Y. A page that shows scan A's X and scan B's Y reads exactly those two
+     * members, never A's Y or B's X.
+     */
+    @Test
+    void shouldReadTheCustodyOfExactlyTheRequestedMembersOfOverlappingScans() {
+        var scanA = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(60));
+        var scanB = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(30));
+        var fileY = new Item();
+        fileY.setWorkspaceId(scanA.getWorkspaceId());
+        fileY.setKind(new ItemKind("scm.file"));
+        fileY.setParentId(scenario.repository().getId());
+        fileY.setPath("src/Other.java");
+        fileY.setCreatedAt(Instant.now().minusSeconds(7200));
+        items.saveAndFlush(fileY);
+        long fileX = Objects.requireNonNull(scenario.file().getId());
+        long y = Objects.requireNonNull(fileY.getId());
+        var aX = copiedBy(member(scanA, fileX), "a-x");
+        var aY = copiedBy(member(scanA, y), "a-y");
+        var bX = copiedBy(member(scanB, fileX), "b-x");
+        var bY = copiedBy(member(scanB, y), "b-y");
+
+        var read = custodies.custodies(scanA.getWorkspaceId(), List.of(aX, bY));
+
+        assertThat(read).containsOnlyKeys(ReviewItemCustody.id(aX), ReviewItemCustody.id(bY));
+        assertThat(Objects.requireNonNull(read.get(ReviewItemCustody.id(aX))).copiedIdentities())
+                .extracting(PersonCopyIdentity::subject)
+                .containsExactly("a-x");
+        assertThat(Objects.requireNonNull(read.get(ReviewItemCustody.id(bY))).copiedIdentities())
+                .extracting(PersonCopyIdentity::subject)
+                .containsExactly("b-y");
+        assertThat(custodies.custodies(scanA.getWorkspaceId(), List.of(aY, bX)))
+                .containsOnlyKeys(ReviewItemCustody.id(aY), ReviewItemCustody.id(bX));
+    }
+
+    /** The scan's member for {@code itemId}, created when the scan has none yet. */
+    private ReviewItem member(Review scan, long itemId) {
+        return membership
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        scan.getWorkspaceId(),
+                        scan.getId(),
+                        scenario.owner().practice().getId(),
+                        itemId)
+                .orElseGet(() -> membership.saveAndFlush(ReviewItem.builder()
+                        .workspaceId(scan.getWorkspaceId())
+                        .reviewId(scan.getId())
+                        .practiceId(scenario.owner().practice().getId())
+                        .itemId(itemId)
+                        .itemVersion(ScanReportTestData.version())
+                        .detail(json.createObjectNode().putNull("developerId"))
+                        .build()));
+    }
+
+    /** Records that the member's capture copied one person, named {@code subject}. */
+    private ReviewItem copiedBy(ReviewItem member, String subject) {
+        var detail = (ObjectNode) Objects.requireNonNull(member.getDetail()).deepCopy();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(ignored -> custodies.record(
+                        member,
+                        detail,
+                        new HistoryCustody(
+                                true,
+                                false,
+                                List.of(new PersonCopyIdentity("GITHUB", "https://github.com", subject, null)),
+                                List.of(),
+                                List.of())));
+        member.setDetail(detail);
+        return membership.saveAndFlush(member);
     }
 }

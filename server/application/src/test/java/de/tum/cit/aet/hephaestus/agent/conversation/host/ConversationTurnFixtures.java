@@ -31,23 +31,18 @@ final class ConversationTurnFixtures {
         return new TurnContextLoads(
                 beans.getBean(ConversationTurnAccess.class),
                 beans.getBeanProvider(ContextLoader.class),
-                beans.getBean(Clock.class),
+                beans.getBean(AgentRuns.class)::conversationDeadlineClock,
                 beans.getBean(PersonDataCopyFence.class),
                 beans.getBean(FabricLayout.class),
                 beans.getBean(AgentRunAuthority.class));
     }
 
     static ConversationTurns turns(ApplicationContext beans, AgentSandboxes sandboxes) {
-        return turns(beans, sandboxes, beans.getBean(Clock.class));
-    }
-
-    static ConversationTurns turns(ApplicationContext beans, AgentSandboxes sandboxes, Clock clock) {
         return new ConversationTurns(
                 beans.getBean(ConversationTurnAccess.class),
                 beans.getBean(ConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 beans.getBean(PersonDataCopyFence.class),
-                clock,
                 beans.getBean(AgentRuns.class),
                 beans.getBean(ConversationTurnService.class),
                 sandboxes,

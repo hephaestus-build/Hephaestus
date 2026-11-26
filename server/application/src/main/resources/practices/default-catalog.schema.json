@@ -13,7 +13,7 @@
 		},
 		"version": {
 			"description": "Version of the bundled practice catalog format.",
-			"const": "2.0.1"
+			"const": "2.1.0"
 		},
 		"criteriaPreambles": {
 			"description": "Named text that the catalog loader adds before practice criteria.",
@@ -52,7 +52,7 @@
 						"items": {
 							"type": "object",
 							"additionalProperties": false,
-							"required": ["slug", "kind", "definition"],
+							"required": ["slug", "kind", "identity", "definition"],
 							"properties": {
 								"slug": {
 									"type": "string",
@@ -61,6 +61,9 @@
 								"kind": {
 									"type": "string",
 									"pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+								},
+								"identity": {
+									"$ref": "#/$defs/identity"
 								},
 								"definition": {
 									"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -525,6 +528,81 @@
 								}
 							}
 						}
+					}
+				}
+			}
+		},
+		"retiredIdentities": {
+			"description": "Practices that the catalog no longer ships, with their item kind and identity. Each key stays reserved, and its classes still apply to the versions that workspaces keep.",
+			"type": "array",
+			"items": {
+				"description": "A practice that the catalog no longer ships: its item kind and its identity.",
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["kind", "identity"],
+				"properties": {
+					"kind": {
+						"description": "The item kind that the practice had. A retired key never moves to another kind.",
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+					},
+					"identity": {
+						"$ref": "#/$defs/identity"
+					}
+				}
+			}
+		}
+	},
+	"$defs": {
+		"identity": {
+			"description": "What the practice judges, across workspaces, renames and versions (ADR 0130). The contributor guide on practice catalog curation explains each field.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["domain", "key"],
+			"properties": {
+				"domain": {
+					"description": "The domain that the practice belongs to. local is reserved for workspace practices.",
+					"type": "string",
+					"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+					"not": {
+						"const": "local"
+					}
+				},
+				"key": {
+					"description": "The key of the practice in its domain. It never changes, also when the slug or the name changes.",
+					"type": "string",
+					"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+				},
+				"classes": {
+					"description": "Groups of review digests that judge the same thing. The first digest names the class. A digest in no group is its own class.",
+					"type": "array",
+					"items": {
+						"type": "array",
+						"minItems": 1,
+						"uniqueItems": true,
+						"items": {
+							"type": "string",
+							"pattern": "^v[0-9]{1,3}:[0-9a-f]{64}$"
+						}
+					}
+				},
+				"related": {
+					"description": "Domain-qualified keys of related catalog practices. A link for the reader, never a shared count.",
+					"type": "array",
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"
+					}
+				},
+				"formerly": {
+					"description": "Domain-qualified keys that this practice had before.",
+					"type": "array",
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"
 					}
 				}
 			}
