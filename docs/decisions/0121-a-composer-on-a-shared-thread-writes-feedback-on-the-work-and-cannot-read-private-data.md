@@ -148,7 +148,7 @@ Decision 13 keeps `REVIEW_COMPOSE` as the producer until the cutover. The cutove
 1. **Handoff.** The seal of an eligible pull or merge request review writes one work-place handoff in its transaction. The handoff is a scoped copy of the public results and the parts of the work they cite. Its key is the review. It names the producer of the copy on the work, and it never changes. `docs/contributor/practice-review-pipeline.mdx` § Work-place handoff has the rules.
 2. **Shadow.** The work-place composer renders the review on the work from the handoff alone. Its only tool is `check_package`, and it writes nothing. A fixture test compares its sessions and verdicts with `REVIEW_COMPOSE`.
 3. **One producer.** The seal of a work place under the rollout records the producer `COMPOSER`. That producer stays with the review through rollout and rollback. `REVIEW_COMPOSE` refuses the review on the work of such a review, so exactly one producer writes. A rollback changes only later seals.
-4. **Drain and delete.** When no review with the producer `LEGACY` has an open copy, a leased run or an unsettled readback, the `REVIEW_COMPOSE` run kind and its composer loop are deleted.
+4. **Drain and delete.** Wait until no review with the producer `LEGACY` has an open copy, a leased run or an unsettled readback. Then delete the `REVIEW_COMPOSE` run kind and its composer loop.
 
 Step 3 starts, and a workspace turns its rollout on, only when all of these hold on the packaged server:
 
@@ -158,15 +158,15 @@ Step 3 starts, and a workspace turns its rollout on, only when all of these hold
   - A channel lease reaches no work-place tool.
   - The public history read filters the destination before it pages.
 - **Fixture parity.** On the fixture set, the composer is no worse than `REVIEW_COMPOSE` for these cases:
-  - comments on GitHub and GitLab;
-  - text bound to an approval and its head;
-  - the required Critical and Major problems;
-  - a stale head and a stale source;
-  - the fixed renderer of graded work;
-  - the deadline and withholding;
-  - a quiet correction;
-  - Withdraw;
-  - readback after a lost response.
+  - comments on GitHub and GitLab
+  - text bound to an approval and its head
+  - the required Critical and Major problems
+  - a stale head and a stale source
+  - the fixed renderer of graded work
+  - the deadline and withholding
+  - a quiet correction
+  - Withdraw
+  - readback after a lost response
 - **Private paths.**
   - Issues reach only their private paths. So do Slack and Outline evidence.
   - Both private destinations behave as before.
@@ -179,5 +179,5 @@ Step 3 starts, and a workspace turns its rollout on, only when all of these hold
   - Leased legacy attempts drain or reconcile.
   - Provider markers and readback keep their identity.
   - An uncertain write stays blocked until it is resolved.
-- **Cost.** The extra sandbox and queue cost of one composer turn for each open pull request is measured against interactive service (ADR 0147). The first-response time of interactive turns does not regress.
+- **Cost.** Each open pull request costs one more composer turn in the sandbox and the queue. That cost is measured against interactive service (ADR 0147). The first-response time of interactive turns does not regress.
 - **Quality.** An Ichnaea composition run of the composer against `REVIEW_COMPOSE` gives no REGRESSION verdict. Ichnaea cannot prove isolation, an effect that happens once, or useful mentoring. The other lines of this gate cover the first two.

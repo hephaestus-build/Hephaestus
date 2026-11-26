@@ -792,6 +792,7 @@ It holds the review's public results and the texts that their citations name.
 It also holds the work's own captured record, the catalog entries of their practices and the copy forms of the work.
 It never holds the private brief, the developer's problem history, a private composition file, or anything that only a private or withheld candidate reached.
 A practice whose only result is private is "not reached" for the public writer.
+
 A digest covers every byte. A later feedback-mode change leaves the digest as it is, because the composer checks the mode when it writes.
 The copy expires two hours after the seal, at the copy deadline of [ADR 0122](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md), or earlier with its inputs.
 
@@ -803,6 +804,7 @@ The legacy composition renders the same turn through `OnWorkTurn`.
 The work-place composer's only tool is `check_package`.
 The check applies `ReviewOnWork.read` and the feedback text policy. Only the handoff's own quotes supply a link.
 No production code calls the composer yet.
+
 `WorkPlaceShadowComparisonTest` compares it with `review_compose` on the composition eval cases, the replay cases and the golden scenarios.
 `WorkPlaceComposerBoundaryArchTest` fails when the composer side depends, even transitively, on a private source or a write path.
 It also fails when any class other than the scope builds a handoff.
