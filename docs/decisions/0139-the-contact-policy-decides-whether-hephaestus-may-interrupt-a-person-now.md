@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Amends:** [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 (what the client shows) and rule 7 (the kinds and quiet hours)
 
 **Relates to:**
@@ -185,3 +187,9 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - W3C, [Push API](https://www.w3.org/TR/push-api/). Push messages "are delivered to a Service Worker". The worker can use the message "to update local state or display a notification". So the service worker can fetch the notice line first.
 - Slack, [Pause your Slack notifications](https://slack.com/help/articles/214908388-Pause-notifications-with-Do-Not-Disturb). A person can "set a notification schedule" for routine times. Slack keeps it on its server, so it holds on every device. Decision 9 keeps quiet hours on the server too.
+
+## Update — 2026-11-25: no unprompted contact about a goal
+
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) keeps the reason "a material change on an agreed goal" of decision 7 off, and the goal follow-up with it.
+The check-in on a goal is `AGREED` contact in the app, with no notification.
+Unsolicited contact stays off until the pilot of [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) shows the cost of an interruption.

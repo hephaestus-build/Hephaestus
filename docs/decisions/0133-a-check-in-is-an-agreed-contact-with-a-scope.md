@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Builds on:** ADR 0131 (proposed in #4862, the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
 
 **Relates to:**
@@ -129,3 +131,11 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - Oracle, [`ZonedDateTime`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/ZonedDateTime.html). In a gap, "the local date-time is adjusted to be later by the length of the gap". In an overlap, the earlier offset applies. Decision 4 follows these rules.
 - OpenAI, [Scheduled tasks in ChatGPT](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt). "A task may pause if it is inactive." Decision 14 declines this: a check-in never pauses on its own, and decision 15 asks instead.
+
+## Update — 2026-11-25: the first check-in is one date on a goal, in the app
+
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) owns the first check-in: one date on a goal, answered in the app, with no notification and no model before the answer.
+It needs no scheduler, so decisions 4, 5, 8 and 9 do not apply to it.
+Decisions 11 to 13 wait (#4992, #5005): the templates, the rhythm choice and the weekly reflection.
+Each adds a second timing channel before one check-in proves useful.
+The Slack place of decision 18 and every other check-in outside the app wait (#4938): the pilot first measures whether the in-app loop is used.

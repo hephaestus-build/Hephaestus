@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) decisions 2, 11 and 12. [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work and its update of 2026-11-09 on the review run kinds.
 
 **Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (threads, inbox items and the commit rule), [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) (private practice feedback has one reader), [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) (citations)
@@ -138,3 +140,9 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - Simon Willison, [The lethal trifecta for AI agents](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), 2025. An agent with private data, untrusted content and external communication can be tricked into "sending it to that attacker". The composer has two of the three and no private data.
 - Debenedetti et al., [Defeating Prompt Injections by Design](https://arxiv.org/abs/2503.18813), 2025. CaMeL extracts "the control and data flows from the (trusted) query". Then "the untrusted data … can never impact the program flow". Typed commands with IDs only follow that rule.
+
+## Update — 2026-11-25: the goal card comes before the Our work page
+
+Decision 14 waits (#4936): [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) shows one goal on a goal card, on the practice page and in the conversation.
+That covers the first release.
+The composer reads no goal, revisit or reflection (decision 5). [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) adds the test that proves it.

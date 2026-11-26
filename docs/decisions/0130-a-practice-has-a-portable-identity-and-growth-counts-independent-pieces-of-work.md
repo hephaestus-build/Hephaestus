@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Amends:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md) (a practice version gains an identity and a comparability class)
 
 **Builds on:** ADR 0124 (proposed in #4866, practices are the unit), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (four outcomes), [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (a workspace keeps its practices in one repository)
@@ -96,3 +98,10 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - Wood, Bruner and Ross, [The role of tutoring in problem solving](https://doi.org/10.1111/j.1469-7610.1976.tb00381.x), Journal of Child Psychology and Psychiatry, 1976. A tutor gives support where the learner needs it and withdraws it as the learner becomes able. This gives the help mode and fading.
 - Kalyuga, Ayres, Chandler and Sweller, [The expertise reversal effect](https://doi.org/10.1207/S15326985EP3801_4), Educational Psychologist, 2003. Guidance that helps a novice can hinder a more expert learner. This is why help steps back when a practice holds.
+
+## Update — 2026-11-25: growth points, help modes and fading wait
+
+Decisions 6 to 11 wait (#4956, #4985). A count of pieces of work is a poor proxy for mastery.
+The developer can ask for less help instead.
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) gives the first loop: one goal and a revisit on the next piece of work, with no count.
+Decisions 1 to 5 on the portable identity stand.

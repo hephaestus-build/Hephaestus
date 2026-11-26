@@ -153,6 +153,7 @@ The story column groups them: **A** who speaks and when, **B** who owns and read
 | 0149 | A delivery experiment draws only unprompted delivery decisions, per person and per decision. | C | #4868 |
 | 0150 | An outcome renders from rows, as an item card or a citation token. | A | #4862 |
 | 0151 | Each external write has one delivery key, and is read back, never retried blindly. | P | #4862 |
+| 0156 | A developer keeps one learning goal, and Hephaestus revisits it on their next work. It defers growth, the other check-in templates and the Our work page. | A | #5222 |
 
 Pull request #4869 holds ADRs 0136, 0143, 0144, 0148 and 0152 for after 1.0. No ADR of this set depends on them.
 
@@ -228,6 +229,7 @@ These principles come from the research above. The design keeps each one with a 
 Sam is a new engineer at Acme.
 The Acme Web workspace uses Automatic feedback, and Sam uses the browser extension on GitHub.
 This walk shows each decision that Sam makes and each wait.
+It shows the whole accepted design. The first release has one goal, its revisits and one check-in date ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)). The rhythm choice, the weekly reflection, goal-linked messages, the Slack detail level and Our work wait.
 
 | Day | Where | What happens |
 | --- | --- | --- |
@@ -330,10 +332,12 @@ The [practice pages](/user/practice-profile) exist. The design adds the item car
 ### Check-ins, goals and help settings
 
 The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the **check-in**, the **goal** and the **help settings**.
-Only the person creates a check-in: in the rhythm choice at first sign-in, in the app, or by accepting an offer.
-Hephaestus saves a goal at once with **Undo**, and follows up only when the person asks.
+Only the person creates a check-in. The first release has one: a date on a goal, answered in the app.
+A developer has one active goal in each workspace: one practice they choose, with a private note. Only their **Save** writes it.
+Code revisits the goal on the developer's next reviewed piece of work, from admitted observations ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
+
 Help settings carry no employer content, so they apply in every workspace. Hephaestus sets them from the person's own words, with no card.
-[Mentoring behavior](./mentoring-behaviour.mdx#check-ins) gives the templates, the follow-up and the fading rules.
+[Mentoring behavior](./mentoring-behaviour.mdx#goals) gives the goal rules, the surfaces and the coaching recipe.
 
 ### Memory
 
@@ -368,7 +372,7 @@ It starts only from the person's request or an agreed check-in.
 
 ### Saving, and where a card is needed
 
-A goal, a help setting or a check-in in the person's own workspace saves at once, with **Undo**.
+A help setting or a check-in in the person's own workspace saves at once, with **Undo**. In the first release, a goal saves from its form ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
 A card appears only where a decision is real, such as an offer, a transfer to another workspace, or anything public.
 A card's consequence never changes after it shows. If the facts change, the acceptance is refused.
 

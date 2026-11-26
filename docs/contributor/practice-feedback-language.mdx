@@ -60,6 +60,9 @@ State each guarantee once on a surface, in positive form, with its qualifier bes
 | Researchers | Hephaestus is the research platform for a study at TUM of whether and how AI-generated feedback improves how developers apply engineering practices. | Run a research program. Participants choose separately whether to allow research use of their data. |
 | Admins and self-hosters | Install the signed Helm chart on one Linux host or an existing Kubernetes cluster. | Follow First steps to set up sign-in, connect a repository, and assign a review model. |
 
+Learning goals come in the first release after 1.0 ([ADR 0156](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)).
+Add them to the message only in the release that ships them.
+
 Check the release's access controls before you make a privacy claim.
 The [user guide](/user/privacy) describes the access controls in the current release.
 
@@ -431,6 +434,8 @@ The planned private threads come from ADR 0120 and ADR 0131.
 These terms name parts of the accepted design in [Mentoring framework](./mentoring-framework.mdx).
 The current release does not have them.
 The last column names the ADR that decides each term. A dash marks a term that no ADR decides yet.
+A meaning that starts with "Deferred" names a part that waits. ADR 0156 gives the reason.
+
 When a part ships, its row moves to the table of its area.
 The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) owns the runtime terms of the same design.
 
@@ -449,11 +454,17 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Private check outcome** | Defined in the [review glossary](./practice-review-glossary.mdx#assessment-records). | private observation, rehearsal result | ADR 0124 |
 | **Self-report** | Defined in the [review glossary](./practice-review-glossary.mdx#assessment-records). | self-assessment, claim | ADR 0124 |
 | **Piece of work** | One item, counted once for a person and a practice, however often it is reviewed. Mirrors of one item are one piece of work. Growth counts pieces of work. | contribution, submission | ADR 0130 |
-| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder | ADR 0133 |
+| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops. The first release has one kind: a date on a goal, answered in the app. | reminder | ADR 0133, ADR 0156 |
 | **Pause until …** | The person's dated pause of the contact that Hephaestus starts. **Resume** ends it. [Mentoring behaviour](./mentoring-behaviour.mdx#controls-the-person-has) owns its effect on each kind of contact. | snooze, do not disturb | ADR 0139 |
-| **Weekly reflection** | A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary | ADR 0133 |
-| **Goal** | A personal record of what the person wants to get better at, in their own words | objective, target | ADR 0132 |
-| **Goal follow-up** | A check-in that brings one useful next step about a named goal, at most once a day | goal reminder | ADR 0133 |
+| **Weekly reflection** | Deferred. A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary | ADR 0133, ADR 0156 |
+| **Goal** | The one practice that the developer chooses to grow in, with an optional private note. A developer has at most one active goal in each workspace. | objective, target, learning objective | ADR 0132, ADR 0156 |
+| **Note** (of a goal) | The developer's own words on their goal. Only they read it. No model reads it. | description, prompt | ADR 0156 |
+| **Revisit** | A look back at the goal with the developer: after a review of their next relevant piece of work, or at the check-in date. Code writes it from rows, never a model. | follow-up, reminder | ADR 0156 |
+| **Revisit status** | What a revisit says about the newest review of the goal's practice on a piece of work. Examples are **Met on the first review** and **Could not check**. It is not an observation outcome, and it makes no claim about the goal itself. | verdict, grade, progress | ADR 0156 |
+| **Met on the first review** | The revisit status when the newest review of the goal's practice on that piece of work is Met. The first review after Save was Met too. It makes no claim about when feedback arrived. | applied before feedback, passed, success, streak | ADR 0156 |
+| **Reflection** | The developer's own account on a revisit, shown as "Your account". Only they read it, and it is never evidence. | journal, self-assessment | ADR 0156 |
+| **Goal card** | The card that shows the goal, its note, its open revisit and its check-in, on the practice page and in the conversation | goal widget, goal tracker | ADR 0156 |
+| **Goal follow-up** | Deferred. A check-in that brings one useful next step about a named goal, at most once a day | goal reminder | ADR 0133, ADR 0156 |
 | **Personal record** | A goal, lesson, preference or context of the account owner | memory (for the record), note | ADR 0132 |
 | **Noted record** | A personal record that Hephaestus wrote from the person's own messages. It stays in its workspace and is never evidence. | inferred memory, profile fact | ADR 0132 |
 | **What Hephaestus keeps in mind** | The one list of everything that Hephaestus remembers about the person, with **Forget**, **Not right** and **Keep** | memories page, profile | ADR 0132 |
@@ -462,8 +473,8 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Take along** | The person's confirmed act that transfers a person-authored record to their personal space | Keep and take along, export | ADR 0129 |
 | **Help settings** | How the person likes help: answer length, command first, language, form of address and help style. They apply in every workspace. | preferences (alone), persona | ADR 0132 |
 | **Help style** | **Give me a hint first** or **Just tell me** |  | ADR 0132 |
-| **Help mode** | What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier | ADR 0130 |
-| **Our work** | The private page of the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back. Only the account reads it, and its name makes no record readable to the workspace. | mentor page, dashboard | ADR 0121 |
+| **Help mode** | Deferred. What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier | ADR 0130, ADR 0156 |
+| **Our work** | Deferred. The private page of the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back. Only the account reads it, and its name makes no record readable to the workspace. | mentor page, dashboard | ADR 0121, ADR 0156 |
 | **History** | The section of the person's Activity page that lists, by day, what Hephaestus said, suggested, placed or notified, each with its reason and **Why**. Only the person reads it. | log, audit log, activity feed | — |
 | **Who runs this server** | The Settings entry that names the instance operator and links its statement | data controller (in UI) | ADR 0125 |
 | **Monthly practice outcome** | The one value for each practice that workspace admins see each month, from observations on the work, over at least 5 people | team score, usage report | ADR 0125 |

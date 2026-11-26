@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md)
+
 **Builds on:** ADR 0131 (proposed in #4862, the conversation and its ledger)
 
 **Relates to:** [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (a check-in is saved like a record)
@@ -126,3 +128,14 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - OpenAI, [Memory FAQ](https://help.openai.com/en/articles/8590148-memory-faq). "You can ask ChatGPT to forget a saved memory or delete it from Memory settings." ChatGPT saves memories without a card. This supports option 5 over a card for each fact.
 - GitHub, [Copilot memory](https://docs.github.com/en/copilot/concepts/agents/copilot-memory). People "can review the preferences Copilot has stored" and delete them. This supports one list with Forget. Its memories also expire without reinforcement, as a noted context record does here.
+
+## Update — 2026-11-25: the first goal has its own table, and the other kinds wait
+
+[ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) owns the first release of goals.
+A goal is a row in `goal`, not an `owned_record` of kind `GOAL`, because only a goal links a practice and has revisits.
+One active goal per workspace, with Edit, Close, Reopen and Delete.
+An unused goal asks after 90 days and goes after 180 days. This replaces decision 10 for goals.
+
+Decisions 2 to 9 wait for the other record kinds and noted records (#4924).
+Their origin proofs do not exist, and a planted note shapes every later turn.
+Decision 16 holds: a turn can offer a goal, and only the person's act saves it.
