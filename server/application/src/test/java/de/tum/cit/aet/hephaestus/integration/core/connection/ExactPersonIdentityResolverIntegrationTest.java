@@ -553,14 +553,19 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRejectConflictingOutlineWorkspaceLinksBeforeSelectingMirroredContent() {
+    void shouldRequireAnUnambiguousOutlineOwnerAtTheRequestedScope() {
         var outline = provider(IdentityProviderType.OUTLINE);
         var first = accounts.saveAndFlush(new Account("First Outline person"));
         var second = accounts.saveAndFlush(new Account("Second Outline person"));
         String subject = UUID.randomUUID().toString();
         link(first, outline, subject, "outline-workspace-a");
         link(second, outline, subject, "outline-workspace-b");
-        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(outline, subject, "outline-workspace-a"))))
+        var firstTeam = identity(outline, subject, "outline-workspace-a");
+        var scope = resolver.resolve(null, List.of(firstTeam));
+        assertThat(scope.accountId()).isEqualTo(first.getId());
+        assertThat(scope.identities()).containsExactly(firstTeam);
+        assertThat(resolver.resolve(scope.accountId(), scope.identities())).isEqualTo(scope);
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(outline, subject, null))))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("409");
     }

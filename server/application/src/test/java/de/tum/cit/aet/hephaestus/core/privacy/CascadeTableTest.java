@@ -205,7 +205,8 @@ class CascadeTableTest extends BaseUnitTest {
                     List.of(
                             COPY_ERASURE_PROOF,
                             PERSON_ERASURE + "shouldEraseTheToolResultsOfTurnsThatRanWhileTheErasureFailedAndResumed",
-                            PERSON_ERASURE + "shouldDeleteTheSummaryAndSearchResultOfTheErasedDevelopersConversation"),
+                            PERSON_ERASURE + "shouldDeleteTheSummaryAndSearchResultOfTheErasedDevelopersConversation",
+                            "core.privacy.PersonOutlineCopiesIntegrationTest#outlineErasureStateTable"),
                     "The erasure redacts every copying tool result of the person's workspaces, with the summaries that"
                             + " cover one, and deletes the person's own conversations. Gap, owned by #4979: a result"
                             + " that the Slack copy retention erased earlier leaves its answer, and a later summary over"
@@ -295,7 +296,8 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.KEEP,
                     List.of(
                             PERSON_ERASURE + "shouldEraseTheToolResultsOfTurnsThatRanWhileTheErasureFailedAndResumed",
-                            PERSON_ERASURE + "shouldEraseAnAnswerThatUsesEarlierContextWithoutAnotherToolCall"),
+                            PERSON_ERASURE + "shouldEraseAnAnswerThatUsesEarlierContextWithoutAnotherToolCall",
+                            "core.privacy.PersonOutlineCopiesIntegrationTest#outlineErasureStateTable"),
                     "The answers of turns that read the person's data are erased. Gap, owned by #4979: a later answer"
                             + " that repeats an erased feedback copy without reading it again stays, until its answer"
                             + " basis makes it stale."),

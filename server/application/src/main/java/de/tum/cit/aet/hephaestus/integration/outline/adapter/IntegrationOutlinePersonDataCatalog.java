@@ -3,9 +3,13 @@ package de.tum.cit.aet.hephaestus.integration.outline.adapter;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlinePersonTeam;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -22,20 +26,24 @@ import tools.jackson.databind.ObjectMapper;
     "outline_document_collaborator"
 })
 public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
+    private static final String DOCUMENT_AUTHOR_SCOPE = """
+        EXISTS (SELECT 1
+          FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
+          JOIN identity_provider p ON i."providerId"=p.id AND p.type='OUTLINE'
+          JOIN connection c ON c.outline_origin=p.outline_origin AND c.kind='OUTLINE'
+          WHERE c.id=t.connection_id AND c.workspace_id=t.workspace_id
+            AND COALESCE(i."teamId",'')""" + OutlinePersonTeam.SQL_MATCH;
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
+                documentStore(
                         "outline_document",
-                        "outline_document",
-                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" JOIN connection c ON c.config->>'serverUrl'=p.server_url WHERE p.type='OUTLINE' AND c.id=t.connection_id AND c.workspace_id=t.workspace_id AND COALESCE(i.\"teamId\",'')=COALESCE(c.instance_key,'') AND i.subject=t.created_by_subject)",
+                        DOCUMENT_AUTHOR_SCOPE + " AND t.created_by_subject=i.subject)",
                         "id,workspace_id,connection_id,document_id,collection_id,collection_slug,parent_document_id,title,slug,body_markdown,content_hash,outline_updated_at,deleted_at,last_materialized_at,created_at,updated_at,created_by_subject,created_by_name,outline_created_at,body_evicted_at,archived_at,version",
-                        "id",
                         "created_by_subject=NULL,created_by_name=NULL,title=NULL,slug=NULL,body_markdown=NULL,content_hash=NULL",
                         300),
                 new JdbcPersonDataStore(
@@ -48,26 +56,34 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                         "id",
                         "",
                         0),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
+                documentStore(
                         "outline_document_editor",
-                        "outline_document",
-                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" JOIN connection c ON c.config->>'serverUrl'=p.server_url WHERE p.type='OUTLINE' AND c.id=t.connection_id AND c.workspace_id=t.workspace_id AND COALESCE(i.\"teamId\",'')=COALESCE(c.instance_key,'') AND i.subject=t.updated_by_subject)",
+                        DOCUMENT_AUTHOR_SCOPE + " AND t.updated_by_subject=i.subject)",
                         "id,workspace_id,connection_id,document_id,updated_by_subject,updated_by_name,outline_updated_at",
-                        "id",
                         "updated_by_subject=NULL,updated_by_name=NULL",
                         280),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
+                documentStore(
                         "outline_document_content",
-                        "outline_document",
                         "t.id = ANY(:documents)",
                         "id,workspace_id,connection_id,document_id,title,slug,body_markdown,content_hash,outline_updated_at,outline_created_at",
-                        "id",
                         "title=NULL,slug=NULL,body_markdown=NULL,content_hash=NULL",
                         270),
                 new OutlineCollaboratorPersonDataContributor(jdbc, mapper));
+    }
+
+    private JdbcPersonDataStore documentStore(
+            String store, String predicate, String columns, String redact, int order) {
+        return new JdbcPersonDataStore(
+                jdbc, mapper, store, "outline_document", predicate, columns, "id", redact, order) {
+            @Override
+            public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
+                requireRows(selection, select(frozenScope));
+            }
+        };
+    }
+
+    static void requireRows(PersonDataSelection frozen, PersonDataSelection current) {
+        if (!Set.copyOf(frozen.rows()).containsAll(current.rows()))
+            throw new IllegalStateException("The frozen erasure is missing Outline person data rows");
     }
 }

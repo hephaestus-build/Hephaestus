@@ -574,7 +574,7 @@ public class ConversationTurnService {
      *
      * @throws ConversationLeaseLostException when the attempt no longer holds the run
      */
-    private ConversationTurn held(long workspaceId, UUID turnId, int epoch, UUID runId) {
+    ConversationTurn held(long workspaceId, UUID turnId, int epoch, UUID runId) {
         ConversationTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new ConversationLeaseLostException(turnId, epoch));
         if ((turn.getStatus() != ConversationTurn.Status.RUNNING && turn.getStatus() != ConversationTurn.Status.STOPPED)
