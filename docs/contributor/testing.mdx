@@ -339,7 +339,9 @@ The floors are set by hand: Vitest's `autoUpdate` would rewrite the config on ev
 
 A flaky test fails and then passes on the same commit.
 CI does not retry Gradle or Vitest tests.
-Playwright retries a failed test once to record a trace, and then it fails the run as flaky.
+Playwright keeps the trace of a failed attempt and retries the test once.
+Then it fails the run as flaky.
+
 You can rerun a failed job, but the rerun does not hide the flake.
 The weekly [flaky test report](ci-cd.mdx#flaky-tests) lists every job that passed only on a rerun.
 Maintainers read it each week.
