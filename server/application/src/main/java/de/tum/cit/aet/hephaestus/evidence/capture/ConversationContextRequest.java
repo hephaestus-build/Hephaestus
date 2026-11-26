@@ -11,7 +11,8 @@ public record ConversationContextRequest(
         UUID threadId,
         @Nullable UUID stimulusEntryId,
         BiConsumer<String, String> outlineSource) {
-    public ConversationContextRequest(long workspaceId, long developerId, UUID threadId, @Nullable UUID stimulusEntryId) {
+    public ConversationContextRequest(
+            long workspaceId, long developerId, UUID threadId, @Nullable UUID stimulusEntryId) {
         this(workspaceId, developerId, threadId, stimulusEntryId, ConversationContextRequest::ignoreSource);
     }
 

@@ -71,8 +71,10 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                 new OutlineCollaboratorPersonDataContributor(jdbc, mapper));
     }
 
-    private JdbcPersonDataStore documentStore(String store, String predicate, String columns, String redact, int order) {
-        return new JdbcPersonDataStore(jdbc, mapper, store, "outline_document", predicate, columns, "id", redact, order) {
+    private JdbcPersonDataStore documentStore(
+            String store, String predicate, String columns, String redact, int order) {
+        return new JdbcPersonDataStore(
+                jdbc, mapper, store, "outline_document", predicate, columns, "id", redact, order) {
             @Override
             public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
                 requireRows(selection, select(frozenScope));

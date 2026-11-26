@@ -183,8 +183,8 @@ public class OutlineDocumentProjector implements DocumentProjection {
                 doc.getLastMaterializedAt(),
                 doc.getDocumentId(),
                 url,
-                source.flatMap(connection -> Optional.ofNullable(connection.getOutlineOrigin()).map(
-                                origin -> new ProjectedDocument.OutlineSource(
+                source.flatMap(connection -> Optional.ofNullable(connection.getOutlineOrigin())
+                                .map(origin -> new ProjectedDocument.OutlineSource(
                                         origin, Objects.requireNonNullElse(connection.getInstanceKey(), ""))))
                         .orElse(null));
     }

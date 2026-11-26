@@ -321,8 +321,14 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
 
         Map<String, byte[]> files = new LinkedHashMap<>();
         var sources = new ArrayList<ProjectedDocument.OutlineSource>();
-        provider.contribute(new ConversationContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), null,
-                (origin, team) -> sources.add(new ProjectedDocument.OutlineSource(origin, team))), files);
+        provider.contribute(
+                new ConversationContextRequest(
+                        WORKSPACE_ID,
+                        7L,
+                        UUID.randomUUID(),
+                        null,
+                        (origin, team) -> sources.add(new ProjectedDocument.OutlineSource(origin, team))),
+                files);
 
         assertThat(sources).containsExactly(source);
         JsonNode root = objectMapper

@@ -289,9 +289,14 @@ public class ConversationTurn implements Persistable<UUID> {
     }
 
     void recordOutlineContext(Collection<OutlinePersonCopyScope.Source> sources) {
-        ArrayNode keys = outlineContext instanceof ArrayNode recorded ? recorded.deepCopy() : JsonNodeFactory.instance.arrayNode();
+        ArrayNode keys = outlineContext instanceof ArrayNode recorded
+                ? recorded.deepCopy()
+                : JsonNodeFactory.instance.arrayNode();
         for (var source : sources) {
-            var key = JsonNodeFactory.instance.objectNode().put("origin", source.origin()).put("team", source.team());
+            var key = JsonNodeFactory.instance
+                    .objectNode()
+                    .put("origin", source.origin())
+                    .put("team", source.team());
             if (keys.valueStream().noneMatch(key::equals)) keys.add(key);
         }
         outlineContext = keys;

@@ -89,8 +89,12 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
 
     @Override
     public PersonDataSelection select(PersonScope person) {
-        boolean onlyOutline = outline.filter(source -> source.onlyOutline(person)).isPresent();
-        Set<Long> broad = onlyOutline ? Set.of() : new TreeSet<>(jdbc.query("""
+        boolean onlyOutline =
+                outline.filter(source -> source.onlyOutline(person)).isPresent();
+        Set<Long> broad = onlyOutline
+                ? Set.of()
+                : new TreeSet<>(jdbc.query(
+                        """
                 SELECT person.workspace_id FROM (%s) person
                 WHERE person.workspace_id IS NOT NULL
                 """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1)));
@@ -169,8 +173,8 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     }
 
     private List<OutlinePersonCopyScope.Source> outlineSources(PersonDataSelection.RowKey row) {
-        return Objects.requireNonNull(mapper.readValue(
-                row.columns().getOrDefault("outline_sources", "[]"), OUTLINE_SOURCES));
+        return Objects.requireNonNull(
+                mapper.readValue(row.columns().getOrDefault("outline_sources", "[]"), OUTLINE_SOURCES));
     }
 
     private void requireCopyProvenance(long workspaceId, PersonScope scope) {
@@ -183,7 +187,11 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                     AND e.account_id<>:erasedAccountId
                     AND t.outline_context IS NULL)
                 """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
-                Map.of("workspaceId", workspaceId, "erasedAccountId", Objects.requireNonNullElse(scope.accountId(), -1L)),
+                Map.of(
+                        "workspaceId",
+                        workspaceId,
+                        "erasedAccountId",
+                        Objects.requireNonNullElse(scope.accountId(), -1L)),
                 Boolean.class);
         if (Boolean.TRUE.equals(unknown))
             throw new IllegalStateException("Outline conversation copies have no recorded source");
@@ -197,7 +205,8 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
             var sources = outlineSources(row);
             if (!sources.isEmpty()) {
                 requireCopyProvenance(workspaceId, frozenScope);
-                var affected = jdbc.query("""
+                var affected = jdbc.query(
+                        """
                     SELECT e.id FROM conversation_entry e
                     JOIN conversation_turn t ON t.id=e.turn_id AND t.workspace_id=e.workspace_id
                     WHERE e.workspace_id=:workspaceId AND e.redacted_at IS NULL
@@ -210,7 +219,8 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                 redaction.redact(affected);
             }
             if (Boolean.parseBoolean(row.columns().getOrDefault("broad", "true"))) {
-                var toolResults = jdbc.query("""
+                var toolResults = jdbc.query(
+                        """
                     SELECT e.id FROM conversation_entry e
                     LEFT JOIN conversation_turn t ON t.id=e.turn_id AND t.workspace_id=e.workspace_id
                     WHERE e.workspace_id=:workspaceId AND e.redacted_at IS NULL

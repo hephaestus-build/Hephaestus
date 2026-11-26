@@ -260,7 +260,10 @@ public class ConversationTurnContexts {
     private Map<String, byte[]> build(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
         var outlineSources = new LinkedHashSet<OutlinePersonCopyScope.Source>();
         Map<String, byte[]> built = contextBuilder.build(new ConversationContextRequest(
-                turn.workspaceId(), turn.accountId(), turn.conversationId(), questionEntryId,
+                turn.workspaceId(),
+                turn.accountId(),
+                turn.conversationId(),
+                questionEntryId,
                 (origin, team) -> outlineSources.add(new OutlinePersonCopyScope.Source(origin, team))));
         turns.recordOutlineContext(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), outlineSources);
         Map<String, byte[]> local = new LinkedHashMap<>();

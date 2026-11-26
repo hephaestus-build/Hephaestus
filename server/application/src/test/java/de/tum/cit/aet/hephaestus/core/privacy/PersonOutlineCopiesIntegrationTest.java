@@ -156,9 +156,14 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     @Test
     void upgradeBackfillsCanonicalKeysForStoredConnectionsAndAliases() throws Exception {
         var fixture = fixture(true);
-        var alias = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.OUTLINE, "HTTPS://OUTLINE-INSTANCE.EXAMPLE.TEST:443/"));
-        jdbc.update("UPDATE identity_provider SET outline_origin=NULL WHERE id IN (?,?)", fixture.provider(), alias.getId());
-        jdbc.update("UPDATE connection SET outline_origin=NULL WHERE workspace_id=?",
+        var alias = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.OUTLINE, "HTTPS://OUTLINE-INSTANCE.EXAMPLE.TEST:443/"));
+        jdbc.update(
+                "UPDATE identity_provider SET outline_origin=NULL WHERE id IN (?,?)",
+                fixture.provider(),
+                alias.getId());
+        jdbc.update(
+                "UPDATE connection SET outline_origin=NULL WHERE workspace_id=?",
                 fixture.first().document().getWorkspaceId());
         try (var connection = dataSource.getConnection()) {
             var database = new PostgresDatabase();
@@ -166,7 +171,8 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
             new OutlineOriginBackfillChange().execute(database);
             connection.commit();
         }
-        assertThat(jdbc.queryForObject("SELECT outline_origin FROM identity_provider WHERE id=?", String.class, alias.getId()))
+        assertThat(jdbc.queryForObject(
+                        "SELECT outline_origin FROM identity_provider WHERE id=?", String.class, alias.getId()))
                 .isEqualTo(ORIGIN);
         UUID request = admit(fixture, Key.INSTANCE);
         service.run(request);
@@ -194,7 +200,10 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
             service.run(request);
         }
         assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
-        assertThat(documents.findById(fixture.first().document().getId()).orElseThrow().getBodyMarkdown())
+        assertThat(documents
+                        .findById(fixture.first().document().getId())
+                        .orElseThrow()
+                        .getBodyMarkdown())
                 .isEqualTo(COPIED_WORDS);
     }
 
@@ -214,8 +223,10 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     @Test
     void unknownCopyProvenanceStopsBeforeRedactingEitherInstance() {
         var fixture = fixture(true);
-        jdbc.update("UPDATE conversation_turn SET outline_context=NULL WHERE id=? AND workspace_id=?",
-                fixture.control().turnId(), fixture.control().document().getWorkspaceId());
+        jdbc.update(
+                "UPDATE conversation_turn SET outline_context=NULL WHERE id=? AND workspace_id=?",
+                fixture.control().turnId(),
+                fixture.control().document().getWorkspaceId());
         UUID request = admit(fixture, Key.INSTANCE);
         service.run(request);
         assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
@@ -247,9 +258,12 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     private void assertPreserved(Target target, Example example) {
         switch (target) {
-            case DOCUMENT -> assertThat(documents.findByWorkspaceIdAndIdForProjection(
-                            example.document().getWorkspaceId(), example.document().getId()))
-                    .hasValueSatisfying(document -> assertThat(document.getBodyMarkdown()).isEqualTo(COPIED_WORDS));
+            case DOCUMENT ->
+                assertThat(documents.findByWorkspaceIdAndIdForProjection(
+                                example.document().getWorkspaceId(),
+                                example.document().getId()))
+                        .hasValueSatisfying(document ->
+                                assertThat(document.getBodyMarkdown()).isEqualTo(COPIED_WORDS));
             case ITEM_DIRECTORY -> assertDirectoryTitle(example, true);
             case TOOL_RESULT -> assertCopy(example, example.toolResult(), false);
             case ANSWER -> assertCopy(example, example.answer(), false);
@@ -267,11 +281,11 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertDirectoryTitle(Example example, boolean visible) {
-        var found = itemDirectory.list(example.document().getWorkspaceId(), "docs.document", Pageable.unpaged())
-                .stream()
-                .filter(item -> item.id().equals(Long.toString(example.itemId())))
-                .findFirst()
-                .orElseThrow();
+        var found =
+                itemDirectory.list(example.document().getWorkspaceId(), "docs.document", Pageable.unpaged()).stream()
+                        .filter(item -> item.id().equals(Long.toString(example.itemId())))
+                        .findFirst()
+                        .orElseThrow();
         assertThat(found.title()).isEqualTo(visible ? COPIED_WORDS : null);
     }
 
@@ -284,7 +298,8 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertCopy(Example example, UUID id, boolean erased) {
-        var entry = entries.findByIdAndWorkspaceId(id, example.document().getWorkspaceId()).orElseThrow();
+        var entry = entries.findByIdAndWorkspaceId(id, example.document().getWorkspaceId())
+                .orElseThrow();
         assertThat(entry.isRedacted()).isEqualTo(erased);
         if (erased) {
             assertThat(entry.getText()).isEmpty();
@@ -297,7 +312,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     private UUID admit(Fixture fixture, Key key) {
         var identity = new PersonIdentity(fixture.provider(), fixture.subject(), key == Key.TEAM ? TEAM_ONE : null);
-        UUID request = service.preview(fixture.admin(), null, List.of(identity)).request().getId();
+        UUID request = service.preview(fixture.admin(), null, List.of(identity))
+                .request()
+                .getId();
         service.requestErasure(request, fixture.admin(), true);
         return request;
     }
@@ -337,7 +354,10 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     private Example example(
             Workspace workspace, String url, String team, String subject, long accountId, boolean withCopies) {
         var connection = new Connection(
-                workspace, IntegrationKind.OUTLINE, team, new ConnectionConfig.OutlineConfig(url, null, null, Set.of()));
+                workspace,
+                IntegrationKind.OUTLINE,
+                team,
+                new ConnectionConfig.OutlineConfig(url, null, null, Set.of()));
         ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connections.saveAndFlush(connection);
         var document = new OutlineDocument();
@@ -363,30 +383,60 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
             OutlineDocument document, Connection connection, long accountId, long itemId, boolean withCopies) {
         long workspaceId = document.getWorkspaceId();
         var conversation = conversations.findOrCreateMain(workspaceId, accountId);
-        turns.submit(workspaceId, conversation.getId(), new ConversationTurnService.Question(
-                ConversationTurn.Surface.APP, "Read the document", UUID.randomUUID().toString(), null, null));
+        turns.submit(
+                workspaceId,
+                conversation.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        "Read the document",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
         var turn = claims.claimNext().orElseThrow();
         UUID run = Objects.requireNonNull(turn.getRunId());
         if (withCopies) {
             var source = new OutlinePersonCopyScope.Source(
-                    Objects.requireNonNull(connection.getOutlineOrigin()), Objects.requireNonNull(connection.getInstanceKey()));
+                    Objects.requireNonNull(connection.getOutlineOrigin()),
+                    Objects.requireNonNull(connection.getInstanceKey()));
             turns.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), run, List.of(source));
         }
         var tool = ConversationLedgerFixtures.toolResult(
                 ConversationLedgerFixtures.piId(), "copy", "read", COPIED_WORDS, false);
         var reply = ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), COPIED_WORDS);
-        turns.end(workspaceId, turn.getId(), turn.getAttempt(), run,
+        turns.end(
+                workspaceId,
+                turn.getId(),
+                turn.getAttempt(),
+                run,
                 new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(tool, reply), null, null));
-        UUID result = entries.findByWorkspaceIdAndTurnIdAndKind(workspaceId, turn.getId(), ConversationEntry.Kind.TOOL_RESULT)
-                .orElseThrow().getId();
-        UUID answer = entries.findByWorkspaceIdAndTurnIdAndKind(workspaceId, turn.getId(), ConversationEntry.Kind.ANSWER)
-                .orElseThrow().getId();
-        var quoteText = JsonNodeFactory.instance.objectNode().put("entryId", answer.toString()).put("excerpt", COPIED_WORDS);
-        var quote = conversationEntries.append(workspaceId, conversation.getId(), new ConversationEntryDraft(
-                ConversationEntry.Kind.TOOL_RESULT, ConversationEntry.Surface.APP, "",
-                ConversationLedgerFixtures.toolResult(
-                        ConversationLedgerFixtures.piId(), "quote", "search_conversation", quoteText.toString(), false),
-                null, null, null));
+        UUID result = entries.findByWorkspaceIdAndTurnIdAndKind(
+                        workspaceId, turn.getId(), ConversationEntry.Kind.TOOL_RESULT)
+                .orElseThrow()
+                .getId();
+        UUID answer = entries.findByWorkspaceIdAndTurnIdAndKind(
+                        workspaceId, turn.getId(), ConversationEntry.Kind.ANSWER)
+                .orElseThrow()
+                .getId();
+        var quoteText = JsonNodeFactory.instance
+                .objectNode()
+                .put("entryId", answer.toString())
+                .put("excerpt", COPIED_WORDS);
+        var quote = conversationEntries.append(
+                workspaceId,
+                conversation.getId(),
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.TOOL_RESULT,
+                        ConversationEntry.Surface.APP,
+                        "",
+                        ConversationLedgerFixtures.toolResult(
+                                ConversationLedgerFixtures.piId(),
+                                "quote",
+                                "search_conversation",
+                                quoteText.toString(),
+                                false),
+                        null,
+                        null,
+                        null));
         return new Example(document, itemId, turn.getId(), result, answer, quote.getId());
     }
 

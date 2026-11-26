@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.time.Clock;
 import java.time.Instant;

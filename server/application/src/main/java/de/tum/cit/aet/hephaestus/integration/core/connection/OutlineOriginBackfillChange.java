@@ -32,8 +32,10 @@ public final class OutlineOriginBackfillChange implements CustomTaskChange {
     private record StoredUrl(long id, String origin) {}
 
     private static void fill(JdbcTemplate jdbc, String select, String update) {
-        var keys = jdbc.query(select, (rs, index) ->
-                new StoredUrl(rs.getLong(1), ScmOrigin.of(rs.getString(2)).orElse("")));
+        var keys = jdbc.query(
+                select,
+                (rs, index) -> new StoredUrl(
+                        rs.getLong(1), ScmOrigin.of(rs.getString(2)).orElse("")));
         for (var key : keys) {
             if (!key.origin().isEmpty()) jdbc.update(update, key.origin(), key.id());
         }

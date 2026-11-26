@@ -23,8 +23,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-public class OutlinePersonSourceIdentityContributor
-        implements PersonSourceIdentityContributor, OutlinePersonCopyScope {
+public class OutlinePersonSourceIdentityContributor implements PersonSourceIdentityContributor, OutlinePersonCopyScope {
     private final OutlineDocumentRepository repository;
     private final IdentityProviderLookup providers;
     // Suppression collects source contributors; initialize permission only for exact attribution reads.
@@ -59,10 +58,12 @@ public class OutlinePersonSourceIdentityContributor
 
     @Override
     public boolean onlyOutline(PersonScope person) {
-        return !person.identities().isEmpty() && person.identities().stream()
-                .allMatch(identity -> providers.findById(identity.providerId())
-                        .filter(provider -> provider.kind() == IntegrationKind.OUTLINE)
-                        .isPresent());
+        return !person.identities().isEmpty()
+                && person.identities().stream()
+                        .allMatch(identity -> providers
+                                .findById(identity.providerId())
+                                .filter(provider -> provider.kind() == IntegrationKind.OUTLINE)
+                                .isPresent());
     }
 
     @Override
