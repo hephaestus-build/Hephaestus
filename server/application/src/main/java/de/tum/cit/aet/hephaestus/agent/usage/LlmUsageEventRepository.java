@@ -66,13 +66,46 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
                     + " m.connection_id AND c.workspace_id = m.workspace_id WHERE m.workspace_id = w.id"
                     + " AND m.enabled AND c.enabled)";
 
+    /**
+     * Deletes rows older than the cutoff. A personal row of this or the previous UTC month stays even then: the personal
+     * purse sums the month from these rows, so deleting one would reopen spent capacity.
+     */
     @WorkspaceAgnostic("Retention removes expired usage rows across all workspaces")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
             value = "DELETE FROM llm_usage_event WHERE id IN (  SELECT e.id FROM llm_usage_event e"
-                    + " WHERE e.occurred_at < :cutoff LIMIT :batchSize)",
+                    + " WHERE e.occurred_at < :cutoff AND NOT (e.source_type = 'PERSONAL_CONVERSATION'"
+                    + " AND e.occurred_at >= (date_trunc('month', timezone('UTC', now())) - interval '1 month')"
+                    + " AT TIME ZONE 'UTC') LIMIT :batchSize)",
             nativeQuery = true)
     int deleteExpired(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+
+    /**
+     * The personal purse in the window {@code [from, to)}: what all personal calls count against its shared cap, what
+     * this account's calls count against its share, and whether any personal call has a cost that nobody knows. Each
+     * total is {@link #SPEND}, so an open or unmeasured call counts at its upper bound. A detached row of an erased
+     * account counts in the shared total only.
+     */
+    @WorkspaceAgnostic("The personal purse belongs to the instance and charges accounts with no workspace")
+    @Query(
+            value = "SELECT COALESCE(SUM(" + SPEND + "), 0) AS shared,"
+                    + " COALESCE(SUM(" + SPEND + ") FILTER (WHERE e.payer_account_id = :accountId), 0) AS account,"
+                    + " COALESCE(BOOL_OR(" + UNKNOWN + "), false) AS unknown"
+                    + " FROM llm_usage_event e WHERE e.source_type = 'PERSONAL_CONVERSATION'"
+                    + " AND e.workspace_id IS NULL AND e.funding_source = 'INSTANCE'"
+                    + " AND e.occurred_at >= :from AND e.occurred_at < :to",
+            nativeQuery = true)
+    PersonalSpend personalSpend(
+            @Param("accountId") long accountId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /** One row of {@link #personalSpend}. */
+    interface PersonalSpend {
+        BigDecimal getShared();
+
+        BigDecimal getAccount();
+
+        boolean getUnknown();
+    }
 
     @WorkspaceAgnostic("Repricing reads the frozen global catalog identity of one instance-funded call")
     @Query(
