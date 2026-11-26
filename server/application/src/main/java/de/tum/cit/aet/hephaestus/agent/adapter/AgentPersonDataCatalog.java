@@ -115,9 +115,9 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                 + " mc.account_id=:account)) OR (t.source_type='PRODUCT_FEEDBACK_DRAFT'"
                                 + " AND t.workspace_id IS NULL AND t.source_id IN"
                                 + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))",
-                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
+                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,payer_account_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
                         "source_id,workspace_id",
-                        "review_id=NULL",
+                        "review_id=NULL, payer_account_id=NULL",
                         -85),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -275,13 +275,18 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     }
 
     /**
-     * The ledger rows of the person's jobs and turns, selected by their source: a job or a turn, each with its own
-     * workspace. The person's turns are selected also before they have a row, because a call of a turn that runs may
-     * open after the preview. The erasure detaches every row of each selected source from it: all of them take one new
-     * source id together and lose their review, so the calls of one attempt still count as one run. Each row keeps its
-     * tokens, cost and date.
+     * The ledger rows of the person's jobs, turns, report drafts and personal conversations, selected by their source:
+     * a job or a turn, each with its own workspace, or a draft or a personal attempt with none. The person's turns are
+     * selected also before they have a row, because a call of a turn that runs may open after the preview. A personal
+     * call opens only under the person-data write fence, so an erasure that holds it sees every one. The erasure
+     * detaches every row of each selected source from it: all of them take one new source id together and lose their
+     * review and payer, so the calls of one attempt still count as one run and the purse that paid keeps their cost.
+     * Each row keeps its tokens, cost and date.
      */
     private static final class LedgerStore extends JdbcPersonDataStore {
+        /** The key of a selected personal call: the row's id, because its source names the person's attempt. */
+        private static final String PERSONAL_CALL = "personal_call_id";
+
         private final NamedParameterJdbcTemplate jdbc;
         private final ObjectMapper mapper;
         private final String predicate;
@@ -304,7 +309,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
 
         @Override
         public PersonDataSelection select(PersonScope scope) {
-            return new PersonDataSelection(jdbc.query(
+            var sources = new PersonDataSelection(jdbc.query(
                     "SELECT DISTINCT s.source_id::text AS source_id, s.workspace_id::text AS workspace_id FROM ("
                             + "SELECT t.source_id, t.workspace_id FROM llm_usage_event t WHERE " + predicate
                             + " UNION SELECT mt.id, mt.workspace_id FROM conversation_turn mt JOIN conversation mc"
@@ -320,12 +325,45 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                         ? Map.of("source_id", source)
                                         : Map.of("source_id", source, "workspace_id", workspace));
                     }));
+            Long account = scope.accountId();
+            if (account == null) return sources;
+            // A personal call is selected on its own, by its id: its source is the attempt, which only this row names.
+            List<PersonDataSelection.RowKey> rows = new ArrayList<>(sources.rows());
+            rows.addAll(jdbc.query(
+                    "SELECT t.id::text FROM llm_usage_event t WHERE t.source_type = 'PERSONAL_CONVERSATION'"
+                            + " AND t.payer_account_id = :account ORDER BY t.id",
+                    Map.of("account", account),
+                    (rs, row) -> new PersonDataSelection.RowKey(
+                            Map.of(PERSONAL_CALL, Objects.requireNonNull(rs.getString(1))))));
+            return new PersonDataSelection(rows);
         }
 
-        /** One entry for each selected source, with the rows of its calls, also when it has none yet. */
+        /**
+         * One entry for each selected source, with the rows of its calls, also when it has none yet, and one entry for
+         * each personal call with its month, model, cost and state only: no id links it to the attempt.
+         */
         @Override
         public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
-            if (selection.rows().isEmpty()) return List.of();
+            List<JsonNode> exported = new ArrayList<>(exportSources(selection));
+            List<UUID> calls = personalCalls(selection);
+            if (!calls.isEmpty()) {
+                exported.addAll(jdbc.query(
+                        """
+                        SELECT jsonb_build_object('month', to_char(t.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM'),
+                            'model', t.model, 'cost_usd', t.cost_usd, 'cost_bound_usd', t.cost_bound_usd,
+                            'call_state', t.call_state, 'pricing_state', t.pricing_state)::text
+                        FROM llm_usage_event t
+                        WHERE t.id = ANY(:calls) AND t.source_type = 'PERSONAL_CONVERSATION'
+                        ORDER BY t.occurred_at, t.id
+                        """,
+                        Map.of("calls", new SqlArrayValue("uuid", calls.toArray())),
+                        (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1)))));
+            }
+            return exported;
+        }
+
+        private List<JsonNode> exportSources(PersonDataSelection selection) {
+            if (sourceKeys(selection).isEmpty()) return List.of();
             return jdbc.query(
                     """
                     SELECT jsonb_build_object('source_id', s.source_id, 'workspace_id', s.workspace_id, 'calls',
@@ -338,34 +376,66 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))));
         }
 
+        private List<PersonDataSelection.RowKey> sourceKeys(PersonDataSelection selection) {
+            return selection.rows().stream()
+                    .filter(row -> !row.columns().containsKey(PERSONAL_CALL))
+                    .toList();
+        }
+
+        private static List<UUID> personalCalls(PersonDataSelection selection) {
+            return selection.rows().stream()
+                    .map(row -> row.columns().get(PERSONAL_CALL))
+                    .filter(Objects::nonNull)
+                    .map(UUID::fromString)
+                    .toList();
+        }
+
         private String keys(PersonDataSelection selection) {
-            return mapper.writeValueAsString(selection.rows().stream()
+            return mapper.writeValueAsString(sourceKeys(selection).stream()
                     .map(PersonDataSelection.RowKey::columns)
                     .toList());
         }
 
-        /** The unit is the selected source, so the receipt counts what the preview counted. */
+        /**
+         * The unit is the selected source or personal call, so the receipt counts what the preview counted. A personal
+         * call loses its payer and its source, and an open one settles at its bound, so the purse keeps counting it.
+         */
         @Override
         public long erase(PersonDataSelection selection, PersonScope frozenScope) {
             if (selection.rows().isEmpty()) return 0;
-            jdbc.update("""
-                    WITH detached AS (
-                        SELECT s.workspace_id, s.source_id, gen_random_uuid() AS detached
-                        FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint))
-                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL,
-                        call_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
-                                          THEN 'SETTLED' ELSE e.call_state END,
-                        measurement_verification = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
-                                                        THEN 'UNVERIFIABLE' ELSE e.measurement_verification END,
-                        pricing_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
-                                             THEN 'UNPRICED' ELSE e.pricing_state END,
-                        cost_usd = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
-                                        THEN NULL ELSE e.cost_usd END,
-                        unreported_calls = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
-                                                THEN 1 ELSE e.unreported_calls END
-                    FROM detached d
-                    WHERE e.workspace_id IS NOT DISTINCT FROM d.workspace_id AND e.source_id = d.source_id
-                    """, Map.of("keys", keys(selection)));
+            if (!sourceKeys(selection).isEmpty()) {
+                jdbc.update("""
+                        WITH detached AS (
+                            SELECT s.workspace_id, s.source_id, gen_random_uuid() AS detached
+                            FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint))
+                        UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL,
+                            call_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                              THEN 'SETTLED' ELSE e.call_state END,
+                            measurement_verification = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                                            THEN 'UNVERIFIABLE' ELSE e.measurement_verification END,
+                            pricing_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                                 THEN 'UNPRICED' ELSE e.pricing_state END,
+                            cost_usd = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                            THEN NULL ELSE e.cost_usd END,
+                            unreported_calls = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                                                    THEN 1 ELSE e.unreported_calls END
+                        FROM detached d
+                        WHERE e.workspace_id IS NOT DISTINCT FROM d.workspace_id AND e.source_id = d.source_id
+                        """, Map.of("keys", keys(selection)));
+            }
+            List<UUID> calls = personalCalls(selection);
+            if (!calls.isEmpty()) {
+                jdbc.update("""
+                        UPDATE llm_usage_event e SET source_id = NULL, payer_account_id = NULL,
+                            call_state = CASE WHEN e.call_state='OPEN' THEN 'SETTLED' ELSE e.call_state END,
+                            measurement_verification = CASE WHEN e.call_state='OPEN'
+                                                            THEN 'UNVERIFIABLE' ELSE e.measurement_verification END,
+                            pricing_state = CASE WHEN e.call_state='OPEN' THEN 'UNPRICED' ELSE e.pricing_state END,
+                            cost_usd = CASE WHEN e.call_state='OPEN' THEN NULL ELSE e.cost_usd END,
+                            unreported_calls = CASE WHEN e.call_state='OPEN' THEN 1 ELSE e.unreported_calls END
+                        WHERE e.id = ANY(:calls) AND e.source_type = 'PERSONAL_CONVERSATION'
+                        """, Map.of("calls", new SqlArrayValue("uuid", calls.toArray())));
+            }
             return selection.rows().size();
         }
     }

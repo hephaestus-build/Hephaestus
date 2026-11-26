@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795735200000-1" author="hephaestus">
+        <comment>The instance model for personal conversations, one for each declared tier. Removing the model removes its slot.</comment>
+        <createTable tableName="personal_model_assignment">
+            <column name="tier" type="VARCHAR(16)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="personal_model_assignmentPK"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="llm_model_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="personal_model_assignment" baseColumnNames="llm_model_id" constraintName="fk_personal_model_assignment_model" referencedTableName="llm_model" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
+        <sql>ALTER TABLE personal_model_assignment ADD CONSTRAINT ck_personal_model_assignment_tier CHECK (tier IN ('IN_HOUSE', 'CLOUD'))</sql>
+        <rollback>
+            <dropTable tableName="personal_model_assignment"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795735200000-2" author="hephaestus">
+        <comment>The two monthly caps of the personal purse. NULL leaves personal AI unconfigured, so it is off.</comment>
+        <addColumn tableName="instance_llm_settings">
+            <column name="personal_monthly_budget_usd" type="NUMERIC(10, 2)"/>
+            <column name="personal_account_monthly_budget_usd" type="NUMERIC(10, 2)"/>
+        </addColumn>
+        <sql>ALTER TABLE instance_llm_settings ADD CONSTRAINT ck_instance_llm_settings_personal_budgets CHECK (
+    (personal_monthly_budget_usd IS NULL OR personal_monthly_budget_usd >= 0)
+    AND (personal_account_monthly_budget_usd IS NULL OR personal_account_monthly_budget_usd >= 0))</sql>
+        <rollback>
+            <sql>ALTER TABLE instance_llm_settings DROP CONSTRAINT ck_instance_llm_settings_personal_budgets,
+    DROP COLUMN personal_account_monthly_budget_usd, DROP COLUMN personal_monthly_budget_usd</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795735200000-3" author="hephaestus">
+        <comment>When the person confirmed that their AI choice also covers personal conversations.</comment>
+        <addColumn tableName="account">
+            <column name="ai_personal_scope_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795735200000-4" author="hephaestus">
+        <comment>A personal call has no workspace and no run; the personal purse pays, and its payer is the account. An open personal call needs its attempt's epoch, a deadline after which a sweeper settles it, and the bound that the purse holds.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE llm_usage_event
+    ADD COLUMN payer_account_id BIGINT,
+    ADD CONSTRAINT sfk_llm_usage_event_payer_account FOREIGN KEY (payer_account_id) REFERENCES account (id)
+        ON DELETE SET NULL,
+    ADD CONSTRAINT ck_llm_usage_event_payer CHECK (payer_account_id IS NULL OR source_type = 'PERSONAL_CONVERSATION'),
+    ALTER COLUMN source_id DROP NOT NULL,
+    -- Only the erasure of a personal call's payer removes its source, which is the person's attempt.
+    ADD CONSTRAINT ck_llm_usage_event_source CHECK (source_id IS NOT NULL
+        OR (source_type = 'PERSONAL_CONVERSATION' AND payer_account_id IS NULL)),
+    DROP CONSTRAINT ck_llm_usage_event_source_type,
+    ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'CONVERSATION_TURN',
+        'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT',
+        'PROBE', 'PERSONAL_CONVERSATION')),
+    DROP CONSTRAINT ck_llm_usage_event_scope,
+    ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+        (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL
+          AND (run_id IS NULL OR (lease_epoch IS NOT NULL AND action_id IS NULL))
+          AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+        OR (source_type = 'PROBE' AND run_id IS NULL AND lease_epoch IS NULL AND action_id IS NULL
+          AND source_attempt = 0 AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL
+          AND ((workspace_id IS NULL AND funding_source = 'INSTANCE')
+            OR (workspace_id IS NOT NULL AND funding_source = 'WORKSPACE')))
+        OR (source_type = 'PERSONAL_CONVERSATION' AND workspace_id IS NULL AND run_id IS NULL AND action_id IS NULL
+          AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+        OR (source_type NOT IN ('PRODUCT_FEEDBACK_DRAFT', 'PROBE', 'PERSONAL_CONVERSATION') AND workspace_id IS NOT NULL)),
+    DROP CONSTRAINT ck_llm_usage_event_open_call,
+    ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+        (source_type = 'PROBE' AND settle_after IS NOT NULL)
+        OR (source_type = 'PERSONAL_CONVERSATION' AND settle_after IS NOT NULL AND lease_epoch IS NOT NULL
+            AND payer_account_id IS NOT NULL AND cost_bound_usd IS NOT NULL)
+        OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL));
+-- The personal purse sums one UTC month of personal rows, and an erasure selects them by payer.
+CREATE INDEX idx_llm_usage_personal ON llm_usage_event (occurred_at, payer_account_id)
+    WHERE source_type = 'PERSONAL_CONVERSATION';
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP INDEX idx_llm_usage_personal;
+DELETE FROM llm_usage_event WHERE source_type = 'PERSONAL_CONVERSATION';
+ALTER TABLE llm_usage_event
+    DROP CONSTRAINT ck_llm_usage_event_source,
+    ALTER COLUMN source_id SET NOT NULL,
+    DROP CONSTRAINT ck_llm_usage_event_open_call,
+    ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+        (source_type = 'PROBE' AND settle_after IS NOT NULL)
+        OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL)),
+    DROP CONSTRAINT ck_llm_usage_event_scope,
+    ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+        (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL
+          AND (run_id IS NULL OR (lease_epoch IS NOT NULL AND action_id IS NULL))
+          AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+        OR (source_type = 'PROBE' AND run_id IS NULL AND lease_epoch IS NULL AND action_id IS NULL
+          AND source_attempt = 0 AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL
+          AND ((workspace_id IS NULL AND funding_source = 'INSTANCE')
+            OR (workspace_id IS NOT NULL AND funding_source = 'WORKSPACE')))
+        OR (source_type NOT IN ('PRODUCT_FEEDBACK_DRAFT','PROBE') AND workspace_id IS NOT NULL)),
+    DROP CONSTRAINT ck_llm_usage_event_source_type,
+    ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'CONVERSATION_TURN',
+        'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT',
+        'PROBE')),
+    DROP CONSTRAINT ck_llm_usage_event_payer,
+    DROP CONSTRAINT sfk_llm_usage_event_payer_account,
+    DROP COLUMN payer_account_id;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

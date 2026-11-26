@@ -104,6 +104,13 @@ public class Account {
     @Column(name = "ai_choice_at")
     private @Nullable Instant aiChoiceAt;
 
+    /**
+     * When the person confirmed that their AI choice also covers personal conversations, which have no workspace.
+     * {@code null} until they confirm, and cleared by any later write of the choice without a new confirmation.
+     */
+    @Column(name = "ai_personal_scope_at")
+    private @Nullable Instant aiPersonalScopeAt;
+
     @Column(name = "feedback_delivery_enabled", nullable = false)
     @ColumnDefault("true")
     private boolean feedbackDeliveryEnabled = true;

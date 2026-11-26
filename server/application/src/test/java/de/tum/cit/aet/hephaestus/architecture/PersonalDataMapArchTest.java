@@ -120,6 +120,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "llm_model",
             "llm_model_price",
             "llm_model_workspace_grant",
+            // The instance model of each personal tier: configuration, no person.
+            "personal_model_assignment",
             "login_provider",
             "item", // Technical source references; personal proof is stored in the mapped result tables.
             "practice",
