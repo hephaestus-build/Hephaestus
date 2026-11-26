@@ -76,6 +76,11 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
     boolean maintenanceBarrierLifted();
 
+    /** Ends a blocked claim transaction before the sandbox's request times out. The setting is local to this transaction. */
+    @WorkspaceAgnostic("Sets a transaction timeout and reads no table")
+    @Query(value = "SELECT set_config('transaction_timeout', CAST(:millis AS text), true)", nativeQuery = true)
+    String limitClaimTransaction(@Param("millis") long millis);
+
     /** Requests the subject's sandbox; empty when the subject already has a live one. */
     @Query(value = """
             INSERT INTO agent_sandbox (id, workspace_id, subject_key, kind, claim_name, shutdown_at)

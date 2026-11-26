@@ -22,7 +22,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,8 +53,8 @@ public class AgentNextWaits implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(AgentNextWaits.class);
 
-    /** Below the driver's 30-second limit for one gateway call, with room for the claim after a late wake. */
-    static final Duration WAIT = Duration.ofSeconds(25);
+    /** From before authentication to the lease commit, with time to answer the driver's 30-second request. */
+    static final Duration WAIT = Duration.ofSeconds(20);
 
     /** As often as a sandbox pulled before requests waited. */
     static final Duration RECHECK = Duration.ofSeconds(2);
@@ -92,22 +93,29 @@ public class AgentNextWaits implements SmartLifecycle {
      * its caller gave the earlier one up.
      */
     public <T> Optional<T> claim(
-            AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> kinds, Supplier<Optional<T>> claim) {
+            AgentSandboxes.LiveSandbox sandbox,
+            Set<AgentRunKind> kinds,
+            long startedAtNanos,
+            Function<LongSupplier, Optional<T>> claim) {
+        long until = startedAtNanos + wait.toNanos();
+        if (until - System.nanoTime() <= 0) return Optional.empty();
         Waiter abandoned = waiters.remove(sandbox.id());
         if (abandoned != null) abandoned.supersede();
-        if (!running || kinds.isEmpty() || !capacity.tryAcquire()) return claim.get();
+        if (!running || kinds.isEmpty() || !capacity.tryAcquire())
+            return claim.apply(() -> until - System.nanoTime());
         var waiter = new Waiter(sandbox, kinds);
-        long until = System.nanoTime() + wait.toNanos();
+        LongSupplier remaining = () -> waiter.superseded ? 0 : until - System.nanoTime();
         try {
             Waiter earlier = waiters.put(sandbox.id(), waiter);
             if (earlier != null) earlier.supersede();
             // The waiter is registered before the first claim, so a run queued after that claim still wakes it. A
             // stop that did not see the waiter has already cleared the flag that each wait reads first.
-            while (true) {
-                Optional<T> claimed = claim.get();
-                if (claimed.isPresent() || !running || !waiter.await(until - System.nanoTime()) || !running)
+            while (remaining.getAsLong() > 0) {
+                Optional<T> claimed = claim.apply(remaining);
+                if (claimed.isPresent() || !running || !waiter.await(remaining.getAsLong()) || !running)
                     return claimed;
             }
+            return Optional.empty();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return Optional.empty();

@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
@@ -21,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,6 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnAgentRuntime
 @Profile("!specs & !cds-training")
 public class AgentNextController {
+
+    public static final String REQUEST_STARTED_AT = "hephaestus.agent.gateway.requestStartedAtNanos";
 
     private final AgentSandboxes sandboxes;
     private final Map<AgentRunKind, SandboxRunKind> kinds;
@@ -54,12 +58,14 @@ public class AgentNextController {
      * kind drives are offered, and each kind moves its domain row in the transaction of the lease.
      */
     @PostMapping("/next")
-    public ResponseEntity<Assignment> next(@AuthenticationPrincipal AgentSandboxes.LiveSandbox sandbox) {
+    public ResponseEntity<Assignment> next(
+            @AuthenticationPrincipal AgentSandboxes.LiveSandbox sandbox,
+            @RequestAttribute(REQUEST_STARTED_AT) long startedAtNanos) {
         Set<AgentRunKind> offered = kinds.values().stream()
                 .filter(kind -> kind.sandbox() == sandbox.kind())
                 .map(SandboxRunKind::kind)
                 .collect(Collectors.toUnmodifiableSet());
-        return waits.claim(sandbox, offered, () -> lease(sandbox, offered))
+        return waits.claim(sandbox, offered, startedAtNanos, remaining -> lease(sandbox, offered, remaining))
                 // A TURN binds its work deadline in claimed(), after this immutable lease snapshot was read.
                 // Its gateway writes and renewals enforce the stored deadline even when this field is null.
                 .map(lease -> ResponseEntity.ok(new Assignment(
@@ -70,10 +76,12 @@ public class AgentNextController {
     }
 
     /** One claim of the subject's next run, while the drain admits claims. */
-    private Optional<AgentRunLease> lease(AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> offered) {
+    private Optional<AgentRunLease> lease(
+            AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> offered, LongSupplier remaining) {
         return drain.claim(() -> sandboxes.lease(
                 sandbox,
                 offered,
+                remaining,
                 () -> kinds.values().stream()
                         .filter(kind -> kind.sandbox() == sandbox.kind())
                         .forEach(kind -> kind.beforeWrite(sandbox)),

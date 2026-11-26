@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,10 +41,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -435,6 +439,75 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         queueRun(subject);
         assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
                 .hasValueSatisfying(lease -> assertThat(lease.kind()).isEqualTo(AgentRunKind.REVIEW));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRollBackAClaimWhenItsPullExpiresBeforeCommit(boolean held) {
+        String subject = "review:" + UUID.randomUUID();
+        var run = queueReview(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        var remaining = new AtomicLong(Duration.ofSeconds(20).toNanos());
+
+        var leases = events(
+                () -> assertThat(sandboxes.lease(
+                                sandbox, Set.of(AgentRunKind.REVIEW), remaining::get, () -> {}, lease -> {
+                                    if (held)
+                                        assertThat(runs.requeue(
+                                                        lease.fence(),
+                                                        AgentRuns.Charge.FREE,
+                                                        Duration.ofMinutes(1),
+                                                        AgentRunHold.MODEL_POOL))
+                                                .isTrue();
+                                    remaining.set(0);
+                                    return !held;
+                                }))
+                        .isEmpty(),
+                AgentSandboxes.class,
+                "agent.sandbox.leased",
+                sandbox.claimName());
+
+        assertThat(leases).isEmpty();
+        assertThat(runs.isHeld(run)).isFalse();
+        assertThat(runState(subject)).isEqualTo("QUEUED");
+        assertThat(sandboxes.isLive(sandbox)).isTrue();
+        assertThat(claims.created).containsKey(claimName(sandbox));
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", "run_held").count())
+                .isZero();
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
+                .hasValueSatisfying(lease -> assertThat(lease.epoch()).isEqualTo(1));
+    }
+
+    @Test
+    void shouldAbortABlockedClaimAtItsDatabaseDeadline() {
+        String subject = "review:" + UUID.randomUUID();
+        var run = queueReview(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        long lock = run.id().getLeastSignificantBits();
+
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            transactions.executeWithoutResult(status -> {
+                jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock(?)", Integer.class, lock);
+                var blocked = executor.submit(() -> sandboxes.lease(
+                        sandbox,
+                        Set.of(AgentRunKind.REVIEW),
+                        Duration.ofSeconds(2)::toNanos,
+                        () -> {},
+                        lease -> {
+                            jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock(?)", Integer.class, lock);
+                            return true;
+                        }));
+                assertThatThrownBy(() -> blocked.get(6, TimeUnit.SECONDS))
+                        .rootCause()
+                        .isInstanceOfSatisfying(
+                                SQLException.class, sql -> assertThat(sql.getSQLState()).isEqualTo("25P04"));
+            });
+        }
+        assertThat(runState(subject)).isEqualTo("QUEUED");
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
+                .hasValueSatisfying(lease -> assertThat(lease.epoch()).isEqualTo(1));
     }
 
     private String runState(String subject) {
