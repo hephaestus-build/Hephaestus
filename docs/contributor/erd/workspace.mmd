@@ -61,9 +61,10 @@ erDiagram
 
     ResourceReader {
         BIGINT id PK
+        BIGINT provider_id FK,UK "NOT NULL"
         BIGINT reader_native_id UK "NOT NULL"
         BIGINT repository_to_monitor_id FK,UK "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     ReviewScopeRepository {
@@ -134,6 +135,7 @@ erDiagram
     }
 
     Account["Account · Core"]
+    IdentityProvider["IdentityProvider · Integration Identity"]
     Organization["Organization · Integration Identity"]
 
     %% Relationships
@@ -147,6 +149,7 @@ erDiagram
     Workspace ||--o{ Membership : belongs_to
     Workspace ||--o{ RepositoryToMonitor : monitors
     RepositoryToMonitor ||--o{ ResourceReader : has
+    IdentityProvider ||--o{ ResourceReader : references
     Workspace ||--o{ WorkspaceSlugHistory : has
 
     %% Many-to-Many relationships
@@ -160,6 +163,7 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
+    class IdentityProvider referenceEntity
     class Organization referenceEntity
     class RepositoryToMonitor metadataEntity
     class Workspace primaryEntity
