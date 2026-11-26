@@ -44,7 +44,7 @@
 
 ## Current runtime boundary
 
-Heph and practice-review sandboxes run on connected workers. The server retains Heph admission and
+Hephaestus and practice-review sandboxes run on connected workers. The server retains Hephaestus admission and
 conversation persistence; workers resolve provider keys and enforce the scoped proxy route.
 [Runtime roles](../admin/runtime-roles.mdx) owns deployment behavior. The current purpose name is
 **Practice reviews**, and the zero-usage-charge price label is **No metered API cost**.
@@ -275,15 +275,17 @@ The submit and claim gates still read the ledger alone: they decide whether work
 
 `agent_job` is renamed; see [ADR 0025](0025-agent-job-queue-on-postgresql.md#update--2026-10-14-2656-the-job-table-and-classes-are-renamed).
 
-## Update — 2026-10-09 (Heph turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+<a id="update--2026-10-09-heph-turn-accounting-adr-0057"></a>
 
-Supersedes the mentor parts of § How tight the cap is and § Current runtime boundary. A Heph turn's
+## Update — 2026-10-09 (Hephaestus turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+
+Supersedes the mentor parts of § How tight the cap is and § Current runtime boundary. A Hephaestus turn's
 spend so far is read from its own `mentor_turn` row counters, priced at the rates frozen in
 `mentor_turn.admission`. `MentorTurnMeter` and `chat_message` no longer exist. The last bullet of
 § What the bound does not cover now reads: a turn whose worker lost its lease is billed by
-`MentorTurnLeaseReaper` once the lease expires (default lease one minute). For Heph turns, N in the
-concurrency bullet is the number of Heph conversations and Heph threads that run a turn at once. The server retains
-Heph submission and the ledger. The worker admits the turn when it claims it.
+`MentorTurnLeaseReaper` once the lease expires (default lease one minute). For Hephaestus turns, N in the
+concurrency bullet is the number of Hephaestus conversations and Hephaestus threads that run a turn at once. The server retains
+Hephaestus submission and the ledger. The worker admits the turn when it claims it.
 
 ## Update — 2026-11-03: no per-location limit on running reviews
 

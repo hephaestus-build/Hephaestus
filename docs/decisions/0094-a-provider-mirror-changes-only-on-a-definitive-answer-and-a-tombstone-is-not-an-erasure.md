@@ -12,7 +12,7 @@
 
 ## Context
 
-Hephaestus mirrors work from GitHub, GitLab, Slack and Outline into PostgreSQL. Reviews and Heph read the mirror, not the provider.
+Hephaestus mirrors work from GitHub, GitLab, Slack and Outline into PostgreSQL. Reviews and Hephaestus read the mirror, not the provider.
 Two questions decide the life of a mirror row. Is the work still there upstream? Does the workspace still have a basis to hold it?
 
 ADR 0024 answered them with two operations, and six updates moved its answer. ADR 0012 added identity rules for sync and was narrowed once.
@@ -50,7 +50,7 @@ A rule that main does not satisfy yet says "1.0 target".
    Enforced by: `IntegrationSubjectBoundariesTest#noUnscopedFindByLogin`, for organizations only.
 7. **A drift tombstone is reversible.** It sets `deleted_at`, and the next upsert of the row clears it. A Slack tombstone also erases the message text, so it cannot be undone. An archived Outline document is not deleted.
    Enforced by: `GitLabDeletionSweepSelfHealIntegrationTest#tombstonedIssueIsRevivedWhenTheUpstreamUpsertSeesItAgain`, `SlackHistoryReconcilerIntegrationTest#shouldEraseTheTextOfADeletedMessageAndKeepEverythingElse`, `OutlineDocumentSyncIntegrationTest#archivedDocument_isNotTombstonedByAbsence_realPostgresRoundTrip`.
-8. **A read that speaks about live work refuses a tombstoned row.** That covers Heph's context, the project inventory and the sync counts. A record of what happened keeps the row: activity, scores, profiles and delivered feedback. No entity-level filter exists. Each query decides.
+8. **A read that speaks about live work refuses a tombstoned row.** That covers Hephaestus's context, the project inventory and the sync counts. A record of what happened keeps the row: activity, scores, profiles and delivered feedback. No entity-level filter exists. Each query decides.
    Enforced by: `MirrorQueryPredicateGuardTest#everyMentorArtifactRangeExcludesTombstones`, `#bothProjectInventoryQueriesExcludeTombstones` and `#everySyncStatusSubEntityCountExcludesChildrenOfTombstonedParents`. The record side is not enforced. Review catches a new filter there.
 9. **Removed work stops new review work.** A deletion removes the item. Its current results end as `REMOVED`, a pending occasion is withheld as `ITEM_GONE`, and new feedback stops with `ITEM_GONE`. A later event on restored work restores the item and can start a new review ([pipeline](../contributor/practice-review-pipeline.mdx)).
    A tombstoned Outline document stops with `ITEM_REMOVED`, as SCM work does, because a removal is never missing evidence.

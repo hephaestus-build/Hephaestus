@@ -85,9 +85,9 @@ ADR 0082 is superseded. Each of its decisions lives here now:
 | ADR 0082 decision | Now |
 | --- | --- |
 | 1. One conversation | Decision 1. Steering returns at the tool-result boundary, for compatible input only ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 9). |
-| 2. Heph threads | Decision 2, as message threads. Decision 3 adds work threads. |
+| 2. Hephaestus threads | Decision 2, as message threads. Decision 3 adds work threads. |
 | 3. Only the owner reads it | Decision 5. No instance admin reads the conversation through View as user. |
-| 4. Heph answers where its model is ready | Decision 6 |
+| 4. Hephaestus answers where its model is ready | Decision 6 |
 | 5. The answer appears where the developer asked | Decision 12 and [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md). A background message can also go to the Slack direct message. |
 | 6. A Slack reply is never posted twice | [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 7 and [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md). The key is the covered set of source keys, not one question. |
 | 7. Stop | [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 9. Stop settles within a deadline. |
@@ -97,8 +97,8 @@ ADR 0082 is superseded. Each of its decisions lives here now:
 | 11. Submissions | [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decisions 2, 3 and 7. The dedupe key takes the role of `request_id`. The limit of 3 follow-ups goes. |
 | 12. Commit, then show | Decision 14 |
 | 13. A turn stores its entries once | [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 10, the commit rule |
-| 14. Heph shows a piece of feedback at most once | [ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md). A citation token takes the role of `show_feedback`. |
-| 15. Heph reads, and never builds or writes | Decision 17 |
+| 14. Hephaestus shows a piece of feedback at most once | [ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md). A citation token takes the role of `show_feedback`. |
+| 15. Hephaestus reads, and never builds or writes | Decision 17 |
 | 16. Erasure stops the ledger | Decision 18 |
 | 17. Retention | Decision 18. A kept-in-mind item that the person keeps follows record retention (ADR 0132). |
 | 18. Turn accounting | Decision 20 |

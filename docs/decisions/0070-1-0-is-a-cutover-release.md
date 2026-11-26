@@ -49,7 +49,7 @@ It is the [Database maintenance](../admin/kubernetes.mdx#database-maintenance) p
 2. **Phase 1, stop the writers.** Run `helm upgrade` with the verified 0.95 chart and values, `server.replicas=0` and `worker.replicas=0`. Wait until the server Pods, the worker Pods, and every sandbox Pod and Job are gone. The webhook role keeps receiving into JetStream.
 3. **Phase 2 + 3, migrate and start the server alone.** Verify the 1.0 chart. Run `helm upgrade` with the 1.0 chart, `server.replicas=1` and `worker.replicas=0`. Do not pass `--rollback-on-failure`: a failed migration restores the backup ([If migration fails](../admin/upgrade.mdx#if-migration-fails)). Wait for the migration Job and the server.
 4. **Phase 4, restore.** Run `helm upgrade` with the recorded `worker.replicas`. The server consumes the deliveries that the receiver published meanwhile.
-5. Check Configuration readiness. Run one practice review and one Heph turn.
+5. Check Configuration readiness. Run one practice review and one Hephaestus turn.
 
 **Production is on k3s before 1.0 ships.** The 1.0 release, which deletes Compose self-hosting, ships only after hephaestus-prod runs 0.95.x on the chart (release order R1–R5).
 
@@ -58,7 +58,7 @@ It is the [Database maintenance](../admin/kubernetes.mdx#database-maintenance) p
 - **Reviews.** In phase 1, workers drain for `worker.drainTimeoutSeconds`. A review that ends in the drain keeps its results. A review that the drain stops is requeued and spends no retry, as today.
   The 1.0 migration requeues every `review_job` that is still claimed. It clears the owner and the attempt fence, spends no retry, and keeps every admitted and staged result. This is needed because 1.0 has no `worker_registry` recovery (ADR 0068).
   Stored config snapshots of an older schema version get a new snapshot when the job runs again.
-- **Heph turns.** A turn that runs at phase 1 ends. The 1.0 migration ends each unfinished turn with the visible state "Heph was updated before it could answer. Ask again." It bills only the measured spend. A turn is not run again silently (decision F-15).
+- **Hephaestus turns.** A turn that runs at phase 1 ends. The 1.0 migration ends each unfinished turn with a notice that the update interrupted the answer and the developer can ask again. It bills only the measured spend. A turn is not run again silently (decision F-15).
   The migration ends each queued turn so. It clears the lease of each running turn, and the server's lease reaper then ends that turn the same way and bills its attempt. A turn that the developer stopped stays stopped.
 - **Feedback composition and delivery.** These are rows. They continue after phase 4. Uncertain provider writes keep their receipts, so readback decides, as today.
 - **JetStream.** The webhook role keeps its 0.95 version until phase 2 changes it. The 1.0 server must read every message that the 0.95 receiver published. The release-upgrade webhook leg proves this for 1.0, although the schema waiver turns the other previous-release legs off. With no backlog, the operator can also start with empty streams after the drain to zero pending (ADR 0041).
@@ -84,7 +84,7 @@ It is the [Database maintenance](../admin/kubernetes.mdx#database-maintenance) p
   > Hephaestus 1.0 is the first release with the 1.x upgrade guarantee: from 1.0, any 1.x release upgrades to any later 1.y release. Self-hosting is the Helm chart on Kubernetes or on one host with k3s. Docker Compose is for local development only. **Operators:** upgrade to 0.95 on the Helm chart first, then follow [Upgrade from 0.x to 1.0](https://docs.hephaestus.build/admin/upgrade-to-1-0). The upgrade stops Hephaestus for the migration.
 - `.migration/release-1-0-0.md`:
   > `#### 🔴 Stop every role for the upgrade to 1.0, which removes what 0.x needed`
-  > 1.0 refuses a database that has not run 0.95.0. A Compose install moves to the Helm chart at 0.95 first. Stop the server and the workers, then migrate with the 1.0 chart, as Database maintenance describes. Running reviews start again after the upgrade and keep their results. A Heph answer in progress ends, and the developer asks again. Each removed setting is listed below: remove it from your values.
+  > 1.0 refuses a database that has not run 0.95.0. A Compose install moves to the Helm chart at 0.95 first. Stop the server and the workers, then migrate with the 1.0 chart, as Database maintenance describes. Running reviews start again after the upgrade and keep their results. A Hephaestus answer in progress ends, and the developer asks again. Each removed setting is listed below: remove it from your values.
 - Each 1.0 layer's own fragment names its one operator step. It does not need its own stop-every-role heading, because the 1.0 entry waives the whole release.
 - **0.95.0** carries one deprecation changeset that lists every key, value and endpoint that 1.0 removes (CO-3). Thus, the deprecation policy holds.
 
@@ -123,10 +123,10 @@ The owning layer of each item records the detail.
 | F-12 | `slack_participant_consent.research_opted_out`/`source` hold opt-outs that v0.90 wrote | Carry true values into `consent_decision`, then drop. |
 | F-13 | `GITLAB_WORKSPACE_CREATION`: GA or a permanent switch (FU-9) | GA. |
 | F-14 | 22 public operations no client calls (API-6) | Keep only the ones a 1.0 UI or the documented API needs. Delete the rest in 1.0. |
-| F-15 | A Heph turn in flight at the cutover: end visibly, or run again? | End visibly ("Ask again"). Never answer late without the developer asking. |
+| F-15 | A Hephaestus turn in flight at the cutover: end visibly, or run again? | End visibly ("Ask again"). Never answer late without the developer asking. |
 | F-16 | Skipping 1.x releases vs the one-step rolling rule (ADR § Consequences) | A skip upgrade stops every role. Say so in the compatibility policy. |
 | F-17 | Approve the 0.95.0 cut-point edit at the head of `master.xml` (FU-2), as for v0.77.4 | Approve. |
-| F-18 | `HEPHAESTUS_WORKER_CAPACITY_*` names (AR-14): rename in 1.0 with PR 6's persona decision | One name, "Heph turns", in the Heph loop layer. |
+| F-18 | `HEPHAESTUS_WORKER_CAPACITY_*` names (AR-14): rename in 1.0 with PR 6's persona decision | One name, "Hephaestus turns", in the Hephaestus loop layer. |
 
 Since 2026-11-17, `Result` names the F-1 rules for a version-0 row: captured proof, admissible proof, the earlier-reviews label, and the SQL form of captured proof.
 `ResultProofAccess.readsAsHistory` decides which purposes read a version-0 row as history.
@@ -135,7 +135,7 @@ Since 2026-11-17, `Result` names the F-1 rules for a version-0 row: captured pro
 
 - One upgrade outage for every installation, bounded by the drain and the migration.
 - A 0.x database older than 0.95.0 takes two hops.
-- About 15k lines go: the Docker backend, the hub, the Heph host, the Compose stacks and gates, and the Compose host scripts. The unused Discussions and Projects sync goes too (decision F-9).
+- About 15k lines go: the Docker backend, the hub, the Hephaestus host, the Compose stacks and gates, and the Compose host scripts. The unused Discussions and Projects sync goes too (decision F-9).
 - Local development runs sandboxes on kind or k3d.
 - **Gap to close with this ADR:** `compatibility-policy.mdx:69` promises "any 1.x to any later 1.y without intermediate releases". The guard and the previous-release check test only against the latest tag. Thus, a drop staged in 1.1 and run in 1.2 breaks a rolling 1.0 → 1.2 upgrade. Decided (F-16): an upgrade that skips a 1.x release stops every role. The compatibility policy says so.
 
@@ -156,7 +156,7 @@ This update amends § In-flight work and § Schema step for the reviews.
 - Recovery needs the server role and runs after its startup grace period, including when `AGENT_ENABLED=false`.
   The timeout backstop gives each cutover claim its normal timeout plus the upload grace and safety buffer, counted from the server's start.
   If recovery does not finish by that deadline, the claim fails with a recorded upgrade failure. Server maintenance closes its parent review, even with execution disabled. Its admitted results stay.
-- `worker_registry` stays until the layer that removes the Heph tools sandboxes of a worker, its last reader. That layer drops it.
+- `worker_registry` stays until the layer that removes the Hephaestus tools sandboxes of a worker, its last reader. That layer drops it.
 
 ## Update — 2026-10-28: one product name and conversation turns
 

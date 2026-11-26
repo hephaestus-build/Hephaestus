@@ -118,17 +118,15 @@ Claim a history, such as "the first time" or "the third time", only when the evi
 
 The Avoid columns apply to the named concept in UI, code, API contracts and prose.
 They do not ban unrelated technical meanings, such as Slack channels, SQL triggers or operating-system signals.
-Historical ADR bodies and released migration records keep their exact terms.
+Released migration records keep their exact terms.
 
-`Heph` is retired as a name.
-Write Hephaestus, a conversation with Hephaestus, or Ask Hephaestus for the area.
+Always write the full name Hephaestus.
+Use Ask Hephaestus for the product area and AI mentor for the category.
 Slack wire identifiers keep `heph_*`.
 
-`gate:no-legacy` refuses the name as a case-sensitive word outside released text and ADRs.
-A commit subject or pull request title that contains it fails too.
-Its allowlist keeps two kinds of line, each by its exact text.
-The conversation prompt tells the model that the old name means it.
-This page names the word to forbid it.
+`gate:no-legacy` rejects the former short name as a case-sensitive word in docs, decision records,
+model prompts, product text and source comments.
+The same name check applies to commit subjects and pull request titles.
 
 The same gate runs the product copy rule in [Vale](./simplified-technical-english.mdx#machine-checks-and-human-review).
 It checks docs, UI text, and server strings.
@@ -348,9 +346,9 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Workspace** | One team's tenant, with its connected repositories, members, practices and feedback. |  |
 | **Instance** | One running deployment that hosts workspaces. |  |
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
-| **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | `Heph`, Mentor, Conversations (as the area), chat, AI assistant |
+| **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | Mentor, Conversations (as the area), chat, AI assistant |
 | **Mentor** | A person who guides a less experienced person, such as a reviewer or an experienced colleague. Use it only for people. “Mentor” alone never names Hephaestus. |  |
-| **Hephaestus** | The application. It also answers in a person's conversation. | agent, `Heph`, mentor, the mentor, your mentor, assistant |
+| **Hephaestus** | The application. It also answers in a person's conversation. | agent, mentor, the mentor, your mentor, assistant |
 | **AI mentor** | The product category of Hephaestus, always written with "AI". Use Hephaestus as the name in product text. [What the category claims](#what-the-category-claims) limits its use. | mentor (alone, for the product), your mentor, coach, companion |
 | **Guided tour** | The chapters on the Practice profile that explain how work becomes feedback and how to read the page. It never opens by itself: a person starts it from the page or from a step of Get started. | product tour, walkthrough, onboarding wizard |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |

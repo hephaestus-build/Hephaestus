@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
-import { RETIRED_NAME, RETIRED_NAME_MESSAGE, RETIRED_NAME_PATTERN } from "./lib/retired-name.ts";
+import { RETIRED_NAME_MESSAGE, RETIRED_NAME_PATTERN } from "./lib/retired-name.ts";
 
 export interface Finding {
 	rule: string;
@@ -17,74 +17,19 @@ const fixtures =
 const ownSource =
 	/^(?:server\/application\/src\/main\/|webapp\/src\/|extension\/src\/|scripts\/|docker\/agents\/|docs\/)/u;
 
-/** Released text and decision records keep the words of their time. */
-const keepsItsWords =
-	/^(?:CHANGELOG\.md|MIGRATION\.md)$|^\.changeset\/pre\/|(?:^|\/)docs\/decisions\//u;
+/** Released upgrade and release records keep their original wording. */
+const releasedText = /^(?:(?:CHANGELOG|MIGRATION)\.md$|\.changeset\/pre\/)/u;
 
-/** A finding that stays: its rule, its file, its exact line, and how often that line occurs there. */
-const allowed: readonly (Omit<Finding, "line"> & { count: number; reason: string })[] = [
-	{
-		rule: "retired-name",
-		file: "server/application/src/main/resources/agent/conversation/system.md",
-		text: `- Never call yourself ${RETIRED_NAME}, mentor, assistant or agent. Earlier "${RETIRED_NAME}" means you; use Hephaestus.`,
-		count: 1,
-		reason: "The prompt tells the model that the old name means it.",
-	},
-	{
-		rule: "retired-name",
-		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `\`${RETIRED_NAME}\` is retired as a name.`,
-		count: 1,
-		reason: "The vocabulary names the retired word to forbid it.",
-	},
-	{
-		rule: "retired-name",
-		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `| **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | \`${RETIRED_NAME}\`, Mentor, Conversations (as the area), chat, AI assistant |`,
-		count: 1,
-		reason: "The vocabulary names the retired word to forbid it.",
-	},
-	{
-		rule: "retired-name",
-		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `| **Hephaestus** | The application. It also answers in a person's conversation. | agent, \`${RETIRED_NAME}\`, mentor, the mentor, your mentor, assistant |`,
-		count: 1,
-		reason: "The vocabulary names the retired word to forbid it.",
-	},
-];
-
-/**
- * The retired short name as a word, in any file the check reads, tests included: product text,
- * comments, test names, docs and changesets (docs/contributor/practice-feedback-language.mdx).
- */
 function retiredNames(file: string, source: string): Finding[] {
-	if (keepsItsWords.test(file)) {
+	if (releasedText.test(file) || !RETIRED_NAME_PATTERN.test(source)) {
 		return [];
 	}
-	const result: Finding[] = [];
-	for (const match of source.matchAll(new RegExp(RETIRED_NAME_PATTERN.source, "gu"))) {
-		const start = source.lastIndexOf("\n", match.index - 1) + 1;
-		const end = source.indexOf("\n", match.index);
-		const finding = {
-			rule: "retired-name",
-			file,
-			line: source.slice(0, match.index).split("\n").length,
-			text: source.slice(start, end === -1 ? undefined : end).trim(),
-		};
-		if (
-			result.at(-1)?.line !== finding.line &&
-			!allowed.some(
-				(entry) =>
-					entry.rule === finding.rule &&
-					entry.file === file &&
-					entry.text === finding.text &&
-					source.split(entry.text).length - 1 === entry.count,
-			)
-		) {
-			result.push(finding);
-		}
-	}
-	return result;
+	const lines = source.split("\n");
+	return lines.flatMap((text, index) =>
+		RETIRED_NAME_PATTERN.test(text)
+			? [{ rule: "retired-name", file, line: index + 1, text: text.trim() }]
+			: [],
+	);
 }
 
 function redirectOnlyRoute(

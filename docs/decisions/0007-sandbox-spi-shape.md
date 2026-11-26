@@ -74,9 +74,11 @@ sandboxes take no host mounts, so the first non-`HostPathMount` consumer this AD
 seal for will not arrive. No `VolumeMount` type exists; `SandboxSpec.volumeMounts` is the
 `Map<String, String>` of option 3.
 
-## Update — 2026-10-09 (Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
 
-`InteractiveSandboxSpec` and the whole interactive sandbox SPI are deleted. The Heph host uses its own
+## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+
+`InteractiveSandboxSpec` and the whole interactive sandbox SPI are deleted. The Hephaestus host uses its own
 small SPI, `agent.sandbox.spi.HostSandbox` (`launch(HostSpec)`, `isRunning(Host)`, `remove(Host)`), with the Docker
 implementation `DockerHostSandbox`. It reuses the container, security and network managers of the job
 sandbox. `SandboxSpec` and `NetworkPolicy` are unchanged.
@@ -96,7 +98,7 @@ Thus, `list`, `kill` and `remove` reach a sandbox from any worker that shares th
 On Docker, the name is the kind, the id and the attempt, which every container, network and volume of the sandbox records in its labels.
 The backend-neutral `agent.sandbox.SandboxReconciler` removes what `list` returns and no attempt or worker uses.
 A review's sandbox goes when its job is neither queued nor running and the sandbox is older than two minutes.
-A Heph host goes when the worker that launched it is gone.
+A Hephaestus host goes when the worker that launched it is gone.
 `Launch` carries the attempt's upload deadline, so that a runtime can end the sandbox without its worker.
 
 The review spec no longer carries runtime details:
@@ -111,7 +113,7 @@ The backend contract states what every backend guarantees for both sandbox proce
 
 ## Update — 2026-10-28: Jobs only ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 
-The sandbox backend starts Jobs only. `HostSandbox` and the exec sandboxes go: Heph's tools run in tools Pods, which are Jobs too.
+The sandbox backend starts Jobs only. `HostSandbox` and the exec sandboxes go: Hephaestus's tools run in tools Pods, which are Jobs too.
 Every sandbox Pod sets `hostUsers: false`. The attempt runner over a narrow backend of the 2026-10-24 update stays.
 
 ## Update — 2026-11-09: superseded by ADR 0079

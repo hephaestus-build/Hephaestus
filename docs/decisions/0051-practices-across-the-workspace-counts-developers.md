@@ -200,7 +200,7 @@ This update restores the decision above. It changes no rule about who and what i
   The Practice profile, a group and this page carry the weakest mark of what they read.
 - `ResultSourceAuthorization.permitsHumanStanding` applies every source, erasure, suppression, account and custody check of delivery, except the AI choice.
   Only the standing reader uses it.
-  Quotes, delivery, Heph and every model input keep the full check, so **No AI** still refuses them.
+  Quotes, delivery, Hephaestus and every model input keep the full check, so **No AI** still refuses them.
 - Feedback mode **Off** stops delivery only. A practice that is off still has a standing.
   **Reviewed by People** or **Nobody** has no review and no standing.
 
