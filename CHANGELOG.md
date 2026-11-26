@@ -1,16 +1,47 @@
 # Changelog
 
+## 1.0.0-rc.20
+
+### Minor Changes
+
+- Erasing an Outline contributor by provider instance and user ID now covers every team on that instance.
+  Hephaestus stops reading the affected documents when erasure starts.
+  Erasure hides their titles in the item directory and removes their local document data.
+  It redacts context copies and their answers by Outline instance and team.
+  If the saved selection misses a document or a relevant copy has no source key, erasure stops.
+  A request that spans providers waits for the Slack and SCM copies too.
+  **Operators:** Use a stopped upgrade when you install this release.
+- With PostgreSQL metrics on, see which statements take the most time alongside connections, locks, dead rows, replica lag and database size.
+- Get a warning when the practice profile overview, reviews list, or standings are slow, even if the rest of the API is fast.
+- A review that its model pool cannot take when it starts now gives its sandbox back at once. It waits a minute with the hold `model_pool` in `agent_run_runs` and spends no attempt, and it gets a new sandbox once the pool admits it. Before, its sandbox stayed and asked for the review again and again, and it kept the place of other reviews of the same pool. A review with more practices than its pool can serve at once now measures them in waves of that size.
+
+  Failed durable server work, such as an email or an account export, now waits longer between its attempts: 5 minutes after the first failure, doubling up to one hour. Its ten attempts in all, the first included, span about six hours, also when several servers run. Before, two servers could spend all ten attempts in about 25 minutes, so a short outage could exhaust work that would have recovered. `event_publications_exhausted` now counts exhausted work at once, and no longer counts a last attempt that still runs.
+
+  Commit link correction no longer spends an email's attempts while GitHub or GitLab throttles it. A rate limit, a secondary limit or GitHub's abuse detection now makes the email wait, also when GitHub answers it with HTTP 200, and it ends unanswered only after five real misses. The email waits until the provider's reset, from five minutes to two hours, on every server. Other repositories that use the throttled credential also wait. Replacing the credential lets correction resume on the next run. `commit_identity_resolutions_total` counts these emails as `deferred`. Before, a throttle during a recovery could end commits that GitHub can read as unanswered, and one throttled repository could hold up all others. **Correct commit links** now asks again only for the GitHub emails of the affected window, with a preview and a transaction.
+
+  **Operators:** stop every role for this upgrade, because a server of the previous release cannot read the new hold.
+
+- See review attempt duration, queue age and practice counts together. Get a warning when an attempt has eligible practices and evaluates none.
+
+### Patch Changes
+
+- Keep practice reviews available when a sandbox's request for work times out. A late claim rolls back, so the review can start without waiting for an unused lease to expire.
+- Commit link correction honors provider deadlines up to 24 hours and pauses a throttled credential even when the provider answered every email in the batch.
+- GitLab events that repeat a recorded version now show why they were withheld. They report the duplicate version even when the earlier event started no review.
+- Hephaestus uses its full name in conversation instructions and documentation.
+- Practice reviews that finish composing after a measurement fails now report the execution failure. The review keeps any results it already accepted.
+- The practice profile and its review list load faster. Hephaestus now checks each piece of work once for all the practices that cite it, and skips the check for results that a newer review already replaced.
+- Retry an open practice review occasion from the item event ledger. Repeated offers no longer build up copies in the event publication registry.
+- Practice pages that show feedback on GitHub and GitLab work load faster. When Hephaestus checks whether a pull request's sources are still current, it verifies the pull request and its repository access once for all of the sources.
+- Result lists read review records only from the current workspace.
+- Hephaestus now checks admission for every Slack message post at the point of sending.
+
 ## 1.0.0-rc.19
 
 ### Patch Changes
 
 - A data export no longer keeps conversation messages or feedback that were deleted or changed after it was ready. When one of your conversation messages or feedback you received is deleted or edited, for example by another person's data erasure, or when that feedback or one of its posted comments is withdrawn, your ready download expires and you can request a new export. The upgrade expires the downloads that are ready at that time.
 - Your Practice page and the review problems list open faster. Hephaestus shares repository and contributor lookups across the work on each page. It still checks current repository access for each work item and applies the erasure and consent checks before showing feedback.
-
-## 1.0.0-rc.18
-
-### Patch Changes
-
 - Hephaestus no longer starts questions or weekly digests after their start window has passed, including when a database migration ends. A weekly digest's cutoff follows local daylight saving time and stays fixed even if enqueueing takes longer than expected. Digests queued by earlier replicas during a rolling upgrade keep their scheduled cutoff. An overdue digest ends even while questions are waiting.
 
   Questions and weekly digests get their full work time after a sandbox leases them. PostgreSQL time also determines whether a weekly digest can start.
