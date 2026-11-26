@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -13,12 +14,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
 
 /** Reads GitLab's own author account for an email on a representative commit. */
@@ -66,13 +69,20 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                 }
                 clients.waitIfRateLimitLow(scopeId);
                 clients.acquirePermission();
-                var response = clients.forScope(scopeId)
+                var exchange = new ProviderReply.Exchange();
+                var response = clients.forScope(scopeId, exchange)
                         .documentName("GetCommitIdentity")
                         .variable("fullPath", nameWithOwner)
                         .variable("sha", question.sha())
                         .execute()
                         .block(properties.graphqlTimeout());
+                var reply = response == null ? new ProviderReply.Failed("no response") : classify(exchange, response);
+                if (reply instanceof ProviderReply.Throttled throttled) {
+                    deferRest(questions, answers, throttled.until());
+                    break;
+                }
                 if (response == null
+                        || !(reply instanceof ProviderReply.Ok)
                         || !response.isValid()
                         || !response.getErrors().isEmpty()) {
                     clients.recordFailure(new IllegalStateException("GitLab did not answer a commit identity read"));
@@ -125,6 +135,14 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                 break;
             } catch (RuntimeException exception) {
                 if (!readSucceeded) clients.recordFailure(exception);
+                // A refused read: a throttle in its status or headers is a wait, never a miss.
+                var refusal = ProviderReply.refusalOf(exception);
+                if (refusal != null
+                        && ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now())
+                                instanceof ProviderReply.Throttled throttled) {
+                    deferRest(questions, answers, throttled.until());
+                    break;
+                }
                 log.warn(
                         "GitLab commit identity read failed: providerId={}, cause={}",
                         providerId,
@@ -132,6 +150,25 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
             }
         }
         return answers;
+    }
+
+    /** A throttle answers nothing: this and every question still open wait for GitLab's deadline. */
+    private static void deferRest(Set<Question> questions, Map<Question, Answer> answers, Instant until) {
+        for (var pending : questions) {
+            answers.putIfAbsent(pending, new Answer.Deferred(until));
+        }
+    }
+
+    private static ProviderReply classify(ProviderReply.Exchange exchange, ClientGraphQlResponse response) {
+        List<ProviderReply.BodyError> errors = response.getErrors().stream()
+                .map(error -> new ProviderReply.BodyError(
+                        error.getExtensions().get("code") instanceof String code ? code : null,
+                        error.getMessage(),
+                        false))
+                .toList();
+        int status = exchange.status() == 0 ? 200 : exchange.status();
+        return ProviderReply.classify(
+                new ProviderReply.Signal(status, exchange.headers(), errors, null, null), Instant.now());
     }
 
     /** GitLab's reset when it reported one, else a minute: a closed circuit or a low budget recovers soon. */

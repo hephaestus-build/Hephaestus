@@ -172,30 +172,6 @@ public class GitHubExceptionClassifier {
     }
 
     /**
-     * The throttle in a GraphQL response, wherever it stands among its errors, or null. An alias error before it, such as
-     * a commit that GitHub cannot resolve, must not hide that the whole request was throttled.
-     */
-    public @Nullable ClassificationResult throttleOf(@Nullable ClientGraphQlResponse response) {
-        if (response == null || response.getErrors().isEmpty()) return null;
-        for (int index = 0; index < response.getErrors().size(); index++) {
-            if (isThrottle(response, index)) {
-                rateLimitedCounter.increment();
-                return ClassificationResult.rateLimited(Duration.ofMinutes(1), "GraphQL rate limit");
-            }
-        }
-        return null;
-    }
-
-    /** Whether the error at {@code index} says that GitHub throttled the request, by its type or by its text. */
-    public static boolean isThrottle(ClientGraphQlResponse response, int index) {
-        String type = GitHubGraphQlErrorUtils.errorType(response, index);
-        String message = response.getErrors().get(index).getMessage();
-        return "RATE_LIMIT".equals(type)
-                || "RATE_LIMITED".equals(type)
-                || (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit"));
-    }
-
-    /**
      * Checks if an exception is retryable (either RETRYABLE or RATE_LIMITED).
      *
      * @param e the exception to check

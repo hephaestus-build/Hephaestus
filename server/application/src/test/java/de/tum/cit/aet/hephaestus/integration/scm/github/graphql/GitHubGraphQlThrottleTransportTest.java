@@ -3,12 +3,15 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.graphql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -103,5 +106,44 @@ class GitHubGraphQlThrottleTransportTest {
 
         assertThat(classification.category()).isEqualTo(Category.RATE_LIMITED);
         assertThat(classification.rateLimitResetAt()).isAfter(Instant.now().plus(Duration.ofMinutes(9)));
+    }
+
+    @Test
+    void shouldKeepTheDeadlineOfAnHttp200ThatSpentTheQuota() {
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        github.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("X-RateLimit-Remaining", "0")
+                .addHeader("X-RateLimit-Reset", Long.toString(reset.getEpochSecond()))
+                .body("{\"data\":null,\"errors\":[{\"message\":\"Something went wrong\"}]}")
+                .build());
+        var exchange = new ProviderReply.Exchange();
+        var client = HttpGraphQlClient.create(WebClient.builder()
+                        .baseUrl(github.url("/graphql").toString())
+                        .filter(GitHubGraphQlConfig.exchangeCapture())
+                        .filter(GitHubGraphQlConfig.retryFilter())
+                        .build())
+                .mutate()
+                .webClient(builder -> builder.defaultRequest(
+                        request -> request.attribute(GitHubGraphQlClientProvider.EXCHANGE_ATTRIBUTE, exchange)))
+                .build();
+
+        var response = Objects.requireNonNull(
+                client.document("query { viewer { login } }").execute().block(Duration.ofSeconds(10)));
+
+        var reply = ProviderReply.classify(
+                new ProviderReply.Signal(
+                        exchange.status(),
+                        exchange.headers(),
+                        response.getErrors().stream()
+                                .map(error -> new ProviderReply.BodyError(null, error.getMessage(), false))
+                                .toList(),
+                        null,
+                        null),
+                Instant.now());
+        assertThat(reply)
+                .as("the transport keeps the headers of an answered request, so its deadline holds")
+                .isEqualTo(new ProviderReply.Throttled(reset));
     }
 }

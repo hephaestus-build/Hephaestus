@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService.InstallationToken;
@@ -112,6 +113,14 @@ public class GitHubGraphQlClientProvider {
         rateLimitSeeder.seedIfUnobserved(scopeId, token);
         return clientFactory.withBearerTokenAndAttribute(
                 baseClient, token, GitHubCredentialRefusalFilter.SCOPE_ID_ATTRIBUTE, scopeId);
+    }
+
+    /** The request attribute that names a {@link ProviderReply.Exchange} for the response's status and headers. */
+    public static final String EXCHANGE_ATTRIBUTE = GitHubGraphQlClientProvider.class.getName() + ".exchange";
+
+    /** The scope's client, whose responses record their status and headers into {@code exchange}. */
+    public HttpGraphQlClient forScope(Long scopeId, ProviderReply.Exchange exchange) {
+        return clientFactory.withAttribute(forScope(scopeId), EXCHANGE_ATTRIBUTE, exchange);
     }
 
     /**

@@ -25,6 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -83,6 +86,9 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     private CommitIdentityResolutionRepository resolutions;
 
     @Autowired
+    private ProviderCredentialPauseRepository pauses;
+
+    @Autowired
     private CommitIdentityChangeRepository changes;
 
     @Autowired
@@ -95,11 +101,27 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     private Function<Question, @Nullable Answer> provider = question -> null;
     private @Nullable CommitIdentityResolutionJob job;
 
+    /** The scope of every repository unless a test names another: a workspace, whose credential a pause keys. */
+    private long scope;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
         github = provider(IdentityProviderType.GITHUB, "https://github.com");
-        when(scopes.getActiveScopesForRepository(anyLong(), anyLong())).thenReturn(List.of(1L));
+        scope = workspace();
+        when(scopes.getActiveScopesForRepository(anyLong(), anyLong())).thenReturn(List.of(scope));
+    }
+
+    private long workspace() {
+        var workspace = new Workspace();
+        workspace.setWorkspaceSlug("identity-" + UUID.randomUUID());
+        workspace.setDisplayName("Commit identity test");
+        workspace.setAccountLogin("identity");
+        workspace.setAccountType(AccountType.ORG);
+        return Objects.requireNonNull(workspaces.saveAndFlush(workspace).getId());
     }
 
     @Test
@@ -403,9 +425,9 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         Repository throttled = repository();
         Repository healthy = repository();
         when(scopes.getActiveScopesForRepository(eq(throttled.getNativeId()), anyLong()))
-                .thenReturn(List.of(1L));
+                .thenReturn(List.of(scope));
         when(scopes.getActiveScopesForRepository(eq(healthy.getNativeId()), anyLong()))
-                .thenReturn(List.of(2L));
+                .thenReturn(List.of(workspace()));
         long waiting = commit(throttled, wrong, null, throttledEmail);
         long corrected = commit(healthy, wrong, null, EMAIL);
         seed();
@@ -446,9 +468,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         User wrong = user("wrong");
         String throttledEmail = "throttled@example.com";
         Repository first = repository();
-        Repository sibling = repository();
         commit(first, wrong, null, throttledEmail);
-        commit(sibling, wrong, null, EMAIL);
         seed();
         Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
         List<String> asked = new ArrayList<>();
@@ -456,11 +476,18 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
             asked.add(question.email());
             return new Answer.Deferred(reset);
         };
+        run(50);
+        // A repository of the same credential comes due later, on another server that never saw the throttle.
+        Repository sibling = repository();
+        commit(sibling, wrong, null, EMAIL);
+        seed();
+        job = null;
 
         run(50);
-        run(50);
 
-        assertThat(asked).as("one request per server for the whole scope").containsExactly(throttledEmail);
+        assertThat(asked)
+                .as("one request for the whole credential, across servers")
+                .containsExactly(throttledEmail);
         assertThat(jdbc.queryForList(
                         "SELECT deferred_until FROM commit_identity_resolution WHERE repository_id = ?",
                         Timestamp.class,
@@ -586,6 +613,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         if (job == null) {
             job = new CommitIdentityResolutionJob(
                     resolutions,
+                    pauses,
                     service,
                     new CommitIdentityResolutionProperties(true, batchSize),
                     List.of(new TableProvider()),

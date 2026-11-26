@@ -28,7 +28,7 @@ The correction job runs by default.
    - `skipped`: another attempt already finished the email. No link changed.
    - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
    - `deferred`: the provider limited its rate, so the email waits until the provider's reset and spends no attempt.
-     The wait is at least one minute and at most two hours, and every server keeps it.
+     The wait is at least five minutes, one run of the job, and at most two hours. Every server keeps it.
      The other repositories of that connection wait too. Other connections continue.
 
 ## Check that it worked

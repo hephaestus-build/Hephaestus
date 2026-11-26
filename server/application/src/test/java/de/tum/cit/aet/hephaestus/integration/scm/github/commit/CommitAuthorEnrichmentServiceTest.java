@@ -43,10 +43,12 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.graphql.GraphQlRequest;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.graphql.client.GraphQlTransportException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -121,7 +123,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             var request = mock(GraphQlClient.RequestSpec.class);
             var response = mock(ClientGraphQlResponse.class);
             var field = mock(ClientResponseField.class);
-            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.just(response));
             when(response.isValid()).thenReturn(true);
@@ -191,7 +193,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         private CommitAuthorEnrichmentService.CommitActors readBody(String body, List<String> shas) {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.just(GitHubGraphQlTestResponses.decode(body)));
             return service.fetchCommitActors("owner/repo", 1L, shas);
@@ -281,6 +283,19 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldReadGitHubsAbuseDetectionUnderForbiddenAsAThrottleThoughTheQuotaLooksHealthy() {
+            var actors = readBody("""
+                    {"data":null,
+                     "errors":[{"type":"FORBIDDEN","message":"You have triggered an abuse detection mechanism."}]}
+                    """, List.of(SHA));
+
+            assertThat(actors.throttled())
+                    .as("abuse detection is a secondary limit: a wait, not a miss that spends the last attempt")
+                    .isTrue();
+            assertThat(actors.bySha()).isEmpty();
+        }
+
+        @Test
         void shouldFindAThrottleBehindANotFoundInAnInvalidResponse() {
             var actors = readBody("""
                     {"data":null,
@@ -310,7 +325,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
         private CommitAuthorEnrichmentService.CommitActors refuse(WebClientResponseException refusal) {
             var client = mock(HttpGraphQlClient.class);
             var request = mock(GraphQlClient.RequestSpec.class);
-            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
             when(client.document(anyString())).thenReturn(request);
             when(request.execute()).thenReturn(Mono.error(refusal));
             return service.fetchCommitActors("owner/repo", 1L, List.of(SHA, "b".repeat(40)));
@@ -334,6 +349,23 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             assertThat(actors.throttled()).isTrue();
             assertThat(actors.bySha()).isEmpty();
             verify(graphQlSyncCoordinator, never()).handleGraphQlClassification(any());
+        }
+
+        @Test
+        void shouldFindTheRefusalInsideTheTransportExceptionThatTheClientThrows() {
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class);
+            when(graphQlClientProvider.forScope(eq(1L), any())).thenReturn(client);
+            when(client.document(anyString())).thenReturn(request);
+            // The GraphQL client wraps an HTTP error in its transport exception.
+            when(request.execute())
+                    .thenReturn(Mono.error(new GraphQlTransportException(
+                            "refused", refusal(429, "Retry-After", "600", "{}"), mock(GraphQlRequest.class))));
+
+            var actors = service.fetchCommitActors("owner/repo", 1L, List.of(SHA));
+
+            assertThat(actors.throttled()).isTrue();
+            assertThat(actors.throttledUntil()).isAfter(Instant.now().plusSeconds(500));
         }
 
         @Test

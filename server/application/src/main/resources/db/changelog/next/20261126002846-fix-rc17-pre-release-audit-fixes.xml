@@ -20,4 +20,16 @@ ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_hold_reason
             <column name="deferred_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
         </addColumn>
     </changeSet>
+    <changeSet id="1795634098734-3" author="hephaestus">
+        <comment>A provider that limits a workspace's credential pauses it until the provider's deadline, for every server.</comment>
+        <createTable tableName="provider_credential_pause">
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="provider_credential_pausePK"/>
+            </column>
+            <column name="paused_until" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="provider_credential_pause" constraintName="sfk_provider_credential_pause_workspace" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
 </databaseChangeLog>

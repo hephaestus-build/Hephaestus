@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitId
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -66,6 +67,9 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private CommitIdentityResolutionRepository resolutions;
+
+    @Autowired
+    private ProviderCredentialPauseRepository pauses;
 
     @Autowired
     private ApplicationEventMulticaster multicaster;
@@ -274,6 +278,7 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
         };
         return new CommitIdentityResolutionJob(
                 resolutions,
+                pauses,
                 service,
                 new CommitIdentityResolutionProperties(true, 1),
                 List.of(provider),

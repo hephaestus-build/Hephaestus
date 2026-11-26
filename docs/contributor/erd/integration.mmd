@@ -49,6 +49,7 @@ erDiagram
         BIGINT commit_id FK "NOT NULL"
         BIGINT contributor_id FK
         BIGINT repository_id FK "NOT NULL"
+        TIMESTAMPTZ deferred_until
     }
 
     CommitPullRequest {
@@ -402,6 +403,11 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    ProviderCredentialPause {
+        BIGINT workspace_id PK,FK
+        TIMESTAMPTZ paused_until "NOT NULL"
+    }
+
     ProviderEvent {
         BIGINT id PK
         BIGINT workspace_id FK
@@ -722,6 +728,7 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
+    Workspace ||--|| ProviderCredentialPause : has
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
 
     %% One-to-Many relationships

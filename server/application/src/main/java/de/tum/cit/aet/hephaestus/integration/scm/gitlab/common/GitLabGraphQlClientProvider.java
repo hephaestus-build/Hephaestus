@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.GITLAB_GRAPHQL_PATH;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -107,6 +108,14 @@ public class GitLabGraphQlClientProvider {
      */
     public HttpGraphQlClient forScope(Long scopeId) {
         return forScope(scopeId, tokenService.getAccessToken(scopeId), tokenService.resolveServerUrl(scopeId));
+    }
+
+    /** The request attribute that names a {@link ProviderReply.Exchange} for the response's status and headers. */
+    public static final String EXCHANGE_ATTRIBUTE = GitLabGraphQlClientProvider.class.getName() + ".exchange";
+
+    /** The scope's client, whose responses record their status and headers into {@code exchange}. */
+    public HttpGraphQlClient forScope(Long scopeId, ProviderReply.Exchange exchange) {
+        return clientFactory.withAttribute(forScope(scopeId), EXCHANGE_ATTRIBUTE, exchange);
     }
 
     /**
