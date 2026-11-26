@@ -36,6 +36,28 @@ public record ExportBundle(
     /** Current export schema version: the major part changes on a breaking shape change, the minor on a new field. */
     public static final String SCHEMA_VERSION = "2.2";
 
+    /** The sources that another person's erasure can remove, which the worker reads under the owner's export fence. */
+    public ExportBundle withErasableSources(
+            List<AccountConversationExport.Message> messages,
+            List<AccountFeedbackExport.Received> received,
+            List<AccountFeedbackExport.Response> responses) {
+        return new ExportBundle(
+                schemaVersion,
+                generatedAt,
+                account,
+                identities,
+                workspaceMemberships,
+                featureFlags,
+                preferences,
+                authEvents,
+                aiChoice,
+                notificationPreferences,
+                passkeys,
+                messages,
+                received,
+                responses);
+    }
+
     public record Passkey(
             String label,
             @Nullable Instant createdAt,

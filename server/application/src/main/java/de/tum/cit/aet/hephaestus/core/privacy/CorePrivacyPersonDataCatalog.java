@@ -260,7 +260,17 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "id,account_id,status,requested_at,completed_at,expires_at",
                         "id",
                         "",
-                        900),
+                        900) {
+                    @Override
+                    protected String eraseStatement(String where) {
+                        // See "Account export locks" in docs/contributor/transactions.mdx.
+                        return """
+                                WITH locked AS MATERIALIZED (
+                                    SELECT t.id FROM account_export t WHERE %s ORDER BY t.id FOR UPDATE OF t
+                                )
+                                """.formatted(where) + super.eraseStatement("t.id IN (SELECT id FROM locked)");
+                    }
+                },
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter.Generation;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.Objects;
@@ -25,6 +27,13 @@ import tools.jackson.databind.ObjectMapper;
  * delivers it at least once: a generation that a stopped process left open runs again, and a delivery
  * for a terminal export does nothing. A transient database failure leaves the publication open. A generation
  * that fails for another reason records FAILED and completes its publication.
+ *
+ * <p>Another person's erasure can remove what the export holds: an answer in the account's conversations that used
+ * their data, or feedback to the account that was derived from it. So the worker reads the conversation messages and
+ * the received feedback only at publication, under the owner's export fence, and the database expires the owner's ready
+ * exports when such a source is removed or edited ({@code person_row_sweep('EXPORT_SOURCES_CHANGED', …)}). The change
+ * shares the same fence, so either the worker reads after the change commits, or the change expires what the worker
+ * published.
  */
 @ConditionalOnServerRole
 @Component
@@ -36,6 +45,8 @@ public class ExportGenerationWorker {
     private final AccountExportRepository accountExportRepository;
     private final AccountRepository accounts;
     private final ExportBundleAssembler assembler;
+    private final AccountConversationExport conversations;
+    private final AccountFeedbackExport feedback;
     private final ObjectMapper objectMapper;
     private final AccountExportWriter writer;
     private final PrivacyJobMetrics metrics;
@@ -46,6 +57,8 @@ public class ExportGenerationWorker {
             AccountExportRepository accountExportRepository,
             AccountRepository accounts,
             ExportBundleAssembler assembler,
+            AccountConversationExport conversations,
+            AccountFeedbackExport feedback,
             ObjectMapper objectMapper,
             AccountExportWriter writer,
             PrivacyJobMetrics metrics,
@@ -54,6 +67,8 @@ public class ExportGenerationWorker {
         this.accountExportRepository = accountExportRepository;
         this.accounts = accounts;
         this.assembler = assembler;
+        this.conversations = conversations;
+        this.feedback = feedback;
         this.objectMapper = objectMapper;
         this.writer = writer;
         this.metrics = metrics;
@@ -126,8 +141,16 @@ public class ExportGenerationWorker {
             // Account erasure is irreversible. A missing account also cannot own a retained export.
             return writer.finish(exportId, accountId, null, "account_unavailable");
         }
-        byte[] payload = objectMapper.writeValueAsBytes(assembler.assemble(accountId));
-        return writer.finish(exportId, accountId, payload, "account_unavailable");
+        ExportBundle bundle = assembler.assemble(accountId);
+        // The writer runs this under the owner's export fence, after the account lock and before the export row.
+        return writer.finish(
+                exportId,
+                accountId,
+                () -> objectMapper.writeValueAsBytes(bundle.withErasableSources(
+                        conversations.messages(accountId),
+                        feedback.received(accountId),
+                        feedback.responses(accountId))),
+                "account_unavailable");
     }
 
     private void recordFailure(Long exportId, Long accountId, String reason, RuntimeException failure) {

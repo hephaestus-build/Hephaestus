@@ -163,6 +163,13 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
   PostgreSQL has already aborted that transaction.
   Use `INSERT … ON CONFLICT`.
 
+### Account export locks
+
+Source expiry and person erasure lock export rows in ascending `account_export.id` order before they update or delete them.
+The source sweep takes these row locks after it finishes writing sources.
+Erasure holds the account lock before it locks export rows.
+The time-based retention sweep skips rows that another transaction locks.
+
 ## 7. Isolation
 
 - READ COMMITTED is the default. Code assumes it.

@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795549410482-1" author="hephaestus">
+        <comment>A closed rule of person_row_sweep expires an account's ready exports when an erasure or an edit changes one of their sources, ordered against the export worker by the account's export fence.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
+    RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    changed integer := 0;
+    counted integer;
+    clash record;
+    absorbed record;
+    admitted boolean;
+    bound timestamp with time zone;
+BEGIN
+    IF rule IN ('WORKSPACE_PURGE', 'ACCOUNT_ABSORB') THEN
+        -- Hash the supplied and expected MACs before comparing their bytes.
+        SELECT EXISTS (
+            SELECT FROM lifecycle_private.sweep_key k
+            WHERE sha256(convert_to(encode(sha256(k.outer_pad || sha256(k.inner_pad || convert_to(
+                concat_ws(':', 'person_row_sweep', rule, subject_id, COALESCE(other_id::text, '-'),
+                          pg_current_xact_id(), pg_backend_pid(), extract(epoch FROM transaction_timestamp())),
+                'UTF8'))), 'hex'), 'UTF8'))
+                = sha256(convert_to(current_setting('hephaestus.sweep_admission', true), 'UTF8'))
+        ) INTO admitted;
+    END IF;
+    IF rule = 'WORKSPACE_PURGE' THEN
+        -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
+        IF subject_id IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        -- A personal space is purged only by its owner's erasure, which suspends it first.
+        PERFORM FROM public.workspace w
+        WHERE w.id = subject_id
+          AND ((w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')) OR (w.kind = 'PERSONAL' AND w.status = 'SUSPENDED'))
+        FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'person_row_sweep: workspace is unavailable for purge'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation_turn WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPIRED_EXPORTS' THEN
+        -- cutoff is now: a ready export past its expiry loses its payload. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        -- One call expires at most 100 exports, by expiry and key. Account erasure locks the account before its
+        -- exports, so a busy account is skipped, and so is an export that another transaction holds: the job commits
+        -- each call and calls again, and its next run retries what it skipped (ExportRetentionSweeper). The bound is a
+        -- variable, so the ready-expiry index can range on it.
+        bound := LEAST(cutoff, statement_timestamp());
+        WITH due AS MATERIALIZED (
+            SELECT x.id FROM public.account_export x JOIN public.account a ON a.id = x.account_id
+            WHERE x.status = 'READY' AND x.expires_at < bound AND a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+            ORDER BY x.expires_at, x.id
+            LIMIT 100
+            FOR UPDATE OF x SKIP LOCKED
+            FOR SHARE OF a SKIP LOCKED
+        )
+        UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
+        FROM due
+        WHERE x.id = due.id;
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSIF rule = 'ACCOUNT_ABSORB' THEN
+        -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
+        -- conversation in a workspace, the absorbed main's entries follow the claiming main's entries, its turns and
+        -- threads move, and it is deleted. Every other conversation of the absorbed account changes owner.
+        IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
+            RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
+        -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
+        PERFORM FROM public.account a WHERE a.id IN (subject_id, other_id) ORDER BY a.id FOR UPDATE;
+        IF NOT EXISTS (SELECT FROM public.account a WHERE a.id = subject_id AND a.status = 'UNCLAIMED')
+           OR NOT EXISTS (SELECT FROM public.account a WHERE a.id = other_id AND a.status IN ('ACTIVE', 'BLOCKED')) THEN
+            RAISE EXCEPTION 'person_row_sweep: only an unclaimed account is absorbed, by an active or blocked account'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        FOR clash IN
+            SELECT a.workspace_id, a.id AS absorbed_id, k.id AS kept_id FROM public.conversation a
+            JOIN public.conversation k ON k.workspace_id = a.workspace_id
+                AND k.account_id = other_id AND k.parent_conversation_id IS NULL
+            WHERE a.account_id = subject_id AND a.parent_conversation_id IS NULL
+            ORDER BY a.id
+            FOR UPDATE OF a, k
+        LOOP
+            -- The caller prepares each clash first: it returns a running turn of the absorbed main to the queue, moves
+            -- the absorbed main's queued runs to the claiming main, and erases the absorbed main's summaries, which
+            -- summarize a conversation that no longer exists alone.
+            IF EXISTS (SELECT FROM public.conversation_turn t
+                       WHERE t.conversation_id = clash.absorbed_id AND t.status = 'RUNNING')
+               OR EXISTS (SELECT FROM public.agent_run r
+                          WHERE r.workspace_id = clash.workspace_id AND r.state = 'QUEUED'
+                            AND r.concurrency_key = 'conversation:' || clash.absorbed_id)
+               OR EXISTS (SELECT FROM public.conversation_entry e
+                          WHERE e.conversation_id = clash.absorbed_id AND e.kind = 'SUMMARY' AND e.redacted_at IS NULL) THEN
+                RAISE EXCEPTION 'person_row_sweep: the absorbed conversation % is not prepared', clash.absorbed_id
+                    USING ERRCODE = 'object_not_in_prerequisite_state';
+            END IF;
+            UPDATE public.conversation_entry e SET conversation_id = clash.kept_id, account_id = other_id,
+                seq = top.seq + moved.position
+            FROM (SELECT x.id, row_number() OVER (ORDER BY x.seq) AS position
+                  FROM public.conversation_entry x WHERE x.conversation_id = clash.absorbed_id) moved,
+                 (SELECT COALESCE(max(y.seq), 0) AS seq FROM public.conversation_entry y
+                  WHERE y.conversation_id = clash.kept_id) top
+            WHERE e.id = moved.id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation_turn SET conversation_id = clash.kept_id, account_id = other_id
+            WHERE conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation SET parent_conversation_id = clash.kept_id
+            WHERE parent_conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            SELECT c.slack_team_id, c.slack_user_id, c.slack_channel_id, c.last_activity_at, c.last_read_at
+            INTO absorbed FROM public.conversation c WHERE c.id = clash.absorbed_id;
+            DELETE FROM public.conversation WHERE id = clash.absorbed_id;
+            -- The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
+            UPDATE public.conversation SET
+                slack_user_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_user_id ELSE slack_user_id END,
+                slack_channel_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_channel_id ELSE slack_channel_id END,
+                slack_team_id = COALESCE(slack_team_id, absorbed.slack_team_id),
+                last_activity_at = GREATEST(last_activity_at, absorbed.last_activity_at),
+                last_read_at = GREATEST(last_read_at, absorbed.last_read_at)
+            WHERE id = clash.kept_id;
+        END LOOP;
+        UPDATE public.conversation SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPORT_SOURCES_CHANGED' THEN
+        IF pg_catalog.pg_trigger_depth() = 0 THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPORT_SOURCES_CHANGED runs only from the triggers of its sources'
+                USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF subject_id IS NOT NULL THEN
+            -- Keep publication behind an open source change, but leave export row locks until all source writes finish.
+            PERFORM pg_catalog.pg_advisory_xact_lock_shared(
+                pg_catalog.hashtext('account-export-sources'), pg_catalog.hashtext(CAST(subject_id AS text)) & 63);
+            INSERT INTO lifecycle_private.export_expiry_queue (transaction_id, account_id)
+            VALUES (pg_current_xact_id(), subject_id) ON CONFLICT DO NOTHING;
+        ELSE
+            -- The first deferred trigger drains this transaction's owners.
+            -- See "Account export locks" in docs/contributor/transactions.mdx.
+            WITH owners AS (
+                DELETE FROM lifecycle_private.export_expiry_queue
+                WHERE transaction_id = pg_current_xact_id()
+                RETURNING account_id
+            ), due AS MATERIALIZED (
+                SELECT x.id FROM public.account_export x
+                WHERE x.status = 'READY' AND x.account_id IN (SELECT account_id FROM owners)
+                ORDER BY x.id
+                FOR UPDATE OF x
+            )
+            UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
+            FROM due WHERE x.id = due.id;
+            GET DIAGNOSTICS changed = ROW_COUNT;
+        END IF;
+    ELSE
+        RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN changed;
+END
+$$;
+        ]]></sql>
+        <rollback changeSetId="1795549938000-1" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125095022-fix-export-expiry-skip-locked.xml"/>
+    </changeSet>
+    <changeSet id="1795549410482-2" author="hephaestus">
+        <comment>An account export holds its owner's conversation messages and received feedback. When an erasure, an edit, a withdrawal or a retraction changes one of them, in the same transaction, the triggers call EXPORT_SOURCES_CHANGED for the owner. A ready export is published only under the owner's export fence.</comment>
+        <sql splitStatements="false"><![CDATA[
+-- Pending expiry belongs to the transaction that changed the source and is cleared before commit.
+CREATE TABLE lifecycle_private.export_expiry_queue (
+    transaction_id xid8 NOT NULL,
+    account_id bigint NOT NULL,
+    PRIMARY KEY (transaction_id, account_id)
+);
+ALTER TABLE lifecycle_private.export_expiry_queue OWNER TO hephaestus_owner;
+
+CREATE FUNCTION public.account_export_expire_at_commit() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', NULL, NULL, NULL);
+    RETURN NULL;
+END
+$$;
+CREATE CONSTRAINT TRIGGER trg_export_expiry_at_commit
+    AFTER INSERT ON lifecycle_private.export_expiry_queue
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION public.account_export_expire_at_commit();
+
+-- The trigger functions run as the role whose statement fires them: the application, or the owner inside another
+-- rule of person_row_sweep. Both may call person_row_sweep, the definer that crosses owners.
+CREATE FUNCTION public.account_export_message_changed() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', NEW.account_id, NULL, NULL);
+    RETURN NULL;
+END
+$$;
+
+CREATE FUNCTION public.account_export_messages_deleted() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', owner.account_id, NULL, NULL)
+    FROM (SELECT DISTINCT deleted.account_id FROM deleted_entries deleted
+          WHERE deleted.redacted_at IS NULL AND deleted.kind IN ('USER', 'ANSWER', 'DIGEST')
+          ORDER BY 1) owner;
+    RETURN NULL;
+END
+$$;
+
+-- Only delivered feedback is exported (AccountFeedbackExport).
+CREATE FUNCTION public.account_export_feedback_deleted() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', owner.person_account_id, NULL, NULL)
+    FROM (SELECT DISTINCT deleted.person_account_id FROM deleted_feedback deleted
+          WHERE deleted.person_account_id IS NOT NULL AND deleted.delivered_at IS NOT NULL ORDER BY 1) owner;
+    RETURN NULL;
+END
+$$;
+
+-- A person erasure deletes a feedback's posted copies and responses in steps before the one that deletes the feedback.
+CREATE FUNCTION public.account_export_feedback_parts_deleted() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', owner.person_account_id, NULL, NULL)
+    FROM (SELECT DISTINCT f.person_account_id FROM deleted_parts deleted
+          JOIN public.feedback f ON f.id = deleted.feedback_id AND f.workspace_id = deleted.workspace_id
+          WHERE f.person_account_id IS NOT NULL AND f.delivered_at IS NOT NULL ORDER BY 1) owner;
+    RETURN NULL;
+END
+$$;
+
+-- The export holds delivered feedback in the states that its developer may learn of (FeedbackState.VISIBLE_TO_DEVELOPER).
+-- Feedback that leaves them, as an edit's original does once the edit is posted (REPLACED), or whose exported fields
+-- change, leaves an older version in a ready export.
+CREATE FUNCTION public.account_export_feedback_changed() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', OLD.person_account_id, NULL, NULL);
+    RETURN NULL;
+END
+$$;
+
+-- The export holds a delivered feedback's posted copies (FeedbackExportRepository.findPostedPieces). A copy that leaves
+-- POSTED, as a confirmed retraction does, or whose exported words change, leaves an older version in a ready export.
+CREATE FUNCTION public.account_export_feedback_copy_changed() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', f.person_account_id, NULL, NULL)
+    FROM public.feedback f
+    WHERE f.workspace_id = NEW.workspace_id AND f.id = NEW.feedback_id
+      AND f.person_account_id IS NOT NULL AND f.delivered_at IS NOT NULL;
+    RETURN NULL;
+END
+$$;
+
+-- A withdrawal hides the text of a delivered feedback and of the edits that replaced it (FeedbackVisibilitySql.LATEST).
+CREATE FUNCTION public.account_export_feedback_withdrawn() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', owner.person_account_id, NULL, NULL)
+    FROM (WITH RECURSIVE hidden AS (
+              SELECT f.workspace_id, f.id, f.person_account_id, f.delivered_at FROM withdrawals d
+              JOIN public.feedback f ON f.workspace_id = d.workspace_id AND f.id = d.feedback_id
+              WHERE d.action = 'WITHDRAW'
+              UNION
+              SELECT later.workspace_id, later.id, later.person_account_id, later.delivered_at FROM hidden h
+              JOIN public.feedback later ON later.workspace_id = h.workspace_id AND later.replaces_id = h.id
+              WHERE later.destination = 'ON_WORK' AND later.composition->>'editOf' = later.replaces_id::text)
+          SELECT DISTINCT hidden.person_account_id FROM hidden
+          WHERE hidden.person_account_id IS NOT NULL AND hidden.delivered_at IS NOT NULL ORDER BY 1) owner;
+    RETURN NULL;
+END
+$$;
+
+-- A ready export is published, or inserted, only by a session that holds its owner's export fence alone, as the export
+-- worker does.
+-- A worker of a release without the fence reads its sources unordered against a change, so its publication fails.
+CREATE FUNCTION public.account_export_published_fenced() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM pg_catalog.pg_locks l
+        WHERE l.locktype = 'advisory' AND l.pid = pg_catalog.pg_backend_pid() AND l.mode = 'ExclusiveLock' AND l.granted
+          AND l.objsubid = 2
+          AND l.classid = CAST(pg_catalog.hashtext('account-export-sources') AS oid)
+          AND l.objid = CAST(pg_catalog.hashtext(CAST(NEW.account_id AS text)) & 63 AS oid)) THEN
+        RAISE EXCEPTION 'account_export: a ready export is published only under its owner''s export fence'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN NULL;
+END
+$$;
+
+-- A row trigger, so a vote pays nothing: only the erasure or the edit of a shown message fires it.
+CREATE TRIGGER trg_conversation_entry_changed_exports
+    AFTER UPDATE OF redacted_at, edited_at ON public.conversation_entry
+    FOR EACH ROW
+    WHEN (OLD.redacted_at IS NULL AND OLD.kind IN ('USER', 'ANSWER', 'DIGEST')
+          AND (NEW.redacted_at IS NOT NULL OR NEW.edited_at IS DISTINCT FROM OLD.edited_at))
+    EXECUTE FUNCTION public.account_export_message_changed();
+-- Statement triggers, so a workspace purge or a person erasure fences each owner once per statement.
+CREATE TRIGGER trg_conversation_entry_deleted_exports
+    AFTER DELETE ON public.conversation_entry
+    REFERENCING OLD TABLE AS deleted_entries
+    FOR EACH STATEMENT EXECUTE FUNCTION public.account_export_messages_deleted();
+CREATE TRIGGER trg_feedback_deleted_exports
+    AFTER DELETE ON public.feedback
+    REFERENCING OLD TABLE AS deleted_feedback
+    FOR EACH STATEMENT EXECUTE FUNCTION public.account_export_feedback_deleted();
+CREATE TRIGGER trg_feedback_copy_deleted_exports
+    AFTER DELETE ON public.feedback_copy
+    REFERENCING OLD TABLE AS deleted_parts
+    FOR EACH STATEMENT EXECUTE FUNCTION public.account_export_feedback_parts_deleted();
+CREATE TRIGGER trg_feedback_response_deleted_exports
+    AFTER DELETE ON public.feedback_response
+    REFERENCING OLD TABLE AS deleted_parts
+    FOR EACH STATEMENT EXECUTE FUNCTION public.account_export_feedback_parts_deleted();
+-- Row triggers, so only a change of what an export shows pays for them.
+CREATE TRIGGER trg_feedback_changed_exports
+    AFTER UPDATE OF state, body, destination, delivered_at, person_account_id ON public.feedback
+    FOR EACH ROW
+    WHEN (OLD.person_account_id IS NOT NULL AND OLD.delivered_at IS NOT NULL
+          AND OLD.state IN ('READY', 'DELIVERED', 'UNCONFIRMED', 'FAILED')
+          AND (NEW.state NOT IN ('READY', 'DELIVERED', 'UNCONFIRMED', 'FAILED')
+               OR (OLD.body, OLD.destination, OLD.delivered_at, OLD.person_account_id)
+                  IS DISTINCT FROM (NEW.body, NEW.destination, NEW.delivered_at, NEW.person_account_id)))
+    EXECUTE FUNCTION public.account_export_feedback_changed();
+CREATE TRIGGER trg_feedback_copy_changed_exports
+    AFTER UPDATE OF state, kind, path, start_line, end_line, body, posted_at ON public.feedback_copy
+    FOR EACH ROW
+    WHEN (OLD.state = 'POSTED' AND OLD.posted_at IS NOT NULL
+          AND (OLD.state, OLD.kind, OLD.path, OLD.start_line, OLD.end_line, OLD.body, OLD.posted_at)
+              IS DISTINCT FROM (NEW.state, NEW.kind, NEW.path, NEW.start_line, NEW.end_line, NEW.body, NEW.posted_at))
+    EXECUTE FUNCTION public.account_export_feedback_copy_changed();
+CREATE TRIGGER trg_feedback_decision_withdrawn_exports
+    AFTER INSERT ON public.feedback_decision
+    REFERENCING NEW TABLE AS withdrawals
+    FOR EACH STATEMENT EXECUTE FUNCTION public.account_export_feedback_withdrawn();
+CREATE TRIGGER trg_account_export_published_fenced
+    AFTER UPDATE OF status ON public.account_export
+    FOR EACH ROW
+    WHEN (NEW.status = 'READY' AND OLD.status IS DISTINCT FROM 'READY')
+    EXECUTE FUNCTION public.account_export_published_fenced();
+CREATE TRIGGER trg_account_export_inserted_fenced
+    AFTER INSERT ON public.account_export
+    FOR EACH ROW
+    WHEN (NEW.status = 'READY')
+    EXECUTE FUNCTION public.account_export_published_fenced();
+        ]]></sql>
+        <rollback>
+            <sql>DROP TRIGGER trg_account_export_inserted_fenced ON public.account_export</sql>
+            <sql>DROP TRIGGER trg_account_export_published_fenced ON public.account_export</sql>
+            <sql>DROP TRIGGER trg_feedback_decision_withdrawn_exports ON public.feedback_decision</sql>
+            <sql>DROP TRIGGER trg_feedback_copy_changed_exports ON public.feedback_copy</sql>
+            <sql>DROP TRIGGER trg_feedback_changed_exports ON public.feedback</sql>
+            <sql>DROP TRIGGER trg_feedback_response_deleted_exports ON public.feedback_response</sql>
+            <sql>DROP TRIGGER trg_feedback_copy_deleted_exports ON public.feedback_copy</sql>
+            <sql>DROP TRIGGER trg_feedback_deleted_exports ON public.feedback</sql>
+            <sql>DROP TRIGGER trg_conversation_entry_deleted_exports ON public.conversation_entry</sql>
+            <sql>DROP TRIGGER trg_conversation_entry_changed_exports ON public.conversation_entry</sql>
+            <sql>DROP FUNCTION public.account_export_published_fenced()</sql>
+            <sql>DROP FUNCTION public.account_export_feedback_withdrawn()</sql>
+            <sql>DROP FUNCTION public.account_export_feedback_copy_changed()</sql>
+            <sql>DROP FUNCTION public.account_export_feedback_changed()</sql>
+            <sql>DROP FUNCTION public.account_export_feedback_parts_deleted()</sql>
+            <sql>DROP FUNCTION public.account_export_feedback_deleted()</sql>
+            <sql>DROP FUNCTION public.account_export_messages_deleted()</sql>
+            <sql>DROP FUNCTION public.account_export_message_changed()</sql>
+            <sql>DROP TRIGGER trg_export_expiry_at_commit ON lifecycle_private.export_expiry_queue</sql>
+            <sql>DROP FUNCTION public.account_export_expire_at_commit()</sql>
+            <sql>DROP TABLE lifecycle_private.export_expiry_queue</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795549410482-3" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="account_export" columnName="status"/>
+            <columnExists tableName="account_export" columnName="payload"/>
+        </preConditions>
+        <comment>Wrong rows: a ready export built before the fence can hold a conversation message or feedback that an erasure removed after the export was built, and nothing writes that export again before it expires. Every ready export expires once, and its owner requests a new one.</comment>
+        <sql>UPDATE public.account_export SET status = 'EXPIRED', payload = NULL WHERE status = 'READY'</sql>
+        <rollback><stop>This step cleared payloads that can hold erased words, so it cannot be reversed. To roll back further, restore the verified pre-upgrade database backup, then expire its ready exports before any server serves a download.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>
