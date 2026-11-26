@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -750,7 +751,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
         socket.setSoTimeout(5_000);
         socket.getOutputStream()
-                .write(("GET /workspaces/ask-api/conversation/events HTTP/1.0\r\n"
+                .write(("GET " + ApiPath.PREFIX + "/workspaces/ask-api/conversation/events HTTP/1.0\r\n"
                                 + "Accept: text/event-stream\r\nAuthorization: Bearer " + MEMBER + "\r\n\r\n")
                         .getBytes(StandardCharsets.US_ASCII));
         var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
