@@ -213,11 +213,14 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                    r.payload -> 'message' ->> 'toolName' AS "tool",
                    COALESCE(r.payload -> 'message' ->> 'isError', 'false') = 'true' AS "error"
             FROM conversation_entry r
-            WHERE r.workspace_id = :workspaceId AND r.turn_id IN (:turnIds) AND r.kind = 'TOOL_RESULT'
+            WHERE r.workspace_id = :workspaceId AND r.conversation_id = :conversationId AND r.turn_id IN (:turnIds)
+              AND r.kind = 'TOOL_RESULT'
               AND r.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'search_conversation')
             """, nativeQuery = true)
     List<ToolOutcome> findToolOutcomes(
-            @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
 
     /**
      * The calls of the tools that open a source, in these turns, in call order: the turn, the call id, the tool and the
@@ -231,13 +234,47 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             CROSS JOIN LATERAL jsonb_array_elements(
                 CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
                      THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS c(block, position)
-            WHERE e.workspace_id = :workspaceId AND e.turn_id IN (:turnIds) AND e.kind = 'ANSWER'
-              AND e.redacted_at IS NULL AND c.block ->> 'type' = 'toolCall'
+            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId AND e.turn_id IN (:turnIds)
+              AND e.kind = 'ANSWER' AND e.redacted_at IS NULL AND c.block ->> 'type' = 'toolCall'
               AND c.block ->> 'name' IN ('read', 'bash', 'load_context', 'search_conversation')
             ORDER BY e.turn_id, e.seq, c.position
             """, nativeQuery = true)
     List<ToolCallRow> findOpeningCalls(
-            @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * The last message of each of these turns that the app shows, over the whole turn and not only one page: an answer
+     * with words, or one that links. What Hephaestus used goes under it, once for each answer, and whether the turn
+     * stored its entries.
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (e.turn_id) e.turn_id AS "turnId", e.id AS "entryId",
+                   e.payload IS NOT NULL AS "recorded"
+            FROM conversation_entry e
+            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId AND e.turn_id IN (:turnIds)
+              AND e.kind = 'ANSWER' AND e.redacted_at IS NULL
+              AND (e.text <> '' OR EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(
+                      CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
+                           THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) b
+                  WHERE b ->> 'type' = 'toolCall' AND b ->> 'name' IN ('link_result', 'link_problem', 'show_feedback')))
+            ORDER BY e.turn_id, e.seq DESC
+            """, nativeQuery = true)
+    List<ReceiptAnchor> findReceiptAnchors(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /** One row of {@link #findReceiptAnchors}. */
+    interface ReceiptAnchor {
+        UUID getTurnId();
+
+        UUID getEntryId();
+
+        boolean getRecorded();
+    }
 
     /** One row of {@link #findOpeningCalls}. */
     interface ToolCallRow {

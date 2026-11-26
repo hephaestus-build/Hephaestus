@@ -1113,7 +1113,15 @@ export type Conversation = {
  */
 export type ConversationAnswerUse = {
 	/**
-	 * What the turn tried to open and could not
+	 * Whether the person asked from a page of the app, which the answer also read
+	 */
+	askedFromPage: boolean;
+	/**
+	 * Whether a message of the answer links an observation, a problem or feedback
+	 */
+	cited: boolean;
+	/**
+	 * What the turn tried to open and could not, or has no stored result for
 	 */
 	couldNotCheck: Array<ConversationUsedSource>;
 	/**
@@ -1447,22 +1455,18 @@ export type ConversationTurnSurface = string;
 export type ConversationTurnWaitingFor = string;
 
 /**
- * A source that Hephaestus opened for an answer, or could not open
+ * Sources of one kind that Hephaestus opened for an answer, or could not open
  */
 export type ConversationUsedSource = {
 	/**
-	 * How many files or searches; 1 for a document or a repository
+	 * How many distinct repositories, files, commands or searches; 1 for a document
 	 */
 	count: number;
 	/**
-	 * Which context document; only for CONTEXT_DOCUMENT
+	 * Which context document; only for CONTEXT_DOCUMENT, absent for one with no known name
 	 */
 	document?: ConversationContextDocument;
 	kind: ConversationUsedSourceKind;
-	/**
-	 * The repository as the turn named it; only for REPOSITORY and REPOSITORY_FILES
-	 */
-	repository?: string;
 };
 
 /**

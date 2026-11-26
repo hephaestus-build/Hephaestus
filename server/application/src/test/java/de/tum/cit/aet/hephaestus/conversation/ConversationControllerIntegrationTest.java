@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -520,7 +521,7 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                                         "path",
                                         "/workspace/work/inputs/context/results_history.json"),
                                 f.result("call-read", "read", false),
-                                f.call("call-load", "load_context", "path", "repositories/acme/api@main"),
+                                f.call("call-load", "load_context", "path", "repos/github.com/acme/api@main"),
                                 f.result("call-load", "load_context", true),
                                 f.call("call-search", "search_conversation", "query", "verify"),
                                 f.result("call-search", "search_conversation", false),
@@ -542,8 +543,58 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(List.of("RESULTS_HISTORY"))
                 .jsonPath("$.content[-1:].used.couldNotCheck[0].kind")
                 .isEqualTo(List.of("REPOSITORY"))
-                .jsonPath("$.content[-1:].used.couldNotCheck[0].repository")
-                .isEqualTo(List.of("repositories/acme/api"));
+                .jsonPath("$.content[-1:].used.couldNotCheck[0].count")
+                .isEqualTo(List.of(1))
+                .jsonPath("$.content[-1:].used.cited")
+                .isEqualTo(List.of(false))
+                .jsonPath("$.content[-1:].used.askedFromPage")
+                .isEqualTo(List.of(false));
+        get("/entries")
+                .consumeWith(result -> assertThat(
+                                new String(Objects.requireNonNull(result.getResponseBody()), StandardCharsets.UTF_8))
+                        .doesNotContain("acme"));
+    }
+
+    @Test
+    void shouldShowOneDisclosureWhenAnAnswersMessagesSpanPages() {
+        submit(main(), "Which documents did you check?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I will check your observations."),
+                                f.call("read", "read", "path", "inputs/context/results_history.json"),
+                                f.result("read", "read", false),
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I checked your observations.")),
+                        null,
+                        null));
+
+        var answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                running.getWorkspaceId(), running.getId(), ConversationEntry.Kind.ANSWER);
+        String cursor = String.valueOf(answers.getLast().getSeq());
+        get("/entries?size=1")
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I checked your observations.")
+                .jsonPath("$.content[0].used.read[0].document")
+                .isEqualTo("RESULTS_HISTORY")
+                .jsonPath("$.content[0].used.cited")
+                .isEqualTo(false)
+                .jsonPath("$.nextCursor")
+                .isEqualTo(cursor);
+
+        get("/entries?size=1&cursor=" + cursor)
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I will check your observations.")
+                .jsonPath("$.content[0].used")
+                .doesNotExist();
     }
 
     /** One opening call and its result, as the host stores them. */

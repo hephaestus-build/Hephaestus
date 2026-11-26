@@ -1,16 +1,11 @@
 import { ChevronDownIcon } from "lucide-react";
 
-import type {
-	ConversationAnswerUse,
-	ConversationContextDocument,
-	ConversationLink,
-	ConversationUsedSource,
-} from "@/api/types.gen";
+import type { ConversationAnswerUse, ConversationUsedSource } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 /** The documents that Hephaestus prepares about the person's work, in the person's terms. */
-const DOCUMENT_LABELS: Partial<Record<ConversationContextDocument, string>> = {
+const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
 	USER: "Counts of your work this week and last week",
 	WORKSPACE: "Issues assigned to you and reviews you owe",
 	RECENT_AUTHORED_WORK: "Your recent pull requests and issues",
@@ -31,69 +26,77 @@ function times(count: number, one: string, many: string): string {
 	return count === 1 ? one : `${count} ${many}`;
 }
 
-/** One source in words: never a tool, a path or an internal ID. A kind that this build does not know is "another source". */
+/** The name of a known document. Any other string, from a newer server or not, gets the neutral name. */
+function documentLabel(document: string | undefined, count: number): string {
+	const known =
+		document !== undefined && Object.hasOwn(DOCUMENT_LABELS, document)
+			? DOCUMENT_LABELS[document]
+			: undefined;
+	return (
+		known ?? times(count, "Another document about your work", "other documents about your work")
+	);
+}
+
+/**
+ * Sources of one kind in words: never a tool, a path or a repository name, because a name could outlive the person's
+ * access. A kind that this build does not know is "Other sources".
+ */
 export function usedSourceLabel(source: ConversationUsedSource): string {
 	switch (source.kind) {
 		case "CONTEXT_DOCUMENT": {
-			return (
-				(source.document === undefined ? undefined : DOCUMENT_LABELS[source.document]) ??
-				"Another document about your work"
-			);
+			return documentLabel(source.document, source.count);
 		}
 		case "REPOSITORY": {
-			return source.repository === undefined
-				? "A repository"
-				: `The repository ${source.repository}`;
+			return times(source.count, "One repository", "repositories");
 		}
-		case "REPOSITORY_FILES": {
-			const files = times(source.count, "One file", "files");
-			return source.repository === undefined ? files : `${files} in ${source.repository}`;
+		case "FILES": {
+			return times(source.count, "One file", "files");
 		}
-		case "CONTEXT_SEARCH": {
-			return times(source.count, "A search of your documents", "searches of your documents");
+		case "COMMAND": {
+			return times(source.count, "One command over these files", "commands over these files");
 		}
 		case "CONVERSATION_SEARCH": {
 			return times(source.count, "A search of earlier messages", "searches of earlier messages");
 		}
 		default: {
-			return "Another source";
+			return "Other sources";
 		}
 	}
 }
 
-function citedLabel(links: readonly ConversationLink[]): string | undefined {
-	const counts = { RESULT: 0, PROBLEM: 0, FEEDBACK: 0 };
-	for (const link of links) {
-		if (link.kind === "RESULT" || link.kind === "PROBLEM" || link.kind === "FEEDBACK") {
-			counts[link.kind] += 1;
-		}
+/** The answer's first words, so that each disclosure on the page has its own accessible name. */
+function opening(text: string): string {
+	const words = text.replaceAll(/\s+/gu, " ").trim();
+	return words.length <= 48 ? words : `${words.slice(0, 47).trimEnd()}…`;
+}
+
+function closingLine(used: ConversationAnswerUse): string {
+	const also = used.askedFromPage
+		? "this conversation and the page you asked from"
+		: "this conversation";
+	if (used.read.length === 0 && used.couldNotCheck.length === 0) {
+		return `Hephaestus opened nothing beyond ${also}.`;
 	}
-	const parts = [
-		counts.RESULT > 0 && times(counts.RESULT, "one observation", "observations"),
-		counts.PROBLEM > 0 && times(counts.PROBLEM, "one problem", "problems"),
-		counts.FEEDBACK > 0 && times(counts.FEEDBACK, "one piece of feedback", "pieces of feedback"),
-	].filter((part): part is string => typeof part === "string");
-	return parts.length === 0 ? undefined : `${parts.join(", ")}, shown above`;
+	return `This list shows what Hephaestus opened, not everything that it read. It also read ${also}.`;
 }
 
 export interface AnswerUseProps {
 	used: ConversationAnswerUse;
-	/** What the answer cited, as the message shows it above. */
-	links: readonly ConversationLink[];
-	/** Names the answer, so that each disclosure on the page has its own accessible name. */
+	/** Who wrote the answer and when, as the message names it. */
 	subject: string;
+	/** The answer's words; their opening tells this disclosure apart from the others on the page. */
+	text: string;
 }
 
 /**
  * What Hephaestus used for one answer (ADR 0157 decision 8), closed until the person opens it. The server derives it
  * from rows; nothing here is model text. It never claims to be complete: every answer also read the conversation.
  */
-export function AnswerUse({ used, links, subject }: AnswerUseProps) {
-	const cited = citedLabel(links);
+export function AnswerUse({ used, subject, text }: AnswerUseProps) {
 	return (
 		<Collapsible>
 			<CollapsibleTrigger
-				aria-label={`What Hephaestus used (${subject})`}
+				aria-label={`What Hephaestus used (${subject}: ${opening(text)})`}
 				render={
 					<Button variant="ghost" size="xs" className="group -ml-2 w-fit text-muted-foreground" />
 				}
@@ -107,20 +110,21 @@ export function AnswerUse({ used, links, subject }: AnswerUseProps) {
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<div className="mt-1 flex flex-col gap-3 rounded-lg border p-3 text-sm">
+					{used.cited && (
+						<UseGroup
+							title="Cited"
+							items={["The observations and feedback that this answer links to"]}
+						/>
+					)}
 					{used.recorded ? (
 						<>
-							{cited !== undefined && <UseGroup title="Cited" items={[cited]} />}
 							{used.read.length > 0 && (
 								<UseGroup title="Read" items={used.read.map(usedSourceLabel)} />
 							)}
 							{used.couldNotCheck.length > 0 && (
 								<UseGroup title="Could not check" items={used.couldNotCheck.map(usedSourceLabel)} />
 							)}
-							<p className="text-muted-foreground">
-								{used.read.length === 0 && used.couldNotCheck.length === 0
-									? "Hephaestus opened nothing beyond this conversation and the page you asked from."
-									: "This list shows what Hephaestus opened, not everything that it read. It also read this conversation and the page you asked from."}
-							</p>
+							<p className="text-muted-foreground">{closingLine(used)}</p>
 						</>
 					) : (
 						<p className="text-muted-foreground">
@@ -139,7 +143,7 @@ function UseGroup({ title, items }: { title: string; items: readonly string[] })
 			<p className="font-medium text-foreground">{title}</p>
 			<ul className="list-disc pl-5 text-muted-foreground">
 				{items.map((item) => (
-					// The server lists each source once, so its words are unique in a group.
+					// The server lists each kind of source once, so its words are unique in a group.
 					<li key={item} className="break-words">
 						{item}
 					</li>

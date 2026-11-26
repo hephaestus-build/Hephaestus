@@ -2287,9 +2287,17 @@ export const ConversationAnswerUseSchema = {
 	type: "object",
 	description: "What Hephaestus opened for one answer, and what it could not open",
 	properties: {
+		askedFromPage: {
+			type: "boolean",
+			description: "Whether the person asked from a page of the app, which the answer also read",
+		},
+		cited: {
+			type: "boolean",
+			description: "Whether a message of the answer links an observation, a problem or feedback",
+		},
 		couldNotCheck: {
 			type: "array",
-			description: "What the turn tried to open and could not",
+			description: "What the turn tried to open and could not, or has no stored result for",
 			items: {
 				$ref: "#/components/schemas/ConversationUsedSource",
 			},
@@ -2307,7 +2315,7 @@ export const ConversationAnswerUseSchema = {
 				"False when the turn stored no record of what it did. The app then says that Hephaestus did not record what the answer used.",
 		},
 	},
-	required: ["couldNotCheck", "read", "recorded"],
+	required: ["askedFromPage", "cited", "couldNotCheck", "read", "recorded"],
 } as const;
 
 export const ConversationContextDocumentSchema = {
@@ -2791,23 +2799,20 @@ export const ConversationTurnWaitingForSchema = {
 
 export const ConversationUsedSourceSchema = {
 	type: "object",
-	description: "A source that Hephaestus opened for an answer, or could not open",
+	description: "Sources of one kind that Hephaestus opened for an answer, or could not open",
 	properties: {
 		count: {
 			type: "integer",
 			format: "int32",
-			description: "How many files or searches; 1 for a document or a repository",
+			description: "How many distinct repositories, files, commands or searches; 1 for a document",
 		},
 		document: {
 			$ref: "#/components/schemas/ConversationContextDocument",
-			description: "Which context document; only for CONTEXT_DOCUMENT",
+			description:
+				"Which context document; only for CONTEXT_DOCUMENT, absent for one with no known name",
 		},
 		kind: {
 			$ref: "#/components/schemas/ConversationUsedSourceKind",
-		},
-		repository: {
-			type: "string",
-			description: "The repository as the turn named it; only for REPOSITORY and REPOSITORY_FILES",
 		},
 	},
 	required: ["count", "kind"],
@@ -2816,13 +2821,7 @@ export const ConversationUsedSourceSchema = {
 export const ConversationUsedSourceKindSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
-	examples: [
-		"CONTEXT_DOCUMENT",
-		"REPOSITORY",
-		"REPOSITORY_FILES",
-		"CONTEXT_SEARCH",
-		"CONVERSATION_SEARCH",
-	],
+	examples: ["CONTEXT_DOCUMENT", "REPOSITORY", "FILES", "COMMAND", "CONVERSATION_SEARCH"],
 } as const;
 
 export const ConversationVoteRequestSchema = {

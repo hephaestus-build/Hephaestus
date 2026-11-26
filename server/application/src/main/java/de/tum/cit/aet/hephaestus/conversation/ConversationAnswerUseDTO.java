@@ -6,8 +6,8 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 
 /**
- * What Hephaestus used for one answer (ADR 0157 decision 8), from what its turn stored. The answer's links are what it
- * cited. Every turn also reads the conversation before it answers, so the app says that in a fixed line.
+ * What Hephaestus used for one answer (ADR 0157 decision 8), from what its turn stored. Every turn also reads the
+ * conversation before it answers, and the page that the person asked from, if any, so the app says that in a fixed line.
  */
 @Schema(description = "What Hephaestus opened for one answer, and what it could not open")
 public record ConversationAnswerUseDTO(
@@ -21,5 +21,21 @@ public record ConversationAnswerUseDTO(
         @Schema(description = "What the turn opened, in the order of its first use") @NonNull
         List<ConversationUsedSourceDTO> read,
 
-        @Schema(description = "What the turn tried to open and could not") @NonNull
-        List<ConversationUsedSourceDTO> couldNotCheck) {}
+        @Schema(description = "What the turn tried to open and could not, or has no stored result for") @NonNull
+        List<ConversationUsedSourceDTO> couldNotCheck,
+
+        @Schema(
+                description = "Whether a message of the answer links an observation, a problem or feedback",
+                requiredMode = RequiredMode.REQUIRED)
+        boolean cited,
+
+        @Schema(
+                description = "Whether the person asked from a page of the app, which the answer also read",
+                requiredMode = RequiredMode.REQUIRED)
+        boolean askedFromPage) {
+
+    /** A turn that stored no record of what it did. */
+    static ConversationAnswerUseDTO unrecorded(boolean cited, boolean askedFromPage) {
+        return new ConversationAnswerUseDTO(false, List.of(), List.of(), cited, askedFromPage);
+    }
+}
