@@ -2,9 +2,8 @@
 //
 // Commands run in the same sandbox as the loop and can change its checkout. A Git object is named by the hash of its bytes, so the loop
 // walks from the commit id that the capture pinned: commit, each tree, then the blob, checking each object's hash before
-// it reads the next id from it. A hostile source can refuse, or stall until a call's time-out, and that reads as
-// unreadable. It can overstate a size, and that reads as too large. It cannot supply a byte that the pinned commit
-// does not hold.
+// it reads the next id from it. A hostile source can refuse a read, stall until the deadline, or overstate a size.
+// It cannot supply a byte that the pinned commit does not hold.
 //
 // A hash proves only that bytes match their id, so anyone can make a commit whose id is right. A commit id that a citation
 // names therefore counts only when `PinnedHistory` reaches it from a commit the capture pinned, parent by parent.
@@ -15,15 +14,21 @@ import { promisify } from "node:util";
 
 import { toolEnvironment } from "./pi-agent-sandbox.ts";
 import { isCommitId, type PinnedBlob, safeRepositoryPath } from "./pi-change.ts";
+import { awaitAbortable } from "./pi-session-lifecycle.ts";
 
 export type ObjectType = "commit" | "tree" | "blob";
 
 /** Where the loop gets Git objects. Nothing that it answers is trusted. */
 export interface ObjectSource {
 	/** The content of the object, without its header; at most `limit` bytes, or null when it cannot answer. */
-	read: (type: ObjectType, id: string, limit: number) => Promise<Buffer | null>;
+	read: (
+		type: ObjectType,
+		id: string,
+		limit: number,
+		signal?: AbortSignal,
+	) => Promise<Buffer | null>;
 	/** The object's size as the source claims it: a hint that only saves a read. Null when it cannot answer. */
-	size: (id: string) => Promise<number | null>;
+	size: (id: string, signal?: AbortSignal) => Promise<number | null>;
 }
 
 /** The most bytes of a commit or a tree that the walk reads: what one `exec` streams, over 100,000 tree entries. */
@@ -48,12 +53,18 @@ const execFileAsync = promisify(execFile);
 
 /** Reads Git objects in the sandbox. The walk still verifies every object against its pinned hash. */
 export function repositoryObjects(repository: string): ObjectSource {
-	const git = async (args: string[], limit: number): Promise<Buffer | null> => {
+	const git = async (
+		args: string[],
+		limit: number,
+		signal?: AbortSignal,
+	): Promise<Buffer | null> => {
 		try {
 			const { stdout } = await execFileAsync("git", ["-C", repository, ...args], {
 				encoding: "buffer",
 				maxBuffer: limit,
 				timeout: OBJECT_TIMEOUT_MS,
+				signal,
+				killSignal: "SIGKILL",
 				env: { ...toolEnvironment(process.env), GIT_NO_REPLACE_OBJECTS: "1" },
 			});
 			return stdout;
@@ -62,9 +73,9 @@ export function repositoryObjects(repository: string): ObjectSource {
 		}
 	};
 	return {
-		read: async (type, id, limit) => git(["cat-file", type, id], limit),
-		size: async (id) => {
-			const answer = await git(["cat-file", "-s", id], 32);
+		read: async (type, id, limit, signal) => git(["cat-file", type, id], limit, signal),
+		size: async (id, signal) => {
+			const answer = await git(["cat-file", "-s", id], 32, signal);
 			const size = answer === null ? Number.NaN : Number(answer.toString("latin1").trim());
 			return Number.isSafeInteger(size) && size >= 0 ? size : null;
 		},
@@ -96,8 +107,9 @@ async function verified(
 	type: ObjectType,
 	id: string,
 	limit: number,
+	signal: AbortSignal,
 ): Promise<Buffer | null> {
-	const content = await source.read(type, id, limit);
+	const content = await awaitAbortable(signal, async () => source.read(type, id, limit, signal));
 	return content !== null && objectId(type, content, id.length) === id ? content : null;
 }
 
@@ -135,27 +147,34 @@ export class PinnedHistory {
 		this.#frontier = pinned.filter(isCommitId);
 	}
 
-	async contains(commit: string): Promise<boolean> {
+	async contains(
+		commit: string,
+		signal = AbortSignal.timeout(OBJECT_TIMEOUT_MS),
+	): Promise<boolean> {
 		const turn = Promise.withResolvers<undefined>();
 		const previous = this.#turn;
-		this.#turn = turn.promise;
-		await previous;
+		// A waiter can expire before the walk ahead of it ends.
+		this.#turn = (async () => {
+			await previous;
+			await turn.promise;
+		})();
 		try {
-			return await this.#walk(commit);
+			await awaitAbortable(signal, async () => previous);
+			return await this.#walk(commit, signal);
 		} finally {
 			turn.resolve(undefined);
 		}
 	}
 
-	async #walk(commit: string): Promise<boolean> {
+	async #walk(commit: string, signal: AbortSignal): Promise<boolean> {
 		this.#frontier.push(...this.#unanswered.splice(0));
 		while (!this.#reached.has(commit)) {
-			const next = this.#frontier.shift();
+			const next = this.#frontier[0];
 			if (next === undefined || this.#reached.size >= HISTORY_COMMITS) {
 				return false;
 			}
 			if (!this.#reached.has(next)) {
-				const content = await verified(this.#source, "commit", next, TREE_BYTES);
+				const content = await verified(this.#source, "commit", next, TREE_BYTES, signal);
 				if (content === null) {
 					this.#unanswered.push(next);
 				} else {
@@ -163,6 +182,7 @@ export class PinnedHistory {
 					this.#frontier.push(...parentsOfCommit(content, next.length));
 				}
 			}
+			this.#frontier.shift();
 		}
 		return true;
 	}
@@ -189,15 +209,20 @@ function entryOf(tree: Buffer, name: Buffer, idLength: number): TreeEntry | "mal
 	return null;
 }
 
-async function readBlob(source: ObjectSource, id: string, limit: number): Promise<PinnedBlob> {
-	const claimed = await source.size(id);
+async function readBlob(
+	source: ObjectSource,
+	id: string,
+	limit: number,
+	signal: AbortSignal,
+): Promise<PinnedBlob> {
+	const claimed = await awaitAbortable(signal, async () => source.size(id, signal));
 	if (claimed === null) {
 		return { kind: "unreadable" };
 	}
 	if (claimed > limit) {
 		return { kind: "tooLarge", size: claimed };
 	}
-	const bytes = await verified(source, "blob", id, limit);
+	const bytes = await verified(source, "blob", id, limit, signal);
 	return bytes === null ? { kind: "unreadable" } : { kind: "regular", bytes };
 }
 
@@ -211,22 +236,23 @@ export async function readPinnedObject(
 	commit: string,
 	file: string,
 	limit: number,
+	signal = AbortSignal.timeout(OBJECT_TIMEOUT_MS),
 ): Promise<PinnedBlob> {
 	if (!isCommitId(commit) || !safeRepositoryPath(file)) {
 		return { kind: "unsafe" };
 	}
-	if (!(await history.contains(commit))) {
+	if (!(await history.contains(commit, signal))) {
 		return { kind: "unreadable" };
 	}
 	const idLength = commit.length;
-	const root = await verified(source, "commit", commit, TREE_BYTES);
+	const root = await verified(source, "commit", commit, TREE_BYTES, signal);
 	let tree = root === null ? null : treeOfCommit(root, idLength);
 	const parts = file.split("/");
 	for (const [position, part] of parts.entries()) {
 		if (tree === null) {
 			return { kind: "unreadable" };
 		}
-		const content = await verified(source, "tree", tree, TREE_BYTES);
+		const content = await verified(source, "tree", tree, TREE_BYTES, signal);
 		if (content === null) {
 			return { kind: "unreadable" };
 		}
@@ -243,7 +269,7 @@ export async function readPinnedObject(
 			}
 			tree = entry.id;
 		} else if (REGULAR_MODES.has(entry.mode)) {
-			return readBlob(source, entry.id, limit);
+			return readBlob(source, entry.id, limit, signal);
 		} else {
 			return { kind: "nonregular" };
 		}

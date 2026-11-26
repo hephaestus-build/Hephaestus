@@ -105,7 +105,11 @@ import {
 	validateInapplicabilityScope,
 	validateSearchScope,
 } from "./pi-result-normalize.ts";
-import { buildResultTools } from "./pi-result-tools.ts";
+import {
+	buildResultTools,
+	type VerificationStep,
+	VerificationTimeoutError,
+} from "./pi-result-tools.ts";
 import { type BriefSource, buildBrief } from "./pi-review-brief.ts";
 import { type Work, missingSlugs, shouldRecordNow, spent, workOf } from "./pi-review-turns.ts";
 import { outputPath } from "./pi-runner-output.ts";
@@ -121,6 +125,7 @@ import {
 } from "./pi-runner-usage.ts";
 import {
 	abortSession,
+	awaitAbortable,
 	REVIEW_SESSION_ENTRY,
 	type ReviewSessionBinding,
 	type SessionPhase,
@@ -410,7 +415,9 @@ type Recorded =
 			filled: string[];
 	  })
 	| { kind: "duplicate"; slug: string }
-	| { kind: "refused"; slug: string; reason: string };
+	| { kind: "refused"; slug: string; reason: string; timedOutStep?: VerificationStep };
+
+const SUBMIT_VERIFICATION_MS = 25_000;
 
 export interface TurnDemand {
 	owed: () => number;
@@ -1185,6 +1192,7 @@ async function runReview(): Promise<void> {
 		slug: string,
 		measureCoverage: (citations: readonly Citation[]) => Coverage,
 		reads: SessionReads,
+		signal: AbortSignal,
 	): Promise<Validated> {
 		const notes: string[] = [];
 		const submission = normalizeSubmission(
@@ -1231,10 +1239,14 @@ async function runReview(): Promise<void> {
 			);
 		}
 		for (const citation of citations) {
-			await verifySubmissionCitation(citation, notes);
+			await verifyStep(slug, "verify_citation", signal, async () =>
+				verifySubmissionCitation(citation, notes, signal),
+			);
 		}
 		validateProblemClaims(submission.problems ?? [], slug);
-		await reads.proveSearches(proveSearches);
+		await verifyStep(slug, "prove_searches", signal, async () =>
+			reads.proveSearches(async (root, claims) => proveSearches(root, claims, { signal })),
+		);
 		const coverage = measureCoverage(citations);
 		// A scan's search covers its assigned file, which it must read whole.
 		const unread = scan
@@ -1266,7 +1278,34 @@ async function runReview(): Promise<void> {
 		return { candidate: parsed.candidate, notes };
 	}
 
-	async function verifySubmissionCitation(citation: Citation, notes: string[]): Promise<void> {
+	async function verifyStep(
+		slug: string,
+		step: VerificationStep,
+		signal: AbortSignal,
+		operation: () => Promise<void>,
+	): Promise<void> {
+		const started = performance.now();
+		try {
+			await awaitAbortable(signal, operation);
+		} catch (error) {
+			if (signal.aborted || (error instanceof DOMException && error.name === "TimeoutError")) {
+				throw new VerificationTimeoutError(step);
+			}
+			throw error;
+		} finally {
+			diagnose("practice.verification_step", {
+				practice: practiceAt(slug),
+				verification_step: step,
+				duration_ms: ms(performance.now() - started),
+			});
+		}
+	}
+
+	async function verifySubmissionCitation(
+		citation: Citation,
+		notes: string[],
+		signal?: AbortSignal,
+	): Promise<void> {
 		const slug = sessionState().activeReview?.slug;
 		const preparedInput = slug === undefined ? null : `${REVIEW_INPUT_ROOT}/${slug}.json`;
 		if (
@@ -1304,7 +1343,7 @@ async function runReview(): Promise<void> {
 		}
 		// Match admission: repository quotes use Git blobs; change quotes use the derived diff.
 		const registered = citation.sourceKind === DIFF_SOURCE ? null : capturedText(citation);
-		const content = registered ?? (await citedContent(citation));
+		const content = registered ?? (await citedContent(citation, signal));
 		const resolved =
 			registered === null
 				? resolveCited(citation, content)
@@ -1404,6 +1443,7 @@ async function runReview(): Promise<void> {
 
 	async function citedContent(
 		citation: Citation,
+		signal?: AbortSignal,
 	): Promise<string | typeof BINARY | typeof UNREADABLE | typeof TOO_LARGE | null> {
 		if (citation.sourceKind === TREE_SOURCE) {
 			if (citation.commit === undefined) {
@@ -1416,6 +1456,7 @@ async function runReview(): Promise<void> {
 				citation.commit,
 				citation.path,
 				TREE_BYTES,
+				signal,
 			);
 			if (blob.kind === "unreadable") {
 				return UNREADABLE;
@@ -1719,6 +1760,8 @@ async function runReview(): Promise<void> {
 			};
 		}
 		let validated: Validated;
+		const deadline = new AbortController();
+		const timer = setTimeout(() => deadline.abort(), SUBMIT_VERIFICATION_MS);
 		try {
 			validated = await validateSubmission(
 				raw,
@@ -1775,8 +1818,12 @@ async function runReview(): Promise<void> {
 					return review.reads.coverage(review.reader, review.domainReads, citedPaths);
 				},
 				review.reads,
+				deadline.signal,
 			);
 		} catch (error) {
+			if (error instanceof VerificationTimeoutError) {
+				return { kind: "refused", slug, reason: error.message, timedOutStep: error.step };
+			}
 			countRefusal(slug);
 			const reason = errorText(error);
 			// A later source read can settle coverage without changing the submitted result.
@@ -1786,6 +1833,8 @@ async function runReview(): Promise<void> {
 				sessionState().refusedItems.set(sent, { reason, resent: 0 });
 			}
 			return { kind: "refused", slug, reason };
+		} finally {
+			clearTimeout(timer);
 		}
 		const { candidate, notes } = validated;
 		const { readable } = declaredSourcesOf(slug);
@@ -1849,12 +1898,14 @@ async function runReview(): Promise<void> {
 			.join("\n");
 	}
 
-	function logRefusal(slug: string, reason: string): void {
+	function logRefusal(slug: string, reason: string, timedOutStep?: VerificationStep): void {
 		const state = sessionState();
 		// The reason quotes the model's result and the reviewed file, so the line names only its length.
 		diagnose("practice.result_refused", {
 			practice: practiceAt(slug),
 			reason_chars: reason.length,
+			reason: timedOutStep === undefined ? undefined : "verification_timeout",
+			verification_step: timedOutStep,
 		});
 		if (state.currentTurn) {
 			state.currentTurn.refused += 1;
@@ -1896,7 +1947,7 @@ async function runReview(): Promise<void> {
 				const outcome = await record(params);
 				const stored = outcome.kind === "stored" || outcome.kind === "revised" ? 1 : 0;
 				if (outcome.kind === "refused") {
-					logRefusal(outcome.slug, outcome.reason);
+					logRefusal(outcome.slug, outcome.reason, outcome.timedOutStep);
 				}
 				if (state.currentTurn) {
 					state.currentTurn.stored += stored;

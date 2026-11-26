@@ -14,6 +14,7 @@ import type { SearchClaim, SearchJob, SearchProof } from "./pi-search-worker.ts"
 
 /** How long the loop gives one proof: a pattern that backtracks is ended here. */
 const PROOF_TIMEOUT_MS = 20_000;
+const TERMINATE_TIMEOUT_MS = 250;
 
 /** The most bytes of a checkout that a proof reads. */
 const PROOF_BYTES = 512 * 1024 * 1024;
@@ -23,26 +24,49 @@ const PROOF_BYTES = 512 * 1024 * 1024;
 // share the loop's user loads it from the image.
 const WORKER = new URL(`pi-search-worker${path.extname(import.meta.filename)}`, import.meta.url);
 
-/** What a worker answers within `timeoutMs`, or null when it fails or runs out of time; it ends either way. */
+/** Waits for the worker's answer and gives it a bounded time to stop. */
 export async function onWorker(
 	file: URL,
 	workerData: unknown,
 	timeoutMs: number,
+	signal?: AbortSignal,
 ): Promise<unknown> {
+	signal?.throwIfAborted();
 	const worker = new Worker(file, { workerData });
 	const stop = new AbortController();
+	const waiting = signal === undefined ? stop.signal : AbortSignal.any([signal, stop.signal]);
+	let answer: readonly unknown[] | null | undefined;
+	let exitCode: number | null;
 	try {
-		const answer = await Promise.race([
-			once(worker, "message", { signal: stop.signal }),
-			sleep(timeoutMs, null, { signal: stop.signal }),
+		answer = await Promise.race([
+			once(worker, "message", { signal: waiting }),
+			sleep(timeoutMs, null, { signal: waiting }),
 		]);
-		return answer?.[0] ?? null;
 	} catch {
-		return null;
+		// A worker can exit without answering.
 	} finally {
+		// The message listener can go away before a stuck worker emits its last error.
+		worker.on("error", () => undefined);
 		stop.abort();
-		await worker.terminate();
+		const cleanup = new AbortController();
+		try {
+			exitCode = await Promise.race([
+				worker.terminate(),
+				sleep(TERMINATE_TIMEOUT_MS, null, { signal: cleanup.signal }),
+			]);
+		} finally {
+			cleanup.abort();
+			worker.unref();
+		}
 	}
+	signal?.throwIfAborted();
+	if (exitCode === null) {
+		throw new DOMException("The worker did not stop in time.", "TimeoutError");
+	}
+	if (answer === null && signal !== undefined) {
+		throw new DOMException("The worker did not answer in time.", "TimeoutError");
+	}
+	return answer?.[0] ?? null;
 }
 
 /**
@@ -52,13 +76,23 @@ export async function onWorker(
 export async function proveSearches(
 	root: string,
 	claims: readonly SearchClaim[],
-	{ timeoutMs = PROOF_TIMEOUT_MS, maxBytes = PROOF_BYTES } = {},
+	{
+		timeoutMs = PROOF_TIMEOUT_MS,
+		maxBytes = PROOF_BYTES,
+		signal,
+	}: { timeoutMs?: number; maxBytes?: number; signal?: AbortSignal } = {},
 ): Promise<SearchProof> {
 	const none: SearchProof = { proved: claims.map(() => false), checkoutDigest: null };
 	if (claims.length === 0) {
 		return none;
 	}
-	const answer = await onWorker(WORKER, { root, maxBytes, claims } satisfies SearchJob, timeoutMs);
+	const answer = await onWorker(
+		WORKER,
+		{ root, maxBytes, claims } satisfies SearchJob,
+		timeoutMs,
+		signal,
+	);
+	signal?.throwIfAborted();
 	if (
 		typeof answer !== "object" ||
 		answer === null ||

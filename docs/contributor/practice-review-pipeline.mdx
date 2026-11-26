@@ -602,6 +602,8 @@ The session's read, grep and find tools refuse a captured file that the practice
 A result may cite only its declared sources, the change and the checkout. The runner refuses other citations, and the session gets a repair turn.
 Every session can also read the change and the checkout through Git.
 
+The runner gives each submission one deadline for verification. If a check exceeds its time limit, the runner returns a [verification timeout](./practice-review-glossary.mdx#runtime-terms) to the session. The session can continue.
+
 Thus, a session that uses only these tools reads and cites only its declared sources.
 `bash` and code in the session can still read every captured file. So these tools keep a session on its sources, but they are not a boundary.
 Admission refuses an undeclared citation. Freshness records only the sources that decide the practice's result.

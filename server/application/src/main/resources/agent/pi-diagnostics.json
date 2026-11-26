@@ -26,6 +26,7 @@
 		"practice.result_refused",
 		"practice.staging_failed",
 		"practice.unsubmitted",
+		"practice.verification_step",
 		"practice.without_result",
 		"practice_scripts.truncated",
 		"provider.failed",
@@ -164,7 +165,8 @@
 			"schema_version",
 			"stalled",
 			"unparsable",
-			"unreadable"
+			"unreadable",
+			"verification_timeout"
 		],
 		"reason_chars": "count",
 		"reasoning_effort": ["default", "high", "low", "max", "medium", "minimal", "none", "xhigh"],
@@ -213,6 +215,7 @@
 		"turn": "count",
 		"turns": "count",
 		"unanswered_calls": "count",
+		"verification_step": ["verify_citation", "prove_searches"],
 		"waited_ms": "count",
 		"waits": "count",
 		"withheld": "count",

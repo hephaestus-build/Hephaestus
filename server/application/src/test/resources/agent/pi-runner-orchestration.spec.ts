@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
+import { Worker } from "node:worker_threads";
 
 import { isDiagnosticLine } from "../../../main/resources/agent/pi-diagnostics.ts";
 import { CANDIDATE_LIMITS } from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
@@ -82,6 +83,22 @@ function notMet(summary: string, citation: SubmittedCitation = changeCitation) {
 			},
 		],
 		evidence: {},
+	};
+}
+
+function quotedProblem(summary: string, citation: SubmittedCitation) {
+	const candidate = notMet(summary, citation);
+	return {
+		...candidate,
+		problems: candidate.problems.map((problem) => ({
+			...problem,
+			basis: {
+				type: "duty",
+				event: 0,
+				criterionQuote: "Added authentication calls use checked(), not insecure().",
+				explanation: "The citation witnesses the required authentication check.",
+			},
+		})),
 	};
 }
 
@@ -314,6 +331,54 @@ if (scenario !== undefined && scenario !== "") {
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
 	await mockChange({ writeChangeView: () => undefined });
+	if (scenario === "verification-git") {
+		const file = new URL("../../../main/resources/agent/pi-pinned-object.ts", import.meta.url);
+		const objects = await import("../../../main/resources/agent/pi-pinned-object.ts");
+		const timer = globalThis.setTimeout;
+		let firstVerification = true;
+		mock.method(
+			globalThis,
+			"setTimeout",
+			(callback: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) => {
+				if (firstVerification && ms === 25_000) {
+					firstVerification = false;
+					return timer(callback, 150, ...args);
+				}
+				return timer(callback, ms, ...args);
+			},
+		);
+		let firstRead = true;
+		mock.module(file.href, {
+			exports: {
+				...objects,
+				repositoryObjects(repository: string) {
+					const source = objects.repositoryObjects(repository);
+					return {
+						...source,
+						async read(...args: Parameters<typeof source.read>) {
+							if (firstRead) {
+								firstRead = false;
+								record("verification:git-read-started");
+								return Promise.withResolvers<never>().promise;
+							}
+							return source.read(...args);
+						},
+					};
+				},
+			},
+		});
+	}
+	if (scenario === "verification-worker") {
+		class StuckWorker extends Worker {
+			override async terminate() {
+				record("verification:worker-terminate-started");
+				await super.terminate();
+				return Promise.withResolvers<never>().promise;
+			}
+		}
+		const workerThreads = await import("node:worker_threads");
+		mock.module("node:worker_threads", { exports: { ...workerThreads, Worker: StuckWorker } });
+	}
 	/** What the mocked server admits: nothing, or one result whose outcome is outside the vocabulary. */
 	const admitted = (): unknown[] => {
 		const outcome = new Map<string, unknown>([
@@ -1252,10 +1317,58 @@ if (scenario !== undefined && scenario !== "") {
 								emit({ type: "turn_end" });
 								return;
 							}
+							if (scenario.startsWith("verification-") && sessionNumber === 1 && prompts > 1) {
+								record("verification:repair-turn");
+								return;
+							}
 							const currentSlug = /### Practice `(?<slug>[^`]+)`/u.exec(text)?.groups?.slug;
 							assert.ok(currentSlug !== undefined && currentSlug !== "", text.slice(0, 400));
 							const report = tool("submit_result");
 							measuredTool = report;
+							if (scenario === "verification-git" || scenario === "verification-worker") {
+								const result =
+									scenario === "verification-git"
+										? quotedProblem("Unsafe authentication call", {
+												sourceKind: "scm.repository.tree",
+												sourcePath: "repos/primary/.git/HEAD",
+												path: "src/Auth.java",
+												commit: readFileSync(nodePath.join(cwd, "history-sha"), "utf8"),
+												startLine: 2,
+												quote: "insecure();",
+											})
+										: notMet("Unsafe authentication call");
+								if (currentSlug === "second-practice") {
+									await report.execute("next-practice", result);
+									return;
+								}
+								if (prompts === 1) {
+									if (scenario === "verification-worker") {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: "search",
+											toolName: "grep",
+											args: { pattern: "missingHelper", path: "repos/primary" },
+										});
+										emit({
+											type: "tool_execution_end",
+											toolCallId: "search",
+											toolName: "grep",
+											isError: false,
+											result: {
+												content: [{ type: "text", text: "No matches found" }],
+												details: {},
+											},
+										});
+									}
+									const step =
+										scenario === "verification-git" ? "verify_citation" : "prove_searches";
+									await assert.rejects(report.execute("stuck-submission", result), {
+										message: `test-practice: refused — verification_timeout (${step}). Result verification did not finish in time.`,
+									});
+									record("verification:refused");
+								}
+								return;
+							}
 							if (
 								scenario === "model-error" ||
 								scenario === "model-recovered-error" ||
@@ -1679,21 +1792,6 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (scenario === "tree-citation") {
-								const quotedProblem = (summary: string, citation: SubmittedCitation) => {
-									const candidate = notMet(summary, citation);
-									return {
-										...candidate,
-										problems: candidate.problems.map((problem) => ({
-											...problem,
-											basis: {
-												type: "duty",
-												event: 0,
-												criterionQuote: "Added authentication calls use checked(), not insecure().",
-												explanation: "The citation witnesses the required authentication check.",
-											},
-										})),
-									};
-								};
 								const cite = async (
 									path: string,
 									quote: string,
@@ -2113,6 +2211,8 @@ if (scenario !== undefined && scenario !== "") {
 		"met-coverage",
 		"met-coverage-repair",
 		"tree-citation",
+		"verification-worker",
+		"verification-git",
 		"model-error",
 		"model-recovered-error",
 		"model-retry-failed",
@@ -2234,6 +2334,10 @@ if (scenario !== undefined && scenario !== "") {
 					"accepts the same MET after its missing source content is read completely",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
+				"verification-worker":
+					"refuses a submission when its search worker never stops and measures the next practice",
+				"verification-git":
+					"refuses a submission when its Git read never returns and lets the next practice read history",
 				"measure-context-compact":
 					"restores the exact criterion before illustrations and leads when native turn preparation compacts",
 				"measure-context-missing":
@@ -2300,7 +2404,8 @@ if (scenario !== undefined && scenario !== "") {
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						writeFileSync(nodePath.join(cwd, PRACTICES_DIR, "test-practice.ts"), LEADS_PROGRAM);
 					}
-					if (stage === "tree-citation") {
+					const verification = stage.startsWith("verification-");
+					if (stage === "tree-citation" || verification) {
 						// A real checkout with one commit in its history, so a citation at a commit is read
 						// through .git like admission reads it.
 						mkdirSync(nodePath.join(cwd, "repos/primary/src"), { recursive: true });
@@ -2375,7 +2480,10 @@ if (scenario !== undefined && scenario !== "") {
 								{
 									kind: "scm.repository.tree",
 									citation: { side: "FORBIDDEN", commit: "OPTIONAL" },
-									state: { availability: "AVAILABLE" },
+									state: {
+										availability: "AVAILABLE",
+										...(verification ? { completeness: "COMPLETE" } : {}),
+									},
 									files: [
 										{ path: "repos/primary/.git/HEAD" },
 										{ path: "repos/primary/.git/hephaestus-captured-refs" },
@@ -2385,7 +2493,15 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let index = [practice("test-practice")];
-					if (
+					if (verification) {
+						index = ["test-practice", "second-practice"].map((slug) =>
+							practice(slug, [
+								"scm.pull-request.core",
+								"scm.pull-request.diff",
+								"scm.repository.tree",
+							]),
+						);
+					} else if (
 						stage.startsWith("scope-") ||
 						stage === "settle-safety" ||
 						stage === "session-init" ||
@@ -2467,6 +2583,7 @@ if (scenario !== undefined && scenario !== "") {
 							import.meta.filename,
 						],
 						{
+							timeout: verification ? 10_000 : undefined,
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,
@@ -3697,6 +3814,45 @@ for (const item of nullableCases) {
 								failedReads: 0,
 							});
 							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "verification-worker":
+						case "verification-git": {
+							assert.equal(child.status, 0, child.stderr);
+							const git = stage === "verification-git";
+							const step = git ? "verify_citation" : "prove_searches";
+							assert.deepEqual(
+								events.filter(
+									(event) =>
+										event.startsWith("verification:") || event.startsWith("stage:second-practice"),
+								),
+								[
+									git ? "verification:git-read-started" : "verification:worker-terminate-started",
+									"verification:refused",
+									"verification:repair-turn",
+									"stage:second-practice",
+								],
+								child.stderr,
+							);
+							assert.match(
+								child.stderr,
+								new RegExp(
+									`practice\\.verification_step practice=0 verification_step=${step} duration_ms=\\d+`,
+									"u",
+								),
+							);
+							assert.match(
+								child.stderr,
+								new RegExp(
+									`practice\\.result_refused practice=0 reason_chars=\\d+ reason=verification_timeout verification_step=${step}`,
+									"u",
+								),
+							);
+							reached({ "test-practice": "NOT_REACHED", "second-practice": "EVALUATED" });
+							assert.equal(
+								candidatesIn(nodePath.join(cwd, "out/result.json")).get("second-practice")?.outcome,
+								"NOT_MET",
+							);
 							break;
 						}
 						case "tree-citation": {
