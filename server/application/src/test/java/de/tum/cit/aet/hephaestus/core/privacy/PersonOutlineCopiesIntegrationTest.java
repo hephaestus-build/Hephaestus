@@ -199,6 +199,19 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void anEmptyDocumentSelectionCannotCompleteEvenWithTheRightScope() {
+        var fixture = fixture(true);
+        UUID request = admit(fixture, Key.INSTANCE);
+        jdbc.update("""
+                UPDATE person_data_request SET selections_json=jsonb_set(
+                    selections_json::jsonb,'{outline_document_content}','{"rows":[]}'::jsonb)::text WHERE id=?
+                """, request);
+        service.run(request);
+        assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertCopy(fixture.first(), fixture.first().answer(), false);
+    }
+
+    @Test
     void unknownCopyProvenanceStopsBeforeRedactingEitherInstance() {
         var fixture = fixture(true);
         jdbc.update("UPDATE conversation_turn SET outline_context=NULL WHERE id=? AND workspace_id=?",

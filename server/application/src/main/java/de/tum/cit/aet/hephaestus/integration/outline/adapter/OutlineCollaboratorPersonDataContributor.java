@@ -61,6 +61,11 @@ final class OutlineCollaboratorPersonDataContributor implements PersonDataContri
     }
 
     @Override
+    public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
+        IntegrationOutlinePersonDataCatalog.requireRows(selection, select(frozenScope));
+    }
+
+    @Override
     public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
         List<JsonNode> rows = new ArrayList<>();
         for (var key : selection.rows())

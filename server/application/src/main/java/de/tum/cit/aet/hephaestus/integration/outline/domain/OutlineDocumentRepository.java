@@ -229,7 +229,7 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
      * a collection whose name was never captured leaves it null.
      */
     @Query(
-            "SELECT d.id AS id, d.title AS title, collection.name AS collectionName FROM OutlineDocument d LEFT JOIN OutlineCollection collection ON collection.workspaceId = d.workspaceId AND collection.connectionId = d.connectionId AND collection.collectionId = d.collectionId WHERE d.workspaceId = :workspaceId AND d.id IN (:ids) "
+            "SELECT d.id AS id, d.title AS title, col.name AS collectionName FROM OutlineDocument d LEFT JOIN OutlineCollection col ON col.workspaceId = d.workspaceId AND col.connectionId = d.connectionId AND col.collectionId = d.collectionId WHERE d.workspaceId = :workspaceId AND d.id IN (:ids) "
                     + ERASED_GUARD)
     List<DocumentLabel> findLabels(@Param("workspaceId") long workspaceId, @Param("ids") Collection<Long> ids);
 
