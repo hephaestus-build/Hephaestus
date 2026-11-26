@@ -121,6 +121,8 @@ public sealed interface ProviderReply {
     static ProviderReply classify(Signal signal, Instant now) {
         Integer remainingHeader = integer(first(signal.headers(), "x-ratelimit-remaining", "ratelimit-remaining"));
         Instant resetHeader = epoch(first(signal.headers(), "x-ratelimit-reset", "ratelimit-reset"));
+        boolean primaryQuotaAvailable =
+                signal.headers().containsKey("x-ratelimit-reset") && remainingHeader != null && remainingHeader > 0;
         Long retryAfterSeconds = seconds(signal.headers().get("retry-after"));
         boolean exhausted = (remainingHeader != null && remainingHeader <= 0)
                 || (signal.remaining() != null && signal.remaining() <= 0);
@@ -135,7 +137,7 @@ public sealed interface ProviderReply {
             if (retryAfterSeconds != null) deadlines.add(now.plusSeconds(retryAfterSeconds));
             // The quota's reset applies when the quota is spent. A secondary limit leaves it, so its reset can be an
             // hour away from the real wait.
-            if (exhausted || status == 429) {
+            if (exhausted || (status == 429 && !primaryQuotaAvailable)) {
                 Instant reset = resetHeader != null ? resetHeader : signal.resetAt();
                 if (reset != null) deadlines.add(reset);
             }

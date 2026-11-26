@@ -96,6 +96,19 @@ class ProviderReplyTest {
                                 List.of()),
                         new ProviderReply.Throttled(RESET)),
                 Arguments.of(
+                        "GitHub 429 with primary quota available uses the secondary deadline",
+                        signal(
+                                429,
+                                Map.of(
+                                        "retry-after",
+                                        "60",
+                                        "x-ratelimit-remaining",
+                                        "4000",
+                                        "x-ratelimit-reset",
+                                        RESET_EPOCH),
+                                List.of()),
+                        new ProviderReply.Throttled(NOW.plusSeconds(60))),
+                Arguments.of(
                         "GitLab 429 with RateLimit headers",
                         signal(429, Map.of("ratelimit-remaining", "0", "ratelimit-reset", RESET_EPOCH), List.of()),
                         new ProviderReply.Throttled(RESET)),

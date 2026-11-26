@@ -203,20 +203,17 @@ public class GitLabGraphQlConfig {
         }
     }
 
-    /**
-     * Retries 5xx server errors. A 429 passes through like every 4xx: its {@code Retry-After} and {@code RateLimit-*}
-     * headers reach the caller's classification, which waits until GitLab's reset instead of a blind backoff.
-     */
-    private ExchangeFilterFunction retryFilter() {
+    /** Commit correction reads the 429 deadline itself. Other callers still retry within the transport's bound. */
+    ExchangeFilterFunction retryFilter() {
         return (request, next) -> next.exchange(request)
                 .flatMap(response -> {
                     HttpStatusCode status = Objects.requireNonNull(response).statusCode();
 
-                    if (status.is4xxClientError()) {
-                        return Mono.just(response);
-                    }
+                    boolean retryThrottle = status.value() == 429
+                            && request.attribute(GitLabGraphQlClientProvider.EXCHANGE_ATTRIBUTE)
+                                    .isEmpty();
 
-                    if (status.is5xxServerError()) {
+                    if (status.is5xxServerError() || retryThrottle) {
                         return Objects.requireNonNull(response)
                                 .releaseBody()
                                 .then(Mono.error(new RetryableStatusException(status.value())));
