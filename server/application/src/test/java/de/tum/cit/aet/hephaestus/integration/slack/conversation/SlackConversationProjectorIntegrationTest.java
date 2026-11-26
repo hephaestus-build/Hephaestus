@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -644,6 +645,42 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     @Test
+    void shouldScheduleTheNextPostAtOrAfterTheRecordedThrottleDeadline() throws Exception {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        end(claims.claim(asked.turn()), "Complete reply");
+        var credentials = mock(SlackCredentialProvider.class);
+        when(credentials.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
+        var metrics = new SimpleMeterRegistry();
+        var throttles = new SlackRateLimitTracker(metrics);
+
+        try (var slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(acceptedPost());
+            try (var gateway = new SlackMessageService(
+                    credentials,
+                    throttles,
+                    new OutboundEgressGuard(() -> false),
+                    new SlackMetrics(metrics),
+                    new SlackProperties(slackApi.url("/").toString()))) {
+                var outbox = executorFor(gateway);
+                long workspaceId = workspace.getId();
+                throttles.recordThrottle(workspaceId, 120_750L);
+                var observation = Objects.requireNonNull(throttles.snapshot(workspaceId));
+                var deadline = Timestamp.from(Objects.requireNonNull(observation.throttledUntil()));
+
+                assertThat(ActionTestSupport.runLane(outbox, jdbc, key(asked)))
+                        .hasValueSatisfying(result -> assertThat(result).isInstanceOf(ActionResult.Defer.class));
+                assertThat(slackApi.getRequestCount()).isZero();
+                assertThat(jdbc.queryForObject("""
+                                SELECT next_attempt_at >= ? AND attempts = 0 AND write_started_at IS NULL
+                                FROM agent_action WHERE lane_key = ?
+                                """, Boolean.class, deadline, key(asked)))
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
     void shouldWithdrawTheReplyWhenItsQuestionIsDeletedDuringSlackBackoff() throws Exception {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         end(claims.claim(asked.turn()), "Complete reply to the deleted question");
@@ -702,7 +739,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
             slackApi.start();
             slackApi.enqueue(new MockResponse.Builder()
                     .code(429)
-                    .addHeader("Retry-After", "1")
+                    .addHeader("Retry-After", "0")
                     .addHeader("Connection", "close")
                     .addHeader("Content-Type", "application/json")
                     .body("{\"ok\":false,\"error\":\"ratelimited\"}")

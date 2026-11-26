@@ -212,7 +212,8 @@ class SlackPostAdapter implements ActionAdapter {
                 return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
             if ("silent_mode_engaged".equals(failed.slackError()))
                 return new ActionResult.Cancelled(ActionStopReason.SILENCED);
-            // A 429 proves no post was accepted; transport and invalid receipts prove no absence.
+            // A rate limit means Slack accepted no post. A transport failure or invalid receipt leaves the outcome
+            // unknown.
             if (failed.isRateLimited())
                 return new ActionResult.Defer(Duration.ofMillis(
                         Math.max(ConversationSlackReplies.REREAD.toMillis(), failed.retryAfterMillis())));

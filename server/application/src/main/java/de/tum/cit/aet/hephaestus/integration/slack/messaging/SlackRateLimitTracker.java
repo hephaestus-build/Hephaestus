@@ -40,12 +40,7 @@ import org.springframework.stereotype.Component;
  * {@code Retry-After: 60} — an admin currently has no way to see that their Slack sync is crawling for
  * that reason.
  *
- * <h2>Not a pacer</h2>
- * There is no {@code waitIfNeeded} here. Back-off already lives in
- * {@link SlackBackoff#awaitRetry}; this class only
- * watches. Slack's synchronous SDK client never self-throttles (only the async client does), so that hand
- * -rolled catch block is the single point where every 429 is already recognized — and therefore the single
- * point that feeds this tracker.
+ * The tracker exposes the recorded time remaining. The gateway and outbox decide when to try again.
  */
 @Component
 @Slf4j
@@ -63,6 +58,15 @@ public class SlackRateLimitTracker {
 
     public SlackRateLimitTracker(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
+    }
+
+    /** Time left on the recorded workspace throttle. Zero when the deadline is absent or has elapsed. */
+    Duration remainingThrottle(long workspaceId) {
+        var state = stateByWorkspace.get(workspaceId);
+        Instant until = state == null ? null : state.throttledUntil.get();
+        if (until == null) return Duration.ZERO;
+        Duration remaining = Duration.between(Instant.now(), until);
+        return remaining.isPositive() ? remaining : Duration.ZERO;
     }
 
     /**
