@@ -965,7 +965,7 @@ class LlmProxyService {
         var admit = exchange.admitSend();
         var sending = admit == null
                 ? request.bodyValue(outgoingBody)
-                : request.body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
+                : request.contentLength(outgoingBody.length).body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
                     // Reactor Netty's single-buffer send hands the whole request to the connected channel
                     // synchronously on emission. The database check runs off the transport event loop.
                     Thread.ofVirtual().name("conversation-model-send").start(() -> {

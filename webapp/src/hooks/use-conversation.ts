@@ -272,13 +272,26 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 		onError: reportFailure("We could not stop the answer. Try again."),
 	});
 	const remove = useMutation({
-		mutationFn: async (entryId: string) => {
+		mutationFn: async (entry: ConversationEntry) => {
 			const { response } = await deleteConversationEntry({
-				path: { workspaceSlug, entryId },
+				path: { workspaceSlug, entryId: entry.id },
 				throwOnError: true,
 			});
 			const header = response.headers.get("X-Conversation-Scope-Epoch");
 			return header === null ? Number.NaN : Number(header);
+		},
+		onSuccess: (epoch, entry) => {
+			if (Number.isSafeInteger(epoch) && epoch >= 0) {
+				observeScopeEpoch(queryClient, workspaceSlug, epoch);
+			}
+			patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
+				...shown,
+				deleted: true,
+				text: "",
+			}));
+			rereadInOrder(queryClient, workspaceSlug, async () =>
+				rereadConversation(queryClient, workspaceSlug),
+			);
 		},
 		onError: reportFailure("We could not delete your message. Try again."),
 	});
@@ -312,23 +325,7 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 			stop.mutate({ path: { workspaceSlug, turnId }, body: { status: "STOPPED" } });
 		},
 		onVote: vote,
-		onDelete: (entry) => {
-			remove.mutate(entry.id, {
-				onSuccess: (epoch) => {
-					if (Number.isSafeInteger(epoch) && epoch >= 0) {
-						observeScopeEpoch(queryClient, workspaceSlug, epoch);
-					}
-					patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
-						...shown,
-						deleted: true,
-						text: "",
-					}));
-					rereadInOrder(queryClient, workspaceSlug, async () =>
-						rereadConversation(queryClient, workspaceSlug),
-					);
-				},
-			});
-		},
+		onDelete: (entry) => remove.mutate(entry),
 	};
 }
 
