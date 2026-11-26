@@ -4320,12 +4320,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     void shouldRetireCurrentClaimsWhenReadinessPinsToAnExistingOccasion() {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
         var item = prepared.item();
+        var workspace = workspaces.findById(item.workspaceId()).orElseThrow();
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
+        workspaces.saveAndFlush(workspace);
         long pullId = Objects.requireNonNull(item.sourceId());
         var pull = pulls.findById(pullId).orElseThrow();
         var author =
                 users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow();
         var scenario = new ReviewIntegrationData.Scenario(
-                workspaces.findById(item.workspaceId()).orElseThrow(),
+                workspace,
                 accounts.findById(account(author)).orElseThrow(),
                 practices
                         .findByWorkspaceIdAndSlug(item.workspaceId(), "event-test")
@@ -4339,6 +4342,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value(),
                         prepared.version().value())
                 .orElseThrow();
+        assertThat(original.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(original.getReason()).isEqualTo(ReviewRequestReason.GATE_WITHHELD);
+        assertThat(reviews.findByWorkspaceIdAndEventId(item.workspaceId(), original.getId()))
+                .isEmpty();
         synchronizeHead(prepared, "c".repeat(40), false);
         var intervening = source.pin(item, null).version();
         assertThat(intervening).isNotEqualTo(prepared.version());
@@ -4380,11 +4387,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         new GitLabMergeRequestReadinessReader.DiffRefs("b".repeat(40), "a".repeat(40))))
                 .isTrue();
 
-        var coalesced = events.findById(pending.getId()).orElseThrow();
-        assertThat(coalesced.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(coalesced.getReason()).isEqualTo(ReviewRequestReason.COALESCED);
-        assertThat(coalesced.getItemVersion()).isNull();
-        assertThat(coalesced.getOccurredAt()).isEqualTo(pending.getOccurredAt());
+        var duplicate = events.findById(pending.getId()).orElseThrow();
+        assertThat(duplicate.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(duplicate.getReason()).isEqualTo(ReviewRequestReason.DUPLICATE_VERSION);
+        assertThat(duplicate.getItemVersion()).isNull();
+        assertThat(duplicate.getOccurredAt()).isEqualTo(pending.getOccurredAt());
         var retained = events.findById(original.getId()).orElseThrow();
         assertThat(retained.getItemVersion()).isEqualTo(prepared.version().value());
         assertThat(retained.getOccurredAt()).isEqualTo(original.getOccurredAt());
