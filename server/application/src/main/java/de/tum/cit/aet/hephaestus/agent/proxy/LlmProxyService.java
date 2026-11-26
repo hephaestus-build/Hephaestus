@@ -975,7 +975,8 @@ class LlmProxyService {
                                             sink.success(output.bufferFactory().wrap(outgoingBody)));
                                 } catch (RuntimeException failure) {
                                     // A pooled connection can report its close before the request-body error.
-                                    if (failure instanceof ProxyRoutingService.ModelRequestRefused) sendRefused.set(true);
+                                    if (failure instanceof ProxyRoutingService.ModelRequestRefused)
+                                        sendRefused.set(true);
                                     sink.error(failure);
                                 }
                             });

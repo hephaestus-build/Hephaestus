@@ -87,7 +87,11 @@ public class SqlStatementCounter implements BeanPostProcessor {
      * returned on its connection just before, and whether its transaction was read-only. Otherwise no owner and not
      * read-only.
      */
-    public record Prepared(String sql, @Nullable Long owner, boolean readOnly, @Nullable String transaction) {}
+    public record Prepared(
+            String sql,
+            @Nullable Long owner,
+            boolean readOnly,
+            @Nullable String transaction) {}
 
     private record Worker(Thread thread, Counter counter) {}
 

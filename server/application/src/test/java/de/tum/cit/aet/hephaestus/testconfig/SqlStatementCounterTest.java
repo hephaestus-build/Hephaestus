@@ -93,7 +93,8 @@ class SqlStatementCounterTest extends BaseUnitTest {
                 prepare(jdbc);
                 return "read";
             });
-            assertThat(measured.prepared()).containsExactly(new SqlStatementCounter.Prepared("SELECT 1", 7L, true, null));
+            assertThat(measured.prepared())
+                    .containsExactly(new SqlStatementCounter.Prepared("SELECT 1", 7L, true, null));
             CompletableFuture.runAsync(() -> prepare(jdbc), worker)
                     .orTimeout(30, TimeUnit.SECONDS)
                     .join();
