@@ -46,6 +46,7 @@ function isHostMessage(value: unknown): value is HostMessage {
 }
 
 const jobArrived = once(process, "message");
+process.once("disconnect", () => exit(0));
 process.on("message", (message: unknown) => {
 	if (!isHostMessage(message) || message.kind === "job") {
 		return;
@@ -54,7 +55,7 @@ process.on("message", (message: unknown) => {
 		metaReply.resolve(undefined);
 		return;
 	}
-	if (message.kind === "review-accepted") {
+	if (message.kind === "exit") {
 		return exit(0);
 	}
 	if (message.kind === "abort") {
@@ -144,5 +145,8 @@ try {
 		message: error instanceof Error ? error.message : String(error),
 		...(error instanceof UnratedError ? { reason: error.reason } : {}),
 	});
+} finally {
+	if (process.connected) {
+		process.disconnect();
+	}
 }
-process.disconnect();
