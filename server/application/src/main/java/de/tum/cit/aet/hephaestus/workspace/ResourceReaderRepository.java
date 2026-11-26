@@ -17,12 +17,16 @@ public interface ResourceReaderRepository extends JpaRepository<ResourceReader, 
             nativeQuery = true)
     int deleteReaders(@Param("workspaceId") long workspaceId, @Param("monitorId") long monitorId);
 
-    /** Deletes the monitor's readers that a complete listing no longer names, keeping the rows it names again. */
+    /**
+     * Deletes the monitor's readers that a complete listing on this provider no longer names, keeping the rows it names
+     * again. A monitor's readers all carry the provider its listings read; a monitor that names another repository drops
+     * them all.
+     */
     @Modifying
     @Query(
             value = "DELETE FROM resource_reader WHERE workspace_id = :workspaceId"
                     + " AND repository_to_monitor_id = :monitorId"
-                    + " AND NOT (provider_id = :providerId AND reader_native_id = ANY(CAST(:readers AS bigint[])))",
+                    + " AND provider_id = :providerId AND NOT (reader_native_id = ANY(CAST(:readers AS bigint[])))",
             nativeQuery = true)
     int deleteReadersNotIn(
             @Param("workspaceId") long workspaceId,
