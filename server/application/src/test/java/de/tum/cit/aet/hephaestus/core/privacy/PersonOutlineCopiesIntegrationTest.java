@@ -163,6 +163,22 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void outlineContextAcceptsArraysAndSqlNull() {
+        var example = fixture(true).first();
+        String update = "UPDATE conversation_turn SET outline_context=CAST(? AS jsonb) WHERE workspace_id=? AND id=?";
+        long workspaceId = example.document().getWorkspaceId();
+        UUID turnId = example.turnId();
+
+        for (String invalid : List.of("{}", "null")) {
+            assertThatThrownBy(() -> jdbc.update(update, invalid, workspaceId, turnId))
+                    .isInstanceOf(DataIntegrityViolationException.class)
+                    .hasMessageContaining("ck_conversation_turn_outline_context_array");
+        }
+        assertThat(jdbc.update(update, "[]", workspaceId, turnId)).isOne();
+        assertThat(jdbc.update(update, null, workspaceId, turnId)).isOne();
+    }
+
+    @Test
     void oldOutlineWritersCannotCreateAnUnselectableConnectionOrProvider() {
         var fixture = fixture(true);
         assertThatThrownBy(() -> jdbc.update("""

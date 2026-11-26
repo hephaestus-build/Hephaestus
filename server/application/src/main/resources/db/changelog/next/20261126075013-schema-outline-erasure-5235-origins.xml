@@ -4,6 +4,11 @@
         <addColumn tableName="conversation_turn">
             <column name="outline_context" type="JSONB"/>
         </addColumn>
+        <sql>
+            ALTER TABLE conversation_turn ADD CONSTRAINT ck_conversation_turn_outline_context_array
+                CHECK (jsonb_typeof(outline_context) = 'array');
+        </sql>
+        <rollback><dropColumn tableName="conversation_turn" columnName="outline_context"/></rollback>
     </changeSet>
     <changeSet id="1795679413316-2" author="hephaestus">
         <addColumn tableName="connection">
