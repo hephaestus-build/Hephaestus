@@ -49,14 +49,16 @@ class ReviewItemCopiedIdentityMigrationTest {
             case "before" -> PracticeMigrationFixture.upgradeBefore(owner, "prod", CHANGELOG);
             default -> PostgreSQLTestContainer.migrateDatabase(owner, "prod");
         }
-        PracticeMigrationFixture.execute(owner, seed("seed"));
+        PracticeMigrationFixture.execute(owner, seed("practice-identity.seed.sql"));
+        PracticeMigrationFixture.execute(owner, seed("review-item-copied-identity.seed.sql"));
 
         PostgreSQLTestContainer.migrateDatabase(owner, "prod");
         // A second run of the conversion, as after a run that stopped before Liquibase recorded it, changes nothing.
         PracticeMigrationFixture.execute(owner, "DELETE FROM databasechangelog WHERE id IN (" + CONVERSION + ")");
         PostgreSQLTestContainer.migrateDatabase(owner, "prod");
 
-        PracticeMigrationFixture.execute(owner, seed("expect"));
+        PracticeMigrationFixture.execute(owner, seed("practice-identity.expect.sql"));
+        PracticeMigrationFixture.execute(owner, seed("review-item-copied-identity.expect.sql"));
     }
 
     /**
@@ -90,9 +92,9 @@ class ReviewItemCopiedIdentityMigrationTest {
         PostgreSQLTestContainer.migrateDatabase(owner, "prod");
     }
 
-    private static String seed(String part) throws Exception {
-        try (var input = Objects.requireNonNull(ReviewItemCopiedIdentityMigrationTest.class.getResourceAsStream(
-                "/db/cutover-seeds/review-item-copied-identity." + part + ".sql"))) {
+    private static String seed(String filename) throws Exception {
+        try (var input = Objects.requireNonNull(
+                ReviewItemCopiedIdentityMigrationTest.class.getResourceAsStream("/db/cutover-seeds/" + filename))) {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
