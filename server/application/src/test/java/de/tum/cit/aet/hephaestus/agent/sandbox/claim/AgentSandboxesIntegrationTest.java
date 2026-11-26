@@ -473,7 +473,8 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(runState(subject)).isEqualTo("QUEUED");
         assertThat(sandboxes.isLive(sandbox)).isTrue();
         assertThat(claims.created).containsKey(claimName(sandbox));
-        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", "run_held").count())
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", "run_held")
+                        .count())
                 .isZero();
         assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
                 .hasValueSatisfying(lease -> assertThat(lease.epoch()).isEqualTo(1));
@@ -491,18 +492,15 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
             transactions.executeWithoutResult(status -> {
                 jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock(?)", Integer.class, lock);
                 var blocked = executor.submit(() -> sandboxes.lease(
-                        sandbox,
-                        Set.of(AgentRunKind.REVIEW),
-                        Duration.ofSeconds(2)::toNanos,
-                        () -> {},
-                        lease -> {
+                        sandbox, Set.of(AgentRunKind.REVIEW), Duration.ofSeconds(2)::toNanos, () -> {}, lease -> {
                             jdbc.queryForObject("SELECT 1 FROM pg_advisory_xact_lock(?)", Integer.class, lock);
                             return true;
                         }));
                 assertThatThrownBy(() -> blocked.get(6, TimeUnit.SECONDS))
                         .rootCause()
                         .isInstanceOfSatisfying(
-                                SQLException.class, sql -> assertThat(sql.getSQLState()).isEqualTo("25P04"));
+                                SQLException.class,
+                                sql -> assertThat(sql.getSQLState()).isEqualTo("25P04"));
             });
         }
         assertThat(runState(subject)).isEqualTo("QUEUED");

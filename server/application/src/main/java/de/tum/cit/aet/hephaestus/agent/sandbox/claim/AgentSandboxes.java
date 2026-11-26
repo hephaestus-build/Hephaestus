@@ -332,10 +332,7 @@ public class AgentSandboxes {
     }
 
     private Claim leaseLocked(
-            LiveSandbox sandbox,
-            Set<AgentRunKind> kinds,
-            Runnable beforeWrite,
-            Predicate<AgentRunLease> claimed) {
+            LiveSandbox sandbox, Set<AgentRunKind> kinds, Runnable beforeWrite, Predicate<AgentRunLease> claimed) {
         beforeWrite.run();
         if (sandboxes
                 .tryLockForClaim(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
@@ -423,16 +420,18 @@ public class AgentSandboxes {
     public void revoke(LiveSandbox sandbox, Revocation reason) {
         if (!TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("A sandbox is revoked in the transaction of the change that revokes it");
-        sandboxes.releaseSandbox(sandbox.id(), sandbox.workspaceId()).ifPresent(row -> TransactionCallbacks.afterCommit(() -> {
-            meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
-                    .increment();
-            SandboxEvents.event(
-                            reason == Revocation.UNISOLATED ? log.atWarn() : log.atInfo(),
-                            "agent.sandbox.taken_back",
-                            row)
-                    .addKeyValue("sandbox.reason", reason.value())
-                    .log("Sandbox revoked; its claim is deleted next");
-        }));
+        sandboxes
+                .releaseSandbox(sandbox.id(), sandbox.workspaceId())
+                .ifPresent(row -> TransactionCallbacks.afterCommit(() -> {
+                    meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
+                            .increment();
+                    SandboxEvents.event(
+                                    reason == Revocation.UNISOLATED ? log.atWarn() : log.atInfo(),
+                                    "agent.sandbox.taken_back",
+                                    row)
+                            .addKeyValue("sandbox.reason", reason.value())
+                            .log("Sandbox revoked; its claim is deleted next");
+                }));
     }
 
     /** Frees a revoked sandbox's slot after commit. The reaper retries any deletion the claim API fails. */

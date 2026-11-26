@@ -101,8 +101,7 @@ public class AgentNextWaits implements SmartLifecycle {
         if (until - System.nanoTime() <= 0) return Optional.empty();
         Waiter abandoned = waiters.remove(sandbox.id());
         if (abandoned != null) abandoned.supersede();
-        if (!running || kinds.isEmpty() || !capacity.tryAcquire())
-            return claim.apply(() -> until - System.nanoTime());
+        if (!running || kinds.isEmpty() || !capacity.tryAcquire()) return claim.apply(() -> until - System.nanoTime());
         var waiter = new Waiter(sandbox, kinds);
         LongSupplier remaining = () -> waiter.superseded ? 0 : until - System.nanoTime();
         try {
@@ -112,8 +111,7 @@ public class AgentNextWaits implements SmartLifecycle {
             // stop that did not see the waiter has already cleared the flag that each wait reads first.
             while (remaining.getAsLong() > 0) {
                 Optional<T> claimed = claim.apply(remaining);
-                if (claimed.isPresent() || !running || !waiter.await(remaining.getAsLong()) || !running)
-                    return claimed;
+                if (claimed.isPresent() || !running || !waiter.await(remaining.getAsLong()) || !running) return claimed;
             }
             return Optional.empty();
         } catch (InterruptedException interrupted) {
