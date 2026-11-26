@@ -89,11 +89,30 @@
         </rollback>
     </changeSet>
     <changeSet id="1795595919745-9" author="hephaestus">
-        <comment>A reader of a monitored repository is removed in the transaction that records, from any path, that GitHub removed the person: a collaborator, a team member, a team's access or an organization member. A team or an organization is deleted only after these rows, because their keys do not cascade to them all. Every monitor of the repository moves its proof generation on, so a listing that began before the removal does not restore the person. A deleted repository drops every monitor's readers and proof. The narrowing that a repository turned private already makes also stamps when the proof changed.</comment>
+        <comment>A reader of a monitored repository is removed in the transaction that records, from any path, that GitHub removed the person: a collaborator, a team member, a team's access or an organization member. A team or an organization is deleted only after these rows, because their keys do not cascade to them all. Every monitor of the repository moves its proof generation on, so a listing that began before the removal does not restore the person. A deleted repository drops every monitor's readers and proof. A repository that turns private narrows the monitors on its own provider, and stamps when the proof changed. The earlier one-argument narrowing stays for the rollback.</comment>
         <sql splitStatements="false"><![CDATA[
--- A repository that turned private narrows the monitors that read it on its own provider: a GitLab project with a
--- GitHub repository's number is another repository.
-CREATE FUNCTION public.narrow_repository_monitors(p_native_id bigint, p_provider_id bigint) RETURNS integer
+-- Every function below finds a repository's monitors through monitors_of_repository: a monitor reads the repository on
+-- its workspace's source provider. A workspace with no active source connection cannot show which provider it read, so
+-- its monitors count for every provider; they are only ever narrowed.
+CREATE FUNCTION public.monitors_of_repository(p_repository bigint, p_provider bigint) RETURNS SETOF bigint
+    LANGUAGE sql STABLE AS $$
+    SELECT m.id
+    FROM (
+        SELECT rtm.id, rtm.native_id, p.id AS provider_id
+        FROM public.repository_to_monitor rtm
+        JOIN public.connection c ON c.workspace_id = rtm.workspace_id
+            AND c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
+        JOIN public.identity_provider p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
+        UNION ALL
+        SELECT rtm.id, rtm.native_id, p_provider
+        FROM public.repository_to_monitor rtm
+        WHERE NOT EXISTS (SELECT 1 FROM public.connection c
+                          WHERE c.workspace_id = rtm.workspace_id
+                            AND c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED'))
+    ) m
+    WHERE m.native_id = p_repository AND m.provider_id = p_provider
+$$;
+CREATE FUNCTION public.narrow_repository_monitors(p_repository bigint, p_provider bigint) RETURNS integer
     LANGUAGE plpgsql AS $$
 DECLARE
     narrowed integer;
@@ -104,14 +123,7 @@ BEGIN
         proof_state = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE m.proof_state END,
         proof_reason = CASE WHEN m.visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE m.proof_reason END,
         proof_changed_at = CASE WHEN m.visibility_class = 'WORKSPACE' THEN now() ELSE m.proof_changed_at END
-    WHERE m.native_id = p_native_id
-      AND (EXISTS (SELECT 1 FROM public.connection c
-                 JOIN public.identity_provider p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
-                 WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                   AND c.workspace_id = m.workspace_id AND p.id = p_provider_id)
-         OR NOT EXISTS (SELECT 1 FROM public.connection c
-                        WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                          AND c.workspace_id = m.workspace_id));
+    WHERE m.id IN (SELECT public.monitors_of_repository(p_repository, p_provider));
     GET DIAGNOSTICS narrowed = ROW_COUNT;
     RETURN narrowed;
 END
@@ -124,10 +136,7 @@ BEGIN
     RETURN NULL;
 END
 $$;
-DROP FUNCTION public.narrow_repository_monitors(bigint);
--- A monitor belongs to the repository on its workspace's source provider. A workspace with no active source connection
--- cannot show which provider it read, so it is narrowed too.
-CREATE FUNCTION public.forget_repository_readers(p_native_id bigint, p_provider_id bigint) RETURNS integer
+CREATE FUNCTION public.forget_repository_readers(p_repository bigint, p_provider bigint) RETURNS integer
     LANGUAGE plpgsql AS $$
 DECLARE
     narrowed integer;
@@ -139,18 +148,11 @@ BEGIN
         proof_state = CASE WHEN m.proof_state = 'FAILED' THEN m.proof_state ELSE 'PENDING' END,
         proof_reason = CASE WHEN m.proof_state = 'FAILED' THEN m.proof_reason ELSE 'AWAITING_READERS' END,
         proof_changed_at = CASE WHEN m.visibility_class = 'UNPROVEN' THEN m.proof_changed_at ELSE now() END
-    WHERE m.native_id = p_native_id
-      AND (EXISTS (SELECT 1 FROM public.connection c
-                 JOIN public.identity_provider p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
-                 WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                   AND c.workspace_id = m.workspace_id AND p.id = p_provider_id)
-         OR NOT EXISTS (SELECT 1 FROM public.connection c
-                        WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                          AND c.workspace_id = m.workspace_id));
+    WHERE m.id IN (SELECT public.monitors_of_repository(p_repository, p_provider));
     GET DIAGNOSTICS narrowed = ROW_COUNT;
     DELETE FROM public.resource_reader rr
-    USING public.repository_to_monitor m
-    WHERE rr.repository_to_monitor_id = m.id AND m.native_id = p_native_id AND rr.provider_id = p_provider_id;
+    WHERE rr.repository_to_monitor_id IN (SELECT public.monitors_of_repository(p_repository, p_provider))
+      AND rr.provider_id = p_provider;
     RETURN narrowed;
 END
 $$;
@@ -165,28 +167,27 @@ CREATE TRIGGER repository_gone AFTER DELETE ON public.repository
     FOR EACH ROW EXECUTE FUNCTION public.forget_repository_monitors_of_row();
 CREATE FUNCTION public.forget_readers_of_repositories(p_repository_ids bigint[], p_user_ids bigint[])
     RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+    target record;
 BEGIN
     IF cardinality(p_repository_ids) = 0 OR cardinality(p_user_ids) = 0 THEN
         RETURN;
     END IF;
-    -- Lock and move on every monitor of the repositories first, so a listing that began before the removal does not
-    -- apply, and one that holds a monitor commits before its rows are deleted.
-    UPDATE public.repository_to_monitor m
-    SET proof_generation = m.proof_generation + 1
-    FROM public.repository r
-    WHERE r.id = ANY (p_repository_ids) AND m.native_id = r.native_id
-      AND (EXISTS (SELECT 1 FROM public.connection c
-                 JOIN public.identity_provider p ON p.type = c.kind AND p.server_url = c.config ->> 'serverUrl'
-                 WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                   AND c.workspace_id = m.workspace_id AND p.id = r.provider_id)
-         OR NOT EXISTS (SELECT 1 FROM public.connection c
-                        WHERE c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
-                          AND c.workspace_id = m.workspace_id));
-    DELETE FROM public.resource_reader rr
-    USING public.repository r, public.repository_to_monitor m, public."user" u
-    WHERE r.id = ANY (p_repository_ids) AND m.native_id = r.native_id AND rr.repository_to_monitor_id = m.id
-      AND rr.provider_id = r.provider_id
-      AND u.id = ANY (p_user_ids) AND u.provider_id = rr.provider_id AND rr.reader_native_id = u.native_id;
+    FOR target IN
+        SELECT r.native_id AS repository, r.provider_id AS provider
+        FROM public.repository r WHERE r.id = ANY (p_repository_ids) ORDER BY r.id
+    LOOP
+        -- Lock and move on every monitor of the repository first, so a listing that began before the removal does
+        -- not apply, and one that holds a monitor commits before its rows are deleted.
+        UPDATE public.repository_to_monitor m
+        SET proof_generation = m.proof_generation + 1
+        WHERE m.id IN (SELECT public.monitors_of_repository(target.repository, target.provider));
+        DELETE FROM public.resource_reader rr
+        USING public."user" u
+        WHERE rr.repository_to_monitor_id IN (SELECT public.monitors_of_repository(target.repository, target.provider))
+          AND rr.provider_id = target.provider AND u.id = ANY (p_user_ids)
+          AND rr.provider_id = u.provider_id AND rr.reader_native_id = u.native_id;
+    END LOOP;
 END
 $$;
 CREATE FUNCTION public.forget_removed_collaborator() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -244,20 +245,6 @@ CREATE TRIGGER organization_membership_removed BEFORE DELETE ON public.organizat
             <sql>DROP FUNCTION public.forget_repository_monitors_of_row()</sql>
             <sql>DROP FUNCTION public.forget_repository_readers(bigint, bigint)</sql>
             <sql splitStatements="false"><![CDATA[
-CREATE FUNCTION public.narrow_repository_monitors(p_native_id bigint) RETURNS integer LANGUAGE plpgsql AS $$
-DECLARE
-    narrowed integer;
-BEGIN
-    UPDATE public.repository_to_monitor
-    SET proof_generation = proof_generation + 1,
-        visibility_class = CASE WHEN visibility_class = 'WORKSPACE' THEN 'UNPROVEN' ELSE visibility_class END,
-        proof_state = CASE WHEN visibility_class = 'WORKSPACE' THEN 'PENDING' ELSE proof_state END,
-        proof_reason = CASE WHEN visibility_class = 'WORKSPACE' THEN 'AWAITING_READERS' ELSE proof_reason END
-    WHERE native_id = p_native_id;
-    GET DIAGNOSTICS narrowed = ROW_COUNT;
-    RETURN narrowed;
-END
-$$;
 CREATE OR REPLACE FUNCTION public.narrow_monitors_of_repository() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM public.narrow_repository_monitors(CASE WHEN TG_OP = 'DELETE' THEN OLD.native_id ELSE NEW.native_id END);
@@ -265,6 +252,7 @@ BEGIN
 END
 $$;
 DROP FUNCTION public.narrow_repository_monitors(bigint, bigint);
+DROP FUNCTION public.monitors_of_repository(bigint, bigint);
             ]]></sql>
         </rollback>
     </changeSet>

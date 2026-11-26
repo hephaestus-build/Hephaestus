@@ -47,8 +47,8 @@ public interface ResourceReaderRepository extends JpaRepository<ResourceReader, 
     @Modifying
     @Query(
             value = "DELETE FROM resource_reader WHERE workspace_id = :workspaceId"
-                    + " AND repository_to_monitor_id = :monitorId AND provider_id = :providerId"
-                    + " AND reader_native_id = :readerNativeId",
+                    + " AND repository_to_monitor_id = :monitorId"
+                    + " AND provider_id = :providerId AND reader_native_id = :readerNativeId",
             nativeQuery = true)
     int deleteReader(
             @Param("workspaceId") long workspaceId,
