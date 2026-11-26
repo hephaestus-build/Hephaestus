@@ -12,9 +12,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -100,8 +102,9 @@ class WorkPlaceScopeTest {
                         base.onWorkCopyForms(),
                         base.root(),
                         base.stagedCopies(),
+                        base.stagedExpiresAt(),
                         base.sealedAt(),
-                        base.basisExpiresAt()))
+                        base.occasionExpiresAt()))
                 .orElseThrow();
         var plainAssigned = WorkPlaceScope.of(new WorkPlaceScope.Sealed(
                         base.basis(),
@@ -111,8 +114,9 @@ class WorkPlaceScopeTest {
                         base.onWorkCopyForms(),
                         base.root(),
                         base.stagedCopies(),
+                        base.stagedExpiresAt(),
                         base.sealedAt(),
-                        base.basisExpiresAt()))
+                        base.occasionExpiresAt()))
                 .orElseThrow();
 
         assertThat(withPrivate.payload()).isEqualTo(plainAssigned.payload());
@@ -146,24 +150,58 @@ class WorkPlaceScopeTest {
     }
 
     @Test
-    void shouldKeepItsDigestWhenOnlyAFeedbackModeChanged() {
+    void shouldRefuseACopyWhoseEligibilityFlagsChanged() {
         var scoped = WorkPlaceScope.of(pullRequest()).orElseThrow();
-        var switched = scoped.payload().deepCopy();
-        for (JsonNode result : switched.path("results")) {
-            ((ObjectNode) result).put("publicEligible", false);
-            result.path("problems").forEach(problem -> ((ObjectNode) problem).put("publicEligible", false));
-        }
-        assertThat(WorkPlaceScope.read(switched, scoped.digest()).results())
-                .hasSize(scoped.payload().path("results").size());
+        assertThat(WorkPlaceScope.read(scoped.payload(), scoped.digest()).results())
+                .isNotEmpty()
+                .allSatisfy(result -> {
+                    assertThat(result.path("publicEligible").asBoolean()).isTrue();
+                    result.path("problems")
+                            .forEach(problem -> assertThat(problem.path("publicEligible").asBoolean())
+                                    .isTrue());
+                });
+
+        var hidden = scoped.payload().deepCopy();
+        ((ObjectNode) hidden.path("results").get(0)).put("publicEligible", false);
+        assertThatThrownBy(() -> WorkPlaceScope.read(hidden, scoped.digest()))
+                .as("a flag that would silence a public finding changes the digest")
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void shouldExpireAtTheCopyDeadlineOrWithItsInputs() {
+    void shouldReadTheCopyAfterTheStoreReordersItsKeys() {
+        var scoped = WorkPlaceScope.of(pullRequest()).orElseThrow();
+        var reordered = reversed(scoped.payload());
+        assertThat(reordered.toString()).isNotEqualTo(scoped.payload().toString());
+
+        assertThat(WorkPlaceScope.read(reordered, scoped.digest()).results())
+                .isEqualTo(WorkPlaceScope.read(scoped.payload(), scoped.digest()).results());
+    }
+
+    @Test
+    void shouldExpireAtTheCopyDeadlineOrWithTheInputsItKeeps() {
         var base = pullRequest();
         assertThat(WorkPlaceScope.of(base).orElseThrow().expiresAt())
                 .isEqualTo(base.sealedAt().plus(WorkPlaceScope.COPY_DEADLINE));
         Instant sooner = base.sealedAt().plus(Duration.ofMinutes(10));
-        var expiring = new WorkPlaceScope.Sealed(
+        String kept = base.results().getFirst().path("practiceSlug").asString();
+
+        assertThat(WorkPlaceScope.of(expiring(base, Map.of(), sooner)).orElseThrow().expiresAt())
+                .as("the occasion's evidence ends")
+                .isEqualTo(sooner);
+        assertThat(WorkPlaceScope.of(expiring(base, Map.of(kept, sooner), null)).orElseThrow().expiresAt())
+                .as("a kept result's staged evidence ends")
+                .isEqualTo(sooner);
+        assertThat(WorkPlaceScope.of(expiring(base, Map.of("reviews-privately", sooner), null))
+                        .orElseThrow()
+                        .expiresAt())
+                .as("a private candidate's staged evidence never shortens the copy")
+                .isEqualTo(base.sealedAt().plus(WorkPlaceScope.COPY_DEADLINE));
+    }
+
+    private static WorkPlaceScope.Sealed expiring(
+            WorkPlaceScope.Sealed base, Map<String, Instant> staged, @Nullable Instant occasion) {
+        return new WorkPlaceScope.Sealed(
                 base.basis(),
                 base.results(),
                 base.capturedSources(),
@@ -171,9 +209,26 @@ class WorkPlaceScopeTest {
                 base.onWorkCopyForms(),
                 base.root(),
                 base.stagedCopies(),
+                staged,
                 base.sealedAt(),
-                sooner);
-        assertThat(WorkPlaceScope.of(expiring).orElseThrow().expiresAt()).isEqualTo(sooner);
+                occasion);
+    }
+
+    /** The node with every object's keys in reverse order, as a store that orders keys its own way may return it. */
+    private static JsonNode reversed(JsonNode node) {
+        if (node.isObject()) {
+            var names = new ArrayList<>(node.propertyNames());
+            Collections.reverse(names);
+            var copy = MAPPER.createObjectNode();
+            names.forEach(name -> copy.set(name, reversed(node.path(name))));
+            return copy;
+        }
+        if (node.isArray()) {
+            var copy = MAPPER.createArrayNode();
+            node.forEach(element -> copy.add(reversed(element)));
+            return copy;
+        }
+        return node;
     }
 
     @Test
@@ -193,8 +248,9 @@ class WorkPlaceScopeTest {
                         base.onWorkCopyForms(),
                         base.root(),
                         base.stagedCopies(),
+                        base.stagedExpiresAt(),
                         base.sealedAt(),
-                        base.basisExpiresAt())))
+                        base.occasionExpiresAt())))
                 .isEmpty();
     }
 

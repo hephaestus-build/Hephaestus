@@ -38,6 +38,7 @@ import tools.jackson.databind.JsonNode;
                         name = "uk_work_place_handoff_review",
                         columnNames = {"workspace_id", "review_id"}),
         indexes = {
+            @Index(name = "ix_work_place_handoff_job", columnList = "job_id, workspace_id"),
             @Index(name = "ix_work_place_handoff_item", columnList = "workspace_id, item_id"),
             @Index(name = "ix_work_place_handoff_expiry", columnList = "expires_at")
         })

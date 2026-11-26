@@ -278,6 +278,7 @@ class WorkPlaceShadowComparisonTest {
                 forms,
                 new WorkPlaceScope.Copy(UUID.nameUUIDFromBytes("root".getBytes(StandardCharsets.UTF_8)), 0),
                 Map.of(),
+                Map.of(),
                 SEALED,
                 SEALED.plus(Duration.ofDays(1)));
     }

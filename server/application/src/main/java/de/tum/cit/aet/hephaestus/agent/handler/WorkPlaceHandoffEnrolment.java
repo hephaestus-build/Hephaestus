@@ -121,6 +121,7 @@ public class WorkPlaceHandoffEnrolment {
                 .forEach(assignment -> slugs.put(
                         List.of(assignment.id().practiceId(), assignment.id().itemId()), assignment.practiceSlug()));
         var copies = new HashMap<String, List<WorkPlaceScope.Copy>>();
+        var expiries = new HashMap<String, Instant>();
         for (var practice : staging.staged(job.getWorkspaceId(), job.getReviewId(), job.getId())) {
             String slug = slugs.get(List.of(
                     practice.assignment().practiceId(), practice.assignment().itemId()));
@@ -128,6 +129,8 @@ public class WorkPlaceHandoffEnrolment {
             copies.computeIfAbsent(slug, ignored -> new ArrayList<>())
                     .add(new WorkPlaceScope.Copy(
                             UUID.fromString(practice.evidence().path("copyId").asString()), practice.attempt()));
+            expiries.merge(slug, Instant.parse(practice.evidence().path("expiresAt").asString()), (kept, staged) ->
+                    staged.isBefore(kept) ? staged : kept);
         }
         Instant now = Instant.now();
         var scoped = WorkPlaceScope.of(new WorkPlaceScope.Sealed(
@@ -138,8 +141,9 @@ public class WorkPlaceHandoffEnrolment {
                 forms,
                 new WorkPlaceScope.Copy(basis.getCopyId(), basis.getAdmissionAttempt()),
                 copies,
+                expiries,
                 now,
-                basis.getExpiresAt()));
+                review.evidenceExpiresAt()));
         if (scoped.isEmpty()) return;
         var copy = scoped.orElseThrow();
         ItemVersion version = review.version();

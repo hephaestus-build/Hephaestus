@@ -519,7 +519,8 @@ class CascadeTableTest extends BaseUnitTest {
             "PostgreSQL recovery facts",
             "PostgreSQL runtime",
             "PostgreSQL sign-in rate limits",
-            "PostgreSQL transient composition");
+            "PostgreSQL transient composition",
+            "PostgreSQL work-place handoff");
 
     /**
      * The dependent kinds that each store of the person-data map holds. A store that holds none is in
@@ -660,7 +661,8 @@ class CascadeTableTest extends BaseUnitTest {
             "trial",
             "user",
             "workspace",
-            "workspace_onboarding_settings");
+            "workspace_onboarding_settings",
+            "work_place_handoff");
 
     private static final Path MAP = Path.of("../../docs/admin/dsms/personal-data-map.mdx");
     private static final String MAIN_TABLE = "| Store / copy |";

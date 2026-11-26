@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -33,9 +34,10 @@ import tools.jackson.databind.node.ObjectNode;
  * enter.
  *
  * <p>The scope is a copy, made once at the seal from inputs that the legacy composition could compose from, so it
- * outlives the review's sandbox and its basis. Its digest covers every byte it keeps, except the {@code publicEligible}
- * flags: a later change of a practice's feedback mode is a destination rule that the composer checks when it writes,
- * not a change of what the review found.
+ * outlives the review's sandbox and its basis. Its digest covers every byte it keeps, its {@code publicEligible} flags
+ * too, in a canonical form, so that a store that orders object keys its own way returns a copy that still matches.
+ * Every result it keeps is public at the seal. A later change of a practice's feedback mode is a destination rule that
+ * the composer checks again when it writes: it never trusts these flags for that.
  */
 public final class WorkPlaceScope {
     public static final int VERSION = 1;
@@ -61,7 +63,8 @@ public final class WorkPlaceScope {
      * @param onWorkCopyForms the copy forms the work takes
      * @param root the receipt of the captured work record
      * @param stagedCopies the receipts of each practice's staged evidence, by practice slug
-     * @param basisExpiresAt when the sealed inputs may no longer be used
+     * @param stagedExpiresAt when each practice's staged evidence may no longer be used, by practice slug
+     * @param occasionExpiresAt when the occasion's evidence may no longer be used, if it ends
      */
     @SuppressWarnings("ArrayRecordComponent") // each value is a file's retained bytes
     public record Sealed(
@@ -72,8 +75,9 @@ public final class WorkPlaceScope {
             List<String> onWorkCopyForms,
             Copy root,
             Map<String, List<Copy>> stagedCopies,
+            Map<String, Instant> stagedExpiresAt,
             Instant sealedAt,
-            Instant basisExpiresAt) {}
+            @Nullable Instant occasionExpiresAt) {}
 
     /** The kept copy: the payload a handoff row stores, its digest and the time it may no longer be used. */
     public record Scoped(ObjectNode payload, String digest, Instant expiresAt) {}
@@ -172,8 +176,16 @@ public final class WorkPlaceScope {
         var encoded = payload.putObject("files");
         files.forEach((path, bytes) -> encoded.put(path, Base64.getEncoder().encodeToString(bytes)));
 
-        Instant deadline = sealed.sealedAt().plus(COPY_DEADLINE);
-        Instant expiresAt = sealed.basisExpiresAt().isBefore(deadline) ? sealed.basisExpiresAt() : deadline;
+        // Only the inputs it keeps bound the copy: a private candidate's shorter evidence never shortens it.
+        Instant expiresAt = sealed.sealedAt().plus(COPY_DEADLINE);
+        var bounds = new ArrayList<Instant>();
+        Instant occasion = sealed.occasionExpiresAt();
+        if (occasion != null) bounds.add(occasion);
+        practices.forEach(slug -> {
+            Instant staged = sealed.stagedExpiresAt().get(slug);
+            if (staged != null) bounds.add(staged);
+        });
+        for (Instant bound : bounds) if (bound.isBefore(expiresAt)) expiresAt = bound;
         return Optional.of(new Scoped(payload, digest(payload), expiresAt));
     }
 
@@ -182,7 +194,7 @@ public final class WorkPlaceScope {
      *
      * @throws IllegalArgumentException when the payload does not match its digest or is not a version this reads
      */
-    static WorkPlaceHandoff read(JsonNode payload, String digest) {
+    public static WorkPlaceHandoff read(JsonNode payload, String digest) {
         if (payload.path("version").asInt(-1) != VERSION || !digest.equals(digest(payload)))
             throw new IllegalArgumentException("The work-place handoff does not match its digest");
         var files = new TreeMap<String, byte[]>();
@@ -256,29 +268,35 @@ public final class WorkPlaceScope {
         return array;
     }
 
-    /** SHA-256 over the payload with each file as its own digest and without the {@code publicEligible} flags. */
+    /**
+     * SHA-256 over the canonical payload, with each file as its own digest. The canonical form sorts every object's keys
+     * and keeps array order, so the digest does not depend on how a store orders the keys of the payload it returns.
+     */
     private static String digest(JsonNode payload) {
-        var material = JSON.objectNode();
-        material.set("version", payload.path("version"));
-        material.set("request", payload.path("request"));
-        var results = material.putArray("results");
-        for (JsonNode result : Js.listOf(payload.path("results"))) {
-            var copy = ((ObjectNode) result).deepCopy();
-            copy.remove("publicEligible");
-            Js.listOf(copy.path("problems")).forEach(problem -> ((ObjectNode) problem).remove("publicEligible"));
-            results.add(copy);
-        }
-        material.set("notReached", payload.path("notReached"));
-        material.set("copies", payload.path("copies"));
+        var material = (ObjectNode) payload.deepCopy();
         var files = material.putObject("files");
-        var sorted = new TreeMap<String, String>();
         payload.path("files")
                 .properties()
-                .forEach(entry -> sorted.put(
+                .forEach(entry -> files.put(
                         entry.getKey(),
                         ProvenanceDigest.sha256Hex(
                                 Base64.getDecoder().decode(entry.getValue().asString()))));
-        sorted.forEach(files::put);
-        return ProvenanceDigest.sha256Hex(material.toString().getBytes(StandardCharsets.UTF_8));
+        return ProvenanceDigest.sha256Hex(canonical(material).toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static JsonNode canonical(JsonNode node) {
+        if (node.isObject()) {
+            var sorted = new TreeMap<String, JsonNode>();
+            node.properties().forEach(entry -> sorted.put(entry.getKey(), entry.getValue()));
+            var canonical = JSON.objectNode();
+            sorted.forEach((key, value) -> canonical.set(key, canonical(value)));
+            return canonical;
+        }
+        if (node.isArray()) {
+            var canonical = JSON.arrayNode();
+            node.forEach(element -> canonical.add(canonical(element)));
+            return canonical;
+        }
+        return node;
     }
 }

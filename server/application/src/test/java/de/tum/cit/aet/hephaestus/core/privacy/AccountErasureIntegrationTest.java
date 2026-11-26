@@ -1315,7 +1315,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             otherFolders.add(captureMountedEvidence(
                     worker, workerReceipts, workerCaptures, recorder, otherDerived.getLast(), other));
         }
-        Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(this::keepCompositionInputs);
+        Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(derived -> {
+            keepCompositionInputs(derived);
+            keepWorkPlaceHandoff(derived);
+        });
         for (var derived : targetDerived) {
             var result = practiceResultRepository
                     .findById(derived.practiceResultIds().getFirst())

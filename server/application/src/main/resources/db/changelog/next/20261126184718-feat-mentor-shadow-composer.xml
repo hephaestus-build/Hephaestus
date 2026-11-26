@@ -41,7 +41,11 @@
         <addUniqueConstraint columnNames="workspace_id, review_id" constraintName="uk_work_place_handoff_review" tableName="work_place_handoff"/>
     </changeSet>
     <changeSet id="1795709850961-3" author="hephaestus">
-        <comment>The handoffs of one work place, and the retention sweep by expiry.</comment>
+        <comment>The handoffs of one work place, the job's cascade and erasure, and the retention sweep by expiry.</comment>
+        <createIndex indexName="ix_work_place_handoff_job" tableName="work_place_handoff">
+            <column name="job_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
         <createIndex indexName="ix_work_place_handoff_item" tableName="work_place_handoff">
             <column name="workspace_id"/>
             <column name="item_id"/>
@@ -60,6 +64,13 @@
         <sql>ALTER TABLE public.work_place_handoff ADD CONSTRAINT ck_work_place_handoff_producer CHECK (producer IN ('LEGACY', 'COMPOSER'))</sql>
         <rollback>
             <sql>ALTER TABLE public.work_place_handoff DROP CONSTRAINT ck_work_place_handoff_producer</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795709850961-6" author="hephaestus">
+        <comment>The payload is the one JSON object that the scope builder writes.</comment>
+        <sql>ALTER TABLE public.work_place_handoff ADD CONSTRAINT ck_work_place_handoff_payload_object CHECK (jsonb_typeof(payload) = 'object')</sql>
+        <rollback>
+            <sql>ALTER TABLE public.work_place_handoff DROP CONSTRAINT ck_work_place_handoff_payload_object</sql>
         </rollback>
     </changeSet>
 </databaseChangeLog>
