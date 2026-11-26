@@ -690,14 +690,14 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(runState(digestRun)).isEqualTo("ENDED");
 
         // While the question waits, the pass settles the stopped digest and leaves the item waiting, uncharged.
-        schedule.startDue();
+        starts(Clock.fixed(due(), ZoneOffset.UTC)).startDue();
         assertThat(item(conversationId))
                 .containsEntry("state", "PENDING")
                 .containsEntry("reason", "DEFERRED_ACTIVE")
                 .containsEntry("attempts", 0);
 
         turns.stop(workspaceId, asked.turn().getId());
-        schedule.startDue();
+        starts(Clock.fixed(due(), ZoneOffset.UTC)).startDue();
         var again = entryRepository
                 .findByWorkspaceIdAndRequestId(workspaceId, requestId() + "#1")
                 .orElseThrow();
@@ -735,13 +735,11 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         // The holder settles within the grace and stores nothing; then the question is the next claim.
         transactionTemplate.executeWithoutResult(tx -> runs.end(claim.fence(), AgentRunStopReason.CANCELLED));
-        assertThat(transactionTemplate.execute(tx -> runs.claimSubject(
-                                workspaceId,
-                                "conversation:" + conversationId,
-                                Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST))
-                        .map(lease -> lease.runId())
-                        .orElse(null)))
-                .isEqualTo(asked.turn().getRunId());
+        var next = transactionTemplate.execute(tx -> runs.claimSubject(
+                workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST)));
+        assertThat(next)
+                .as("the question is the next claim of its thread")
+                .hasValueSatisfying(lease -> assertThat(lease.runId()).isEqualTo(asked.turn().getRunId()));
     }
 
     @Test
@@ -755,8 +753,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(item(main.getId())).containsEntry("state", "PENDING").containsEntry("reason", "DEFERRED_ACTIVE");
 
         turns.stop(workspaceId, asked.turn().getId());
-        schedule(Clock.fixed(week.contactCutoff().plusSeconds(1), ZoneOffset.UTC))
-                .startDue();
+        starts(Clock.fixed(week.contactCutoff().plusSeconds(1), ZoneOffset.UTC)).startDue();
         assertThat(item(main.getId())).containsEntry("state", "EXPIRED").containsEntry("reason", "DEADLINE_PASSED");
         assertThat(digestEntry()).as("a late digest is never written").isEmpty();
     }
@@ -773,7 +770,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         when(subscriptions.enabledSince(accountId))
                 .thenReturn(Optional.of(week.start().plusSeconds(60)));
         turns.stop(workspaceId, asked.turn().getId());
-        schedule.startDue();
+        starts(Clock.fixed(due(), ZoneOffset.UTC)).startDue();
         assertThat(item(main.getId())).containsEntry("state", "DROPPED").containsEntry("reason", "NO_LONGER_ELIGIBLE");
         assertThat(digestEntry()).isEmpty();
     }
@@ -816,13 +813,24 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 facts,
                 conversations,
                 entries,
-                turns,
                 inbox,
-                eligibility(),
-                conversationAccess,
+                starts(clock),
                 writeFence,
                 objectMapper,
                 transactionTemplate,
+                clock);
+    }
+
+    private DigestStarts starts(Clock clock) {
+        return new DigestStarts(
+                inbox,
+                subscriptions,
+                new WeeklyDigestAvailability(memberships, readiness, admission),
+                facts,
+                turns,
+                eligibility(),
+                conversationAccess,
+                objectMapper,
                 clock);
     }
 

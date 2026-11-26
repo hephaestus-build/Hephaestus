@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.conversation.InboxItems;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
@@ -69,7 +69,8 @@ class DigestScheduleLockTest extends BaseUnitTest {
                     mock(WeeklyDigestFacts.class),
                     mock(ConversationService.class),
                     mock(ConversationEntryService.class),
-                    mock(ConversationTurnService.class),
+                    mock(InboxItems.class),
+                    mock(DigestStarts.class),
                     mock(PersonDataWriteFence.class),
                     mock(ObjectMapper.class),
                     mock(TransactionTemplate.class),

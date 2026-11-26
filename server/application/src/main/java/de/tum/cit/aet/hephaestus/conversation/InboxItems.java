@@ -16,7 +16,6 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * The inbox of each thread (ADR 0120): the items that no person typed, and the start policy in code that decides each
@@ -46,7 +45,6 @@ public class InboxItems {
     private final PersonDataWriteFence writeFence;
     private final TurnRuns runs;
     private final TransactionTemplate transactions;
-    private final ObjectMapper mapper;
 
     /** What the item's producer did at its start. */
     public sealed interface Start {}
@@ -77,12 +75,11 @@ public class InboxItems {
     public record Due(UUID id, long workspaceId, UUID conversationId) {}
 
     /**
-     * Writes the item on the thread once: the same source on the same thread writes nothing again.
+     * A new item of a thread.
      *
-     * @return the item, when this call wrote it
+     * @param payload the IDs and values its producer needs at its start, never text
      */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<Due> enqueue(
+    public record NewItem(
             long workspaceId,
             UUID conversationId,
             InboxItem.Kind kind,
@@ -90,21 +87,19 @@ public class InboxItems {
             InboxItem.Custody custody,
             Instant dueAt,
             Instant deadlineAt,
-            JsonNode payload,
-            Instant now) {
-        UUID id = UUID.randomUUID();
-        int written = items.enqueue(
-                id,
-                workspaceId,
-                conversationId,
-                kind.name(),
-                sourceKey,
-                custody.name(),
-                dueAt,
-                deadlineAt,
-                mapper.writeValueAsString(payload),
-                now);
-        return written == 1 ? Optional.of(new Due(id, workspaceId, conversationId)) : Optional.empty();
+            JsonNode payload) {}
+
+    /**
+     * Writes the item on the thread once: the same source on the same thread writes nothing again. Its producer holds
+     * the thread's single schedule lock, and the unique key refuses a second writer that slips past it.
+     *
+     * @return the item, when this call wrote it
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Due> enqueue(NewItem item, Instant now) {
+        if (items.existsByConversationIdAndSourceKey(item.conversationId(), item.sourceKey())) return Optional.empty();
+        var saved = items.save(new InboxItem(UUID.randomUUID(), item, now));
+        return Optional.of(new Due(saved.getId(), saved.getWorkspaceId(), saved.getConversationId()));
     }
 
     /** The open items of a kind that are due at {@code now}, oldest first. */

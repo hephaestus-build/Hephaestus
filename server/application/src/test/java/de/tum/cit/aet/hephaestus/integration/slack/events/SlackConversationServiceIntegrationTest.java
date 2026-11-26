@@ -799,7 +799,7 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         ConversationEntry edited = question("100.1");
         assertThat(edited.getText()).isEqualTo("How is my review practice?");
         assertThat(edited.getEditedAt()).isNotNull();
-        assertThat(turnRepository.countQueuedByWorkspaceIdAndConversationId(workspace.getId(), main().getId()))
+        assertThat(turnRepository.countQueuedQuestions(workspace.getId(), main().getId()))
                 .isEqualTo(1);
     }
 

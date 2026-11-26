@@ -151,6 +151,21 @@ public class InboxItem {
     @Column(name = "settled_at")
     private @Nullable Instant settledAt;
 
+    InboxItem(UUID id, InboxItems.NewItem item, Instant now) {
+        this.id = id;
+        this.workspaceId = item.workspaceId();
+        this.conversationId = item.conversationId();
+        this.kind = item.kind();
+        this.sourceKey = item.sourceKey();
+        this.custody = item.custody();
+        this.state = State.PENDING;
+        this.reason = Reason.WAITING;
+        this.dueAt = item.dueAt();
+        this.deadlineAt = item.deadlineAt();
+        this.payload = item.payload();
+        this.createdAt = now;
+    }
+
     /** A turn started for the item. */
     void claim(UUID turn) {
         state = State.CLAIMED;
