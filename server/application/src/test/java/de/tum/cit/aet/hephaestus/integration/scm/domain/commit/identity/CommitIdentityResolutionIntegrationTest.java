@@ -2,13 +2,16 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource.WEBHOOK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.database.CommitIdentityResolutionSeedChange;
 import de.tum.cit.aet.hephaestus.core.database.GitLabCommitIdentityResolutionSeedChange;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -30,6 +33,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitIdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -48,6 +55,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import javax.sql.DataSource;
 import liquibase.database.core.PostgresDatabase;
@@ -58,7 +66,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
 class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
@@ -482,6 +499,93 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 .contains(reset);
         assertThat(pauses.pausedUntil(scope, replacement.connectionId(), replacement.credentialsGeneration()))
                 .isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void shouldKeepTheLastAttemptAvailableWhenGitLabRotatesATokenMidBatch(int rotateOnRequest) throws Exception {
+        String server = "https://gitlab.com";
+        var workspace = workspaces.findById(scope).orElseThrow();
+        var original = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
+        connections.transition(
+                original,
+                new ConnectionService.TransitionRequest(
+                        IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
+        connections.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITLAB,
+                "test-gitlab",
+                new ConnectionConfig.GitLabConfig(server, 1L, null, Set.of(), null),
+                "old-test-token",
+                UUID.randomUUID().toString());
+        var repository = repository(provider(IdentityProviderType.GITLAB, server));
+        long first = commit(repository, null, null, "first@example.com");
+        long second = commit(repository, null, null, EMAIL);
+        jdbc.update("""
+                INSERT INTO commit_identity_resolution(repository_id, commit_id, source, state, attempts)
+                VALUES (?, ?, 'AUTHOR', 'PENDING', 0), (?, ?, 'AUTHOR', 'PENDING', 4)
+                """, repository.getId(), first, repository.getId(), second);
+
+        var clientProvider = mock(GitLabGraphQlClientProvider.class);
+        var gitLabProperties = mock(GitLabProperties.class);
+        when(gitLabProperties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
+        var calls = new AtomicInteger();
+        var revoked = new AtomicInteger();
+        var old = activeScm.withToken(scope).orElseThrow();
+        String sha = commits.findById(second).orElseThrow().getSha();
+        var healthy = HttpGraphQlClient.create(WebClient.builder()
+                .baseUrl(server)
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                        .body("""
+                                {"data":{"project":{"repository":{"commit":{"sha":"%s","authorEmail":"%s","author":null}}}}}
+                                """.formatted(sha, EMAIL))
+                        .build()))
+                .build());
+        when(clientProvider.forCredential(eq(scope), any(), any())).thenAnswer(invocation -> {
+            ActiveScm used = invocation.getArgument(1);
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class, RETURNS_SELF);
+            when(client.documentName("GetCommitIdentity")).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.defer(() -> {
+                int call = calls.incrementAndGet();
+                if (call == rotateOnRequest) {
+                    assertThat(connections.rotateBearerToken(
+                                    scope, IntegrationKind.GITLAB, new BearerToken("new-test-token", null), null))
+                            .isPresent();
+                }
+                if (call > 1 && used.credentialsGeneration() == old.credentialsGeneration()) {
+                    revoked.incrementAndGet();
+                    return Mono.error(WebClientResponseException.create(
+                            401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null));
+                }
+                return healthy.document("{ __typename }").execute();
+            }));
+            return client;
+        });
+        job = new CommitIdentityResolutionJob(
+                resolutions,
+                pauses,
+                service,
+                new CommitIdentityResolutionProperties(true, 50),
+                List.of(new GitLabCommitIdentityProvider(
+                        clientProvider,
+                        gitLabProperties,
+                        mock(GitLabUserService.class),
+                        mock(PersonProcessingSuppression.class),
+                        activeScm,
+                        pauses)),
+                scopes,
+                activeScm,
+                meters);
+
+        run(50);
+
+        assertThat(jdbc.queryForMap(
+                        "SELECT state, attempts FROM commit_identity_resolution WHERE commit_id = ?", second))
+                .containsEntry("state", rotateOnRequest == 1 ? "NO_ACCOUNT" : "PENDING")
+                .containsEntry("attempts", rotateOnRequest == 1 ? 5 : 4);
+        assertThat(revoked).hasValue(rotateOnRequest == 1 ? 0 : 1);
     }
 
     @Test

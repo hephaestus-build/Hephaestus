@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +128,12 @@ public class CommitIdentityResolutionJob {
         var credential = selected.credential();
         var paused = pauses.pausedUntil(scopeId, credential.connectionId(), credential.credentialsGeneration());
         if (paused.isPresent()) {
-            defer(repository, emails.stream().map(PendingEmail::getId).toList(), credential, paused.get());
+            defer(
+                    repository,
+                    emails.stream().map(PendingEmail::getId).toList(),
+                    credential.connectionId(),
+                    credential.credentialsGeneration(),
+                    paused.get());
             return Turn.DEFERRED;
         }
         var questions = emails.stream()
@@ -136,25 +142,32 @@ public class CommitIdentityResolutionJob {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         var answers = provider.orElseThrow()
                 .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, credential, questions);
-        List<Long> deferred = new ArrayList<>();
-        Instant until = null;
+        Map<Answer.Deferred, List<Long>> deferred = new HashMap<>();
         for (var email : emails) {
             if (email.getEmail() == null) {
                 count(service.miss(email.getId(), MAX_ATTEMPTS, MAX_ATTEMPTS));
                 continue;
             }
-            if (answers.get(question(email)) instanceof Answer.Deferred deferral) {
-                deferred.add(email.getId());
-                until = until == null || deferral.until().isAfter(until) ? deferral.until() : until;
+            var answer = answers.get(question(email));
+            if (answer instanceof Answer.Deferred deferral) {
+                deferred.computeIfAbsent(deferral, ignored -> new ArrayList<>()).add(email.getId());
+                continue;
+            }
+            if (answer instanceof Answer.RetryAfterCredentialChange) {
+                count(new CommitIdentityResolutionService.Result("deferred", 0));
                 continue;
             }
             apply(repository, email, answers);
         }
-        if (until == null) return Turn.ANSWERED;
-        Instant bounded = bounded(until);
-        pauses.pause(scopeId, credential.connectionId(), credential.credentialsGeneration(), bounded);
-        defer(repository, deferred, credential, bounded);
-        return Turn.DEFERRED;
+        deferred.forEach((deferral, ids) -> {
+            var generation = deferral.generation();
+            long connectionId = generation == null ? credential.connectionId() : generation.connectionId();
+            long number = generation == null ? credential.credentialsGeneration() : generation.generation();
+            Instant until = bounded(deferral.until());
+            pauses.pause(scopeId, connectionId, number, until);
+            defer(repository, ids, connectionId, number, until);
+        });
+        return deferred.isEmpty() ? Turn.ANSWERED : Turn.DEFERRED;
     }
 
     private Optional<RepositoryAccess> access(long scopeId, NextRepository repository) {
@@ -174,9 +187,9 @@ public class CommitIdentityResolutionJob {
 
     private record RepositoryAccess(long scopeId, ActiveScm credential) {}
 
-    private void defer(NextRepository repository, List<Long> ids, ActiveScm credential, Instant until) {
+    private void defer(NextRepository repository, List<Long> ids, long connectionId, long generation, Instant until) {
         if (ids.isEmpty()) return;
-        resolutions.defer(ids, credential.connectionId(), credential.credentialsGeneration(), until);
+        resolutions.defer(ids, connectionId, generation, until);
         meterRegistry
                 .counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "deferred")
                 .increment(ids.size());

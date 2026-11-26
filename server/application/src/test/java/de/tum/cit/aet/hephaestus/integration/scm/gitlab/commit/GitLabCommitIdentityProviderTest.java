@@ -10,10 +10,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -26,6 +31,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,8 +54,18 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @Mock
     private GitLabGraphQlClientProvider clients;
 
+    private final ActiveScm credential = new ActiveScm(
+            10L,
+            2L,
+            IntegrationKind.GITLAB,
+            new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 1L, null, Set.of(), null),
+            null);
+
     @Mock
-    private ActiveScm credential;
+    private ActiveScmConnections connections;
+
+    @Mock
+    private ProviderCredentialPauseRepository pauses;
 
     @Mock
     private GitLabProperties properties;
@@ -65,7 +81,8 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        provider = new GitLabCommitIdentityProvider(clients, properties, users, suppression);
+        provider = new GitLabCommitIdentityProvider(clients, properties, users, suppression, connections, pauses);
+        when(connections.withToken(9L)).thenReturn(Optional.of(credential));
         lenient().when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
     }
 
@@ -167,7 +184,7 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
 
         assertThat(answers)
                 .as("a throttle is a wait until GitLab's reset, never a miss that spends an attempt")
-                .containsEntry(QUESTION, new Answer.Deferred(reset));
+                .containsEntry(QUESTION, new Answer.Deferred(reset, new CredentialGeneration(10L, 2L)));
         verifyNoInteractions(users);
     }
 }

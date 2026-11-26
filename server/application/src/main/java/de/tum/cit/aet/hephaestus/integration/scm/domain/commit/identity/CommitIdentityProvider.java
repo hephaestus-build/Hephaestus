@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /** A provider's own answer for the emails of one repository. An adapter never infers a person from an email. */
 public interface CommitIdentityProvider {
@@ -34,6 +35,16 @@ public interface CommitIdentityProvider {
          * The provider's budget is spent until {@code until}. The question stays open until then, and it costs no
          * attempt.
          */
-        record Deferred(Instant until) implements Answer {}
+        record Deferred(Instant until, @Nullable CredentialGeneration generation) implements Answer {
+            /** The batch's original credential made the throttled request. */
+            public Deferred(Instant until) {
+                this(until, null);
+            }
+        }
+
+        /** The credential changed during the read. Try again on the next run. */
+        record RetryAfterCredentialChange() implements Answer {}
     }
+
+    record CredentialGeneration(long connectionId, long generation) {}
 }

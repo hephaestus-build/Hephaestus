@@ -2,10 +2,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -16,6 +19,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +39,8 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
     private final GitLabProperties properties;
     private final GitLabUserService users;
     private final PersonProcessingSuppression suppression;
+    private final ActiveScmConnections connections;
+    private final ProviderCredentialPauseRepository pauses;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Actor(
@@ -58,9 +64,25 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
 
     @Override
     public Map<Question, Answer> answer(
-            String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
+            String nameWithOwner, long providerId, long scopeId, ActiveScm initialCredential, Set<Question> questions) {
         Map<Question, Answer> answers = new HashMap<>();
+        String serverUrl = Objects.requireNonNull(SourceProviderNamespaces.configuredUrl(initialCredential.config()));
         for (var question : questions) {
+            var current = connections
+                    .withToken(scopeId)
+                    .filter(credential -> credential.kind() == IntegrationKind.GITLAB
+                            && serverUrl.equals(SourceProviderNamespaces.configuredUrl(credential.config())));
+            if (current.isEmpty()) {
+                deferRest(questions, answers, new Answer.RetryAfterCredentialChange());
+                break;
+            }
+            var credential = current.get();
+            var generation = new CredentialGeneration(credential.connectionId(), credential.credentialsGeneration());
+            var paused = pauses.pausedUntil(scopeId, generation.connectionId(), generation.generation());
+            if (paused.isPresent()) {
+                deferRest(questions, answers, new Answer.Deferred(paused.get(), generation));
+                break;
+            }
             boolean readSucceeded = false;
             try {
                 clients.acquirePermission();
@@ -74,7 +96,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                 var reply = response == null ? new ProviderReply.Failed("no response") : classify(exchange, response);
                 if (reply instanceof ProviderReply.Throttled throttled) {
                     clients.recordSuccess();
-                    deferRest(questions, answers, throttled.until());
+                    deferRest(questions, answers, new Answer.Deferred(throttled.until(), generation));
                     break;
                 }
                 if (response == null
@@ -122,17 +144,26 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                     answers.put(question, new Answer.Account(local.getId(), nativeId));
                 }
             } catch (CircuitBreakerOpenException exception) {
-                deferRest(questions, answers, Instant.now().plus(ProviderReply.UNNAMED_WAIT));
+                deferRest(
+                        questions,
+                        answers,
+                        new Answer.Deferred(Instant.now().plus(ProviderReply.UNNAMED_WAIT), generation));
                 break;
             } catch (RuntimeException exception) {
                 // A throttle is local to this credential. The circuit breaker is shared.
                 var refusal = ProviderReply.refusalOf(exception);
-                if (refusal != null
-                        && ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now())
-                                instanceof ProviderReply.Throttled throttled) {
-                    clients.recordSuccess();
-                    deferRest(questions, answers, throttled.until());
-                    break;
+                if (refusal != null) {
+                    var reply = ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now());
+                    if (reply instanceof ProviderReply.Throttled throttled) {
+                        clients.recordSuccess();
+                        deferRest(questions, answers, new Answer.Deferred(throttled.until(), generation));
+                        break;
+                    }
+                    if (reply instanceof ProviderReply.AuthLost && !connections.isCurrent(scopeId, credential)) {
+                        clients.recordSuccess();
+                        deferRest(questions, answers, new Answer.RetryAfterCredentialChange());
+                        break;
+                    }
                 }
                 if (!readSucceeded) clients.recordFailure(exception);
                 log.warn(
@@ -144,10 +175,9 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
         return answers;
     }
 
-    /** A throttle answers nothing: this and every question still open wait for GitLab's deadline. */
-    private static void deferRest(Set<Question> questions, Map<Question, Answer> answers, Instant until) {
+    private static void deferRest(Set<Question> questions, Map<Question, Answer> answers, Answer deferred) {
         for (var pending : questions) {
-            answers.putIfAbsent(pending, new Answer.Deferred(until));
+            answers.putIfAbsent(pending, deferred);
         }
     }
 

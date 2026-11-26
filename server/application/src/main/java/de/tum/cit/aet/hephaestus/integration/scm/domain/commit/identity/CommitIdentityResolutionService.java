@@ -49,7 +49,8 @@ public class CommitIdentityResolutionService {
             }
             case Answer.Erased ignored ->
                 finish(resolutionId, State.RESOLVED, "erased", write(repositoryId, email, NO_USER, "erased"));
-            case Answer.Deferred ignored -> throw new IllegalArgumentException("A deferred answer writes nothing");
+            case Answer.Deferred _, Answer.RetryAfterCredentialChange _ ->
+                throw new IllegalArgumentException("A deferred answer writes nothing");
         };
     }
 

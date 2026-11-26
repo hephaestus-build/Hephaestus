@@ -92,6 +92,14 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findByWorkspaceIdAndStateAndKindIn(
             long workspaceId, IntegrationState state, Collection<IntegrationKind> kinds);
 
+    @Query("""
+        SELECT c FROM Connection c WHERE c.workspace.id = :workspaceId AND c.kind IN :kinds
+          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
+          AND c.workspace.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
+        """)
+    List<Connection> findActiveForRequests(
+            @Param("workspaceId") long workspaceId, @Param("kinds") Collection<IntegrationKind> kinds);
+
     default Optional<Connection> findActive(long workspaceId, IntegrationKind kind) {
         return findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(workspaceId, kind, IntegrationState.ACTIVE);
     }
