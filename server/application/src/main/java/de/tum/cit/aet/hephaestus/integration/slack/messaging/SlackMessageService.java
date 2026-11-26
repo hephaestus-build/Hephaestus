@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import okhttp3.FormBody;
@@ -309,7 +310,8 @@ public class SlackMessageService implements AutoCloseable {
     /**
      * Silent Mode refuses writes before credential lookup and after it returns. The outbox also checks under
      * admission after taking the source lock. Other writes check just before each attempt.
-     * A 429 returns to the outbox for a new attempt. Other writes can wait within the interactive budget.
+     * A recorded throttle or a 429 returns a post to the outbox for a new attempt. Other writes can wait within the
+     * interactive budget.
      */
     private <T extends SlackApiTextResponse> T callWrite(
             long workspaceId,
@@ -338,6 +340,13 @@ public class SlackMessageService implements AutoCloseable {
                 });
             } else {
                 egressGuard.requireDeliveryAllowed("slack.write");
+                Duration remaining = rateLimitTracker.remainingPostThrottle(workspaceId);
+                if (remaining.isPositive()) {
+                    // The outbox stores retry delays in whole seconds. Round up to preserve the provider deadline.
+                    long seconds = remaining.plusSeconds(1).minusNanos(1).toSeconds();
+                    throw new SlackSendException(
+                            workspaceId, channel, "ratelimited", TimeUnit.SECONDS.toMillis(seconds));
+                }
                 SlackSendFence.ADMISSION.set(new SlackSendFence.Admission(admitAtSend));
                 try {
                     response = call.call(methods);
@@ -358,7 +367,7 @@ public class SlackMessageService implements AutoCloseable {
                     ? SlackSendException.NOT_RATE_LIMITED
                     : SlackBackoff.retryAfterMillis(refused.code(), refused.header("Retry-After"));
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
-                if (admitAtSend != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
+                if (admitAtSend != null) rateLimitTracker.recordPostThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);

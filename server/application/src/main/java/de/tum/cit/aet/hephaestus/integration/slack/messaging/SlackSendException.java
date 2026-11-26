@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 import java.io.Serial;
 import java.util.Set;
 
-/** Raised by {@link SlackMessageService} when Slack refuses a call or cannot be reached; carries the Slack error code. */
+/** Raised by {@link SlackMessageService} when a Slack call fails or a delivery guard refuses it. */
 public class SlackSendException extends RuntimeException {
 
     private static final Set<String> PROVIDER_UNAVAILABLE =
@@ -21,7 +21,7 @@ public class SlackSendException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** Sentinel for {@link #retryAfterMillis}: this failure is not a rate-limit (HTTP 429). */
+    /** Sentinel for a failure without a rate-limit delay. */
     public static final long NOT_RATE_LIMITED = -1L;
 
     private final long workspaceId;
@@ -69,15 +69,13 @@ public class SlackSendException extends RuntimeException {
     }
 
     /**
-     * The Slack {@code Retry-After} wait in milliseconds when this was a rate-limit (HTTP 429), else
-     * {@link #NOT_RATE_LIMITED}. A caller uses it to back off exactly as long as Slack asked rather than
-     * re-hammering on a fixed tick.
+     * The delay in milliseconds from a Slack 429 or an active recorded throttle, else {@link #NOT_RATE_LIMITED}.
      */
     public long retryAfterMillis() {
         return retryAfterMillis;
     }
 
-    /** Whether this failure is a Slack rate-limit (HTTP 429) carrying a {@code Retry-After} wait. */
+    /** Whether this failure carries a rate-limit delay. */
     public boolean isRateLimited() {
         return retryAfterMillis != NOT_RATE_LIMITED;
     }
