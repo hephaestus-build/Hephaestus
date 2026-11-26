@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -33,6 +34,8 @@ import de.tum.cit.aet.hephaestus.practices.groupdetail.ProductItemDirectoryQuery
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
+import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.HashMap;
@@ -84,6 +87,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaces;
 
     @Autowired
+    private MembershipRepository memberships;
+
+    @Autowired
     private ConnectionRepository connections;
 
     @Autowired
@@ -105,6 +111,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConversationTurnClaims claims;
+
+    @Autowired
+    private ConversationTurnContextStore context;
 
     @Autowired
     private ProductItemDirectoryQuery itemDirectory;
@@ -341,6 +350,10 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
         long colleagueId = Objects.requireNonNull(colleague.getId());
         String subject = UUID.randomUUID().toString();
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("outline-" + UUID.randomUUID()));
+        var membership = new Membership();
+        membership.setWorkspace(workspace);
+        membership.setId(new Membership.Id(workspace.getId(), colleagueId));
+        memberships.saveAndFlush(membership);
 
         return new Fixture(
                 Objects.requireNonNull(provider.getId()),
@@ -398,7 +411,7 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
             var source = new OutlinePersonCopyScope.Source(
                     Objects.requireNonNull(connection.getOutlineOrigin()),
                     Objects.requireNonNull(connection.getInstanceKey()));
-            turns.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), run, List.of(source));
+            context.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), run, List.of(source));
         }
         var tool = ConversationLedgerFixtures.toolResult(
                 ConversationLedgerFixtures.piId(), "copy", "read", COPIED_WORDS, false);

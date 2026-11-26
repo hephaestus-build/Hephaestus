@@ -253,31 +253,24 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
 
     @WorkspaceAgnostic("Instance-admin person selection pins the Outline provider and subject across workspaces")
     @Query(value = """
-        SELECT d.id
+        SELECT d.id AS id, d.workspace_id AS workspaceId, c.outline_origin AS origin, COALESCE(c.instance_key,'') AS team
         FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
         JOIN identity_provider p ON p.type='OUTLINE' AND p.outline_origin=c.outline_origin
         WHERE p.id=:providerId AND c.kind='OUTLINE'
           AND (:subject IN (d.created_by_subject,d.updated_by_subject) OR jsonb_exists(d.collaborator_subjects,:subject))
           AND :teamId""" + OutlinePersonTeam.SQL_MATCH, nativeQuery = true)
-    List<Long> findPersonSourceIds(
+    List<PersonSourceDocument> findPersonSourceIds(
             @Param("providerId") long providerId, @Param("subject") String subject, @Param("teamId") String teamId);
 
-    interface CopySourceRow {
+    interface PersonSourceDocument {
+        long getId();
+
         long getWorkspaceId();
 
         String getOrigin();
 
         String getTeam();
     }
-
-    @WorkspaceAgnostic("Instance-admin person selection reads the source keys of previously selected document ids")
-    @Query("""
-            SELECT DISTINCT d.workspaceId AS workspaceId, c.outlineOrigin AS origin, COALESCE(c.instanceKey,'') AS team
-            FROM OutlineDocument d JOIN Connection c ON c.id=d.connectionId AND c.workspace.id=d.workspaceId
-            WHERE d.id IN :ids AND c.outlineOrigin IS NOT NULL
-            ORDER BY d.workspaceId, c.outlineOrigin, COALESCE(c.instanceKey,'')
-            """)
-    List<CopySourceRow> findCopySources(@Param("ids") Collection<Long> ids);
 
     @Query(value = """
         SELECT DISTINCT p.id AS providerId,authors.subject AS subject,COALESCE(c.instance_key,'') AS teamId

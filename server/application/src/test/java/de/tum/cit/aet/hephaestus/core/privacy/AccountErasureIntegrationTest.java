@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -239,6 +240,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConversationTurnService conversationTurns;
+
+    @Autowired
+    private ConversationTurnContextStore turnContext;
 
     @Autowired
     private ReviewJobRepository agentJobRepository;
@@ -1170,6 +1174,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var allStores = new PersonErasureAllStoresFixture(jdbc);
         var firstDerived = targetDerived.getFirst();
         long firstWorkspace = firstDerived.workspaceId();
+        recordNonOutlineContext(otherDerived.getFirst());
         var firstResult = practiceResultRepository
                 .findById(firstDerived.practiceResultIds().getFirst())
                 .orElseThrow();
@@ -2154,6 +2159,27 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "context-call",
                 "fetch_context",
                 mapper.createObjectNode().put("authorization", "credential-canary " + text));
+    }
+
+    private void recordNonOutlineContext(DerivedConversation derived) {
+        long workspaceId = derived.workspaceId();
+        var answer = conversationEntryRepository.findById(derived.messageId()).orElseThrow();
+        var submitted = conversationTurns.submit(
+                workspaceId,
+                answer.getConversationId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.SYSTEM, "Load context", UUID.randomUUID().toString(), null, null));
+        var turn = claims.claimNext().orElseThrow();
+        assertThat(turn.getId()).isEqualTo(submitted.turn().getId());
+        UUID runId = Objects.requireNonNull(turn.getRunId());
+        turnContext.recordOutlineContext(workspaceId, turn.getId(), turn.getAttempt(), runId, List.of());
+        conversationTurns.end(
+                workspaceId, turn.getId(), turn.getAttempt(), runId,
+                new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null));
+        assertThat(jdbc.update(
+                "UPDATE conversation_entry SET turn_id=? WHERE workspace_id=? AND id IN (?,?)",
+                turn.getId(), workspaceId, derived.toolResultId(), derived.messageId()))
+                .isEqualTo(2);
     }
 
     private Conversation conversationOf(Workspace workspace, User owner) {

@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,19 +41,33 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
 
     @Override
     public List<Long> sourceIds(PersonScope person) {
-        Set<Long> ids = new TreeSet<>();
-        for (var identity : person.identities())
-            ids.addAll(repository.findPersonSourceIds(identity.providerId(), identity.subject(), identity.teamKey()));
-        return List.copyOf(ids);
+        return matchingDocuments(person).stream()
+                .map(OutlineDocumentRepository.PersonSourceDocument::getId)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     @Override
     public Map<Long, List<Source>> sources(PersonScope person) {
-        if (person.outlineDocumentIds().isEmpty()) return Map.of();
-        return repository.findCopySources(person.outlineDocumentIds()).stream()
-                .collect(Collectors.groupingBy(
-                        OutlineDocumentRepository.CopySourceRow::getWorkspaceId,
-                        Collectors.mapping(row -> new Source(row.getOrigin(), row.getTeam()), Collectors.toList())));
+        var rows = matchingDocuments(person);
+        Set<Long> frozen = Set.copyOf(person.outlineDocumentIds());
+        if (rows.stream().anyMatch(row -> !frozen.contains(row.getId())))
+            throw new IllegalStateException("The frozen erasure is missing Outline documents");
+        return rows.stream().collect(Collectors.groupingBy(
+                OutlineDocumentRepository.PersonSourceDocument::getWorkspaceId,
+                Collectors.collectingAndThen(
+                        Collectors.mapping(row -> new Source(row.getOrigin(), row.getTeam()), Collectors.toSet()),
+                        sources -> sources.stream()
+                                .sorted(Comparator.comparing(Source::origin).thenComparing(Source::team))
+                                .toList())));
+    }
+
+    private List<OutlineDocumentRepository.PersonSourceDocument> matchingDocuments(PersonScope person) {
+        return person.identities().stream()
+                .flatMap(identity -> repository.findPersonSourceIds(
+                        identity.providerId(), identity.subject(), identity.teamKey()).stream())
+                .toList();
     }
 
     @Override
@@ -64,13 +78,6 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
                                 .findById(identity.providerId())
                                 .filter(provider -> provider.kind() == IntegrationKind.OUTLINE)
                                 .isPresent());
-    }
-
-    @Override
-    public void verify(PersonScope person) {
-        if (!Set.copyOf(person.outlineDocumentIds()).containsAll(sourceIds(person))) {
-            throw new IllegalStateException("The frozen erasure is missing Outline documents");
-        }
     }
 
     @Override

@@ -164,7 +164,7 @@ public class Connection {
         this.workspace = workspace;
         this.kind = kind;
         this.instanceKey = instanceKey;
-        this.config = config;
+        setConfig(config);
     }
 
     /**
@@ -314,6 +314,9 @@ public class Connection {
                         "A bound connection cannot change its provider instance. Create a new connection.");
         }
         this.config = config;
+        outlineOrigin = config instanceof ConnectionConfig.OutlineConfig outline
+                ? ScmOrigin.of(outline.serverUrl()).orElse(null)
+                : null;
     }
 
     /** Encrypts or clears this connection's credentials. */
@@ -437,8 +440,5 @@ public class Connection {
                     + expected
                     + ")");
         }
-        outlineOrigin = config instanceof ConnectionConfig.OutlineConfig outline
-                ? ScmOrigin.of(outline.serverUrl()).orElse(null)
-                : null;
     }
 }

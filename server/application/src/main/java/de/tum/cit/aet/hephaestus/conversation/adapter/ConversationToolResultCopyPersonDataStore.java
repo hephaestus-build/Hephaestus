@@ -137,8 +137,10 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
         var copies = new HashMap<>(frozenCopies(selection));
         outline.ifPresent(source -> {
-            source.verify(frozenScope);
             Map<Long, List<OutlinePersonCopyScope.Source>> required = source.sources(frozenScope);
+            if (!frozenScope.outlineDocumentIds().isEmpty()
+                    && selection.rows().stream().allMatch(row -> outlineSources(row).isEmpty()))
+                throw new IllegalStateException("The frozen erasure has no Outline copy sources");
             for (var row : selection.rows()) {
                 long workspaceId = workspace(row);
                 var sources = outlineSources(row);

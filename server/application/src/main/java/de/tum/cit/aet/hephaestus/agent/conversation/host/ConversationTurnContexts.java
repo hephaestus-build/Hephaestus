@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
@@ -52,7 +52,7 @@ public class ConversationTurnContexts {
 
     private final ConversationContextPathBuilder paths;
     private final TurnSituation situations;
-    private final ConversationTurnService turns;
+    private final ConversationTurnContextStore turns;
     private final ConversationEntryService entries;
     private final ConversationService conversations;
     private final WorkspaceContextBuilder contextBuilder;
@@ -66,7 +66,7 @@ public class ConversationTurnContexts {
     public ConversationTurnContexts(
             ConversationContextPathBuilder paths,
             TurnSituation situations,
-            ConversationTurnService turns,
+            ConversationTurnContextStore turns,
             ConversationEntryService entries,
             ConversationService conversations,
             WorkspaceContextBuilder contextBuilder,

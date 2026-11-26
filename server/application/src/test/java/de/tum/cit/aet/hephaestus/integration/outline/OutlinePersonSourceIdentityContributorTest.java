@@ -28,7 +28,11 @@ class OutlinePersonSourceIdentityContributorTest extends BaseUnitTest {
     void sourceInventoryDoesNotInitializeItsOwnSuppressionDependency() {
         var documents = mock(OutlineDocumentRepository.class);
         var identity = new PersonIdentity(31L, "creator", "team-a");
-        when(documents.findPersonSourceIds(31L, "creator", "team-a")).thenReturn(List.of(19L, 12L, 19L));
+        var first = mock(OutlineDocumentRepository.PersonSourceDocument.class);
+        var second = mock(OutlineDocumentRepository.PersonSourceDocument.class);
+        when(first.getId()).thenReturn(19L);
+        when(second.getId()).thenReturn(12L);
+        when(documents.findPersonSourceIds(31L, "creator", "team-a")).thenReturn(List.of(first, second, first));
         var contributor = new OutlinePersonSourceIdentityContributor(documents, providers, permission);
         var scope = new PersonScope(null, List.of(identity), List.of(), List.of(), List.of(), List.of(), List.of());
 

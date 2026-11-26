@@ -2,13 +2,11 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -220,14 +218,6 @@ public class ConversationTurnService {
     @Transactional
     public void admit(long workspaceId, UUID turnId, int epoch, UUID runId, JsonNode admission) {
         held(workspaceId, turnId, epoch, runId).admit(admission);
-    }
-
-    /** Stores the source keys before the turn can read the context that they name. */
-    @Transactional
-    public void recordOutlineContext(
-            long workspaceId, UUID turnId, int epoch, UUID runId, Collection<OutlinePersonCopyScope.Source> sources) {
-        copies.holdForCapture();
-        held(workspaceId, turnId, epoch, runId).recordOutlineContext(sources);
     }
 
     /**
@@ -584,7 +574,7 @@ public class ConversationTurnService {
      *
      * @throws ConversationLeaseLostException when the attempt no longer holds the run
      */
-    private ConversationTurn held(long workspaceId, UUID turnId, int epoch, UUID runId) {
+    ConversationTurn held(long workspaceId, UUID turnId, int epoch, UUID runId) {
         ConversationTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new ConversationLeaseLostException(turnId, epoch));
         if ((turn.getStatus() != ConversationTurn.Status.RUNNING && turn.getStatus() != ConversationTurn.Status.STOPPED)
