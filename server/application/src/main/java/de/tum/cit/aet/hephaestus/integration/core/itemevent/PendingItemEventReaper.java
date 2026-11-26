@@ -66,7 +66,9 @@ public class PendingItemEventReaper {
         for (var event : due) {
             repository.attempted(event.getWorkspaceId(), event.getId(), now, now.plus(properties.pendingRetryAfter()));
             var recorded = new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId());
-            publisher.publishEvent(durable ? recorded : new ItemEventOffered(recorded));
+            publisher.publishEvent(durable
+                    ? recorded
+                    : new ItemEventOffered(recorded.workspaceId(), recorded.eventId(), recorded.itemId()));
         }
     }
 }

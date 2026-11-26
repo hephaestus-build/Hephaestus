@@ -3838,7 +3838,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     private long offers(UUID occasion) {
         return Stream.concat(
                         applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion),
-                        applicationEvents.stream(ItemEventOffered.class, offered -> offered.event().eventId(), occasion))
+                        applicationEvents.stream(ItemEventOffered.class, ItemEventOffered::eventId, occasion))
                 .count();
     }
 
@@ -5088,8 +5088,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             var occasion = event(prepared);
             assertThat(occasion.getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
             assertThat(incompletePublications(occasion)).isEmpty();
-            String retained = Objects.requireNonNull(
-                    jdbc.queryForObject("SELECT evidence::text FROM item_event WHERE id=?", String.class, occasion.getId()));
+            String retained = Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT evidence::text FROM item_event WHERE id=?", String.class, occasion.getId()));
             jdbc.update(
                     "UPDATE item_event SET evidence = jsonb_set(evidence, '{sourceId}', '0'),"
                             + " decided_at=now()-interval '3 minutes' WHERE id=?",
@@ -5103,15 +5103,18 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 assertThat(incompletePublications(occasion)).isEmpty();
             }
             assertThat(itemReviews(prepared)).isEmpty();
-            assertThat(output.getAll().lines()
-                            .filter(line -> line.contains("The occasion offer failed and will be tried again from the ledger"))
+            assertThat(output.getAll()
+                            .lines()
+                            .filter(line ->
+                                    line.contains("The occasion offer failed and will be tried again from the ledger"))
                             .count())
                     .isEqualTo(2);
 
             jdbc.update("UPDATE item_event SET evidence=CAST(? AS jsonb) WHERE id=?", retained, occasion.getId());
             closeWindows(prepared);
 
-            assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
+            assertThat(events.findById(occasion.getId()).orElseThrow().getState())
+                    .isEqualTo(ItemEventState.STARTED);
             assertThat(itemReviews(prepared)).hasSize(1);
             assertThat(incompletePublications(occasion)).isEmpty();
         }

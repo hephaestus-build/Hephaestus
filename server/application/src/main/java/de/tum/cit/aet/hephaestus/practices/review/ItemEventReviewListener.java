@@ -68,7 +68,7 @@ public class ItemEventReviewListener {
     @TransactionalEventListener
     public void onOffered(ItemEventOffered offered) {
         try {
-            review(offered.event());
+            review(new ItemEventRecorded(offered.workspaceId(), offered.eventId(), offered.itemId()));
         } catch (RuntimeException failure) {
             log.atWarn()
                     .addKeyValue("event.name", "practice_review.occasion_offer_failed")
