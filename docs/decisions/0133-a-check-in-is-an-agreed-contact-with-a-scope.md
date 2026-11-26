@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) (a due occurrence is a fixed-text notice)
+
 **Builds on:** ADR 0131 (proposed in #4862, the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
 
 **Relates to:**
@@ -129,3 +131,15 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 - Oracle, [`ZonedDateTime`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/ZonedDateTime.html). In a gap, "the local date-time is adjusted to be later by the length of the gap". In an overlap, the earlier offset applies. Decision 4 follows these rules.
 - OpenAI, [Scheduled tasks in ChatGPT](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt). "A task may pause if it is inactive." Decision 14 declines this: a check-in never pauses on its own, and decision 15 asks instead.
+
+## Update — 2026-11-26: a due occurrence is a fixed-text notice
+
+[ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) decision 17 replaces decision 7.
+When an occurrence is due and the contact policy allows it, its whole effect is a fixed-text notice.
+The notice holds the check-in's title, its reason line and facts that code renders from rows. No model writes it.
+The model runs only when the person opens the notice, as an ordinary interactive turn on the route where the person opens it.
+The dispositions of decisions 6 and 9 stay.
+
+Templates are data rows. The first one is a dated follow-up on one goal.
+
+The reason: a model turn at the due time costs a call when nothing changed, and its words can claim more than the rows say.
