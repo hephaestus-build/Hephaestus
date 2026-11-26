@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.itemevent;
 
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -40,7 +41,7 @@ public class PendingItemEventReaper {
         repository.forgetExpiredEvidence(now, properties.sweepBatchSize());
         expire(now);
         repository.deleteUnreferenced(now.minus(properties.retainFor()), properties.sweepBatchSize());
-        if (reviewsEnabled()) offerDue(now, properties.sweepBatchSize(), false);
+        if (reviewsEnabled()) offerDue(now, properties.sweepBatchSize(), clock instanceof ControlledClock);
     }
 
     /** Offers the work due on the scenario clock without waiting for the wall-clock sweep. */
