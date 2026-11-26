@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -11,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -47,8 +50,15 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldVerifyTheResultDigestBeforeKeepingAnyListenerCopy() throws Exception {
         var told = new ArrayList<Map<String, byte[]>>();
+        var receivedAt = Instant.parse("2026-01-01T10:00:00Z");
+        var clock = new ControlledClock(receivedAt);
         var receiver = new SandboxGatewaySessions(
-                SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET, List.of((jobId, attempt, image) -> told::add));
+                SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET,
+                List.of((jobId, attempt, image) -> files -> {
+                    told.add(files);
+                    clock.set(receivedAt.plusSeconds(20));
+                }),
+                clock);
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         byte[] result = resultTar();
@@ -59,8 +69,10 @@ class SandboxGatewaySessionsTest {
                         ResponseStatusException.class,
                         refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         assertThat(told).isEmpty();
-        receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        var uploaded =
+                receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
         assertThat(told).singleElement().satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
+        assertThat(uploaded.receivedAt()).isEqualTo(receivedAt);
     }
 
     @Test
@@ -110,7 +122,8 @@ class SandboxGatewaySessionsTest {
                         (job, attempt, image) -> {
                             bound.add(job + "#" + attempt + "@" + image);
                             return told::add;
-                        }));
+                        }),
+                Clock.systemUTC());
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         byte[] result = resultTar();

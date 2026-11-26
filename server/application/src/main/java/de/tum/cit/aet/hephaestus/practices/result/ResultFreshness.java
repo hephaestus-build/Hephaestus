@@ -16,6 +16,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -138,30 +139,50 @@ public class ResultFreshness implements FreshnessRead {
                     result.id(), decision.map(ResultFreshness::fingerprints).orElse(Map.of()));
             decision.map(ResultFreshness::decidedAt).ifPresent(at -> capturedAt.put(result.id(), at));
         }
+        // Only a live result of work that still exists compares its sources: an ended one is stale and a scan's is
+        // frozen, whatever the work holds now. Each piece of work is read once per occasion, for every kind its
+        // results compare. A reader answers each kind on its own (ItemSource#recordFingerprints), and a read of fewer
+        // kinds does part of the same work, so a read that answers every kind of a result answers as a read of just
+        // those kinds would. A result it leaves a kind unanswered for reads its own kinds, so a source that fails
+        // fails only the results that compare it.
+        var kindsByRead = new LinkedHashMap<WorkRead, Set<SourceKind>>();
+        for (var result : rows)
+            if (result.endedAt() == null && refs.containsKey(result.itemId()) && !frozen.contains(result.id()))
+                kindsByRead
+                        .computeIfAbsent(WorkRead.of(result, occasions), read -> new HashSet<>())
+                        .addAll(Objects.requireNonNull(expected.get(result.id()))
+                                .keySet());
+        var currentByRead = new HashMap<WorkRead, Map<SourceKind, String>>();
+        kindsByRead.forEach((read, kinds) -> currentByRead.put(read, currentFingerprints(refs, read, kinds)));
+        var currentByScope = new HashMap<ReadScope, Map<SourceKind, String>>();
         var states = new HashMap<UUID, Freshness>();
-        for (var group : rows.stream()
-                .collect(Collectors.groupingBy(result -> new ReadScope(
-                        result.itemId(),
-                        Objects.requireNonNull(expected.get(result.id())).keySet(),
-                        occasions.get(result.id()))))
-                .entrySet()) {
-            var item = refs.get(group.getKey().itemId());
-            var kinds = group.getKey().kinds();
-            var current = item == null || kinds.isEmpty()
-                    ? Map.<SourceKind, String>of()
-                    : items.read(item, kinds, group.getKey().occasion()).fingerprints();
-            for (var result : group.getValue()) {
-                var readAt = capturedAt.get(result.id());
-                states.put(
-                        result.id(),
-                        result.endedAt() != null || item == null
-                                ? Freshness.stale(readAt)
-                                : frozen.contains(result.id())
-                                        ? Freshness.current(readAt)
-                                        : freshness(expected.getOrDefault(result.id(), Map.of()), current, readAt));
+        for (var result : rows) {
+            var readAt = capturedAt.get(result.id());
+            if (result.endedAt() != null || !refs.containsKey(result.itemId())) {
+                states.put(result.id(), Freshness.stale(readAt));
+                continue;
             }
+            if (frozen.contains(result.id())) {
+                states.put(result.id(), Freshness.current(readAt));
+                continue;
+            }
+            var compared = expected.getOrDefault(result.id(), Map.of());
+            var read = WorkRead.of(result, occasions);
+            var answered = Objects.requireNonNull(currentByRead.get(read));
+            if (!answered.keySet().containsAll(compared.keySet()))
+                answered = currentByScope.computeIfAbsent(
+                        new ReadScope(read.itemId(), compared.keySet(), read.occasion()),
+                        scope -> currentFingerprints(refs, read, scope.kinds()));
+            states.put(result.id(), freshness(compared, answered, readAt));
         }
         return Map.copyOf(states);
+    }
+
+    private Map<SourceKind, String> currentFingerprints(Map<Long, ItemRef> refs, WorkRead read, Set<SourceKind> kinds) {
+        return kinds.isEmpty()
+                ? Map.of()
+                : items.read(Objects.requireNonNull(refs.get(read.itemId())), Set.copyOf(kinds), read.occasion())
+                        .fingerprints();
     }
 
     /**
@@ -220,6 +241,13 @@ public class ResultFreshness implements FreshnessRead {
 
     private record ReadScope(
             long itemId, Set<SourceKind> kinds, @Nullable UUID occasion) {}
+
+    /** One freshness read of a piece of work: the work as it stands now, or as the occasion its capture read held it. */
+    private record WorkRead(long itemId, @Nullable UUID occasion) {
+        static WorkRead of(Claim result, Map<UUID, UUID> occasions) {
+            return new WorkRead(result.itemId(), occasions.get(result.id()));
+        }
+    }
 
     /** A requested review can reuse only the same readable footprint that its own capture recorded. */
     public boolean sameCapture(long workspaceId, Result result, UUID requestedReviewId) {

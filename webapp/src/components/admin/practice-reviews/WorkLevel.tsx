@@ -287,7 +287,7 @@ function itemEvent(
 				</span>
 				{event.reason !== null && (
 					<span className="block">
-						<span>{itemEventReasonSentence(event.reason)} </span>
+						<span>{itemEventReasonSentence(event.reason, "event")} </span>
 						<RefusalFixLink workspaceSlug={workspaceSlug} reason={event.reason} />
 					</span>
 				)}

@@ -92,7 +92,8 @@ public class ReviewSandboxController {
             var upload = reviews.receive(run, request.getInputStream(), contentDigest);
             // The upload can take long, and recording it can rebuild the evidence and seal staged results.
             authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
-            reviews.measured(run, new SandboxResult(exitCode, upload.files(), "", timedOut, Duration.ZERO));
+            reviews.measured(
+                    run, new SandboxResult(exitCode, upload.files(), "", timedOut, Duration.ZERO), upload.receivedAt());
             // Only now: the runner reads a 409 with this ETag as confirmed, and an error answer keeps the headers.
             response.setHeader("ETag", upload.etag());
             response.setStatus(HttpStatus.NO_CONTENT.value());

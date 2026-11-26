@@ -60,7 +60,7 @@ class AgentNextWaitsTest {
     private CompletableFuture<Optional<String>> next(
             AgentNextWaits waits, AgentSandboxes.LiveSandbox sandbox, AtomicInteger claims) {
         return CompletableFuture.supplyAsync(
-                () -> waits.claim(sandbox, REVIEW, () -> {
+                () -> waits.claim(sandbox, REVIEW, System.nanoTime(), remaining -> {
                     claims.incrementAndGet();
                     return Optional.<String>empty();
                 }),
@@ -115,12 +115,23 @@ class AgentNextWaitsTest {
 
         assertThat(answer.get(5, TimeUnit.SECONDS)).isEmpty();
         assertThat(claims).hasValue(1);
-        assertThat(waits.claim(sandbox("review:b"), REVIEW, () -> {
+        assertThat(waits.claim(sandbox("review:b"), REVIEW, System.nanoTime(), remaining -> {
                     claims.incrementAndGet();
                     return Optional.of("leased");
                 }))
                 .contains("leased");
         assertThat(waits.waiting()).isZero();
+    }
+
+    @Test
+    void shouldNotClaimOnceAuthenticationUsedTheRequestBudget() {
+        var waits = started(1);
+        long startedAt = System.nanoTime() - LONG.toNanos();
+
+        assertThat(waits.claim(sandbox("review:a"), REVIEW, startedAt, remaining -> {
+                    throw new AssertionError("An expired request began a claim");
+                }))
+                .isEmpty();
     }
 
     @Test

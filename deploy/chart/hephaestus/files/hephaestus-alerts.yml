@@ -485,6 +485,13 @@ groups:
           summary: Review attempts kept failing before their sandbox started, so they run again
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A stage that never ends has no sample: the attempt's deadline ends it, and HephaestusAgentJobsFailing reports that.
+      - alert: HephaestusReviewZeroEvaluated
+        expr: (max(max_over_time(agent_review_last_zero_evaluated_timestamp_seconds{job="hephaestus"}[1h])) > 0) > time() - 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: A review attempt had eligible practices and evaluated none in the last hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewStageSlow
         expr: >-
           (
@@ -807,6 +814,24 @@ groups:
   # docs/admin/observability.mdx § Service level objectives gives each objective and its reason.
   - name: hephaestus-slos
     rules:
+      - record: hephaestus:api_route_p95_seconds:24h
+        expr: >-
+          histogram_quantile(0.95, sum by (le, uri) (
+            rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status=~"2..",uri=~"/api/.*",uri!~".*/(events|download|export|sarif)"}[24h])
+          ))
+      - record: hephaestus:api_route_requests:24h
+        expr: >-
+          sum by (uri) (increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status=~"2..",uri=~"/api/.*",uri!~".*/(events|download|export|sarif)"}[24h]))
+      - alert: HephaestusPracticeProfileRouteSlow
+        expr: >-
+          hephaestus:api_route_p95_seconds:24h{uri=~"/api/workspaces/[^/]+/(practice-profile/(overview|reviews)|(practices|practice-groups)/standings)"} > 2
+          and on (uri) hephaestus:api_route_requests:24h >= 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Practice profile route {{ $labels.uri }} takes more than 2 seconds at p95"
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusApiErrorBudgetBurnFast
         expr: >-
           (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[1h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[1h]))) > 14.4 * 0.005
