@@ -32,7 +32,9 @@ class FeedbackExportVisibilityMigrationTest {
 
         try (var connection = DriverManager.getConnection(owner.jdbcUrl(), owner.username(), owner.password());
                 var liquibase = new Liquibase(
-                        "db/master.xml", new ClassLoaderResourceAccessor(), DatabaseFactory.getInstance()
+                        "db/master.xml",
+                        new ClassLoaderResourceAccessor(),
+                        DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
             PracticeMigrationFixture.upgradeOnly(liquibase, "prod", CHANGELOG);
             assertThat(PracticeMigrationFixture.column(owner, TRIGGER)).isNotEqualTo(before);
@@ -42,7 +44,6 @@ class FeedbackExportVisibilityMigrationTest {
         assertThat(PracticeMigrationFixture.column(owner, TRIGGER)).isEqualTo(before);
         assertThat(PracticeMigrationFixture.column(owner, """
                 SELECT (to_regprocedure('public.account_export_feedback_state_visible(character varying)') IS NULL)::text
-                """))
-                .containsExactly("true");
+                """)).containsExactly("true");
     }
 }

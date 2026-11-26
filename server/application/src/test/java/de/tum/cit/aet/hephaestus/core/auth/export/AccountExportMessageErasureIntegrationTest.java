@@ -546,7 +546,10 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
         "READY,     false, DELIVERED, true,  READY"
     })
     void shouldExpireOnlyExportsThatShowTheChangedFeedback(
-            FeedbackState before, boolean delivered, FeedbackState after, boolean bodyChanged,
+            FeedbackState before,
+            boolean delivered,
+            FeedbackState after,
+            boolean bodyChanged,
             AccountExport.Status status) {
         var scenario = data.scenario();
         long developer = Objects.requireNonNull(scenario.account().getId());
@@ -554,18 +557,25 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
         String words = "Feedback before the update.";
         UUID id = deliveredFeedback(result, developer, before.name(), null, words);
         if (!delivered) {
-            jdbc.update("UPDATE feedback SET delivered_at = NULL WHERE workspace_id = ? AND id = ?",
-                    result.getWorkspaceId(), id);
+            jdbc.update(
+                    "UPDATE feedback SET delivered_at = NULL WHERE workspace_id = ? AND id = ?",
+                    result.getWorkspaceId(),
+                    id);
         }
         long exportId = readyExport(developer);
 
-        jdbc.update("UPDATE feedback SET state = ?, body = ?, delivered_at = ? WHERE workspace_id = ? AND id = ?",
-                after.name(), bodyChanged ? "Feedback after the update." : words, Timestamp.from(AT),
-                result.getWorkspaceId(), id);
+        jdbc.update(
+                "UPDATE feedback SET state = ?, body = ?, delivered_at = ? WHERE workspace_id = ? AND id = ?",
+                after.name(),
+                bodyChanged ? "Feedback after the update." : words,
+                Timestamp.from(AT),
+                result.getWorkspaceId(),
+                id);
 
         var export = read(exportId, developer);
         assertThat(export.getStatus()).isEqualTo(status);
-        if (status == AccountExport.Status.EXPIRED) assertThat(export.getPayload()).isNull();
+        if (status == AccountExport.Status.EXPIRED)
+            assertThat(export.getPayload()).isNull();
     }
 
     private void moveOriginal(long workspaceId, UUID feedbackId, FeedbackState state) {
