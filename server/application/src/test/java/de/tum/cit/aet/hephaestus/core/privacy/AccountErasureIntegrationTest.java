@@ -294,6 +294,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         eraseArrivals(kind, true);
     }
 
+    /**
+     * Each erasure step commits on its own. A withdrawal hides its feedback's text, also from a new account export, so
+     * the step that deletes a withdrawal never commits before the one that deletes its feedback.
+     */
+    @Test
+    void shouldEraseFeedbackDecisionsNoEarlierThanTheirFeedback() {
+        var order = registry.stores().stream().map(PersonDataContributor::store).toList();
+        assertThat(order.indexOf("feedback")).isNotNegative();
+        assertThat(order.indexOf("feedback_decision")).isGreaterThan(order.indexOf("feedback"));
+    }
+
     @Test
     void shouldKeepTheErasurePreviewValidAfterReplayRetentionDeletesTheRow() {
         Account administrator = new Account("Replay erasure administrator");

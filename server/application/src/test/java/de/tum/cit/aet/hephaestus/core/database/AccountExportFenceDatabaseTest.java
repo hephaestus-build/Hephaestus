@@ -9,6 +9,11 @@ import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -75,6 +80,99 @@ class AccountExportFenceDatabaseTest {
             assertThat(owner.queryForObject("SELECT status FROM account_export WHERE id = ?", String.class, fenced))
                     .isEqualTo("READY");
         }
+    }
+
+    /**
+     * Two transactions that each erase a message of two owners, in opposite orders. Each takes the first owner's ready
+     * export, then needs the other's. The instance-wide expiry lock orders them, so the second waits for the first
+     * instead of a deadlock that would roll one back.
+     */
+    @Test
+    void shouldExpireTheExportsOfTwoOwnersFromCrossedTransactionsWithoutADeadlock() throws Exception {
+        long first = 979411;
+        long second = 979412;
+        UUID[] firstMessages = {UUID.randomUUID(), UUID.randomUUID()};
+        UUID[] secondMessages = {UUID.randomUUID(), UUID.randomUUID()};
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
+            var owner = jdbc(connection);
+            owner.update("""
+                    INSERT INTO workspace (id, account_login, account_type, display_name, slug, status)
+                    VALUES (979410, 'crossed-org', 'ORG', 'Crossed', 'crossed-org', 'ACTIVE')
+                    """);
+            seedOwner(owner, first, firstMessages);
+            seedOwner(owner, second, secondMessages);
+        }
+        try (Connection one = connect(PostgreSQLTestContainer.asOwner(INSTALLED));
+                Connection two = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
+            one.setAutoCommit(false);
+            two.setAutoCommit(false);
+            var oneJdbc = jdbc(one);
+            var twoJdbc = jdbc(two);
+            Integer twoPid = twoJdbc.queryForObject("SELECT pg_backend_pid()", Integer.class);
+
+            erase(oneJdbc, firstMessages[0]);
+            var crossed = CompletableFuture.runAsync(() -> {
+                erase(twoJdbc, secondMessages[0]);
+                erase(twoJdbc, firstMessages[1]);
+                try {
+                    two.commit();
+                } catch (SQLException e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            try (Connection observer = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
+                Awaitility.await()
+                        .atMost(Duration.ofSeconds(10))
+                        .until(() -> Boolean.TRUE.equals(jdbc(observer)
+                                .queryForObject(
+                                        "SELECT EXISTS (SELECT FROM pg_locks WHERE pid = ? AND NOT granted)",
+                                        Boolean.class,
+                                        twoPid)));
+            }
+            erase(oneJdbc, secondMessages[1]);
+            one.commit();
+            crossed.get(10, TimeUnit.SECONDS);
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
+            assertThat(jdbc(connection)
+                            .queryForList(
+                                    "SELECT status FROM account_export WHERE account_id IN (?, ?)",
+                                    String.class,
+                                    first,
+                                    second))
+                    .hasSize(2)
+                    .containsOnly("EXPIRED");
+        }
+    }
+
+    private static void seedOwner(JdbcTemplate owner, long account, UUID[] messages) {
+        owner.update("INSERT INTO account(id, display_name) VALUES (?, 'Crossed owner')", account);
+        UUID conversation = UUID.randomUUID();
+        owner.update(
+                "INSERT INTO conversation (id, created_at, last_activity_at, account_id, workspace_id)"
+                        + " VALUES (?, now(), now(), ?, 979410)",
+                conversation,
+                account);
+        for (int seq = 0; seq < messages.length; seq++) {
+            owner.update(
+                    "INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text,"
+                            + " workspace_id, account_id) VALUES (?, ?, now(), 'USER', ?, 'APP', 'A message', 979410, ?)",
+                    messages[seq],
+                    conversation,
+                    seq + 1,
+                    account);
+        }
+        owner.queryForObject(
+                ReadyExportFence.CTE
+                        + "INSERT INTO account_export(account_id, status, expires_at, payload)"
+                        + " SELECT ?, 'READY', now() + interval '1 day', '\\x01' FROM fence RETURNING id",
+                Long.class,
+                account,
+                account);
+    }
+
+    private static void erase(JdbcTemplate session, UUID message) {
+        session.update("UPDATE conversation_entry SET redacted_at = now(), text = '' WHERE id = ?", message);
     }
 
     private static Connection connect(TestDatabase database) throws SQLException {

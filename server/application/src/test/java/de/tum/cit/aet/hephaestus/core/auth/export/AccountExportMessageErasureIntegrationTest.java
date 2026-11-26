@@ -411,16 +411,32 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("The original words of the feedback.");
     }
 
-    /** The feedback trigger names the states that an export shows, so a new state cannot slip past it. */
+    /**
+     * The feedback trigger names the states that an export shows twice: the state it leaves and the state it enters.
+     * Each list holds exactly those states, so a new state cannot slip past either one.
+     */
     @Test
     void shouldWatchExactlyTheFeedbackStatesThatAnExportShows() {
         String definition = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_feedback_changed_exports'",
                 String.class));
+        int left = definition.indexOf("old.state");
+        int entered = definition.indexOf("new.state");
+        int otherFields = definition.indexOf(" OR ", entered);
+        assertThat(left).as("the state the feedback leaves").isNotNegative().isLessThan(entered);
+        assertThat(otherFields)
+                .as("the exported fields after the state it enters")
+                .isGreaterThan(entered);
+        String leaves = definition.substring(left, entered);
+        String enters = definition.substring(entered, otherFields);
         for (FeedbackState state : FeedbackState.values()) {
-            assertThat(definition.contains("'" + state.name() + "'"))
-                    .as(state.name())
-                    .isEqualTo(FeedbackState.VISIBLE_TO_DEVELOPER.contains(state));
+            boolean shown = FeedbackState.VISIBLE_TO_DEVELOPER.contains(state);
+            assertThat(leaves.contains("'" + state.name() + "'"))
+                    .as("leaves " + state.name())
+                    .isEqualTo(shown);
+            assertThat(enters.contains("'" + state.name() + "'"))
+                    .as("enters " + state.name())
+                    .isEqualTo(shown);
         }
     }
 
