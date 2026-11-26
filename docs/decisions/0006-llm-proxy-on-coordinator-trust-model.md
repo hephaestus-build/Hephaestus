@@ -237,6 +237,8 @@ BYO remote-worker purpose. “BYO” is now a governed provider-key lookup behin
 credential-isolation driver in the Context above is unchanged and still binding: the sandbox receives
 no provider credential and can reach only the gateway.
 
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 Supersedes the interactive half of the 2026-07-20 update and two sentences of § Admission and

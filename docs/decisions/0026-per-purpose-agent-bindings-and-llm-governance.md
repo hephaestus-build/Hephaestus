@@ -275,6 +275,8 @@ The submit and claim gates still read the ledger alone: they decide whether work
 
 `agent_job` is renamed; see [ADR 0025](0025-agent-job-queue-on-postgresql.md#update--2026-10-14-2656-the-job-table-and-classes-are-renamed).
 
+<a id="update--2026-10-09-heph-turn-accounting-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 Supersedes the mentor parts of § How tight the cap is and § Current runtime boundary. A Hephaestus turn's

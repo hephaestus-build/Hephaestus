@@ -1,5 +1,7 @@
 # ADR 0068: Reviews and Hephaestus run on one agent runtime
 
+<a id="adr-0068-reviews-and-heph-run-on-one-agent-runtime"></a>
+
 **Status:** Superseded by [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md)
 **Date:** 2026-10-27
 **Authors:** Felix T.J. Dietrich
@@ -91,6 +93,8 @@ In every option, untrusted tools run apart from the loop, with no credential.
 
 Three off-the-shelf ways to run the Pods were also weighed: an operator, Kueue and kubernetes-sigs/agent-sandbox.
 
+<a id="x-a-heph-turn-as-a-job-rejected"></a>
+
 ### X: a Hephaestus turn as a Job (rejected)
 
 Each turn takes a warm agent Pod, runs its own loop in it and never returns the Pod to the pool.
@@ -98,6 +102,8 @@ Each turn takes a warm agent Pod, runs its own loop in it and never returns the 
 - **Latency.** A Pod start comes before the first model call. A pool of P Pods covers arrivals only while P ≥ arrival rate × start time (Little's law). With a measured start of 23–47 seconds, a pool of 2 covers one turn each 12–23 seconds. Ten questions within 30 seconds give 8 cold starts. After each deploy, the pool is empty.
 - **Memory.** Each running turn pays its own loop, about 136 MiB. In a shared loop, an extra turn costs about 3–10 MiB. One load test ran 90 turns in 364 MiB.
 - **Fit.** With 8 concurrent turns, X holds about 8 reviews on the reference node, against 10 for W′.
+
+<a id="w-a-heph-loop-with-a-relay-rejected"></a>
 
 ### W: a Hephaestus loop with a relay (rejected)
 
@@ -252,6 +258,8 @@ One Pod builder makes both.
 - A small pool of started tools Pods hides the start. The chart derives the pool size from Little's law with the measured rate of turns that use `bash` or `load_context`.
 - Pooled Pods carry the label of their owner worker. A worker deletes its old pool at start and checks room before it creates a Pod.
 
+<a id="the-heph-loop"></a>
+
 ### The Hephaestus loop
 
 The [Hephaestus loop](../contributor/practice-review-glossary.mdx#runtime-terms) is one long-lived Deployment that the chart manages, in the roles tier.
@@ -268,7 +276,7 @@ The [Hephaestus loop](../contributor/practice-review-glossary.mdx#runtime-terms)
 - Its code is compiled JavaScript in the agent image, built once in CI. The worker no longer stages it.
 - On several nodes, 2 replicas with anti-affinity.
 
-Each attempt has its own workspace ([decision J](#j-hephaestus-keeps-one-workspace-for-each-attempt)). `INDEX.md` lists the repositories that the conversation loaded earlier, with their commit and time, so Hephaestus can load the right one at once.
+Each attempt has its own workspace ([decision J](#j-heph-keeps-one-workspace-for-each-attempt)). `INDEX.md` lists the repositories that the conversation loaded earlier, with their commit and time, so Hephaestus can load the right one at once.
 
 `ContextChanged` keeps the turn attempt and its session.
 The loop deletes the turn's tools Job and takes a fresh one at the next tool call.
@@ -435,6 +443,8 @@ W′ is the only option with all of these properties:
 Z's memory gain does not become throughput while the model pool binds first.
 [Consequences](#consequences) gives the costs of this decision.
 
+<a id="b-hephs-tools-get-no-network-access"></a>
+
 ### B. Hephaestus's tools get no network access
 
 A tools Pod has no egress at all. It accepts ingress only from the Hephaestus loop, on the tools port.
@@ -586,6 +596,8 @@ A build needs a registry, which is an exfiltration path, and it runs the reposit
 A run without the project's dependencies, secrets and services is not the developer's environment. Its failure would be a capture failure reported as a claim about the work.
 
 **Consequence:** a practice that needs build results waits for the CI source.
+
+<a id="j-heph-keeps-one-workspace-for-each-attempt"></a>
 
 ### J. Hephaestus keeps one workspace for each attempt
 
@@ -872,9 +884,9 @@ The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls 
 - **Coverage authority.** § Tool placement made coverage depend on which process read the bytes. In one container, a command can change a file before the loop reads it. For each read and each proved search, the loop reports the path and digest of each file. Admission compares each digest with the one that the server captured. A read with a changed digest gives no coverage, and a search over it proves no absence. Admission checks each citation against the captured bytes, never against the sandbox's files.
 - **§ The attempt contract.** The lease, the attempt and the epoch move to `agent_run`. The fence is `(run_id, lease_epoch)` with an unexpired lease. The token names the workspace, the subject and the sandbox, and it expires at the sandbox's `shutdownTime`. The signing keys of the attempt token stay.
 - **The 2026-11-08 update, "review loops renew their own leases".** The sandbox is the only writer of its run's lease. The worker's renewals go with the worker.
-- **§ Network and [decision B](#b-hephaestuss-tools-get-no-network-access).** A sandbox can reach only the gateway port of the server. Thus, commands can reach the gateway too, with the token of their own subject. No sandbox has any other route.
+- **§ Network and [decision B](#b-hephs-tools-get-no-network-access).** A sandbox can reach only the gateway port of the server. Thus, commands can reach the gateway too, with the token of their own subject. No sandbox has any other route.
 - **§ Capacity, § Fit by measured use and [decision G](#g-review-pod-admission-checks-quota-and-provider-demand).** The claim admits sandboxes by the counts in one capacity home, `hephaestus.agent.capacity.*`. The tier quotas that the chart derives, the resident-turn CPU rule, the 32-turn ceiling and `Recreate` on single-node profiles go.
-- **[Decision J](#j-hephaestus-keeps-one-workspace-for-each-attempt).** A conversation keeps one sandbox while it is in use, and the server deletes it when it is idle. An erasure or a change of access deletes it at once. Its turns share the workspace.
+- **[Decision J](#j-heph-keeps-one-workspace-for-each-attempt).** A conversation keeps one sandbox while it is in use, and the server deletes it when it is idle. An erasure or a change of access deletes it at once. Its turns share the workspace.
 - **Option W.** Its first reason, a token beside untrusted code, no longer decides. W stays rejected for its relay and its broker in the gateway.
 - **Option [kubernetes-sigs/agent-sandbox](#kubernetes-sigsagent-sandbox-rejected), rejected on 2026-10-28, is the chosen path from 2026-11-09.** ADR 0079 gives what changed and how it bounds the risks that this ADR named.
 

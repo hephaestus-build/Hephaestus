@@ -195,6 +195,8 @@ called unbuilt; it needed no new role.
 
 `agent_job` is renamed; see [ADR 0025](0025-agent-job-queue-on-postgresql.md#update--2026-10-14-2656-the-job-table-and-classes-are-renamed).
 
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 The 2026-10-01 update's "Hephaestus sessions run on connected workers" now means one stateless Hephaestus host per

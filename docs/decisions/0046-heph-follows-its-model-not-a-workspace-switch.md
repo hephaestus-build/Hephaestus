@@ -1,5 +1,7 @@
 # ADR 0046: Hephaestus follows its model, not a workspace switch
 
+<a id="adr-0046-heph-follows-its-model-not-a-workspace-switch"></a>
+
 **Status:** Accepted
 **Date:** 2026-09-27
 **Authors:** Felix T.J. Dietrich

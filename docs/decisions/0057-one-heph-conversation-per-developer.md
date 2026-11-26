@@ -1,5 +1,7 @@
 # ADR 0057: One Hephaestus conversation per developer, on a stateless shared Hephaestus host
 
+<a id="adr-0057-one-heph-conversation-per-developer-on-a-stateless-shared-heph-host"></a>
+
 **Status:** Superseded by [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
@@ -87,7 +89,7 @@ Slack egress:
    Its Postgres state tables are created at run time, outside Liquibase and outside workspace scoping.
    It also needs a second Slack ingress beside the Java webhook role ([Chat SDK](https://chat-sdk.dev/)).
 2. **The Java Slack projector reads the ledger, and records each post as intent, effect and outcome.** Chosen.
-3. **Slack agent sessions with the native stop button in threads.** First rejected, then chosen ([Amendment of 2026-10-22](#amendment-of-2026-10-22-slacks-stop-in-a-hephaestus-thread)).
+3. **Slack agent sessions with the native stop button in threads.** First rejected, then chosen ([Amendment of 2026-10-22](#amendment-of-2026-10-22-slacks-stop-in-a-heph-thread)).
    The first rejection said: a stop event names no turn when no stream exists yet.
    Binding it needed event receipts, session owners and a clock-skew rule.
    Threads use 👀 as the working signal, and Stop is in the app.
@@ -98,6 +100,8 @@ Weekly digest:
 2. **Java writes a digest from facts. A pointer with no content tells the developer that it is ready.** Chosen.
 
 ## Decision
+
+<a id="one-conversation-heph-threads-and-where-the-answer-appears"></a>
 
 ### One conversation, Hephaestus threads, and where the answer appears
 
@@ -131,7 +135,7 @@ The answer appears where the developer asked. The app shows everything.
   A `stopped_by_user` response to a running turn's stream append also stops that exact turn.
   The response identifies one stream and its owning turn. It does not stop queued follow-ups.
 - In a Slack thread, Slack's agent session shows that Hephaestus works, with Slack's Stop.
-  Its stop event (`agent_session_stopped`) stops the thread's running Slack turn only ([Amendment of 2026-10-22](#amendment-of-2026-10-22-slacks-stop-in-a-hephaestus-thread)).
+  Its stop event (`agent_session_stopped`) stops the thread's running Slack turn only ([Amendment of 2026-10-22](#amendment-of-2026-10-22-slacks-stop-in-a-heph-thread)).
 
 The app offers Helpful and Not helpful on each Hephaestus answer.
 Ratings come from these buttons only. Hephaestus's own 👀 reaction is its working signal, and Hephaestus does not read Slack reactions.
@@ -196,6 +200,8 @@ The claim binds to the turn, and the receipt binds the message:
 
 A lost attempt stores no Hephaestus message, so no placeholder row exists.
 [Hephaestus runtime](../contributor/unified-pi-runtime.mdx) is the home of the claim and the receipt.
+
+<a id="the-heph-host"></a>
 
 ### The Hephaestus host
 
@@ -462,6 +468,8 @@ Thus, no old code reads a dropped table or column.
 It proves that a fresh and an upgraded database have the same schema.
 This exception does not change the rule for other tables and columns.
 
+<a id="amendment-of-2026-10-22-slacks-stop-in-a-heph-thread"></a>
+
 ### Amendment of 2026-10-22: Slack's Stop in a Hephaestus thread
 
 The first decision rejected Slack's agent session and its stop event (option 3 of Slack egress).
@@ -554,6 +562,8 @@ The outbox owns the lease, metadata readback, retries and terminal outcome. Entr
 - OpenAI: [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), [Session memory](https://developers.openai.com/cookbook/examples/agents_sdk/session_memory).
 - Context limits: [Chroma, context rot](https://www.trychroma.com/research/context-rot), [How contexts fail](https://www.dbreunig.com/2025/06/22/how-contexts-fail-and-how-to-fix-them.html), [Manus, context engineering](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus).
 - Slack: [Agents and AI apps](https://docs.slack.dev/ai/), [Streaming messages](https://docs.slack.dev/reference/methods/chat.startStream/), [message events](https://docs.slack.dev/reference/events/message/).
+
+<a id="update--2026-10-28-where-hephs-loop-and-tools-run-adr-0068"></a>
 
 ## Update — 2026-10-28: where Hephaestus's loop and tools run ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 

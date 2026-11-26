@@ -95,6 +95,8 @@ owns the current grants and limits.
 [Context and trust](../contributor/practice-script-runner.mdx#context-and-trust) owns the
 threat model.
 
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 The mentor runner is replaced by the Hephaestus host, one long-lived process per worker. It runs with

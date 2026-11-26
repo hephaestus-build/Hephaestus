@@ -62,6 +62,8 @@ Feedback does not change. An ended result gets no new feedback (`FeedbackGate`).
 
 Revisit when a practice must lose standing at a work change, for example a practice about the current state of a branch.
 
+<a id="update--2026-10-26-shipped-and-what-heph-reads"></a>
+
 ## Update — 2026-10-26 (shipped, and what Hephaestus reads)
 
 [#3294](https://github.com/hephaestus-build/Hephaestus/pull/3294) ships this decision in `PracticeStandingService`.

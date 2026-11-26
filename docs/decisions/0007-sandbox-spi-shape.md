@@ -74,6 +74,8 @@ sandboxes take no host mounts, so the first non-`HostPathMount` consumer this AD
 seal for will not arrive. No `VolumeMount` type exists; `SandboxSpec.volumeMounts` is the
 `Map<String, String>` of option 3.
 
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 `InteractiveSandboxSpec` and the whole interactive sandbox SPI are deleted. The Hephaestus host uses its own

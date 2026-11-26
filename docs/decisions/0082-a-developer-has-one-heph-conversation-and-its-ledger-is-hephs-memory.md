@@ -1,5 +1,7 @@
 # ADR 0082: A developer has one Hephaestus conversation, and its ledger is Hephaestus's memory
 
+<a id="adr-0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory"></a>
+
 **Status:** Superseded by [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md)
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
@@ -135,7 +137,7 @@ Each line links the section that priced the option.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#considered-options): compaction after the answer.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#considered-options): AI SDK UI (`useChat`) with a custom transport.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#considered-options): the Vercel Chat SDK with its Slack adapter.
-- [ADR 0057](0057-one-heph-conversation-per-developer.md#amendment-of-2026-10-22-slacks-stop-in-a-hephaestus-thread): no Slack Stop in a thread. The maintainer chose Slack's Stop on 2026-10-22.
+- [ADR 0057](0057-one-heph-conversation-per-developer.md#amendment-of-2026-10-22-slacks-stop-in-a-heph-thread): no Slack Stop in a thread. The maintainer chose Slack's Stop on 2026-10-22.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#considered-options): a digest that Java writes from facts. ADR 0079 replaced it with a model-written digest.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#context-folder-and-turn-sandbox): a virtual tree of generated files over Git.
 - [ADR 0057](0057-one-heph-conversation-per-developer.md#context-folder-and-turn-sandbox): one warm sandbox for each conversation. ADR 0079 chose it, with deletion on erasure and when idle.

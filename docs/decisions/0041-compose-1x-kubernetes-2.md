@@ -375,6 +375,8 @@ The [workspace ABI](../contributor/agent/agent-workspace-abi.mdx#session-transcr
 - [Cursor Continuity: Git at any scale](https://cursor.com/blog/git-at-any-scale)
 - [Cloudflare Code Mode](https://blog.cloudflare.com/code-mode/)
 
+<a id="update--2026-10-09-heph-host-adr-0057"></a>
+
 ## Update — 2026-10-09 (Hephaestus host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
 
 Supersedes the interactive parts of this decision. Hephaestus has no per-developer session to keep warm or
