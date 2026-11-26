@@ -129,8 +129,10 @@ public class WorkPlaceHandoffEnrolment {
             copies.computeIfAbsent(slug, ignored -> new ArrayList<>())
                     .add(new WorkPlaceScope.Copy(
                             UUID.fromString(practice.evidence().path("copyId").asString()), practice.attempt()));
-            expiries.merge(slug, Instant.parse(practice.evidence().path("expiresAt").asString()), (kept, staged) ->
-                    staged.isBefore(kept) ? staged : kept);
+            expiries.merge(
+                    slug,
+                    Instant.parse(practice.evidence().path("expiresAt").asString()),
+                    (kept, staged) -> staged.isBefore(kept) ? staged : kept);
         }
         Instant now = Instant.now();
         var scoped = WorkPlaceScope.of(new WorkPlaceScope.Sealed(

@@ -157,7 +157,8 @@ class WorkPlaceScopeTest {
                 .allSatisfy(result -> {
                     assertThat(result.path("publicEligible").asBoolean()).isTrue();
                     result.path("problems")
-                            .forEach(problem -> assertThat(problem.path("publicEligible").asBoolean())
+                            .forEach(problem -> assertThat(
+                                            problem.path("publicEligible").asBoolean())
                                     .isTrue());
                 });
 
@@ -175,7 +176,8 @@ class WorkPlaceScopeTest {
         assertThat(reordered.toString()).isNotEqualTo(scoped.payload().toString());
 
         assertThat(WorkPlaceScope.read(reordered, scoped.digest()).results())
-                .isEqualTo(WorkPlaceScope.read(scoped.payload(), scoped.digest()).results());
+                .isEqualTo(
+                        WorkPlaceScope.read(scoped.payload(), scoped.digest()).results());
     }
 
     @Test
@@ -186,10 +188,14 @@ class WorkPlaceScopeTest {
         Instant sooner = base.sealedAt().plus(Duration.ofMinutes(10));
         String kept = base.results().getFirst().path("practiceSlug").asString();
 
-        assertThat(WorkPlaceScope.of(expiring(base, Map.of(), sooner)).orElseThrow().expiresAt())
+        assertThat(WorkPlaceScope.of(expiring(base, Map.of(), sooner))
+                        .orElseThrow()
+                        .expiresAt())
                 .as("the occasion's evidence ends")
                 .isEqualTo(sooner);
-        assertThat(WorkPlaceScope.of(expiring(base, Map.of(kept, sooner), null)).orElseThrow().expiresAt())
+        assertThat(WorkPlaceScope.of(expiring(base, Map.of(kept, sooner), null))
+                        .orElseThrow()
+                        .expiresAt())
                 .as("a kept result's staged evidence ends")
                 .isEqualTo(sooner);
         assertThat(WorkPlaceScope.of(expiring(base, Map.of("reviews-privately", sooner), null))

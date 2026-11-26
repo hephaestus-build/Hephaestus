@@ -684,8 +684,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .results())
                     .as("the copy matches its digest after PostgreSQL reorders its keys")
                     .isNotEmpty()
-                    .allSatisfy(result -> assertThat(result.path("publicEligible").asBoolean())
-                            .isTrue());
+                    .allSatisfy(
+                            result -> assertThat(result.path("publicEligible").asBoolean())
+                                    .isTrue());
             assertThat(payload.path("files").propertyNames())
                     .contains("INDEX.json")
                     .noneMatch(path -> path.equals("INDEX.md")
