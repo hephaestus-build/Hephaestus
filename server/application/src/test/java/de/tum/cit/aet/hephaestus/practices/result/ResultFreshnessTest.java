@@ -11,11 +11,21 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemTransactions;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmSourceFingerprints;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -104,6 +114,64 @@ class ResultFreshnessTest {
 
         assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.recordMissing());
+    }
+
+    @Test
+    void shouldKeepTheDiffResultCurrentWhenAnotherPracticeNeedsAnExpiredOccasionRecord() {
+        var source = mock(ScmItemService.class);
+        var reader = new ScmSourceFingerprints(
+                source, mock(ScmWorkCapture.class), mock(ScmItemTransactions.class));
+        var query = new ProductItemQuery(
+                mock(ProductItemRepository.class), List.of(source), List.of(), List.of(), new JsonMapper(), List.of(reader));
+        var occasion = UUID.randomUUID();
+        var base = "a".repeat(40);
+        var head = "b".repeat(40);
+        var version = ScmVersion.pullRequest(base, head, "Pull request", null);
+        var snapshot = mock(ItemSnapshot.class);
+        when(snapshot.version()).thenReturn(version);
+        when(source.supports(item)).thenReturn(true);
+        when(source.pin(item, null)).thenReturn(snapshot);
+        when(source.pinOccasion(item, version, occasion))
+                .thenThrow(new ItemCaptureException(ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE, "EXPIRED"));
+
+        var diff = new SourceKind("scm.pull-request.diff");
+        var diffResult = result();
+        var recordResult = Result.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(diffResult.getWorkspaceId())
+                .reviewId(diffResult.getReviewId())
+                .practiceId(4)
+                .itemId(diffResult.getItemId())
+                .outcome(ResultOutcome.MET)
+                .recordedAt(diffResult.getRecordedAt())
+                .build();
+        when(practices.sourceCaptures(eq(1L), any(), any()))
+                .thenReturn(List.of(
+                        new ResultSourceCapture(
+                                diffResult.getReviewId(),
+                                diffResult.getPracticeId(),
+                                diffResult.getItemId(),
+                                ReviewKind.ITEM,
+                                ReviewOrigin.EVENT,
+                                occasion,
+                                decision(CAPTURED_AT, Map.of(diff.value(), SourceFingerprint.git(diff, base + ":" + head))),
+                                null),
+                        new ResultSourceCapture(
+                                recordResult.getReviewId(),
+                                recordResult.getPracticeId(),
+                                recordResult.getItemId(),
+                                ReviewKind.ITEM,
+                                ReviewOrigin.EVENT,
+                                occasion,
+                                decision(CAPTURED_AT, Map.of(LINKED.value(), FINGERPRINT)),
+                                null)));
+
+        assertThat(new ResultFreshness(practices, query)
+                        .freshness(1, facts(List.of(diffResult, recordResult)), Map.of(7L, item)))
+                .containsEntry(
+                        recordResult.getId(),
+                        new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, CAPTURED_AT))
+                .containsEntry(diffResult.getId(), Freshness.current(CAPTURED_AT));
     }
 
     @Test
