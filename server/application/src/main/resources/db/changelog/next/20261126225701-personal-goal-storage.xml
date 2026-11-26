@@ -32,5 +32,19 @@ CREATE TRIGGER trg_personal_goal_export_changed
     AFTER INSERT OR UPDATE OF words OR DELETE ON public.personal_goal
     FOR EACH ROW EXECUTE FUNCTION public.personal_goal_export_changed();
         ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+LOCK TABLE public.personal_goal IN ACCESS EXCLUSIVE MODE;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.personal_goal) THEN
+        RAISE EXCEPTION 'Restore the verified pre-upgrade database backup to reverse personal goal storage with rows.';
+    END IF;
+END
+$$;
+DROP TABLE public.personal_goal;
+DROP FUNCTION public.personal_goal_export_changed();
+            ]]></sql>
+        </rollback>
     </changeSet>
 </databaseChangeLog>
