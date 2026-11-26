@@ -21,11 +21,13 @@ class PersonalGoalStorageMigrationTest {
     void shouldRollBackOnlyWhilePersonalGoalStorageIsEmpty() throws Exception {
         var database = PostgreSQLTestContainer.createDatabase("personal_goal_storage");
         PracticeMigrationFixture.upgradeBefore(database, CONTEXT, CHANGELOG);
-        try (var connection = DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+        try (var connection =
+                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
                 var liquibase = new Liquibase(
                         "db/master.xml",
                         new ClassLoaderResourceAccessor(),
-                        DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+                        DatabaseFactory.getInstance()
+                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
             PracticeMigrationFixture.upgradeOnly(liquibase, CONTEXT, CHANGELOG);
             PracticeMigrationFixture.execute(database, """
                 WITH owner AS (
