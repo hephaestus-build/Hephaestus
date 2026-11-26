@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnComplet
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
@@ -155,6 +157,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentRuns runs;
+
+    @Autowired
+    private AgentRunReaper reaper;
 
     @Autowired
     private LlmUsageEventRepository usage;
@@ -1050,50 +1055,90 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(digestEntry()).isEmpty();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldLeaseTheNextDigestAfterAnEarlierReplicaErasedTheQueuedDigest(boolean subjectClaim) {
+    @Test
+    void shouldReapAnEarlierReplicasErasedDigestBeforeTheFirstClaim() {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         transactionTemplate.executeWithoutResult(status -> {
             status.setRollbackOnly();
-            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
-            var stimulus = digestEntry().orElseThrow();
-            var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
-            UUID erasedTurnId = Objects.requireNonNull(stimulus.getTurnId());
-            var erasedRun = new AgentRunRef(
-                    turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
-            // rc.16 erased the stimulus without changing the queued turn or run.
-            assertThat(jdbcTemplate.update("""
-                            UPDATE conversation_entry
-                               SET redacted_at = clock_timestamp(), payload = NULL, text = '', search_text = ''
-                             WHERE workspace_id = ? AND id = ?
-                            """, workspaceId, stimulus.getId())).isOne();
+            var queue = erasedDigestQueue();
 
-            UUID conversationId = stimulus.getConversationId();
-            String requestId = requestId() + "-next";
-            assertThat(turns.submitDigest(
-                            workspaceId,
-                            conversationId,
-                            new ConversationTurnService.DigestRequest(
-                                    requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
-                    .isTrue();
-            var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
-                    .orElseThrow();
-            assertThat(runs.find(erasedRun).orElseThrow().getStartWithinSeconds())
-                    .as("the older writer set the relative window")
-                    .isPositive();
+            reaper.reap();
 
-            var kinds = Set.of(AgentRunKind.DIGEST);
-            var lease = subjectClaim
-                    ? runs.claimSubject(workspaceId, "conversation:" + conversationId, kinds)
-                    : runs.claim(kinds, List.of());
-            assertThat(lease)
-                    .as("the erased digest releases its queue position during the claim")
-                    .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(next.getRunId()));
-            assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
-                    .isEqualTo(ConversationTurn.Status.STOPPED);
-            assertThat(runs.find(erasedRun).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
+            assertErasedDigestEnded(queue);
+            assertThat(runs.claim(Set.of(AgentRunKind.DIGEST), List.of()))
+                    .hasValueSatisfying(claim ->
+                            assertThat(claim.runId()).isEqualTo(queue.nextRun().id()));
         });
+    }
+
+    @Test
+    void shouldKeepTheErasedDigestAndItsSuccessorQueuedDuringFleetClaims() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            var queue = erasedDigestQueue();
+            var kinds = Set.of(AgentRunKind.DIGEST);
+
+            assertThat(runs.claim(kinds, List.of())).isEmpty();
+            assertThat(runs.claim(kinds, List.of(queue.erasedRun().id()))).isEmpty();
+            assertThat(runs.claimCapped(AgentRunKind.DIGEST, 1)).isEmpty();
+            assertThat(turnRows.findById(queue.erasedTurn()).orElseThrow().getStatus())
+                    .isEqualTo(ConversationTurn.Status.QUEUED);
+            assertThat(runs.find(queue.erasedRun()).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+            assertThat(runs.find(queue.nextRun()).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+        });
+    }
+
+    @Test
+    void shouldLeaseTheSuccessorWhenTheSubjectClaimCleansUpAnErasedDigest() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            var queue = erasedDigestQueue();
+            assertThat(runs.claimSubject(
+                            workspaceId, "conversation:" + queue.conversation(), Set.of(AgentRunKind.DIGEST)))
+                    .hasValueSatisfying(claim ->
+                            assertThat(claim.runId()).isEqualTo(queue.nextRun().id()));
+            assertErasedDigestEnded(queue);
+        });
+    }
+
+    private record ErasedDigestQueue(UUID conversation, UUID erasedTurn, AgentRunRef erasedRun, AgentRunRef nextRun) {}
+
+    private ErasedDigestQueue erasedDigestQueue() {
+        assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+        var stimulus = digestEntry().orElseThrow();
+        var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
+        UUID erasedTurn = Objects.requireNonNull(stimulus.getTurnId());
+        var erasedRun =
+                new AgentRunRef(turnRows.findById(erasedTurn).orElseThrow().getRunId(), workspaceId);
+        // The older release erased the stimulus without ending the queued turn or run.
+        assertThat(jdbcTemplate.update("""
+                        UPDATE conversation_entry
+                           SET redacted_at = clock_timestamp(), payload = NULL, text = '', search_text = ''
+                         WHERE workspace_id = ? AND id = ?
+                        """, workspaceId, stimulus.getId())).isOne();
+        UUID conversation = stimulus.getConversationId();
+        String requestId = requestId() + "-next";
+        assertThat(turns.submitDigest(
+                        workspaceId,
+                        conversation,
+                        new ConversationTurnService.DigestRequest(
+                                requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
+                .isTrue();
+        var next =
+                turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId).orElseThrow();
+        assertThat(runs.find(erasedRun).orElseThrow().getStartWithinSeconds()).isPositive();
+        return new ErasedDigestQueue(
+                conversation, erasedTurn, erasedRun, new AgentRunRef(next.getRunId(), workspaceId));
+    }
+
+    private void assertErasedDigestEnded(ErasedDigestQueue queue) {
+        assertThat(turnRows.findById(queue.erasedTurn()).orElseThrow().getStatus())
+                .isEqualTo(ConversationTurn.Status.STOPPED);
+        var run = runs.find(queue.erasedRun()).orElseThrow();
+        assertThat(run.getState()).isEqualTo(AgentRunState.ENDED);
+        assertThat(run.getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
     }
 
     private static WeeklyDigestTransport transport(WeeklyDigestPointer pointer, boolean reaches) {
