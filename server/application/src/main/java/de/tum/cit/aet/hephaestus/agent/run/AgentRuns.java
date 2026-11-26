@@ -332,7 +332,6 @@ public class AgentRuns {
 
     private Optional<AgentRunLease> claimNext(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
         if (kinds.isEmpty()) return Optional.empty();
-        if (kinds.contains(AgentRunKind.DIGEST)) cancelErasedDigests(timing.workspaceIds(), null);
         // Only the oldest queued run of a subject is offered, and a claim skips a locked one, so two claims never lease
         // two runs of one subject; the partial unique index on the leased subject refuses it if they did.
         return runs.claim(
