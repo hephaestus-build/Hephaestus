@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-public class SlackGroupDeletedMessageHandler extends SlackChannelDeletedMessageHandler {
+public class SlackGroupDeletedMessageHandler extends AbstractSlackChannelDeletionMessageHandler {
 
     public SlackGroupDeletedMessageHandler(
             SlackChannelLifecycleService lifecycleService, EventPayloadDeserializer deserializer) {

@@ -296,6 +296,32 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSuppressAPostWhenSilentModeEngagesDuringAdmission() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+            try (SlackMessageService local = localService(config)) {
+                assertThatThrownBy(() -> local.postMessage(
+                                7L,
+                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
+                                List.of(),
+                                "hi",
+                                null,
+                                () -> {
+                                    silentModeEngaged = true;
+                                    return true;
+                                }))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.slackError()).isEqualTo("silent_mode_engaged"));
+            }
+            assertThat(slackApi.getRequestCount()).isZero();
+        }
+    }
+
+    @Test
     void shouldReturnTheFirstPostThrottleToTheOutbox() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();

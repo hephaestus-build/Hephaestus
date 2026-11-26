@@ -24,8 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Erases a Slack channel from the workspace: revokes its consent so ingestion stops, and deletes its stored provider
  * events, its messages, its thread aggregates (which hold {@code participant_account_ids}) and the conversation feedback
- * derived from them. Redacts tool results that could have copied channel content through the original erasure time.
- * It reads no Slack API, so recovery runs it while Slack is turned off.
+ * derived from them. Live erasure redacts tool results that could have copied the stored channel content.
+ * Replay bounds that redaction by the original erasure time and reads no Slack API.
  */
 @Component
 @ConditionalOnServerRole
@@ -64,7 +64,8 @@ public class SlackChannelErasure {
     @Transactional
     public void erase(long workspaceId, String channelId, Instant erasedAt) {
         eraseChannelRows(workspaceId, channelId);
-        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
+        // Slack may deliver a deletion after its event time, while the channel content is still available.
+        conversationEntries.redactCopyingToolResults(workspaceId, null);
         journal.record(
                 PrivacyJournalKind.SLACK_CHANNEL_ERASED,
                 Map.of("workspaceId", workspaceId, "channelId", new NativeId(channelId), "erasedAt", erasedAt));

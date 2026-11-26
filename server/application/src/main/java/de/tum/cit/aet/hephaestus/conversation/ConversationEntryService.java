@@ -253,7 +253,7 @@ public class ConversationEntryService {
      * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them, when a source that they could
      * have read leaves the workspace. No record says which source a result copied.
      *
-     * @param cutoff the time of the source erasure, or null to erase all existing results on workspace disconnect
+     * @param cutoff the original erasure time on replay, or null to erase all existing results during live erasure
      */
     @Transactional
     public void redactCopyingToolResults(long workspaceId, @Nullable Instant cutoff) {

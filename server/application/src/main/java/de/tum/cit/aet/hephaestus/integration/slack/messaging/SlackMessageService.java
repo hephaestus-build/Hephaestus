@@ -308,10 +308,9 @@ public class SlackMessageService implements AutoCloseable {
     }
 
     /**
-     * One Slack write; every write of this gateway goes through it. Silent Mode refuses it before a token is read, and
-     * again before each attempt, so Silent Mode engaged during a throttle wait refuses the next attempt. A 429 is
-     * retried after its {@code Retry-After} within the interactive budget; one that outlives the budget is
-     * {@code ratelimited} and carries its wait. A failed transport is {@code transport_failure}.
+     * Silent Mode refuses writes before credential lookup and immediately before each provider call.
+     * An outbox post also checks it before admission, which can wait for a source lock.
+     * A 429 returns to the outbox for a new attempt. Other writes can wait within the interactive budget.
      */
     private <T extends SlackApiTextResponse> @Nullable T callWrite(
             long workspaceId,
@@ -341,6 +340,7 @@ public class SlackMessageService implements AutoCloseable {
             } else {
                 egressGuard.requireDeliveryAllowed("slack.write");
                 if (!admit.getAsBoolean()) return null;
+                egressGuard.requireDeliveryAllowed("slack.write");
                 response = call.call(methods);
             }
             if (!response.isOk()) {

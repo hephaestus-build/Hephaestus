@@ -355,6 +355,29 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
+    void shouldRedactCopiesMadeAfterSlackDeletedTheChannelButBeforeErasure() {
+        long workspaceId = workspace.getId();
+        jdbc.update("""
+                INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)
+                VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')
+                """, workspaceId);
+        long stored = slackMessage("1700000003.000300", "Channel words still stored after deletion in Slack");
+        jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", stored);
+        UUID copy = copyingToolResult("2026-01-03T00:00:00Z", "Copied while the channel words were still stored");
+        Instant providerDeletion = Instant.parse("2026-01-02T00:00:00Z");
+
+        channelErasure.erase(workspaceId, "C-erased", providerDeletion);
+
+        assertThat(slackRows("C-erased")).isZero();
+        assertThat(words(copy)).isBlank();
+        String recorded = Objects.requireNonNull(jdbc.queryForObject("""
+                SELECT (refs->'erasedAt')::text FROM privacy_journal
+                WHERE kind = 'SLACK_CHANNEL_ERASED' AND refs->>'workspaceId' = ? AND refs->>'channelId' = 'C-erased'
+                """, String.class, Long.toString(workspaceId)));
+        assertThat(mapper.readValue(recorded, Instant.class)).isEqualTo(providerDeletion);
+    }
+
+    @Test
     void shouldPreserveTheNewConsentPeriodWhenTheSameChannelErasureReplays() throws Exception {
         jdbc.update("""
                 INSERT INTO slack_monitored_channel
