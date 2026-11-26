@@ -48,6 +48,28 @@ class ConversationAnswerUsesTest {
     }
 
     @Test
+    void shouldShowTheRepositoryNameWithoutItsSandboxPath() {
+        var uses = List.of(
+                new ToolUse("load", "load_context", "repos/github.com/acme/api@main"),
+                new ToolUse("file", "read", "repos/github.com/acme/api/README.md"));
+        var outcomes = List.of(new Outcome("load", "load_context", false), new Outcome("file", "read", false));
+
+        assertThat(ConversationAnswerUses.of(true, uses, outcomes).read())
+                .containsExactly(
+                        new ConversationUsedSourceDTO(Kind.REPOSITORY, null, "acme/api", 1),
+                        new ConversationUsedSourceDTO(Kind.REPOSITORY_FILES, null, "acme/api", 1));
+    }
+
+    @Test
+    void shouldRecordAFailedDocumentReadWhenTheDocumentHasNoKnownLabel() {
+        var uses = List.of(new ToolUse("read", "read", "inputs/context/missing.json"));
+        var outcomes = List.of(new Outcome("read", "read", true));
+
+        assertThat(ConversationAnswerUses.of(true, uses, outcomes).couldNotCheck())
+                .hasSize(1);
+    }
+
+    @Test
     void shouldListAFailedCallUnderCouldNotCheckAndLeaveOutACallThatNeverFinished() {
         var uses = List.of(
                 use("1", "load_context", Map.of("path", "repositories/acme/api")),

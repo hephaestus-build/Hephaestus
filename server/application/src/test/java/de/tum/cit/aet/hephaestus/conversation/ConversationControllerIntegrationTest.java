@@ -563,6 +563,46 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
+    void shouldShowOneDisclosureWhenAnAnswersMessagesSpanPages() {
+        submit(main(), "Which documents did you check?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I will check your observations."),
+                                f.call("read", "read", "path", "inputs/context/results_history.json"),
+                                f.result("read", "read", false),
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I checked your observations.")),
+                        null,
+                        null));
+
+        var answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                running.getWorkspaceId(), running.getId(), ConversationEntry.Kind.ANSWER);
+        String cursor = String.valueOf(answers.getLast().getSeq());
+        get("/entries?size=1")
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I checked your observations.")
+                .jsonPath("$.content[0].used.read[0].document")
+                .isEqualTo("RESULTS_HISTORY")
+                .jsonPath("$.nextCursor")
+                .isEqualTo(cursor);
+
+        get("/entries?size=1&cursor=" + cursor)
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I will check your observations.")
+                .jsonPath("$.content[0].used")
+                .doesNotExist();
+    }
+
+    @Test
     void shouldNotShowARefusedCallWhenAnotherTurnOnThePageUsedTheSameCallIdSuccessfully() {
         endWithFeedbackCall(started(submit(main(), "First question")), "Shown in the first turn.", false);
         endWithFeedbackCall(started(submit(main(), "Second question")), "Refused in the second turn.", true);
