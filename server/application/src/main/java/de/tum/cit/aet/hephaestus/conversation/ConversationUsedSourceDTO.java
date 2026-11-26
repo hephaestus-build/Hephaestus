@@ -7,19 +7,20 @@ import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/** One source that an answer's turn opened, or tried to open, named in the person's terms and never by a tool or path. */
-@Schema(description = "A source that Hephaestus opened for an answer, or could not open")
+/**
+ * Sources of one kind that an answer's turn opened, or tried to open, counted in the person's terms. It never names a
+ * tool, a path or a repository, because a name could outlive the person's access to it.
+ */
+@Schema(description = "Sources of one kind that Hephaestus opened for an answer, or could not open")
 public record ConversationUsedSourceDTO(
         @NonNull Kind kind,
 
-        @Schema(description = "Which context document; only for CONTEXT_DOCUMENT") @Nullable
+        @Schema(description = "Which context document; only for CONTEXT_DOCUMENT, absent for one with no known name")
+        @Nullable
         ContextDocument document,
 
-        @Schema(description = "The repository as the turn named it; only for REPOSITORY and REPOSITORY_FILES") @Nullable
-        String repository,
-
         @Schema(
-                description = "How many files or searches; 1 for a document or a repository",
+                description = "How many distinct repositories, files, commands or searches; 1 for a document",
                 requiredMode = RequiredMode.REQUIRED)
         int count) {
 
@@ -28,12 +29,12 @@ public record ConversationUsedSourceDTO(
     public enum Kind {
         /** One of the documents that Hephaestus prepares about the person's work. */
         CONTEXT_DOCUMENT,
-        /** A repository that the turn loaded. */
+        /** Repositories that the turn loaded. */
         REPOSITORY,
-        /** Files that the turn read in loaded repositories. */
-        REPOSITORY_FILES,
-        /** Searches across the context documents. */
-        CONTEXT_SEARCH,
+        /** Files that the turn read, other than context documents. */
+        FILES,
+        /** Shell commands that the turn ran over the files it had. */
+        COMMAND,
         /** Searches of the earlier messages of this conversation. */
         CONVERSATION_SEARCH,
     }

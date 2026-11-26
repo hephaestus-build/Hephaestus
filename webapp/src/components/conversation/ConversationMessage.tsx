@@ -225,8 +225,8 @@ export function ConversationMessage({
 				{!message.deleted && !streaming && message.used !== undefined && (
 					<AnswerUse
 						used={message.used}
-						links={message.links}
 						subject={messageSubject(message, developer)}
+						text={message.text}
 					/>
 				)}
 				{children}

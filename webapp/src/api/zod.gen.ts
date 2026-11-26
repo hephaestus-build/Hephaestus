@@ -696,7 +696,7 @@ export const zConversationTurnWaitingFor = z.string();
 export const zConversationUsedSourceKind = z.string();
 
 /**
- * A source that Hephaestus opened for an answer, or could not open
+ * Sources of one kind that Hephaestus opened for an answer, or could not open
  */
 export const zConversationUsedSource = z.object({
 	count: z
@@ -705,13 +705,14 @@ export const zConversationUsedSource = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	document: zConversationContextDocument.optional(),
 	kind: zConversationUsedSourceKind,
-	repository: z.string().optional(),
 });
 
 /**
  * What Hephaestus opened for one answer, and what it could not open
  */
 export const zConversationAnswerUse = z.object({
+	askedFromPage: z.boolean(),
+	cited: z.boolean(),
 	couldNotCheck: z.array(zConversationUsedSource),
 	read: z.array(zConversationUsedSource),
 	recorded: z.boolean(),

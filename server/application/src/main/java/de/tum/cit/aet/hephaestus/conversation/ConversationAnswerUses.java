@@ -4,17 +4,17 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationUsedSourceDTO.ContextD
 import de.tum.cit.aet.hephaestus.conversation.ConversationUsedSourceDTO.Kind;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Derives What Hephaestus used for one answer from the tool calls that its turn stored, and from the outcomes of those
  * calls (ADR 0157 decision 8). It reads only the calls' arguments and whether each result was an error, never the
- * content of a result. It lists what the turn opened. It never claims to list everything, because the turn also read
- * the conversation, which the app says in a fixed line.
+ * content of a result. It counts sources and names only the context documents, whose names are the product's own. It
+ * never claims to list everything, because the turn also read the conversation, which the app says in a fixed line.
  */
 final class ConversationAnswerUses {
 
@@ -35,70 +35,60 @@ final class ConversationAnswerUses {
     record Outcome(String callId, String tool, boolean error) {}
 
     /**
-     * What the answer used.
+     * What the answer used. A call whose result the turn did not store is listed under could not check, because nothing
+     * shows that it opened its source.
      *
      * @param recorded whether the turn stored its entries with their tool calls
      * @param uses the turn's calls of {@link #OPENING_TOOLS}, in call order
-     * @param outcomes the outcomes of those calls; a call without one did not finish and is left out
+     * @param outcomes the outcomes of those calls, paired with a call by its id and tool
+     * @param cited whether a message of the answer links an observation, a problem or feedback
+     * @param askedFromPage whether the person asked from a page of the app
      */
-    static ConversationAnswerUseDTO of(boolean recorded, List<ToolUse> uses, List<Outcome> outcomes) {
-        if (!recorded) return new ConversationAnswerUseDTO(false, List.of(), List.of());
+    static ConversationAnswerUseDTO of(
+            boolean recorded, List<ToolUse> uses, List<Outcome> outcomes, boolean cited, boolean askedFromPage) {
+        if (!recorded) return ConversationAnswerUseDTO.unrecorded(cited, askedFromPage);
         Map<String, Boolean> failed = new LinkedHashMap<>();
-        for (Outcome outcome : outcomes) failed.put(outcome.callId(), outcome.error());
-        List<String> repositories = uses.stream()
-                .filter(use -> use.tool().equals("load_context"))
-                .map(use -> repository(use.path()))
-                .flatMap(Optional::stream)
-                .toList();
+        for (Outcome outcome : outcomes) failed.put(outcome.callId() + ":" + outcome.tool(), outcome.error());
         Sources read = new Sources();
         Sources couldNot = new Sources();
         for (ToolUse use : uses) {
-            Boolean error = failed.get(use.callId());
-            if (error == null) continue;
-            Sources into = error ? couldNot : read;
+            Boolean error = failed.get(use.callId() + ":" + use.tool());
+            Sources into = error == null || error ? couldNot : read;
             switch (use.tool()) {
-                case "load_context" ->
-                    repository(use.path()).ifPresent(repository -> into.add(Kind.REPOSITORY, null, repository));
-                case "read" ->
-                    path(use.path()).ifPresent(path -> {
-                        if (path.startsWith(DOCUMENTS)) {
-                            ContextDocument.ofFile(path.substring(DOCUMENTS.length()))
-                                    .ifPresent(document -> into.add(Kind.CONTEXT_DOCUMENT, document, null));
-                        } else {
-                            into.add(Kind.REPOSITORY_FILES, null, owner(path, repositories));
-                        }
-                    });
-                case "bash" -> into.add(Kind.CONTEXT_SEARCH, null, null);
-                case "search_conversation" -> into.add(Kind.CONVERSATION_SEARCH, null, null);
+                case "load_context" -> into.add(Kind.REPOSITORY, null, repository(use.path()));
+                case "read" -> {
+                    String path = path(use.path());
+                    if (path.startsWith(DOCUMENTS)) {
+                        into.add(
+                                Kind.CONTEXT_DOCUMENT,
+                                ContextDocument.ofFile(path.substring(DOCUMENTS.length()))
+                                        .orElse(null),
+                                path);
+                    } else {
+                        into.add(Kind.FILES, null, path);
+                    }
+                }
+                case "bash" -> into.add(Kind.COMMAND, null, use.callId());
+                case "search_conversation" -> into.add(Kind.CONVERSATION_SEARCH, null, use.callId());
                 default -> {}
             }
         }
-        return new ConversationAnswerUseDTO(true, read.list(), couldNot.list());
+        return new ConversationAnswerUseDTO(true, read.list(), couldNot.list(), cited, askedFromPage);
     }
 
-    /** The repository that a {@code load_context} call named, without its {@code @ref}. */
-    private static Optional<String> repository(@Nullable String argument) {
+    /** The repository that a {@code load_context} call named, without its {@code @ref}, only to count it once. */
+    private static String repository(@Nullable String argument) {
         String path = argument == null ? "" : argument.strip();
         int at = path.indexOf('@');
-        String repository = at < 0 ? path : path.substring(0, at);
-        repository = trimSlashes(repository.startsWith(ROOT) ? repository.substring(ROOT.length()) : repository);
-        return repository.isEmpty() ? Optional.empty() : Optional.of(repository);
+        return trimSlashes(path(at < 0 ? path : path.substring(0, at)));
     }
 
-    /** A {@code read} call's path, relative to the working directory. */
-    private static Optional<String> path(@Nullable String argument) {
+    /** A call's path, relative to the working directory, only to count it once. */
+    private static String path(@Nullable String argument) {
         String path = argument == null ? "" : argument.strip();
         if (path.startsWith(ROOT)) path = path.substring(ROOT.length());
         while (path.startsWith("./")) path = path.substring(2);
-        return path.isEmpty() ? Optional.empty() : Optional.of(path);
-    }
-
-    /** The loaded repository that holds a file, or none when the file is in no loaded repository. */
-    private static @Nullable String owner(String path, List<String> repositories) {
-        return repositories.stream()
-                .filter(repository -> path.startsWith(repository + "/"))
-                .findFirst()
-                .orElse(null);
+        return path;
     }
 
     private static String trimSlashes(String text) {
@@ -108,21 +98,23 @@ final class ConversationAnswerUses {
         return trimmed;
     }
 
-    /** Sources in the order of their first use, each counted once, with the files and searches counted. */
+    /**
+     * Sources in the order of their first use. A document counts once; repositories, files, commands and searches count
+     * once for each distinct key, so two reads of one file are one file.
+     */
     private static final class Sources {
-        private final Map<String, ConversationUsedSourceDTO> byKey = new LinkedHashMap<>();
+        private final Map<String, Set<String>> keys = new LinkedHashMap<>();
+        private final Map<String, ConversationUsedSourceDTO> byGroup = new LinkedHashMap<>();
 
-        void add(Kind kind, @Nullable ContextDocument document, @Nullable String repository) {
-            String key = kind + ":" + document + ":" + repository;
-            ConversationUsedSourceDTO known = byKey.get(key);
-            boolean counted =
-                    kind == Kind.REPOSITORY_FILES || kind == Kind.CONTEXT_SEARCH || kind == Kind.CONVERSATION_SEARCH;
-            int count = known == null ? 1 : counted ? known.count() + 1 : known.count();
-            byKey.put(key, new ConversationUsedSourceDTO(kind, document, repository, count));
+        void add(Kind kind, @Nullable ContextDocument document, String key) {
+            String group = kind == Kind.CONTEXT_DOCUMENT ? kind + ":" + document : kind.name();
+            Set<String> seen = keys.computeIfAbsent(group, ignored -> new LinkedHashSet<>());
+            seen.add(kind == Kind.CONTEXT_DOCUMENT && document != null ? "" : key);
+            byGroup.put(group, new ConversationUsedSourceDTO(kind, document, seen.size()));
         }
 
         List<ConversationUsedSourceDTO> list() {
-            return new ArrayList<>(byKey.values());
+            return new ArrayList<>(byGroup.values());
         }
     }
 }
