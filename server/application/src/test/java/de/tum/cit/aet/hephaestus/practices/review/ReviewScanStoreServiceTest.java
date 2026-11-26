@@ -54,10 +54,10 @@ class ReviewScanStoreServiceTest extends BaseUnitTest {
                 mock(ResultRepository.class),
                 mock(ItemIndexService.class),
                 mock(ProductItemRepository.class),
-                json,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 mock(ReviewSnapshotQuery.class),
-                mock(ReviewRuntimeQuery.class));
+                mock(ReviewRuntimeQuery.class),
+                new ReviewItemCustody(mock(ReviewItemCopiedIdentityRepository.class), json));
     }
 
     private ReviewItem member(long id) {

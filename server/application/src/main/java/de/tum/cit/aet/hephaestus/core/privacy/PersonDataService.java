@@ -493,7 +493,10 @@ public class PersonDataService {
     }
 
     private List<PersonDataContributor.ExternalDelivery> deliveries(Map<String, PersonDataSelection> selected) {
+        // A preview that an earlier release made has no selection for a store added since. It still opens, and its
+        // erasure is refused because its stores differ from the inventory.
         return registry.stores().stream()
+                .filter(s -> selected.containsKey(s.store()))
                 .flatMap(s -> s.externalDeliveries(Objects.requireNonNull(selected.get(s.store()))).stream())
                 .distinct()
                 .toList();

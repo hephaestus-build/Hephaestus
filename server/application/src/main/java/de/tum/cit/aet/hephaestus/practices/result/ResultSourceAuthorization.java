@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
@@ -42,7 +43,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @ConditionalOnServerRole
@@ -52,7 +52,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     private final ReviewItemRepository assignments;
     private final HistoryCustodyQuery custody;
     private final ResultRepository results;
-    private final JsonMapper json;
+    private final ReviewItemCustody custodies;
     private final ClasspathSourceCatalogRegistry sources;
     private final PersonProcessingSuppression suppression;
     private final PersonIdentityResolver people;
@@ -260,6 +260,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         private final Map<ReviewItem.Id, ReviewItem> producers = new HashMap<>();
         private final Set<UUID> prefetchedResults = new HashSet<>();
         private final Map<UUID, List<ReviewItem>> retained = new HashMap<>();
+        private final Map<ReviewItem.Id, Optional<HistoryCustody>> storedCustody = new HashMap<>();
         private final Map<UUID, List<Problem>> children = new HashMap<>();
         // Registered by prefetchChecks and read in one batch at the first check that asks for one of them, so a read
         // whose checks never reach an item or a job reads none.
@@ -289,13 +290,15 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                     .filter(prefetchedResults::add)
                     .toList();
             for (var chunk : chunks(ids)) {
-                for (var m : assignments.findByWorkspaceIdAndResultIdInOrderByReviewIdAscPracticeIdAscItemIdAsc(
-                        workspaceId, chunk)) {
+                var members = assignments.findByWorkspaceIdAndResultIdInOrderByReviewIdAscPracticeIdAscItemIdAsc(
+                        workspaceId, chunk);
+                for (var m : members) {
                     var resultId = m.getResultId();
                     if (resultId != null)
                         retained.computeIfAbsent(resultId, ignored -> new ArrayList<>())
                                 .add(m);
                 }
+                readCustody(workspaceId, members);
                 // Every row may reach its problems: a processing read checks the source kinds they cite at any
                 // evidence version.
                 problems.findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(workspaceId, chunk)
@@ -372,14 +375,25 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         }
 
         List<HistoryCustody> retainedCustody(ResultFacts result) {
-            return retained(result).stream()
-                    .map(m -> m.getDetail())
-                    .filter(Objects::nonNull)
-                    .map(detail -> detail.path("custody"))
-                    .filter(node -> node.isObject())
-                    .map(node -> json.convertValue(node, HistoryCustody.class))
+            var members = retained(result);
+            readCustody(
+                    result.workspaceId(),
+                    members.stream()
+                            .filter(m -> !storedCustody.containsKey(ReviewItemCustody.id(m)))
+                            .toList());
+            return members.stream()
+                    .map(m -> storedCustody.get(ReviewItemCustody.id(m)))
+                    .flatMap(Optional::stream)
                     .distinct()
                     .toList();
+        }
+
+        /** Reads the custody of these members in one statement; a member without one records an empty value. */
+        private void readCustody(long workspaceId, List<ReviewItem> members) {
+            if (members.isEmpty()) return;
+            var read = custodies.custodies(workspaceId, members);
+            for (var m : members)
+                storedCustody.put(ReviewItemCustody.id(m), Optional.ofNullable(read.get(ReviewItemCustody.id(m))));
         }
 
         Optional<ReviewItem> producer(ResultFacts result) {

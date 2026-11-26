@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795629966150-0" author="hephaestus">
+        <comment>Stop the upgrade while a person data erasure is admitted and not complete. The previous release froze its selection while copied identities were part of the review item detail, so this release does not resume it. Complete each one on the previous release, then upgrade. Every erasure after the upgrade is selected by this release.</comment>
+        <sql splitStatements="false"><![CDATA[DO $$
+DECLARE pending text;
+BEGIN
+  SELECT string_agg(id::text || ' (' || state || ')', ', ' ORDER BY created_at, id) INTO pending
+  FROM public.person_data_request WHERE state IN ('ERASING', 'FAILED');
+  IF pending IS NOT NULL THEN
+    RAISE EXCEPTION E'The upgrade stopped before copied identities leave the review item detail. These person data erasures are admitted and not complete: %\nKeep the new release stopped and follow "Recover when the migration stops on an erasure" in the migration guide entry "Stop every role before copied identities leave the review item detail": https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md', pending;
+  END IF;
+END $$]]></sql>
+        <!-- A check changes nothing, so its rollback has nothing to reverse. -->
+        <rollback><sql>SELECT 1</sql></rollback>
+    </changeSet>
+    <changeSet id="1795629966150-1" author="hephaestus">
+        <createTable tableName="review_item_copied_identity">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_item_copied_identityPK"/>
+            </column>
+            <column name="item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="practice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_origin" type="VARCHAR(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_type" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="review_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_id" type="VARCHAR(255)"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795629966150-2" author="hephaestus">
+        <createIndex indexName="idx_review_item_copied_identity_member" tableName="review_item_copied_identity">
+            <column name="review_id"/>
+            <column name="practice_id"/>
+            <column name="item_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795629966150-3" author="hephaestus">
+        <createIndex indexName="idx_review_item_copied_identity_person" tableName="review_item_copied_identity">
+            <column name="provider_type"/>
+            <column name="provider_origin"/>
+            <column name="subject"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795629966150-4" author="hephaestus">
+        <comment>Each copied identity belongs to its review item and goes with it. Only the four providers that can copy a person's words appear.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.review_item_copied_identity
+    ADD CONSTRAINT sfk_review_item_copied_identity_member FOREIGN KEY (review_id, practice_id, item_id, workspace_id)
+        REFERENCES public.review_item(review_id, practice_id, item_id, workspace_id) ON DELETE CASCADE,
+    ADD CONSTRAINT ck_review_item_copied_identity_provider
+        CHECK (provider_type IN ('GITHUB', 'GITLAB', 'SLACK', 'OUTLINE'));
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.review_item_copied_identity DROP CONSTRAINT ck_review_item_copied_identity_provider, DROP CONSTRAINT sfk_review_item_copied_identity_member</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795629966150-5" author="hephaestus">
+        <comment>Move each review item's distinct copied identities out of its detail into their rows, in one transaction. EXCEPT drops a duplicate and a copy that is already a row, so a second run adds nothing. The upgrade stops every role, so no server reads the detail list any more.</comment>
+        <sql><![CDATA[
+INSERT INTO public.review_item_copied_identity
+    (workspace_id, review_id, practice_id, item_id, provider_type, provider_origin, subject, team_id)
+SELECT m.workspace_id, m.review_id, m.practice_id, m.item_id,
+       copy->>'providerType', copy->>'providerOrigin', copy->>'subject', copy->>'teamId'
+FROM public.review_item m
+CROSS JOIN LATERAL jsonb_array_elements(m.detail->'custody'->'copiedIdentities') copy
+WHERE jsonb_typeof(m.detail->'custody'->'copiedIdentities') = 'array'
+EXCEPT
+SELECT workspace_id, review_id, practice_id, item_id, provider_type, provider_origin, subject, team_id
+FROM public.review_item_copied_identity;
+UPDATE public.review_item SET detail = detail #- '{custody,copiedIdentities}'
+WHERE detail->'custody'->'copiedIdentities' IS NOT NULL;
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup. A capture that this release recorded can copy more people than the review item detail of the previous release holds.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

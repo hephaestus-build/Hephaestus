@@ -11,6 +11,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.MonitoredRepositoryScope;
+import de.tum.cit.aet.hephaestus.practices.adapter.CopiedIdentityMatch;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -66,6 +67,12 @@ class NativeIdProviderBindingArchTest extends HephaestusArchitectureTest {
     private static final String MONITOR_SCOPE = normalized(MonitoredRepositoryScope.NATIVE_RTM_R);
     private static final boolean REVIEWED_MONITOR_SCOPE =
             fingerprint(MONITOR_SCOPE).equals("8c2d126e277c8fdb932ac020c6f75c72e8ea33bb94bdd1bbea99088ca4bfb36c");
+
+    // The one predicate that compares a copied identity's subject binds its provider by type and origin, which
+    // identity_provider holds unique together. Pin its text so a change to it needs a review of this test.
+    private static final String COPIED_IDENTITY = normalized(CopiedIdentityMatch.PERSON);
+    private static final boolean REVIEWED_COPIED_IDENTITY = fingerprint(CopiedIdentityMatch.PERSON)
+            .equals("db29d77dff2751abdf8f70804e13c02c6605966663916fe3fb478f779feb24e3");
 
     private record Violation(Path file, long line, String predicate, String statement) {
 
@@ -137,6 +144,25 @@ class NativeIdProviderBindingArchTest extends HephaestusArchitectureTest {
         assertThat(violations).isEmpty();
 
         scan(Path.of("fixture"), 1, query.replace("monitor_provider.id = r.provider_id", "TRUE"), violations);
+        assertThat(violations).hasSize(1);
+    }
+
+    @Test
+    void shouldRecognizeTheSharedCopiedIdentityMatchOnlyWithItsProviderBinding() {
+        assertThat(REVIEWED_COPIED_IDENTITY)
+                .as("the pinned copied identity match")
+                .isTrue();
+        List<Violation> violations = new ArrayList<>();
+        String query = "SELECT copy.id FROM review_item_copied_identity copy"
+                + " JOIN jsonb_array_elements(CAST(:copies AS jsonb)) person ON " + CopiedIdentityMatch.PERSON;
+        scan(Path.of("fixture"), 1, query, violations);
+        assertThat(violations).isEmpty();
+
+        scan(
+                Path.of("fixture"),
+                1,
+                query.replace("copy.provider_origin = person->>'providerOrigin' AND ", ""),
+                violations);
         assertThat(violations).hasSize(1);
     }
 
@@ -268,6 +294,7 @@ class NativeIdProviderBindingArchTest extends HephaestusArchitectureTest {
         if (!NATIVE_ID.matcher(raw).find()) return;
         String sql = normalized(raw);
         String predicates = REVIEWED_MONITOR_SCOPE ? sql.replace(MONITOR_SCOPE, "(true)") : sql;
+        if (REVIEWED_COPIED_IDENTITY) predicates = predicates.replace(COPIED_IDENTITY, "(true)");
         var scopes = new ArrayDeque<Position>();
         scopes.push(new Position(new Scope(null, false), 0, null));
         var matches = new ArrayList<Match>();

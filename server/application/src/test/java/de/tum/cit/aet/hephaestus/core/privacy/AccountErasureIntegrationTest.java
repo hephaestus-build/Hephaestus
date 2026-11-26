@@ -1497,8 +1497,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
         Map<String, Long> expectedReceipts = new TreeMap<>(counts);
         // Retained controls report no removal. Earlier owner steps already cleared the decision and resolver, and
-        // the copies' erasure already deleted the recorded attempt inputs.
+        // the copies' erasure already deleted the recorded attempt inputs. A copied identity goes last, and the erasure
+        // of its review item already removed it.
         for (String store : List.of(
+                "review_item_copied_identity",
                 "identity_restriction",
                 "privacy_journal",
                 "git_repository_history",
