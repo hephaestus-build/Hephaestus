@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
@@ -22,6 +23,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -288,11 +291,32 @@ public class AgentSandboxes {
      */
     public Optional<AgentRunLease> lease(
             LiveSandbox sandbox, Set<AgentRunKind> kinds, Runnable beforeWrite, Predicate<AgentRunLease> claimed) {
+        return lease(sandbox, kinds, null, beforeWrite, claimed);
+    }
+
+    /** A gateway pull must still have time for its reply when the claim commits. */
+    public Optional<AgentRunLease> lease(
+            LiveSandbox sandbox,
+            Set<AgentRunKind> kinds,
+            @Nullable LongSupplier remainingNanos,
+            Runnable beforeWrite,
+            Predicate<AgentRunLease> claimed) {
         if (kinds.isEmpty()) return Optional.empty();
-        boolean[] retired = {false};
-        var leased = leaseInTransaction(sandbox, kinds, beforeWrite, claimed, retired);
-        if (retired[0]) deleteRevoked(sandbox);
-        return leased;
+        var result = Objects.requireNonNull(transactions.execute(status -> {
+            if (remainingNanos != null) {
+                long millis = TimeUnit.NANOSECONDS.toMillis(remainingNanos.getAsLong());
+                if (millis <= 0) return Claim.EMPTY;
+                sandboxes.limitClaimTransaction(millis);
+            }
+            Claim claim = leaseLocked(sandbox, kinds, beforeWrite, claimed);
+            if (remainingNanos != null && remainingNanos.getAsLong() <= 0) {
+                status.setRollbackOnly();
+                return Claim.EMPTY;
+            }
+            return claim;
+        }));
+        if (result.retired()) deleteRevoked(sandbox);
+        return Optional.ofNullable(result.lease());
     }
 
     /** Whether the sandbox still serves: a revoked or deleted one answers no more runs. */
@@ -303,54 +327,52 @@ public class AgentSandboxes {
                 .isPresent();
     }
 
-    private Optional<AgentRunLease> leaseInTransaction(
-            LiveSandbox sandbox,
-            Set<AgentRunKind> kinds,
-            Runnable beforeWrite,
-            Predicate<AgentRunLease> claimed,
-            boolean[] retired) {
-        return Objects.requireNonNull(transactions.execute(status -> {
-            beforeWrite.run();
-            if (sandboxes
-                    .tryLockForClaim(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
-                    .isEmpty()) return Optional.<AgentRunLease>empty();
-            var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
-            if (lease.isEmpty()) return lease;
-            var leased = lease.get();
-            var previous = MDC.getCopyOfContextMap();
-            try {
-                MDC.put(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName());
-                MDC.put(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey());
-                MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
-                MDC.put(StructuredLogKeys.RUN_ID, leased.runId().toString());
-                MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(leased.epoch()));
-                MDC.remove(StructuredLogKeys.JOB_ID);
-                MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
-                String reviewId = sandbox.reviewId();
-                if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
-                else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
-                if (!claimed.test(leased)) {
-                    if (runs.isHeld(new AgentRunRef(leased.runId(), sandbox.workspaceId()))) {
-                        revoke(sandbox, Revocation.RUN_HELD);
-                        retired[0] = true;
-                    }
-                    return Optional.<AgentRunLease>empty();
+    private record Claim(@Nullable AgentRunLease lease, boolean retired) {
+        private static final Claim EMPTY = new Claim(null, false);
+    }
+
+    private Claim leaseLocked(
+            LiveSandbox sandbox, Set<AgentRunKind> kinds, Runnable beforeWrite, Predicate<AgentRunLease> claimed) {
+        beforeWrite.run();
+        if (sandboxes
+                .tryLockForClaim(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
+                .isEmpty()) return Claim.EMPTY;
+        var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
+        if (lease.isEmpty()) return Claim.EMPTY;
+        var leased = lease.get();
+        var previous = MDC.getCopyOfContextMap();
+        try {
+            MDC.put(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName());
+            MDC.put(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey());
+            MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(sandbox.workspaceId()));
+            MDC.put(StructuredLogKeys.RUN_ID, leased.runId().toString());
+            MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(leased.epoch()));
+            MDC.remove(StructuredLogKeys.JOB_ID);
+            MDC.remove(StructuredLogKeys.JOB_ATTEMPT);
+            String reviewId = sandbox.reviewId();
+            if (reviewId == null) MDC.remove(StructuredLogKeys.REVIEW_ID);
+            else MDC.put(StructuredLogKeys.REVIEW_ID, reviewId);
+            if (!claimed.test(leased)) {
+                if (runs.isHeld(new AgentRunRef(leased.runId(), sandbox.workspaceId()))) {
+                    revoke(sandbox, Revocation.RUN_HELD);
+                    return new Claim(null, true);
                 }
-                sandboxes.used(sandbox.id(), sandbox.workspaceId());
-                log.atInfo()
-                        .addKeyValue("event.name", "agent.sandbox.leased")
-                        .addKeyValue(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName())
-                        .addKeyValue(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey())
-                        .addKeyValue(StructuredLogKeys.WORKSPACE_ID, sandbox.workspaceId())
-                        .addKeyValue(StructuredLogKeys.RUN_ID, leased.runId())
-                        .addKeyValue(StructuredLogKeys.RUN_EPOCH, leased.epoch())
-                        .log("Sandbox leased its subject's next run");
-                return lease;
-            } finally {
-                if (previous == null) MDC.clear();
-                else MDC.setContextMap(previous);
+                return Claim.EMPTY;
             }
-        }));
+            sandboxes.used(sandbox.id(), sandbox.workspaceId());
+            TransactionCallbacks.afterCommit(() -> log.atInfo()
+                    .addKeyValue("event.name", "agent.sandbox.leased")
+                    .addKeyValue(StructuredLogKeys.SANDBOX_NAME, sandbox.claimName())
+                    .addKeyValue(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey())
+                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, sandbox.workspaceId())
+                    .addKeyValue(StructuredLogKeys.RUN_ID, leased.runId())
+                    .addKeyValue(StructuredLogKeys.RUN_EPOCH, leased.epoch())
+                    .log("Sandbox leased its subject's next run"));
+            return new Claim(leased, false);
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
     }
 
     /** Frees one physical conversation slot for queued work, oldest idle first; failed deletion stays owned. */
@@ -398,16 +420,18 @@ public class AgentSandboxes {
     public void revoke(LiveSandbox sandbox, Revocation reason) {
         if (!TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("A sandbox is revoked in the transaction of the change that revokes it");
-        sandboxes.releaseSandbox(sandbox.id(), sandbox.workspaceId()).ifPresent(row -> {
-            meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
-                    .increment();
-            SandboxEvents.event(
-                            reason == Revocation.UNISOLATED ? log.atWarn() : log.atInfo(),
-                            "agent.sandbox.taken_back",
-                            row)
-                    .addKeyValue("sandbox.reason", reason.value())
-                    .log("Sandbox revoked; its claim is deleted next");
-        });
+        sandboxes
+                .releaseSandbox(sandbox.id(), sandbox.workspaceId())
+                .ifPresent(row -> TransactionCallbacks.afterCommit(() -> {
+                    meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
+                            .increment();
+                    SandboxEvents.event(
+                                    reason == Revocation.UNISOLATED ? log.atWarn() : log.atInfo(),
+                                    "agent.sandbox.taken_back",
+                                    row)
+                            .addKeyValue("sandbox.reason", reason.value())
+                            .log("Sandbox revoked; its claim is deleted next");
+                }));
     }
 
     /** Frees a revoked sandbox's slot after commit. The reaper retries any deletion the claim API fails. */
