@@ -90,9 +90,7 @@ class ConversationEventEmitter extends SseEmitter {
             failure.initCause(interrupted);
             throw abort(write, failure);
         } catch (ExecutionException failed) {
-            if (failed.getCause() instanceof RuntimeException failure) throw failure;
-            if (failed.getCause() instanceof IOException failure) throw failure;
-            throw new IOException(failed.getCause());
+            throw new IOException("The live stream write failed", failed);
         }
     }
 
