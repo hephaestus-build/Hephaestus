@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,6 +62,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -122,6 +124,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     JdbcTemplate jdbc;
 
     @Autowired
+    SqlStatementCounter statements;
+
+    @Autowired
     ResultMarkService marks;
 
     @Autowired
@@ -173,6 +178,39 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         scenario = data.scenario();
         scenarioAccountId = Objects.requireNonNull(scenario.account().getId());
         decide(purpose -> true);
+    }
+
+    @Test
+    void shouldScopeResultViewReviewReadsToTheWorkspace() {
+        var own = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        var foreign = data.result(data.scenario(), ResultOutcome.NOT_MET, Instant.now());
+        long workspaceId = own.getWorkspaceId();
+        var ownFacts = own.facts();
+        assertThat(resultViews
+                        .viewsOnDemand(workspaceId, List.of(ownFacts))
+                        .getFirst()
+                        .review()
+                        .getId())
+                .isEqualTo(own.getReviewId());
+
+        // The result's foreign key prevents this mismatch in stored rows.
+        var wrongReview =
+                resultBuilder(own).reviewId(foreign.getReviewId()).build().facts();
+        var mixedReviews = statements.measure(() -> assertThatThrownBy(
+                        () -> resultViews.viewsOnDemand(workspaceId, List.of(ownFacts, wrongReview)))
+                .isInstanceOf(NullPointerException.class));
+        assertThat(mixedReviews.sql())
+                .filteredOn(sql -> sql.contains(" from review "))
+                .singleElement()
+                .satisfies(sql -> assertThat(sql)
+                        .containsPattern("\\bwhere\\b.*\\bworkspace_id\\s*=\\s*\\?")
+                        .containsPattern("\\bwhere\\b.*\\bid\\s+in\\s*\\("));
+
+        var mixedWorkspaces = statements.measure(() -> assertThatThrownBy(
+                        () -> resultViews.viewsOnDemand(workspaceId, List.of(ownFacts, foreign.facts())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Results do not belong to the workspace"));
+        assertThat(mixedWorkspaces.sql()).noneMatch(sql -> sql.contains(" from review "));
     }
 
     /** The authorization answer of every row a history read checks: complete custody, permitted for some purposes. */
