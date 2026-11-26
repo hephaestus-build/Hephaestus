@@ -92,7 +92,13 @@ export const ITEM_EVENT_REASON_SENTENCES = {
 } satisfies Record<string, string>;
 
 /** Why a review did not start, or that the reason is one this build does not know. */
-export function itemEventReasonSentence(reason: ItemEventReason): string {
+export function itemEventReasonSentence(
+	reason: ItemEventReason,
+	context: "request" | "event" = "request",
+): string {
+	if (reason === "CONCURRENT_DUPLICATE" && context === "event") {
+		return "An earlier event of the same kind already recorded this version of the work.";
+	}
 	return definitionFor(
 		ITEM_EVENT_REASON_SENTENCES,
 		reason,
