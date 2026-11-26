@@ -51,6 +51,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("AgentRuntimeOffIntegrationTest", "agent-off-e2e"),
             assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
+            assignment("core.privacy.PersonOutlineCopiesIntegrationTest", "outline-enabled"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
             assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
             assignment(
@@ -375,6 +376,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.auth.mcp.McpAuthorizationConformanceIntegrationTest",
             "core.auth.mcp.McpPasskeyConsentIntegrationTest",
             "core.auth.mcp.McpTokenRestRefusalIntegrationTest",
+            "core.privacy.PersonOutlineCopiesIntegrationTest",
             "practices.mcp.McpPracticeToolsIntegrationTest",
             "practices.mcp.McpWriteToolsIntegrationTest",
             "integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest",

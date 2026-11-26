@@ -346,6 +346,27 @@ void test("the driver pulls again after the gateway failed to answer next", asyn
 	assert.deepEqual(ends(calls), [JSON.stringify({ outcome: "completed" })]);
 });
 
+void test("a next answered 410 stops the driver, which asks no more", async () => {
+	let nexts = 0;
+	const fetch: typeof globalThis.fetch = async (input) => {
+		assert.ok(url(input).endsWith("/internal/agent/next"));
+		nexts += 1;
+		return new Response(null, { status: 410 });
+	};
+	// No abort: only the gateway's answer ends the loop.
+	await drive({
+		gatewayUrl: GATEWAY,
+		token: "sandbox-token",
+		kinds: {},
+		signal: new AbortController().signal,
+		fetch,
+		log: quiet,
+		isolation: ISOLATED,
+	});
+
+	assert.equal(nexts, 1);
+});
+
 /**
  * The pauses between three `next` calls that each answer no run after `holdMs`, as a gateway holds a waiting `next`,
  * in milliseconds from one answer to the following call.

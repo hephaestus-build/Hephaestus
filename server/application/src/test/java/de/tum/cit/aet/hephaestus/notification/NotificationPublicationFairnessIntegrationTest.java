@@ -76,7 +76,8 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
                         "FAILED"));
             }
             jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    "UPDATE event_publication SET publication_date = ?, last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     source);
             probe.failing(false);
@@ -103,7 +104,8 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
         List<UUID> older = new ArrayList<>();
         try {
             jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    "UPDATE event_publication SET publication_date = ?, last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     newest);
             for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
@@ -124,7 +126,8 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
             }
             assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
                     .extracting(TargetEventPublication::getIdentifier)
-                    .containsAll(older)
+                    .as("a publication just retried waits for its backoff")
+                    .doesNotContainAnyElementsOf(older)
                     .contains(newest);
             var criteria = FailedCriteria.ALL
                     .withPublicationsPublishedBefore(Instant.now().minus(Duration.ofMinutes(5)))
@@ -151,7 +154,8 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
         List<UUID> other = new ArrayList<>();
         try {
             jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    "UPDATE event_publication SET publication_date = ?, last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.parse("2001-01-01T00:00:00Z")),
                     Timestamp.from(Instant.parse("2001-01-01T00:00:00Z")),
                     source);
             for (String status : List.of("PUBLISHED", "PROCESSING", "RESUBMITTED", "COMPLETED", "FAILED")) {
@@ -167,7 +171,9 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
                     .containsExactly(source);
             assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
                     .extracting(TargetEventPublication::getIdentifier)
-                    .contains(source, other.getLast());
+                    .as("without a minimum age, the backoff still holds a publication from the future")
+                    .contains(source)
+                    .doesNotContain(other.getLast());
         } finally {
             for (UUID id : other) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
             jdbc.update("DELETE FROM event_publication WHERE id = ?", source);
@@ -181,7 +187,8 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
         List<UUID> exhausted = new ArrayList<>();
         try {
             jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
+                    "UPDATE event_publication SET publication_date = ?, last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
                     next);
             for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
@@ -217,7 +224,53 @@ class NotificationPublicationFairnessIntegrationTest extends BaseIntegrationTest
         }
     }
 
-    /** Publishes a probe while the probe fails, and returns its failed publication. */
+    @Test
+    void shouldSpendOneAttemptPerBackoffWhenTwoServersRunTheirPassesBackToBack() {
+        String key = "two-servers-" + UUID.randomUUID();
+        UUID failed = failedPublication(key);
+        try {
+            jdbc.update(
+                    "UPDATE event_publication SET publication_date = ?, last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
+                    failed);
+
+            // One server's pass, then the other's a moment later: both find the publication older than the minimum age.
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+
+            assertThat(attempts(failed))
+                    .as("the second pass waits for the backoff of the first")
+                    .isEqualTo(2);
+
+            // The backoff after the second attempt is ten minutes, counted from that attempt.
+            jdbc.update(
+                    "UPDATE event_publication SET last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(9))),
+                    failed);
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+            assertThat(attempts(failed)).isEqualTo(2);
+
+            jdbc.update(
+                    "UPDATE event_publication SET last_resubmission_date = ? WHERE id = ?",
+                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(11))),
+                    failed);
+            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
+            assertThat(attempts(failed)).isEqualTo(3);
+        } finally {
+            jdbc.update("DELETE FROM event_publication WHERE id = ?", failed);
+        }
+    }
+
+    private int attempts(UUID publication) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT completion_attempts FROM event_publication WHERE id = ?", Integer.class, publication));
+    }
+
+    /**
+     * Publishes a probe while the probe fails, and returns its failed publication. Modulith sets the last resubmission
+     * of a first failure to its publication time, so a test that ages a publication ages both.
+     */
     private UUID failedPublication(String key) {
         probe.failing(true);
         new TransactionTemplate(transactionManager)

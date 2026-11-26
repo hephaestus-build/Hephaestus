@@ -42,7 +42,7 @@ This ADR states the cutover at 1.0 as rules, and it holds the one list of breaki
    Enforced by: `LiquibaseBaselineIntegrationTest#shouldRefuseWithoutChangesWhenADatabaseIsOlderThanRc1` and `#shouldRefuseAFalseIdentityOfTheLastRc1ChangeSet`.
 3. **A database on 1.0.0-rc.1 joins the baseline only with the same schema.** `BaselineSynchronization` compares the schema fingerprint with a new install of rc.1. If they match, it records the baseline without DDL. If they differ, or a later build ran, it refuses and writes nothing.
    Enforced by: `LiquibaseBaselineIntegrationTest` (`shouldEndInTheSameSchemaWhenADatabaseOnRc1Upgrades`, `shouldRefuseWithoutChangesWhenASchemaOnRc1Drifted`, `shouldRefuseWithoutChangesWhenABuildLaterThanRc1RanOnTheDatabase`) and `SchemaFingerprintDatabaseTest#shouldPinTheSchemaThatTheBaselineBuilds`.
-4. **Work in flight resumes from its row.** The lease reaper requeues a run that a stopped role held ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 3). A Heph turn is never answered late without the developer asking (F-15).
+4. **Work in flight resumes from its row.** The lease reaper requeues a run that a stopped role held ([ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 3). A Hephaestus turn is never answered late without the developer asking (F-15).
    1.0 target: on main, a turn whose holder stops goes back to the queue once (`TurnRunKind`, [#4072](https://github.com/hephaestus-build/Hephaestus/pull/4072)), against this rule. No pull request yet ends the stopped turn visibly.
 5. **Released history never changes.** `master.xml` holds one include of the baseline and one `includeAll` of `next/`. A future baseline needs a major release, an automated synchronization and an ADR.
    Enforced by: `scripts/check-changelog-immutability.ts` (Security workflow, step "Changelog immutability guard").
@@ -149,7 +149,7 @@ Each line links the section of ADR 0070 that priced the option.
   - F-10: `NATS_ENABLED` as a setting.
   - F-13: `GITLAB_WORKSPACE_CREATION` as a permanent switch.
   - F-14: keep the public operations that no client calls.
-  - F-15: run an interrupted Heph turn again without the developer.
+  - F-15: run an interrupted Hephaestus turn again without the developer.
   - F-16: a rolling upgrade that skips a 1.x release.
 
 ## Update — 2026-11-23: a maintenance barrier refuses new claims while the migration runs

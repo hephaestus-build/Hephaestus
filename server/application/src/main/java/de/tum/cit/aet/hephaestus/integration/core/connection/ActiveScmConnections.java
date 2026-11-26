@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ActiveScmConnections {
 
+    private static final List<IntegrationKind> SCM_KINDS = List.of(IntegrationKind.GITHUB, IntegrationKind.GITLAB);
+
     private final ConnectionRepository connections;
     private final CredentialReader credentials;
 
@@ -36,6 +38,14 @@ public class ActiveScmConnections {
         return active(workspaceId).map(Connection::getConfig);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isCurrent(long workspaceId, ActiveScm credential) {
+        return activeForRequests(workspaceId)
+                .filter(connection -> connection.getId() == credential.connectionId()
+                        && connection.getCredentialsGeneration() == credential.credentialsGeneration())
+                .isPresent();
+    }
+
     /**
      * The connection with its personal access token. Only a GitHub PAT or GitLab connection has its credential read:
      * an App connection stores installation identity that nothing runs on. An unreadable credential is a recorded
@@ -45,7 +55,7 @@ public class ActiveScmConnections {
             readOnly = true,
             noRollbackFor = {CredentialUnreadableException.class, MissingCredentialKeyException.class})
     public Optional<ActiveScm> withToken(long workspaceId) {
-        return active(workspaceId).map(connection -> {
+        return activeForRequests(workspaceId).map(connection -> {
             boolean token = connection.getConfig() instanceof ConnectionConfig.GitHubPatConfig
                     || connection.getConfig() instanceof ConnectionConfig.GitLabConfig;
             BearerToken bearer = token
@@ -54,13 +64,25 @@ public class ActiveScmConnections {
                             .flatMap(b -> b instanceof BearerToken read ? Optional.of(read) : Optional.empty())
                             .orElse(null)
                     : null;
-            return new ActiveScm(connection.getConfig(), bearer);
+            return new ActiveScm(
+                    connection.getId(),
+                    connection.getCredentialsGeneration(),
+                    connection.getKind(),
+                    connection.getConfig(),
+                    bearer);
         });
     }
 
+    private Optional<Connection> activeForRequests(long workspaceId) {
+        return oneActive(connections.findActiveForRequests(workspaceId, SCM_KINDS));
+    }
+
     private Optional<Connection> active(long workspaceId) {
-        List<Connection> active = connections.findByWorkspaceIdAndStateAndKindIn(
-                workspaceId, IntegrationState.ACTIVE, List.of(IntegrationKind.GITHUB, IntegrationKind.GITLAB));
+        return oneActive(
+                connections.findByWorkspaceIdAndStateAndKindIn(workspaceId, IntegrationState.ACTIVE, SCM_KINDS));
+    }
+
+    private static Optional<Connection> oneActive(List<Connection> active) {
         if (active.size() > 1) {
             throw new IllegalStateException(
                     "This workspace has active GitHub and GitLab connections, which Hephaestus does not support. Ask your instance operator to fix it.");
@@ -70,5 +92,9 @@ public class ActiveScmConnections {
 
     /** The configuration of the active SCM connection and its personal access token, if any. */
     public record ActiveScm(
-            ConnectionConfig config, @Nullable BearerToken bearer) {}
+            long connectionId,
+            long credentialsGeneration,
+            IntegrationKind kind,
+            ConnectionConfig config,
+            @Nullable BearerToken bearer) {}
 }

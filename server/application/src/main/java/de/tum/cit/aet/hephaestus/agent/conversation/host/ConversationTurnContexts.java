@@ -13,8 +13,9 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
@@ -25,6 +26,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,7 +52,7 @@ public class ConversationTurnContexts {
 
     private final ConversationContextPathBuilder paths;
     private final TurnSituation situations;
-    private final ConversationTurnService turns;
+    private final ConversationTurnContextStore turns;
     private final ConversationEntryService entries;
     private final ConversationService conversations;
     private final WorkspaceContextBuilder contextBuilder;
@@ -64,7 +66,7 @@ public class ConversationTurnContexts {
     public ConversationTurnContexts(
             ConversationContextPathBuilder paths,
             TurnSituation situations,
-            ConversationTurnService turns,
+            ConversationTurnContextStore turns,
             ConversationEntryService entries,
             ConversationService conversations,
             WorkspaceContextBuilder contextBuilder,
@@ -121,13 +123,15 @@ public class ConversationTurnContexts {
             String systemPrompt,
             String documents) {}
 
+    record PreparedContext(Context context, List<UUID> quotedEntries) {}
+
     /**
      * The turn's context: its path, situation, model and documents. Each part reads in a short transaction of its own.
      * Inside one read-write transaction, Hibernate checks every entity the build has loaded before each query, which
      * made a build of minutes, and its locks blocked the run's lease (docs/contributor/agent-runs.mdx § Locks and slow
      * work). So a caller in a transaction is refused.
      */
-    public Context context(TurnAttempt turn) {
+    PreparedContext context(TurnAttempt turn) {
         requireNoTransaction();
         ZoneId zone = zone(turn);
         ConversationContextPathBuilder.TurnContext path = paths.forTurn(turn.workspaceId(), turn.turnId(), zone);
@@ -137,10 +141,11 @@ public class ConversationTurnContexts {
                         new IllegalStateException("Conversation turn " + turn.turnId() + " has no admitted model"));
         Map<String, byte[]> built = build(turn, path.questionEntryId(), zone);
         String loadable = folder.situation(turn);
-        String situation = situations.render(turn, zone) + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
+        var rendered = situations.render(turn, zone);
+        String situation = rendered.text() + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
                 + ConversationTurnEvidence.receipt(mapper, built);
         var effort = admitted.reasoningEffort();
-        return new Context(
+        var context = new Context(
                 path.sessionId(),
                 path.entries(),
                 path.prompt(),
@@ -156,6 +161,7 @@ public class ConversationTurnContexts {
                 Base64.getEncoder()
                         .encodeToString(folder.documentsArchive(
                                 turn, prettyDocuments(built), ContextTimes.local(clock.instant(), zone))));
+        return new PreparedContext(context, rendered.quotedEntries());
     }
 
     private Map<String, byte[]> prettyDocuments(Map<String, byte[]> documents) {
@@ -257,8 +263,14 @@ public class ConversationTurnContexts {
 
     /** The turn's context documents, each time in them in the developer's zone ({@link ContextTimes}). */
     private Map<String, byte[]> build(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
+        var outlineSources = new LinkedHashSet<OutlinePersonCopyScope.Source>();
         Map<String, byte[]> built = contextBuilder.build(new ConversationContextRequest(
-                turn.workspaceId(), turn.accountId(), turn.conversationId(), questionEntryId));
+                turn.workspaceId(),
+                turn.accountId(),
+                turn.conversationId(),
+                questionEntryId,
+                (origin, team) -> outlineSources.add(new OutlinePersonCopyScope.Source(origin, team))));
+        turns.recordOutlineContext(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), outlineSources);
         Map<String, byte[]> local = new LinkedHashMap<>();
         built.forEach((key, bytes) -> local.put(key, local(bytes, zone)));
         return local;

@@ -2169,7 +2169,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         UUID publicationId = publications.getFirst();
                         // The staleness monitor marks this committed publication failed after its process stops.
                         jdbc.update(
-                                "UPDATE event_publication SET status='FAILED',publication_date=? WHERE id=?",
+                                "UPDATE event_publication SET status='FAILED',publication_date=?,last_resubmission_date=?"
+                                        + " WHERE id=?",
+                                Timestamp.from(Instant.EPOCH),
                                 Timestamp.from(Instant.EPOCH),
                                 publicationId);
                         failedPublications.resubmit(ResubmissionOptions.defaults()

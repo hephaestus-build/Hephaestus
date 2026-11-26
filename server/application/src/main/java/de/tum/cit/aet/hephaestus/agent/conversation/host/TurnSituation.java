@@ -49,11 +49,17 @@ public class TurnSituation {
     private final IntegrationManifestRegistry manifests;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
-    public String render(TurnAttempt turn, ZoneId zone) {
-        String situation = situations.render(turn.workspaceId(), turn.turnId(), zone);
+    @Transactional
+    public ConversationSituation.Rendered render(TurnAttempt turn, ZoneId zone) {
+        var rendered = situations.render(turn.workspaceId(), turn.turnId(), zone);
+        String situation = rendered.text();
         int close = situation.lastIndexOf(CLOSE);
-        return situation.substring(0, close) + identity(turn.accountId()) + calendar(zone) + situation.substring(close);
+        return new ConversationSituation.Rendered(
+                situation.substring(0, close)
+                        + identity(turn.accountId())
+                        + calendar(zone)
+                        + situation.substring(close),
+                rendered.quotedEntries());
     }
 
     private String identity(long accountId) {

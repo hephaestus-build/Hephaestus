@@ -59,6 +59,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
         @Nullable
         UUID getTurnId();
+
+        boolean getRedactionPending();
     }
 
     /** How many messages a conversation holds after a sequence number, and when the newest was written. */
@@ -373,20 +375,63 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             """)
     List<EntryPlace> findUnredactedPlaces(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * A turn can copy any message it could read. Until those dependencies are known, a removal withholds all earlier
+     * model output from replay. Developer messages and digest stimuli are source entries. Old admissions start at zero.
+     */
+    String MODEL_HISTORY = """
+            (e.kind IN ('USER', 'DIGEST')
+             OR COALESCE(CAST(t.admission ->> 'historyEpoch' AS bigint), 0) = scope.scope_epoch)
+            """;
+
+    String MODEL_HISTORY_JOINS = """
+            JOIN conversation scope ON scope.workspace_id = e.workspace_id AND scope.account_id = e.account_id
+                                   AND scope.parent_conversation_id IS NULL
+            LEFT JOIN conversation_turn t ON t.workspace_id = e.workspace_id AND t.id = e.turn_id
+            """;
+
     @Query(value = """
             SELECT e.id AS "id", e.conversation_id AS "conversationId", e.seq AS "seq", e.kind AS "kind",
                    e.turn_id AS "turnId",
                    CASE WHEN e.kind <> 'DIGEST' THEN e.payload ->> 'id' END AS "piId",
                    CASE WHEN e.kind = 'SUMMARY' THEN e.payload ->> 'firstKeptEntryId' END AS "firstKept",
-                   ((e.redacted_at IS NOT NULL AND e.kind NOT IN ('ANSWER', 'TOOL_RESULT')) OR
+                   ((e.redacted_at IS NOT NULL AND e.kind NOT IN ('ANSWER', 'TOOL_RESULT'))
+                    OR
             """ + UNPROVEN + """
+                    OR NOT
+            """ + MODEL_HISTORY + """
                    ) AS "omitted"
             FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
             WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId
             ORDER BY e.seq
             """, nativeQuery = true)
     List<Head> findHeadsByWorkspaceIdAndConversationId(
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
+
+    interface ModelAnchor {
+        UUID getId();
+
+        Instant getCreatedAt();
+
+        long getSeq();
+
+        @Nullable
+        String getText();
+    }
+
+    @Query(value = """
+            SELECT e.id AS "id", e.created_at AS "createdAt", e.seq AS "seq",
+                   CASE WHEN e.redacted_at IS NULL AND NOT
+            """ + UNPROVEN + """
+                    AND
+            """ + MODEL_HISTORY + """
+                   THEN e.text END AS "text"
+            FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
+            WHERE e.workspace_id = :workspaceId AND e.id IN (:ids)
+            """, nativeQuery = true)
+    List<ModelAnchor> findModelAnchors(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
     /** A search hit: the message and an excerpt of its text around the query's words. */
     interface SearchHit {
@@ -417,12 +462,15 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                          'StartSel="",StopSel="",MaxFragments=1,MaxWords=50,MinWords=20')
                    END AS "excerpt"
             FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
             WHERE e.workspace_id = :workspaceId AND e.conversation_id IN (:conversationIds)
               AND e.search_text <> ''
               AND (
             """ + SHOWN + """
               ) AND e.redacted_at IS NULL AND NOT
             """ + UNPROVEN + """
+              AND
+            """ + MODEL_HISTORY + """
               AND (CAST(:query AS text) IS NULL
                    OR to_tsvector('simple', e.search_text) @@ websearch_to_tsquery('simple', CAST(:query AS text)))
               AND (CAST(:before AS timestamptz) IS NULL OR e.created_at < CAST(:before AS timestamptz))
@@ -663,6 +711,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                 FROM dependent x
                 JOIN basis_edge b ON b.source_id = x.id AND b.workspace_id = x.workspace_id AND b.source_kind = 'ENTRY'
                 JOIN conversation_entry d ON d.basis_id = b.basis_id AND d.workspace_id = b.workspace_id
+            ), targets AS (
+                SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
+                UNION SELECT id FROM covering
+                UNION SELECT d.id FROM dependent d JOIN conversation_entry e ON e.id = d.id
+                      WHERE e.redacted_at IS NULL AND (:withTargets OR d.id NOT IN (SELECT id FROM target))
             ), updated AS (
             UPDATE conversation_entry e
                SET redacted_at = clock_timestamp(), text = '', search_text = '',
@@ -686,17 +739,17 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                         ELSE jsonb_build_array() END) WITH ORDINALITY AS blocks (b, n)
                                WHERE b ->> 'type' = 'toolCall'), jsonb_build_array()))
                    END
-             WHERE e.redacted_at IS NULL
-               AND e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
-                            UNION SELECT id FROM covering
-                            UNION SELECT id FROM dependent WHERE :withTargets OR id NOT IN (SELECT id FROM target))
-            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind, e.turn_id
+             WHERE e.id IN (SELECT id FROM targets)
+            RETURNING e.id, e.redacted_at
             )
-            SELECT u.id AS "id", u.workspace_id AS "workspaceId", u.conversation_id AS "conversationId",
-                   c.account_id AS "accountId", u.kind AS "kind", u.turn_id AS "turnId"
-            FROM updated u JOIN conversation c ON (c.id,c.workspace_id)=(u.conversation_id,u.workspace_id)
-            WHERE u.kind IN ('USER','ANSWER','DIGEST')
-            ORDER BY u.workspace_id, u.turn_id, u.id
+            SELECT e.id AS "id", e.workspace_id AS "workspaceId", e.conversation_id AS "conversationId",
+                   c.account_id AS "accountId", e.kind AS "kind", e.turn_id AS "turnId",
+                   (u.redacted_at IS NULL) AS "redactionPending"
+            FROM targets t JOIN conversation_entry e ON e.id=t.id
+            JOIN conversation c ON (c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+            LEFT JOIN updated u ON u.id=e.id
+            WHERE e.kind IN ('USER','ANSWER','DIGEST') OR u.redacted_at IS NULL
+            ORDER BY e.workspace_id, e.turn_id, e.id
             """, nativeQuery = true)
     List<EntryRef> redactWithCopies(
             @Param("ids") UUID[] ids,

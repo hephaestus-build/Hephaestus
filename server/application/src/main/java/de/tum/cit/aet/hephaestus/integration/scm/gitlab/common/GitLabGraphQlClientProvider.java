@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.GITLAB_GRAPHQL_PATH;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -107,6 +110,18 @@ public class GitLabGraphQlClientProvider {
      */
     public HttpGraphQlClient forScope(Long scopeId) {
         return forScope(scopeId, tokenService.getAccessToken(scopeId), tokenService.resolveServerUrl(scopeId));
+    }
+
+    /** The request attribute that names a {@link ProviderReply.Exchange} for the response's status and headers. */
+    public static final String EXCHANGE_ATTRIBUTE = GitLabGraphQlClientProvider.class.getName() + ".exchange";
+
+    /** Uses the same token and server snapshot that admitted the commit identity read. */
+    public HttpGraphQlClient forCredential(long scopeId, ActiveScm credential, ProviderReply.Exchange exchange) {
+        if (!(credential.config() instanceof ConnectionConfig.GitLabConfig config) || credential.bearer() == null) {
+            throw new IllegalStateException("GitLab connection has no token");
+        }
+        var client = forScope(scopeId, credential.bearer().token(), tokenService.serverUrlOf(config.serverUrl()));
+        return clientFactory.withAttribute(client, EXCHANGE_ATTRIBUTE, exchange);
     }
 
     /**

@@ -63,10 +63,13 @@ public interface DocumentProjection {
             @Nullable String collectionName,
             @Nullable Instant syncedAt,
             @Nullable String sourceId,
-            @Nullable String url) {
+            @Nullable String url,
+            @Nullable OutlineSource outlineSource) {
         public ProjectedDocument {
             collaborators = List.copyOf(collaborators);
         }
+        /** The persisted provider origin and team key of the source connection. */
+        public record OutlineSource(String origin, String team) {}
         /** One document editor: provider-native subject, display name if known, resolved account id if linked. */
         public record Collaborator(
                 String subject,

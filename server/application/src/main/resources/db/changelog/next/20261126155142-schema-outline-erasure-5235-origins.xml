@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795679413316-1" author="hephaestus">
+        <addColumn tableName="conversation_turn">
+            <column name="outline_context" type="JSONB"/>
+        </addColumn>
+        <sql>
+            ALTER TABLE conversation_turn ADD CONSTRAINT ck_conversation_turn_outline_context_array
+                CHECK (jsonb_typeof(outline_context) = 'array');
+        </sql>
+        <rollback><dropColumn tableName="conversation_turn" columnName="outline_context"/></rollback>
+    </changeSet>
+    <changeSet id="1795679413316-2" author="hephaestus">
+        <addColumn tableName="connection">
+            <column name="outline_origin" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795679413316-3" author="hephaestus">
+        <addColumn tableName="identity_provider">
+            <column name="outline_origin" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795679413316-4" author="hephaestus">
+        <comment>Backfill the Outline keys before reads and erasure compare them.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.integration.core.connection.OutlineOriginBackfillChange"/>
+        <rollback><sql>SELECT 1</sql></rollback>
+    </changeSet>
+    <changeSet id="1795679413316-5" author="hephaestus">
+        <comment>Reject new Outline rows that an older writer would leave outside erasure.</comment>
+        <sql>
+            ALTER TABLE connection ADD CONSTRAINT ck_outline_connection_origin
+                CHECK (kind &lt;&gt; 'OUTLINE' OR outline_origin IS NOT NULL
+                    OR (state &lt;&gt; 'ACTIVE' AND config-&gt;&gt;'serverUrl' IS NULL));
+            ALTER TABLE identity_provider ADD CONSTRAINT ck_outline_identity_origin
+                CHECK (type &lt;&gt; 'OUTLINE' OR outline_origin IS NOT NULL);
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE connection DROP CONSTRAINT ck_outline_connection_origin;
+                ALTER TABLE identity_provider DROP CONSTRAINT ck_outline_identity_origin;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

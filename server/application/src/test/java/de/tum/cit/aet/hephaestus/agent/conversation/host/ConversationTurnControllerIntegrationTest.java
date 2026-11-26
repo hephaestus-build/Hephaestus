@@ -49,6 +49,7 @@ import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
@@ -236,6 +237,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
                 agentRuns,
                 conversationTurns,
                 ConversationTurnFixtures.contexts(beans),
+                beans.getBean(ConversationSituation.class),
                 turnAccess,
                 turns,
                 completion,
@@ -407,7 +409,10 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(ConversationTurnContexts.SYSTEM_PROMPT.getBytes(StandardCharsets.UTF_8).length)
                 .as("system prompt bytes")
                 .isLessThanOrEqualTo(15 * 1024);
-        assertThat(ConversationTurnFixtures.contexts(beans).context(attempt).systemPrompt())
+        assertThat(ConversationTurnFixtures.contexts(beans)
+                        .context(attempt)
+                        .context()
+                        .systemPrompt())
                 .isEqualTo(ConversationTurnContexts.SYSTEM_PROMPT);
     }
 

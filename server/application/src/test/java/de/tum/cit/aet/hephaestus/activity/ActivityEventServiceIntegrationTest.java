@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.DuePublications;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -378,6 +379,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         }
 
         private void resubmit(ScmDomainEvent.PullRequestCreated event) {
+            DuePublications.age(jdbc, ActivityFact.class);
             publications.resubmit(ResubmissionOptions.defaults()
                     .withMinAge(Duration.ZERO)
                     .withFilter(publication -> publication.getEvent() instanceof ActivityFact stored

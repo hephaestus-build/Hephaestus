@@ -56,7 +56,9 @@ class TurnSituationTest extends BaseUnitTest {
         TurnSituation situation =
                 new TurnSituation(situations, accounts, identities, profiles, providers, manifests, clock);
         TurnAttempt turn = turn();
-        when(situations.render(1L, turn.turnId(), BERLIN)).thenReturn("<situation>\nWorkspace facts.\n</situation>");
+        when(situations.render(1L, turn.turnId(), BERLIN))
+                .thenReturn(
+                        new ConversationSituation.Rendered("<situation>\nWorkspace facts.\n</situation>", List.of()));
         IdentityProviderLookup.Provider gitLab = provider(10L, IdentityProviderType.GITLAB);
         IdentityProviderLookup.Provider slack = provider(20L, IdentityProviderType.SLACK);
         when(accounts.find(5L))
@@ -72,7 +74,7 @@ class TurnSituationTest extends BaseUnitTest {
         when(manifests.displayName(any(IntegrationKind.class)))
                 .thenAnswer(call -> call.getArgument(0) == IntegrationKind.SLACK ? "Slack" : "GitLab");
 
-        String rendered = situation.render(turn, BERLIN);
+        String rendered = situation.render(turn, BERLIN).text();
 
         assertThat(rendered).startsWith("<situation>\nWorkspace facts.\n").endsWith("</situation>");
         assertThat(rendered)
@@ -90,10 +92,11 @@ class TurnSituationTest extends BaseUnitTest {
         TurnSituation situation =
                 new TurnSituation(situations, accounts, identities, profiles, providers, manifests, clock);
         TurnAttempt turn = turn();
-        when(situations.render(1L, turn.turnId(), BERLIN)).thenReturn("<situation>\n</situation>");
+        when(situations.render(1L, turn.turnId(), BERLIN))
+                .thenReturn(new ConversationSituation.Rendered("<situation>\n</situation>", List.of()));
         when(accounts.find(5L)).thenReturn(Optional.empty());
 
-        String rendered = situation.render(turn, BERLIN);
+        String rendered = situation.render(turn, BERLIN).text();
 
         assertThat(rendered).doesNotContain("You are talking to").contains("today is Mon 2026-10-12");
     }

@@ -458,6 +458,11 @@ public class AgentRuns {
         return runs.findByRef(run.id(), run.workspaceId());
     }
 
+    /** Whether the run waits on a hold now, as its row says. */
+    public boolean isHeld(AgentRunRef run) {
+        return runs.isHeld(run.id(), run.workspaceId());
+    }
+
     /** Extends the lease; empty when the holder no longer holds it, after which it must not write. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Instant> renew(AgentRunFence fence) {

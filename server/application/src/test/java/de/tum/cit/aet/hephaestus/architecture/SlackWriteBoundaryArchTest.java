@@ -1,15 +1,16 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.core.domain.JavaAccess.Predicates.target;
+import static com.tngtech.archunit.core.domain.JavaAccess.Predicates.targetOwner;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.slack.api.Slack;
+import com.slack.api.methods.AsyncMethodsClient;
 import com.slack.api.methods.MethodsClient;
-import com.tngtech.archunit.core.domain.AccessTarget;
-import com.tngtech.archunit.core.domain.JavaAccess;
+import com.slack.api.util.http.SlackHttpClient;
 import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -30,17 +31,16 @@ class SlackWriteBoundaryArchTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    void shouldCallChatPostMessageOnlyFromPostAdmitted() {
+    void shouldCreateSlackClientsOnlyInTheSendFence() {
         noClasses()
+                .that()
+                .doNotHaveFullyQualifiedName("de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendFence")
                 .should()
-                .accessTargetWhere(describe(
-                        "call or reference chatPostMessage outside SlackMessageService.postAdmitted",
-                        (JavaAccess<?> access) -> access.getTarget() instanceof AccessTarget.CodeUnitAccessTarget target
-                                && target.getName().equals("chatPostMessage")
-                                && target.getOwner().isAssignableTo(MethodsClient.class)
-                                && !(access.getOriginOwner().isEquivalentTo(SlackMessageService.class)
-                                        && access.getOrigin().getName().equals("postAdmitted"))))
-                .because("each chat.postMessage request must pass the outbox fence at the HTTP write boundary")
+                .accessTargetWhere(targetOwner(assignableTo(Slack.class).or(assignableTo(SlackHttpClient.class)))
+                        .and(target(name("<init>").or(name("getInstance")).or(name("buildSlackHttpClient"))))
+                        .or(targetOwner(assignableTo(MethodsClient.class).or(assignableTo(AsyncMethodsClient.class)))
+                                .and(target(name("<init>")))))
+                .because("Slack SDK clients must use the transport that checks admission at the HTTP write boundary")
                 .check(classes);
     }
 

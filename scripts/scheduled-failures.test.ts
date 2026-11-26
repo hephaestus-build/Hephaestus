@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 
 import { parse } from "yaml";
 
+import { expandExpressions, parseDocument } from "./ci-contract-support.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
 const observer = asRecord(
@@ -16,7 +17,7 @@ const jobs = asRecord(observer.jobs, "jobs");
 const report = asRecord(jobs.report, "report");
 const step = asRecord(
 	asArray(report.steps, "steps").find(
-		(each) => asRecord(each, "step").name === "Notify maintainers of a failed scheduled run",
+		(each) => asRecord(each, "step").name === "Notify maintainers of a failed check",
 	),
 	"step",
 );
@@ -37,10 +38,7 @@ void test("every scheduled workflow has a notification owner", async () => {
 		scheduled.push(name);
 		assert.ok(watched.includes(name), name);
 	}
-	assert.deepEqual(
-		watched.toSorted((a, b) => a.localeCompare(b)),
-		scheduled.toSorted((a, b) => a.localeCompare(b)),
-	);
+	assert.deepEqual(watched.toSorted(), [...scheduled, "CI/CD"].toSorted());
 });
 
 async function notify(
@@ -102,6 +100,49 @@ async function notify(
 	await completed;
 	return writes;
 }
+
+void test("only a failed seeded upgrade on a trusted main push alerts maintainers", async () => {
+	assert.deepEqual(trigger.branches, ["main"]);
+	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const upgrade = parseDocument(await readFile(".github/workflows/release-upgrade.yml", "utf8"));
+	const name = `${String(ci.getIn(["jobs", "Database-upgrade", "name"]))} / ${String(upgrade.getIn(["jobs", "upgrade", "name"]))}`;
+	const run = {
+		name: "CI/CD",
+		event: "push",
+		head_branch: "main",
+		head_repository: { full_name: "owner/repo" },
+		conclusion: "failure",
+	};
+	const runs = (overrides: Record<string, unknown>) =>
+		expandExpressions(`\${{ ${asString(report.if, "condition")} }}`, {
+			github: { repository: "owner/repo", event: { workflow_run: { ...run, ...overrides } } },
+		});
+	assert.equal(runs({}), "true");
+	assert.equal(runs({ conclusion: "timed_out" }), "true");
+	for (const overrides of [
+		{ event: "pull_request" },
+		{ event: "merge_group" },
+		{ event: "workflow_dispatch" },
+		{ head_branch: "other" },
+		{ head_repository: { full_name: "fork/repo" } },
+		{ conclusion: "success" },
+	]) {
+		assert.equal(runs(overrides), "false", JSON.stringify(overrides));
+	}
+	assert.deepEqual(
+		await notify([], [], false, [{ name: "Build", conclusion: "failure" }], run.name),
+		[],
+	);
+	for (const conclusion of ["failure", "timed_out"]) {
+		const upgradeJobs = [{ name, conclusion }];
+		const [created] = await notify([], [], false, upgradeJobs, run.name);
+		assert.ok(created);
+		assert.equal(created.input.title, "Seeded upgrade failed on main");
+		const body = asString(created.input.body, "body");
+		assert.match(body, /@hephaestus-build\/maintainer/u);
+		assert.deepEqual(await notify([{ number: 1, body }], [], false, upgradeJobs, run.name), []);
+	}
+});
 
 void test("scheduled failures notify the maintainer team once per attempt", async () => {
 	const [created] = await notify();

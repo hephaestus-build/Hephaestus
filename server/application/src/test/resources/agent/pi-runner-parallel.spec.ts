@@ -67,6 +67,40 @@ void test("the next session waits for the content of the one before it, not for 
 	}
 });
 
+void test("a session limit of one measures the practices one after another, in waves the pool can serve", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-waves-")));
+	try {
+		stagePractices(cwd, [{ slug: "z-last" }, { slug: "a-first" }, { slug: "m-middle" }]);
+		const exit = await runRunner(
+			cwd,
+			{},
+			{
+				PI_HOST_DELAYS: JSON.stringify({ "z-last": 300, "a-first": 300, "m-middle": 300 }),
+				PI_SESSION_LIMIT: "1",
+			},
+		);
+		assert.equal(exit.status, 0, exit.stderr);
+		const starts = capturedLines(cwd, "model-start").map((row) => field(row, "at"));
+		const finishes = capturedLines(cwd, "model-finish").map((row) => field(row, "at"));
+		assert.equal(starts.length, 3);
+		assert.ok(starts.every((at): at is number => typeof at === "number"));
+		assert.ok(finishes.every((at): at is number => typeof at === "number"));
+		const order = starts.toSorted((a, b) => a - b);
+		const done = finishes.toSorted((a, b) => a - b);
+		assert.ok(
+			order.slice(1).every((start, index) => start >= (done[index] ?? Number.POSITIVE_INFINITY)),
+			"each session starts after the one before it finished",
+		);
+		assert.match(exit.stderr, /review\.paced sessions_at_once=1 /u);
+		assert.partialDeepStrictEqual(readJsonFile(cwd, "out/practice-coverage.json"), {
+			evaluated: 3,
+			eligible: 3,
+		});
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 void test("three isolated model sessions overlap, retain each candidate and receipt, and submit in practice order", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-")));
 	try {

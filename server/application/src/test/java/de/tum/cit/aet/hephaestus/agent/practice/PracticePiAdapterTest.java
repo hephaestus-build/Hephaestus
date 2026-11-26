@@ -48,7 +48,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
-                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, false);
+                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, false, 3);
     }
 
     @Test
@@ -56,7 +56,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
         assertThat(adapter.buildSandboxSpec(proxyRequest()).environment())
                 .containsEntry(PracticePiAdapter.PRACTICE_MODEL_CALLS_ENV, "12")
                 .containsEntry(PracticePiAdapter.PRACTICE_OUTPUT_TOKENS_ENV, "16000")
-                .containsEntry(PracticePiAdapter.PRACTICE_INPUT_TOKENS_ENV, "342000");
+                .containsEntry(PracticePiAdapter.PRACTICE_INPUT_TOKENS_ENV, "342000")
+                .containsEntry(PracticePiAdapter.SESSION_LIMIT_ENV, "3");
     }
 
     @Test
@@ -104,7 +105,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 null,
                 "job-token-123",
                 PracticePiAdapter.MIN_TIMEOUT_SECONDS,
-                false);
+                false,
+                1);
 
         assertThat(Long.parseLong(
                         adapter.buildSandboxSpec(request).environment().get("AGENT_BUDGET_MS")))
@@ -116,7 +118,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     void shouldGiveTheRunnerTheWholeTimeoutLessTheShutdownBufferWhenBuildingTheSpec(
             int timeoutSeconds, long expectedBudgetMs) {
         PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, false);
+                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, false, 1);
 
         long budgetMs =
                 Long.parseLong(adapter.buildSandboxSpec(request).environment().get("AGENT_BUDGET_MS"));
@@ -145,7 +147,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 ReasoningEffort.MEDIUM,
                 "job-token-123",
                 600,
-                false);
+                false,
+                1);
 
         var spec = adapter.buildSandboxSpec(request);
 

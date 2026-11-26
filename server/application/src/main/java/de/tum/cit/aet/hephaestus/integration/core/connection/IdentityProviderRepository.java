@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -35,10 +36,15 @@ public interface IdentityProviderRepository extends JpaRepository<IdentityProvid
 
     Optional<IdentityProvider> findByTypeAndServerUrl(IdentityProviderType type, String serverUrl);
 
+    default void registerSourceInstance(String type, String serverUrl) {
+        insertSourceInstance(type, serverUrl, IdentityProvider.outlineOrigin(type, serverUrl));
+    }
+
     @Modifying
     @Query(value = """
-            INSERT INTO identity_provider(type,server_url,created_at) VALUES (:type,:serverUrl,now())
+            INSERT INTO identity_provider(type,server_url,outline_origin,created_at)
+            VALUES (:type,:serverUrl,:outlineOrigin,now())
             ON CONFLICT(type,server_url) DO NOTHING
             """, nativeQuery = true)
-    void registerSourceInstance(String type, String serverUrl);
+    void insertSourceInstance(String type, String serverUrl, @Nullable String outlineOrigin);
 }

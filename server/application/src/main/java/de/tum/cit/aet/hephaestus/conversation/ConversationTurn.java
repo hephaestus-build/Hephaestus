@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +14,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -25,6 +29,9 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Persistable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One question to Hephaestus and the work to answer it. {@link ConversationTurnService} owns execution and
@@ -236,6 +243,12 @@ public class ConversationTurn implements Persistable<UUID> {
     @ColumnDefault("0")
     private int toolsLoads;
 
+    /** The Outline instance and team keys of the context served to this attempt. Null means it was not recorded. */
+    @Nullable
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "outline_context", columnDefinition = "jsonb")
+    private JsonNode outlineContext;
+
     /**
      * The basis of the current or last attempt ({@link ConversationBasis}): what it read, and what the entries it stores
      * derive from. Each start begins a new basis. {@code null} before the first start.
@@ -275,6 +288,7 @@ public class ConversationTurn implements Persistable<UUID> {
         this.startedAt = now;
         this.basisId = TimeOrderedIds.next();
         this.toolsLoads = 0;
+        this.outlineContext = null;
         this.admission = null;
         this.error = null;
         this.failureCause = null;
@@ -284,6 +298,35 @@ public class ConversationTurn implements Persistable<UUID> {
 
     void admit(JsonNode admittedWith) {
         this.admission = admittedWith;
+    }
+
+    /** Adds the quoted entries to this attempt's admission. The gateway holds the turn and history locks. */
+    void recordSituationInputs(List<UUID> quotedEntries) {
+        if (!(admission instanceof ObjectNode document)) {
+            throw new IllegalStateException("A conversation turn needs an admission before it can quote history");
+        }
+        ObjectNode updated = document.deepCopy();
+        var recorded = updated.withArray("situationEntryIds");
+        Set<String> ids = new HashSet<>();
+        recorded.forEach(id -> ids.add(id.asString()));
+        for (UUID entryId : quotedEntries) {
+            if (ids.add(entryId.toString())) recorded.add(entryId.toString());
+        }
+        this.admission = updated;
+    }
+
+    void recordOutlineContext(Collection<OutlinePersonCopyScope.Source> sources) {
+        ArrayNode keys = outlineContext instanceof ArrayNode recorded
+                ? recorded.deepCopy()
+                : JsonNodeFactory.instance.arrayNode();
+        for (var source : sources) {
+            var key = JsonNodeFactory.instance
+                    .objectNode()
+                    .put("origin", source.origin())
+                    .put("team", source.team());
+            if (keys.valueStream().noneMatch(key::equals)) keys.add(key);
+        }
+        outlineContext = keys;
     }
 
     void stop(Instant now) {

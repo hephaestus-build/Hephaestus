@@ -133,7 +133,7 @@ void test("a selected release check that did not pass fails the gate, a skipped 
 		const run = await runStep(
 			render(evaluate, all, {
 				"release-candidate": "false",
-				"queue-upgrade": "false",
+				"seeded-upgrade": "false",
 				"queue-server-image": "false",
 				"rename-only": "false",
 				"release-preflight": "false",
@@ -148,6 +148,10 @@ void test("a selected release check that did not pass fails the gate, a skipped 
 		return run.failed;
 	};
 	for (const result of ["skipped", "failure", "cancelled"]) {
+		assert.ok(
+			await verdict({ "Database-upgrade": result }, { "seeded-upgrade": "true" }),
+			`main seeded upgrade ${result}`,
+		);
 		assert.ok(
 			await verdict({ "Chart-upgrade": result }, { "chart-upgrade": "true" }),
 			`chart ${result}`,

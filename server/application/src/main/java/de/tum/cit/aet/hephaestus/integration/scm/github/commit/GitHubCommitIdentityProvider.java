@@ -1,12 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService.CommitActor;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,6 @@ import org.springframework.stereotype.Component;
 public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
 
     private final CommitAuthorEnrichmentService commits;
-    private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubUserProcessor users;
     private final PersonProcessingSuppression suppression;
 
@@ -35,19 +35,19 @@ public class GitHubCommitIdentityProvider implements CommitIdentityProvider {
     }
 
     @Override
-    public Map<Question, Answer> answer(String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
+    public Map<Question, Answer> answer(
+            String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
         var shas = questions.stream().map(Question::sha).distinct().toList();
-        var actors = commits.fetchCommitActors(nameWithOwner, scopeId, shas);
-        boolean stopped = graphQlClientProvider.isRateLimitCritical(scopeId);
+        var actors = commits.fetchCommitActors(nameWithOwner, scopeId, credential, shas);
+        // A throttled read is a wait: each question it left without an answer waits for GitHub's deadline, also one
+        // whose commit came back without a usable actor for its email, and spends no attempt.
+        Instant until = actors.throttledUntil();
         Map<Question, Answer> answers = new HashMap<>();
         for (var question : questions) {
-            var commitActors = actors.get(question.sha());
-            if (commitActors == null) {
-                if (stopped) answers.put(question, new Answer.Deferred());
-                continue;
-            }
-            var answer = answer(providerId, question.email(), commitActors);
+            var commitActors = actors.bySha().get(question.sha());
+            var answer = commitActors == null ? null : answer(providerId, question.email(), commitActors);
             if (answer != null) answers.put(question, answer);
+            else if (until != null) answers.put(question, new Answer.Deferred(until));
         }
         return answers;
     }

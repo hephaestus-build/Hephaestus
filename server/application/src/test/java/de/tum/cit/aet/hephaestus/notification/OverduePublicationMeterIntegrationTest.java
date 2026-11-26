@@ -56,7 +56,22 @@ class OverduePublicationMeterIntegrationTest extends BaseIntegrationTest {
         Instant twoHoursAgo = Instant.now().minus(Duration.ofHours(2));
         try {
             publication(listenerId, twoHoursAgo, "FAILED", NotificationRedeliveryJob.MAX_ATTEMPTS);
+            // Exhausted at once, though younger than the overdue bound.
+            publication(
+                    listenerId,
+                    Instant.now().minus(Duration.ofMinutes(10)),
+                    "FAILED",
+                    NotificationRedeliveryJob.MAX_ATTEMPTS);
+            // Exhausted too, though an upgrade removed its event type: the count reads no payload.
+            publication(
+                    listenerId,
+                    Instant.now().minus(Duration.ofMinutes(10)),
+                    "FAILED",
+                    NotificationRedeliveryJob.MAX_ATTEMPTS,
+                    "de.example.RemovedEvent");
             publication(listenerId, twoHoursAgo, "FAILED", NotificationRedeliveryJob.MAX_ATTEMPTS - 1);
+            // A last attempt that still runs can end: it is not exhausted yet.
+            publication(listenerId, twoHoursAgo, "PROCESSING", NotificationRedeliveryJob.MAX_ATTEMPTS);
 
             meter.measure();
         } finally {
@@ -68,14 +83,14 @@ class OverduePublicationMeterIntegrationTest extends BaseIntegrationTest {
                         .tag("listener", type + ".on")
                         .gauge()
                         .value())
-                .isEqualTo(1.0);
+                .isEqualTo(3.0);
         assertThat(meterRegistry
                         .get(NotificationMetrics.EVENT_PUBLICATIONS_OVERDUE)
                         .tag("listener", type + ".on")
                         .gauge()
                         .value())
-                .as("the publication with attempts left still retries")
-                .isEqualTo(1.0);
+                .as("the old publication with attempts left, and the one whose last attempt runs")
+                .isEqualTo(2.0);
     }
 
     private void publication(String listenerId, Instant publishedAt, String status) {
@@ -83,19 +98,15 @@ class OverduePublicationMeterIntegrationTest extends BaseIntegrationTest {
     }
 
     private void publication(String listenerId, Instant publishedAt, String status, int attempts) {
-        jdbc.update(
-                """
+        // An existing type, never deserialized: the meter reads only the listener id.
+        publication(listenerId, publishedAt, status, attempts, BotCommandReceivedEvent.class.getName());
+    }
+
+    private void publication(String listenerId, Instant publishedAt, String status, int attempts, String eventType) {
+        jdbc.update("""
             INSERT INTO event_publication
                 (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-                UUID.randomUUID(),
-                listenerId,
-                // An existing type, never deserialized: the meter reads only the listener id.
-                BotCommandReceivedEvent.class.getName(),
-                "{}",
-                Timestamp.from(publishedAt),
-                status,
-                attempts);
+            """, UUID.randomUUID(), listenerId, eventType, "{}", Timestamp.from(publishedAt), status, attempts);
     }
 }

@@ -396,7 +396,7 @@ The guard is the critique's limit above, and the eval grades unsupported claims.
 
 ### The feedback rubric
 
-The rubric is for the composers only, not for Heph. Its home is `server/application/src/main/resources/agent/feedback-style.md`, which both composers read today.
+The rubric is for the composers only, not for Hephaestus. Its home is `server/application/src/main/resources/agent/feedback-style.md`, which both composers read today.
 `critique_package` and the eval read the same file. Most criteria are already there or in [§ Writing feedback](../contributor/practice-feedback-language.mdx#writing-feedback). L13 adds only the new ones.
 
 | Criterion | The feedback… | Home today | Source |
@@ -461,7 +461,7 @@ At the seal, a staged result that is already stale is admitted and ended at once
 | GitHub pull request | A pending review with the body and threads, replies added to it with `addPullRequestReviewThreadReply`, then one submit with event `COMMENT` | `updatePullRequestReview`, `updatePullRequestReviewComment`, `updateIssueComment` | `resolveReviewThread` |
 | GitLab merge request | Draft notes and reply drafts, then one bulk publish with the body as `summary_note` | `updateNote` | Resolve the discussion |
 | Issue (both providers) | One issue comment. The check has no positions. | The same comment | Not supported here |
-| Slack, Outline | Not supported here: no destination on the work. The private package and Heph do not change. | – | – |
+| Slack, Outline | Not supported here: no destination on the work. The private package and Hephaestus do not change. | – | – |
 
 **Quiet edits for each provider.** GitLab notifies an edit only for added mentions, and escaping prevents them (GL-PUBLISH, source read).
 GitHub is open (GH-EDIT). Until the spike answers, an edit counts as a possible notification, and the edit budget bounds it.

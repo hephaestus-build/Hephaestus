@@ -30,7 +30,7 @@ OWASP ASVS 4.0.3 requirement 5.2.7 requires that the application sanitizes, disa
 - An admin can change a picture as easily as a text field, at every scope.
 - A picture never changes how a practice is reviewed.
 - Uploaded markup cannot run code or load anything from outside.
-- A developer and Heph can get the meaning of a picture without seeing it.
+- A developer and Hephaestus can get the meaning of a picture without seeing it.
 - The cost to maintain the content stays bounded.
 
 ## Considered options
@@ -80,7 +80,7 @@ The fields follow the rules of other developer guidance:
 
 - Each change creates a revision. A release proposal offers each field separately.
 - The definition digest includes both fields. The review-rule fingerprint excludes them, so a change keeps the recurrence chain.
-- The review model never receives them. Heph receives the descriptions and the guide text.
+- The review model never receives them. Hephaestus receives the descriptions and the guide text.
 
 `PracticeGuidanceRules` is an allowlist of shape and text elements and of geometry and presentation attributes.
 The server applies it when a definition is saved and when the bundled catalog loads.
@@ -98,7 +98,7 @@ The webapp sanitizes the markup again with DOMPurify [9] and draws it inline.
 - Without ids, a picture cannot use markers, gradients, masks, filters, or clip paths. An arrow is two paths.
 - The server and DOMPurify each hold a copy of the rules, and the copies can drift. The server is the gate. DOMPurify is the second layer.
 - Each bundled visual and guide is content that maintainers review like code.
-- Heph explains a practice in the same words as the panel.
+- Hephaestus explains a practice in the same words as the panel.
 - The introduction always shows. It is short, and the detail is in the **Guide** tab.
 
 ## Confirmation

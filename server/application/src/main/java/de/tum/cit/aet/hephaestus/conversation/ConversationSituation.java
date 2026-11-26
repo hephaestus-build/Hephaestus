@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,16 +42,23 @@ public class ConversationSituation {
     private final ConversationTurnRepository turns;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
-    public String render(long workspaceId, UUID turnId, ZoneId zone) {
+    /** The situation text and the entries whose text it quotes. */
+    public record Rendered(String text, List<UUID> quotedEntries) {}
+
+    @Transactional
+    public Rendered render(long workspaceId, UUID turnId, ZoneId zone) {
         ConversationTurn turn = turns.findByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("ConversationTurn", turnId.toString()));
         Conversation conversation = conversations
                 .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Conversation", turn.getConversationId().toString()));
+        var _ = conversations
+                .shareByIdAndWorkspaceId(conversation.rootId(), workspaceId)
+                .orElseThrow();
         ConversationEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         Instant now = clock.instant();
+        List<UUID> quoted = new ArrayList<>();
 
         StringBuilder text = new StringBuilder("<situation>\n");
         text.append("Now: ").append(at(now, zone)).append(".\n");
@@ -78,11 +87,21 @@ public class ConversationSituation {
                                 .append(".\n"),
                         () -> text.append("This is the first message of the conversation.\n"));
         if (conversation.isThread()) {
-            thread(workspaceId, conversation, zone, text);
+            thread(workspaceId, conversation, zone, text, quoted);
         } else {
-            openThreads(workspaceId, conversation, zone, text);
+            openThreads(workspaceId, conversation, zone, text, quoted);
         }
-        return text.append("</situation>").toString();
+        return new Rendered(text.append("</situation>").toString(), List.copyOf(quoted));
+    }
+
+    /** Records quoted entries before the gateway releases its turn and history locks. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordInputs(long workspaceId, UUID turnId, List<UUID> quotedEntries) {
+        if (!quotedEntries.isEmpty()) {
+            turns.findByIdAndWorkspaceId(turnId, workspaceId)
+                    .orElseThrow(() -> new EntityNotFoundException("ConversationTurn", turnId.toString()))
+                    .recordSituationInputs(quotedEntries);
+        }
     }
 
     /** The message before the question; a thread's first question follows the message it replies to. */
@@ -98,18 +117,26 @@ public class ConversationSituation {
         return entries.findByIdAndWorkspaceId(parent, workspaceId).filter(entry -> !entry.isRedacted());
     }
 
-    private void thread(long workspaceId, Conversation thread, ZoneId zone, StringBuilder text) {
+    private void thread(long workspaceId, Conversation thread, ZoneId zone, StringBuilder text, List<UUID> quoted) {
         UUID parentId = thread.getParentEntryId();
-        Optional<ConversationEntry> parent =
-                parentId == null ? Optional.empty() : entries.findByIdAndWorkspaceId(parentId, workspaceId);
-        if (parent.isEmpty()) {
+        if (parentId == null) {
             return;
         }
-        ConversationEntry message = parent.get();
-        text.append("This is a thread on the message from ")
-                .append(at(message.getCreatedAt(), zone))
-                .append(message.isRedacted() ? " (deleted since)" : ": \"" + excerpt(message.getText()) + "\"")
-                .append(". The thread opened ")
+        var parents = entries.findModelAnchors(workspaceId, List.of(parentId));
+        if (parents.isEmpty()) {
+            text.append("This is a thread on a deleted message.\n");
+            return;
+        }
+        var message = parents.getFirst();
+        String anchor = message.getText();
+        text.append("This is a thread on the message from ").append(at(message.getCreatedAt(), zone));
+        if (anchor == null) {
+            text.append(" (deleted since)");
+        } else {
+            quoted.add(message.getId());
+            text.append(": \"").append(excerpt(anchor)).append("\"");
+        }
+        text.append(". The thread opened ")
                 .append(at(thread.getCreatedAt(), zone))
                 .append(". You see the main conversation only up to that message.\n");
         ConversationEntryRepository.MessageSpan since =
@@ -127,7 +154,7 @@ public class ConversationSituation {
         }
     }
 
-    private void openThreads(long workspaceId, Conversation main, ZoneId zone, StringBuilder text) {
+    private void openThreads(long workspaceId, Conversation main, ZoneId zone, StringBuilder text, List<UUID> quoted) {
         List<ConversationEntryRepository.ThreadSummary> threads =
                 entries.findThreadSummariesOfMain(workspaceId, main.getId(), MAX_THREADS + 1);
         if (threads.isEmpty()) {
@@ -136,31 +163,33 @@ public class ConversationSituation {
         }
         List<ConversationEntryRepository.ThreadSummary> listed =
                 threads.subList(0, Math.min(MAX_THREADS, threads.size()));
-        Map<UUID, ConversationEntry> parents = entries
-                .findByWorkspaceIdAndIdIn(
+        Map<UUID, ConversationEntryRepository.ModelAnchor> parents = entries
+                .findModelAnchors(
                         workspaceId,
                         listed.stream()
                                 .map(ConversationEntryRepository.ThreadSummary::getParentEntryId)
                                 .toList())
                 .stream()
-                .collect(Collectors.toMap(ConversationEntry::getId, Function.identity()));
+                .collect(Collectors.toMap(ConversationEntryRepository.ModelAnchor::getId, Function.identity()));
         text.append("Threads on messages of this conversation, latest activity first")
                 .append(threads.size() > MAX_THREADS ? " (the " + MAX_THREADS + " latest)" : "")
                 .append(". You do not see their messages; use search_conversation to read them:\n");
         for (ConversationEntryRepository.ThreadSummary thread : listed) {
-            ConversationEntry parent = parents.get(thread.getParentEntryId());
+            var parent = parents.get(thread.getParentEntryId());
             long messages = thread.getReplies();
-            text.append("- On ")
-                    .append(
-                            parent == null
-                                    ? "a message"
-                                    : parent.isRedacted()
-                                            ? "a deleted message"
-                                            : "\"" + excerpt(parent.getText()) + "\" ("
-                                                    + at(parent.getCreatedAt(), zone) + ")")
-                    .append(": ")
-                    .append(messages)
-                    .append(messages == 1 ? " message" : " messages");
+            text.append("- On ");
+            String anchor = parent == null ? null : parent.getText();
+            if (parent != null && anchor != null) {
+                quoted.add(parent.getId());
+                text.append("\"")
+                        .append(excerpt(anchor))
+                        .append("\" (")
+                        .append(at(parent.getCreatedAt(), zone))
+                        .append(")");
+            } else {
+                text.append("a deleted message");
+            }
+            text.append(": ").append(messages).append(messages == 1 ? " message" : " messages");
             Instant lastReply = thread.getLastReplyAt();
             if (lastReply != null) {
                 text.append(", the newest from ").append(at(lastReply, zone));

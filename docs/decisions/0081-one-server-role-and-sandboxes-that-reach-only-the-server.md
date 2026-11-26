@@ -104,7 +104,7 @@ Each line links the options section that priced the option.
 - [ADR 0009](0009-worker-runtime-substrate-wss-control-channel.md#considered-options): a NATS-only control channel, gRPC, a frame router, frame replay, and named drain modes.
 - [ADR 0025](0025-agent-job-queue-on-postgresql.md#considered-options): JetStream for agent jobs, a poll with no claim, and another broker.
 - [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md): Bun as the agent runtime.
-- [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md#considered-options): a Heph turn as a Job, and a Heph loop with a relay.
+- [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md#considered-options): a Hephaestus turn as a Job, and a Hephaestus loop with a relay.
 - [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md#considered-options): one loop host for all loops, or one for each workspace.
 - [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md#considered-options): an operator, and Kueue.
 - [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md#considered-options): more Pods at width 3, and several practices in one session.

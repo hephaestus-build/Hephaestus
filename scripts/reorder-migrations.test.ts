@@ -60,6 +60,15 @@ void test("files also move after every migration that a queued pull request adds
 	assert.deepEqual(reorder(base, branch, at("2026-11-03T12:00:00Z")), []);
 });
 
+void test("rename targets are free even when two branch migrations share a slug", () => {
+	const base = [next("20261103120000-base.xml")];
+	const branch = [next("20261103110000-mine.xml"), next("20261103120001-mine.xml")];
+	assert.deepEqual(reorder(base, branch, 0), [
+		{ from: branch[0], to: next("20261103120002-mine.xml") },
+		{ from: branch[1], to: next("20261103120003-mine.xml") },
+	]);
+});
+
 const tree = (names: string[] | null) => ({
 	file: names === null ? null : { object: { entries: names.map((name) => ({ name })) } },
 });

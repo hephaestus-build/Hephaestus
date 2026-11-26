@@ -8,18 +8,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RateLimitSnapshot;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.env.MockEnvironment;
@@ -29,6 +35,7 @@ import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 /**
  * Unit tests for the rate-limit tracking exchange filter in {@link GitLabGraphQlConfig}.
@@ -45,16 +52,17 @@ class GitLabGraphQlConfigRateLimitFilterTest extends BaseUnitTest {
     private static final URI GRAPHQL_URI = URI.create("https://gitlab.example.com/api/graphql");
 
     private GitLabRateLimitTracker tracker;
+    private GitLabGraphQlConfig config;
     private ExchangeFilterFunction filter;
 
     @BeforeEach
     void setUp() {
         tracker = new GitLabRateLimitTracker(new SimpleMeterRegistry());
-        filter = new GitLabGraphQlConfig(
-                        tracker,
-                        new ScmServerEndpointPolicy(
-                                new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())))
-                .rateLimitTrackingFilter();
+        config = new GitLabGraphQlConfig(
+                tracker,
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+        filter = config.rateLimitTrackingFilter();
     }
 
     @Test
@@ -103,6 +111,36 @@ class GitLabGraphQlConfigRateLimitFilterTest extends BaseUnitTest {
         return ClientRequest.create(HttpMethod.POST, GRAPHQL_URI)
                 .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                 .build();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldPassTheThrottleDeadlineToCommitCorrectionAndRetryForOtherCallers(boolean commitCorrection) {
+        var builder = ClientRequest.create(HttpMethod.POST, GRAPHQL_URI);
+        if (commitCorrection) {
+            builder.attribute(GitLabGraphQlClientProvider.EXCHANGE_ATTRIBUTE, new ProviderReply.Exchange());
+        }
+        ClientRequest request = builder.build();
+        var attempts = new AtomicInteger();
+
+        StepVerifier.withVirtualTime(() -> config.retryFilter()
+                        .filter(
+                                request,
+                                ignored -> Mono.fromSupplier(() -> attempts.incrementAndGet() == 1
+                                        ? ClientResponse.create(HttpStatus.TOO_MANY_REQUESTS)
+                                                .header(HttpHeaders.RETRY_AFTER, "60")
+                                                .build()
+                                        : ClientResponse.create(HttpStatus.OK).build())))
+                .thenAwait(Duration.ofSeconds(10))
+                .assertNext(response -> {
+                    assertThat(response.statusCode())
+                            .isEqualTo(commitCorrection ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.OK);
+                    if (commitCorrection)
+                        assertThat(response.headers().header(HttpHeaders.RETRY_AFTER))
+                                .containsExactly("60");
+                })
+                .verifyComplete();
+        assertThat(attempts).hasValue(commitCorrection ? 1 : 2);
     }
 
     private ClientResponse responseWithRateLimitHeaders(int remaining, int limit, Instant resetAt, int observed) {

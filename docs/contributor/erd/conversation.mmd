@@ -9,14 +9,6 @@ erDiagram
 
     direction LR
 
-    BasisEdge {
-        UUID basis_id PK
-        UUID source_id PK,FK
-        VARCHAR(16) source_kind PK
-        INTEGER source_revision "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
-    }
-
     Conversation {
         UUID id PK,UK
         TIMESTAMPTZ created_at "NOT NULL"
@@ -50,8 +42,6 @@ erDiagram
         VARCHAR(16) vote
         BIGINT workspace_id FK,UK "NOT NULL"
         BIGINT account_id FK "NOT NULL"
-        UUID basis_id
-        INTEGER revision "NOT NULL"
     }
 
     ConversationTurn {
@@ -75,7 +65,7 @@ erDiagram
         INTEGER tools_loads "NOT NULL"
         UUID run_id FK,UK "NOT NULL"
         BIGINT account_id FK "NOT NULL"
-        UUID basis_id
+        JSONB outline_context
     }
 
     Account["Account · Core"]
@@ -88,7 +78,6 @@ erDiagram
     AgentRun ||--|| ConversationTurn : has
 
     %% One-to-Many relationships
-    ConversationEntry ||--o{ BasisEdge : references
     Account ||--o{ Conversation : has
     Conversation ||--o{ Conversation : has
     Workspace ||--o{ Conversation : has

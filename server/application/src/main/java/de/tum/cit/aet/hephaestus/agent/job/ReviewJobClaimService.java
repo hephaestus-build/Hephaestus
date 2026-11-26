@@ -44,6 +44,10 @@ import tools.jackson.databind.ObjectMapper;
 public class ReviewJobClaimService {
     private static final Logger log = LoggerFactory.getLogger(ReviewJobClaimService.class);
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
+
+    /** How long a review that its pool refused waits before a dispatch may start a sandbox for it again. */
+    private static final Duration POOL_HOLD_INTERVAL = Duration.ofMinutes(1);
+
     private static final Duration BUDGET_HOLD_MAX_JOB_AGE = Duration.ofDays(7);
 
     private final ReviewJobRepository jobRepository;
@@ -163,7 +167,9 @@ public class ReviewJobClaimService {
                     yield Optional.empty();
                 }
                 case PoolWait waiting -> {
-                    runs.defer(fence, AgentRuns.Deferral.MODEL_POOL);
+                    // A deferral would keep the run due, so its ready sandbox would poll and hold its slot. A hold
+                    // spends nothing and keeps the run's place, and the lease returns the sandbox at once.
+                    runs.requeue(fence, AgentRuns.Charge.FREE, POOL_HOLD_INTERVAL, AgentRunHold.MODEL_POOL);
                     yield Optional.empty();
                 }
                 case ClaimOutcome held -> {

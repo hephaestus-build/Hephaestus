@@ -70,6 +70,10 @@ public class Connection {
     @Nullable
     private String instanceKey;
 
+    @Nullable
+    @Column(name = "outline_origin", length = 512)
+    private String outlineOrigin;
+
     @Column(name = "display_name", length = 256)
     @Nullable
     private String displayName;
@@ -161,6 +165,7 @@ public class Connection {
         this.kind = kind;
         this.instanceKey = instanceKey;
         this.config = config;
+        this.outlineOrigin = configuredOutlineOrigin(config);
     }
 
     /**
@@ -203,6 +208,11 @@ public class Connection {
     @Nullable
     public String getInstanceKey() {
         return instanceKey;
+    }
+
+    @Nullable
+    public String getOutlineOrigin() {
+        return outlineOrigin;
     }
 
     @Nullable
@@ -305,6 +315,13 @@ public class Connection {
                         "A bound connection cannot change its provider instance. Create a new connection.");
         }
         this.config = config;
+        outlineOrigin = configuredOutlineOrigin(config);
+    }
+
+    private static @Nullable String configuredOutlineOrigin(ConnectionConfig config) {
+        return config instanceof ConnectionConfig.OutlineConfig outline
+                ? ScmOrigin.of(outline.serverUrl()).orElse(null)
+                : null;
     }
 
     /** Encrypts or clears this connection's credentials. */

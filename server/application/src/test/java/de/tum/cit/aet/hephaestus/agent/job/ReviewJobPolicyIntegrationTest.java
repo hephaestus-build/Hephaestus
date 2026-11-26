@@ -288,6 +288,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .flatMap(lease -> claims.claimLeased(lease.fence()))));
     }
 
+    private int runAttempt(ReviewJob job) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT attempt FROM agent_run WHERE id=?", Integer.class, job.getRunId()));
+    }
+
     private String runKind(ReviewJob job) {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT kind FROM agent_run WHERE id=?",
@@ -1040,8 +1045,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
             jdbc.update(
                     "UPDATE review_job SET status='COMPLETED', completed_at=now() WHERE id=?", runningReview.getId());
         });
-        // The wait deferred the run for a later pull; the next pull is now.
-        jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
+        // The pool held the run for a later dispatch; that dispatch is now.
+        jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", job.getRunId());
 
         assertThat(claimLeased(job, pool.claims())).isPresent();
         var admitted = jobs.findById(job.getId()).orElseThrow();
@@ -1106,8 +1111,38 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
 
         jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
-        jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
+        jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", job.getRunId());
         assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldHoldTheRunSoItsSandboxGoesBackWhenTheLimitFallsBetweenDispatchAndClaim() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        withPractices(job, 3);
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)), 3);
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+        // At the learned limit of eight, three running sessions and the review's three fit the six calls of
+        // measurements, so a dispatch admitted the review and started its sandbox.
+        int attempt = runAttempt(job);
+
+        // The provider lowers the pool's limit before the review's sandbox claims its run: five calls, less their
+        // reserve of two, hold three, and the three running sessions fill them.
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=5 WHERE id=?", pool.poolId());
+
+        assertThat(claimLeased(job, pool.claims())).isEmpty();
+        var run = jdbc.queryForMap(
+                "SELECT state, hold_reason, available_at > clock_timestamp() AS waits FROM agent_run WHERE id=?",
+                job.getRunId());
+        assertThat(run)
+                .as("held, not deferred: a deferred run stays due, and its ready sandbox would poll and keep its slot")
+                .containsEntry("state", "QUEUED")
+                .containsEntry("hold_reason", AgentRunHold.MODEL_POOL.name())
+                .containsEntry("waits", true);
+        assertThat(runAttempt(job)).as("a hold spends no attempt").isEqualTo(attempt);
+        assertThat(agentRuns.due(reviews, 0, 100))
+                .as("a held run is not due, so no dispatch starts a sandbox for it")
+                .noneMatch(due -> due.run().id().equals(job.getRunId()));
     }
 
     @Test

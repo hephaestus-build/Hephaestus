@@ -16,6 +16,8 @@
             "core::auth-spi",
             "core::current-account",
             "core::event",
+            // The retry selection and the gauges read the publication registry that core owns.
+            "core::publication",
             "core::person-data",
             "core::runtime",
             "core::web",

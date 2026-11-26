@@ -121,8 +121,8 @@ jobs:
         with:
           install: "frozen"
 
-      # A pull request's run does not repeat when its base advances, so the merge group is where a
-      # migration that reached `main` since then is judged. Both need their base; only a push may lack one.
+      # Check immutability against the event tree, which the checkout includes. Changes checks order
+      # against current main separately. Only a push may lack an event base.
       - name: Resolve released-chain baseline
         id: baseline
         continue-on-error: true

@@ -11,6 +11,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
@@ -157,6 +158,12 @@ public class GitLabGraphQlConfig {
         return (request, next) -> next.exchange(request).doOnNext(response -> {
             logRateLimitInfo(response);
 
+            request.attribute(GitLabGraphQlClientProvider.EXCHANGE_ATTRIBUTE)
+                    .filter(ProviderReply.Exchange.class::isInstance)
+                    .map(ProviderReply.Exchange.class::cast)
+                    .ifPresent(exchange -> exchange.record(
+                            response.statusCode().value(),
+                            ProviderReply.headersOf(response.headers().asHttpHeaders())));
             // Update per-scope rate limit tracker from response headers
             request.attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE)
                     .ifPresent(scopeIdObj -> rateLimitTracker.updateFromHeaders(
@@ -196,16 +203,17 @@ public class GitLabGraphQlConfig {
         }
     }
 
-    private ExchangeFilterFunction retryFilter() {
+    /** Commit correction reads the 429 deadline itself. Other callers still retry within the transport's bound. */
+    ExchangeFilterFunction retryFilter() {
         return (request, next) -> next.exchange(request)
                 .flatMap(response -> {
                     HttpStatusCode status = Objects.requireNonNull(response).statusCode();
 
-                    if (status.is4xxClientError() && status.value() != 429) {
-                        return Mono.just(response);
-                    }
+                    boolean retryThrottle = status.value() == 429
+                            && request.attribute(GitLabGraphQlClientProvider.EXCHANGE_ATTRIBUTE)
+                                    .isEmpty();
 
-                    if (status.is5xxServerError() || status.value() == 429) {
+                    if (status.is5xxServerError() || retryThrottle) {
                         return Objects.requireNonNull(response)
                                 .releaseBody()
                                 .then(Mono.error(new RetryableStatusException(status.value())));
