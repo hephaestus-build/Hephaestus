@@ -67,6 +67,7 @@ Option 4.
    - A person has at most three active goals in each workspace. The limit keeps the always-loaded block small (ADR 0132 decision 9).
 3. **The person's act writes a record, and each act has its reverse.** The goal follows this table. Code applies it in the transaction of each act, under one lock for the owner in the workspace. A test covers each row.
    - Every act names the version of the record that the person saw. Every act, a state change too, makes a new version.
+   - An act applies only when the version that it names is the current version. Retained history never makes an older version current.
    - Undo is the reverse act on the same path. It is not an act of its own.
 
    | State | Act or event | Next state |
@@ -79,10 +80,11 @@ Option 4.
    | `ACTIVE` | **Close** | `CLOSED`. The goal's check-ins pause. The confirmation shows **Undo**. |
    | `CLOSED` | **Reopen**, or **Undo** of the close | `ACTIVE`. The check-ins that the close paused resume. |
    | Three goals `ACTIVE` | **Save**, **Reopen**, or **Undo** of a close | Refused. The list says to close a goal first. |
-   | Any goal | **Forget**, after one confirmation | No goal, decision 6 removes its uses, and its check-ins stop. The journal records a deletion fact with the record ID only ([ADR 0140](0140-privacy-facts-go-to-a-journal-and-a-restore-reapplies-them.md)). A ready export of the owner expires. |
-   | Any goal | An act with a version that the record no longer has | Refused as changed since shown. The list reloads (ADR 0132 decision 15). |
+   | Any goal | **Forget**, after one confirmation | No goal, decision 6 makes its uses stale, and its check-ins stop. The journal records a deletion fact with the record ID only ([ADR 0140](0140-privacy-facts-go-to-a-journal-and-a-restore-reapplies-them.md)). A ready export of the owner expires. |
+   | Any goal | An act that names a version other than the current one | Refused as changed since shown, under the owner lock. The list reloads (ADR 0132 decision 15). |
    | `ACTIVE` with a practice | The practice leaves the workspace practices | The link stays. The line says that the practice is no longer in use. **Edit** removes it. |
    | Any goal | The membership ends | Writes stop, except **Forget** and **Take along** in the leaving window of [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) decision 6. The goal stays under ADR 0132 decision 10. |
+   | Any goal | The leaving window ends under a Closed policy of ADR 0132 decision 10 | No goal, as after **Forget**. A ready export of the owner expires. |
    | Any goal | The account is erased, or the workspace is purged | No goal |
 
 4. **A model never writes a record** (ADR 0132 decision 16). Hephaestus may offer "Save this as a goal?" with the exact words only after decision 6 holds. The save is still the person's act, and it binds the hash of the text that the person saw.
@@ -96,7 +98,8 @@ Option 4.
    - A record never goes into the context folder or its archive. An archive is one conservative input, so a record in it would make every answer depend on every record.
    - The owner's app route reads records. A Slack turn under **Full** reads only the kinds that [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 5 lists. The composer, a review and the digest never read them.
    - Every entry that a turn derives from a record carries the record in its basis. Replay, search, summaries, the digest, Slack and exports apply the route check to that basis.
-   - **Forget** and **Not right** make every entry whose basis holds the record stale (ADR 0128). A stale entry stays in the owner's app view with the note "This answer used a goal that you forgot". It never reaches a model, Slack or an export again.
+   - **Forget** and **Not right** make every entry whose basis holds the record stale (ADR 0128). A stale entry stays in the owner's app view. It never reaches a model, Slack or an export again.
+   - A stale entry's note names the record kind and the act, such as "This answer used a goal that you forgot" or "This answer used a preference that you marked not right".
    - The scope fence of #5141 stops each running turn that read the record ([ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md)).
    - The read stays off until three things hold: the durable basis records the read (#5256), the route comes from the held turn before the first read, and the route check of the fourth rule covers every reader of the ledger.
    - No staff export holds an entry whose basis holds a record ([ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md)).
@@ -109,15 +112,17 @@ Option 4.
    - A turn sets one from the person's own words only after decision 6 holds, as a save with **Undo**.
 8. **What Hephaestus used** (ADR 0131 decision 16) sits under each answer. The server renders it from rows. No model writes it. It has four groups, in this order:
    1. **Cited:** the observations, problems and feedback that the answer links, from the link calls that succeeded, with the place in the work.
-   2. **Read:** the context documents, the repositories at a commit and the practice definitions that the turn opened, and the messages that a search returned.
+   2. **Read:** the context documents, the repositories and the practice definitions that the turn opened, and the messages that a search returned.
    3. **Shaped by:** the records and help settings that the turn read, each with its own actions.
-   4. **Could not check:** each source that the turn tried to open and could not, with the reason in plain words.
+   4. **Could not check:** each source that the turn tried to open and could not, with the reason in plain words when the stored result still holds it.
 
    - Every turn also reads the conversation before it answers. The view says so in one fixed line. It lists earlier messages only when a search returned them.
    - Labels render from current rows at each view. A source that the owner can no longer read shows "No longer available", never its old title.
    - The list shows no tool name, prompt, reasoning, file path, model or internal ID.
-   - Until the durable basis records how each source was read (#5277), the server takes **Cited**, **Read** and **Could not check** from the stored tool calls of the answer's turn. Then it takes them from `ConversationBasis.sourcesOf`. The view does not change.
-   - An answer whose turn stored no tool calls, such as one from before this view, says "Hephaestus did not record what this answer used."
+   - Until the durable basis records how each source was read (#5277), the server takes **Cited**, **Read** and **Could not check** from the stored tool calls of the answer's turn and the error marks of their results. Then it takes them from `ConversationBasis.sourcesOf`.
+   - A stored result can lose its resolved commit and its failure text. So before #5277, a repository shows its name without a commit, and a failure shows without its reason.
+   - When the stored calls show no source, the view says that Hephaestus opened nothing beyond the conversation.
+   - An answer whose turn stored no entries says "Hephaestus did not record what this answer used."
 9. **A message from Hephaestus says why it exists.** A check-in notice or a requested result carries its reason line and the agreement that allowed it, with that agreement's **Less often** and **Stop this check-in** ([ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) decision 8, [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) decision 16).
 10. **Hephaestus holds or yields on evidence.** When the person says that an answer or feedback is wrong, Hephaestus does these things:
     - It asks for the evidence that the person sees.
