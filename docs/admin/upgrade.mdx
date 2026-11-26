@@ -132,7 +132,8 @@ Do not use `--rollback-on-failure`: a rollback can start the old server against 
 Pause deployment automation that can change the release until this procedure is complete.
 
 Before phase 1, record the current chart, profile, site values and `server.replicas`.
-Prepare the applicable restore point as [Upgrade the release](#upgrade-the-host) describes.
+If bundled PostgreSQL has no backup repository, [prepare a logical restore point](#prepare-a-logical-restore-point).
+For other installations, verify the database backup.
 
 Set `release` to the Helm release name.
 Set `namespace` to the release namespace.
