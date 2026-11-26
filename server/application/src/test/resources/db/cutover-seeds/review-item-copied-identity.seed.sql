@@ -16,6 +16,17 @@ VALUES (979405, 979400, 979404, 1,
    "reads":{"contract":"3.0.0","sources":[{"source":"scm.pull-request.core","need":"COMPLETE"}]},
    "reviewedBy":{"by":"HEPHAESTUS","humanReason":null,"limits":[]},"script":null,"scan":null,
    "lineNotes":false,"guidance":{"whyItMatters":null,"whatGoodLooksLike":null,"goingWell":null,"visual":null,"guide":null}}');
+-- A release that already backfilled practice identities writes an identity with every version.
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = 'practice_version' AND column_name = 'identity_key') THEN
+        UPDATE practice_version
+        SET identity_key = 'local/979400/979404', comparability_class = review_digest
+        WHERE id = 979405;
+    END IF;
+END
+$$;
 -- An item review lists only its own item, so each member has a review of its own.
 INSERT INTO review (id, workspace_id, item_id, kind, item_version, origin, status, ordered_at)
 VALUES ('00000000-0000-0000-0000-000000979411', 979400, 979406, 'ITEM', 'cutover-v1', 'REQUEST', 'QUEUED', now()),

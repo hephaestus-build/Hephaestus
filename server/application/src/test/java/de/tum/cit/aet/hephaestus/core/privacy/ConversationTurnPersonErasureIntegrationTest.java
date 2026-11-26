@@ -21,6 +21,9 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
+import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
+import de.tum.cit.aet.hephaestus.core.auth.export.ExportGenerationWorker;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
@@ -49,6 +52,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -153,6 +157,15 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonDataService personData;
+
+    @Autowired
+    private ExportGenerationWorker exportWorker;
+
+    @Autowired
+    private AccountExportRepository exports;
+
+    @Autowired
+    private OwnerScope ownerScope;
 
     /** The developer's workspace and conversation, and the erasure of another member that the test runs. */
     private record Erasure(
@@ -357,6 +370,53 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                     assertThat(entry.getText()).isEmpty();
                     assertThat(String.valueOf(entry.getPayload())).doesNotContain("Alex");
                 });
+    }
+
+    @Test
+    void shouldExpireTheReadyExportThatHoldsAnAnswerTheErasureRemovesAndKeepAnUnrelatedOne() {
+        Erasure erasure = requestErasure(sourceThatFailsOnce());
+        ConversationTurn turn = ask(erasure.workspace(), erasure.main(), "Who reviews the API?");
+        end(turn, "Alex reviews it.");
+        long developer = erasure.main().getAccountId();
+        long unrelated = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Unrelated")).getId());
+        long developerExport = readyExport(developer);
+        long unrelatedExport = readyExport(unrelated);
+        assertThat(new String(
+                        Objects.requireNonNull(
+                                export(developerExport, developer).getPayload()),
+                        StandardCharsets.UTF_8))
+                .contains("Alex reviews it.");
+
+        run(erasure);
+
+        assertThat(requests.findById(erasure.requestId()).orElseThrow().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(export(developerExport, developer)).satisfies(expired -> {
+            assertThat(expired.getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
+            assertThat(expired.getPayload()).isNull();
+        });
+        assertThat(export(unrelatedExport, unrelated)).satisfies(kept -> {
+            assertThat(kept.getStatus()).isEqualTo(AccountExport.Status.READY);
+            assertThat(kept.getPayload()).isNotEmpty();
+        });
+    }
+
+    private long readyExport(long accountId) {
+        long exportId = Objects.requireNonNull(transaction().execute(status -> {
+            ownerScope.ofJob(accountId);
+            return exports.save(new AccountExport(accountId)).getId();
+        }));
+        exportWorker.generate(exportId, accountId);
+        assertThat(export(exportId, accountId).getStatus()).isEqualTo(AccountExport.Status.READY);
+        return exportId;
+    }
+
+    private AccountExport export(long exportId, long accountId) {
+        return Objects.requireNonNull(transaction().execute(status -> {
+            ownerScope.ofJob(accountId);
+            return exports.findById(exportId).orElseThrow();
+        }));
     }
 
     @Test

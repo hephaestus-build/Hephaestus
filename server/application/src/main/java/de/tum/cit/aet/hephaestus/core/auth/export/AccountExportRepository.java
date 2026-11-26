@@ -32,6 +32,18 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
             nativeQuery = true)
     boolean tryLockGeneration(@Param("id") Long id);
 
+    /**
+     * The owner's export fence, alone, until the transaction ends. An erasure or an edit of the owner's conversation
+     * messages or received feedback shares it ({@code person_row_sweep('EXPORT_SOURCES_CHANGED', …)}), so the worker
+     * reads those sources either after such a change commits or before it starts, and only a session that holds it may
+     * publish a ready export ({@code account_export_published_fenced}). The key is the one that rule uses.
+     */
+    @Query(
+            value = "SELECT count(*) FROM (SELECT pg_advisory_xact_lock(hashtext('account-export-sources'),"
+                    + " hashtext(CAST(:accountId AS text)) & 63)) fence",
+            nativeQuery = true)
+    long lockSources(@Param("accountId") Long accountId);
+
     /** The ownership-scoped row, locked through the terminal state change. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM AccountExport e WHERE e.id = :id AND e.accountId = :accountId")

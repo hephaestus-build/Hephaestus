@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -97,11 +98,20 @@ public class ScmRetainedOccasionEvidence {
             throw new ItemCaptureException(
                     ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE,
                     "The occasion kept no record of the work: " + retained.unretained());
+        ScmOccasionEvidence evidence;
         try {
-            return mapper.readValue(json, ScmOccasionEvidence.class);
+            evidence = mapper.readValue(json, ScmOccasionEvidence.class);
         } catch (JacksonException | IllegalArgumentException unreadable) {
             throw new ItemCaptureException(
                     ItemCaptureCode.CAPTURE_FAILED, "Retained occasion evidence is unreadable", unreadable);
         }
+        // A record that pins another version than its own pinned occasion, or none, is corrupt: a fault that is
+        // retried.
+        // A valid record asked for a different version stays unavailable, which currentness compares.
+        if (!Objects.equals(evidence.itemVersion(), retained.itemVersion()))
+            throw new ItemCaptureException(
+                    ItemCaptureCode.CAPTURE_FAILED,
+                    "Retained occasion evidence pins another version than its occasion");
+        return evidence;
     }
 }

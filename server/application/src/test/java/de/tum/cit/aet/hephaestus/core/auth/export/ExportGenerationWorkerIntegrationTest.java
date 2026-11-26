@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.AccountPurger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
@@ -61,6 +63,12 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AccountConversationExport conversations;
+
+    @Autowired
+    private AccountFeedbackExport feedback;
 
     @ParameterizedTest
     @EnumSource(names = {"DELETING", "DELETED"})
@@ -245,6 +253,8 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                 repository,
                 accountRepository,
                 assembler,
+                conversations,
+                feedback,
                 objectMapper,
                 new AccountExportWriter(repository, accountRepository, clock),
                 new PrivacyJobMetrics(registry),

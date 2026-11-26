@@ -7,6 +7,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -67,10 +69,20 @@ public class AccountExportWriter {
         ALREADY_DONE
     }
 
-    public Generation finish(Long exportId, Long accountId, byte @Nullable [] payload, String failureReason) {
+    /**
+     * Publishes the payload, or records the failure when {@code payload} is null or the account is unavailable. The
+     * payload is built here, under the owner's export fence: an erasure or an edit of an exported source shares that
+     * fence ({@code person_row_sweep('EXPORT_SOURCES_CHANGED', …)}), so the payload reads its sources after such a change
+     * commits, or the change expires what this publishes. The database refuses a ready export without the fence.
+     */
+    public Generation finish(Long exportId, Long accountId, @Nullable Supplier<byte[]> payload, String failureReason) {
         // Take the account lifecycle lock before the export row, as the purge does. A null payload
         // can only clear an existing export, so recording failure does not require admission.
         boolean admitted = payload != null && admit(accountId);
+        if (admitted) {
+            // After the account and before the export row: the order of every path that takes them.
+            accountExportRepository.lockSources(accountId);
+        }
         AccountExport export = accountExportRepository
                 .lockByIdAndAccountId(exportId, accountId)
                 .orElse(null);
@@ -85,7 +97,7 @@ public class AccountExportWriter {
             return Generation.ACCOUNT_UNAVAILABLE;
         }
         Instant now = clock.instant();
-        export.setPayload(payload);
+        export.setPayload(Objects.requireNonNull(payload).get());
         export.setCompletedAt(now);
         export.setExpiresAt(now.plus(RETENTION));
         export.setStatus(AccountExport.Status.READY);

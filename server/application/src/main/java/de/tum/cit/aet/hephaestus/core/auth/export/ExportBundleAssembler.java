@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
@@ -26,7 +24,11 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Maps account-owned data to the explicit field allowlist in {@link ExportBundle}. */
+/**
+ * Maps account-owned data to the explicit field allowlist in {@link ExportBundle}. The conversation messages and the
+ * feedback are left empty: another person's erasure can remove them, so {@link ExportGenerationWorker} reads them under
+ * the owner's export fence when it publishes.
+ */
 @ConditionalOnServerRole
 @Component
 public class ExportBundleAssembler {
@@ -46,8 +48,6 @@ public class ExportBundleAssembler {
     private final AccountAiChoiceExport aiChoiceExport;
     private final ResearchParticipationQuery researchParticipation;
     private final NotificationPreferencesExportQuery notificationPreferences;
-    private final AccountConversationExport conversations;
-    private final AccountFeedbackExport feedback;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -61,11 +61,7 @@ public class ExportBundleAssembler {
             NotificationPreferencesExportQuery notificationPreferences,
             ResearchParticipationQuery researchParticipation,
             PasskeyCredentialRepository passkeys,
-            PasskeyJson passkeyJson,
-            AccountConversationExport conversations,
-            AccountFeedbackExport feedback) {
-        this.conversations = conversations;
-        this.feedback = feedback;
+            PasskeyJson passkeyJson) {
         this.passkeys = passkeys;
         this.passkeyJson = passkeyJson;
         this.accountService = accountService;
@@ -149,9 +145,9 @@ public class ExportBundleAssembler {
                                     credential.getLabel(), credential.getCreated(), credential.getLastUsed());
                         })
                         .toList(),
-                conversations.messages(accountId),
-                feedback.received(accountId),
-                feedback.responses(accountId));
+                List.of(),
+                List.of(),
+                List.of());
     }
 
     private static GitProviderRegistry.IdentityKey key(Identity identity) {

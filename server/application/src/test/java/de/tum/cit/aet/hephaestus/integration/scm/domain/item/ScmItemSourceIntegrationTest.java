@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 
 import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
@@ -107,6 +108,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -209,6 +211,9 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ScmItemSourceAccess sourceAccess;
+
+    @MockitoSpyBean
+    private ScmItemAccess itemAccess;
 
     @Autowired
     private ProductItemQuery productItems;
@@ -644,7 +649,8 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 sources.labels(holder.workspaceId(), List.of(issueRef)).get(issueRef.itemId()));
         assertThat(removedLabel.title()).isEqualTo("An issue");
         assertThat(removedLabel.url()).isNull();
-        assertUnavailable(issueRef, ItemCaptureCode.ITEM_REMOVED);
+        // The index removal does not prove a deletion: a withdrawn repository's work leaves the index too.
+        assertUnavailable(issueRef, ItemCaptureCode.ITEM_NOT_VISIBLE);
         writer.restore(holder.workspaceId(), issueRef.itemId());
         assertThat(sources.pin(issueRef, null).item()).isEqualTo(issueRef);
 
@@ -1060,10 +1066,6 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         long developer = Objects.requireNonNull(scenario.account().getId());
         var start = Instant.now().minus(1, ChronoUnit.HOURS);
         List<Result> recorded = new ArrayList<>();
-        var json = new JsonMapper();
-        var completeCustody = json.createObjectNode()
-                .set("custody", json.valueToTree(new HistoryCustody(true, false, List.of(), List.of(), List.of())))
-                .toString();
         Runnable more = () -> {
             for (int index = 0; index < 3; index++) {
                 var at = start.plusSeconds(60L * recorded.size());
@@ -1071,15 +1073,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 var result = resultData.result(
                         scenario, recorded.size() % 3 == 0 ? ResultOutcome.NOT_MET : ResultOutcome.MET, at);
                 recorded.add(result);
-                // Only capture writes custody receipts; the guard that refuses other writers stays on.
-                transactions.executeWithoutResult(status -> {
-                    jdbc.execute("SET LOCAL session_replication_role=replica");
-                    jdbc.update(
-                            "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
-                            completeCustody,
-                            workspaceId,
-                            result.getId());
-                });
+                retainCompleteCustody(result);
             }
         };
         Supplier<Long> cost = () -> {
@@ -1099,6 +1093,135 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         more.run();
 
         assertThat(cost.get()).isEqualTo(few);
+    }
+
+    /**
+     * A read of many work items checks every item's source as its own check does, and reads what they share, here
+     * their repository and their author, once. Every third item's work is deleted, so it is refused.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldShareSourceReadsAndCheckEachWorkRowWhenAsked(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        List<ItemRef> refs = new ArrayList<>();
+        Runnable more = () -> {
+            for (int index = 0; index < 3; index++) {
+                var issue = progressIssue(fixture, 300 + refs.size(), null);
+                if (refs.size() % 3 == 2) {
+                    issue.setDeletedAt(Instant.now());
+                    issues.saveAndFlush(issue);
+                }
+                refs.add(writer.upsert(
+                        new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null)));
+            }
+        };
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var audience = SourceReadAudience.PROCESSING;
+        Supplier<Long> cost = () -> {
+            var read = reads.measure(() -> sourceAccess.prepareChecks(refs, purpose, audience).entrySet().stream()
+                    .collect(Collectors.toMap(
+                            entry -> entry.getKey().itemId(),
+                            entry -> entry.getValue().getAsBoolean())));
+            for (var ref : refs)
+                assertThat(read.value())
+                        .as("item %s", ref.itemId())
+                        .containsEntry(
+                                ref.itemId(), sourceAccess.permits(ref, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY));
+            assertThat(read.value()).containsValues(true, false);
+            return read.cost().statements();
+        };
+
+        more.run();
+        long few = cost.get();
+        more.run();
+        more.run();
+
+        // Each additional item reads its work row and checks the current monitor and connection.
+        assertThat(cost.get()).isEqualTo(few + 18);
+
+        var later = refs.get(1);
+        var transferred = reads.measure(() -> {
+            var checks = sourceAccess.prepareChecks(refs, purpose, audience);
+            assertThat(Objects.requireNonNull(checks.get(refs.getFirst())).getAsBoolean())
+                    .isTrue();
+            CompletableFuture.runAsync(
+                            () -> jdbc.update("UPDATE issue SET deleted_at = now() WHERE id = ?", later.sourceId()))
+                    .join();
+            return Objects.requireNonNull(checks.get(later)).getAsBoolean();
+        });
+        assertThat(transferred.value()).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldRefuseTheNextResultWhenItsRepositoryIsWithdrawnDuringTheRead(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        var repository = fixture.repository();
+        var holder = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.REPOSITORY, repository.getId(), null, null));
+        var firstWork = progressIssue(fixture, 310, null);
+        var nextWork = progressIssue(fixture, 311, null);
+        var firstItem = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, firstWork.getId(), holder.itemId(), null));
+        var nextItem = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, nextWork.getId(), holder.itemId(), null));
+        var at = Instant.now();
+        var first = resultData.result(parentScenario(fixture, firstItem), ResultOutcome.MET, at);
+        var next = resultData.result(parentScenario(fixture, nextItem), ResultOutcome.MET, at);
+        retainCompleteCustody(first);
+        retainCompleteCustody(next);
+
+        var other = connectedWorkspace(type, fixture.provider().getServerUrl(), "still-monitors-" + UUID.randomUUID());
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                other, repository.getNameWithOwner(), repository.getNativeId()));
+        long monitorId = monitors.findByWorkspaceIdAndNameWithOwner(workspaceId, repository.getNameWithOwner())
+                .orElseThrow()
+                .getId();
+        doAnswer(call -> {
+                    var work = call.callRealMethod();
+                    // Authorization already accepted the first result's repository. Revoke access before the next
+                    // check.
+                    CompletableFuture.runAsync(() -> monitors.deleteById(monitorId))
+                            .join();
+                    return work;
+                })
+                .when(itemAccess)
+                .work(ScmItemEvents.ISSUE, firstWork.getId());
+
+        var checked = authorization.checkAll(
+                workspaceId, facts(List.of(first, next)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+
+        assertThat(checked)
+                .containsOnlyKeys(first.getId(), next.getId())
+                .hasEntrySatisfying(
+                        first.getId(), check -> assertThat(check.permitted()).isTrue())
+                .hasEntrySatisfying(
+                        next.getId(), check -> assertThat(check.permitted()).isFalse());
+        assertThat(repositories.isMonitored(workspaceId, repository.getId())).isFalse();
+        assertThat(repositories.isMonitored(other.getId(), repository.getId())).isTrue();
+    }
+
+    private void retainCompleteCustody(Result result) {
+        var complete = mapper.createObjectNode()
+                .set("custody", mapper.valueToTree(new HistoryCustody(true, false, List.of(), List.of(), List.of())))
+                .toString();
+        // Only capture normally writes custody receipts.
+        transactions.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role=replica");
+            jdbc.update(
+                    "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
+                    complete,
+                    result.getWorkspaceId(),
+                    result.getId());
+        });
     }
 
     @ParameterizedTest
@@ -1688,7 +1811,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(productItems
                         .read(item, Set.of(LinkedWorkItemContentSource.KIND), null)
                         .unreadReason())
-                .isEqualTo("ITEM_REMOVED");
+                .isEqualTo("ITEM_NOT_VISIBLE");
 
         long unavailableId = Objects.requireNonNull(jdbc.queryForObject(
                 "INSERT INTO item(workspace_id,kind,source_id,parent_id,created_at)"

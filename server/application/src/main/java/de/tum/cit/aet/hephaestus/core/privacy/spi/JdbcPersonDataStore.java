@@ -160,12 +160,16 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     }
 
     private long eraseWhere(PersonDataSelection selection, PersonScope frozenScope, String where) {
+        var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
+        bindings.putAll(selectionParameters(selection));
+        return jdbc.update(eraseStatement(where), bindings);
+    }
+
+    protected String eraseStatement(String where) {
         String command = redaction.isEmpty()
                 ? "DELETE FROM " + quotedTable() + " t"
                 : "UPDATE " + quotedTable() + " t SET " + redaction;
-        var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
-        bindings.putAll(selectionParameters(selection));
-        return jdbc.update(command + " WHERE " + where, bindings);
+        return command + " WHERE " + where;
     }
 
     protected List<JsonNode> querySelected(String projection, String from, PersonDataSelection selection) {

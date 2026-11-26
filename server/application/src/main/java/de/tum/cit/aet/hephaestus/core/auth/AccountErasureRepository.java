@@ -41,8 +41,14 @@ interface AccountErasureRepository extends Repository<Account, Long> {
     @Query(value = "DELETE FROM issued_jwt WHERE account_id = :accountId", nativeQuery = true)
     void deleteIssuedTokens(@Param("accountId") Long accountId);
 
+    // See "Account export locks" in docs/contributor/transactions.mdx.
     @Modifying
-    @Query(value = "DELETE FROM account_export WHERE account_id = :accountId", nativeQuery = true)
+    @Query(value = """
+                WITH locked AS MATERIALIZED (
+                    SELECT id FROM account_export WHERE account_id = :accountId ORDER BY id FOR UPDATE
+                )
+                DELETE FROM account_export WHERE id IN (SELECT id FROM locked)
+                """, nativeQuery = true)
     void deleteExports(@Param("accountId") Long accountId);
 
     @Modifying

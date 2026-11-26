@@ -23,10 +23,13 @@ public interface ResultCommunicationRepository extends Repository<Result, UUID> 
         """, nativeQuery = true)
     List<BoundFeedback> boundFeedback(long ws, UUID id);
 
-    // The time is that of the first row of the newest run with the same disagreement and explanation: a later private
-    // rating appends a row too, and the admin must not see when it changed.
-    @Query(value = """
-        SELECT DISTINCT f.id,f.destination,s.comment,s.created_at AS respondedAt FROM feedback f
+    /**
+     * Each piece of feedback on a result with its newest response run as {@code s}. The time is that of the first row of
+     * the newest run with the same disagreement and explanation: a later private rating appends a row too, and the
+     * admin must not see when it changed.
+     */
+    String NEWEST_RESPONSE_RUN = """
+        FROM feedback f
         JOIN feedback_basis b ON b.feedback_id=f.id AND b.workspace_id=f.workspace_id JOIN LATERAL (
           SELECT v.resolution,v.comment,v.created_at FROM (
             SELECT r.id,r.created_at,r.resolution,CASE WHEN r.resolution='DISAGREE' THEN r.comment END AS comment,
@@ -37,9 +40,27 @@ public interface ResultCommunicationRepository extends Repository<Result, UUID> 
             WINDOW w AS (ORDER BY r.created_at,r.id::text)) v
           WHERE v.position=1 OR v.resolution IS DISTINCT FROM v.previous_resolution OR v.comment IS DISTINCT FROM v.previous_comment
           ORDER BY v.created_at DESC,v.id::text DESC LIMIT 1) s ON true
-        WHERE f.workspace_id=:ws AND b.result_id=:id AND s.resolution='DISAGREE' ORDER BY s.created_at
-        """, nativeQuery = true)
+        """;
+
+    @Query(
+            value = "SELECT DISTINCT f.id,f.destination,s.comment,s.created_at AS respondedAt " + NEWEST_RESPONSE_RUN
+                    + " WHERE f.workspace_id=:ws AND b.result_id=:id AND s.resolution='DISAGREE' ORDER BY s.created_at",
+            nativeQuery = true)
     List<Disagreement> disagreements(long ws, UUID id);
+
+    /** The newest of {@link #disagreements} of each of {@code ids} that has one. */
+    @Query(
+            value = "SELECT b.result_id AS resultId,max(s.created_at) AS respondedAt " + NEWEST_RESPONSE_RUN
+                    + " WHERE f.workspace_id=:ws AND b.result_id=ANY(CAST(:ids AS uuid[])) AND s.resolution='DISAGREE'"
+                    + " GROUP BY b.result_id",
+            nativeQuery = true)
+    List<LatestDisagreement> latestDisagreements(long ws, UUID[] ids);
+
+    interface LatestDisagreement {
+        UUID getResultId();
+
+        Instant getRespondedAt();
+    }
 
     @Query(value = """
         SELECT DISTINCT b.result_id AS resultId,f.id,f.destination,f.state,f.delivered_at AS deliveredAt,s.resolution,s.usefulness,s.comment,s.created_at AS respondedAt

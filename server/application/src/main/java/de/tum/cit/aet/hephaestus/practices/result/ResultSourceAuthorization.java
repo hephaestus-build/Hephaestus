@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
@@ -37,7 +38,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -78,6 +81,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return result.id().equals(assignment.getResultId());
     }
 
+    @Transactional(readOnly = true)
     public boolean authorized(ResultFacts result, HistoryCustody facts, SourceUsePurpose purpose) {
         return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups(result.workspaceId()));
     }
@@ -248,6 +252,9 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         private final Map<SourceKey, Boolean> sources = new HashMap<>();
         // Suppression does not depend on the purpose or the audience, so every source check of an item shares it.
         private final Map<Long, Boolean> suppressedSources = new HashMap<>();
+        private final Set<Long> suppressionOffered = new HashSet<>();
+        private final Map<SourceKey, BooleanSupplier> ownerChecks = new HashMap<>();
+        private final Set<SourceKey> ownerOffered = new HashSet<>();
         private final Map<Long, Optional<AccountDirectory.AccountView>> accounts = new HashMap<>();
         private final Map<Long, Boolean> suppressedAccounts = new HashMap<>();
         private final Map<UUID, Boolean> suppressedJobs = new HashMap<>();
@@ -435,11 +442,59 @@ public class ResultSourceAuthorization implements ResultProofAccess {
 
         boolean sourceSuppressed(ItemRef item) {
             var source = item.sourceId();
-            return source != null
-                    && suppressedSources.computeIfAbsent(
-                            item.itemId(),
-                            ignored -> suppression.isSourceSuppressed(
-                                    item.workspaceId(), item.kind().value(), source));
+            if (source == null) return false;
+            if (!suppressedSources.containsKey(item.itemId())) readSuppressedSources(item.workspaceId(), item.kind());
+            return suppressedSources.computeIfAbsent(
+                    item.itemId(),
+                    ignored -> suppression.isSourceSuppressed(
+                            item.workspaceId(), item.kind().value(), source));
+        }
+
+        /**
+         * Whether the read's items of {@code kind} are suppressed, asked for all of them at once. Each item is offered
+         * once, so an item that a later check reaches joins the next such read.
+         */
+        private void readSuppressedSources(long workspaceId, ItemKind kind) {
+            var known = knownItems(workspaceId).stream()
+                    .filter(ref -> ref.kind().equals(kind) && ref.sourceId() != null)
+                    .filter(ref -> suppressionOffered.add(ref.itemId()))
+                    .toList();
+            if (known.isEmpty()) return;
+            var suppressed = suppression.suppressedSources(
+                    workspaceId,
+                    kind.value(),
+                    known.stream()
+                            .map(ref -> Objects.requireNonNull(ref.sourceId()))
+                            .collect(Collectors.toSet()));
+            known.forEach(ref ->
+                    suppressedSources.put(ref.itemId(), suppressed.contains(Objects.requireNonNull(ref.sourceId()))));
+        }
+
+        /** Prepare the owner's checks together and run only the one this result reaches. */
+        @Nullable
+        BooleanSupplier ownerCheck(
+                ItemSourceAccess owner, ItemRef item, SourceUsePurpose purpose, SourceReadAudience audience) {
+            var key = new SourceKey(item.itemId(), purpose, audience);
+            if (!ownerOffered.contains(key)) {
+                var known = knownItems(item.workspaceId()).stream()
+                        .filter(ref -> owner.kinds().contains(ref.kind()))
+                        .filter(ref -> ownerOffered.add(new SourceKey(ref.itemId(), purpose, audience)))
+                        .toList();
+                if (!known.isEmpty())
+                    owner.prepareChecks(known, purpose, audience)
+                            .forEach((ref, check) ->
+                                    ownerChecks.put(new SourceKey(ref.itemId(), purpose, audience), check));
+            }
+            return ownerChecks.get(key);
+        }
+
+        /** Every item the read has registered or looked up, and their parents, as stored in the workspace. */
+        private List<ItemRef> knownItems(long workspaceId) {
+            while (workspaceId == pendingWorkspace && !pendingItems.isEmpty()) readPendingItems(workspaceId);
+            return items.values().stream()
+                    .flatMap(Optional::stream)
+                    .filter(ref -> ref.workspaceId() == workspaceId)
+                    .toList();
         }
 
         boolean accountSuppressed(long accountId) {
@@ -639,9 +694,12 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                 .filter(owner -> owner.kinds().contains(item.kind()))
                 .toList();
         if (owners.size() != 1) return false;
+        var owner = owners.getFirst();
+        var batched = lookups.ownerCheck(owner, item, purpose, audience);
+        if (batched != null) return batched.getAsBoolean();
         // Processing keeps the one check every AI reader uses; only the human read asks the typed one.
         return audience == SourceReadAudience.PROCESSING
-                ? owners.getFirst().permits(item, purpose)
-                : owners.getFirst().permits(item, purpose, audience);
+                ? owner.permits(item, purpose)
+                : owner.permits(item, purpose, audience);
     }
 }

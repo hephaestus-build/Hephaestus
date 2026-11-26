@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongFunction;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -52,7 +53,12 @@ public class ScmItemAccess {
     }
 
     public ItemRef require(ItemRef item) {
-        ItemRef canonical = find(item.workspaceId(), item.itemId())
+        return require(item, stored(item.workspaceId()));
+    }
+
+    /** {@link #require} against {@code stored}, which answers as {@link ItemIndexService#find} of the workspace does. */
+    public ItemRef require(ItemRef item, LongFunction<Optional<ItemIndexService.IndexedItem>> stored) {
+        ItemRef canonical = find(item.itemId(), stored)
                 .orElseThrow(() -> new ItemCaptureException(
                         ItemCaptureCode.ITEM_NOT_VISIBLE, "Item is unavailable in this workspace"));
         if (!canonical.equals(item))
@@ -62,22 +68,45 @@ public class ScmItemAccess {
     }
 
     public Optional<ItemRef> find(long workspaceId, long itemId) {
-        return items.find(workspaceId, itemId).map(item -> {
-            if (item.removed()) throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Item has been removed");
+        return find(itemId, stored(workspaceId));
+    }
+
+    private static Optional<ItemRef> find(long itemId, LongFunction<Optional<ItemIndexService.IndexedItem>> stored) {
+        return stored.apply(itemId).map(item -> {
+            // The index removes the row of a withdrawn repository's work too: only the source confirms a deletion.
+            if (item.removed())
+                throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Item has left the workspace index");
             return item.ref();
         });
     }
 
+    private LongFunction<Optional<ItemIndexService.IndexedItem>> stored(long workspaceId) {
+        return itemId -> items.find(workspaceId, itemId);
+    }
+
     /**
      * The item's parent of {@code kind}. A parent that is missing, gone or of another kind makes the item not visible:
-     * no read can be authorized through it. An item without a parent is not visible either, never a crash.
+     * no read can be authorized through it. An item without a parent is not visible either, never a crash. A removed
+     * parent says nothing about the item itself: a repository that the workspace stopped monitoring keeps its pull
+     * requests, so only the item's own removal is {@link ItemCaptureCode#ITEM_REMOVED}.
      */
     public ItemRef parent(ItemRef item, ItemKind kind) {
+        return parent(item, kind, stored(item.workspaceId()));
+    }
+
+    /** {@link #parent} against {@code stored}, as {@link #require} reads it. */
+    public ItemRef parent(ItemRef item, ItemKind kind, LongFunction<Optional<ItemIndexService.IndexedItem>> stored) {
         Long parentId = item.parentId();
         if (parentId == null) throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Item has no parent");
-        ItemRef parent = find(item.workspaceId(), parentId)
-                .orElseThrow(
-                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item is unavailable"));
+        ItemRef parent;
+        try {
+            parent = find(parentId, stored)
+                    .orElseThrow(() ->
+                            new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item is unavailable"));
+        } catch (ItemCaptureException removed) {
+            if (removed.code() != ItemCaptureCode.ITEM_REMOVED) throw removed;
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item has been removed", removed);
+        }
         if (!parent.kind().equals(kind))
             throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent has the wrong kind");
         return parent;

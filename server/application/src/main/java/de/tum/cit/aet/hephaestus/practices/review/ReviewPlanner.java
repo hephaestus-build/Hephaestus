@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -82,6 +83,10 @@ class ReviewPlanner {
         var occasions = new HashSet<>(request.occasions());
         if (request.eventId() != null) {
             var fact = itemRows.event(request.workspaceId(), request.itemId(), request.eventId());
+            // A concurrent offer of the occasion may have decided it since this one was admitted: it gets no review.
+            if (ItemEventState.valueOf(fact.getState()).isTerminal())
+                throw new ReviewRequestRejected(
+                        ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The occasion was already decided.");
             if (!pinned.version().value().equals(fact.getItemVersion()))
                 throw new ReviewRequestRejected(
                         ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The event version does not match the review.");

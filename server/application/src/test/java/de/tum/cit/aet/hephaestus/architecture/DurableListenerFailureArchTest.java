@@ -59,7 +59,8 @@ class DurableListenerFailureArchTest extends HephaestusArchitectureTest {
                                     "LlmModelUnavailableException",
                                     "RepositoryFetchException",
                                     "ReviewRequestRefused"),
-                            "#5196: capture and review request failures; #5190 settles the unavailable version")),
+                            "#5196: review request failures, and the capture faults that #5190 rethrows so that they stay"
+                                    + " retryable while the occasion stays open")),
             Map.entry(
                     "ConversationTurnCompletion.billTakenBack",
                     new Escape(Set.of("EntityNotFoundException"), "#5196: the turn is gone")),

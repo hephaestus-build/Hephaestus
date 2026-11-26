@@ -223,6 +223,16 @@ public class ResultPresentation {
                 .toList();
     }
 
+    /** When each of {@code ids} was last disagreed with, for the results that were. */
+    public Map<UUID, Instant> latestDisagreements(long workspaceId, Collection<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        Map<UUID, Instant> latest = new HashMap<>();
+        communication
+                .latestDisagreements(workspaceId, ids.toArray(UUID[]::new))
+                .forEach(row -> latest.put(row.getResultId(), row.getRespondedAt()));
+        return latest;
+    }
+
     public List<FeedbackDisagreementDTO> disagreements(Result r) {
         return communication.disagreements(r.getWorkspaceId(), r.getId()).stream()
                 .map(row -> new FeedbackDisagreementDTO(

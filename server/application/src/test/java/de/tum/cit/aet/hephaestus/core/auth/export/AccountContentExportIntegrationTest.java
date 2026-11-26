@@ -25,9 +25,16 @@ import tools.jackson.databind.ObjectMapper;
 
 class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     private static final Instant AT = Instant.parse("2026-01-01T00:00:00Z");
+    private static final String CARD_WORDS = "Name each test after the behaviour it checks.";
 
     @Autowired
     private ExportBundleAssembler assembler;
+
+    @Autowired
+    private AccountConversationExport conversations;
+
+    @Autowired
+    private AccountFeedbackExport feedbackExport;
 
     @Autowired
     private ReviewIntegrationData data;
@@ -69,6 +76,10 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
         UUID delivered = feedback(result, account, "DELIVERED", "Name the tests after the behaviour.", AT);
         copy(delivered, workspace, 0, "POSTED", "Posted on the work.");
         copy(delivered, workspace, 1, "PLANNED", "Never posted.");
+        // Hephaestus shows feedback in a conversation as a card: the words are in its show_feedback call, and the
+        // answer's text barely mentions them. The chat receipt keeps the words the card showed.
+        UUID cardAnswer = cardAnswer(conversation, "Here is one thing to change.", CARD_WORDS);
+        chatTurn(delivered, workspace, 2, cardAnswer, CARD_WORDS);
         UUID withdrawn = feedback(result, account, "DELIVERED", "Withdrawn words.", AT.plusSeconds(1));
         copy(withdrawn, workspace, 0, "POSTED", "Withdrawn piece.");
         decisions.saveAndFlush(FeedbackDecision.builder()
@@ -85,13 +96,19 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
         feedback(result, other.getId(), "DELIVERED", "Feedback for another member.", AT.plusSeconds(3));
         response(delivered, workspace, "DISAGREE", "The tests already say it.");
 
-        ExportBundle bundle = assembler.assemble(account);
+        ExportBundle bundle = assembler
+                .assemble(account)
+                .withErasableSources(
+                        conversations.messages(account),
+                        feedbackExport.received(account),
+                        feedbackExport.responses(account));
 
         assertThat(bundle.conversationMessages())
                 .extracting(AccountConversationExport.Message::author, AccountConversationExport.Message::text)
                 .containsExactly(
                         tuple("USER", "How do I split this pull request?"),
-                        tuple("ANSWER", "Split it by the two features."));
+                        tuple("ANSWER", "Split it by the two features."),
+                        tuple("ANSWER", "Here is one thing to change."));
         assertThat(bundle.conversationMessages().getFirst().workspace())
                 .isEqualTo(scenario.workspace().getWorkspaceSlug());
         assertThat(bundle.feedbackReceived())
@@ -101,7 +118,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
             assertThat(received.body()).isEqualTo("Name the tests after the behaviour.");
             assertThat(received.pieces())
                     .extracting(AccountFeedbackExport.Piece::body)
-                    .containsExactly("Posted on the work.");
+                    .containsExactly("Posted on the work.", CARD_WORDS);
             assertThat(received.withdrawnAt()).isNull();
         });
         assertThat(bundle.feedbackReceived().getLast()).satisfies(received -> {
@@ -148,7 +165,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 .single();
     }
 
-    private void entry(UUID conversation, String kind, String text, @Nullable Instant redactedAt) {
+    private UUID entry(UUID conversation, String kind, String text, @Nullable Instant redactedAt) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
             INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
@@ -170,6 +187,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 .param("at", Timestamp.from(AT.plusSeconds(seq)))
                 .param("redacted", redactedAt == null ? null : Timestamp.from(redactedAt))
                 .update();
+        return id;
     }
 
     private UUID feedback(Result result, long developer, String state, String body, @Nullable Instant deliveredAt) {
@@ -189,6 +207,47 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 .param("delivered", deliveredAt == null ? null : Timestamp.from(deliveredAt))
                 .update();
         return id;
+    }
+
+    private UUID cardAnswer(UUID conversation, String text, String cardWords) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+            INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                            payload, created_at)
+            VALUES (:id, :ws, :conversation, (SELECT account_id FROM conversation WHERE id = :conversation), :seq,
+                    'ANSWER', 'APP', :text,
+                    jsonb_build_object('type', 'message', 'id', 'pi-' || :id, 'message', jsonb_build_object(
+                        'role', 'assistant', 'content', jsonb_build_array(
+                            jsonb_build_object('type', 'text', 'text', :text),
+                            jsonb_build_object('type', 'toolCall', 'id', 'call-' || :id, 'name', 'show_feedback',
+                                'arguments', jsonb_build_object('text', :card))))),
+                    :at)
+            """)
+                .param("id", id)
+                .param("ws", workspaceOf(conversation))
+                .param("conversation", conversation)
+                .param("seq", ++seq)
+                .param("text", text)
+                .param("card", cardWords)
+                .param("at", Timestamp.from(AT.plusSeconds(seq)))
+                .update();
+        return id;
+    }
+
+    private void chatTurn(UUID feedback, long workspace, int position, UUID answer, String body) {
+        jdbc.sql("""
+            INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,state,conversation_entry_id,
+                                      created_at,posted_at)
+            VALUES(:id,:ws,:feedback,'CHAT_TURN',:position,:body,'POSTED',:answer,:at,:at)
+            """)
+                .param("id", UUID.randomUUID())
+                .param("ws", workspace)
+                .param("feedback", feedback)
+                .param("position", position)
+                .param("body", body)
+                .param("answer", answer)
+                .param("at", Timestamp.from(AT))
+                .update();
     }
 
     private void copy(UUID feedback, long workspace, int position, String state, String body) {

@@ -217,6 +217,10 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -200),
+                        // After the feedback: a withdrawal hides its feedback's text, also from a new account export,
+                        // so it
+                        // never goes in a commit before its feedback. The feedback step deletes these rows (ON DELETE
+                        // CASCADE); this step exports them and counts them.
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,
@@ -226,7 +230,13 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id,feedback_id,action,actor_account_id,reason,note,content_digest,decided_at",
                                 "id,workspace_id",
                                 "",
-                                -190),
+                                -179) {
+                            @Override
+                            public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                                super.erase(selection, frozenScope);
+                                return selection.rows().size();
+                            }
+                        },
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,

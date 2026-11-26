@@ -24,4 +24,7 @@ public interface PersonProcessingSuppression {
      * workspace.
      */
     boolean isSourceSuppressed(long workspaceId, String itemKind, long sourceId);
+
+    /** {@link #isSourceSuppressed} of many sources of one kind in one read: the sources among them that are suppressed. */
+    Set<Long> suppressedSources(long workspaceId, String itemKind, Collection<Long> sourceIds);
 }

@@ -1073,6 +1073,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Arrays.stream(practices).map(Practice::getId).toList(),
                 false,
                 Set.of(),
+                Set.of(),
                 null,
                 null,
                 null,

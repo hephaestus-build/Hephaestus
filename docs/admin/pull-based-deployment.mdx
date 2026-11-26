@@ -342,16 +342,29 @@ After you run it, the next tick installs the release again.
 ### Stopped major upgrades
 
 A change of major release is a [stopped upgrade](./upgrade#stopped-schema-upgrades).
-Read the migration guide entry of the target release, and prepare the target site values before phase 2 as it describes.
+Read the migration guide entry of the target release.
+Prepare the target site values before phase 2.
 Pause the timer before phase 1.
 Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
-Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
 
-Verify the backups, record the server count, and stop the source release as phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) describes.
+Set `release` to the Helm release name.
+Set `namespace` to the release namespace.
+
+If bundled PostgreSQL has no backup repository, [prepare a logical restore point](./upgrade#prepare-a-logical-restore-point).
+For other installations, verify the database backup.
+Record the server count.
+
+Stop the source release as phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) describes.
 Use the verified source chart and your site values with `server.stopped=true`, or with `server.replicas=0` on a source chart without `server.stopped`.
-Wait until every source role Pod and sandbox Pod and Job is removed.
+Wait until every source role Pod, sandbox Pod and sandbox Job is gone.
+Record the stopped phase-1 Helm revision from `helm history "$release" --namespace "$namespace"`.
 
-Then promote the target release.
+Take the final restore point while the source is stopped.
+If the bundled PostgreSQL has no backup repository, [take and verify the final logical archive](./upgrade#take-a-logical-restore-point-without-backups).
+
+Promote the target release after the final restore point passes its checks.
+If you approve the deployment through GitHub's `pending_deployments` API, include the `comment` field.
+With `gh api`, pass `-f comment=''` to send an empty comment.
 Restart the timer for phase 2 only after the channel names the target.
 A tick before that applies your edited file to the source release and starts the writers again.
 
@@ -389,21 +402,39 @@ A Helm timeout stops its wait. It does not stop a migration Job.
 
 If a stopped cutover fails or remains pending:
 
+Set `release` to the affected Helm release.
+Set `namespace` to its namespace.
+
 1. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`.
 2. Wait for the active reconciler service to finish.
 3. Do steps 2 to 5 of [If migration fails](./upgrade#if-migration-fails): wait until the migration Job stops, and save its evidence.
-4. Read `helm history <release> --namespace <namespace>`, and record the failed revision.
-5. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
+4. [Check for erasures before recovery](./upgrade#check-for-erasures-before-recovery).
+   Keep reconciliation paused and access closed.
+   Continue to the Helm rollback only if the stopped-window restore checks pass.
+   Read `helm history "$release" --namespace "$namespace"`.
+   Record the failed revision.
+5. Set `phase_1_revision` to the stopped revision you recorded.
+   Run `helm rollback "$release" "$phase_1_revision" --namespace "$namespace" --wait`.
    That revision runs the source release with every role stopped.
-6. Restore the final restore point of the cutover with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
-   Use the verified source chart and the values of the phase-1 revision.
-   Put the egress values of its step 3 in `/etc/hephaestus/chart.yaml`, because each tick applies that file.
-7. To retry the target, resume the timer.
+6. If you took a final logical archive, [restore that archive on the host](./upgrade#restore-the-final-logical-archive).
+   Otherwise, restore the final backup with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
+   For that recovery path, put the egress values of step 3 in `/etc/hephaestus/chart.yaml`.
+   Use the verified source chart and the values of the phase-1 revision for either path.
+7. Run the [read-only erasure check](./upgrade#check-for-erasure-requests) on the selected database before you reopen access.
+   To retry the target, keep the restored source release stopped.
+   If `applied.json` already names the target, restore `applied-before-cutover.json` to `applied.json`.
+   Check that the channel names the target.
+   Resume the timer.
+
    To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
+   Set the source server count in your site values.
+   Clear `server.stopped` if the source chart has that option.
    Then do steps 10 and 11 of [If migration fails](./upgrade#if-migration-fails).
-8. When the selected release runs, stop the timer again.
+
+   Verify readiness after the source starts.
+   Verify authenticated reads.
+8. If you used the backup recovery path, stop the timer again when the selected release runs.
    Do steps 8 to 13 of [Recover the live installation](./backup-restore#recover-the-live-installation) with the verified chart of that release.
-   Skip its step 7: no server ran after the final restore point, so no erasure follows it.
    Keep `/etc/hephaestus/chart.yaml` in step with the values of each step, because the next tick applies that file.
 
 A signed rollback request never restores the database.
