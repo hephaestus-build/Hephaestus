@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.OutlineOriginBackfillChange;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
@@ -41,6 +42,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import javax.sql.DataSource;
+import liquibase.database.core.PostgresDatabase;
+import liquibase.database.jvm.JdbcConnection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -48,13 +52,18 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 import tools.jackson.databind.node.JsonNodeFactory;
 
+@TestPropertySource(properties = "hephaestus.integration.outline.enabled=true")
 class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     private static final String COPIED_WORDS = "Outline collaborator canary";
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private PersonDataService service;
@@ -142,6 +151,29 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     private static List<Example> expectedErasure(Fixture fixture, Cell cell) {
         return cell.clearsSecondTeam() ? List.of(fixture.first(), fixture.second()) : List.of(fixture.first());
+    }
+
+    @Test
+    void upgradeBackfillsCanonicalKeysForStoredConnectionsAndAliases() throws Exception {
+        var fixture = fixture(true);
+        var alias = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.OUTLINE, "HTTPS://OUTLINE-INSTANCE.EXAMPLE.TEST:443/"));
+        jdbc.update("UPDATE identity_provider SET outline_origin=NULL WHERE id IN (?,?)", fixture.provider(), alias.getId());
+        jdbc.update("UPDATE connection SET outline_origin=NULL WHERE workspace_id=?",
+                fixture.first().document().getWorkspaceId());
+        try (var connection = dataSource.getConnection()) {
+            var database = new PostgresDatabase();
+            database.setConnection(new JdbcConnection(connection));
+            new OutlineOriginBackfillChange().execute(database);
+            connection.commit();
+        }
+        assertThat(jdbc.queryForObject("SELECT outline_origin FROM identity_provider WHERE id=?", String.class, alias.getId()))
+                .isEqualTo(ORIGIN);
+        UUID request = admit(fixture, Key.INSTANCE);
+        service.run(request);
+        assertCopy(fixture.first(), fixture.first().answer(), true);
+        assertCopy(fixture.second(), fixture.second().answer(), true);
+        assertCopy(fixture.control(), fixture.control().answer(), false);
+        assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
     }
 
     @ParameterizedTest

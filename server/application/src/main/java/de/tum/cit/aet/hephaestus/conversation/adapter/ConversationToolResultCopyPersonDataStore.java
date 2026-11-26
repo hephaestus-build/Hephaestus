@@ -202,8 +202,8 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                     JOIN conversation_turn t ON t.id=e.turn_id AND t.workspace_id=e.workspace_id
                     WHERE e.workspace_id=:workspaceId AND e.redacted_at IS NULL
                       AND (e.kind IN ('ANSWER','DIGEST','SYSTEM') OR (%s))
-                      AND EXISTS (SELECT 1 FROM jsonb_array_elements(CAST(:sources AS jsonb)) k
-                                  WHERE t.outline_context @> jsonb_build_array(k))
+                      AND EXISTS (SELECT 1 FROM jsonb_array_elements(CAST(:sources AS jsonb)) AS k(value)
+                                  WHERE t.outline_context @> jsonb_build_array(k.value))
                     """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
                         Map.of("workspaceId", workspaceId, "sources", mapper.writeValueAsString(sources)),
                         (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));

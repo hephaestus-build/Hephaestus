@@ -86,7 +86,8 @@ After the erasure, Hephaestus stops processing the person's exact provider ident
 The [personal-data map](./dsms/personal-data-map.mdx) gives what each store keeps.
 
 For Outline, erasure hides the selected documents from Hephaestus when the request starts.
-It removes the person's local document data and redacts context copies and their answers before the request completes.
+It removes the person's local document data, including titles in the item directory.
+It redacts context copies and their answers by Outline instance and team before the request completes.
 
 The receipt keeps the acting instance admin, the state, the times and the counts.
 It keeps no erased content and no identity of the person.
@@ -108,6 +109,9 @@ It keeps no erased content and no identity of the person.
 After the first temporary database failure, the request stays in `ERASING` with `STORE_ERASURE_RETRY_PENDING`, and the job tries again on its next pass.
 A repeated or permanent failure stops the request in `FAILED` with `STORE_ERASURE_FAILED`.
 The page shows **Erasure stopped**.
+
+An Outline erasure also stops if its saved selection misses a document or a relevant conversation copy has no source key.
+Keep the request open while you check the selection and the origin of the copies.
 
 **Fix:**
 

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection.ProjectedDocument;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -293,6 +294,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     @Test
     void conversationPathGivesTheDocumentLinkAndSaysWhenTheBodyWasCut() throws Exception {
         String longBody = "a".repeat(DocumentCaptureSource.CONVERSATION_BODY_CHARS + 500);
+        var source = new ProjectedDocument.OutlineSource("https://docs.example", "engineering");
         ProjectedDocument linked = new ProjectedDocument(
                 "engineering",
                 "release-guide",
@@ -313,13 +315,16 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 null,
                 null,
                 "https://docs.example/doc/release-guide-abc123",
-                null);
+                source);
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(linked, doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(conversationRequest(), files);
+        var sources = new ArrayList<ProjectedDocument.OutlineSource>();
+        provider.contribute(new ConversationContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), null,
+                (origin, team) -> sources.add(new ProjectedDocument.OutlineSource(origin, team))), files);
 
+        assertThat(sources).containsExactly(source);
         JsonNode root = objectMapper
                 .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
                 .path("documents");

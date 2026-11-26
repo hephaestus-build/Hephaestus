@@ -1,9 +1,8 @@
 package de.tum.cit.aet.hephaestus.evidence.capture;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import org.jspecify.annotations.Nullable;
 
 public record ConversationContextRequest(
@@ -11,8 +10,8 @@ public record ConversationContextRequest(
         long developerId,
         UUID threadId,
         @Nullable UUID stimulusEntryId,
-        Consumer<OutlinePersonCopyScope.Source> outlineSource) {
-    private static final Consumer<OutlinePersonCopyScope.Source> IGNORE_SOURCE = source -> {};
+        BiConsumer<String, String> outlineSource) {
+    private static final BiConsumer<String, String> IGNORE_SOURCE = (origin, team) -> {};
 
     public ConversationContextRequest(long workspaceId, long developerId, UUID threadId, @Nullable UUID stimulusEntryId) {
         this(workspaceId, developerId, threadId, stimulusEntryId, IGNORE_SOURCE);

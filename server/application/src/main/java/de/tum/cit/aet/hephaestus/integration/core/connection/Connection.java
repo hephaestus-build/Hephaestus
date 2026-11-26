@@ -210,6 +210,11 @@ public class Connection {
     }
 
     @Nullable
+    public String getOutlineOrigin() {
+        return outlineOrigin;
+    }
+
+    @Nullable
     public String getDisplayName() {
         return displayName;
     }

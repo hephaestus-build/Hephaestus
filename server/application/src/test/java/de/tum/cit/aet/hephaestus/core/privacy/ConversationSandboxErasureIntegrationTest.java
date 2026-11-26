@@ -448,7 +448,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 beans.getBean(ConversationContextChanges.class),
                 copies,
                 beans.getBean(WorkspaceMemberships.class),
-                java.util.Optional.empty());
+                Optional.empty());
     }
 
     private PersonDataService service(ConversationSandboxCopies copies) {

@@ -143,7 +143,7 @@ public class DocumentCaptureSource implements ContentSource {
         }
         for (ProjectedDocument doc : documents.subList(0, emitted)) {
             var source = doc.outlineSource();
-            if (source != null) request.outlineSource().accept(source);
+            if (source != null) request.outlineSource().accept(source.origin(), source.team());
         }
     }
 

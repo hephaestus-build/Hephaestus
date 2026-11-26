@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.outline.documentation;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -19,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -184,7 +184,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
                 doc.getDocumentId(),
                 url,
                 source.flatMap(connection -> Optional.ofNullable(connection.getOutlineOrigin()).map(
-                                origin -> new OutlinePersonCopyScope.Source(
+                                origin -> new ProjectedDocument.OutlineSource(
                                         origin, Objects.requireNonNullElse(connection.getInstanceKey(), ""))))
                         .orElse(null));
     }

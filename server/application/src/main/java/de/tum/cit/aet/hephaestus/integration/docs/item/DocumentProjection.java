@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.docs.item;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -65,10 +64,12 @@ public interface DocumentProjection {
             @Nullable Instant syncedAt,
             @Nullable String sourceId,
             @Nullable String url,
-            @Nullable OutlinePersonCopyScope.Source outlineSource) {
+            @Nullable OutlineSource outlineSource) {
         public ProjectedDocument {
             collaborators = List.copyOf(collaborators);
         }
+        /** The persisted provider origin and team key of the source connection. */
+        public record OutlineSource(String origin, String team) {}
         /** One document editor: provider-native subject, display name if known, resolved account id if linked. */
         public record Collaborator(
                 String subject,
