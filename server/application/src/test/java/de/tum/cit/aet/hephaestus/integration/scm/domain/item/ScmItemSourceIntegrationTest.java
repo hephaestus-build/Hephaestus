@@ -1939,6 +1939,64 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /**
+     * A read of a pull request's record sources reads each source alone, but checks the pin once for all of them: more
+     * sources add only what each source reads, never another check of the work and its repository.
+     */
+    @Test
+    void shouldCheckThePinOnceWhenAPullRequestsRecordSourcesAreRead() {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        var pull = new PullRequest();
+        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        pull.setProvider(fixture.provider());
+        pull.setRepository(fixture.repository());
+        pull.setNumber(41);
+        pull.setTitle("A change read for its sources");
+        pull.setBody("Its record sources are read for freshness.");
+        pull.setState(Issue.State.OPEN);
+        pull.setAuthor(fixture.author());
+        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/41");
+        pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setHeadRefOid("e".repeat(40));
+        pull.setBaseRefOid("f".repeat(40));
+        pull.setHeadRefName("topic");
+        pull.setBaseRefName("main");
+        pull = pulls.saveAndFlush(pull);
+        ItemRef holder = writer.upsert(new ItemRegistration(
+                fixture.workspace().getId(),
+                ScmItemEvents.REPOSITORY,
+                fixture.repository().getId(),
+                null,
+                null));
+        ItemRef pullRef = writer.upsert(new ItemRegistration(
+                holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
+        Set<SourceKind> all = Set.of(
+                PullRequestContentSource.CORE,
+                PullRequestContentSource.COMMENTS,
+                PullRequestContentSource.CHECKS,
+                GeneralReviewCommentContentSource.KIND,
+                ReviewThreadContentSource.KIND);
+
+        var one = reads.measure(
+                () -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper));
+        long started = System.nanoTime();
+        var five = reads.measure(() -> fingerprints.fingerprints(pullRef, all, null, mapper));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(one.value()).containsKey(PullRequestContentSource.CORE);
+        assertThat(five.value())
+                .containsEntry(PullRequestContentSource.CORE, one.value().get(PullRequestContentSource.CORE));
+        assertThat(itemChecks(five.sql())).isPositive().isEqualTo(itemChecks(one.sql()));
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    }
+
+    private static long itemChecks(List<String> sql) {
+        return sql.stream()
+                .filter(statement -> statement.contains(" from item i1_0 where i1_0.id=? and i1_0.workspace_id=?"))
+                .count();
+    }
+
     private Fixture fixture(IdentityProviderType type) {
         String slug = "scm-source-" + UUID.randomUUID();
         String url = type == IdentityProviderType.GITHUB ? "https://github.com" : "https://gitlab.example.test";
