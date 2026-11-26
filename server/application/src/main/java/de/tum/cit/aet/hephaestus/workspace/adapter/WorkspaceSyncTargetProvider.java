@@ -216,6 +216,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional
     public void recordRepositoryPublic(ReadersRead read) {
+        if (read.syncTargetId() == null) return;
         // The read asked the provider of this monitor's workspace connection about exactly this repository.
         boolean sameRepository =
                 repositoryToMonitorRepository
@@ -233,6 +234,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional
     public void recordRepositoryNotPublic(ReadersRead read) {
+        if (read.syncTargetId() == null) return;
         locked(read.syncTargetId(), null)
                 .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
                 .ifPresent(rtm -> rtm.getReaders().confirmedNotPublic());

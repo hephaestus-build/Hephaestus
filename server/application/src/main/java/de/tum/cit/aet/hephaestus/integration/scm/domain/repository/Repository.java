@@ -110,6 +110,9 @@ public class Repository extends BaseGitServiceEntity {
      */
     private Instant lastSyncAt;
 
+    @Column(insertable = false, updatable = false)
+    private @Nullable Instant metadataObservedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id", foreignKey = @ForeignKey(name = "fk_repository_organization"))
     @ToString.Exclude
