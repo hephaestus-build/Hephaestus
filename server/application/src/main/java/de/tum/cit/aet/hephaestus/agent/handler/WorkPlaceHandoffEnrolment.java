@@ -11,8 +11,8 @@ import de.tum.cit.aet.hephaestus.agent.job.WorkPlaceHandoffRow;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
@@ -111,8 +111,8 @@ public class WorkPlaceHandoffEnrolment {
                         List.of(assignment.id().practiceId(), assignment.id().itemId()), assignment.practiceSlug()));
         var copies = new HashMap<String, List<WorkPlaceScope.Copy>>();
         for (var practice : staging.staged(job.getWorkspaceId(), job.getReviewId(), job.getId())) {
-            String slug = slugs.get(
-                    List.of(practice.assignment().practiceId(), practice.assignment().itemId()));
+            String slug = slugs.get(List.of(
+                    practice.assignment().practiceId(), practice.assignment().itemId()));
             if (practice.candidate() == null || slug == null) continue;
             copies.computeIfAbsent(slug, ignored -> new ArrayList<>())
                     .add(new WorkPlaceScope.Copy(

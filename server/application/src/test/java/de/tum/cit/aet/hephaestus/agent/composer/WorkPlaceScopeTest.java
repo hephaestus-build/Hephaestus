@@ -47,7 +47,9 @@ class WorkPlaceScopeTest {
                             || path.startsWith("composition/")
                             || path.equals(SandboxLayout.FEEDBACK_COMPOSITION_PATH));
             assertThat(scoped.payload().path("results"))
-                    .allSatisfy(result -> assertThat(result.path("publicEligible").asBoolean()).isTrue());
+                    .allSatisfy(
+                            result -> assertThat(result.path("publicEligible").asBoolean())
+                                    .isTrue());
         }
     }
 
@@ -117,13 +119,15 @@ class WorkPlaceScopeTest {
         assertThat(withPrivate.digest()).isEqualTo(plainAssigned.digest());
         assertThat(withPrivate.payload().path("files").has(PRIVATE_TEXT)).isFalse();
         assertThat(withPrivate.payload().path("notReached").toString()).contains("reviews-privately");
-        assertThat(plain.payload().path("files")).isEqualTo(plainAssigned.payload().path("files"));
+        assertThat(plain.payload().path("files"))
+                .isEqualTo(plainAssigned.payload().path("files"));
     }
 
     @Test
     void shouldRefuseACopyWhoseBytesOrResultsChanged() {
         var scoped = WorkPlaceScope.of(pullRequest()).orElseThrow();
-        assertThat(WorkPlaceScope.read(scoped.payload(), scoped.digest()).results()).isNotEmpty();
+        assertThat(WorkPlaceScope.read(scoped.payload(), scoped.digest()).results())
+                .isNotEmpty();
 
         var file = scoped.payload().deepCopy();
         var files = (ObjectNode) file.path("files");

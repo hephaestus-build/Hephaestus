@@ -5,8 +5,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 
 import com.tngtech.archunit.base.DescribedPredicate;
-import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -26,11 +26,12 @@ class WorkPlaceComposerBoundaryArchTest extends HephaestusArchitectureTest {
             Set.of("WorkPlaceComposer", "WorkPlaceHandoff", "WorkPlaceScope", "OnWorkTurn");
 
     private static final DescribedPredicate<JavaClass> WORK_PLACE_COMPOSER = DescribedPredicate.describe(
-            "the work-place composer, its scope, its handoff and the on-work turn", type -> named(type, COMPOSER, COMPOSER_SIDE));
+            "the work-place composer, its scope, its handoff and the on-work turn",
+            type -> named(type, COMPOSER, COMPOSER_SIDE));
 
     /** What the composer may use of the review handler: the text policy and the package records, which read nothing. */
-    private static final Set<String> HANDLER_DATA = Set.of(
-            "FeedbackTextPolicy", "composition.ComposedFeedback", "composition.FeedbackPackage");
+    private static final Set<String> HANDLER_DATA =
+            Set.of("FeedbackTextPolicy", "composition.ComposedFeedback", "composition.FeedbackPackage");
 
     /** The legacy composition's private half and its custody: the admission, the private read, the basis. */
     private static final Set<String> LEGACY_COMPOSITION = Set.of(
@@ -67,8 +68,8 @@ class WorkPlaceComposerBoundaryArchTest extends HephaestusArchitectureTest {
 
     private static boolean named(JavaClass type, String prefix, Set<String> names) {
         return names.stream()
-                .anyMatch(name -> type.getName().equals(prefix + name)
-                        || type.getName().startsWith(prefix + name + "$"));
+                .anyMatch(name ->
+                        type.getName().equals(prefix + name) || type.getName().startsWith(prefix + name + "$"));
     }
 
     @Test

@@ -173,8 +173,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -653,7 +653,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldHandTheWorkPlaceOneScopedCopyInTheSealsTransaction() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admission.stage(review.identity(), request(review));
-            var seal = new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0);
+            var seal = new SealResultsRequestDTO(
+                    3, review.reviewId(), review.identity().jobId(), 0);
             Instant before = Instant.now();
             admission.admit(review.identity(), seal, () -> {});
 
@@ -676,7 +677,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var payload = mapper.readTree((String) row.get("payload"));
             assertThat(payload.path("results"))
                     .isNotEmpty()
-                    .allSatisfy(result -> assertThat(result.path("publicEligible").asBoolean()).isTrue());
+                    .allSatisfy(
+                            result -> assertThat(result.path("publicEligible").asBoolean())
+                                    .isTrue());
             assertThat(payload.path("files").propertyNames())
                     .contains("INDEX.json")
                     .noneMatch(path -> path.equals("INDEX.md")
@@ -737,7 +740,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             List.of()));
             admission.admit(
                     review.identity(),
-                    new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
                     () -> {});
 
             var payload = mapper.readTree(jdbc.queryForObject(
@@ -752,7 +756,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(payload.path("files").propertyNames())
                     .noneMatch(path -> path.endsWith("/" + sibling.getSlug() + ".md"));
             var catalog = mapper.readTree(Base64.getDecoder()
-                    .decode(payload.path("files").path("inputs/practices/index.json").asString()));
+                    .decode(payload.path("files")
+                            .path("inputs/practices/index.json")
+                            .asString()));
             assertThat(catalog)
                     .extracting(practice -> practice.path("slug").asString())
                     .containsExactly(review.practiceSlug());
@@ -765,7 +771,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             admission.stage(review.identity(), request(review));
             admission.admit(
                     review.identity(),
-                    new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
                     () -> {});
             assertThat(resultIds(review)).isNotEmpty();
             assertThat(jdbc.queryForObject(

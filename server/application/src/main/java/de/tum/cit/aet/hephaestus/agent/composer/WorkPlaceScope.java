@@ -126,9 +126,10 @@ public final class WorkPlaceScope {
         var files = new TreeMap<String, byte[]>();
         files.put(SandboxLayout.MANIFEST_PATH, MAPPER.writeValueAsBytes(index));
         var record = new LinkedHashSet<String>();
-        Js.listOf(index.path("files")).forEach(file -> record.add(Evidence.text(file.path("file").path("path"))));
-        sources.forEach(source -> Js.listOf(source.path("files"))
-                .forEach(file -> record.add(Evidence.text(file.path("path")))));
+        Js.listOf(index.path("files"))
+                .forEach(file -> record.add(Evidence.text(file.path("file").path("path"))));
+        sources.forEach(source ->
+                Js.listOf(source.path("files")).forEach(file -> record.add(Evidence.text(file.path("path")))));
         texts.forEach(text -> record.add(Evidence.text(text.path("stagedPath"))));
         for (String path : record) {
             byte[] bytes = sealed.basis().get(path);
@@ -172,8 +173,7 @@ public final class WorkPlaceScope {
         files.forEach((path, bytes) -> encoded.put(path, Base64.getEncoder().encodeToString(bytes)));
 
         Instant deadline = sealed.sealedAt().plus(COPY_DEADLINE);
-        Instant expiresAt =
-                sealed.basisExpiresAt().isBefore(deadline) ? sealed.basisExpiresAt() : deadline;
+        Instant expiresAt = sealed.basisExpiresAt().isBefore(deadline) ? sealed.basisExpiresAt() : deadline;
         return Optional.of(new Scoped(payload, digest(payload), expiresAt));
     }
 
@@ -189,7 +189,8 @@ public final class WorkPlaceScope {
         payload.path("files")
                 .properties()
                 .forEach(entry -> files.put(
-                        entry.getKey(), Base64.getDecoder().decode(entry.getValue().asString())));
+                        entry.getKey(),
+                        Base64.getDecoder().decode(entry.getValue().asString())));
         var results = new ArrayList<ObjectNode>();
         Js.listOf(payload.path("results")).forEach(result -> results.add(((ObjectNode) result).deepCopy()));
         return new WorkPlaceHandoff(
@@ -209,8 +210,8 @@ public final class WorkPlaceScope {
         for (var result : handoff.results()) {
             Js.listOf(result.path("evidence").path("citations")).forEach(citation -> add(quotes, citation));
             Js.listOf(result.path("problems"))
-                    .forEach(problem ->
-                            Js.listOf(problem.path("citations")).forEach(citation -> add(quotes, citation)));
+                    .forEach(
+                            problem -> Js.listOf(problem.path("citations")).forEach(citation -> add(quotes, citation)));
         }
         return quotes;
     }

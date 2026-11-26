@@ -25,8 +25,9 @@ final class WorkPlaceComposer {
     static final String CHECK_PACKAGE = "check_package";
 
     /** The legacy prompt names the publication tools; a shadow session has none, and says so. */
-    static final String SHADOW_NOTE = "\nThis is a shadow composition. Only check_package exists. Check the complete draft"
-            + " and stop. Nothing is published.\n";
+    static final String SHADOW_NOTE =
+            "\nThis is a shadow composition. Only check_package exists. Check the complete draft"
+                    + " and stop. Nothing is published.\n";
 
     private WorkPlaceComposer() {}
 
@@ -96,8 +97,7 @@ final class WorkPlaceComposer {
         var policy = FeedbackTextPolicy.suppliedBy(session.quotes());
         for (var piece : CompositionPackages.review(review, null).composition()) {
             var refusal = policy.refusal(piece);
-            if (refusal != null)
-                return new Check(null, List.of(refusal.rule().name() + " in " + refusal.field()));
+            if (refusal != null) return new Check(null, List.of(refusal.rule().name() + " in " + refusal.field()));
         }
         return new Check(review, List.of());
     }

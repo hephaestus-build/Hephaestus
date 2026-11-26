@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextPolicy;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -49,7 +48,9 @@ class WorkPlaceShadowComparisonTest {
         for (var scenario : scenarios) {
             var session = WorkPlaceComposer.session(handoff(scenario), scenario.history());
             assertThat(session.system()).as(scenario.id()).isEqualTo(ComposerPrompts.reviewSystem());
-            assertThat(session.input()).as(scenario.id()).isEqualTo(scenario.turn().text() + WorkPlaceComposer.SHADOW_NOTE);
+            assertThat(session.input())
+                    .as(scenario.id())
+                    .isEqualTo(scenario.turn().text() + WorkPlaceComposer.SHADOW_NOTE);
             assertThat(session.tools()).as(scenario.id()).singleElement().satisfies(tool -> {
                 assertThat(tool.name()).isEqualTo("check_package");
                 assertThat(tool.parameters()).isEqualTo(scenario.turn().toolParameters());
@@ -89,9 +90,11 @@ class WorkPlaceShadowComparisonTest {
         var identity = new ResultAdmissionService.AdmissionIdentity(
                 server.job.getId(), server.job.getWorkspaceId(), server.job.getAttempt(), ComposerReplay.RUN);
         var next = server.sessions().next(server.job, identity, Set.of()).orElse(null);
-        if (!(next instanceof CompositionSessions.Session legacy) || legacy.destination() != FeedbackDestination.ON_WORK) {
+        if (!(next instanceof CompositionSessions.Session legacy)
+                || legacy.destination() != FeedbackDestination.ON_WORK) {
             // A review on the work published earlier opens no session, so there is nothing to compare: say why.
-            assertThat(basis.reviewedEarlier() || replay.path("earlierDecisions").has("ON_WORK"))
+            assertThat(basis.reviewedEarlier()
+                            || replay.path("earlierDecisions").has("ON_WORK"))
                     .as(name + " opens no review on the work, though nothing decided it earlier")
                     .isTrue();
             return;
@@ -174,7 +177,8 @@ class WorkPlaceShadowComparisonTest {
         hidden.put("resultId", "30000000-0000-4000-8000-00000000000f");
         hidden.put("publicEligible", false);
         ((ArrayNode) hidden.path("problems")).removeAll();
-        ((ObjectNode) hidden.path("evidence").path("citations").get(0)).put("quote", "See https://internal.example/run/7");
+        ((ObjectNode) hidden.path("evidence").path("citations").get(0))
+                .put("quote", "See https://internal.example/run/7");
         ((ArrayNode) admission.path("admitted")).add(hidden);
         var shadowed = new ComposerReplay.Basis(
                 basis.inputs(),
@@ -200,7 +204,9 @@ class WorkPlaceShadowComparisonTest {
                 "See https://internal.example/run/7 for why fetches retry.")) {
             var copy = draft.deepCopy();
             ((ObjectNode) copy.path("summary")).put("body", hostile);
-            assertThat(WorkPlaceComposer.check(session, copy).draft()).as(hostile).isNull();
+            assertThat(WorkPlaceComposer.check(session, copy).draft())
+                    .as(hostile)
+                    .isNull();
         }
         var linked = draft.deepCopy();
         ((ObjectNode) linked.path("summary")).put("body", "See https://internal.example/run/7 for why fetches retry.");
@@ -259,7 +265,8 @@ class WorkPlaceShadowComparisonTest {
         var assigned = new ArrayList<String>();
         byte[] practices = basis.get(ComposerFiles.PRACTICE_INDEX);
         if (practices != null)
-            MAPPER.readTree(practices).forEach(practice -> assigned.add(practice.path("slug").asString()));
+            MAPPER.readTree(practices)
+                    .forEach(practice -> assigned.add(practice.path("slug").asString()));
         return new WorkPlaceScope.Sealed(
                 basis,
                 results,
@@ -328,7 +335,8 @@ class WorkPlaceShadowComparisonTest {
     private static List<Call> calls(JsonNode answer) {
         if (answer.has("tool")) return List.of(new Call(answer.path("tool").asString(), answer.path("arguments")));
         var calls = new ArrayList<Call>();
-        for (JsonNode call : answer.path("body").path("choices").path(0).path("message").path("tool_calls")) {
+        for (JsonNode call :
+                answer.path("body").path("choices").path(0).path("message").path("tool_calls")) {
             @Nullable String arguments = call.path("function").path("arguments").asString(null);
             calls.add(new Call(
                     call.path("function").path("name").asString(),
