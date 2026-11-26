@@ -65,7 +65,10 @@ not your production data. They do not replace this update of the copy.
 Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you start.
 
 1. On a pull-based one-host install, pause [reconciliation](./pull-based-deployment#operating-it), and wait for its active run to finish.
-2. Take a verified [database backup](./backup-restore#back-up-the-database), and complete [Validate the actual production data](#validate-the-actual-production-data).
+2. Choose the restore point before you start the upgrade.
+   For a stopped upgrade with bundled PostgreSQL and no backup repository, [prepare a logical restore point](#prepare-a-logical-restore-point).
+   For other upgrades, take a verified [database backup](./backup-restore#back-up-the-database).
+   Complete [Validate the actual production data](#validate-the-actual-production-data).
 3. On the running instance, open **Instance administration → Instance settings**.
 4. Select **Turn on silent mode…**, enter the upgrade as the reason, and select **Turn on silent mode**.
 5. Read it back: the **Silent mode** card shows **On**.
@@ -136,7 +139,12 @@ Do not use `--rollback-on-failure`: a rollback can start the old server against 
 Pause deployment automation that can change the release until this procedure is complete.
 
 Before phase 1, record the current chart, profile, site values and `server.replicas`.
-Prepare a PostgreSQL backup, verify its restore, and keep the matching signed release lock and encryption keys.
+If bundled PostgreSQL has no backup repository, [prepare a logical restore point](#prepare-a-logical-restore-point).
+For other installations, verify the database backup.
+
+Set `release` to the Helm release name.
+Set `namespace` to the release namespace.
+Keep the matching signed release lock and encryption keys.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
@@ -155,11 +163,14 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
    A server can drain for up to its configured timeout. If phase 1 times out, keep `server.stopped=true` and wait for every old Pod to stop.
 3. Remove the remaining sandbox workloads, as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes.
 4. Take and verify the final restore point while the server is stopped.
+   Without `postgresql.backup.enabled`, take a [logical restore point](#take-a-logical-restore-point-without-backups) from the host.
 5. Do phase 2.
    Expect one PostgreSQL restart: each release builds its PostgreSQL image again with current security fixes.
-   Find the migration Job of the new Helm revision. For the release `hephaestus`, its name is `hephaestus-migration-<revision>`.
-6. Save its log: `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
-7. Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
+   Read the new revision with `helm history "$release" --namespace "$namespace"`.
+   List the Jobs with `kubectl --namespace "$namespace" get jobs -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=migration"`.
+   Set `migration_job` to the Job name that ends in the new revision number.
+6. Save its log: `kubectl --namespace "$namespace" logs "job/$migration_job" -c migration > migration.log`.
+7. Require its `Complete` condition: `kubectl --namespace "$namespace" wait --for=condition=complete "job/$migration_job" --timeout=20m`.
    If the Job fails or times out, do not do phase 3.
    Keep the server stopped. Save the log and the failed change set: the chart deletes the Job after 24 hours.
    Then follow [If migration fails](#if-migration-fails).
@@ -190,6 +201,550 @@ Remove the setting at a later upgrade. The removal restarts PostgreSQL once.
 A refused migration can follow changesets that it already committed.
 An image or Helm rollback does not undo them.
 Before you return to the old release, restore the matching pre-upgrade backup.
+
+### Take a logical restore point without backups
+
+Use this procedure on the host of the bundled PostgreSQL when `postgresql.backup.enabled` is off.
+Keep the archive on the host with the matching signed release lock and encryption keys.
+Confirm that the host and the database volume have room for the dump, the retained database and the restored copy.
+
+#### Prepare a logical restore point
+
+Do these steps before phase 1.
+
+1. Check that the source uses the `hephaestus_app` login.
+   Check for the `DATABASE_APP_PASSWORD`, `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` keys in the release Secret.
+   Check that the app can read `agent_run` and `agent_action` with the lease columns below.
+   Check that the app can read `person_data_request` with its completion time.
+   Check that the app can read `event_publication` and `workspace`.
+
+   For an older source, prepare a verified backup or follow a verified restore procedure for that source version.
+2. Install the PostgreSQL client of the source server's major version on the host.
+   On Ubuntu 26.04 with PostgreSQL 18, run `sudo apt-get install -y --no-install-recommends postgresql-client-18`.
+   Hephaestus tested `postgresql-client-18` and `libpq5` 18.6-0ubuntu0.26.04.1 with `postgresql-client-common` 290ubuntu1.
+3. Rehearse the [host-side restore](#restore-the-final-logical-archive) on an isolated staging installation.
+4. Run the pre-stop [erasure check](#check-for-erasure-requests) if the target migration requires it.
+
+Take the [final archive](#take-and-verify-the-final-archive) after the last server stops.
+
+#### Open the database tunnel
+
+Run the commands on the host in Bash.
+
+1. Choose an absolute path for the restore point.
+   Create a private directory there on first use.
+   Stop if the directory already exists on first use.
+
+   ```bash
+   work='/absolute/path/to/restore-point'
+   (umask 077 && mkdir -m 700 -- "$work")
+   ```
+
+2. Set `namespace` to the release namespace.
+   Set `release` to the Helm release name.
+   Set `sandbox_namespace` from `sandbox.namespace`.
+   With sandboxes disabled, set `sandbox_namespace=''`.
+
+   Select the PostgreSQL Service of the release.
+   Set the Secret name from `secret.name`.
+   Set the database name from `postgresql.database`.
+
+3. Define the tunnel and credential helpers.
+   Use the same directory for each command of this restore point.
+   The tunnel helper saves the PID when it opens the tunnel.
+   It stops that PID after success or failure.
+
+   ```bash
+   set +x
+   umask 077
+   namespace='<release-namespace>'
+   release='<helm-release>'
+   sandbox_namespace='<sandbox-namespace>'
+   postgres_service='<postgresql-service>'
+   release_secret='<release-secret>'
+   database='<database-name>'
+   maintenance_database=postgres
+   if [[ "$database" == "$maintenance_database" ]]; then maintenance_database=template1; fi
+   pg_host='host=127.0.0.1 port=15432 sslmode=require connect_timeout=5'
+   secret() { kubectl -n "$namespace" get secret "$release_secret" -o "jsonpath={.data.$1}" | base64 -d; }
+   with_tunnel() (
+     set +x
+     set -euo pipefail
+     local forward_pid command_pid command_input status=0
+     exec {command_input}<&0
+     kubectl -n "$namespace" port-forward --address 127.0.0.1 "svc/$postgres_service" 15432:5432 \
+       > "$work/port-forward.log" 2>&1 &
+     forward_pid=$!
+     printf 'Port-forward PID: %s\n' "$forward_pid" >&2
+     (
+       for attempt in {1..50}; do
+         grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log" && break
+         kill -0 "$forward_pid" 2>/dev/null || exit 1
+         sleep 0.2
+       done
+       grep -Fq 'Forwarding from 127.0.0.1:15432' "$work/port-forward.log"
+       "$@"
+     ) <&"$command_input" &
+     command_pid=$!
+     exec {command_input}<&-
+     wait "$command_pid" || status=$?
+     kill "$forward_pid" 2>/dev/null || true
+     wait "$forward_pid" 2>/dev/null || true
+     exit "$status"
+   )
+   admin_pg() (
+     set +x
+     set -euo pipefail
+     PGUSER="$(secret DATABASE_ADMIN_USERNAME)"
+     PGPASSWORD="$(secret DATABASE_ADMIN_PASSWORD)"
+     test -n "$PGUSER"
+     test -n "$PGPASSWORD"
+     export PGUSER PGPASSWORD
+     "$@"
+   )
+   ```
+
+Avoid `pg_isready`. Its disconnect can end this tunnel with `lost connection to pod`.
+A client can also close a tunnel after the command succeeds.
+The next call starts a new tunnel.
+
+#### Check for erasure requests
+
+Read the target release's migration guide.
+If it requires zero requests in `ERASING` or `FAILED`, run this query before the window.
+Run it again after [the quiet check](#verify-that-all-writers-have-stopped) passes and before you take the final dump.
+
+```bash
+app_sql() (
+  set +x
+  set -euo pipefail
+  PGPASSWORD="$(secret DATABASE_APP_PASSWORD)"
+  test -n "$PGPASSWORD"
+  export PGPASSWORD PGOPTIONS='-c default_transaction_read_only=on'
+  psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$database user=hephaestus_app" "$@"
+)
+with_tunnel app_sql -c 'SHOW default_transaction_read_only' \
+  -c "SELECT id, state, created_at FROM person_data_request WHERE state IN ('ERASING', 'FAILED');"
+```
+
+Require `on` from `SHOW`.
+Require zero rows from the query.
+If either check fails, stop before the dump or migration.
+
+For [external PostgreSQL](./external-database#connect-the-release), connect `psql` directly to the configured database as the app role.
+Set `PGOPTIONS='-c default_transaction_read_only=on'` for that session.
+Run the same `SHOW` and `SELECT` statements with `-v ON_ERROR_STOP=1`.
+
+#### Verify that all writers have stopped
+
+Wait for each server Pod to disappear, including Pods that are terminating.
+Stop any other role that writes to this database.
+Remove remaining sandbox claims as in [Planned node maintenance](./maintenance#planned-node-maintenance).
+Use your sandbox namespace in the cleanup commands.
+Confirm that no sandbox Pod or Job remains.
+
+Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
+Run the quiet check before you query for erasures.
+Require both workload lists to be empty.
+Require the block to exit successfully.
+Require `quiet.tsv` to contain three zeros for run leases, action leases and other app connections.
+
+```bash
+(
+  set -euo pipefail
+  : > "$work/quiet.tsv"
+  server_pods=$(kubectl -n "$namespace" get pods \
+    -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" -o name)
+  test -z "$server_pods"
+  if [[ -n "$sandbox_namespace" ]]; then
+    sandbox_workloads=$(kubectl -n "$sandbox_namespace" get pods,jobs -o name)
+    test -z "$sandbox_workloads"
+  fi
+  with_tunnel app_sql -At -F $'\t' -c "
+    SELECT
+      (SELECT count(*) FROM public.agent_run WHERE state = 'LEASED' AND leased_until > clock_timestamp()),
+      (SELECT count(*) FROM public.agent_action WHERE state = 'EXECUTING' AND leased_until > clock_timestamp()),
+      (SELECT count(*) FROM pg_stat_activity
+       WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid())
+  " > "$work/quiet.tsv"
+  test "$(cat "$work/quiet.tsv")" = $'0\t0\t0'
+)
+```
+
+If a lease remains, check its `leased_until` value.
+Set a timer to repeat the quiet check just after the last lease expires.
+During the rc.17 production upgrade, the quiet check resumed about 26 minutes after the last lease expired.
+If an app connection remains, find and stop its writer.
+Repeat the quiet check after that writer stops.
+
+#### Check for erasures before recovery
+
+1. Keep access closed.
+   Pause deployment automation.
+   Wait for any active apply to finish.
+   Wait for the migration Job to stop.
+   Keep deployment automation paused through the restore decision.
+   For bundled PostgreSQL, set up the [database tunnel](#open-the-database-tunnel) if you have not done so.
+   For external PostgreSQL, use the same workload checks and run the SQL through your read-only app connection.
+2. Scale the server Deployment to zero with `kubectl`.
+   This works while Helm reports a pending revision.
+
+   ```bash
+   kubectl -n "$namespace" scale deployment --replicas=0 \
+     -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server"
+   ```
+
+   If no server Deployment exists, still check for server Pods.
+   [Verify that all writers have stopped](#verify-that-all-writers-have-stopped).
+   Continue only after the quiet check passes.
+3. Set `restore_point` to the verified restore point in UTC.
+   For a logical archive, use its receipt's `start` time.
+   Use the read-only app connection from [Check for erasure requests](#check-for-erasure-requests).
+   For external PostgreSQL, pass the options after `app_sql` to your direct `psql` connection.
+
+   ```bash
+   restore_point='<UTC restore point>'
+   with_tunnel app_sql -c 'SHOW default_transaction_read_only' \
+     -v "restore_point=$restore_point" -f - <<'SQL'
+   SELECT id, state, created_at, completed_at
+   FROM public.person_data_request
+   WHERE state IN ('ERASING', 'FAILED')
+      OR (state = 'COMPLETE' AND completed_at >= :'restore_point'::timestamptz);
+   SQL
+   ```
+
+4. Require the query command to exit successfully.
+   Require `on` from `SHOW`.
+   Check the restricted incident record for other erasures after the restore point.
+
+   Check whether the migration names an erasure already present in the final source archive.
+   Confirm that no target server processed data after that archive.
+   If the named erasure is in the archive and the target processed no data, follow the target release's migration guide.
+
+   For the stopped-window restore path, require zero rows.
+   Confirm that no server processed data after the restore point before you restore it.
+5. If an erasure ran on the target, keep the target database.
+   Keep ordinary access closed.
+   Let the erasure finish on a release that can use that database.
+   Follow the migration guide for a failed request.
+
+   Stop the server after the erasure finishes.
+   Take and verify a new final restore point.
+6. If you cannot establish what the target processed, stop before Helm rollback or database replacement.
+   Keep access closed.
+   Preserve the current database.
+   Check the retained database and the restricted incident record for erasures since the archive.
+   If the erasure history remains uncertain, keep the server stopped.
+   Leave reconciliation paused until you can account for the erasures.
+
+   Without a backup repository, recover on the retained database once you can account for the erasures.
+   Repair the cause of the migration failure.
+   Check the release status with `helm status "$release" --namespace "$namespace"`.
+   If the status is `pending-*`, do these steps:
+
+   - Identify the stopped phase-1 revision in `helm history`.
+   - Verify that the revision has all writers stopped and migration disabled.
+   - Verify that the revision's PostgreSQL can use the retained database.
+   - Stop if you cannot verify a compatible stopped revision.
+   - Roll back Helm to that revision to clear the pending state.
+   - Keep the retained database in place.
+
+   When Helm has no pending revision, finish [phase 2 of Stopped schema upgrades](#stopped-schema-upgrades) on the retained database.
+   Keep the server stopped during that migration.
+   If an erasure ran, complete the recovery in step 5 before you reopen access.
+   Run the [read-only check for erasure requests](#check-for-erasure-requests) before you reopen access.
+
+   If you already restored a database and completed its migration with access closed, account for every erasure after its restore point.
+   Then follow [Reapply erasures after a restore](./erasure-recovery) before you open access.
+
+#### Take and verify the final archive
+
+1. [Verify that all writers have stopped](#verify-that-all-writers-have-stopped).
+2. Run the applicable [erasure check](#check-for-erasure-requests) again after the quiet check passes.
+3. Record the source inventory before the dump.
+   Count the ordinary tables that the full dump includes.
+   The count includes partition leaves and extension configuration tables.
+   Require a positive count.
+
+   ```bash
+   with_tunnel app_sql -At -c "
+     SELECT count(*) FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE c.relkind = 'r'
+       AND (EXISTS (SELECT 1 FROM pg_extension e WHERE c.oid = ANY(e.extconfig))
+         OR (n.nspname <> 'information_schema' AND left(n.nspname, 3) <> 'pg_'
+           AND NOT EXISTS (
+             SELECT 1 FROM pg_depend d
+             WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid
+               AND d.refclassid = 'pg_extension'::regclass AND d.deptype = 'e'
+           )))
+   " > "$work/source-table-data.count"
+   test "$(cat "$work/source-table-data.count")" -gt 0
+   ```
+
+4. Take the dump as the database admin.
+   The app role cannot read every schema.
+   Record the receipt after all checks pass.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     umask 077
+     cd -- "$work"
+     test "$(cat quiet.tsv)" = $'0\t0\t0'
+     expected_table_data=$(cat source-table-data.count)
+     test "$expected_table_data" -gt 0
+     test ! -e final.dump
+     cat > row-counts.sql <<'SQL'
+   SELECT 'workspace', count(*) FROM public.workspace
+   UNION ALL SELECT 'person_data_request', count(*) FROM public.person_data_request
+   UNION ALL SELECT 'event_publication', count(*) FROM public.event_publication
+   ORDER BY 1;
+   SQL
+     with_tunnel app_sql -At -F $'\t' -f row-counts.sql > row-counts.tsv
+     started=$(date -u +%FT%TZ)
+     with_tunnel admin_pg pg_dump "$pg_host dbname=$database" \
+       --no-password --format=custom --file=final.dump
+     ended=$(date -u +%FT%TZ)
+     test -s final.dump
+     chmod 600 final.dump
+     test "$(stat -c %a final.dump)" = 600
+     sha256sum final.dump > final.dump.sha256
+     pg_restore --file=/dev/null final.dump
+     pg_restore --list final.dump > archive.list
+     table_data=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TABLE DATA ' archive.list)
+     test "$table_data" -eq "$expected_table_data"
+     printf 'file=final.dump\nbytes=%s\nstart=%s\nend=%s\nserver_pods=0\nsandbox_workloads=0\n' \
+       "$(stat -c %s final.dump)" "$started" "$ended" > receipt.txt
+     printf 'run_leases=0\naction_leases=0\napp_connections=0\nsource_TABLE_DATA=%s\nTABLE_DATA=%s\n' \
+       "$expected_table_data" "$table_data" >> receipt.txt
+     cat final.dump.sha256 row-counts.tsv >> receipt.txt
+   )
+   ```
+
+5. Require the dump to exit successfully.
+   Check that the file is nonempty.
+   Check that its mode is 600.
+   Require the full archive read to exit successfully.
+   Check that the `TABLE DATA` count matches the source inventory.
+   Require a complete receipt before you start phase 2.
+
+### Restore the final logical archive
+
+:::caution[CAUTION: Erased data]
+Restoring an older archive can bring back erased data.
+Select the archive from the final stopped window.
+Use the receipt that matches that archive.
+:::
+
+Keep the server stopped.
+Confirm that the failed migration Job has stopped.
+
+Use the source release's PostgreSQL version, extensions, database roles and encryption keys.
+Keep the matching signed release lock.
+Before you start, rehearse this procedure on an isolated staging installation.
+
+1. Define the [database tunnel](#open-the-database-tunnel) functions.
+   Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
+   Define this rename helper on the host.
+   The helper disables connections to the selected database before the rename.
+   It stops if a connection other than the exporter remains.
+
+   ```bash
+   retain_selected_db() (
+     set +x
+     set -euo pipefail
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -v "database=$database" -v "retained=$1" -f - <<'SQL'
+   ALTER DATABASE :"database" WITH ALLOW_CONNECTIONS false;
+   SELECT pid AS exporter_pid FROM pg_stat_activity
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor';
+   SELECT format(
+     'SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE pid = %s
+      AND datname = %L AND usename = %L', pid, datname, usename
+   ) FROM pg_stat_activity
+   WHERE datname = :'database' AND usename = 'hephaestus_monitor'
+   \gexec
+   ALTER DATABASE :"database" RENAME TO :"retained";
+   SQL
+   )
+   ```
+
+   If `replacement.txt` already exists after an interruption, [resume the replacement](#resume-an-interrupted-database-replacement).
+   For a new replacement, [check for erasures before recovery](#check-for-erasures-before-recovery).
+2. Verify the SHA-256.
+   Check that the archive names the selected database.
+   Do both checks before you change the live database.
+   Run the restore as the database admin.
+
+   The block keeps the failed database under another name with connections disabled.
+   The exporter can still hold a connection after the server stops.
+   The block records its PIDs before it closes them.
+   It stops if any other connection remains.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     umask 077
+     cd -- "$work"
+     sha256sum --check final.dump.sha256
+     grep -Fx "$(cat final.dump.sha256)" receipt.txt
+     pg_restore --list final.dump > archive.list
+     test "$(sed -nE 's/^;[[:space:]]+dbname:[[:space:]]+//p' archive.list)" = "$database"
+     pg_restore --file=/dev/null final.dump
+     pg_restore --create --list final.dump > database-inventory.list
+     awk -v db="$database" '
+       function matches_db(value) { return value == db || value == "\"" db "\"" }
+       $1 !~ /^[0-9]+;$/ { next }
+       $4 == "DATABASE" && $5 == "-" && matches_db($6) { print }
+       $4 == "DATABASE" && $5 == "PROPERTIES" && $6 == "-" && matches_db($7) { print }
+       $4 ~ /^(ACL|COMMENT)$/ && $5 == "-" && $6 == "DATABASE" && matches_db($7) { print }
+       $4 == "SECURITY" && $5 == "LABEL" && $6 == "-" && $7 == "DATABASE" && matches_db($8) { print }
+     ' database-inventory.list > database-only.list
+     pg_restore --create --use-list=database-only.list --file=database.sql final.dump
+     : > database-create.sql
+     : > database-properties.sql
+     awk '/^\\connect[[:space:]]/ { if (++switches > 2) exit 1; next }
+          { print > (switches ? "database-properties.sql" : "database-create.sql") }' database.sql
+     grep -qE "^CREATE DATABASE ($database|\"$database\") " database-create.sql
+     failed_db="heph_failed_$(date -u +%Y%m%dT%H%M%S)"
+     (set -C; {
+       printf 'database=%s\nretained=%s\n' "$database" "$failed_db"
+       cat final.dump.sha256
+       printf 'stage=archive-verified\n'
+     } > replacement.txt)
+     retain_selected_db "$failed_db"
+     printf 'stage=database-retained\n' >> replacement.txt
+   )
+   ```
+
+3. Create the replacement database from the verified archive.
+   If the rename succeeded before an interruption, resume here with the same restore directory.
+   Keep all writers stopped and reconciliation paused.
+   `replacement.txt` records the retained database, the archive checksum and the last completed stage.
+   The catalog check must return `t`.
+   This confirms that the retained database has connections disabled and the selected name is free.
+   If the selected name exists, follow [Resume an interrupted database replacement](#resume-an-interrupted-database-replacement).
+   Stop if you cannot confirm the recorded state.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     umask 077
+     cd -- "$work"
+     failed_db=$(sed -n 's/^retained=//p' replacement.txt)
+     [[ "$failed_db" =~ ^heph_failed_[0-9]{8}T[0-9]{6}$ ]]
+     grep -Fx "database=$database" replacement.txt
+     grep -Fx "$(cat final.dump.sha256)" replacement.txt
+     sha256sum --check final.dump.sha256
+     can_create=$(with_tunnel admin_pg psql -X -w -At -v ON_ERROR_STOP=1 \
+       "$pg_host dbname=$maintenance_database" -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
+   SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'failed_db' AND NOT datallowconn)
+      AND NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database');
+   SQL
+     )
+     test "$can_create" = t
+     printf 'stage=ready-to-create\n' >> replacement.txt
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -f database-create.sql
+     printf 'stage=replacement-created\n' >> replacement.txt
+     with_tunnel admin_pg pg_restore --no-password --exit-on-error --single-transaction \
+       --dbname="$pg_host dbname=$database" final.dump
+     if [[ -s database-properties.sql ]]; then
+       with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 --single-transaction \
+         "$pg_host dbname=$database" -f database-properties.sql
+     fi
+     pg_restore --list final.dump > archive.list
+     table_data=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TABLE DATA ' archive.list)
+     grep -Fx "TABLE_DATA=$table_data" receipt.txt
+     with_tunnel app_sql -At -F $'\t' -f row-counts.sql > restored-row-counts.tsv
+     grep -E '^(event_publication|person_data_request|workspace)'$'\t' receipt.txt > expected-row-counts.tsv
+     cmp expected-row-counts.tsv restored-row-counts.tsv
+     printf 'stage=restore-verified\n' >> replacement.txt
+   )
+   ```
+
+   The SQL files keep the database settings and grants in the archive.
+   One connection creates the database.
+   Another connection applies the archive in a transaction.
+   A separate command applies the remaining database grants and settings if the archive has them.
+   The split keeps the archive's restriction commands in their original order.
+   It removes the reconnect commands so each client starts with a fresh tunnel.
+
+   Require each command to succeed.
+   Check that the archive inventory matches the receipt.
+   Check that the restored row counts match the receipt.
+   On any failure, leave the server stopped.
+   Keep the failed database and any partial restore for diagnosis.
+4. After verification passes, apply the signed source release with the server stopped and migration enabled.
+   The migration Job runs [database role setup](./helm-chart#database-roles) again.
+   Wait for the Job to be `Complete`.
+   Keep every source server stopped.
+   Run the [read-only erasure check](#check-for-erasure-requests) on the selected database before you reopen access.
+   Keep the failed database until the investigation and retention rules permit its removal.
+
+#### Resume an interrupted database replacement
+
+1. Keep access closed.
+   Keep reconciliation paused.
+   Verify that no server, sandbox or migration workload remains.
+   Confirm that only recovery commands could write after the erasure check in restore step 1.
+   Stop if you cannot confirm that history.
+2. Use the same restore directory.
+   Verify the archive checksum against `replacement.txt` and `receipt.txt`.
+   Verify the selected name against `replacement.txt`.
+   Read both database names from the maintenance database, even when the selected name cannot accept connections.
+
+   ```bash
+   (
+     set +x
+     set -euo pipefail
+     cd -- "$work"
+     sha256sum --check final.dump.sha256
+     grep -Fx "$(cat final.dump.sha256)" receipt.txt
+     grep -Fx "$(cat final.dump.sha256)" replacement.txt
+     grep -Fx "database=$database" replacement.txt
+     failed_db=$(sed -n 's/^retained=//p' replacement.txt)
+     [[ "$failed_db" =~ ^heph_failed_[0-9]{8}T[0-9]{6}$ && "$failed_db" != "$database" ]]
+     with_tunnel admin_pg psql -X -w -v ON_ERROR_STOP=1 "$pg_host dbname=$maintenance_database" \
+       -v "database=$database" -v "failed_db=$failed_db" -f - <<'SQL'
+   SELECT datname, datallowconn FROM pg_database WHERE datname IN (:'database', :'failed_db');
+   SQL
+   )
+   ```
+
+3. Choose the next action from the catalog result.
+   Here `f` means that the database has connections disabled.
+   Use the catalog even when the stage in `replacement.txt` has yet to catch up.
+
+   | Selected name | Recorded retained name | Action |
+   | --- | --- | --- |
+   | Present, `f` | Absent | Pass the recorded retained name to `retain_selected_db`. After it succeeds, append `stage=database-retained` to `replacement.txt`. Continue at step 3 of the restore. |
+   | Absent | Present, `f` | Continue at step 3 of the restore. |
+   | Present | Present, `f` | If verification of this replacement finished, continue at step 4. Otherwise, retain the selected database under a new name with the commands below. |
+
+   Stop on any other result.
+
+   To retain an unverified replacement, choose an unused name with the `heph_partial_` prefix.
+   Record it before the rename.
+   Keep the original retained database unchanged.
+
+   ```bash
+   (
+     set -euo pipefail
+     quarantine_db="heph_partial_$(date -u +%Y%m%dT%H%M%S)"
+     test "$quarantine_db" != "$database"
+     printf 'partial=%s\n' "$quarantine_db" >> "$work/replacement.txt"
+     retain_selected_db "$quarantine_db"
+     printf 'stage=partial-retained\n' >> "$work/replacement.txt"
+   )
+   ```
+
+   After the rename succeeds, return to step 3 of [Restore the final logical archive](#restore-the-final-logical-archive).
+   The catalog check in that step requires the selected name to be free before it creates the database.
 
 ## Change a volume size
 
@@ -269,19 +824,29 @@ Removal of a stale lock does not repair a failed migration.
 On a pull-based one-host install, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) instead.
 It adds the steps of the reconciler to this procedure.
 
+Set `release` to the affected Helm release.
+Set `namespace` to its namespace.
+
 1. Keep the server stopped.
 2. Wait until the migration Job has stopped.
-   `kubectl --namespace hephaestus get job hephaestus-migration-<revision>` shows its `Complete` or `Failed` condition.
+   Set `migration_job` as in [Stopped schema upgrades](#stopped-schema-upgrades).
+   `kubectl --namespace "$namespace" get job "$migration_job"` shows its `Complete` or `Failed` condition.
    After its 24-hour TTL, an absent Job has stopped only if no migration Pod remains.
 3. Save the Job log, the error and the identity of the failed changeset.
 4. Save the `databasechangelog` and lock diagnostics and the target image lock.
 5. If possible, take a forensic snapshot of the database volume.
-6. If Helm reports a `pending-*` status, roll the release back: `helm rollback hephaestus <revision> --namespace hephaestus --wait`.
-   After a stopped upgrade, use the phase-1 revision, which runs no server. After a rolling upgrade, use the previous revision.
-7. Restore the pre-upgrade backup, as [Recover the live installation](./backup-restore#recover-the-live-installation) describes.
-   Use the chart and the **previous signed release lock** of the previous release.
-   Use its PostgreSQL image and extensions, and its encryption keys.
-   That procedure starts the server with silent mode on, and ends when you turn silent mode off.
+6. After a stopped upgrade, [check for erasures before recovery](#check-for-erasures-before-recovery).
+   If Helm reports a `pending-*` status, choose the rollback revision.
+   For a stopped upgrade, set `previous_revision` to the phase-1 revision.
+   For a rolling upgrade, use the previous revision.
+   Run `helm rollback "$release" "$previous_revision" --namespace "$namespace" --wait`.
+7. If you took a final logical archive, [restore that archive](#restore-the-final-logical-archive).
+   For a target retry, keep the source stopped.
+   To return to the source, start it after the restore passes.
+   Verify readiness.
+   Verify authenticated reads.
+   For a repository backup, follow [Recover the live installation](./backup-restore#recover-the-live-installation) to restore the pre-upgrade backup.
+   Use the previous chart, signed release lock, PostgreSQL image, extensions and encryption keys.
 8. Report the actual recovery point and time, and any lost writes.
 9. Keep the failed database until the investigation and your retention rules permit its removal.
 10. On a pull-based one-host install: promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
