@@ -459,7 +459,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         }
 
         @Override
-        public boolean claimed(SandboxRun run) {
+        public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
             return true;
         }
 

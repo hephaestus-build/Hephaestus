@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -112,6 +113,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -132,6 +134,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @MockitoBean
     DigestAdmission liveDigestAdmission;
+
+    @MockitoSpyBean
+    Clock jvmClock;
 
     @MockitoBean(name = "digestTransactionTransport")
     WeeklyDigestTransport transactionTransport;
@@ -670,6 +675,12 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     private DigestAdmission eligibility() {
+        AgentRuns replay = mock(AgentRuns.class);
+        when(replay.conversationDeadlineClock()).thenReturn(due());
+        return eligibility(replay);
+    }
+
+    private DigestAdmission eligibility(AgentRuns runs) {
         return new DigestAdmission(
                 turnAccess,
                 conversationAccess,
@@ -677,7 +688,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 new WeeklyDigestAvailability(memberships, readiness, admission),
                 facts,
                 objectMapper,
-                Clock.fixed(due(), ZoneOffset.UTC));
+                runs);
     }
 
     private DigestDelivery delivery(List<WeeklyDigestTransport> transports) {
@@ -954,6 +965,22 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                         .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(run.getId()));
             }
         });
+    }
+
+    @Test
+    void shouldRefuseDigestAdmissionWhenTheJvmClockStillShowsAnOpenWindow() {
+        Instant databaseNow = runs.conversationDeadlineClock();
+        week = WeeklyDigestWindow.previousWeek(databaseNow.minus(Duration.ofDays(7)), BERLIN);
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+
+        assertThat(week.contactCutoff()).isBefore(databaseNow);
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isOne();
+        UUID turnId = Objects.requireNonNull(digestEntry().orElseThrow().getTurnId());
+
+        doReturn(due()).when(jvmClock).instant();
+        assertThat(eligibility().refuses(workspaceId, turnId)).isFalse();
+        assertThat(eligibility(runs).refuses(workspaceId, turnId)).isTrue();
     }
 
     @Test

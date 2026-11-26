@@ -187,14 +187,20 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private SandboxRun claim() {
+        return claim(() -> {});
+    }
+
+    private SandboxRun claim(Runnable beforeLease) {
         var sandbox = sandbox();
         var lease = sandboxes
                 .lease(
                         sandbox,
                         Set.of(AgentRunKind.TURN),
-                        () -> kind.beforeWrite(sandbox),
-                        claimed -> kind.claimed(
-                                new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
+                        () -> {
+                            kind.beforeWrite(sandbox);
+                            beforeLease.run();
+                        },
+                        claimed -> kind.claimed(sandbox, claimed))
                 .orElseThrow();
         return new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
     }
@@ -244,8 +250,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                         sandbox,
                         Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST),
                         () -> digestKind.beforeWrite(sandbox),
-                        claimed -> digestKind.claimed(
-                                new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
+                        claimed -> digestKind.claimed(sandbox, claimed))
                 .orElseThrow();
         var run = new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
         assertThat(lease.kind()).isEqualTo(AgentRunKind.DIGEST);
@@ -280,20 +285,22 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldStartOnlyTheSubjectsNextQuestionAndBoundItsWork() {
         ConversationTurn first = ask("First");
         ConversationTurn second = ask("Second");
-        SandboxRun run = claim();
+        SandboxRun run = claim(() -> jdbc.execute("SELECT pg_sleep(2)"));
         assertThat(run.fence().runId()).isEqualTo(first.getRunId());
         assertThat(held.held(run, false).turnId()).isEqualTo(first.getId());
         assertThat(turnRows.findById(second.getId()).orElseThrow().getStatus())
                 .isEqualTo(ConversationTurn.Status.QUEUED);
         Instant startedAt = Objects.requireNonNull(
                 turnRows.findById(first.getId()).orElseThrow().getStartedAt());
+        var leased = runs.find(run.fence().run()).orElseThrow();
+        Instant leasedAt = Objects.requireNonNull(leased.getStartedAt());
+        assertThat(leasedAt).isAfterOrEqualTo(startedAt.plusSeconds(2));
         assertThat(held.workDeadline(run))
-                .as("the work deadline is anchored to the database start")
-                .isEqualTo(startedAt.plusSeconds(
+                .as("the wait before leasing leaves the full model timeout")
+                .isEqualTo(leasedAt.plusSeconds(
                         LlmCatalogTestFixtures.admittedConversationConfig().timeoutSeconds()))
                 .isAfter(runs.conversationDeadlineClock());
-        assertThat(runs.find(run.fence().run()).orElseThrow().getDeadline())
-                .isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
+        assertThat(leased.getDeadline()).isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
         assertThat(sandboxes.lease(
                         run.sandbox(),
                         Set.of(AgentRunKind.TURN),
@@ -630,7 +637,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                         sandbox,
                         Set.of(AgentRunKind.TURN),
                         () -> observed.beforeWrite(sandbox),
-                        lease -> kind.claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))));
+                        lease -> kind.claimed(sandbox, lease)));
                 try {
                     assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
                 } catch (InterruptedException interrupted) {

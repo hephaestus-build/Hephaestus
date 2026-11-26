@@ -78,8 +78,7 @@ public class AgentNextController {
                     // The token filter restores the request scope after common advice records a failure.
                     MDC.put(StructuredLogKeys.RUN_ID, lease.runId().toString());
                     MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(lease.epoch()));
-                    return Objects.requireNonNull(kinds.get(lease.kind()))
-                            .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()));
+                    return Objects.requireNonNull(kinds.get(lease.kind())).claimed(sandbox, lease);
                 }));
     }
 

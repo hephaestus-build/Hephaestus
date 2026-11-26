@@ -1587,12 +1587,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
         return Boolean.TRUE.equals(transactions.execute(status -> agentRuns
                 .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
-                .map(lease -> sandboxRuns.claimed(new SandboxRun(
+                .map(lease -> sandboxRuns.claimed(
                         new AgentSandboxes.LiveSandbox(
                                 UUID.randomUUID(), job.getWorkspaceId(), subject, AgentSandboxKind.REVIEW),
-                        lease.fence(),
-                        lease.kind(),
-                        lease.attempt())))
+                        lease))
                 .orElseThrow()));
     }
 

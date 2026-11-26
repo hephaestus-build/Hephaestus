@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.turn;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -97,15 +98,15 @@ public class TurnRunsAdapter implements TurnRuns {
     }
 
     /**
-     * Bounds the claim from its stored start. Its run ends {@link #GRACE} after the work deadline, so its
+     * Bounds the claim from the time it took the lease. Its run ends {@link #GRACE} after the work deadline, so its
      * holder can still end what it wrote, and the run reaper ends it then.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void setWorkDeadline(AgentRunFence claim, UUID turnId, Instant startedAt, int timeoutSeconds) {
-        Instant deadline = runs.conversationWorkStart(startedAt)
+    public void setWorkDeadline(AgentRunLease lease, UUID turnId, int timeoutSeconds) {
+        Instant deadline = runs.conversationWorkStart(lease.leasedAt())
                 .plusSeconds(timeoutSeconds)
                 .plus(GRACE);
-        if (!runs.limit(claim, deadline)) throw new ConversationLeaseLostException(turnId, claim.epoch());
+        if (!runs.limit(lease.fence(), deadline)) throw new ConversationLeaseLostException(turnId, lease.epoch());
     }
 
     /** Renews the attempt's claim of its turn's run; false once it lost the run, or the run passed its deadline. */

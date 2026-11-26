@@ -83,6 +83,13 @@ Check the [database prerequisites](./compatibility-policy#database-baseline-prer
 ## Upgrade a schema-compatible release
 
 [Verify the release chart](./kubernetes#verify-the-release-chart).
+
+Before a rolling upgrade from 1.0.0-rc.16, check that the server nodes and PostgreSQL have synchronized clocks.
+Do the same before a rollback to 1.0.0-rc.16.
+Keep the clocks synchronized until the old Pods finish draining or the rollback completes.
+If the server clock is ahead, rc.16 can end a turn from the newer release too early.
+If the PostgreSQL clock is ahead, the newer release can end a turn from rc.16 too early.
+
 Then apply the new chart, its profile, and your own values:
 
 ```bash
@@ -102,8 +109,6 @@ A previous release of 1.0.0-rc.14 or earlier still claims work during the migrat
 The server uses a rolling update: its replacement is ready before the old Pod stops serving.
 An old server drains for up to `server.drainTimeoutSeconds`: 30 minutes by default, and 10 minutes in the `small` profile.
 Any ready server serves the sandbox calls of running reviews. A connection that is open can finish on the old server during the drain.
-Keep the server nodes and PostgreSQL clocks synchronized during an upgrade or rollback from a release that measures conversation work time on the server.
-The earlier server can still time out a turn while both revisions serve requests.
 
 Each release builds its PostgreSQL image again with the current security fixes of its distribution.
 Thus, the upgrade usually restarts the bundled PostgreSQL once. While it restarts, requests that need the database fail.

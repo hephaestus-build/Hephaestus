@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -93,8 +94,8 @@ public class TurnSandboxRunKind implements SandboxRunKind {
      * longer waits takes its run with it; admission that declines a turn ends both.
      */
     @Override
-    public boolean claimed(SandboxRun run) {
-        AgentRunFence claim = run.fence();
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        AgentRunFence claim = lease.fence();
         Optional<ConversationTurnStarter.StartedTurn> started;
         try {
             started = starter.startClaimed(claim);
@@ -107,11 +108,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             return false;
         }
         ConversationTurn turn = started.get().turn();
-        turnRuns.setWorkDeadline(
-                claim,
-                turn.getId(),
-                started.get().startedAt(),
-                started.get().llm().timeoutSeconds());
+        turnRuns.setWorkDeadline(lease, turn.getId(), started.get().llm().timeoutSeconds());
         return true;
     }
 

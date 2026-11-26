@@ -61,9 +61,8 @@ public final class ConversationTurnStarts {
                     .flatMap(lease -> starter.startClaimed(lease.fence()).map(started -> {
                         beans.getBean(TurnRunsAdapter.class)
                                 .setWorkDeadline(
-                                        lease.fence(),
+                                        lease,
                                         started.turn().getId(),
-                                        started.startedAt(),
                                         started.llm().timeoutSeconds());
                         return started;
                     }));

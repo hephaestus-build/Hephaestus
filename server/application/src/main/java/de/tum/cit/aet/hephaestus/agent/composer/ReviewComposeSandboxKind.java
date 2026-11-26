@@ -15,11 +15,13 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -93,12 +95,12 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     }
 
     @Override
-    public boolean claimed(SandboxRun run) {
-        var fence = run.fence();
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        var fence = lease.fence();
         return claims.claimLeased(fence)
                 .map(started -> {
                     gateway.save(
-                            run,
+                            new SandboxRun(sandbox, fence, lease.kind(), lease.attempt()),
                             started.job(),
                             new ReviewCompositionClaim.Decision(Instant.now(), started.withholdOnly(), false));
                     return true;

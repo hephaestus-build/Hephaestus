@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
@@ -37,8 +38,8 @@ public class DigestSandboxRunKind implements SandboxRunKind {
     }
 
     @Override
-    public boolean claimed(SandboxRun run) {
-        return turns.claimed(run);
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        return turns.claimed(sandbox, lease);
     }
 
     @Override

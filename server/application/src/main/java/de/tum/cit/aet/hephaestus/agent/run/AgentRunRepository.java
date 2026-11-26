@@ -29,7 +29,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                    cost_usd = NULL, unreported_calls = 1
             """;
 
-    /** A leased run as a claim or a lookup returns it. */
+    /** A leased run as a claim returns it. */
     interface LeaseRow {
         UUID getId();
 
@@ -44,6 +44,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
         int getAttempt();
 
         int getLeaseEpoch();
+
+        Instant getLeasedAt();
 
         Instant getLeasedUntil();
 
@@ -222,16 +224,17 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     // The start limit can pass while the claim orders its candidates and locks the picked row.
     String LEASE = """
+            , lease_time AS MATERIALIZED (SELECT id, clock_timestamp() AS leased_at FROM picked)
             UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL, deferred_until = NULL,
-                   leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """
+                   leased_until = lease_time.leased_at + make_interval(secs =>""" + LEASE_SECONDS + """
             ),
-                   started_at = COALESCE(r.started_at, clock_timestamp())
-              FROM picked WHERE r.id = picked.id
+                   started_at = COALESCE(r.started_at, lease_time.leased_at)
+              FROM lease_time WHERE r.id = lease_time.id
             """ + WITHIN_START_LIMITS + """
             RETURNING r.id AS id, COALESCE(r.workspace_id, 0) AS "workspaceId", r.kind AS kind, r.band AS band,
                       r.concurrency_key AS "concurrencyKey", r.attempt AS attempt, r.lease_epoch AS "leaseEpoch",
-                      r.leased_until AS "leasedUntil", r.deadline AS deadline,
-                      EXTRACT(EPOCH FROM clock_timestamp() - r.available_at)::double precision AS "waitedSeconds"
+                      lease_time.leased_at AS "leasedAt", r.leased_until AS "leasedUntil", r.deadline AS deadline,
+                      EXTRACT(EPOCH FROM lease_time.leased_at - r.available_at)::double precision AS "waitedSeconds"
             """;
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")

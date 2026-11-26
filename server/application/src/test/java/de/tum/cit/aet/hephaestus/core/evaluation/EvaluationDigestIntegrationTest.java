@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestAvailability;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -230,8 +229,7 @@ class EvaluationDigestIntegrationTest {
         var lease = Objects.requireNonNull(transactions.execute(status -> {
             var claim = runs.claimSubject(workspaceId, digest.subject(), Set.of(AgentRunKind.DIGEST))
                     .orElseThrow();
-            assertThat(digestKind.claimed(new SandboxRun(sandbox, claim.fence(), claim.kind(), claim.attempt())))
-                    .isTrue();
+            assertThat(digestKind.claimed(sandbox, claim)).isTrue();
             return claim;
         }));
         var fence = lease.fence();

@@ -62,7 +62,7 @@ public class ConversationTurnStarter {
     private final LlmConnectionHealth connections;
 
     /** A claimed and admitted turn attempt: what its host runs, for whom, with which model. */
-    public record StartedTurn(ConversationTurn turn, long accountId, ConversationLlmConfig llm, Instant startedAt) {}
+    public record StartedTurn(ConversationTurn turn, long accountId, ConversationLlmConfig llm) {}
 
     /**
      * Starts and admits the turn of a run that a sandbox's pull claimed, in the pull's transaction.
@@ -137,7 +137,7 @@ public class ConversationTurnStarter {
         if (!admitted) {
             return decline(turn, PERSON_DATA_HELD);
         }
-        return Optional.of(new StartedTurn(turn, accountId, llm, startedAt));
+        return Optional.of(new StartedTurn(turn, accountId, llm));
     }
 
     /**

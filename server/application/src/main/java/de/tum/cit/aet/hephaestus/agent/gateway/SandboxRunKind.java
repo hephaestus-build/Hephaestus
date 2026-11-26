@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import java.util.EnumMap;
@@ -31,7 +32,7 @@ public interface SandboxRunKind {
      * requeued the run instead, in the same transaction, as a claim that finds its work erased does; the sandbox then
      * gets no run from this pull.
      */
-    boolean claimed(SandboxRun run);
+    boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease);
 
     /** Takes a domain write fence before the sandbox and run row locks. */
     default void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {}

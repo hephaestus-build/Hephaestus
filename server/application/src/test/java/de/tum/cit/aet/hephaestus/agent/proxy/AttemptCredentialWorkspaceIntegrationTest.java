@@ -494,7 +494,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
         }
 
         @Override
-        public boolean claimed(SandboxRun run) {
+        public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
             return true;
         }
 

@@ -476,9 +476,9 @@ public class AgentRuns {
         return replayNow != null ? replayNow : runs.databaseClock();
     }
 
-    /** The start stamped on the turn by PostgreSQL, or the scenario's start during a replay. */
-    public Instant conversationWorkStart(Instant databaseStartedAt) {
-        return Objects.requireNonNullElse(timing.replayNow(), databaseStartedAt);
+    /** The time the lease was taken, on the scenario clock during a replay. */
+    public Instant conversationWorkStart(Instant leasedAt) {
+        return Objects.requireNonNullElse(timing.replayNow(), leasedAt);
     }
 
     /**
@@ -804,6 +804,7 @@ public class AgentRuns {
                 row.getConcurrencyKey(),
                 row.getAttempt(),
                 row.getLeaseEpoch(),
+                row.getLeasedAt(),
                 row.getLeasedUntil(),
                 row.getDeadline());
     }

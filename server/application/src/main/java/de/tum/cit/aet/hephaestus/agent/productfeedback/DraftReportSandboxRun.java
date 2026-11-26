@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
@@ -64,10 +65,10 @@ class DraftReportSandboxRun implements SandboxRunKind, ProductFeedbackDrafts.Que
     }
 
     @Override
-    public boolean claimed(SandboxRun run) {
-        var subject = subject(run);
+    public boolean claimed(AgentSandboxes.LiveSandbox sandbox, AgentRunLease lease) {
+        var subject = ProductFeedbackDrafts.Subject.fromKey(sandbox.subjectKey());
         if (drafts.claimed(subject)) return true;
-        runs.end(run.fence(), AgentRunStopReason.CANCELLED);
+        runs.end(lease.fence(), AgentRunStopReason.CANCELLED);
         return false;
     }
 
