@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
@@ -386,14 +386,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var stores =
                 registry.stores().stream().map(PersonDataContributor::store).toList();
         String previousStore = stores.get(stores.indexOf("feedback") - 1);
-        var shipping = spy(beans.getBean(PrivacyJournalShipping.class));
-        doAnswer(ignored -> Boolean.TRUE.equals(jdbc.queryForObject(
+        var shipping = mock(PrivacyJournalShipping.class);
+        when(shipping.erasurePending(requestId))
+                .thenAnswer(ignored -> Boolean.TRUE.equals(jdbc.queryForObject(
                         "SELECT jsonb_exists(completed_json::jsonb, ?) FROM person_data_request WHERE id=?",
                         Boolean.class,
                         previousStore,
-                        requestId)))
-                .when(shipping)
-                .erasurePending(requestId);
+                        requestId)));
         erasureWithShipping(shipping).run(requestId);
 
         var paused = personData.get(requestId).request();
