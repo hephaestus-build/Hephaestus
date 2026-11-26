@@ -2257,25 +2257,30 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     void shouldExpireAnOccasionPastItsDeadlineExactlyAsTheTableSays(ItemEventState state) {
         var prepared = prepare(IdentityProviderType.GITHUB, false);
         var occasion = waitingOccasion(prepared);
+        var initialReason = state == ItemEventState.RECORDED || state == ItemEventState.STARTED
+                ? null
+                : ReviewRequestReason.BUDGET_EXHAUSTED;
         jdbc.update(
                 "UPDATE item_event SET state = ?, reason = ? WHERE id = ?",
                 state.name(),
-                state == ItemEventState.WAITING || state == ItemEventState.WITHHELD || state == ItemEventState.EXPIRED
-                        ? ReviewRequestReason.BUDGET_EXHAUSTED.name()
-                        : null,
+                initialReason == null ? null : initialReason.name(),
                 occasion.getId());
 
-        // Its occurrence is a fact, so the deadline moves past it instead.
-        transactions.executeWithoutResult(ignored -> events.expire(
-                Instant.now().plus(Duration.ofDays(365)),
-                Instant.now(),
-                ReviewRequestReason.PENDING_DEADLINE_EXCEEDED));
+        var now = occasion.getOccurredAt().plus(ledger.pendingLapseAfter()).plusSeconds(1);
+        var sweep = new PendingItemEventReaper(
+                events,
+                ledger,
+                publisher,
+                Clock.fixed(now, clock.getZone()),
+                new MockEnvironment().withProperty(RuntimeRole.AGENT_ENABLED_PROPERTY, "true"));
+        transactions.executeWithoutResult(ignored -> sweep.sweep());
 
-        var expected = OccasionSettlement.next(
-                        state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.EXPIRED, null)
-                .map(next -> ((OccasionSettlement.Next.Decide) next).state())
-                .orElse(state);
-        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(expected);
+        var expected = (OccasionSettlement.Next.Decide)
+                OccasionSettlement.next(state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.EXPIRED, null)
+                        .orElse(new OccasionSettlement.Next.Decide(state, initialReason));
+        var settled = events.findById(occasion.getId()).orElseThrow();
+        assertThat(settled.getState()).isEqualTo(expected.state());
+        assertThat(settled.getReason()).isEqualTo(expected.reason());
     }
 
     private static ReviewRequest eventRequest(Prepared prepared, ItemEvent occasion, Set<UUID> coalesced) {
@@ -3911,7 +3916,13 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         ItemEventRecorded.class.getName(),
                         occasion.getId().toString()))
                 .containsExactly("FAILED");
-        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        var stillWaiting = events.findById(occasion.getId()).orElseThrow();
+        assertThat(OccasionSettlement.next(
+                        occasion.getState(), OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.FAULT, null))
+                .isEmpty();
+        assertThat(stillWaiting.getState()).isEqualTo(occasion.getState());
+        assertThat(stillWaiting.getReason()).isEqualTo(occasion.getReason());
+        assertThat(stillWaiting.getDecidedAt()).isEqualTo(occasion.getDecidedAt());
         assertThat(reviews.findByWorkspaceIdAndEventId(workspaceId, occasion.getId()))
                 .isEmpty();
     }
@@ -4214,7 +4225,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
         assertThat(pulls.findById(pull.getId()).orElseThrow().getBaseRefOid()).isEqualTo("a".repeat(40));
         var unresolved = events.findById(pending.getId()).orElseThrow();
-        assertThat(unresolved.getState()).isEqualTo(ItemEventState.RECORDED);
+        assertThat(OccasionSettlement.next(
+                        pending.getState(), OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.FAULT, null))
+                .isEmpty();
+        assertThat(unresolved.getState()).isEqualTo(pending.getState());
+        assertThat(unresolved.getReason()).isEqualTo(pending.getReason());
+        assertThat(unresolved.getDecidedAt()).isEqualTo(pending.getDecidedAt());
         assertThat(unresolved.getItemVersion()).isNull();
         var evidence = Objects.requireNonNull(unresolved.getEvidence());
         assertThat(evidence.path("work").path("body").asString()).isEqualTo("Inconsistent retained words");
