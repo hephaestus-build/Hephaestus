@@ -65,7 +65,10 @@ not your production data. They do not replace this update of the copy.
 Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you start.
 
 1. On a pull-based one-host install, pause [reconciliation](./pull-based-deployment#operating-it), and wait for its active run to finish.
-2. Take a verified [database backup](./backup-restore#back-up-the-database), and complete [Validate the actual production data](#validate-the-actual-production-data).
+2. Choose the restore point before you start the upgrade.
+   For a stopped upgrade with bundled PostgreSQL and no backup repository, [prepare a logical restore point](#prepare-a-logical-restore-point).
+   For other upgrades, take a verified [database backup](./backup-restore#back-up-the-database).
+   Complete [Validate the actual production data](#validate-the-actual-production-data).
 3. On the running instance, open **Instance administration → Instance settings**.
 4. Select **Turn on silent mode…**, enter the upgrade as the reason, and select **Turn on silent mode**.
 5. Read it back: the **Silent mode** card shows **On**.
@@ -129,7 +132,10 @@ Do not use `--rollback-on-failure`: a rollback can start the old server against 
 Pause deployment automation that can change the release until this procedure is complete.
 
 Before phase 1, record the current chart, profile, site values and `server.replicas`.
-Prepare a PostgreSQL backup or rehearse the [host-side restore](#restore-the-final-logical-archive).
+Prepare the applicable restore point as [Upgrade the release](#upgrade-the-host) describes.
+
+Set `release` to the Helm release name.
+Set `namespace` to the release namespace.
 Keep the matching signed release lock and encryption keys.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
@@ -152,9 +158,11 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
    Without `postgresql.backup.enabled`, take a [logical restore point](#take-a-logical-restore-point-without-backups) from the host.
 5. Do phase 2.
    Expect one PostgreSQL restart: each release builds its PostgreSQL image again with current security fixes.
-   Find the migration Job of the new Helm revision. For the release `hephaestus`, its name is `hephaestus-migration-<revision>`.
-6. Save its log: `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
-7. Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
+   Read the new revision with `helm history "$release" --namespace "$namespace"`.
+   List the Jobs with `kubectl --namespace "$namespace" get jobs -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=migration"`.
+   Set `migration_job` to the Job name that ends in the new revision number.
+6. Save its log: `kubectl --namespace "$namespace" logs "job/$migration_job" -c migration > migration.log`.
+7. Require its `Complete` condition: `kubectl --namespace "$namespace" wait --for=condition=complete "job/$migration_job" --timeout=20m`.
    If the Job fails or times out, do not do phase 3.
    Keep the server stopped. Save the log and the failed change set: the chart deletes the Job after 24 hours.
    Then follow [If migration fails](#if-migration-fails).
@@ -192,9 +200,24 @@ Use this procedure on the host of the bundled PostgreSQL when `postgresql.backup
 Keep the archive on the host with the matching signed release lock and encryption keys.
 Confirm that the host and the database volume have room for the dump, the retained database and the restored copy.
 
-Install the PostgreSQL client of the server's major version on the host before the window.
-On Ubuntu 26.04 with PostgreSQL 18, run `sudo apt-get install -y --no-install-recommends postgresql-client-18`.
-Hephaestus tested `postgresql-client-18` and `libpq5` 18.6-0ubuntu0.26.04.1 with `postgresql-client-common` 290ubuntu1.
+#### Prepare a logical restore point
+
+Do these steps before phase 1.
+
+1. Check that the source uses the `hephaestus_app` login.
+   Check for the `DATABASE_APP_PASSWORD`, `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` keys in the release Secret.
+   Check that the app can read `agent_run` and `agent_action` with the lease columns below.
+   Check that the app can read `person_data_request` with its completion time.
+   Check that the app can read `event_publication` and `workspace`.
+
+   For an older source, prepare a verified backup or follow a verified restore procedure for that source version.
+2. Install the PostgreSQL client of the source server's major version on the host.
+   On Ubuntu 26.04 with PostgreSQL 18, run `sudo apt-get install -y --no-install-recommends postgresql-client-18`.
+   Hephaestus tested `postgresql-client-18` and `libpq5` 18.6-0ubuntu0.26.04.1 with `postgresql-client-common` 290ubuntu1.
+3. Rehearse the [host-side restore](#restore-the-final-logical-archive) on an isolated staging installation.
+4. Run the pre-stop [erasure check](#check-for-erasure-requests) if the target migration requires it.
+
+Take the [final archive](#take-and-verify-the-final-archive) after the last server stops.
 
 #### Open the database tunnel
 
@@ -209,9 +232,11 @@ Run the commands on the host in Bash.
    (umask 077 && mkdir -m 700 -- "$work")
    ```
 
-2. Set the namespace and Helm release name.
-   Set the namespace from `sandbox.namespace`.
+2. Set `namespace` to the release namespace.
+   Set `release` to the Helm release name.
+   Set `sandbox_namespace` from `sandbox.namespace`.
    With sandboxes disabled, set `sandbox_namespace=''`.
+
    Select the PostgreSQL Service of the release.
    Set the Secret name from `secret.name`.
    Set the database name from `postgresql.database`.
@@ -297,6 +322,45 @@ with_tunnel app_sql -c 'SHOW default_transaction_read_only' \
 Require `on` from `SHOW`.
 Require zero rows from the query.
 If either check fails, stop before the dump or migration.
+
+#### Check for erasures before recovery
+
+1. Keep access closed.
+   Keep the source and target stopped.
+   Check the live database before you replace it with a restore point.
+2. Set `restore_point` to the verified restore point in UTC.
+   For a logical archive, use its receipt's `start` time.
+   Run the check through the read-only app connection from [Check for erasure requests](#check-for-erasure-requests).
+
+   ```bash
+   restore_point='<UTC restore point>'
+   with_tunnel app_sql -c 'SHOW default_transaction_read_only' \
+     -v "restore_point=$restore_point" -f - <<'SQL'
+   SELECT id, state, created_at, completed_at
+   FROM public.person_data_request
+   WHERE state IN ('ERASING', 'FAILED')
+      OR (state = 'COMPLETE' AND completed_at >= :'restore_point'::timestamptz);
+   SQL
+   ```
+
+3. Require `on` from `SHOW`.
+   Require zero rows for the stopped-window restore path.
+   Check the restricted incident record for other erasures after the restore point.
+   Use the stopped-window restore path only when you can confirm that no server processed data after the restore point.
+
+   If a migration names an erasure already present in the final source archive, follow the target release's migration guide.
+   Use that recovery only if no target server processed data after that archive.
+4. If an erasure ran on the target, keep the target database.
+   Do not restore the older archive.
+   Keep ordinary access closed.
+   Let the erasure finish on a release that can use that database.
+   Follow the migration guide for a failed request.
+
+   Stop the server after the erasure finishes.
+   Take and verify a new final restore point.
+5. If you cannot establish what the target processed, keep access closed.
+   Preserve the current database.
+   Follow [Reapply erasures after a restore](./erasure-recovery) before you open access.
 
 #### Take and verify the final archive
 
@@ -415,6 +479,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
 
 1. Define the [database tunnel](#open-the-database-tunnel) functions.
    Define `app_sql` as in [Check for erasure requests](#check-for-erasure-requests).
+   [Check for erasures before recovery](#check-for-erasures-before-recovery).
 2. Verify the SHA-256.
    Check that the archive names the selected database.
    Do both checks before you change the live database.
@@ -498,6 +563,7 @@ Before you start, rehearse this procedure on an isolated staging installation.
    The migration Job runs [database role setup](./helm-chart#database-roles) again.
    Wait for the Job to be `Complete`.
    Keep every source server stopped.
+   Run the [read-only erasure check](#check-for-erasure-requests) on the selected database before you reopen access.
    Keep the failed database until the investigation and retention rules permit its removal.
 
 ## Change a volume size
@@ -578,15 +644,22 @@ Removal of a stale lock does not repair a failed migration.
 On a pull-based one-host install, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) instead.
 It adds the steps of the reconciler to this procedure.
 
+Set `release` to the affected Helm release.
+Set `namespace` to its namespace.
+
 1. Keep the server stopped.
 2. Wait until the migration Job has stopped.
-   `kubectl --namespace hephaestus get job hephaestus-migration-<revision>` shows its `Complete` or `Failed` condition.
+   Set `migration_job` as in [Stopped schema upgrades](#stopped-schema-upgrades).
+   `kubectl --namespace "$namespace" get job "$migration_job"` shows its `Complete` or `Failed` condition.
    After its 24-hour TTL, an absent Job has stopped only if no migration Pod remains.
 3. Save the Job log, the error and the identity of the failed changeset.
 4. Save the `databasechangelog` and lock diagnostics and the target image lock.
 5. If possible, take a forensic snapshot of the database volume.
-6. If Helm reports a `pending-*` status, roll the release back: `helm rollback hephaestus <revision> --namespace hephaestus --wait`.
-   After a stopped upgrade, use the phase-1 revision, which runs no server. After a rolling upgrade, use the previous revision.
+6. After a stopped upgrade, [check for erasures before recovery](#check-for-erasures-before-recovery).
+   If Helm reports a `pending-*` status, choose the rollback revision.
+   For a stopped upgrade, set `previous_revision` to the phase-1 revision.
+   For a rolling upgrade, use the previous revision.
+   Run `helm rollback "$release" "$previous_revision" --namespace "$namespace" --wait`.
 7. If you took a final logical archive, [restore that archive](#restore-the-final-logical-archive).
    For a target retry, keep the source stopped.
    To return to the source, start it after the restore passes.
