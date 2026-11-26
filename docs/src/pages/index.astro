@@ -50,39 +50,39 @@ const guides = [
 /** The six product features, named the same way in the README, the webapp and these docs. */
 const features = [
 	{
-		title: "Practices Your Team Chose",
+		title: "Your Team’s Practices",
 		description:
-			"Start from the catalog or write your own. Each practice states what good work looks like. For each practice, feedback can be off. Feedback on the work can wait for a workspace admin’s approval or go out automatically.",
+			"Start from the catalog or write your own. Each practice describes what good work looks like, such as writing clear issues or testing a change.",
 		cta: { label: "Practice catalog", to: "/admin/practice-catalog" },
 	},
 	{
-		title: "Feedback on the Work",
+		title: "Feedback on Your Work",
 		description:
-			"A note on the pull request, merge request, or issue. By default, it posts only while the work is open. It points to the evidence, says why, and suggests a next step.",
+			"Feedback can appear on your pull request, merge request, or issue, on your Practice profile, or in a conversation. By default, comments on the work wait for a workspace admin’s approval and post while the work is open.",
 		cta: { label: "Practice feedback", to: "/user/ai-code-review" },
-	},
-	{
-		title: "Feedback Grounded in Your Work",
-		description:
-			"A review checks its evidence before feedback can go out. If it cannot capture the evidence it needs, it records no observation for that practice.",
-		cta: { label: "How a review decides", to: "/user/ai-code-review#observations" },
 	},
 	{
 		title: "Practice Profile",
 		description:
-			"See patterns across your work, what is going well, and where you stand on each practice. No score, grade, or rank.",
+			"When your workspace reviews practices, your Practice profile shows recurring feedback and what is going well in your reviewed work.",
 		cta: { label: "Practice profile", to: "/user/practice-profile" },
 	},
 	{
 		title: "Ask Hephaestus",
 		description:
-			"Ask why, ask for an example, or disagree, in the web app or in a Slack direct message. You can turn on a weekly digest in your conversation in the app.",
+			"Ask why, ask for an example, or disagree, in the web app or, when your workspace uses Slack, in a direct message.",
 		cta: { label: "Ask Hephaestus", to: "/user/ask-hephaestus" },
 	},
 	{
-		title: "Your Stack",
+		title: "Built for Growth",
 		description:
-			"Works with GitHub, GitLab, Slack, and Outline. Connect OpenAI, Azure OpenAI, Anthropic, or another provider that supports the required API. Helm on your Kubernetes.",
+			"Feedback describes your work and how to improve it, without scores, grades or ranks. AI writes the feedback and can make mistakes, so check it against your work and decide what to do.",
+		cta: { label: "Who can see what", to: "/user/privacy#who-can-see-what" },
+	},
+	{
+		title: "Connected Services",
+		description:
+			"Connect GitHub or GitLab for repository work. Add Slack for conversations and team channels, or Outline for team documents. Each member chooses In-house, Cloud, or No AI for reviews about their work.",
 		cta: { label: "Install with Helm", to: "/admin/kubernetes" },
 	},
 ];
@@ -100,7 +100,7 @@ const features = [
 							Get better at the work you already do.
 						</h1>
 						<p class="text-fd-muted-foreground mb-8 text-lg">
-							Hephaestus reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose. When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step. An observation can say when the evidence could not settle a question. You can talk it through, ask for an example, or disagree. Your feedback has no score, grade or rank. Hephaestus is software, and it can be wrong.
+							Developers grow by doing real work and getting feedback from people who know the craft: senior developers, reviewers, teachers and team leads. Hephaestus gives you feedback alongside them, on the practices your team chose, such as writing clear issues or testing a change. If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step. You can ask about the feedback in a conversation, and you decide what to do with it. AI writes the feedback and can make mistakes.
 						</p>
 						<div class="flex flex-wrap gap-3">
 							<a

@@ -1,7 +1,7 @@
 {
 	"short_name": "Hephaestus",
 	"name": "Hephaestus",
-	"description": "Hephaestus is the open-source AI mentor for software engineering practices. It reads your real work and can suggest what to improve and why. You can talk it through in a conversation.",
+	"description": "Hephaestus is an AI mentor that helps software developers grow in the engineering practices their team values. It reads your real work and can suggest what to improve, with the evidence. You can ask about the feedback in a conversation.",
 	"icons": [
 		{
 			"src": "icon-192.png",

@@ -1,13 +1,13 @@
 cff-version: 1.2.0
-message: If you use Hephaestus in your research, please cite it as below.
+message: If you use Hephaestus in your research, cite it as shown below.
 type: software
 title: Hephaestus
 abstract: >-
-  Hephaestus is an open-source AI mentor for software engineering practices. It reads pull
-  requests, merge requests, issues and code reviews where they happen, and checks them against the
-  practices that a team chose. When a review finds a problem it can support, Hephaestus can point to the work,
-  explain what to improve, and suggest a next step. An observation can say when the evidence
-  could not settle a question. Developers can talk the feedback through in a conversation.
+  Hephaestus is an open-source AI mentor that helps software developers grow in the engineering
+  practices their team values. It reads pull requests, merge requests, issues and reviews, and
+  checks them against the practices that the team chose. If a review finds a problem it can
+  support, Hephaestus can show the evidence and suggest a next step. Developers can ask about
+  the feedback in a conversation.
 authors:
   - name: TUM Applied Education Technologies
     website: https://aet.cit.tum.de/

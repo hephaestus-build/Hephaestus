@@ -68,8 +68,8 @@ export function LandingFeaturesSection() {
 						Feedback on the whole workflow
 					</h2>
 					<p className="mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
-						Hephaestus reads the code, the conversation around it, and the plan behind it. Authors
-						and reviewers both get feedback.
+						Hephaestus reads the code, the conversation around it, and the plan behind it. It can
+						give feedback on how you prepare a change and how you review a teammate’s work.
 					</p>
 
 					<h3 className="mt-8 text-sm font-semibold">

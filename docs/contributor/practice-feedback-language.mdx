@@ -17,33 +17,56 @@ Use item only in contributor documentation, code and API contracts.
 
 ## Tagline and lead
 
-Hephaestus is an AI mentor for software engineering practices.
+This section owns the product's message: the definition, the tagline, the category line, the lead, the three steps, the guarantees and the audience lines.
+Every public surface uses them, shortened to fit its space.
 Software engineering is the first domain.
-This section owns the tagline, the category line, and the lead.
 
 | Name | Text |
 | --- | --- |
+| **Definition** | Hephaestus is an AI mentor that helps software developers grow in the engineering practices their team values. |
 | **Tagline** | Get better at the work you already do. |
 | **Category line** | The open-source AI mentor for software engineering practices |
 
-**Lead for the current release**
+**Lead**
 
-> Hephaestus is an AI mentor for software engineering practices.
-> It reads your pull requests, merge requests, issues and code reviews where they happen, and checks them against the practices that your team chose.
-> When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step.
-> An observation can say when the evidence could not settle a question.
-> You can talk it through, ask for an example, or disagree, in the app or in Slack.
-> Your feedback has no score, grade or rank. No workspace admin page shows your conversation. An instance admin can include it in an audited export of your data.
+> Developers grow by doing real work and getting feedback from people who know the craft: senior developers, reviewers, teachers and team leads.
+> Hephaestus gives you feedback alongside them, on the practices your team chose, such as writing clear issues or testing a change.
+> If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step.
+> You can ask about the feedback in a conversation, and you decide what to do with it.
 
-**Lead for 1.0**
+**How it works**
 
-> Hephaestus knows your goals, gives feedback grounded in your own work and comes back when it said it would.
-> What you learn stays yours from team to team.
+1. **It reads your work.** It reads pull requests, merge requests, issues and reviews from connected repositories. It can also use selected Outline collections and new messages in Slack channels after it announces monitoring.
+2. **It gives feedback on your team's practices.** If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step. Feedback can appear on your work, on your Practice profile, or in a conversation.
+3. **It helps you take the next step.** Ask Hephaestus why, ask for an example, or disagree. Your Practice profile shows recurring feedback and what is going well.
+
+**Guarantees**
+
+State each guarantee once on a surface, in positive form, with its qualifier beside it:
+
+- Feedback describes your work and how to improve it, without scores, grades or ranks.
+- AI writes the feedback and can make mistakes. Check it against your work, and decide what to do.
+- Workspace admins see practice results linked to the work. Those links can identify you even when names are hidden.
+- An instance admin can include your conversation in an audited export of your data.
+- You can turn off use of your Slack channel messages.
+
+**Audience lines**
+
+| Audience | First line | Start here |
+| --- | --- | --- |
+| Developers | Get feedback on your own work, see what is going well, and ask why. | Sign in at your team's Hephaestus address, then follow Getting started. |
+| Team leads and mentors | Choose the practices your team values. Hephaestus adds feedback on everyday work alongside the guidance you give. | Ask your workspace admin to add the practices and turn on practice reviews. |
+| Educators | Use a workspace for a course or a project team. A workspace admin chooses the practices you teach and can approve comments before they post. | Set up your workspace. |
+| Researchers | Hephaestus is the research platform for a study at TUM of whether and how AI-generated feedback improves how developers apply engineering practices. | Run a research program. Participants choose separately whether to allow research use of their data. |
+| Admins and self-hosters | Install the signed Helm chart on one Linux host or an existing Kubernetes cluster. | Follow First steps to set up sign-in, connect a repository, and assign a review model. |
 
 Check the release's access controls before you make a privacy claim.
 The [user guide](/user/privacy) describes the access controls in the current release.
 
-A surface with a length limit starts with the category line, or with the first sentence of the lead for the current release.
+A surface with a length limit starts with the definition or the category line.
+Public copy says what Hephaestus is and does, in positive form.
+It states a limit only where a reader needs it to decide or act.
+It makes no roadmap promise and no outcome claim.
 Display text keeps the full stop of the tagline.
 A browser title drops it.
 

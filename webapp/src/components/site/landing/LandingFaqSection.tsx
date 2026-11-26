@@ -9,7 +9,12 @@ const faqItems = [
 	{
 		key: "ai-mentor",
 		q: "What does an AI mentor do?",
-		a: "It gives one part of mentoring: feedback on how you apply engineering practices in your real work. Hephaestus checks your work against the practices your team chose. When a review finds a problem it can support, Hephaestus can point to the work, explain what to improve, and suggest a next step. An observation can say when the evidence could not settle a question. It is software, not a person. It adds to your reviewers and mentors, and it can be wrong.",
+		a: "It gives you feedback alongside the people who already mentor you, on the practices your team chose, such as writing clear issues or testing a change. If a review finds a problem it can support, Hephaestus can show you the evidence and suggest a next step. You can ask about the feedback in a conversation, and you decide what to do with it.",
+	},
+	{
+		key: "audiences",
+		q: "Who is Hephaestus for?",
+		a: "Developers who want feedback on their own work and someone to ask why. Team leads and mentors who choose the practices their team values. Educators who use a workspace for a course or a project team, where a workspace admin chooses the practices and can approve comments before they post. Admins who run it on their own Kubernetes with the Helm chart.",
 	},
 	{
 		key: "practice-feedback",
@@ -19,7 +24,7 @@ const faqItems = [
 	{
 		key: "code-review",
 		q: "How does Hephaestus work with code review?",
-		a: "Hephaestus comments on the practices behind the work, next to your reviewers’ comments. Developers decide what to do with feedback: fix the work, ask why, or disagree. Merge decisions stay with your reviewers.",
+		a: "Hephaestus comments on the practices behind the work, next to your reviewers’ comments. You decide what to do with each piece of feedback: fix the work, ask why, or disagree. Merge decisions stay with your reviewers.",
 	},
 	{
 		key: "feedback-location",
@@ -29,12 +34,12 @@ const faqItems = [
 	{
 		key: "who-sees-feedback",
 		q: "Who sees my feedback?",
-		a: "Your feedback has no score, grade or rank. Workspace admins see practice results, each linked to the work it is about, and that feedback on your Practice profile exists, not what it says. A workspace owner can let admins see who these records are about. Hephaestus records each change. Links to the work can still identify you when the setting is off. No workspace admin page shows your conversation with Hephaestus. An instance admin can include it in an audited export of your data. Feedback on the work is visible to everyone who can see that work, like any review comment.",
+		a: "Feedback describes your work and how to improve it, without scores, grades or ranks. Your Practice profile shows you the full feedback. Workspace admins see practice results, each linked to the work it is about, and whether feedback was delivered. Those links can identify you even when names are hidden. A workspace owner can let admins see who these records are about, and Hephaestus records each change. Your conversation with Hephaestus stays out of workspace admin pages. An instance admin can include it in an audited export of your data. Feedback on the work is visible to everyone who can see that work, like any review comment.",
 	},
 	{
 		key: "conversation",
 		q: "What can I ask Hephaestus?",
-		a: "Why a suggestion matters, or for an example. You can also add context Hephaestus missed, or disagree. Hephaestus draws on your recent project activity, the feedback you have received, and selected Outline documents. Hephaestus can use new messages in monitored Slack channels, and you can turn off use of your channel messages.",
+		a: "Why a suggestion matters, or for an example. You can also add context Hephaestus missed, or disagree. Hephaestus draws on your recent project activity, the feedback you have received, and selected Outline documents. Hephaestus can use new messages in monitored Slack channels, and you can turn off use of your channel messages. Hephaestus answers when your workspace has a model that fits your AI choice.",
 	},
 	{
 		key: "project-data",
@@ -43,8 +48,8 @@ const faqItems = [
 	},
 	{
 		key: "ai-limitations",
-		q: "Can the feedback be wrong?",
-		a: "Yes. It is written by an AI model, so it can miss context or suggest something unhelpful. Check the work it links to, ask Hephaestus a follow-up, or disagree and say why.",
+		q: "How can I check the feedback?",
+		a: "AI writes the feedback and can make mistakes. Each piece of feedback points to the evidence in your work, so check the work it links to, ask a follow-up, or disagree and say why.",
 	},
 	{
 		key: "cost",

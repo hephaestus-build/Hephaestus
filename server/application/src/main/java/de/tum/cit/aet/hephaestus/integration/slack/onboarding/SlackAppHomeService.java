@@ -220,7 +220,7 @@ public class SlackAppHomeService {
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return "*Get better at the work you already do.* Hephaestus is an AI mentor for software engineering practices. In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. Hephaestus replies in Slack direct messages, and you can also read the replies in the app.";
+        return "*Get better at the work you already do.* Hephaestus is an AI mentor that helps you grow in the engineering practices your team values. In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. Hephaestus replies in Slack direct messages, and you can also read the replies in the app.";
     }
 
     private static String stateIcon(boolean ok) {

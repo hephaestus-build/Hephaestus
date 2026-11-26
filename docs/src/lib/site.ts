@@ -4,7 +4,7 @@ export const PRODUCT_URL = "https://hephaestus.build";
 export const SITE_TITLE = "Hephaestus documentation";
 
 export const DESCRIPTION =
-	"Hephaestus is the open-source AI mentor for software engineering practices. It reads your real work and can suggest what to improve and why. You can talk it through in a conversation.";
+	"Hephaestus is an AI mentor that helps software developers grow in the engineering practices their team values. It reads your real work and can suggest what to improve, with the evidence. You can ask about the feedback in a conversation.";
 
 export const GUIDES = [
 	{
