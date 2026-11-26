@@ -1,5 +1,5 @@
 ---
-"hephaestus": patch
+"hephaestus": minor
 ---
 
 A review that its model pool cannot take when it starts now gives its sandbox back. It waits with the hold `model_pool` in `agent_run_runs`, keeps its place and spends no attempt, and it gets a new sandbox once the pool admits it. Before, its sandbox stayed and asked for the review again and again, and it kept the place of other reviews of the same pool. A review with more practices than its pool can serve at once now measures them in waves of that size.
