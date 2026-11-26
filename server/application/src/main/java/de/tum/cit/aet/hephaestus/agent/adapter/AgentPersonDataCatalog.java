@@ -102,10 +102,11 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                 + " conversation_turn mt JOIN conversation mc ON mc.id=mt.conversation_id WHERE"
                                 + " mc.account_id=:account)) OR (t.source_type='PRODUCT_FEEDBACK_DRAFT'"
                                 + " AND t.workspace_id IS NULL AND t.source_id IN"
-                                + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))",
-                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
+                                + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))"
+                                + " OR (t.source_type='PERSONAL_CONVERSATION' AND t.payer_account_id=:account)",
+                        "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,payer_account_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
                         "source_id,workspace_id",
-                        "review_id=NULL",
+                        "review_id=NULL, payer_account_id=NULL",
                         -85),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -263,13 +264,21 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     }
 
     /**
-     * The ledger rows of the person's jobs and turns, selected by their source: a job or a turn, each with its own
-     * workspace. The person's turns are selected also before they have a row, because a call of a turn that runs may
-     * open after the preview. The erasure detaches every row of each selected source from it: all of them take one new
-     * source id together and lose their review, so the calls of one attempt still count as one run. Each row keeps its
-     * tokens, cost and date.
+     * The ledger rows of the person's jobs, turns, report drafts and personal conversations, selected by their source:
+     * a job or a turn, each with its own workspace, or a draft or a personal attempt with none. The person's turns are
+     * selected also before they have a row, because a call of a turn that runs may open after the preview. A personal
+     * call opens only under the person-data write fence, so an erasure that holds it sees every one. The erasure
+     * detaches every row of each selected source from it: all of them take one new source id together and lose their
+     * review and payer, so the calls of one attempt still count as one run and the purse that paid keeps their cost.
+     * Each row keeps its tokens, cost and date.
      */
     private static final class LedgerStore extends JdbcPersonDataStore {
+        /**
+         * The sources whose open calls no run's end settles: a report draft and a personal conversation. Their erasure
+         * settles such a call at its upper bound, so the purse that pays keeps counting it.
+         */
+        private static final String RUNLESS_OPEN_SOURCES = "'PRODUCT_FEEDBACK_DRAFT', 'PERSONAL_CONVERSATION'";
+
         private final NamedParameterJdbcTemplate jdbc;
         private final ObjectMapper mapper;
         private final String predicate;
@@ -340,20 +349,20 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     WITH detached AS (
                         SELECT s.workspace_id, s.source_id, gen_random_uuid() AS detached
                         FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint))
-                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL,
-                        call_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                    UPDATE llm_usage_event e SET source_id = d.detached, review_id = NULL, payer_account_id = NULL,
+                        call_state = CASE WHEN e.source_type IN (%1$s) AND e.call_state='OPEN'
                                           THEN 'SETTLED' ELSE e.call_state END,
-                        measurement_verification = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                        measurement_verification = CASE WHEN e.source_type IN (%1$s) AND e.call_state='OPEN'
                                                         THEN 'UNVERIFIABLE' ELSE e.measurement_verification END,
-                        pricing_state = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                        pricing_state = CASE WHEN e.source_type IN (%1$s) AND e.call_state='OPEN'
                                              THEN 'UNPRICED' ELSE e.pricing_state END,
-                        cost_usd = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                        cost_usd = CASE WHEN e.source_type IN (%1$s) AND e.call_state='OPEN'
                                         THEN NULL ELSE e.cost_usd END,
-                        unreported_calls = CASE WHEN e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.call_state='OPEN'
+                        unreported_calls = CASE WHEN e.source_type IN (%1$s) AND e.call_state='OPEN'
                                                 THEN 1 ELSE e.unreported_calls END
                     FROM detached d
                     WHERE e.workspace_id IS NOT DISTINCT FROM d.workspace_id AND e.source_id = d.source_id
-                    """, Map.of("keys", keys(selection)));
+                    """.formatted(RUNLESS_OPEN_SOURCES), Map.of("keys", keys(selection)));
             return selection.rows().size();
         }
     }

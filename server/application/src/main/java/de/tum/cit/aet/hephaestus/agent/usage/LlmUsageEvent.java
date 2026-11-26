@@ -31,7 +31,8 @@ import org.jspecify.annotations.Nullable;
  * rows of their own hold one job attempt, practice script model kind or turn attempt each, have no run, and keep
  * their {@code totalCalls}.
  *
- * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or {@code conversation_turn.id},
+ * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id}, {@code conversation_turn.id} or
+ * personal attempt,
  * and {@code practiceId} to the practice whose review session made the call: accounting must survive their deletion. The run
  * reference is cleared when the run is deleted, for the same reason.
  */
@@ -128,6 +129,14 @@ public class LlmUsageEvent {
     @Enumerated(EnumType.STRING)
     @Column(name = "model_kind", nullable = false, length = 16, updatable = false)
     private ModelKind modelKind = ModelKind.CHAT;
+
+    /**
+     * The account whose personal conversation made the call, which the personal purse charges; {@code null} for every
+     * other call and after the account's erasure, which keeps the cost in the purse.
+     */
+    @Nullable
+    @Column(name = "payer_account_id")
+    private Long payerAccountId;
 
     /** The practice whose script made the call; {@code null} for every other call. */
     @Nullable

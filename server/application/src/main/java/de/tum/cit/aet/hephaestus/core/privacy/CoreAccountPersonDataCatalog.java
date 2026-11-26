@@ -32,7 +32,7 @@ class CoreAccountPersonDataCatalog implements PersonDataCatalog {
                         "account",
                         "account",
                         "t.id=:account",
-                        "id,display_name,primary_email,status,public_activity_visible,ai_choice,ai_choice_at,feedback_delivery_enabled,created_at,time_zone,passkey_protection_enabled",
+                        "id,display_name,primary_email,status,public_activity_visible,ai_choice,ai_choice_at,ai_personal_scope_at,feedback_delivery_enabled,created_at,time_zone,passkey_protection_enabled",
                         "id",
                         "",
                         1000) {

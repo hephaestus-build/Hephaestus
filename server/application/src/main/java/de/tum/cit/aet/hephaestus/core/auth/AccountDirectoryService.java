@@ -77,6 +77,8 @@ public class AccountDirectoryService implements AccountDirectory {
             throw new IllegalStateException("Only an active account can choose AI use");
         account.setAiChoice(choice);
         account.setAiChoiceAt(choice == null ? null : clock.instant());
+        // This write discloses only the workspace scope, so a personal confirmation no longer covers the choice.
+        account.setAiPersonalScopeAt(null);
         accounts.save(account);
         events.publishEvent(new AiChoiceChangedEvent(accountId));
     }

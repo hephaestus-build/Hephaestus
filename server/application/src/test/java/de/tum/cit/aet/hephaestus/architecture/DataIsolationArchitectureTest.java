@@ -137,6 +137,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ProductFeedbackCleanup", // GitHub locators left after erasure; no person data
             "InstanceLlmSettings", // Instance LLM settings singleton (egress allowlist + BYO enable + default policy);
             // global
+            "PersonalModelAssignment", // The instance model for personal conversations, one per tier; global
             "CatalogEntry",
             "FxRate", // ECB daily reference rate for display-only conversion; a world fact, not tenant data
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
