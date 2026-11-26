@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -34,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -76,14 +78,9 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         return permitsItem(item, Objects.requireNonNull(audience), new Direct());
     }
 
-    /**
-     * {@link #permits} of each of {@code refs}, with each item's checks run as for one item. What the items share is
-     * read once, and each kind of row is read for all items together. An item whose check fails other than by a refusal
-     * gets no answer here, and the caller's own check of it fails as before.
-     */
     @Override
-    @Transactional(readOnly = true)
-    public Map<Long, Boolean> permitsAll(
+    @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
+    public Map<ItemRef, BooleanSupplier> prepareChecks(
             Collection<ItemRef> refs, SourceUsePurpose purpose, SourceReadAudience audience) {
         Objects.requireNonNull(purpose);
         Objects.requireNonNull(audience);
@@ -92,16 +89,12 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         var facts = new Read(
                 workspaceId,
                 refs.stream().filter(ref -> ref.workspaceId() == workspaceId).toList());
-        Map<Long, Boolean> answers = new HashMap<>();
+        Map<ItemRef, BooleanSupplier> checks = new HashMap<>();
         for (var ref : refs) {
             if (ref.workspaceId() != workspaceId) continue;
-            try {
-                answers.put(ref.itemId(), permitsItem(ref, audience, facts));
-            } catch (RuntimeException unexpected) {
-                // Left for the single check, which raises it where the caller asks.
-            }
+            checks.put(ref, () -> permitsItem(ref, audience, facts));
         }
-        return answers;
+        return checks;
     }
 
     // The audience reaches every parent, and changes only whether a contributor's AI choice applies.
@@ -133,10 +126,11 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
             } else {
                 var parent = facts.parent(item, ScmItemEvents.REPOSITORY);
                 if (!permitsItem(parent, audience, facts)) return false;
-                var work = facts.work(item.kind(), source);
-                if (!work.map(row -> !row.deleted()
-                                && row.repositoryId() != null
-                                && Objects.equals(row.repositoryId(), parent.sourceId()))
+                // A transfer can commit between checks of two items in the same read.
+                var work = items.work(item.kind(), source);
+                if (!work.map(row -> !row.getDeleted()
+                                && row.getRepositoryId() != null
+                                && Objects.equals(row.getRepositoryId(), parent.sourceId()))
                         .orElse(false)) return false;
             }
             for (var identity : facts.contributors(item.workspaceId(), item.kind(), source)) {
@@ -161,8 +155,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         }
     }
 
-    private record Work(@Nullable Long repositoryId, boolean deleted) {}
-
     /** What the checks of {@link #permitsItem} read, one lookup per question. */
     private abstract static class Facts {
         abstract void require(ItemRef item);
@@ -174,8 +166,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         abstract Optional<Repository> repository(long id);
 
         abstract void authorize(long workspaceId, Repository repository);
-
-        abstract Optional<Work> work(ItemKind kind, long source);
 
         abstract List<PersonIdentity> contributors(long workspaceId, ItemKind kind, long source);
 
@@ -216,11 +206,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         }
 
         @Override
-        public Optional<Work> work(ItemKind kind, long source) {
-            return items.work(kind, source).map(row -> new Work(row.getRepositoryId(), row.getDeleted()));
-        }
-
-        @Override
         public List<PersonIdentity> contributors(long workspaceId, ItemKind kind, long source) {
             return contributors.identitiesForSource(workspaceId, kind.value(), source);
         }
@@ -247,8 +232,8 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
     }
 
     /**
-     * The same lookups for many items of one workspace. Items, their parents, source suppression, work rows and
-     * contributors are each read for all items of a kind at once; a repository, a person and an account are each read
+     * The same lookups for many items of one workspace. Items, their parents, source suppression and contributors
+     * are each read for all items of a kind at once; a repository, a person and an account are each read
      * once, however many items share them. A lookup that fails fails again for each item that asks, as it would alone.
      */
     private final class Read extends Facts {
@@ -256,7 +241,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         private final Map<Long, ItemIndexService.IndexedItem> stored = new HashMap<>();
         private final Map<ItemKind, Set<Long>> sources = new HashMap<>();
         private final BySource<Boolean> suppressedSources;
-        private final BySource<Optional<Work>> works;
         private final BySource<List<PersonIdentity>> people;
         private final Map<Long, Optional<Repository>> repositoryRows = new HashMap<>();
         private final Map<Long, Outcome<Boolean>> authorized = new HashMap<>();
@@ -271,15 +255,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
                 var suppressed = suppression.suppressedSources(workspaceId, kind.value(), ids);
                 Map<Long, Boolean> answers = new HashMap<>();
                 ids.forEach(id -> answers.put(id, suppressed.contains(id)));
-                return answers;
-            });
-            works = new BySource<>((kind, ids) -> {
-                var found = items.workStates(kind, ids);
-                Map<Long, Optional<Work>> answers = new HashMap<>();
-                ids.forEach(id -> answers.put(
-                        id,
-                        Optional.ofNullable(found.get(id))
-                                .map(row -> new Work(row.getRepositoryId(), row.getDeleted()))));
                 return answers;
             });
             people = new BySource<>((kind, ids) -> contributors.identitiesForSources(workspaceId, kind.value(), ids));
@@ -347,11 +322,6 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
                                 return true;
                             }))
                     .get();
-        }
-
-        @Override
-        public Optional<Work> work(ItemKind kind, long source) {
-            return works.get(kind, source);
         }
 
         @Override

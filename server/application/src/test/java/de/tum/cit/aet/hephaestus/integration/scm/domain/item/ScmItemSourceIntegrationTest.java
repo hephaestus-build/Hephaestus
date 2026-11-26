@@ -107,6 +107,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1110,7 +1111,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     @EnumSource(
             value = IdentityProviderType.class,
             names = {"GITHUB", "GITLAB"})
-    void shouldCheckTheSourcesOfManyItemsAsTheirOwnChecksDoAtAFixedStatementCount(IdentityProviderType type) {
+    void shouldShareSourceReadsAndCheckEachWorkRowWhenAsked(IdentityProviderType type) {
         var fixture = fixture(type);
         long workspaceId = fixture.workspace().getId();
         var holder = writer.upsert(new ItemRegistration(
@@ -1127,9 +1128,13 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                         new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null)));
             }
         };
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var audience = SourceReadAudience.PROCESSING;
         Supplier<Long> cost = () -> {
-            var read = reads.measure(() -> sourceAccess.permitsAll(
-                    refs, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, SourceReadAudience.PROCESSING));
+            var read = reads.measure(() -> sourceAccess.prepareChecks(refs, purpose, audience).entrySet().stream()
+                    .collect(Collectors.toMap(
+                            entry -> entry.getKey().itemId(),
+                            entry -> entry.getValue().getAsBoolean())));
             for (var ref : refs)
                 assertThat(read.value())
                         .as("item %s", ref.itemId())
@@ -1144,7 +1149,19 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         more.run();
         more.run();
 
-        assertThat(cost.get()).isEqualTo(few);
+        assertThat(cost.get()).isEqualTo(few + 6);
+
+        var later = refs.get(1);
+        var transferred = reads.measure(() -> {
+            var checks = sourceAccess.prepareChecks(refs, purpose, audience);
+            assertThat(Objects.requireNonNull(checks.get(refs.getFirst())).getAsBoolean())
+                    .isTrue();
+            CompletableFuture.runAsync(
+                            () -> jdbc.update("UPDATE issue SET deleted_at = now() WHERE id = ?", later.sourceId()))
+                    .join();
+            return Objects.requireNonNull(checks.get(later)).getAsBoolean();
+        });
+        assertThat(transferred.value()).isFalse();
     }
 
     @ParameterizedTest

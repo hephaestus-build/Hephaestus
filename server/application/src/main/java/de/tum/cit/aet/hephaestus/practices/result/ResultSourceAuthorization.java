@@ -38,6 +38,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -80,6 +81,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return result.id().equals(assignment.getResultId());
     }
 
+    @Transactional(readOnly = true)
     public boolean authorized(ResultFacts result, HistoryCustody facts, SourceUsePurpose purpose) {
         return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups(result.workspaceId()));
     }
@@ -251,7 +253,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         // Suppression does not depend on the purpose or the audience, so every source check of an item shares it.
         private final Map<Long, Boolean> suppressedSources = new HashMap<>();
         private final Set<Long> suppressionOffered = new HashSet<>();
-        private final Map<SourceKey, Boolean> ownerAnswers = new HashMap<>();
+        private final Map<SourceKey, BooleanSupplier> ownerChecks = new HashMap<>();
         private final Set<SourceKey> ownerOffered = new HashSet<>();
         private final Map<Long, Optional<AccountDirectory.AccountView>> accounts = new HashMap<>();
         private final Map<Long, Boolean> suppressedAccounts = new HashMap<>();
@@ -468,26 +470,22 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                     suppressedSources.put(ref.itemId(), suppressed.contains(Objects.requireNonNull(ref.sourceId()))));
         }
 
-        /**
-         * The owner's answer about {@code item}; null when it has none, and the item is asked on its own. The owner
-         * answers for every item of the read it has not been offered for the purpose and audience, so each item is
-         * offered once.
-         */
+        /** Prepare the owner's checks together and run only the one this result reaches. */
         @Nullable
-        Boolean ownerAnswer(
+        BooleanSupplier ownerCheck(
                 ItemSourceAccess owner, ItemRef item, SourceUsePurpose purpose, SourceReadAudience audience) {
             var key = new SourceKey(item.itemId(), purpose, audience);
-            if (!ownerAnswers.containsKey(key)) {
+            if (!ownerOffered.contains(key)) {
                 var known = knownItems(item.workspaceId()).stream()
                         .filter(ref -> owner.kinds().contains(ref.kind()))
                         .filter(ref -> ownerOffered.add(new SourceKey(ref.itemId(), purpose, audience)))
                         .toList();
                 if (!known.isEmpty())
-                    owner.permitsAll(known, purpose, audience)
-                            .forEach((itemId, permitted) ->
-                                    ownerAnswers.put(new SourceKey(itemId, purpose, audience), permitted));
+                    owner.prepareChecks(known, purpose, audience)
+                            .forEach((ref, check) ->
+                                    ownerChecks.put(new SourceKey(ref.itemId(), purpose, audience), check));
             }
-            return ownerAnswers.get(key);
+            return ownerChecks.get(key);
         }
 
         /** Every item the read has registered or looked up, and their parents, as stored in the workspace. */
@@ -697,8 +695,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                 .toList();
         if (owners.size() != 1) return false;
         var owner = owners.getFirst();
-        var batched = lookups.ownerAnswer(owner, item, purpose, audience);
-        if (batched != null) return batched;
+        var batched = lookups.ownerCheck(owner, item, purpose, audience);
+        if (batched != null) return batched.getAsBoolean();
         // Processing keeps the one check every AI reader uses; only the human read asks the typed one.
         return audience == SourceReadAudience.PROCESSING
                 ? owner.permits(item, purpose)

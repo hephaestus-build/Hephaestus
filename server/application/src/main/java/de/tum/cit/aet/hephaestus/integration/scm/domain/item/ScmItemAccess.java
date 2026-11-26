@@ -48,15 +48,6 @@ public class ScmItemAccess {
         return queries.work(kind.value(), sourceId);
     }
 
-    /** {@link #work} of many sources of {@code kind}, keyed by source id: only what the source relation reads. */
-    public Map<Long, ScmItemQueryRepository.WorkState> workStates(ItemKind kind, Collection<Long> sourceIds) {
-        if (sourceIds.isEmpty()) return Map.of();
-        Map<Long, ScmItemQueryRepository.WorkState> states = new HashMap<>();
-        queries.workStates(kind.value(), sourceIds.toArray(Long[]::new))
-                .forEach(state -> states.put(state.getSourceId(), state));
-        return states;
-    }
-
     public List<Issue> closingIssues(long pullRequestId) {
         return queries.closingIssues(pullRequestId);
     }
