@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.0.0-rc.17
+
+### Minor Changes
+
+- A review whose capture copied the words of many people no longer fails at its inputs on every retry.
+
+  **Operators:** before the window, complete every person data erasure that is still erasing or failed; the migration stops and names each one otherwise. Then stop every role, run the migration, and start the new release. Keep the final restore point that you take while the server is stopped, because a rollback needs it. If the migration stops on an erasure, follow the recovery in the migration guide: never restore a backup from before the window. Each copied person is now kept as one row beside the review item, so a capture records every one of them. A review that failed this way and still has retries left succeeds on its next retry. A review that used all its retries before the upgrade has ended. Its work is reviewed again at its next occasion, or when someone requests a review of it. Erasure and export find a person's copies by their exact provider identity. A preview made before the upgrade is refused: create a new one.
+
+- Practice feedback can reach a merged GitLab merge request after its source branch is deleted. If an open merge request loses its source branch, the review details show why feedback was withheld.
+
+  **Operators:** Stop every runtime role before you upgrade. The new delivery reason requires all roles to use the new version.
+
+- Instance admins can now connect an MCP client, such as Claude Code, to a workspace that they administer as an admin or owner. Where the instance requires a passkey from its instance admins, the consent page asks for a passkey confirmation first, as for any workspace admin under a passkey policy. The client does only the workspace admin work that the admin approved, in that one workspace, and never acts as an instance admin. The consent page no longer refuses instance admins. The REST API refuses MCP client tokens in every configuration.
+- Each practice now has an identity that stays the same across catalog edits and workspaces. A practice from the catalog means the same thing in every workspace that adopts it, and an edit that changes what it judges starts a new comparability class. The practice API returns the identity and whether it is portable. The upgrade gives existing practice versions their identity from the bundled catalog.
+
+  **Operators:** Stop every role before this upgrade. Follow **Stop every role before practice versions get their identity** in the upgrade guide.
+
+- You can read Hephaestus in numbers at `/usage`: the totals of this server for each released half-year, with no sign-in. It shows workspaces, developers whose work was reviewed, reviewed work, practice reviews and practice feedback delivered, each with a definition, and a small bar for each half-year. It names no person and no workspace. Figures are rounded down, a half-year shows figures only if at least 5 workspaces and 5 developers took part, and a hidden figure reads "Not published". While the page is on, the footer links it. Instance admins turn it on or off under **Instance settings → Hephaestus in numbers**.
+
+### Patch Changes
+
+- The public pages now explain when practice feedback can reach you, how to turn off use of your Slack channel messages, and when an instance admin can export your Hephaestus conversation.
+- The Helm chart describes Hephaestus as the open-source AI mentor for software engineering practices.
+- The Slack app home, the Slack app manifest and the Chrome extension now introduce Hephaestus as the AI mentor for software engineering practices. To show the new description in an existing Slack app, copy the two descriptions from the current manifest into the app settings, as Connect Slack describes. This is optional.
+- Hephaestus now introduces itself as the open-source AI mentor for software engineering practices, with the tagline _Get better at the work you already do._ The start page, the About page, link previews and the installed app say what it does: it checks your work against your team's practices, says what to improve and why when your work gives it grounds, and stays silent when it does not. The start page also answers who sees your feedback.
+- Practice reviews can continue when a result check times out. The sandbox log names the check that caused the refusal.
+- Commit link correction no longer stalls on one commit that GitHub cannot read. GitHub answers a batch of up to 50 commits at once. When it could not read one of them, for example a commit that a force-push removed, all the answers of the batch were dropped, and the emails of that repository left the queue as unanswered after 5 attempts. Now only that commit goes without an answer, and the server logs a warning that counts it. The upgrade needs no action. To link the commits of emails that already ended unanswered, ask again for them, as **Correct commit links** → **Ask again after an upgrade from 1.0.0-rc.16 or earlier** describes.
+- Durable server work that fails the same way every time no longer retries for ever. The server now retries a failed email, account export or other durable work at most ten times. After that, the work stays recorded and the new alert `HephaestusEventPublicationsExhausted` names its listener. The production operations runbook shows how to replay it after the cause is fixed. Before, one failure that never recovered could grow to thousands of retries and delay the retries of all other work.
+- Signed webhooks that Hephaestus does not handle no longer fill the inbox. The server reports extra and missing GitHub App subscriptions. In the App's **Subscribe to events** settings, uncheck unused events such as Workflow job and Check run so GitHub's delivery list leaves room for failed deliveries that need recovery.
+- Hephaestus now describes itself the same way everywhere: an AI mentor that helps software developers grow in the engineering practices their team values. The start page, the About page, link previews and the Slack app say how it reads your work, gives feedback on your team's practices and helps you take the next step. A new answer on the start page says who Hephaestus is for.
+
+  Operators with an existing Slack app copy its two descriptions from the current manifest, as **Connect Slack** describes. No new scope or reinstall is needed.
+
+- Pages open sooner on a fresh load: the page downloads its code while Hephaestus checks your sign-in and workspace access, not after.
+- A practice that needs many model calls on a large change no longer stops early with the reason budget. Its input-token budget (`PRACTICE_REVIEW_PRACTICE_INPUT_TOKENS`) now counts only what its calls read anew: the uncached prompt and the prompt written to the cache. A call no longer pays again for the part of the conversation that earlier calls already sent. A practice that keeps rereading large files still spends its budget. The limit on one review attempt counts the same way.
+- Your Practice page opens faster when you have a long history of reviews. To decide whether later work closed a card, the page now checks only reviews that the work itself started, because a review that you asked for never closes a card. Before, it rechecked the sources behind every review since your oldest card.
+- Practice standings and the practice profile overview open faster. They now check the custody of every review in their look-back in one batch, instead of one locked read per review.
+- Reviews no longer all run out of time together when the review model is busy. A review that checks several practices now counts as one model call per practice when a model pool decides whether it can take another review. So a pool starts only the reviews that it can serve, and each one finishes its practices. Before, a pool took a new review as soon as no call waited, so reviews of six practices filled it far past its limit, and each one ended with no practice result.
+- The database migration now also stops when a Hephaestus database login can reach the `TEMPORARY` privilege by switching to another role with `SET ROLE` and inheriting it from there. The earlier check followed each kind of role membership on its own and missed this path. If your database grants such a path, for example through a custom group, the migration names the problem: remove that grant and run the migration again. A default installation needs no action.
+- The workspace practice overview and its tiles open in large workspaces again. Before, a workspace with a few hundred reviews in the window got a server error on both pages, because the workspace isolation check ran out of stack on the long list of reviews that the pages look up. Other reads that look up many records by their keys had the same limit and no longer fail.
+
 ## 1.0.0-rc.16
 
 ### Minor Changes
