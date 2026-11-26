@@ -145,6 +145,27 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheMeasurementFailureReasonAfterComposition() {
+        var job = RuntimeReviewTestData.job();
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
+        job.setAdmissionAttempt(0);
+        job.setAdmissionDigest("proof");
+        job.setExitCode(1);
+        var output = new JsonMapper().createObjectNode();
+        output.putObject(ReviewJobTerminal.MEASURED).put("status", ReviewJobStatus.FAILED.name());
+        job.setOutput(output);
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.EXECUTION_FAILED));
+    }
+
+    @Test
     void shouldCloseAReviewAsUnconfirmedOnlyWhenRecoveryEndedIt() {
         var job = RuntimeReviewTestData.job();
         ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
