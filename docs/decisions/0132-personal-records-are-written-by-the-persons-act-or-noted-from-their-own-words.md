@@ -133,7 +133,7 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) owns the first release of goals.
 A goal is a row in `goal`, not an `owned_record` of kind `GOAL`, because only a goal links a practice and has revisits.
-One active goal per workspace, with Edit, Close, Reopen and Delete.
+Each developer can have one active goal in each workspace, with Edit, Close, Reopen and Delete.
 An unused goal asks after 90 days and goes after 180 days. This replaces decision 10 for goals.
 
 Decisions 2 to 9 wait for the other record kinds and noted records (#4924).

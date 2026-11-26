@@ -192,4 +192,4 @@ Not enforced. The implementing issues add the checks below, and review of each i
 
 [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) keeps the reason "a material change on an agreed goal" of decision 7 off, and the goal follow-up with it.
 The check-in on a goal is `AGREED` contact in the app, with no notification.
-Unsolicited contact stays off until the pilot of [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) shows the cost of an interruption.
+Unsolicited contact about a goal stays off until the pilot of [ADR 0156](0156-a-developer-keeps-one-learning-goal-and-hephaestus-revisits-it-on-their-next-work.md) shows the cost of an interruption.

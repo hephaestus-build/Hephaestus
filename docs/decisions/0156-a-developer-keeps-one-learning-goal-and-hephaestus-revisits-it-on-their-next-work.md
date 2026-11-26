@@ -202,7 +202,7 @@ Option 7.
 - Bad: coaching does not know the goal in this release. A question about the chosen practice gets the same answer as any other question.
 - Bad: what the developer writes about their goal in the conversation follows the conversation's rules, as any message does.
 - Bad: a developer who does not open the app does not see the check-in. The revisit trigger below decides when a notification is worth it.
-- Bad: one active goal per workspace. A developer who wants two must close one first.
+- Bad: a developer must close their active goal before they can save another one in the same workspace.
 
 ## Confirmation
 
