@@ -114,27 +114,21 @@ public class SlackMessageService implements AutoCloseable {
             OutboundEgressGuard egressGuard,
             SlackMetrics metrics,
             SlackProperties properties) {
-        this(
-                Slack.getInstance(nativeConfig(properties)),
-                credentialProvider,
-                rateLimitTracker,
-                egressGuard,
-                metrics,
-                SlackTime.SYSTEM);
+        this(nativeConfig(properties), credentialProvider, rateLimitTracker, egressGuard, metrics, SlackTime.SYSTEM);
     }
 
     /**
-     * @param slack the Slack client of this gateway; a test points one at a local server
+     * @param config the Slack client configuration; a test can set its API origin or deadline
      * @param time the time of the throttle budgets; a test passes virtual time, so no throttle wait takes real time
      */
     SlackMessageService(
-            Slack slack,
+            SlackConfig config,
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
             SlackMetrics metrics,
             SlackTime time) {
-        this.slack = slack;
+        this.slack = SlackPostTransport.client(config);
         this.credentialProvider = credentialProvider;
         this.rateLimitTracker = rateLimitTracker;
         this.egressGuard = egressGuard;

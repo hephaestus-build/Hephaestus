@@ -64,8 +64,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -514,6 +516,44 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                         .contains(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
             }
             assertThat(slackApi.getRequestCount()).isOne();
+        }
+    }
+
+    @Test
+    void shouldNotResendTheReplyWhenSlackReturns503AfterItsQuestionIsDeleted() throws Exception {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        end(claims.claim(asked.turn()), "Complete reply to the deleted question");
+        var credentials = mock(SlackCredentialProvider.class);
+        when(credentials.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
+        var firstRequest = new AtomicBoolean(true);
+
+        try (var slackApi = new MockWebServer()) {
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (!firstRequest.getAndSet(false)) return acceptedPost();
+                    entries.deleteMessage(workspace.getId(), asked.question().getId());
+                    return new MockResponse.Builder()
+                            .code(503)
+                            .addHeader("Retry-After", "0")
+                            .build();
+                }
+            });
+            slackApi.start();
+            try (var gateway = gateway(slackApi, credentials)) {
+                var result = ActionTestSupport.runLane(executorFor(gateway), jdbc, key(asked));
+
+                assertThat(slackApi.getRequestCount())
+                        .as("one outbox admission must issue one Slack request")
+                        .isOne();
+                assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
+                assertThat(jdbc.queryForObject(
+                                "SELECT redacted_at IS NOT NULL FROM conversation_entry WHERE id = ?",
+                                Boolean.class,
+                                asked.question().getId()))
+                        .isTrue();
+                assertThat(result).contains(new ActionResult.Reread(ConversationSlackReplies.REREAD));
+            }
         }
     }
 

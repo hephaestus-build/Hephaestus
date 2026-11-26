@@ -119,7 +119,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
             var local = new SlackMessageService(
-                    Slack.getInstance(localConfig(slackApi, 1000)),
+                    localConfig(slackApi, 1000),
                     credentialProvider,
                     new SlackRateLimitTracker(new SimpleMeterRegistry()),
                     new OutboundEgressGuard(() -> false),
@@ -164,7 +164,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
             when(credentialProvider.resolveActiveTeam(7L, "T123", eligible))
                     .thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
             var local = new SlackMessageService(
-                    Slack.getInstance(config),
+                    config,
                     credentialProvider,
                     new SlackRateLimitTracker(new SimpleMeterRegistry()),
                     new OutboundEgressGuard(() -> false),
@@ -428,7 +428,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
         when(credentialProvider.resolve(any(IntegrationRef.class)))
                 .thenReturn(Optional.of(new BearerToken("xoxb-" + UUID.randomUUID(), null)));
         return new SlackMessageService(
-                Slack.getInstance(config),
+                config,
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> silentModeEngaged),
