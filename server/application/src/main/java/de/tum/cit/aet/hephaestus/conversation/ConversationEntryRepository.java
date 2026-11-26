@@ -454,7 +454,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
      * developer's, Hephaestus's and weekly digests, never tool results, summaries, redacted entries or Hephaestus's
      * messages of unknown basis ({@link #UNPROVEN}). Without a query, the newest come first.
      */
-    @Query(value = """
+    @Query(
+            value = """
             SELECT e.id AS "id", e.conversation_id AS "conversationId", e.created_at AS "createdAt",
                    e.surface AS "surface", e.kind AS "kind",
                    CASE WHEN CAST(:query AS text) IS NULL THEN left(e.search_text, 300)
@@ -480,7 +481,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                        websearch_to_tsquery('simple', CAST(:query AS text))) END DESC,
                      e.created_at DESC, e.id
             LIMIT :limit
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<SearchHit> searchByWorkspaceId(
             @Param("workspaceId") Long workspaceId,
             @Param("conversationIds") Collection<UUID> conversationIds,
