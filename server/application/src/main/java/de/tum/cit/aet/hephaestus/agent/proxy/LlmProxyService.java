@@ -965,18 +965,19 @@ class LlmProxyService {
         var admit = exchange.admitSend();
         var sending = admit == null
                 ? request.bodyValue(outgoingBody)
-                : request.contentLength(outgoingBody.length).body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
-                    // Reactor Netty's single-buffer send hands the whole request to the connected channel
-                    // synchronously on emission. The database check runs off the transport event loop.
-                    Thread.ofVirtual().name("conversation-model-send").start(() -> {
-                        try {
-                            admit.accept(
-                                    () -> sink.success(output.bufferFactory().wrap(outgoingBody)));
-                        } catch (RuntimeException failure) {
-                            sink.error(failure);
-                        }
-                    });
-                })));
+                : request.contentLength(outgoingBody.length)
+                        .body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
+                            // Reactor Netty's single-buffer send hands the whole request to the connected channel
+                            // synchronously on emission. The database check runs off the transport event loop.
+                            Thread.ofVirtual().name("conversation-model-send").start(() -> {
+                                try {
+                                    admit.accept(() ->
+                                            sink.success(output.bufferFactory().wrap(outgoingBody)));
+                                } catch (RuntimeException failure) {
+                                    sink.error(failure);
+                                }
+                            });
+                        })));
         var parts = sending.exchangeToFlux(upstream -> {
                     answered.set(true);
                     tap.answered(upstream.statusCode().is2xxSuccessful());

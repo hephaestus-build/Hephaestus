@@ -90,8 +90,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
             ConversationScopeFence.Scope scope = call.getArgument(0);
             BooleanSupplier current = call.getArgument(1);
             Runnable handoff = call.getArgument(2);
-            if (epoch.get() != scope.epoch() || !current.getAsBoolean())
-                return false;
+            if (epoch.get() != scope.epoch() || !current.getAsBoolean()) return false;
             handoff.run();
             return true;
         });
