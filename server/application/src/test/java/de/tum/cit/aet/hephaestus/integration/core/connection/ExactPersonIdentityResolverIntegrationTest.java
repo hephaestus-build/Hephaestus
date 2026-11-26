@@ -463,14 +463,19 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRequireSlackTeamAndKeepNativeWorkspaceIdsSeparate() {
         var slack = provider(IdentityProviderType.SLACK);
+        String subject = "U" + UUID.randomUUID();
         var first = accounts.saveAndFlush(new Account("First Slack person"));
         var second = accounts.saveAndFlush(new Account("Second Slack person"));
-        link(first, slack, "U42", "T1");
-        link(second, slack, "U42", "T2");
+        link(first, slack, subject, "T1");
+        link(second, slack, subject, "T2");
 
-        assertThat(resolver.resolve(null, List.of(identity(slack, "U42", "T1"))).accountId())
+        assertThat(resolver.resolve(null, List.of(identity(slack, subject, "T1")))
+                        .accountId())
                 .isEqualTo(first.getId());
-        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(slack, "U42", null))))
+        assertThat(resolver.resolve(null, List.of(identity(slack, subject, "T2")))
+                        .accountId())
+                .isEqualTo(second.getId());
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(slack, subject, null))))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("native Slack workspace id");
     }
