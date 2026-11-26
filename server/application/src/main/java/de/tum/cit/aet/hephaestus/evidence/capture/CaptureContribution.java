@@ -104,6 +104,15 @@ public record CaptureContribution(
         if (failure != null) throw failure;
     }
 
+    /** {@link #closeAll} of contributions that a failed read composed and no one reads, kept on {@code failure}. */
+    public static void release(List<CaptureContribution> unread, Exception failure) {
+        try {
+            closeAll(unread);
+        } catch (Exception unreleased) {
+            failure.addSuppressed(unreleased);
+        }
+    }
+
     public CaptureContribution {
         citableTexts = List.copyOf(citableTexts);
         filesOnDisk = Map.copyOf(filesOnDisk);
