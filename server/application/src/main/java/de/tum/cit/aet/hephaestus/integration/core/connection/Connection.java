@@ -164,7 +164,8 @@ public class Connection {
         this.workspace = workspace;
         this.kind = kind;
         this.instanceKey = instanceKey;
-        setConfig(config);
+        this.config = config;
+        this.outlineOrigin = configuredOutlineOrigin(config);
     }
 
     /**
@@ -314,7 +315,11 @@ public class Connection {
                         "A bound connection cannot change its provider instance. Create a new connection.");
         }
         this.config = config;
-        outlineOrigin = config instanceof ConnectionConfig.OutlineConfig outline
+        outlineOrigin = configuredOutlineOrigin(config);
+    }
+
+    private static @Nullable String configuredOutlineOrigin(ConnectionConfig config) {
+        return config instanceof ConnectionConfig.OutlineConfig outline
                 ? ScmOrigin.of(outline.serverUrl()).orElse(null)
                 : null;
     }
