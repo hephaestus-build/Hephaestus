@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
@@ -413,6 +414,24 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         ending.commitAfter(redaction);
         redaction.get(20, TimeUnit.SECONDS);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_action WHERE id=?", Long.class, claim.id()))
+                .isZero();
+        verifyNoInteractions(slack);
+    }
+
+    /** A developer's delete or a Slack disconnect removes the question, and the lane withdraws its pending reply. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldWithdrawThePendingReplyAndSendNothingWhenItsQuestionIsRemoved(boolean disconnect) {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        var running = claims.claim(asked.turn());
+        end(running, "Private complete answer");
+        var id = action(asked);
+
+        if (disconnect) context.getBean(SlackWorkspaceContentEraser.class).eraseWorkspace(workspace.getId());
+        else entries.deleteMessage(workspace.getId(), asked.question().getId());
+        attempt(asked);
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_action WHERE id=?", Long.class, id))
                 .isZero();
         verifyNoInteractions(slack);
     }

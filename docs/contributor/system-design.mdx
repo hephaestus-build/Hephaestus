@@ -258,6 +258,46 @@ The erasure worker cannot remove the data before the journal copy is confirmed.
 The server acknowledges admission after the copy is confirmed. The erasure worker finishes independently of the request.
 If the bucket is unavailable, the hold stays in effect and the server retries the copy.
 
+### Cascade table
+
+A cause removes a source or narrows who may read it. These are the causes:
+
+- A removal: the developer deletes a message, or its retention ends.
+- A source erasure: a source of the workspace is erased.
+  Slack content, Outline content, the SCM mirror and a removed repository are such sources.
+- A person-data erasure.
+- A narrowing: what the workspace's turns may read narrows while the source stays.
+
+A record that depends on the source must follow the cause.
+`CascadeCause` and `CascadeDependent` in `core.privacy.spi` register the causes and the dependent kinds.
+`CascadeTableTest` holds one cell for each pair: the action, and the tests that prove it through the cause
+([ADR 0128](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md), decision 3).
+
+- A cell names the action that holds for every dependent of its kind. Its reason names a stronger action that holds for some.
+- A cell that keeps the dependent states why. A gap names the issue that owns it.
+- Each store of the [personal-data map](/admin/dsms/personal-data-map) names the dependent kinds that it holds, or none.
+- Each row of the map's main table decides by its name. It is a store row, or it names the dependent kinds of its own copies.
+  So a remote copy of a known store must decide too.
+
+To add a kind of dependent record:
+
+1. Add its constant to `CascadeDependent`, with where it lives.
+2. Add one cell for each cause to `CascadeTableTest`.
+3. If the kind lives in a store, name the kind at that store.
+
+To add a cause:
+
+1. Add its constant to `CascadeCause`.
+2. Add one cell for each dependent kind.
+
+To add a store or a row to the personal-data map:
+
+1. Name the dependent kinds of a new store in `CascadeTableTest`, or list it as holding none.
+2. List a new row of the main table as a store row. If it holds copies of its own, name their dependent kinds.
+
+A cell that changes the dependent needs a proof. A cell that keeps the dependent needs a reason.
+The test fails until the table is complete.
+
 ### Context map
 
 The architecture tier generates the context map from the verified module model. CI retains it in `server-context-map-<attempt>` for fourteen days.

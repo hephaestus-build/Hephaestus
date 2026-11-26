@@ -6,8 +6,10 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRejectedException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
@@ -38,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -81,6 +84,9 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private SharedEventRecorder events;
 
     @Autowired
     private MeterRegistry meters;
@@ -230,6 +236,100 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldEraseTheSummaryInAnotherPersonsConversationThatCoversACopyOfTheErasedPersonsData() {
+        Erasure erasure = requestErasure(sourceThatFailsOnce());
+        ConversationTurn turn = ask(erasure.workspace(), erasure.main(), "Who reviews the API?");
+        end(turn, "Alex does.");
+        ConversationEntry copy = toolResultOf(erasure.workspace(), turn);
+        ConversationEntry kept = entryService.append(
+                erasure.workspace().getId(), erasure.main().getId(), ConversationLedgerFixtures.hephaestus("Later"));
+        ConversationEntry summary = entryService.append(
+                erasure.workspace().getId(),
+                erasure.main().getId(),
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.SUMMARY,
+                        ConversationEntry.Surface.APP,
+                        "Target's open review is with Alex",
+                        ConversationLedgerFixtures.compaction(
+                                ConversationLedgerFixtures.piId(),
+                                "Target's open review is with Alex",
+                                ConversationLedgerFixtures.piIdOf(kept)),
+                        null,
+                        null,
+                        null));
+        events.clear();
+
+        run(erasure);
+
+        assertThat(requests.findById(erasure.requestId()).orElseThrow().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+        // The workspace's turns may read less: the context change revokes its sandboxes.
+        assertThat(events.of(
+                        ConversationLedgerEvents.ContextChanged.class,
+                        ConversationLedgerEvents.ContextChanged::workspaceId,
+                        erasure.workspace().getId()))
+                .isNotEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT redacted_at IS NOT NULL AND text = '' AND COALESCE(payload::text, '') NOT LIKE ?"
+                                + " FROM conversation_entry WHERE id = ?",
+                        Boolean.class,
+                        "%Target's open review%",
+                        summary.getId()))
+                .as("the summary over the copy holds none of the erased person's words")
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT redacted_at IS NOT NULL FROM conversation_entry WHERE id = ?",
+                        Boolean.class,
+                        copy.getId()))
+                .isTrue();
+    }
+
+    /** The developer's own erasure: a turn that runs meanwhile stores nothing, and the conversation goes. */
+    @Test
+    void shouldDiscardTheRunningTurnOfADeveloperWhoseErasureRuns() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-erasure.example.test"));
+        User developer = users.saveAndFlush(TestUserFactory.createUser(86L, "developer", provider));
+        long developerId = accountFor(developer);
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("own-erasure"));
+        membership(workspace, developer);
+        Conversation main = conversations.findOrCreateMain(workspace.getId(), developerId);
+        ConversationTurn running = ask(workspace, main, "Who merges?");
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "86", null));
+        UUID requestId = Objects.requireNonNull(
+                        transaction().execute(status -> personData.preview(adminId, null, identities)))
+                .request()
+                .getId();
+        transaction().executeWithoutResult(status -> personData.requestErasure(requestId, adminId, true));
+
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Alex merges.")),
+                        null,
+                        null));
+        assertThat(ConversationLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
+                .noneSatisfy(entry -> assertThat(entry.getKind()).isEqualTo(ConversationEntry.Kind.ANSWER));
+        personData.run(requestId);
+
+        assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_entry WHERE workspace_id = ?",
+                        Long.class,
+                        workspace.getId()))
+                .isZero();
+    }
+
+    @Test
     void shouldEraseAnAnswerThatUsesEarlierContextWithoutAnotherToolCall() {
         Erasure erasure = requestErasure(sourceThatFailsOnce());
         ConversationTurn earlier = ask(erasure.workspace(), erasure.main(), "Who reviews?");
@@ -320,6 +420,73 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                         "SELECT count(*) FROM conversation_entry WHERE workspace_id = ?",
                         Long.class,
                         workspace.getId()))
+                .isZero();
+    }
+
+    @Test
+    void shouldDeleteTheSummaryAndSearchResultOfTheErasedDevelopersConversation() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-erasure.example.test"));
+        User developer = users.saveAndFlush(TestUserFactory.createUser(85L, "developer", provider));
+        long developerId = accountFor(developer);
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("copy-erasure"));
+        membership(workspace, developer);
+        Conversation main = conversations.findOrCreateMain(workspace.getId(), developerId);
+        ConversationEntry answer = entryService.append(
+                workspace.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("Alex reviews the API"));
+        ConversationEntry later =
+                entryService.append(workspace.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("Later"));
+        ConversationEntry summary = entryService.append(
+                workspace.getId(),
+                main.getId(),
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.SUMMARY,
+                        ConversationEntry.Surface.APP,
+                        "Alex reviews",
+                        ConversationLedgerFixtures.compaction(
+                                ConversationLedgerFixtures.piId(),
+                                "Alex reviews",
+                                ConversationLedgerFixtures.piIdOf(later)),
+                        null,
+                        null,
+                        null));
+        ConversationEntry result = entryService.append(
+                workspace.getId(),
+                main.getId(),
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.TOOL_RESULT,
+                        ConversationEntry.Surface.APP,
+                        "",
+                        ConversationLedgerFixtures.toolResult(
+                                ConversationLedgerFixtures.piId(),
+                                "search-1",
+                                "search_conversation",
+                                "{\"hits\":[{\"entryId\":\"" + answer.getId()
+                                        + "\",\"branch\":\"main\",\"excerpt\":\"Alex reviews the API\"}]}",
+                                false),
+                        null,
+                        null,
+                        null));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "85", null));
+        UUID requestId = Objects.requireNonNull(
+                        transaction().execute(status -> personData.preview(adminId, null, identities)))
+                .request()
+                .getId();
+
+        transaction().executeWithoutResult(status -> personData.requestErasure(requestId, adminId, true));
+        personData.run(requestId);
+
+        assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_entry WHERE id IN (?, ?)",
+                        Long.class,
+                        summary.getId(),
+                        result.getId()))
                 .isZero();
     }
 
