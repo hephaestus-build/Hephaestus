@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +40,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -223,6 +227,91 @@ class ResultFreshnessTest {
             TransactionSynchronizationManager.setActualTransactionActive(false);
         }
         verifyNoInteractions(items);
+    }
+
+    /**
+     * One read reads each kind of a piece of work once. A later check reads only the kinds that no check read yet, and
+     * outside one read every check reads.
+     */
+    @Test
+    void shouldReadEachSourceOfAPieceOfWorkOnceInOneRead() {
+        var core = new SourceKind("scm.pull-request.core");
+        var checks = new SourceKind("scm.pull-request.checks");
+        var coreOnly = result();
+        var both = result();
+        capturedAll(Map.of(
+                coreOnly, decision(CAPTURED_AT, Map.of(core.value(), FINGERPRINT)),
+                both, decision(CAPTURED_AT, Map.of(core.value(), FINGERPRINT, checks.value(), FINGERPRINT))));
+        when(items.read(eq(item), any(), any())).thenAnswer(call -> {
+            Set<SourceKind> kinds = call.getArgument(1);
+            return new ProductItemQuery.FingerprintRead(
+                    kinds.stream().collect(Collectors.toMap(Function.identity(), kind -> FINGERPRINT)), null);
+        });
+        var refs = Map.of(7L, item);
+
+        var states = freshness.asOneRead(
+                1,
+                () -> List.of(
+                        freshness.freshness(1, facts(List.of(coreOnly)), refs).get(coreOnly.getId()),
+                        freshness.freshness(1, facts(List.of(both)), refs).get(both.getId()),
+                        freshness.freshness(1, facts(List.of(both)), refs).get(both.getId())));
+
+        assertThat(states).extracting(Freshness::currentness).containsOnly(Currentness.CURRENT);
+        verify(items).read(item, Set.of(core), null);
+        verify(items).read(item, Set.of(checks), null);
+        verify(items, times(2)).read(eq(item), any(), any());
+        freshness.freshness(1, facts(List.of(coreOnly)), refs);
+        verify(items, times(3)).read(eq(item), any(), any());
+    }
+
+    /**
+     * A read that fails keeps no answer. Within one read, a later check of the same or more kinds answers nothing without
+     * reading again, as its own read would fail, while a check of fewer kinds still reads its own.
+     */
+    @Test
+    void shouldAnswerNothingForMoreKindsThanAReadThatFailedInOneRead() {
+        var core = new SourceKind("scm.pull-request.core");
+        var both = result();
+        var coreOnly = result();
+        capturedAll(Map.of(
+                both, decision(CAPTURED_AT, Map.of(core.value(), FINGERPRINT, LINKED.value(), FINGERPRINT)),
+                coreOnly, decision(CAPTURED_AT, Map.of(core.value(), FINGERPRINT))));
+        when(items.read(eq(item), any(), any())).thenAnswer(call -> {
+            Set<SourceKind> kinds = call.getArgument(1);
+            return kinds.contains(LINKED)
+                    ? new ProductItemQuery.FingerprintRead(Map.of(), "OCCASION_EVIDENCE_UNAVAILABLE")
+                    : new ProductItemQuery.FingerprintRead(Map.of(core, FINGERPRINT), null);
+        });
+        var refs = Map.of(7L, item);
+
+        var states = freshness.asOneRead(
+                1,
+                () -> List.of(
+                        freshness.freshness(1, facts(List.of(both)), refs).get(both.getId()),
+                        freshness.freshness(1, facts(List.of(both)), refs).get(both.getId()),
+                        freshness.freshness(1, facts(List.of(coreOnly)), refs).get(coreOnly.getId())));
+
+        assertThat(states)
+                .extracting(Freshness::currentness)
+                .containsExactly(Currentness.UNVERIFIABLE, Currentness.UNVERIFIABLE, Currentness.CURRENT);
+        verify(items).read(item, Set.of(core, LINKED), null);
+        verify(items).read(item, Set.of(core), null);
+        verify(items, times(2)).read(eq(item), any(), any());
+    }
+
+    private void capturedAll(Map<Result, ObjectNode> decisions) {
+        when(practices.sourceCaptures(eq(1L), any(), any()))
+                .thenReturn(decisions.entrySet().stream()
+                        .map(entry -> new ResultSourceCapture(
+                                entry.getKey().getReviewId(),
+                                entry.getKey().getPracticeId(),
+                                entry.getKey().getItemId(),
+                                ReviewKind.ITEM,
+                                ReviewOrigin.REQUEST,
+                                null,
+                                entry.getValue(),
+                                null))
+                        .toList());
     }
 
     private Result result() {
