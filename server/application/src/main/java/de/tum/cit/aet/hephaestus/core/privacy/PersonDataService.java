@@ -305,12 +305,12 @@ public class PersonDataService {
                     PersonDataRequest r = lockAdmittedErasure(id);
                     return r == null ? null : new FrozenErasure(selections(r), scope(r));
                 });
-                if (admitted == null || admitted.selections().isEmpty()) return;
+                if (admitted == null) return;
                 Map<String, PersonDataSelection> frozen = admitted.selections();
                 Set<String> inventory = registry.stores().stream()
                         .map(PersonDataContributor::store)
                         .collect(Collectors.toUnmodifiableSet());
-                if (!frozen.keySet().equals(inventory))
+                if (frozen.isEmpty() || !frozen.keySet().equals(inventory))
                     throw new IllegalStateException("Erasure contributor inventory changed");
                 for (var store : registry.stores()) {
                     activeStore = store.store();
@@ -350,6 +350,8 @@ public class PersonDataService {
                 tx.executeWithoutResult(status -> {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return;
+                    if (!completed(r).keySet().equals(inventory))
+                        throw new IllegalStateException("Erasure store receipts are incomplete");
                     hold.release(id);
                     r.complete(Instant.now());
                     requests.saveAndFlush(r);

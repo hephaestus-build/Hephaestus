@@ -146,6 +146,12 @@ class ProxyRoutingService {
     static final class ModelRequestRefused extends RuntimeException {
         @Serial
         private static final long serialVersionUID = 1L;
+
+        ModelRequestRefused() {}
+
+        ModelRequestRefused(Throwable cause) {
+            super(cause);
+        }
     }
 
     ProxyRouting resolve(ProxyIdentity identity) {

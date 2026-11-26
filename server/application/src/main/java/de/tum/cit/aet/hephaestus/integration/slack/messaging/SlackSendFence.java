@@ -8,6 +8,7 @@ import java.net.ProtocolException;
 import java.util.function.BooleanSupplier;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okio.BufferedSink;
@@ -20,7 +21,6 @@ final class SlackSendFence implements Interceptor {
     static final ThreadLocal<@Nullable Admission> ADMISSION = new ThreadLocal<>();
 
     private static final SlackSendFence INSTANCE = new SlackSendFence();
-    private static final String POST_MESSAGE = "/chat.postMessage";
 
     private SlackSendFence() {}
 
@@ -36,7 +36,7 @@ final class SlackSendFence implements Interceptor {
     private static Response sendPostOnce(Interceptor.Chain chain) throws IOException {
         var request = chain.request();
         var body = request.body();
-        if (body == null || !request.url().encodedPath().endsWith(POST_MESSAGE)) {
+        if (body == null || !isPostMessage(request)) {
             return chain.proceed(request);
         }
         // The SDK disables redirects. A one-shot body also stops HTTP follow-ups such as 503 with Retry-After: 0.
@@ -65,13 +65,19 @@ final class SlackSendFence implements Interceptor {
     @Override
     public Response intercept(Chain chain) throws IOException {
         var request = chain.request();
-        Admission admission = ADMISSION.get();
-        if (admission != null && request.url().encodedPath().endsWith(POST_MESSAGE)) {
-            if (admission.asked) throw new ProtocolException("An admitted post is sent once");
-            admission.asked = true;
-            if (!admission.admit.getAsBoolean()) throw new NotAdmitted();
+        if (!isPostMessage(request)) {
+            return chain.proceed(request);
         }
+        Admission admission = ADMISSION.get();
+        if (admission == null) throw new NotAdmitted();
+        if (admission.asked) throw new ProtocolException("An admitted post is sent once");
+        admission.asked = true;
+        if (!admission.admit.getAsBoolean()) throw new NotAdmitted();
         return chain.proceed(request);
+    }
+
+    private static boolean isPostMessage(Request request) {
+        return request.url().pathSegments().getLast().equals("chat.postMessage");
     }
 
     private static RequestBody oneShot(RequestBody body) {

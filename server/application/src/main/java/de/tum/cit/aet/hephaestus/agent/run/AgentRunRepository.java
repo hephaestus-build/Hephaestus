@@ -642,6 +642,13 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             "SELECT r FROM AgentRun r WHERE r.id = :id AND (r.workspaceId = :workspaceId OR (r.workspaceId IS NULL AND :workspaceId = 0))")
     Optional<AgentRun> findByRef(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
+    /** Whether the run waits on a hold, read from the row: a native requeue in this transaction is not in the cache. */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM agent_run WHERE id = :id AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0)
+                             AND state = 'QUEUED' AND hold_reason IS NOT NULL)
+            """, nativeQuery = true)
+    boolean isHeld(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
     @Modifying(flushAutomatically = true)
     @Query(
             "DELETE FROM AgentRun r WHERE r.id = :id AND (r.workspaceId = :workspaceId OR (r.workspaceId IS NULL AND :workspaceId = 0))"

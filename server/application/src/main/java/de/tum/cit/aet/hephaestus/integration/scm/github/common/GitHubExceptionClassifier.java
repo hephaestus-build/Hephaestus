@@ -508,17 +508,9 @@ public class GitHubExceptionClassifier {
      * Checks if a 403 response is due to rate limiting.
      */
     private boolean isRateLimitResponse(WebClientResponseException e) {
-        // Check for rate limit headers
-        List<String> rateLimitRemaining = e.getHeaders().get("X-RateLimit-Remaining");
-        if (rateLimitRemaining != null && !rateLimitRemaining.isEmpty()) {
-            try {
-                int remaining = Integer.parseInt(rateLimitRemaining.get(0));
-                if (remaining == 0) {
-                    return true;
-                }
-            } catch (NumberFormatException ignored) {
-                // Continue with other checks
-            }
+        // GitHub names a secondary limit by Retry-After, whatever the primary quota and the body say.
+        if (e.getHeaders().getFirst("Retry-After") != null || isPrimaryQuotaExhausted(e)) {
+            return true;
         }
 
         // Check response body for rate limit message
@@ -534,30 +526,41 @@ public class GitHubExceptionClassifier {
         return false;
     }
 
-    /**
-     * Extracts rate limit reset time from response headers.
-     */
+    private static boolean isPrimaryQuotaExhausted(WebClientResponseException e) {
+        String remaining = e.getHeaders().getFirst("X-RateLimit-Remaining");
+        try {
+            return remaining != null && Integer.parseInt(remaining) == 0;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    /** Wait for both deadlines when GitHub reports that the primary quota is spent. */
     @Nullable
-    private Instant extractRateLimitReset(WebClientResponseException e) {
-        // Try X-RateLimit-Reset header (Unix timestamp)
+    private static Instant extractRateLimitReset(WebClientResponseException e) {
+        Instant resetAt = extractPrimaryReset(e);
+        List<String> retryAfter = e.getHeaders().get("Retry-After");
+        if (retryAfter != null && !retryAfter.isEmpty()) {
+            try {
+                long seconds = Long.parseLong(retryAfter.get(0));
+                Instant retryAt = Instant.now().plusSeconds(seconds);
+                return isPrimaryQuotaExhausted(e) && resetAt != null && resetAt.isAfter(retryAt) ? resetAt : retryAt;
+            } catch (NumberFormatException ignored) {
+                // Retry-After might be a date, but we'll ignore that for simplicity
+            }
+        }
+
+        return resetAt;
+    }
+
+    private static @Nullable Instant extractPrimaryReset(WebClientResponseException e) {
         List<String> resetHeader = e.getHeaders().get("X-RateLimit-Reset");
         if (resetHeader != null && !resetHeader.isEmpty()) {
             try {
                 long epochSeconds = Long.parseLong(resetHeader.get(0));
                 return Instant.ofEpochSecond(epochSeconds);
             } catch (NumberFormatException ignored) {
-                // Fall through to other methods
-            }
-        }
-
-        // Try Retry-After header (seconds to wait)
-        List<String> retryAfter = e.getHeaders().get("Retry-After");
-        if (retryAfter != null && !retryAfter.isEmpty()) {
-            try {
-                long seconds = Long.parseLong(retryAfter.get(0));
-                return Instant.now().plusSeconds(seconds);
-            } catch (NumberFormatException ignored) {
-                // Retry-After might be a date, but we'll ignore that for simplicity
+                // No usable reset header
             }
         }
 

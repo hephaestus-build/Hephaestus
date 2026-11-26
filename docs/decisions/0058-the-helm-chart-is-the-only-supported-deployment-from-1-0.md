@@ -156,7 +156,7 @@ The old host stays unchanged, and it is the rollback.
 | JetStream | Follow ADR 0041: stop ingress, drain to zero pending messages, verify the outcomes, and start with empty streams. |
 | Webhooks during the move | GitHub does not redeliver a failed delivery itself [G1]. The server asks GitHub to redeliver the failed App deliveries of the past hour. Redeliver older ones by hand, then sync each workspace. |
 | Secrets and configuration | Map each known `.env` key into one Secret and `site.yaml`. Stop on an unknown key. Keep the encryption keys. A script can do this mapping, but the guide does not require it. |
-| Cut-over | Move DNS. Run one practice review and one Heph turn. Until the new host admits writes, a rollback moves DNS back. |
+| Cut-over | Move DNS. Run one practice review and one Hephaestus turn. Until the new host admits writes, a rollback moves DNS back. |
 
 The migration guide owns the procedure.
 A rehearsal on staging with a rollback drill and a restore drill comes before the guide is published.

@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -43,6 +44,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OutlinePersonCopyScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -90,6 +92,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -241,6 +244,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private ConversationTurnService conversationTurns;
 
     @Autowired
+    private ConversationTurnContextStore turnContext;
+
+    @Autowired
     private ReviewJobRepository agentJobRepository;
 
     @Autowired
@@ -292,6 +298,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             names = {"GITHUB", "GITLAB", "SLACK", "OUTLINE"})
     void shouldEraseDeliveriesThatArriveBeforeAFailedRequestIsResumed(IntegrationKind kind) {
         eraseArrivals(kind, true);
+    }
+
+    /**
+     * Each erasure step commits on its own. A withdrawal hides its feedback's text, also from a new account export, so
+     * the step that deletes a withdrawal never commits before the one that deletes its feedback.
+     */
+    @Test
+    void shouldEraseFeedbackDecisionsNoEarlierThanTheirFeedback() {
+        var order = registry.stores().stream().map(PersonDataContributor::store).toList();
+        assertThat(order.indexOf("feedback")).isNotNegative();
+        assertThat(order.indexOf("feedback_decision")).isGreaterThan(order.indexOf("feedback"));
     }
 
     @Test
@@ -1170,6 +1187,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var allStores = new PersonErasureAllStoresFixture(jdbc);
         var firstDerived = targetDerived.getFirst();
         long firstWorkspace = firstDerived.workspaceId();
+        recordMixedContext(otherDerived.getFirst());
         var firstResult = practiceResultRepository
                 .findById(firstDerived.practiceResultIds().getFirst())
                 .orElseThrow();
@@ -1233,6 +1251,20 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var preservedSourceRows = otherSourceRows.snapshot();
         authoredVersion(workspaces.findById(firstWorkspace).orElseThrow(), "all-stores-authored", subject.account());
         var ownConversation = conversations.findOrCreateMain(firstWorkspace, subject.account());
+        UUID ownOutlineCopy = conversationEntries
+                .append(
+                        firstWorkspace,
+                        ownConversation.getId(),
+                        entry(
+                                ConversationEntry.Kind.TOOL_RESULT,
+                                "",
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "outline",
+                                        "read",
+                                        PersonErasureAllStoresFixture.CANARY,
+                                        false)))
+                .getId();
         conversationTurns.submit(
                 firstWorkspace,
                 ownConversation.getId(),
@@ -1466,8 +1498,42 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(suppression.isSourceSuppressed(-1L, "chat.thread", threadId))
                     .isFalse();
         }
+        var mixed = otherDerived.getFirst();
+        var ownerJdbc = PostgreSQLTestContainer.ownerJdbc();
+        ownerJdbc.execute("""
+                CREATE FUNCTION test_hold_provider_answer() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RETURN NULL; END $$;
+                CREATE TRIGGER test_hold_provider_answer BEFORE UPDATE OF redacted_at ON conversation_entry
+                   FOR EACH ROW WHEN (NEW.id='%s'::uuid AND NEW.redacted_at IS NOT NULL)
+                   EXECUTE FUNCTION test_hold_provider_answer();
+                """.formatted(mixed.messageId()));
+        try {
+            personData.run(requestId);
+            assertThat(conversationEntryRepository.findById(ownOutlineCopy)).isEmpty();
+            assertThat(conversationEntryRepository
+                            .findById(mixed.messageId())
+                            .orElseThrow()
+                            .isRedacted())
+                    .isFalse();
+            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        } finally {
+            ownerJdbc.execute("DROP TRIGGER test_hold_provider_answer ON conversation_entry;"
+                    + " DROP FUNCTION test_hold_provider_answer();");
+        }
+
+        personData.requestErasure(requestId, administratorId, false);
         // The erasure waits for no server; the server that holds the folders removes them in its next pass.
         personData.run(requestId);
+        assertThat(conversationEntryRepository
+                        .findById(mixed.toolResultId())
+                        .orElseThrow()
+                        .isRedacted())
+                .isTrue();
+        assertThat(conversationEntryRepository
+                        .findById(mixed.messageId())
+                        .orElseThrow()
+                        .isRedacted())
+                .isTrue();
         worker.removeErasedFolders();
         targetFolders.forEach(path -> assertThat(path).doesNotExist());
         otherFolders.forEach(path -> assertThat(path).exists());
@@ -2154,6 +2220,42 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "context-call",
                 "fetch_context",
                 mapper.createObjectNode().put("authorization", "credential-canary " + text));
+    }
+
+    private void recordMixedContext(DerivedConversation derived) {
+        long workspaceId = derived.workspaceId();
+        var answer = conversationEntryRepository.findById(derived.messageId()).orElseThrow();
+        var submitted = conversationTurns.submit(
+                workspaceId,
+                answer.getConversationId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        "Load context",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+        var turn = claims.claimNext().orElseThrow();
+        assertThat(turn.getId()).isEqualTo(submitted.turn().getId());
+        UUID runId = Objects.requireNonNull(turn.getRunId());
+        turnContext.recordOutlineContext(
+                workspaceId,
+                turn.getId(),
+                turn.getAttempt(),
+                runId,
+                List.of(new OutlinePersonCopyScope.Source("https://unrelated-outline.example.test", "other-team")));
+        conversationTurns.end(
+                workspaceId,
+                turn.getId(),
+                turn.getAttempt(),
+                runId,
+                new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null));
+        assertThat(jdbc.update(
+                        "UPDATE conversation_entry SET turn_id=? WHERE workspace_id=? AND id IN (?,?)",
+                        turn.getId(),
+                        workspaceId,
+                        derived.toolResultId(),
+                        derived.messageId()))
+                .isEqualTo(2);
     }
 
     private Conversation conversationOf(Workspace workspace, User owner) {

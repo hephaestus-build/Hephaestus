@@ -40,12 +40,14 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
@@ -67,6 +69,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -269,6 +272,39 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         recover(manifest);
         assertThat(entries.find(workspace.getId(), message).orElseThrow().isRedacted())
                 .isTrue();
+    }
+
+    /**
+     * A backup holds a ready export with a message that its owner deleted after the backup. The replayed deletion
+     * expires that export again, and an unrelated account's export stays ready.
+     */
+    @Test
+    void shouldExpireAgainAReadyExportThatARestoreBroughtBackWithADeletedMessage() throws Exception {
+        UUID message = question("Words in the export");
+        long other = accountId(persistUser("restore-erase-other-" + System.nanoTime()));
+        long held = readyExport(ownerAccount, "Words in the export");
+        long unrelated = readyExport(other, "Another person's export");
+        var exports = PostgreSQLTestContainer.ownerJdbc()
+                .queryForList("SELECT id, status, payload FROM account_export WHERE id IN (?, ?)", held, unrelated);
+        var backup = Backup.of(jdbc, workspace.getId());
+        entries.deleteMessage(workspace.getId(), message);
+        assertThat(exportStatus(held)).isEqualTo("EXPIRED");
+
+        backup.restore();
+        restoreExports(exports);
+        assertThat(exportStatus(held)).as("the restore brought the export back").isEqualTo("READY");
+
+        recover("""
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],
+                 "messageDeletions":[{"workspaceId":%d,"entryId":"%s"}]}
+                """.formatted(workspace.getId(), message));
+
+        assertThat(exportStatus(held)).isEqualTo("EXPIRED");
+        assertThat(PostgreSQLTestContainer.ownerJdbc()
+                        .queryForObject("SELECT payload IS NULL FROM account_export WHERE id = ?", Boolean.class, held))
+                .isTrue();
+        assertThat(exportStatus(unrelated)).isEqualTo("READY");
     }
 
     @Test
@@ -694,6 +730,45 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     private String words(UUID entryId) {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT text || ' ' || search_text FROM conversation_entry WHERE id = ?", String.class, entryId));
+    }
+
+    /** A ready export with the given words, published under its owner's export fence as the export worker does. */
+    private static long readyExport(long accountId, String words) {
+        JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
+        return Objects.requireNonNull(new TransactionTemplate(
+                        new DataSourceTransactionManager(Objects.requireNonNull(owner.getDataSource())))
+                .execute(status -> {
+                    owner.queryForList(ReadyExportFence.LOCK, accountId);
+                    return owner.queryForObject("""
+                                    INSERT INTO account_export(account_id, status, completed_at, expires_at, payload)
+                                    VALUES (?, 'READY', now(), now() + interval '1 day', ?) RETURNING id
+                                    """, Long.class, accountId, words.getBytes(StandardCharsets.UTF_8));
+                }));
+    }
+
+    private static String exportStatus(long exportId) {
+        return Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
+                .queryForObject("SELECT status FROM account_export WHERE id = ?", String.class, exportId));
+    }
+
+    /** Puts the exports back as the backup held them, as a physical restore does: no trigger runs while it writes. */
+    private void restoreExports(List<Map<String, @Nullable Object>> exports) throws SQLException {
+        var administrator = PostgreSQLTestContainer.administrator();
+        try (var session = DriverManager.getConnection(
+                administrator.jdbcUrl(), administrator.username(), administrator.password())) {
+            session.setAutoCommit(false);
+            var restore = new JdbcTemplate(new SingleConnectionDataSource(session, true));
+            restore.execute("SET LOCAL session_replication_role = replica");
+            restore.execute("SET LOCAL search_path TO " + jdbc.queryForObject("SELECT current_schema()", String.class));
+            for (var export : exports) {
+                restore.update(
+                        "UPDATE account_export SET status = ?, payload = ? WHERE id = ?",
+                        export.get("status"),
+                        export.get("payload"),
+                        export.get("id"));
+            }
+            session.commit();
+        }
     }
 
     private void recover(String content) throws Exception {

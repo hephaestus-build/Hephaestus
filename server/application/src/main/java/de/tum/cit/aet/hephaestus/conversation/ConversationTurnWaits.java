@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,6 +78,7 @@ public class ConversationTurnWaits {
      * read the other's. Every process publishes it, also one that does not know the capacity: a worker starts and ends
      * most turns.
      */
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishWaits(SlotsChanged changed) {

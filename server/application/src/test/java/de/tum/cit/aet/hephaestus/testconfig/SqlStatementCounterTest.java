@@ -44,8 +44,8 @@ class SqlStatementCounterTest extends BaseUnitTest {
                     .isEqualTo(new SqlStatementCounter.Measurement<>(
                             "read",
                             List.of(
-                                    new SqlStatementCounter.Prepared("SELECT 1", null, false),
-                                    new SqlStatementCounter.Prepared("SELECT 1", null, false))));
+                                    new SqlStatementCounter.Prepared("SELECT 1", null, false, null),
+                                    new SqlStatementCounter.Prepared("SELECT 1", null, false, null))));
             prepare(jdbc);
             assertThat(counter.measure(() -> "empty").statements()).isZero();
         }
@@ -93,7 +93,8 @@ class SqlStatementCounterTest extends BaseUnitTest {
                 prepare(jdbc);
                 return "read";
             });
-            assertThat(measured.prepared()).containsExactly(new SqlStatementCounter.Prepared("SELECT 1", 7L, true));
+            assertThat(measured.prepared())
+                    .containsExactly(new SqlStatementCounter.Prepared("SELECT 1", 7L, true, null));
             CompletableFuture.runAsync(() -> prepare(jdbc), worker)
                     .orTimeout(30, TimeUnit.SECONDS)
                     .join();

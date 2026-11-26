@@ -99,7 +99,7 @@ Corrects the 2026-09-05 update. The mentor session frames did ship: `MentorSessi
 `MentorSessionEvent` were `WorkerControlFrame` permits, with `WorkerMentorSessions` on the worker and
 `WorkerMentorSessionEvent` on the hub. ADR 0057 deletes them. `FrameEnvelope.CURRENT_VERSION` is 4, and
 `CapacityReport` counts review slots only. The drain sequence of § Decision no longer closes mentor
-sessions. It stops Heph turn claims and removes the worker's Heph host. The Protocol row and the
+sessions. It stops Hephaestus turn claims and removes the worker's Hephaestus host. The Protocol row and the
 § Consequences paragraph about the mentor session bridge are superseded.
 
 ## Update — 2026-10-28: the WSS control channel goes ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -26,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemSourceObserved;
+import de.tum.cit.aet.hephaestus.integration.core.api.OccasionSettlement;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -135,6 +137,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -156,6 +159,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -402,6 +406,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var event = event(prepared);
         assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
         assertThat(event.getReason()).isEqualTo(reason);
+        // A permanent stop is recorded, so its durable listener completes the publication instead of retrying it.
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(jdbc.queryForList(
+                                "SELECT status FROM event_publication WHERE event_type=?"
+                                        + " AND serialized_event::jsonb->>'eventId'=? AND completion_date IS NULL",
+                                String.class,
+                                ItemEventRecorded.class.getName(),
+                                event.getId().toString()))
+                        .isEmpty());
         var refusal = catchThrowableOfType(
                 ReviewRequestRejected.class,
                 () -> service.request(request(prepared)
@@ -2080,7 +2093,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
-    void shouldStartAnOccasionOnceWhenItIsOfferedAgainAfterItsReviewWasRecordedButNotSettled() {
+    void shouldStartAnOccasionInItsReviewsTransactionAndOnceWhenItIsOfferedAgain() {
         var prepared = prepare(IdentityProviderType.GITHUB, false);
         var item = prepared.item();
         when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(false);
@@ -2088,7 +2101,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var occasion = event(prepared);
         assertThat(occasion.getState()).isEqualTo(ItemEventState.WAITING);
         when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(true);
-        // The edge recorded its review, and then its settle step failed: the occasion still waits.
+        // The review's own transaction starts its occasion, so no other offer or expiry can come between them.
         var recorded = service.request(ReviewRequest.builder()
                 .workspaceId(item.workspaceId())
                 .itemId(item.itemId())
@@ -2099,13 +2112,272 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .practiceIds(List.of())
                 .occasions(Set.of(prepared.name()))
                 .build());
-        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
+        // The reaper expires only an open occasion, so a started one outlives its deadline.
+        transactions.executeWithoutResult(ignored -> events.expire(
+                Instant.now().plus(Duration.ofDays(365)),
+                Instant.now(),
+                ReviewRequestReason.PENDING_DEADLINE_EXCEEDED));
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
 
         transactions.executeWithoutResult(ignored ->
                 publisher.publishEvent(new ItemEventRecorded(item.workspaceId(), occasion.getId(), item.itemId())));
 
         assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
         assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
+    }
+
+    @Test
+    void shouldWithholdAnOccasionWhoseAuthorizationWasReplacedAndCompleteItsPublication() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // A valid record whose authorization another connection replaced: the original cannot be read any more.
+        jdbc.update(
+                "UPDATE item_event SET evidence = jsonb_set(evidence, '{integration,connectionId}', '987654321')"
+                        + " WHERE id = ?",
+                occasion.getId());
+        assertThatThrownBy(() -> source.pinOccasion(prepared.item(), prepared.version(), occasion.getId()))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.VERSION_UNAVAILABLE));
+
+        offerAgain(prepared, occasion);
+
+        var decided = events.findById(occasion.getId()).orElseThrow();
+        assertThat(decided.getState()).isEqualTo(ItemEventState.WITHHELD);
+        // The work itself did not change, so the stop names the unavailable original, never a changed version.
+        assertThat(decided.getReason()).isEqualTo(ReviewRequestReason.OCCASION_EVIDENCE_UNAVAILABLE);
+        assertThat(itemReviews(prepared)).isEmpty();
+        // The stop is recorded and the publication completes, so neither the publication nor the occasion is sent
+        // again.
+        assertThat(incompletePublications(occasion)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{sourceId}", "{work,sourceId}"})
+    void shouldRetryAnOccasionWhoseRetainedRecordNamesOtherWork(String path) {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // The record still reads, but it names other work, at its top or in its work: a corrupt record, never a reason
+        // to withhold.
+        jdbc.update(
+                "UPDATE item_event SET evidence = jsonb_set(evidence, CAST(? AS text[]), '0') WHERE id = ?",
+                path,
+                occasion.getId());
+        assertThatThrownBy(() -> source.pinOccasion(prepared.item(), prepared.version(), occasion.getId()))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CAPTURE_FAILED));
+
+        offerAgain(prepared, occasion);
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(occasion)).containsExactly("FAILED");
+    }
+
+    @Test
+    void shouldRetryAnOccasionWhoseRetainedRecordPinsAnotherVersionThanItsOccasion() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // One hex digit of the retained digest changes. The occasion's own version, the base and the head stay.
+        jdbc.update(
+                "UPDATE item_event SET evidence = jsonb_set(evidence, '{itemVersion}', to_jsonb("
+                        + "left(evidence->>'itemVersion', -1) || CASE WHEN right(evidence->>'itemVersion', 1) = '0'"
+                        + " THEN '1' ELSE '0' END)) WHERE id = ?",
+                occasion.getId());
+        assertThatThrownBy(() -> source.pinOccasion(prepared.item(), prepared.version(), occasion.getId()))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CAPTURE_FAILED));
+
+        offerAgain(prepared, occasion);
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(occasion)).containsExactly("FAILED");
+    }
+
+    @Test
+    void shouldRetryAPinnedOccasionWhoseRetainedRecordPinsNoVersion() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // The record reads as an unpinned one, while the ledger pinned the occasion: a corrupt record, never a stop.
+        jdbc.update(
+                "UPDATE item_event SET evidence = jsonb_set(jsonb_set(jsonb_set(evidence, '{itemVersion}', 'null'),"
+                        + " '{baseVersion}', 'null'), '{work,base}', 'null') WHERE id = ?",
+                occasion.getId());
+        assertThatThrownBy(() -> source.pinOccasion(prepared.item(), prepared.version(), occasion.getId()))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CAPTURE_FAILED));
+
+        offerAgain(prepared, occasion);
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(occasion)).containsExactly("FAILED");
+    }
+
+    @Test
+    void shouldRecordNoReviewWhenAnOlderOccasionOfItsWindowWasDecidedMeanwhile() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // The window named an older occasion that the reaper or another offer has decided since: it no longer selects.
+        var decidedMeanwhile = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.request(eventRequest(prepared, occasion, Set.of(decidedMeanwhile))))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRejected.class,
+                        refusal ->
+                                assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.PRACTICES_CHANGED));
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+    }
+
+    @Test
+    void shouldStartAReplayedReviewsOwnOccasionThatItsSettlementLeftOpen() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        var recorded = service.request(eventRequest(prepared, occasion, Set.of()));
+        // An earlier release recorded the review and stopped before its settlement committed.
+        jdbc.update(
+                "UPDATE item_event SET state = 'WAITING', reason = 'BUDGET_EXHAUSTED', decided_at = now() WHERE id = ?",
+                occasion.getId());
+
+        assertThat(service.request(eventRequest(prepared, occasion, Set.of()))).isEqualTo(recorded);
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
+    }
+
+    /** The reaper's bulk update writes exactly the table's {@code EXPIRED} cell for each state. */
+    @ParameterizedTest
+    @EnumSource(ItemEventState.class)
+    void shouldExpireAnOccasionPastItsDeadlineExactlyAsTheTableSays(ItemEventState state) {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        jdbc.update(
+                "UPDATE item_event SET state = ?, reason = ? WHERE id = ?",
+                state.name(),
+                state == ItemEventState.WAITING || state == ItemEventState.WITHHELD || state == ItemEventState.EXPIRED
+                        ? ReviewRequestReason.BUDGET_EXHAUSTED.name()
+                        : null,
+                occasion.getId());
+
+        // Its occurrence is a fact, so the deadline moves past it instead.
+        transactions.executeWithoutResult(ignored -> events.expire(
+                Instant.now().plus(Duration.ofDays(365)),
+                Instant.now(),
+                ReviewRequestReason.PENDING_DEADLINE_EXCEEDED));
+
+        var expected = OccasionSettlement.next(
+                        state, OccasionSettlement.Role.NEWEST, OccasionSettlement.Outcome.EXPIRED, null)
+                .map(next -> ((OccasionSettlement.Next.Decide) next).state())
+                .orElse(state);
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(expected);
+    }
+
+    private static ReviewRequest eventRequest(Prepared prepared, ItemEvent occasion, Set<UUID> coalesced) {
+        return ReviewRequest.builder()
+                .workspaceId(prepared.item().workspaceId())
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(new ItemVersion(Objects.requireNonNull(occasion.getItemVersion()), null))
+                .origin(ReviewOrigin.EVENT)
+                .eventId(occasion.getId())
+                .practiceIds(List.of())
+                .occasions(Set.of(prepared.name()))
+                .coalesced(coalesced)
+                .build();
+    }
+
+    @Test
+    void shouldRecordNoReviewForAnOccasionThatAConcurrentOfferDecidedFirst() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var occasion = waitingOccasion(prepared);
+        // The other offer withheld the occasion after this one was admitted and pinned, before it took the lock.
+        jdbc.update(
+                "UPDATE item_event SET state = 'WITHHELD', reason = 'ITEM_NOT_VISIBLE' WHERE id = ?", occasion.getId());
+
+        assertThatThrownBy(() -> service.request(ReviewRequest.builder()
+                        .workspaceId(item.workspaceId())
+                        .itemId(item.itemId())
+                        .kind(ReviewKind.ITEM)
+                        .version(new ItemVersion(Objects.requireNonNull(occasion.getItemVersion()), null))
+                        .origin(ReviewOrigin.EVENT)
+                        .eventId(occasion.getId())
+                        .practiceIds(List.of())
+                        .occasions(Set.of(prepared.name()))
+                        .build()))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRejected.class,
+                        refusal ->
+                                assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.REQUEST_CONFLICT));
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WITHHELD);
+    }
+
+    @Test
+    void shouldWithholdAPullRequestThatLeftTheIndexAsNotVisibleNeverAsGone() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // Withdrawal removes the pull request itself from the workspace index; it can still exist at the provider.
+        jdbc.update(
+                "UPDATE item SET removed_at = now() WHERE id = ? AND workspace_id = ?",
+                prepared.item().itemId(),
+                prepared.item().workspaceId());
+
+        offerAgain(prepared, occasion);
+
+        var decided = events.findById(occasion.getId()).orElseThrow();
+        assertThat(decided.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(decided.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
+        assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(occasion)).isEmpty();
+    }
+
+    @Test
+    void shouldWithholdAPullRequestWhoseRepositoryIsNoLongerIndexedAsNotVisibleNeverAsGone() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var occasion = waitingOccasion(prepared);
+        // The workspace stopped monitoring the repository; the pull request is still indexed and still exists.
+        jdbc.update(
+                "UPDATE item SET removed_at = now() WHERE id = ? AND workspace_id = ?",
+                Objects.requireNonNull(prepared.item().parentId()),
+                prepared.item().workspaceId());
+
+        offerAgain(prepared, occasion);
+
+        var decided = events.findById(occasion.getId()).orElseThrow();
+        assertThat(decided.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(decided.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
+        assertThat(incompletePublications(occasion)).isEmpty();
+    }
+
+    /** An occasion of the prepared work that waits with its version pinned, as one whose budget ran out does. */
+    private ItemEvent waitingOccasion(Prepared prepared) {
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(false);
+        publish(prepared);
+        var occasion = event(prepared);
+        assertThat(occasion.getState()).isEqualTo(ItemEventState.WAITING);
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(true);
+        return occasion;
+    }
+
+    private void offerAgain(Prepared prepared, ItemEvent occasion) {
+        transactions.executeWithoutResult(ignored -> publisher.publishEvent(new ItemEventRecorded(
+                prepared.item().workspaceId(), occasion.getId(), prepared.item().itemId())));
+    }
+
+    private List<@Nullable String> incompletePublications(ItemEvent occasion) {
+        return jdbc.queryForList(
+                "SELECT status FROM event_publication WHERE event_type=?"
+                        + " AND serialized_event::jsonb->>'eventId'=? AND completion_date IS NULL",
+                String.class,
+                ItemEventRecorded.class.getName(),
+                occasion.getId().toString());
     }
 
     /** A second practice of the prepared work: about nobody, selected on {@code on}, reading only the core record. */
@@ -4847,6 +5119,43 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             var coalesced = events.findById(opened.getId()).orElseThrow();
             assertThat(coalesced.getState()).isEqualTo(ItemEventState.WITHHELD);
             assertThat(coalesced.getReason()).isEqualTo(ReviewRequestReason.COALESCED);
+        }
+
+        @Test
+        void shouldRetryWhenExpiryWinsTheLockOnAnOlderOccasion() throws Exception {
+            var prepared = prepare(
+                    IdentityProviderType.GITHUB,
+                    false,
+                    Map.of(),
+                    false,
+                    List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+            publish(prepared);
+            var older = event(prepared);
+            deliver(
+                    prepared,
+                    "synchronize",
+                    pullRequestPayload(prepared, "c".repeat(40), Instant.now()),
+                    "b".repeat(40));
+            var newest = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+            var request = eventRequest(prepared, newest, Set.of(older.getId()));
+
+            var expiry = HeldTransaction.holdIn(
+                    transactions,
+                    jdbc,
+                    () -> jdbc.update(
+                            "UPDATE item_event SET state = 'EXPIRED', reason = 'PENDING_DEADLINE_EXCEEDED', "
+                                    + "decided_at = now(), retry_at = NULL WHERE id = ?",
+                            older.getId()));
+            var refusal = CompletableFuture.supplyAsync(() -> catchThrowable(() -> service.request(request)));
+            expiry.commitAfter(refusal, () -> assertThat(refusal).isNotDone());
+
+            assertThat(refusal.get(20, TimeUnit.SECONDS))
+                    .isInstanceOfSatisfying(
+                            ReviewRequestRejected.class,
+                            rejected -> assertThat(rejected.reason())
+                                    .isEqualTo(ReviewRequestRejected.Reason.PRACTICES_CHANGED));
+            assertThat(itemReviews(prepared)).isEmpty();
+            assertThat(events.findById(newest.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
         }
 
         @Test

@@ -2,16 +2,26 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource.WEBHOOK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.database.CommitIdentityResolutionSeedChange;
 import de.tum.cit.aet.hephaestus.core.database.GitLabCommitIdentityResolutionSeedChange;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
@@ -23,12 +33,21 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitIdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +55,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import javax.sql.DataSource;
 import liquibase.database.core.PostgresDatabase;
@@ -46,7 +66,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
 class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
@@ -80,6 +109,9 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     private CommitIdentityResolutionRepository resolutions;
 
     @Autowired
+    private ProviderCredentialPauseRepository pauses;
+
+    @Autowired
     private CommitIdentityChangeRepository changes;
 
     @Autowired
@@ -87,16 +119,51 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
     private final RepositoryScopeProvider scopes = mock(RepositoryScopeProvider.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final List<ActiveScm> askedCredentials = new ArrayList<>();
 
     private IdentityProvider github;
     private Function<Question, @Nullable Answer> provider = question -> null;
     private @Nullable CommitIdentityResolutionJob job;
 
+    /** The workspace that monitors each repository unless a test names another. */
+    private long scope;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
+    @Autowired
+    private ActiveScmConnections activeScm;
+
+    @Autowired
+    private ConnectionService connections;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
         github = provider(IdentityProviderType.GITHUB, "https://github.com");
-        when(scopes.getActiveScopesForRepository(anyLong(), anyLong())).thenReturn(List.of(1L));
+        scope = workspace();
+        when(scopes.getActiveScopesForRepository(anyLong(), anyLong())).thenReturn(List.of(scope));
+    }
+
+    private long workspace() {
+        var workspace = new Workspace();
+        workspace.setWorkspaceSlug("identity-" + UUID.randomUUID());
+        workspace.setDisplayName("Commit identity test");
+        workspace.setAccountLogin("identity");
+        workspace.setAccountType(AccountType.ORG);
+        Workspace saved = workspaces.saveAndFlush(workspace);
+        provisionPat(saved, "test-connection", "test-token");
+        return Objects.requireNonNull(saved.getId());
+    }
+
+    private void provisionPat(Workspace workspace, String instanceKey, String token) {
+        connections.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITHUB,
+                instanceKey,
+                new ConnectionConfig.GitHubPatConfig("identity", "https://github.com", Set.of()),
+                token,
+                UUID.randomUUID().toString());
     }
 
     @Test
@@ -363,16 +430,241 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldChangeNothingAndSpendNoAttemptWhenTheRateLimitStopsTheRun() throws Exception {
+    void shouldChangeNothingAndSpendNoAttemptOfTheLastWhenTheRateLimitStopsTheRun() throws Exception {
         User wrong = user("wrong");
         long commit = commit(repository(), wrong, null, EMAIL);
         seed();
-        provider = question -> new Answer.Deferred();
+        // The email has one attempt left: a throttle must not take it.
+        jdbc.update("UPDATE commit_identity_resolution SET attempts = ?", CommitIdentityResolutionJob.MAX_ATTEMPTS - 1);
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return new Answer.Deferred(reset);
+        };
 
+        run(50);
+        // Another server, which never saw the throttle, reads the deadline from the row.
+        job = null;
         run(50);
 
         assertThat(authorOf(commit)).isEqualTo(wrong.getId());
         assertThat(states()).containsOnly("PENDING");
+        assertThat(attempts()).containsOnly(CommitIdentityResolutionJob.MAX_ATTEMPTS - 1);
+        assertThat(asked)
+                .as("no server asks again before the provider's deadline")
+                .containsExactly(EMAIL);
+        assertThat(jdbc.queryForList("SELECT deferred_until FROM commit_identity_resolution", Timestamp.class))
+                .singleElement()
+                .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldResumeDeferredWorkWithANewCredentialInTheSameWorkspace(boolean replaceToken) throws Exception {
+        User right = user("right");
+        long waiting = commit(repository(), null, null, EMAIL);
+        seed();
+        var old = activeScm.withToken(scope).orElseThrow();
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        provider = question -> new Answer.Deferred(reset);
+        run(50);
+        assertThat(attempts()).containsExactly(0);
+        assertThat(pauses.pausedUntil(scope, old.connectionId(), old.credentialsGeneration()))
+                .contains(reset);
+
+        if (replaceToken) {
+            assertThat(connections.rotateBearerToken(
+                            scope, IntegrationKind.GITHUB, new BearerToken("new-test-token", null), null))
+                    .isPresent();
+        } else {
+            var previous = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
+            connections.transition(
+                    previous,
+                    new ConnectionService.TransitionRequest(
+                            IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
+            provisionPat(workspaces.findById(scope).orElseThrow(), "other-connection", "new-test-token");
+        }
+        var replacement = activeScm.withToken(scope).orElseThrow();
+        assertThat(replacement).isNotEqualTo(old);
+        provider = question -> new Answer.Account(id(right), right.getNativeId());
+
+        job = null;
+        run(50);
+
+        assertThat(authorOf(waiting)).isEqualTo(right.getId());
+        assertThat(askedCredentials).containsExactly(old, replacement);
+        assertThat(attempts()).containsExactly(1);
+        assertThat(pauses.pausedUntil(scope, old.connectionId(), old.credentialsGeneration()))
+                .contains(reset);
+        assertThat(pauses.pausedUntil(scope, replacement.connectionId(), replacement.credentialsGeneration()))
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void shouldKeepTheLastAttemptAvailableWhenGitLabRotatesATokenMidBatch(int rotateOnRequest) throws Exception {
+        String server = "https://gitlab.com";
+        var workspace = workspaces.findById(scope).orElseThrow();
+        var original = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
+        connections.transition(
+                original,
+                new ConnectionService.TransitionRequest(
+                        IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
+        connections.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITLAB,
+                "test-gitlab",
+                new ConnectionConfig.GitLabConfig(server, 1L, null, Set.of(), null),
+                "old-test-token",
+                UUID.randomUUID().toString());
+        var repository = repository(provider(IdentityProviderType.GITLAB, server));
+        long first = commit(repository, null, null, "first@example.com");
+        long second = commit(repository, null, null, EMAIL);
+        jdbc.update("""
+                INSERT INTO commit_identity_resolution(repository_id, commit_id, source, state, attempts)
+                VALUES (?, ?, 'AUTHOR', 'PENDING', 0), (?, ?, 'AUTHOR', 'PENDING', 4)
+                """, repository.getId(), first, repository.getId(), second);
+
+        var clientProvider = mock(GitLabGraphQlClientProvider.class);
+        var gitLabProperties = mock(GitLabProperties.class);
+        when(gitLabProperties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
+        var calls = new AtomicInteger();
+        var revoked = new AtomicInteger();
+        var old = activeScm.withToken(scope).orElseThrow();
+        String sha = commits.findById(second).orElseThrow().getSha();
+        var healthy = HttpGraphQlClient.create(WebClient.builder()
+                .baseUrl(server)
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                        .body("""
+                                {"data":{"project":{"repository":{"commit":{"sha":"%s","authorEmail":"%s","author":null}}}}}
+                                """.formatted(sha, EMAIL))
+                        .build()))
+                .build());
+        when(clientProvider.forCredential(eq(scope), any(), any())).thenAnswer(invocation -> {
+            ActiveScm used = invocation.getArgument(1);
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class, RETURNS_SELF);
+            when(client.documentName("GetCommitIdentity")).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.defer(() -> {
+                int call = calls.incrementAndGet();
+                if (call == rotateOnRequest) {
+                    assertThat(connections.rotateBearerToken(
+                                    scope, IntegrationKind.GITLAB, new BearerToken("new-test-token", null), null))
+                            .isPresent();
+                }
+                if (call > 1 && used.credentialsGeneration() == old.credentialsGeneration()) {
+                    revoked.incrementAndGet();
+                    return Mono.error(WebClientResponseException.create(
+                            401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null));
+                }
+                return healthy.document("{ __typename }").execute();
+            }));
+            return client;
+        });
+        job = new CommitIdentityResolutionJob(
+                resolutions,
+                pauses,
+                service,
+                new CommitIdentityResolutionProperties(true, 50),
+                List.of(new GitLabCommitIdentityProvider(
+                        clientProvider,
+                        gitLabProperties,
+                        mock(GitLabUserService.class),
+                        mock(PersonProcessingSuppression.class),
+                        activeScm,
+                        pauses)),
+                scopes,
+                activeScm,
+                meters);
+
+        run(50);
+
+        assertThat(jdbc.queryForMap(
+                        "SELECT state, attempts FROM commit_identity_resolution WHERE commit_id = ?", second))
+                .containsEntry("state", rotateOnRequest == 1 ? "NO_ACCOUNT" : "PENDING")
+                .containsEntry("attempts", rotateOnRequest == 1 ? 5 : 4);
+        assertThat(revoked).hasValue(rotateOnRequest == 1 ? 0 : 1);
+    }
+
+    @Test
+    void shouldCorrectAHealthyRepositoryBehindAThrottledOne() throws Exception {
+        User wrong = user("wrong");
+        User right = user("right");
+        String throttledEmail = "throttled@example.com";
+        Repository throttled = repository();
+        Repository healthy = repository();
+        when(scopes.getActiveScopesForRepository(eq(throttled.getNativeId()), anyLong()))
+                .thenReturn(List.of(scope));
+        when(scopes.getActiveScopesForRepository(eq(healthy.getNativeId()), anyLong()))
+                .thenReturn(List.of(workspace()));
+        long waiting = commit(throttled, wrong, null, throttledEmail);
+        long corrected = commit(healthy, wrong, null, EMAIL);
+        seed();
+        assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
+                .as("the throttled repository stands first in the queue")
+                .isEqualTo(throttled.getId());
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return question.email().equals(throttledEmail)
+                    ? new Answer.Deferred(Instant.now().plus(Duration.ofMinutes(40)))
+                    : new Answer.Account(id(right), right.getNativeId());
+        };
+
+        run(50);
+        run(50);
+        run(50);
+
+        assertThat(authorOf(corrected))
+                .as("the repository behind the throttled one is corrected")
+                .isEqualTo(right.getId());
+        assertThat(authorOf(waiting)).isEqualTo(wrong.getId());
+        assertThat(asked)
+                .as("the throttled repository is not asked again before its deadline")
+                .containsExactly(throttledEmail, EMAIL);
+        assertThat(jdbc.queryForObject(
+                        "SELECT attempts FROM commit_identity_resolution WHERE repository_id = ?",
+                        Integer.class,
+                        throttled.getId()))
+                .isZero();
+        assertThat(meters.counter("commit.identity.resolutions", "outcome", "deferred")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldSetAsideTheOtherRepositoriesOfAThrottledScopeWithoutAskingTheProvider() throws Exception {
+        User wrong = user("wrong");
+        String throttledEmail = "throttled@example.com";
+        Repository first = repository();
+        commit(first, wrong, null, throttledEmail);
+        seed();
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        List<String> asked = new ArrayList<>();
+        provider = question -> {
+            asked.add(question.email());
+            return new Answer.Deferred(reset);
+        };
+        run(50);
+        // A repository of the same credential comes due later, on another server that never saw the throttle.
+        Repository sibling = repository();
+        commit(sibling, wrong, null, EMAIL);
+        seed();
+        job = null;
+
+        run(50);
+
+        assertThat(asked)
+                .as("one request for the whole credential, across servers")
+                .containsExactly(throttledEmail);
+        assertThat(jdbc.queryForList(
+                        "SELECT deferred_until FROM commit_identity_resolution WHERE repository_id = ?",
+                        Timestamp.class,
+                        sibling.getId()))
+                .singleElement()
+                .satisfies(until -> assertThat(until.toInstant()).isEqualTo(reset));
         assertThat(attempts()).containsOnly(0);
     }
 
@@ -492,10 +784,12 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         if (job == null) {
             job = new CommitIdentityResolutionJob(
                     resolutions,
+                    pauses,
                     service,
                     new CommitIdentityResolutionProperties(true, batchSize),
                     List.of(new TableProvider()),
                     scopes,
+                    activeScm,
                     meters);
         }
         var running = job;
@@ -515,7 +809,8 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
         @Override
         public Map<Question, Answer> answer(
-                String nameWithOwner, long providerId, long scopeId, Set<Question> questions) {
+                String nameWithOwner, long providerId, long scopeId, ActiveScm credential, Set<Question> questions) {
+            askedCredentials.add(credential);
             Map<Question, Answer> answers = new HashMap<>();
             for (var question : questions) {
                 var answer = provider.apply(question);

@@ -141,15 +141,31 @@ public class ReviewPoolAdmission implements RunAdmission {
     /** The rule, which the claim also applies while it holds the pool's lock. */
     static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPools pools, long poolId, int practices) {
         if (load.getRunning() == 0) return true;
-        Integer learned = load.getLearnedLimit();
-        // A pool that is gone holds nothing: the claim refuses the review with its own reason.
-        if (learned == null) return true;
-        int limit = LlmCallLimit.effective(learned, load.getMaxConcurrentCalls());
-        // Measurements never hold the calls kept for interactive work.
-        if (load.getPractices() + practices > limit - LlmCallLimit.reserve(limit)) return false;
+        if (load.getPractices() + practices > room(load)) return false;
         Instant newest = load.getNewestStart();
         return !pools.congested(poolId)
                 && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
+    }
+
+    /**
+     * The calls that measurements may hold in the pool now: its learned limit, capped by its maximum, less the calls kept
+     * for interactive work. A pool that is gone holds nothing back: the claim refuses the review with its own reason.
+     */
+    static int room(ReviewJobRepository.PoolLoad load) {
+        Integer learned = load.getLearnedLimit();
+        if (learned == null) return Integer.MAX_VALUE;
+        int limit = LlmCallLimit.effective(learned, load.getMaxConcurrentCalls());
+        return limit - LlmCallLimit.reserve(limit);
+    }
+
+    /**
+     * The practice sessions that a running measurement of {@code practices} practices may run at once: the pool's room
+     * less the practices of the other running measurements, and at least one, so a review always makes progress.
+     */
+    static int sessionLimit(ReviewJobRepository.PoolLoad load, int practices) {
+        long others = Math.max(0, load.getPractices() - practices);
+        long free = (long) room(load) - others;
+        return (int) Math.max(1, Math.min(practices, free));
     }
 
     private AtomicLong gauge(String label) {

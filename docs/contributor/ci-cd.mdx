@@ -779,7 +779,7 @@ The required checks are job names, so a display name does not change them.
 | `cd-docs.yml` | `docs/**` on push to `main` and in a pull request. A published release | In a pull request, builds the docs at `/next/`. On `main`, publishes the docs site, the latest release at `/` and `main` at `/next/` ([Versions](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/README.md#versions)) |
 | `version-pr.yml`                      | Successful CI/CD push run on main                                             | Maintains the accumulating Version PR from the newest validated main commit, and tracks failures on one issue. Its own pull-request CI/CD run, release evidence preflight included, validates it                                |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Requires empty architecture ratchets for the planned stable version before publication, then promotes the moving series and latest image tags                                                                                                                                                       |
-| `release-upgrade.yml`                 | Called by `release.yml` and by a merge group that changes the drill or a migration input. Also runs weekly and on manual dispatch | Boots the previous release with seeded data, then the candidate against the same database. See [Seeded release upgrade](./database-migration#ci-validation) |
+| `release-upgrade.yml`                 | Called by `release.yml` and by CI/CD for selected merge groups and pushes to `main`. Also runs weekly and on manual dispatch | Boots the previous release with seeded data, then the candidate against the same database. See [Seeded release upgrade](./database-migration#ci-validation) |
 | `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Records the GitHub deployment of the promoted source and signs the channel a host follows. Hosts pull and apply it themselves                                                                                                    |
 
 ### Commits a workflow makes
@@ -1230,7 +1230,9 @@ A merge group compares the commit where it leaves `main` with its head.
 GitHub's `merge_group.base_sha` is the group's parent commit. Behind another group, that parent is the group ahead, and its diff would hold only its own pull request.
 The queue merges every pull request of a group that passes, so the group's checks must cover all of them.
 
-A push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
+A push to `main` and a dispatch set the `unfiltered` selection flag for the core CI jobs.
+The seeded upgrade still reads the push diff. It runs when that diff changes an upgrade input, such as a migration, seed, or fixture.
+The CI gate requires the upgrade to succeed when selected. [The failure reporter](#scheduled-failures) alerts maintainers if the job fails or times out.
 
 Selection does not override outer event guards.
 Ordinary main pushes omit Quality, Server tests, Security and Workflow lint.
@@ -1732,6 +1734,9 @@ JUnit results appear as `Test Results - …` check runs.
 It executes no upstream source or artifacts and installs no dependencies.
 One issue per workflow notifies the maintainer team. Each later failed attempt adds one comment.
 Replays of an already reported attempt add no notification.
+
+The reporter also opens an issue when the seeded upgrade on a push to `main` fails or times out.
+Later failed attempts of the same run add a comment to that issue.
 
 The Kubernetes nightly and image rescan workflows keep their specific reports and notify the same team.
 The shared reporter checks those attempts and reports a failure only when the specific owner did not notify maintainers.

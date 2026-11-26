@@ -5,12 +5,15 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_BACKOFF;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
@@ -19,12 +22,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlErrorUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator.GraphQlClassificationContext;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -520,50 +526,136 @@ public class CommitAuthorEnrichmentService {
     }
 
     /**
-     * Reads every actor of the given commits, for callers that need GitHub's answer for an email.
-     * It stops before a batch when the rate limit is near, and the remaining SHAs have no entry. A rate limit
-     * response to a batch that has started can still wait, as it does for every batch of this class.
+     * Reads every actor of the given commits, for callers that need GitHub's answer for an email. Each batch is one read
+     * that {@link ProviderReply} classifies, so a throttle is never a miss, whatever form GitHub gives it. The read stops
+     * at the first throttle and reports the deadline to the job.
      *
-     * @return the actors per SHA; a SHA has no entry when GitHub gave no answer for that commit
+     * @return the actors per SHA, and the deadline when a throttle cut the read short; a SHA has no entry when GitHub
+     *     gave no answer for that commit
      */
-    public Map<String, List<CommitActor>> fetchCommitActors(String nameWithOwner, Long scopeId, List<String> shas) {
+    public CommitActors fetchCommitActors(String nameWithOwner, long scopeId, ActiveScm credential, List<String> shas) {
         Map<String, List<CommitActor>> actors = new HashMap<>();
         String[] parts = nameWithOwner.split("/", 2);
         if (parts.length != 2) {
-            return actors;
+            return new CommitActors(actors, null);
         }
         List<String> valid =
                 shas.stream().filter(sha -> SHA_PATTERN.matcher(sha).matches()).toList();
         for (int start = 0; start < valid.size(); start += BATCH_SIZE) {
-            if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
+            List<String> batch = valid.subList(start, Math.min(start + BATCH_SIZE, valid.size()));
+            var reply = readActors(
+                    buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD), scopeId, credential, batch, actors);
+            if (reply instanceof ProviderReply.Throttled throttled) return new CommitActors(actors, throttled.until());
+            if (!(reply instanceof ProviderReply.Ok)) {
+                log.warn(
+                        "Stopped a commit actor read on the provider's reply: repo={}, reply={}",
+                        nameWithOwner,
+                        reply.getClass().getSimpleName());
                 break;
             }
-            List<String> batch = valid.subList(start, Math.min(start + BATCH_SIZE, valid.size()));
-            fetchBatch(
-                    buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD),
-                    scopeId,
-                    nameWithOwner,
-                    response -> extractActors(response, batch, actors));
         }
-        return actors;
+        return new CommitActors(actors, null);
     }
 
+    /** One read of a batch, classified once. Answers of an {@code Ok} or a throttled reply go into {@code actors}. */
+    private ProviderReply readActors(
+            String queryString,
+            long scopeId,
+            ActiveScm credential,
+            List<String> batch,
+            Map<String, List<CommitActor>> actors) {
+        var exchange = new ProviderReply.Exchange();
+        ClientGraphQlResponse response;
+        try {
+            graphQlClientProvider.acquirePermission();
+        } catch (CircuitBreakerOpenException open) {
+            // Nothing was asked: the questions wait, as for a throttle with no named deadline.
+            return new ProviderReply.Throttled(Instant.now().plus(ProviderReply.UNNAMED_WAIT));
+        }
+        try {
+            var client = graphQlClientProvider.forCredential(scopeId, credential, exchange);
+            response = Mono.defer(() -> client.document(queryString).execute())
+                    .retryWhen(Retry.backoff(TRANSPORT_MAX_RETRIES, TRANSPORT_INITIAL_BACKOFF)
+                            .maxBackoff(TRANSPORT_MAX_BACKOFF)
+                            .jitter(JITTER_FACTOR)
+                            .filter(ScmTransportErrors::isTransportError))
+                    .block(GRAPHQL_TIMEOUT);
+        } catch (RuntimeException failure) {
+            var refusal = ProviderReply.refusalOf(failure);
+            var reply = refusal != null
+                    ? ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now())
+                    : new ProviderReply.Failed(failure.getClass().getSimpleName());
+            if (reply instanceof ProviderReply.Throttled) graphQlClientProvider.recordSuccess();
+            else graphQlClientProvider.recordFailure(failure);
+            return reply;
+        }
+        if (response == null) {
+            graphQlClientProvider.recordFailure(new IllegalStateException("No GraphQL response"));
+            return new ProviderReply.Failed("no response");
+        }
+        graphQlClientProvider.trackRateLimit(scopeId, response);
+        var reply = ProviderReply.classify(signal(exchange, response), Instant.now());
+        if (reply instanceof ProviderReply.Ok || reply instanceof ProviderReply.Throttled) {
+            graphQlClientProvider.recordSuccess();
+            if (response.isValid()) extractActors(response, batch, actors, reply instanceof ProviderReply.Throttled);
+        } else {
+            graphQlClientProvider.recordFailure(new IllegalStateException("GraphQL reply " + reply));
+        }
+        return reply;
+    }
+
+    /** The response as the classification reads it: the transport's status and headers, the errors, the quota. */
+    private static ProviderReply.Signal signal(ProviderReply.Exchange exchange, ClientGraphQlResponse response) {
+        List<ProviderReply.BodyError> errors = new ArrayList<>();
+        for (int index = 0; index < response.getErrors().size(); index++) {
+            ResponseError error = response.getErrors().get(index);
+            errors.add(new ProviderReply.BodyError(
+                    GitHubGraphQlErrorUtils.errorType(response, index),
+                    error.getMessage(),
+                    commitAlias(error) != null));
+        }
+        Integer remaining = null;
+        Instant resetAt = null;
+        ClientResponseField quotaField = response.isValid() ? response.field("rateLimit") : null;
+        if (quotaField != null && quotaField.getValue() instanceof Map<?, ?> quota) {
+            if (quota.get("remaining") instanceof Number left) remaining = left.intValue();
+            if (quota.get("resetAt") instanceof String reset) {
+                try {
+                    resetAt = Instant.parse(reset);
+                } catch (DateTimeParseException ignored) {
+                    // No usable reset in the body
+                }
+            }
+        }
+        int status = exchange.status() == 0 ? 200 : exchange.status();
+        return new ProviderReply.Signal(status, exchange.headers(), errors, remaining, resetAt);
+    }
+
+    /**
+     * The actors that GitHub gave per SHA, and when GitHub lets the scope read again if a throttle cut the read short. A
+     * question without an answer then waits for that deadline: it is no miss, and spends no attempt.
+     */
+    public record CommitActors(
+            Map<String, List<CommitActor>> bySha, @Nullable Instant throttledUntil) {
+        public boolean throttled() {
+            return throttledUntil != null;
+        }
+    }
+
+    /**
+     * The actors of each commit of an answered batch. An error under one commit's alias spoils only that commit, for
+     * example a SHA that GitHub no longer has. Under a throttle, which can cut a resolution short, only a named account
+     * is an answer: a null user then says nothing.
+     */
     private void extractActors(
-            ClientGraphQlResponse response, List<String> batch, Map<String, List<CommitActor>> actors) {
-        // A partial error can leave a null user in valid data. That null is a failure, not GitHub's "no account". An
-        // error under one commit's alias spoils only that commit, for example a SHA that GitHub no longer has; an error
-        // anywhere else spoils the whole batch.
+            ClientGraphQlResponse response,
+            List<String> batch,
+            Map<String, List<CommitActor>> actors,
+            boolean cutShort) {
         Set<String> spoiled = new HashSet<>();
         for (ResponseError error : response.getErrors()) {
             String alias = commitAlias(error);
-            if (alias == null) {
-                log.warn(
-                        "Dropped a commit actor batch on a GraphQL error: commits={}, errorType={}",
-                        batch.size(),
-                        error.getErrorType());
-                return;
-            }
-            spoiled.add(alias);
+            if (alias != null) spoiled.add(alias);
         }
         if (!spoiled.isEmpty()) {
             log.warn(
@@ -593,7 +685,7 @@ public class CommitAuthorEnrichmentService {
                     found.stream()
                             .<CommitActor>mapMulti((actor, sink) -> {
                                 if (actor instanceof Map<?, ?> map && map.get("email") instanceof String email) {
-                                    sink.accept(actorOf(email, map));
+                                    sink.accept(actorOf(email, map, cutShort));
                                 }
                             })
                             .toList());
@@ -610,10 +702,13 @@ public class CommitAuthorEnrichmentService {
                 : null;
     }
 
-    /** Only an explicit {@code user: null} says that no account owns the email. Anything unreadable is no answer. */
-    private CommitActor actorOf(String email, Map<?, ?> actor) {
+    /**
+     * Only an explicit {@code user: null} says that no account owns the email, and not under a throttle, which can cut
+     * the resolution short. Anything unreadable is no answer.
+     */
+    private CommitActor actorOf(String email, Map<?, ?> actor, boolean cutShort) {
         if (actor.containsKey("user") && actor.get("user") == null) {
-            return new CommitActor(email, null, true);
+            return new CommitActor(email, null, !cutShort);
         }
         UserSnapshot snapshot = snapshotOf(actor);
         GitHubUserDTO user = snapshot == null ? null : snapshot.user();

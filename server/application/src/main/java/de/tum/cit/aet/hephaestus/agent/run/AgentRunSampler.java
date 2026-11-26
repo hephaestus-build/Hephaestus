@@ -30,7 +30,7 @@ public class AgentRunSampler {
 
     private static final Logger log = LoggerFactory.getLogger(AgentRunSampler.class);
     /** The holds a queued run can have; a queued run can also have none, and a leased run has none. */
-    private static final List<AgentRunHold> QUEUED_HOLDS = List.of(AgentRunHold.BUDGET, AgentRunHold.SANDBOX_ROOM);
+    private static final List<AgentRunHold> QUEUED_HOLDS = List.of(AgentRunHold.values());
 
     private record Slot(
             AgentRunKind kind,

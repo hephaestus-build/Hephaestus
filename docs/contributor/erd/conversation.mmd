@@ -65,6 +65,7 @@ erDiagram
         INTEGER tools_loads "NOT NULL"
         UUID run_id FK,UK "NOT NULL"
         BIGINT account_id FK "NOT NULL"
+        JSONB outline_context
     }
 
     Account["Account · Core"]

@@ -56,7 +56,7 @@ public interface ProductItemRepository extends Repository<Review, UUID> {
     List<Long> scopeItemsInWindow(long workspaceId, String kind, Instant from, Instant to, Pageable page);
 
     @Query(
-            value = "SELECT name,occurred_at AS occurredAt,item_version AS itemVersion,"
+            value = "SELECT name,occurred_at AS occurredAt,item_version AS itemVersion,state,"
                     + "evidence_expires_at AS evidenceExpiresAt FROM item_event"
                     + " WHERE workspace_id=:workspaceId AND item_id=:itemId AND id=:eventId",
             nativeQuery = true)
@@ -64,6 +64,8 @@ public interface ProductItemRepository extends Repository<Review, UUID> {
 
     interface EventFact {
         String getName();
+
+        String getState();
 
         Instant getOccurredAt();
 

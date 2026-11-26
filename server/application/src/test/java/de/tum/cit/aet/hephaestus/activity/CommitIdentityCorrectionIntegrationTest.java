@@ -7,6 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.config.SpringAsyncConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -19,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitId
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -31,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -68,9 +73,13 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
     private CommitIdentityResolutionRepository resolutions;
 
     @Autowired
+    private ProviderCredentialPauseRepository pauses;
+
+    @Autowired
     private ApplicationEventMulticaster multicaster;
 
     private long providerId;
+    private String serverUrl;
     private long repositoryId;
     private long wrong;
     private long correct;
@@ -82,8 +91,9 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
     void fixture() {
         databaseTestUtils.cleanDatabase();
         String unique = UUID.randomUUID().toString();
+        serverUrl = "https://" + unique + ".example.com";
         providerId = Objects.requireNonNull(providers
-                .saveAndFlush(new IdentityProvider(IdentityProviderType.GITHUB, "https://" + unique + ".example.com"))
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.GITHUB, serverUrl))
                 .getId());
         wrong = user(1, "wrong");
         correct = user(2, "correct");
@@ -259,6 +269,14 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
     private CommitIdentityResolutionJob job() {
         var scopes = mock(RepositoryScopeProvider.class);
         when(scopes.getActiveScopesForRepository(anyLong(), anyLong())).thenReturn(List.of(1L));
+        var activeScm = mock(ActiveScmConnections.class);
+        when(activeScm.withToken(1L))
+                .thenReturn(Optional.of(new ActiveScm(
+                        1L,
+                        0L,
+                        IntegrationKind.GITHUB,
+                        new ConnectionConfig.GitHubPatConfig(null, serverUrl, Set.of()),
+                        null)));
         CommitIdentityProvider provider = new CommitIdentityProvider() {
             @Override
             public IntegrationKind kind() {
@@ -266,7 +284,8 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
             }
 
             @Override
-            public Map<Question, Answer> answer(String name, long provider, long scope, Set<Question> questions) {
+            public Map<Question, Answer> answer(
+                    String name, long provider, long scope, ActiveScm credential, Set<Question> questions) {
                 Map<Question, Answer> answers = new HashMap<>();
                 questions.forEach(question -> answers.put(question, new Answer.Account(correct, 2)));
                 return answers;
@@ -274,10 +293,12 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
         };
         return new CommitIdentityResolutionJob(
                 resolutions,
+                pauses,
                 service,
                 new CommitIdentityResolutionProperties(true, 1),
                 List.of(provider),
                 scopes,
+                activeScm,
                 new SimpleMeterRegistry());
     }
 

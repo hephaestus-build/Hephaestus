@@ -22,7 +22,14 @@ public enum RowSweepRule {
      * KR-08: moves an unclaimed account's conversations to the account that claimed it. Reads {@code account},
      * {@code agent_run}; changes {@code conversation_entry}, {@code conversation_turn}, {@code conversation}.
      */
-    ACCOUNT_ABSORB(true);
+    ACCOUNT_ABSORB(true),
+
+    /**
+     * #5090: expires an account's ready exports when an erasure or an edit changes one of their sources. The triggers
+     * on {@code conversation_entry}, {@code feedback}, {@code feedback_copy} and {@code feedback_response} call it; it
+     * takes the account's export fence shared. Changes {@code account_export}.
+     */
+    EXPORT_SOURCES_CHANGED(false);
 
     private final boolean requiresLifecycleAdmission;
 

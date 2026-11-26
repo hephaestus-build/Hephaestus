@@ -3,14 +3,23 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.ProviderCredentialPauseRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -18,8 +27,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +54,19 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     @Mock
     private GitLabGraphQlClientProvider clients;
 
+    private final ActiveScm credential = new ActiveScm(
+            10L,
+            2L,
+            IntegrationKind.GITLAB,
+            new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 1L, null, Set.of(), null),
+            null);
+
+    @Mock
+    private ActiveScmConnections connections;
+
+    @Mock
+    private ProviderCredentialPauseRepository pauses;
+
     @Mock
     private GitLabProperties properties;
 
@@ -56,32 +81,36 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        provider = new GitLabCommitIdentityProvider(clients, properties, users, suppression);
-        lenient().when(clients.isCircuitClosed()).thenReturn(true);
-        lenient().when(clients.getRateLimitRemaining(9L)).thenReturn(1000);
+        provider = new GitLabCommitIdentityProvider(clients, properties, users, suppression, connections, pauses);
+        when(connections.withToken(9L)).thenReturn(Optional.of(credential));
         lenient().when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
     }
 
     private Map<Question, Answer> ask(String body) {
+        return ask(HttpStatus.OK, new HttpHeaders(), body);
+    }
+
+    private Map<Question, Answer> ask(HttpStatus status, HttpHeaders headers, String body) {
         var web = WebClient.builder()
                 .baseUrl("https://gitlab.example.test/api/graphql")
                 .filter((request, next) -> {
                     calls.incrementAndGet();
-                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                    return Mono.just(ClientResponse.create(status)
+                            .headers(target -> target.addAll(headers))
                             .header(HttpHeaders.CONTENT_TYPE, "application/json")
                             .body(body)
                             .build());
                 })
                 .build();
         lenient()
-                .when(clients.forScope(9L))
+                .when(clients.forCredential(eq(9L), eq(credential), any()))
                 .thenReturn(HttpGraphQlClient.builder(web)
                         .documentSource(new FragmentMergingDocumentSource(
                                 List.of(new ClassPathResource("graphql/gitlab/operations/")),
                                 List.of(".graphql"),
                                 List.of(new ClassPathResource("graphql/gitlab/fragments/GitLabUserFields.graphql"))))
                         .build());
-        return provider.answer("org/project", 7L, 9L, Set.of(QUESTION));
+        return provider.answer("org/project", 7L, 9L, credential, Set.of(QUESTION));
     }
 
     private static String commit(String fields) {
@@ -137,17 +166,25 @@ class GitLabCommitIdentityProviderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDeferWithoutARequestWhenTheBudgetIsCritical() {
-        when(clients.getRateLimitRemaining(9L)).thenReturn(0);
-        assertThat(ask(actor())).containsEntry(QUESTION, new Answer.Deferred());
+    void shouldDeferWithoutARequestWhenTheCircuitIsOpen() {
+        doThrow(CircuitBreakerOpenException.class).when(clients).acquirePermission();
+        assertThat(ask(actor()))
+                .hasEntrySatisfying(QUESTION, answer -> assertThat(answer).isInstanceOf(Answer.Deferred.class));
         assertThat(calls).hasValue(0);
-        verifyNoInteractions(users);
     }
 
     @Test
-    void shouldDeferWithoutARequestWhenTheCircuitIsOpen() {
-        when(clients.isCircuitClosed()).thenReturn(false);
-        assertThat(ask(actor())).containsEntry(QUESTION, new Answer.Deferred());
-        assertThat(calls).hasValue(0);
+    void shouldDeferUntilGitLabsResetWhenA429Arrives() {
+        Instant reset = Instant.now().plus(Duration.ofMinutes(40)).truncatedTo(ChronoUnit.SECONDS);
+        var headers = new HttpHeaders();
+        headers.add("RateLimit-Remaining", "0");
+        headers.add("RateLimit-Reset", Long.toString(reset.getEpochSecond()));
+
+        var answers = ask(HttpStatus.TOO_MANY_REQUESTS, headers, "{\"message\":\"Retry later\"}");
+
+        assertThat(answers)
+                .as("a throttle is a wait until GitLab's reset, never a miss that spends an attempt")
+                .containsEntry(QUESTION, new Answer.Deferred(reset, new CredentialGeneration(10L, 2L)));
+        verifyNoInteractions(users);
     }
 }

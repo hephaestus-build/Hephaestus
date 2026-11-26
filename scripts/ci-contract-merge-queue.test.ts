@@ -53,6 +53,7 @@ import {
 	hasWorkflowTrigger,
 } from "./ci-contract-support.ts";
 import { parseInventory } from "./commit-image-lock.ts";
+import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
@@ -60,6 +61,104 @@ import { asArray, asRecord, asString, asStringArray, at as valueAt, isRecord } f
 import { loadTasks } from "./lib/task-graph.ts";
 import { QUEUE_TIER_JOBS, QUEUE_TIER_STEP } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
+
+const migrationFile = (name: string) => `${NEXT_CHANGELOG_DIRECTORY}/202611260000${name}.xml`;
+
+void test("PR and enqueue checks reject stale migration names before the downstream jobs", async (context) => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const order = namedStep(
+		workflow,
+		["jobs", "detect-changes"],
+		"Check migration order against current main",
+	);
+	const cwd = await mkdtemp(path.join(tmpdir(), "migration-order-"));
+	context.after(async () => rm(cwd, { recursive: true, force: true }));
+	const env = environmentForGitFixture({
+		GIT_AUTHOR_NAME: "Fixture",
+		GIT_AUTHOR_EMAIL: "fixture@example.com",
+		GIT_COMMITTER_NAME: "Fixture",
+		GIT_COMMITTER_EMAIL: "fixture@example.com",
+	});
+	const git = (...args: string[]) => {
+		const result = spawnSync("git", args, { cwd, env, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+		return result.stdout.trim();
+	};
+	const add = async (file: string) => {
+		await writeFile(path.join(cwd, file), "<databaseChangeLog/>\n");
+		git("add", file);
+		git("commit", "-qm", file);
+		return git("rev-parse", "HEAD");
+	};
+	const check = (event: Record<string, unknown>, eventName: string) => {
+		const github = { event_name: eventName, event };
+		const steps = { group_base: { outputs: { sha: git("merge-base", "main", "HEAD") } } };
+		const expressions = { github, steps };
+		assert.equal(expandExpressions(`\${{ ${String(order.get("if"))} }}`, expressions), "true");
+		const variables = {
+			...env,
+			EVENT_BASE: expandExpressions(order.getIn(["env", "EVENT_BASE"]), expressions),
+			QUEUE_PARENT: expandExpressions(order.getIn(["env", "QUEUE_PARENT"]), expressions),
+			ORDER_SCRIPT: path.resolve("scripts/reorder-migrations.ts"),
+		};
+		return spawnSync(
+			"bash",
+			[
+				"-ec",
+				String(order.get("run")).replaceAll("scripts/reorder-migrations.ts", '"$ORDER_SCRIPT"'),
+			],
+			{
+				cwd,
+				env: variables,
+				encoding: "utf8",
+			},
+		);
+	};
+	git("init", "-q", "--initial-branch=main");
+	git("remote", "add", "origin", ".");
+	await mkdir(path.join(cwd, NEXT_CHANGELOG_DIRECTORY), { recursive: true });
+	const originalMain = await add(migrationFile("01-base"));
+	await add(migrationFile("03-main"));
+	git("update-ref", "refs/remotes/origin/main", originalMain);
+	git("switch", "-qc", "pr", originalMain);
+	const older = migrationFile("02-pr");
+	await add(older);
+	const pr = { pull_request: { base: { sha: originalMain } } };
+	const rejectedPR = check(pr, "pull_request");
+	assert.equal(rejectedPR.status, 1, rejectedPR.stderr);
+	assert.ok(
+		rejectedPR.stderr.includes(`git mv -- ${older} ${migrationFile("04-pr")}`),
+		rejectedPR.stderr,
+	);
+	git("mv", older, migrationFile("04-pr"));
+	git("commit", "-qm", "rename");
+	assert.equal(check(pr, "pull_request").status, 0);
+
+	git("switch", "-qc", "queue", "main");
+	const ahead = await add(migrationFile("05-ahead"));
+	await add(migrationFile("04-pr"));
+	const rejectedQueue = check({ merge_group: { base_sha: ahead } }, "merge_group");
+	assert.equal(rejectedQueue.status, 1, rejectedQueue.stderr);
+	assert.ok(
+		rejectedQueue.stderr.includes(`git mv -- ${migrationFile("04-pr")} ${migrationFile("06-pr")}`),
+		rejectedQueue.stderr,
+	);
+
+	git("switch", "-qc", "stale-queue", originalMain);
+	const staleFile = migrationFile("02-ahead");
+	const staleAhead = await add(staleFile);
+	git("commit", "--allow-empty", "-qm", "next queue entry adds no migrations");
+	const rejectedStaleQueue = check({ merge_group: { base_sha: staleAhead } }, "merge_group");
+	assert.equal(
+		rejectedStaleQueue.status,
+		1,
+		"the passing queue entry would merge the stale migration from the entry ahead of it",
+	);
+	assert.ok(
+		rejectedStaleQueue.stderr.includes(`git mv -- ${staleFile} ${migrationFile("04-ahead")}`),
+		rejectedStaleQueue.stderr,
+	);
+});
 
 void describe("ci-contract: merge-queue", () => {
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
@@ -1396,7 +1495,7 @@ void describe("ci-contract: merge-queue", () => {
 			onVersionBranch: boolean,
 			needs = JSON.stringify(jobsOf({ ...green, ...results })),
 			summary?: string,
-			queueUpgrade = false,
+			seededUpgrade = false,
 			queueServerImage = false,
 			renameOnly = false,
 			releaseChecks: Record<string, string> = {},
@@ -1407,7 +1506,7 @@ void describe("ci-contract: merge-queue", () => {
 					{ ...green, ...results },
 					{
 						"release-candidate": String(onVersionBranch),
-						"queue-upgrade": String(queueUpgrade),
+						"seeded-upgrade": String(seededUpgrade),
 						"queue-server-image": String(queueServerImage),
 						"rename-only": String(renameOnly),
 						"release-preflight": String(onVersionBranch),

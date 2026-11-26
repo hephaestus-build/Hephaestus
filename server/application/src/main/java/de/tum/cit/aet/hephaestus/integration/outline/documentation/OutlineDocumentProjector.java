@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -148,18 +149,21 @@ public class OutlineDocumentProjector implements DocumentProjection {
             OutlineDocument doc, AuthorContext authors, Map<CollectionKey, String> collectionNames) {
         Optional<Connection> source = connectionService.findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId());
         String url = source.map(connection -> documentUrl(connection, doc)).orElse(null);
-        source.ifPresent(connection -> {
-            if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config && config.serverUrl() != null) {
-                var subjects = new LinkedHashSet<String>();
-                if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
-                if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
-                if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
-                subjects.stream()
-                        .filter(subject -> !subject.isBlank())
-                        .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
-                                "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
-            }
-        });
+        var outlineSource = source.map(connection -> {
+                    String origin = connection.getOutlineOrigin();
+                    if (origin == null) return null;
+                    String team = connection.getInstanceKey();
+                    var subjects = new LinkedHashSet<String>();
+                    if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
+                    if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
+                    if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
+                    subjects.stream()
+                            .filter(subject -> !subject.isBlank())
+                            .forEach(subject -> personCopies.recordIdentity(
+                                    new PersonCopyIdentity("OUTLINE", origin, subject, team)));
+                    return new ProjectedDocument.OutlineSource(origin, Objects.requireNonNullElse(team, ""));
+                })
+                .orElse(null);
         boolean deleted = doc.isDeleted();
         String body = deleted ? null : doc.getBodyMarkdown();
         return new ProjectedDocument(
@@ -181,7 +185,8 @@ public class OutlineDocumentProjector implements DocumentProjection {
                 collectionNames.get(new CollectionKey(doc.getConnectionId(), doc.getCollectionId())),
                 doc.getLastMaterializedAt(),
                 doc.getDocumentId(),
-                url);
+                url,
+                outlineSource);
     }
 
     /** Outline links a document as {@code <server>/doc/<slug>}. The mirrored slug is that last path segment. */

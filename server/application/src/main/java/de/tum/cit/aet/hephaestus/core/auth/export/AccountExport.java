@@ -24,7 +24,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Lifecycle</h2>
  * <pre>
- *   PENDING ──(bundle assembled)──▶ READY ──(48h)──▶ EXPIRED
+ *   PENDING ──(bundle assembled)──▶ READY ──(48h, or an owner's message or received feedback is erased)──▶ EXPIRED
  *       └─────────(generation stopped)──▶ FAILED
  * </pre>
  *

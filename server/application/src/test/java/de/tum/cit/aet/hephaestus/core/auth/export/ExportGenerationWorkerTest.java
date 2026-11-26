@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -54,6 +55,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 repository,
                 accounts,
                 assembler,
+                accountId -> List.of(),
+                mock(AccountFeedbackExport.class),
                 objectMapper,
                 new AccountExportWriter(repository, accounts, clock),
                 metrics,
@@ -138,7 +141,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         pendingExport();
         var bundle = mock(ExportBundle.class);
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
-        when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
+        // The export row lookup fails before the writer builds the payload.
         when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
         AccountExport export = new AccountExport(ACCOUNT_ID);
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
@@ -167,6 +170,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 .thenReturn(Optional.of(export))
                 .thenReturn(Optional.of(rolledBack));
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
+        when(bundle.withErasableSources(List.of(), List.of(), List.of())).thenReturn(bundle);
         when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
         when(repository.save(export)).thenThrow(new IllegalStateException("save failed"));
 

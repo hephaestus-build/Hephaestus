@@ -40,6 +40,14 @@ public class SilentModeGraphQlClientFactory {
                 .build();
     }
 
+    /** The client with one more request attribute, such as the exchange that records each response's headers. */
+    public HttpGraphQlClient withAttribute(HttpGraphQlClient client, String attributeName, Object attributeValue) {
+        return client.mutate()
+                .webClient(
+                        builder -> builder.defaultRequest(request -> request.attribute(attributeName, attributeValue)))
+                .build();
+    }
+
     public HttpGraphQlClient withBearerTokenAndAttribute(
             HttpGraphQlClient baseClient, String token, String attributeName, Object attributeValue) {
         return baseClient

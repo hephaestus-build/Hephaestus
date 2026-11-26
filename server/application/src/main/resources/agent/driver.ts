@@ -98,6 +98,10 @@ export async function drive(options: DriverOptions): Promise<void> {
 			offered = await next(fetch, options.gatewayUrl, auth, signal);
 			failures = 0;
 		} catch (error) {
+			if (error instanceof SandboxRetiredError) {
+				log("driver: the gateway retired this sandbox");
+				return;
+			}
 			if (stopped()) {
 				return;
 			}
@@ -121,6 +125,14 @@ export async function drive(options: DriverOptions): Promise<void> {
 	}
 }
 
+/** The gateway retired this sandbox, for example because its run waits for a full model pool: it serves no more runs. */
+export class SandboxRetiredError extends Error {
+	constructor() {
+		super("the gateway retired this sandbox");
+		this.name = "SandboxRetiredError";
+	}
+}
+
 /** A run that the gateway leased to this sandbox, with how far this clock runs ahead of the gateway's. */
 export interface Offered {
 	assignment: Assignment;
@@ -141,6 +153,10 @@ export async function next(
 	});
 	if (response.status === 204) {
 		return null;
+	}
+	if (response.status === 410) {
+		await response.body?.cancel();
+		throw new SandboxRetiredError();
 	}
 	if (!response.ok) {
 		await response.body?.cancel();

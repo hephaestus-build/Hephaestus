@@ -119,7 +119,8 @@ final class LiveRunnerWorkspace {
                 settings.reasoningEffort(),
                 jobToken,
                 TIMEOUT_SECONDS,
-                false);
+                false,
+                1);
     }
 
     static void stageSpec(Path workspace, Map<String, byte[]> inputFiles) throws IOException {

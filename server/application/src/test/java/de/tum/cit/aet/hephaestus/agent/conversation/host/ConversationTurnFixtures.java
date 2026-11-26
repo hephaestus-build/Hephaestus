@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.conversation.ConversationContextPathBuilder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnContextStore;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
@@ -60,7 +61,7 @@ final class ConversationTurnFixtures {
                 beans.getBean(ConversationContextPathBuilder.class),
                 // Created through the factory, so its transaction proxy applies as on a worker.
                 beans.getAutowireCapableBeanFactory().createBean(TurnSituation.class),
-                beans.getBean(ConversationTurnService.class),
+                beans.getBean(ConversationTurnContextStore.class),
                 beans.getBean(ConversationEntryService.class),
                 beans.getBean(ConversationService.class),
                 beans.getBean(WorkspaceContextBuilder.class),

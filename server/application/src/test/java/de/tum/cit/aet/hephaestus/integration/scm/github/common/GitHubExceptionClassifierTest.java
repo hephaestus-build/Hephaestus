@@ -151,6 +151,21 @@ class GitHubExceptionClassifierTest {
         }
 
         @Test
+        void shouldKeepThePrimaryResetWhenRetryAfterEndsBeforeIt() {
+            var reset = Instant.ofEpochSecond(Instant.now().plusSeconds(2400).getEpochSecond());
+            var headers = new HttpHeaders();
+            headers.set("X-RateLimit-Remaining", "0");
+            headers.set("X-RateLimit-Reset", Long.toString(reset.getEpochSecond()));
+            headers.set("Retry-After", "60");
+
+            var result = classifier.classifyWithDetails(
+                    createWebClientResponseExceptionWithHeaders(403, "Forbidden", headers));
+
+            assertThat(result.category()).isEqualTo(Category.RATE_LIMITED);
+            assertThat(result.rateLimitResetAt()).isEqualTo(reset);
+        }
+
+        @Test
         void internalServerError() {
             var exception = createWebClientResponseException(500, "Internal Server Error");
 

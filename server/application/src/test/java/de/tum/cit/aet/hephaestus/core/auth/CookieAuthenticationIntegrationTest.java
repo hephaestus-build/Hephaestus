@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.auth.web.AccountExportController;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.ReadyExportFence;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import java.net.URI;
@@ -150,10 +151,15 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     private long readyExport(IssuedAccount owner, String payload) {
         return Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
-                .queryForObject("""
-                INSERT INTO account_export(account_id, status, expires_at, payload)
-                VALUES (?, 'READY', now() + interval '1 day', ?) RETURNING id
-                """, Long.class, owner.accountId(), payload.getBytes(UTF_8)));
+                .queryForObject(
+                        ReadyExportFence.CTE + """
+                        INSERT INTO account_export(account_id, status, expires_at, payload)
+                        SELECT ?, 'READY', now() + interval '1 day', ? FROM fence RETURNING id
+                        """,
+                        Long.class,
+                        owner.accountId(),
+                        owner.accountId(),
+                        payload.getBytes(UTF_8)));
     }
 
     private WebTestClient.ResponseSpec getExport(IssuedAccount account, ExportRoute route, long id) {

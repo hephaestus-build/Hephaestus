@@ -1206,6 +1206,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 List.of(scenario.practice().getId()),
                 false,
                 Set.of(),
+                Set.of(),
                 null,
                 null,
                 null,
@@ -1550,7 +1551,8 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(ended.getEndedAt()).isAfterOrEqualTo(at);
         var event = eventRows.findByIdAndWorkspaceId(eventId, workspace).orElseThrow();
         assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.ITEM_GONE);
+        // The item left the index, which a withdrawal does too: the stop claims only that it is no longer visible.
+        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
         assertThat(reviews.findByWorkspaceIdAndEventId(workspace, eventId)).isEmpty();
     }
 
