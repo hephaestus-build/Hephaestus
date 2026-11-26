@@ -57,7 +57,7 @@
     <changeSet id="1795709850961-4" author="hephaestus">
         <comment>A handoff goes with its sealing job, also when erasure deletes the job, and only within its job's workspace.</comment>
         <addForeignKeyConstraint baseTableName="work_place_handoff" baseColumnNames="job_id,workspace_id" constraintName="sfk_work_place_handoff_job" referencedTableName="review_job" referencedColumnNames="id,workspace_id" onDelete="CASCADE" validate="true"/>
-        <addForeignKeyConstraint baseTableName="work_place_handoff" baseColumnNames="workspace_id" constraintName="sfk_work_place_handoff_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="RESTRICT" validate="true"/>
+        <addForeignKeyConstraint baseTableName="work_place_handoff" baseColumnNames="workspace_id" constraintName="sfk_work_place_handoff_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
     </changeSet>
     <changeSet id="1795709850961-5" author="hephaestus">
         <comment>The producer of a review's copy on the work: the legacy composition or the work place's composer.</comment>
