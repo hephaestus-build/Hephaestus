@@ -5,7 +5,9 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,6 +24,9 @@ public final class GitLabAdmissionTestFixtures {
             GitLabProjectAdmission admission, long workspaceId, long providerId, String group) {
         var read = new GitLabProjectAdmission.ConnectionRead(1L, workspaceId, providerId, group, Map.of());
         lenient().when(admission.captureConnection(workspaceId, providerId)).thenReturn(Optional.of(read));
+        lenient()
+                .when(admission.beginRepositoryReads(read))
+                .thenReturn(new RepositoryReads(workspaceId, providerId, Instant.EPOCH, Map.of()));
         return read;
     }
 

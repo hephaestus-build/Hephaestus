@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Observation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import java.time.Instant;
@@ -44,23 +46,28 @@ public class GitLabProjectProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabProjectProcessor.class);
 
-    private final RepositoryRepository repositoryRepository;
+    private final RepositoryObservationStore store;
 
-    public GitLabProjectProcessor(RepositoryRepository repositoryRepository) {
-        this.repositoryRepository = repositoryRepository;
+    public GitLabProjectProcessor(RepositoryObservationStore store) {
+        this.store = store;
     }
 
     /**
      * Processes a GitLab project GraphQL response into a Repository entity.
      *
      * @param project      the GitLab project GraphQL response
-     * @param organization the parent organization (nullable for user-owned projects)
+     * @param organizationId the parent organization (nullable for user-owned projects)
+     * @param read the snapshot taken before asking GitLab
      * @return the persisted Repository entity, or null if the response is invalid
      */
     @Transactional
     @Nullable
-    public Repository processGraphQlResponse(
-            @Nullable GitLabProjectResponse project, @Nullable Organization organization, IdentityProvider provider) {
+    public Result processGraphQlResponse(
+            @Nullable GitLabProjectResponse project,
+            @Nullable Long organizationId,
+            IdentityProvider provider,
+            ReadersRead read) {
+        Objects.requireNonNull(read);
         if (project == null || project.id() == null || project.fullPath() == null || project.webUrl() == null) {
             log.warn("Skipped project processing: reason=nullOrMissingFields");
             return null;
@@ -74,55 +81,27 @@ public class GitLabProjectProcessor {
             return null;
         }
 
-        Repository repository = repositoryRepository
-                .findByNativeIdAndProviderId(nativeId, Objects.requireNonNull(provider.getId()))
-                .orElseGet(Repository::new);
-
-        repository.setNativeId(nativeId);
-        repository.setProvider(provider);
-        repository.setName(project.name());
-        repository.setNameWithOwner(project.fullPath());
-        repository.setHtmlUrl(project.webUrl());
-        repository.setDescription(project.description());
-        repository.setVisibility(mapVisibility(project.visibility()));
-        repository.setPrivate("private".equalsIgnoreCase(project.visibility()));
-        repository.setArchived(Boolean.TRUE.equals(project.archived()));
-        repository.setDisabled(false); // GitLab has no "disabled" concept
-        repository.setOrganization(organization);
-
-        // Default branch from repository metadata
-        if (project.repository() != null && project.repository().rootRef() != null) {
-            repository.setDefaultBranch(project.repository().rootRef());
-        } else {
-            repository.setDefaultBranch("main");
+        long providerId = Objects.requireNonNull(provider.getId());
+        Repository.Visibility visibility = mapVisibility(project.visibility());
+        if (nativeId != read.repositoryNativeId() || providerId != read.providerId()) {
+            return null;
         }
-
-        // Timestamps — only set createdAt if we have a valid parsed value;
-        // never overwrite existing createdAt with null from a bad timestamp
-        if (project.createdAt() != null) {
-            Instant parsed = parseTimestamp(project.createdAt());
-            if (parsed != null) {
-                repository.setCreatedAt(parsed);
-            }
+        var patch = RepositoryObservationStore.path(
+                project.fullPath(), Objects.requireNonNullElse(project.name(), project.fullPath()), project.webUrl());
+        patch.put("description", project.description());
+        patch.put("organization_id", organizationId);
+        patch.put("is_archived", Boolean.TRUE.equals(project.archived()));
+        patch.put("is_disabled", false);
+        var branch = project.repository() == null ? null : project.repository().rootRef();
+        patch.put("default_branch", Objects.requireNonNullElse(branch, "main"));
+        var created = parseTimestamp(project.createdAt());
+        if (created != null) patch.put("created_at", created.toString());
+        var latest = parseTimestamp(project.lastActivityAt());
+        if (latest != null) {
+            patch.put("pushed_at", latest.toString());
+            patch.put("updated_at", latest.toString());
         }
-        if (project.lastActivityAt() != null) {
-            Instant lastActivity = parseTimestamp(project.lastActivityAt());
-            if (lastActivity != null) {
-                repository.setPushedAt(lastActivity);
-                repository.setUpdatedAt(lastActivity);
-            }
-        }
-        // pushedAt is @NonNull — use creation time or now as fallback
-        if (repository.getPushedAt() == null) {
-            repository.setPushedAt(repository.getCreatedAt() != null ? repository.getCreatedAt() : Instant.now());
-        }
-
-        // Do NOT set lastSyncAt here — it is set after issue sync completes
-        // in WorkspaceActivationService. Setting it here would cause the first
-        // issue sync to use an updatedAfter filter of "just now", skipping all
-        // historical issues.
-
-        return repositoryRepository.save(repository);
+        return store.observe(read, Observation.read(read, visibility, patch));
     }
 
     /**

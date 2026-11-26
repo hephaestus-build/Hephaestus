@@ -27,6 +27,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.DynamicUpdate;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -52,6 +53,7 @@ import org.jspecify.annotations.Nullable;
  * @see de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget
  */
 @Entity
+@DynamicUpdate
 @Table(
         name = "repository",
         uniqueConstraints = {

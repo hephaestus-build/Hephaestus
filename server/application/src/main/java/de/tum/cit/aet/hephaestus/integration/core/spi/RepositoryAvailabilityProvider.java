@@ -8,10 +8,6 @@ public interface RepositoryAvailabilityProvider {
     /** Backfills must not fetch a repository until its metadata check recovers. */
     boolean isRepositoryUnavailable(Long scopeId, Long syncTargetId);
 
-    void recordRepositoryUnavailable(Long scopeId, Long syncTargetId);
-
-    void clearRepositoryUnavailable(Long scopeId, Long syncTargetId);
-
     /** A failed attempt without an absence response retains normal retry behavior. */
     void retryUnavailableRepository(Long scopeId, Long syncTargetId);
 

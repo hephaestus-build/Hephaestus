@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
+import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -284,7 +285,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
             workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
                     INSTALLATION_ID,
                     new ProvisioningListener.RepositorySnapshot(
-                            100L, "HephaestusTest/added-during-read", "added-during-read", true));
+                            100L, "HephaestusTest/added-during-read", "added-during-read", true, databaseTime()));
             return List.of(snapshot(99L, retained.getNameWithOwner(), retained.getName(), true));
         });
         assertThat(workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
@@ -506,6 +507,36 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void delayedPrivateInstallationSnapshotCannotClearARecordedAccessLoss() {
+        Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
+        Repository mirror = persistGitHubRepository(78L, "HephaestusTest/current");
+        RepositoryToMonitor monitor = monitorWithScope(workspace, mirror.getNameWithOwner(), mirror.getNativeId());
+        var captured = workspaceSyncTargetProvider
+                .beginRepositoryReads(
+                        workspace.getId(),
+                        Objects.requireNonNull(mirror.getProvider().getId()))
+                .forRepository(mirror.getNativeId());
+        var queued = new ProvisioningListener.RepositorySnapshot(
+                mirror.getNativeId(), "HephaestusTest/old-path", "old-path", true, captured.requestedAt());
+
+        workspaceSyncTargetProvider.recordRepositoryLoss(captured);
+        var loss = repositoryToMonitorRepository.findById(monitor.getId()).orElseThrow();
+        assertThat(loss.getUnavailableSince()).isAfter(queued.observedAt());
+        assertThat(loss.getUnavailableRetryAt()).isNotNull();
+
+        workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(INSTALLATION_ID, queued);
+
+        var retained = repositoryToMonitorRepository.findById(monitor.getId()).orElseThrow();
+        assertThat(retained.getUnavailableSince()).isEqualTo(loss.getUnavailableSince());
+        assertThat(retained.getUnavailableRetryAt()).isEqualTo(loss.getUnavailableRetryAt());
+        assertThat(retained.getNameWithOwner()).isEqualTo(mirror.getNameWithOwner());
+        assertThat(repositoryRepository.findById(mirror.getId())).hasValueSatisfying(current -> {
+            assertThat(current.getNameWithOwner()).isEqualTo(mirror.getNameWithOwner());
+            assertThat(current.getVisibility()).isEqualTo(Repository.Visibility.PRIVATE);
+        });
+    }
+
+    @Test
     void pathMirroredForAnotherRepositoryIsNeitherTakenOverNorMonitored() {
         Workspace workspace = persistWorkspace(RepositorySelection.ALL);
         Repository holder = persistGitHubRepository(85L, "HephaestusTest/taken");
@@ -632,9 +663,11 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         holder = repositoryToMonitorRepository.saveAndFlush(holder);
 
         workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
-                INSTALLATION_ID, new ProvisioningListener.RepositorySnapshot(9001L, SHARED_NAME, "shared", true));
+                INSTALLATION_ID,
+                new ProvisioningListener.RepositorySnapshot(9001L, SHARED_NAME, "shared", true, databaseTime()));
         workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
-                INSTALLATION_ID, new ProvisioningListener.RepositorySnapshot(9002L, "shared-org/other", "other", true));
+                INSTALLATION_ID,
+                new ProvisioningListener.RepositorySnapshot(9002L, "shared-org/other", "other", true, databaseTime()));
 
         assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
                 .extracting(RepositoryToMonitor::getNativeId)
@@ -653,7 +686,8 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
 
         workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
                 INSTALLATION_ID,
-                new ProvisioningListener.RepositorySnapshot(4L, "HephaestusTest/replayed", "replayed", true));
+                new ProvisioningListener.RepositorySnapshot(
+                        4L, "HephaestusTest/replayed", "replayed", true, databaseTime()));
 
         assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
                 .isEmpty();
@@ -696,13 +730,23 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         RepositoryToMonitor monitor = buildMonitor(workspace, SHARED_NAME);
         monitor.setNativeId(701L);
         monitor = repositoryToMonitorRepository.saveAndFlush(monitor);
+        long previousGeneration = monitor.getReaders().getProofGeneration();
+        jdbc.update("""
+                UPDATE repository_to_monitor
+                SET visibility_class = 'WORKSPACE', proof_state = 'PROVEN', proof_reason = 'PUBLIC_ON_PROVIDER',
+                    repository_visibility_confirmed_at = statement_timestamp(),
+                    public_observation_at = statement_timestamp()
+                WHERE id = ?
+                """, monitor.getId());
 
         workspaceSyncTargetProvider.reconcileSyncTargetIdentity(monitor.getId(), 9001L, SHARED_NAME);
 
-        assertThat(repositoryToMonitorRepository.findById(monitor.getId()))
-                .get()
-                .extracting(RepositoryToMonitor::getNativeId)
-                .isEqualTo(9001L);
+        var rebound = repositoryToMonitorRepository.findById(monitor.getId()).orElseThrow();
+        assertThat(rebound.getNativeId()).isEqualTo(9001L);
+        assertThat(rebound.getReaders().getVisibilityClass()).isEqualTo(VisibilityClass.UNPROVEN);
+        assertThat(rebound.getReaders().getProofGeneration()).isGreaterThan(previousGeneration);
+        assertThat(rebound.getRepositoryVisibilityConfirmedAt()).isNull();
+        assertThat(rebound.getPublicObservationAt()).isNull();
     }
 
     @Test
@@ -975,6 +1019,11 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         repository.setPushedAt(Instant.now());
         repository.setProvider(provider);
         return repositoryRepository.saveAndFlush(repository);
+    }
+
+    private Instant databaseTime() {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT clock_timestamp()", (row, number) -> row.getTimestamp(1).toInstant()));
     }
 
     private RepositoryToMonitor monitorWithScope(Workspace workspace, String nameWithOwner, long nativeId) {

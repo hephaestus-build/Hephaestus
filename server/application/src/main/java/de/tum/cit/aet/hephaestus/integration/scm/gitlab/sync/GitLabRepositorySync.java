@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTyp
 import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.StaleRepositoryMetadataException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitBackfillService;
@@ -235,7 +236,8 @@ public class GitLabRepositorySync {
             // job stops before the next repo rather than mid-repository.
             if (cancellation.stopsHere()) {
                 log.info(
-                        "GitLab scheduled sync cancelled between repositories: scopeId={}, reposProcessed={}, reposRemaining={}",
+                        "GitLab scheduled sync cancelled between repositories: scopeId={}, reposProcessed={},"
+                                + " reposRemaining={}",
                         session.scopeId(),
                         reposProcessed,
                         totalRepos - reposProcessed);
@@ -244,8 +246,8 @@ public class GitLabRepositorySync {
             // A credential refused during this run ends it: every remaining repository would repeat the refusal.
             if (!syncTargetProvider.isScopeActiveForSync(session.scopeId())) {
                 log.info(
-                        "GitLab sync stopped between repositories: reason=scopeNotEligible, scopeId={}, reposProcessed={},"
-                                + " reposRemaining={}",
+                        "GitLab sync stopped between repositories: reason=scopeNotEligible, scopeId={},"
+                                + " reposProcessed={}, reposRemaining={}",
                         session.scopeId(),
                         reposProcessed,
                         totalRepos - reposProcessed);
@@ -306,12 +308,13 @@ public class GitLabRepositorySync {
                 updatedAfter = buffered.atOffset(ZoneOffset.UTC);
             }
 
-            Instant metadataRequestedAt = Instant.now();
+            var metadataRead = syncTargetProvider.beginReadersProof(
+                    session.scopeId(), rtmId, read.nativeId(), read.connection().providerId());
             try {
                 var metadata = projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId());
                 if (!admission.current(read)) continue;
                 if (metadata.isEmpty()) {
-                    syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
+                    admission.runWrite(read, () -> syncTargetProvider.recordRepositoryLoss(metadataRead));
                     GitLabSyncReports.warn(
                             handle,
                             SyncResult.Status.ABORTED_ERROR,
@@ -324,7 +327,7 @@ public class GitLabRepositorySync {
                 var refreshed = admission.write(
                         read,
                         () -> projectSyncService
-                                .persistProject(metadata.get(), beforeRefresh.getProvider())
+                                .persistProject(metadata.get(), beforeRefresh.getProvider(), metadataRead)
                                 .orElse(null));
                 if (!admission.current(read)) continue;
                 if (refreshed.isEmpty()) {
@@ -340,16 +343,13 @@ public class GitLabRepositorySync {
                 }
                 repo = refreshed.get();
                 syncTargetProvider.reconcileSyncTargetIdentity(rtmId, repo.getNativeId(), repo.getNameWithOwner());
-                syncTargetProvider.clearRepositoryUnavailable(session.scopeId(), rtmId);
-                admission.runWrite(
-                        read,
-                        () -> syncTargetProvider.updateSyncTimestamp(
-                                rtmId, SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt));
                 availableRepos.add(repo);
                 availableTargetIds.put(repo.getId(), rtmId);
+            } catch (StaleRepositoryMetadataException e) {
+                continue;
             } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
                 if (!admission.current(read)) continue;
-                syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
+                admission.runWrite(read, () -> syncTargetProvider.recordRepositoryLoss(metadataRead));
                 GitLabSyncReports.warn(
                         handle,
                         SyncResult.Status.ABORTED_ERROR,
@@ -779,7 +779,8 @@ public class GitLabRepositorySync {
         }
 
         log.info(
-                "GitLab repo sync complete: scopeId={}, repos={}, labels={}, milestones={}, issues={}, mrs={}, collaborators={}, commits={}",
+                "GitLab repo sync complete: scopeId={}, repos={}, labels={}, milestones={}, issues={}, mrs={},"
+                        + " collaborators={}, commits={}",
                 session.scopeId(),
                 repos.size(),
                 totalLabels,

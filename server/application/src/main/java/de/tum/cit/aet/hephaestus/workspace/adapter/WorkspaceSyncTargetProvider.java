@@ -58,6 +58,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     private final ConnectionService connectionService;
     private final ApplicationEventPublisher eventPublisher;
     private final PrivacyJournal journal;
+    private final Observations observations;
 
     private final ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository;
     private final MeterRegistry meterRegistry;
@@ -73,7 +74,9 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
             ApplicationEventPublisher eventPublisher,
             MeterRegistry meterRegistry,
-            PrivacyJournal journal) {
+            PrivacyJournal journal,
+            Observations observations) {
+        this.observations = observations;
         this.meterRegistry = meterRegistry;
         this.journal = journal;
         this.workspaceRepository = workspaceRepository;
@@ -192,7 +195,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                                 case PULL_REQUESTS -> rtm.setPullRequestsSyncedAt(syncedAt);
                                 case COLLABORATORS -> rtm.setCollaboratorsSyncedAt(syncedAt);
                                 case FULL_REPOSITORY -> rtm.setRepositorySyncedAt(syncedAt);
-                                case REPOSITORY_VISIBILITY -> rtm.setRepositoryVisibilityConfirmedAt(syncedAt);
                                 default -> {}
                             }
                             repositoryToMonitorRepository.save(rtm);
@@ -203,47 +205,29 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public ReadersRead beginReadersProof(
-            Long syncTargetId, long repositoryNativeId, long providerId, Instant requestedAt) {
-        long generation = repositoryToMonitorRepository
-                .findById(syncTargetId)
-                .map(rtm -> rtm.getReaders().getProofGeneration())
-                .orElse(-1L);
-        return new ReadersRead(syncTargetId, repositoryNativeId, providerId, generation, requestedAt);
+    public ReadersRead beginReadersProof(Long scopeId, Long syncTargetId, long repositoryNativeId, long providerId) {
+        var batch = observations.capture(scopeId, providerId, syncTargetId);
+        var read = batch.forRepository(repositoryNativeId);
+        return read.syncTargetId() != null
+                ? read
+                : new ReadersRead(
+                        scopeId,
+                        syncTargetId,
+                        repositoryNativeId,
+                        providerId,
+                        -1,
+                        batch.requestedAt(),
+                        batch.credential());
     }
 
     @Override
-    @Transactional
-    public void recordRepositoryPublic(ReadersRead read) {
-        if (read.syncTargetId() == null) return;
-        // The read asked the provider of this monitor's workspace connection about exactly this repository.
-        boolean sameRepository =
-                repositoryToMonitorRepository
-                        .findByNativeIdOnSourceProvider(read.repositoryNativeId(), read.providerId())
-                        .stream()
-                        .anyMatch(monitor -> read.syncTargetId().equals(monitor.getId()));
-        if (!sameRepository) {
-            return;
-        }
-        locked(read.syncTargetId(), null)
-                .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
-                .ifPresent(rtm -> rtm.getReaders().confirmedPublic(read.generation(), read.requestedAt()));
+    public RepositoryReads beginRepositoryReads(Long scopeId, long providerId) {
+        return observations.capture(scopeId, providerId, null);
     }
 
     @Override
-    @Transactional
-    public void recordRepositoryNotPublic(ReadersRead read) {
-        if (read.syncTargetId() == null) return;
-        locked(read.syncTargetId(), null)
-                .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
-                .ifPresent(rtm -> rtm.getReaders().confirmedNotPublic());
-    }
-
-    @Override
-    @Transactional
-    public void recordRepositoryPrivatized(long repositoryNativeId) {
-        repositoryToMonitorRepository.narrowRepositoryMonitors(repositoryNativeId);
+    public void recordRepositoryLoss(ReadersRead read) {
+        observations.recordLoss(read);
     }
 
     /**
@@ -294,19 +278,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     public boolean isRepositoryUnavailable(Long scopeId, Long syncTargetId) {
         return repositoryToMonitorRepository.existsByWorkspaceIdAndIdAndUnavailableSinceIsNotNull(
                 scopeId, syncTargetId);
-    }
-
-    @Override
-    @Transactional
-    public void recordRepositoryUnavailable(Long scopeId, Long syncTargetId) {
-        Instant now = Instant.now();
-        repositoryToMonitorRepository.recordUnavailable(scopeId, syncTargetId, now, now.plus(Duration.ofDays(1)));
-        locked(syncTargetId, scopeId).ifPresent(rtm -> rtm.getReaders().unavailable());
-    }
-
-    @Override
-    public void clearRepositoryUnavailable(Long scopeId, Long syncTargetId) {
-        repositoryToMonitorRepository.clearUnavailable(scopeId, syncTargetId);
     }
 
     @Override
@@ -596,7 +567,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                             resolvedNativeId);
                 } else {
                     rtm.setNativeId(resolvedNativeId);
-                    rtm.getReaders().identityChanged();
                     dirty = true;
                 }
             }

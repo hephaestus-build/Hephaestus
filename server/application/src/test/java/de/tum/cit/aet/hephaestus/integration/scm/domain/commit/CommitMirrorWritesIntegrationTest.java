@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -25,6 +26,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * them is refused: the only signal is the tenancy violation metric and its log line.
  */
 class CommitMirrorWritesIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private RepositoryObservationStore observations;
 
     @Autowired
     private CommitRepository commits;
@@ -123,13 +127,19 @@ class CommitMirrorWritesIntegrationTest extends BaseIntegrationTest {
     void shouldRefreshTheMirrorRowFromItsSnapshotWhenNoBypassIsOpen() {
         String renamed = repository.getNameWithOwner() + "-renamed";
 
-        boolean recorded = repositories.upsertFromSnapshot(
-                repository.getNativeId(),
-                Objects.requireNonNull(repository.getProvider().getId()),
-                renamed,
-                repository.getName() + "-renamed",
-                true,
-                null);
+        boolean recorded = observations
+                .observe(
+                        RepositoryObservationStore.providerEvent(
+                                Objects.requireNonNull(repository.getProvider().getId()),
+                                repository.getNativeId(),
+                                observations.databaseTime()),
+                        new RepositoryObservationStore.Observation(
+                                RepositoryObservationStore.Kind.PRIVATE,
+                                Repository.Visibility.PRIVATE,
+                                RepositoryObservationStore.path(
+                                        renamed, repository.getName() + "-renamed", "https://github.com/" + renamed),
+                                false))
+                .applied();
 
         assertThat(recorded).isTrue();
         assertThat(jdbc.queryForObject(

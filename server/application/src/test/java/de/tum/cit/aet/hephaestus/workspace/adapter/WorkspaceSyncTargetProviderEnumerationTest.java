@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -70,7 +71,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry(),
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(RepositoryObservationStore.class));
         lenient()
                 .when(workspaceScopeFilter.isRepositoryAllowed(any(Workspace.class), anyString()))
                 .thenReturn(true);
@@ -211,7 +213,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry(),
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(RepositoryObservationStore.class));
         Workspace nested = workspace(9);
         nested.setAccountLogin("acme/platform");
         RepositoryToMonitor monitor =

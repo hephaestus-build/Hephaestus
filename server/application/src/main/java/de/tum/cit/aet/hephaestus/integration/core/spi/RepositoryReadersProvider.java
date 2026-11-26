@@ -26,11 +26,6 @@ public interface RepositoryReadersProvider {
             long generation,
             Instant requestedAt,
             @Nullable Credential credential) {
-        public ReadersRead(Long syncTargetId, long repositoryNativeId, long providerId,
-                long generation, Instant requestedAt) {
-            this(0L, syncTargetId, repositoryNativeId, providerId, generation, requestedAt, null);
-        }
-
         public ReadersRead(
                 Long scopeId,
                 @Nullable Long syncTargetId,
@@ -61,21 +56,10 @@ public interface RepositoryReadersProvider {
         }
     }
 
-    /** Begins a read of the repository with {@code repositoryNativeId} on the provider, for this monitor. */
-    ReadersRead beginReadersProof(Long syncTargetId, long repositoryNativeId, long providerId, Instant requestedAt);
+    /** Captures the monitor's generation and database time before the provider read. */
+    ReadersRead beginReadersProof(Long scopeId, Long syncTargetId, long repositoryNativeId, long providerId);
 
-    /** The provider showed the repository public to this workspace's credential in {@code read}. */
-    void recordRepositoryPublic(ReadersRead read);
+    RepositoryReads beginRepositoryReads(Long scopeId, long providerId);
 
-    /**
-     * The provider showed the repository, in {@code read}, as not public. The mirror row that the read stored already
-     * narrowed every workspace's monitor of the repository; this also lets this monitor wait for its readers again.
-     */
-    void recordRepositoryNotPublic(ReadersRead read);
-
-    /**
-     * The provider reported that the repository turned private or was deleted. That narrows every workspace's monitor of
-     * it, also when the mirror row already held the repository private or no longer exists.
-     */
-    void recordRepositoryPrivatized(long repositoryNativeId);
+    void recordRepositoryLoss(ReadersRead read);
 }

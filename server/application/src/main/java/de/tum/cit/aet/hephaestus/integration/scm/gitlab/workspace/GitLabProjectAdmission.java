@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -52,6 +54,11 @@ public class GitLabProjectAdmission {
     private final RepositoryMonitorSources monitorSources;
     private final WorkspaceProviderAccounts providerAccounts;
     private final TransactionTemplate transactions;
+    private final RepositoryReadersProvider repositoryReaders;
+
+    public RepositoryReads beginRepositoryReads(ConnectionRead connection) {
+        return repositoryReaders.beginRepositoryReads(connection.workspaceId(), connection.providerId());
+    }
 
     @Transactional(readOnly = true)
     public Optional<ConnectionRead> captureConnection(long workspaceId, long providerId) {

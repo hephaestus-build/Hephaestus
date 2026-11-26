@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,8 +16,11 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
@@ -30,8 +34,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +45,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
@@ -143,14 +151,14 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(resp));
 
-            when(groupProcessor.process(any(), anyLong())).thenReturn(null);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(null);
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
             assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.ABORTED_ERROR);
             assertThat(result.synced()).isEmpty();
-            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any());
+            verify(projectProcessor, never()).processGraphQlResponse(any(), any(), any(), any());
         }
 
         @Test
@@ -159,7 +167,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
@@ -177,15 +185,15 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo1 = createTestRepository(10L);
             Repository repo2 = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any()))
-                    .thenReturn(repo1);
-            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any()))
-                    .thenReturn(repo2);
+            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any(), any()))
+                    .thenReturn(new Result(true, repo1));
+            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any(), any()))
+                    .thenReturn(new Result(true, repo2));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -195,6 +203,36 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.projectsSkipped()).isZero();
             assertThat(result.projectsRedacted()).isZero();
             assertThat(result.projectsReconciled()).isZero();
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void shouldCompleteTheListingWhenOneProjectsMetadataIsStale(boolean foundInRecursiveListing) {
+            var stale = createMinimalProject(
+                    "gid://gitlab/Project/10",
+                    foundInRecursiveListing ? "my-org/subgroup/stale" : "my-org/stale",
+                    "stale");
+            var discovered = createMinimalProject("gid://gitlab/Project/20", "my-org/new", "new");
+            var recursive = mockProjectsPageWithGroup(
+                    foundInRecursiveListing ? List.of(stale, discovered) : List.of(discovered), LAST_PAGE);
+            reportCount(recursive, 2);
+            var direct = mockProjectsPage(
+                    foundInRecursiveListing ? List.of(discovered) : List.of(stale, discovered), LAST_PAGE);
+            mockSequentialExecute(mockClient(), recursive, direct);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(stale), any(), any(), any()))
+                    .thenReturn(new Result(false, null));
+            var stored = createTestRepository(20L);
+            when(projectProcessor.processGraphQlResponse(eq(discovered), any(), any(), any()))
+                    .thenReturn(new Result(true, stored));
+
+            var result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
+            assertThat(result.synced()).containsExactly(stored);
+            assertThat(result.projectsSkipped()).isZero();
+            verify(projectProcessor).processGraphQlResponse(eq(stale), any(), any(), any());
         }
 
         @Test
@@ -208,15 +246,15 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, page1, page2);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo1 = createTestRepository(10L);
             Repository repo2 = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any()))
-                    .thenReturn(repo1);
-            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any()))
-                    .thenReturn(repo2);
+            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any(), any()))
+                    .thenReturn(new Result(true, repo1));
+            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any(), any()))
+                    .thenReturn(new Result(true, repo2));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -234,13 +272,13 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo1 = createTestRepository(10L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any()))
-                    .thenReturn(repo1);
-            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any()))
+            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any(), any()))
+                    .thenReturn(new Result(true, repo1));
+            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any(), any()))
                     .thenReturn(null);
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
@@ -259,14 +297,14 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo2 = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any()))
+            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any(), any()))
                     .thenThrow(new RuntimeException("DB error"));
-            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any()))
-                    .thenReturn(repo2);
+            when(projectProcessor.processGraphQlResponse(eq(proj2), any(), any(), any()))
+                    .thenReturn(new Result(true, repo2));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -290,12 +328,12 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo1 = createTestRepository(10L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any()))
-                    .thenReturn(repo1);
+            when(projectProcessor.processGraphQlResponse(eq(proj1), any(), any(), any()))
+                    .thenReturn(new Result(true, repo1));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -335,27 +373,27 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
-            mockSequentialExecute(client, projectsResp);
+            mockSequentialExecute(client, projectsResp, mockProjectsPage(List.of(), LAST_PAGE));
 
             Organization subOrg = new Organization();
             subOrg.setId(99L);
             subOrg.setLogin("my-org/sub-team");
 
             // First call: top-level group; subsequent calls: subgroup
-            when(groupProcessor.process(eq(DEFAULT_GROUP), anyLong())).thenReturn(org);
-            when(groupProcessor.process(eq(subGroupResponse), anyLong())).thenReturn(subOrg);
+            when(groupProcessor.processId(eq(DEFAULT_GROUP), anyLong())).thenReturn(org.getId());
+            when(groupProcessor.processId(eq(subGroupResponse), anyLong())).thenReturn(subOrg.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repo1 = createTestRepository(10L);
-            when(projectProcessor.processGraphQlResponse(eq(proj1), eq(subOrg), any()))
-                    .thenReturn(repo1);
+            when(projectProcessor.processGraphQlResponse(eq(proj1), eq(subOrg.getId()), any(), any()))
+                    .thenReturn(new Result(true, repo1));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
             assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
             assertThat(result.synced()).hasSize(1);
             // Verify processor was called with the subgroup org, not the top-level org
-            verify(projectProcessor).processGraphQlResponse(eq(proj1), eq(subOrg), any());
+            verify(projectProcessor).processGraphQlResponse(eq(proj1), eq(subOrg.getId()), any(), any());
         }
 
         @Test
@@ -394,15 +432,22 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repoA = createTestRepository(10L);
             Repository repoB = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(repoA);
-            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
-                    .thenReturn(repoB);
+            var firstRead = new ReadersRead(1L, 31L, 10L, TEST_PROVIDER_ID, 3L, Instant.EPOCH);
+            var secondRead = new ReadersRead(1L, 32L, 20L, TEST_PROVIDER_ID, 4L, Instant.EPOCH.plusSeconds(1));
+            when(projectAdmission.beginRepositoryReads(originalConnection))
+                    .thenReturn(
+                            new RepositoryReads(1L, TEST_PROVIDER_ID, firstRead.requestedAt(), Map.of(10L, firstRead)),
+                            new RepositoryReads(
+                                    1L, TEST_PROVIDER_ID, secondRead.requestedAt(), Map.of(20L, secondRead)));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, repoA));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any(), any()))
+                    .thenReturn(new Result(true, repoB));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -410,6 +455,13 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.synced()).hasSize(2);
             assertThat(result.synced()).extracting(Repository::getNativeId).containsExactlyInAnyOrder(10L, 20L);
             assertThat(result.projectsReconciled()).isEqualTo(1);
+            var order = inOrder(projectAdmission, client, projectProcessor);
+            order.verify(projectAdmission).beginRepositoryReads(originalConnection);
+            order.verify(client).documentName("GetGroupProjects");
+            order.verify(projectProcessor).processGraphQlResponse(eq(projA), any(), any(), eq(firstRead));
+            order.verify(projectAdmission).beginRepositoryReads(originalConnection);
+            order.verify(client).documentName("GetGroupProjects");
+            order.verify(projectProcessor).processGraphQlResponse(eq(projB), any(), any(), eq(secondRead));
         }
 
         @Test
@@ -424,15 +476,15 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repoA = createTestRepository(10L);
             Repository repoB = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(repoA);
-            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
-                    .thenReturn(repoB);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, repoA));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any(), any()))
+                    .thenReturn(new Result(true, repoB));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -458,12 +510,12 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repoA = createTestRepository(10L);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(repoA);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, repoA));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -485,17 +537,17 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
             // waitIfRateLimitLow is called unconditionally — it handles the wait internally
             when(graphQlClientProvider.waitIfRateLimitLow(1L)).thenReturn(true);
 
             Repository repoA = createTestRepository(10L);
             Repository repoB = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(repoA);
-            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
-                    .thenReturn(repoB);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, repoA));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any(), any()))
+                    .thenReturn(new Result(true, repoB));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -520,15 +572,15 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
 
             Repository repoA = createTestRepository(10L);
             Repository repoB = createTestRepository(20L);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(repoA);
-            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
-                    .thenReturn(repoB);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, repoA));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any(), any()))
+                    .thenReturn(new Result(true, repoB));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -545,10 +597,10 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, page);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(createTestRepository(10L));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(10L)));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -563,10 +615,10 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, page);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(createTestRepository(10L));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(10L)));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -581,10 +633,10 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, page);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(createTestRepository(10L));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(10L)));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -602,12 +654,12 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(createTestRepository(10L));
-            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
-                    .thenReturn(createTestRepository(20L));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(10L)));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(20L)));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
@@ -634,10 +686,10 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
-            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(groupProcessor.processId(any(), anyLong())).thenReturn(org.getId());
             when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
-            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
-                    .thenReturn(createTestRepository(10L));
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any(), any()))
+                    .thenReturn(new Result(true, createTestRepository(10L)));
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
