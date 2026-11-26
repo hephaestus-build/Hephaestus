@@ -2168,7 +2168,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 answer.getConversationId(),
                 new ConversationTurnService.Question(
-                        ConversationTurn.Surface.SYSTEM,
+                        ConversationTurn.Surface.APP,
                         "Load context",
                         UUID.randomUUID().toString(),
                         null,
