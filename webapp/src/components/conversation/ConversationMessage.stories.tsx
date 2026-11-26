@@ -86,7 +86,9 @@ export const AnswersWithMatchingOpenings: Story = {
 		const names = new Set<string>();
 		const triggers = canvas.getAllByRole("button", {
 			name: (name) => {
-				if (!name.startsWith("What Hephaestus used")) return false;
+				if (!name.startsWith("What Hephaestus used")) {
+					return false;
+				}
 				names.add(name);
 				return true;
 			},
