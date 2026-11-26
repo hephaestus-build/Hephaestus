@@ -604,7 +604,9 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     /**
      * Redacts these entries and their copies as {@link ConversationRedaction} describes; without {@code withTargets}, only
      * the copies. With {@code withDerivedAnswers}, it also redacts every entry derived from one it redacts: the entries
-     * whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far as they reach.
+     * whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far as they reach. The
+     * walk passes through entries that an earlier redaction erased, because what derived from them before that
+     * redaction still holds their words. Only entries that still hold words change.
      */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """
@@ -661,7 +663,6 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                 FROM dependent x
                 JOIN basis_edge b ON b.source_id = x.id AND b.workspace_id = x.workspace_id AND b.source_kind = 'ENTRY'
                 JOIN conversation_entry d ON d.basis_id = b.basis_id AND d.workspace_id = b.workspace_id
-                WHERE d.redacted_at IS NULL
             ), updated AS (
             UPDATE conversation_entry e
                SET redacted_at = clock_timestamp(), text = '', search_text = '',
@@ -685,7 +686,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                         ELSE jsonb_build_array() END) WITH ORDINALITY AS blocks (b, n)
                                WHERE b ->> 'type' = 'toolCall'), jsonb_build_array()))
                    END
-             WHERE e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
+             WHERE e.redacted_at IS NULL
+               AND e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
                             UNION SELECT id FROM covering
                             UNION SELECT id FROM dependent WHERE :withTargets OR id NOT IN (SELECT id FROM target))
             RETURNING e.id, e.workspace_id, e.conversation_id, e.kind, e.turn_id

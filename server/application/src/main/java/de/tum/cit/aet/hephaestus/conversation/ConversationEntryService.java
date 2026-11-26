@@ -269,24 +269,26 @@ public class ConversationEntryService {
      * {@code search_conversation} of a turn's started attempt: {@link #search} in the turn's conversation, with each hit
      * bound to the attempt's basis before the hits leave ({@link ConversationBasis}). It reads under a shared lock of
      * the tree's main conversation row, as the turn's context does, so no redaction commits between the read and the
-     * binding.
+     * binding. An attempt that started before attempts recorded their basis has none: it searches unbound, and what it
+     * stores has unknown sources ({@link ConversationEntryRepository#UNPROVEN}).
      */
     @Transactional
     public List<SearchHit> searchForTurn(long workspaceId, UUID turnId, SearchQuery search) {
         ConversationTurn turn = turns.findByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("ConversationTurn", turnId.toString()));
         UUID attemptBasis = turn.getBasisId();
-        if (attemptBasis == null) {
-            throw new IllegalStateException("Conversation turn " + turnId + " searches before its attempt started");
-        }
         Conversation conversation = conversations
                 .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Conversation", turn.getConversationId().toString()));
         conversations.shareByIdAndWorkspaceId(conversation.rootId(), workspaceId);
         List<SearchHit> hits = search(workspaceId, turn.getConversationId(), search);
-        basis.bind(
-                workspaceId, attemptBasis, hits.stream().map(SearchHit::entryId).toList());
+        if (attemptBasis != null) {
+            basis.bind(
+                    workspaceId,
+                    attemptBasis,
+                    hits.stream().map(SearchHit::entryId).toList());
+        }
         return hits;
     }
 

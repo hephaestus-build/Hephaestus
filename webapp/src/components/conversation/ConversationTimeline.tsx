@@ -382,13 +382,14 @@ function useAnchorKeys(rows: TimelineRow[], ready: boolean): AnchorKeys {
 }
 
 /**
- * What deleting a message does, what it leaves (the replies in its thread, each with its own
- * Delete, and the copy in Slack of a message asked there), and that it is final.
+ * What deleting a message does (Hephaestus's later answers that used it go too), what it leaves
+ * (the person's own replies in its thread, each with its own Delete, and the copy in Slack of a
+ * message asked there), and that it is final.
  */
 function deleteDescription(entry: ConversationEntry): string {
 	return [
-		"Hephaestus forgets it. If it has not answered yet, it does not answer.",
-		(entry.thread?.replyCount ?? 0) > 0 ? "The replies in its thread stay." : undefined,
+		"Hephaestus forgets it and erases its own later answers that used it. If it has not answered yet, it does not answer.",
+		(entry.thread?.replyCount ?? 0) > 0 ? "Your replies in its thread stay." : undefined,
 		entry.surface === "SLACK" ? "It and Hephaestus's answer stay in Slack." : undefined,
 		"You cannot undo this.",
 	]

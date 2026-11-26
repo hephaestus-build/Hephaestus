@@ -155,6 +155,61 @@ class ConversationBasisIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(search(next, marker)).isEmpty();
     }
 
+    /**
+     * The walk passes through an entry that an earlier, non-transitive redaction erased: an app thread repeated a Slack
+     * answer that a Slack disconnect erased later, and the delete of the app question that the Slack answer read still
+     * reaches the thread's answer.
+     */
+    @Test
+    void shouldEraseAnAnswerDerivedThroughAnAnswerThatAnEarlierRedactionErased() {
+        Answered opening = answer(main, "Hello", "How can I help?");
+        Conversation thread = conversations.openThread(workspace.getId(), opening.answer());
+        Answered source = answer(main, "My private project is named Finch", "I understand.");
+        ConversationTurn slackTurn = claim(turns.submit(
+                workspace.getId(),
+                main.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.SLACK,
+                        "Give that project a code",
+                        "slack:" + UUID.randomUUID(),
+                        "9.0",
+                        null)));
+        String slackPrompt = context(slackTurn).prompt();
+        assertThat(sources(slackTurn)).contains(source.question());
+        UUID slackAnswer = end(slackTurn, slackPrompt, "The code for Finch is " + marker);
+        ConversationTurn searching = claim(ask(thread, "Find the code from Slack"));
+        String prompt = context(searching).prompt();
+        assertThat(search(searching, marker))
+                .extracting(ConversationEntryService.SearchHit::entryId)
+                .containsExactly(slackAnswer);
+        assertThat(sources(searching)).contains(slackAnswer).doesNotContain(source.question(), source.answer());
+        UUID derived = end(searching, prompt, "Finch has code " + marker);
+        entries.redactSlackEntries(workspace.getId());
+        assertThat(redacted(slackAnswer, source.question(), derived)).containsExactly(true, false, false);
+
+        entries.deleteMessage(workspace.getId(), source.question());
+
+        assertThat(redacted(derived)).containsExactly(true);
+    }
+
+    /** An attempt that started before attempts recorded their basis can still search; what it stores stays unproven. */
+    @Test
+    void shouldSearchUnboundForAnAttemptStartedBeforeBasesWereRecorded() {
+        Answered earlier = answer(main, "Which base image?", "Pin " + marker + " by digest.");
+        ConversationTurn running = claim(ask(main, "What did we decide?"));
+        jdbc.update(
+                "UPDATE conversation_turn SET basis_id = NULL WHERE workspace_id = ? AND id = ?",
+                workspace.getId(),
+                running.getId());
+
+        assertThat(search(running, marker))
+                .extracting(ConversationEntryService.SearchHit::entryId)
+                .containsExactly(earlier.answer());
+
+        UUID answer = end(running, context(running).prompt(), "Pin by digest.");
+        assertThat(entryRepository.findById(answer).orElseThrow().getBasisId()).isNull();
+    }
+
     /** An attempt that read an entry erased while it ran keeps only skeletons and fails, also without a fence. */
     @Test
     void shouldStoreNoWordsOfAnAttemptWhenAnEntryItReadIsErasedWhileItRuns() {

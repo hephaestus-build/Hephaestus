@@ -71,9 +71,8 @@ public class ConversationEntryController {
     @DeleteMapping("/entries/{entryId}")
     @Operation(
             summary = "Delete a message the developer wrote",
-            description =
-                    "Erases its text and every summary that read it. A question Hephaestus has not answered yet is "
-                            + "not answered.")
+            description = "Erases its text, every summary that read it, and every later entry that Hephaestus derived "
+                    + "from it. A question Hephaestus has not answered yet is not answered.")
     @ApiResponse(
             responseCode = "204",
             description = "The message is deleted",

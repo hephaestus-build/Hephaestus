@@ -4678,7 +4678,7 @@ export const listConversationEntries = <ThrowOnError extends boolean = false>(
 /**
  * Delete a message the developer wrote
  *
- * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
+ * Erases its text, every summary that read it, and every later entry that Hephaestus derived from it. A question Hephaestus has not answered yet is not answered.
  */
 export const deleteConversationEntry = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteConversationEntryData, ThrowOnError>,
