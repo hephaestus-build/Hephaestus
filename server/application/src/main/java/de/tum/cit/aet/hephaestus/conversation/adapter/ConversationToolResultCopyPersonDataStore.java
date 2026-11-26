@@ -99,7 +99,7 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                 WHERE person.workspace_id IS NOT NULL
                 """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1)));
         Map<Long, List<OutlinePersonCopyScope.Source>> sources =
-                outline.map(source -> source.sources(person)).orElseGet(Map::of);
+                outline.map(source -> source.selectSources(person).sources()).orElseGet(Map::of);
         var found = new TreeSet<>(broad);
         found.addAll(sources.keySet());
         // The person's personal space too: no other person's conversation runs there, but its sandboxes hold the
@@ -137,7 +137,10 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
         var copies = new HashMap<>(frozenCopies(selection));
         outline.ifPresent(source -> {
-            Map<Long, List<OutlinePersonCopyScope.Source>> required = source.sources(frozenScope);
+            var current = source.selectSources(frozenScope);
+            if (!current.complete())
+                throw new IllegalStateException("The frozen erasure is missing Outline documents");
+            Map<Long, List<OutlinePersonCopyScope.Source>> required = current.sources();
             if (!frozenScope.outlineDocumentIds().isEmpty()
                     && selection.rows().stream()
                             .allMatch(row -> outlineSources(row).isEmpty()))

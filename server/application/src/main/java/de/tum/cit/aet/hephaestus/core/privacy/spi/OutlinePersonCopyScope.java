@@ -7,8 +7,9 @@ import java.util.Map;
 public interface OutlinePersonCopyScope {
     record Source(String origin, String team) {}
 
-    /** Resolves the currently matching source keys and checks that the frozen scope still covers them. */
-    Map<Long, List<Source>> sources(PersonScope person);
+    record Selection(Map<Long, List<Source>> sources, boolean complete) {}
+
+    Selection selectSources(PersonScope person);
 
     boolean onlyOutline(PersonScope person);
 }

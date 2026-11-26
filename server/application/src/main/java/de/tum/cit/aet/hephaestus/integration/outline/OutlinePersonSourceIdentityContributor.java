@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocume
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -49,12 +48,12 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
     }
 
     @Override
-    public Map<Long, List<Source>> sources(PersonScope person) {
+    public Selection selectSources(PersonScope person) {
         var rows = matchingDocuments(person);
         Set<Long> frozen = Set.copyOf(person.outlineDocumentIds());
-        if (rows.stream().anyMatch(row -> !frozen.contains(row.getId())))
-            throw new IllegalStateException("The frozen erasure is missing Outline documents");
-        return rows.stream()
+        boolean complete = rows.stream().allMatch(row -> frozen.contains(row.getId()));
+        var sourcesByWorkspace = rows.stream()
+                .filter(row -> frozen.contains(row.getId()))
                 .collect(Collectors.groupingBy(
                         OutlineDocumentRepository.PersonSourceDocument::getWorkspaceId,
                         Collectors.collectingAndThen(
@@ -64,6 +63,7 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
                                         .sorted(Comparator.comparing(Source::origin)
                                                 .thenComparing(Source::team))
                                         .toList())));
+        return new Selection(sourcesByWorkspace, complete);
     }
 
     private List<OutlineDocumentRepository.PersonSourceDocument> matchingDocuments(PersonScope person) {
