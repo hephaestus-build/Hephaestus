@@ -60,7 +60,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -166,11 +165,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
         ConversationTurnContexts contexts = ConversationTurnFixtures.contexts(beans);
         var controller = new ConversationTurnController(contexts, completion, served, usage);
         var sandboxController = new TurnContextController(
-                contexts,
-                served,
-                ConversationTurnFixtures.folder(beans),
-                beans.getBean(AgentRunAuthority.class),
-                beans.getBean(Clock.class));
+                contexts, served, ConversationTurnFixtures.folder(beans), beans.getBean(AgentRunAuthority.class));
         var transactions = beans.getBean(TransactionTemplate.class);
         var kind = new TurnSandboxRunKind(
                 ConversationTurnStarts.admitting(beans, metrics),

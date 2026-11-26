@@ -55,7 +55,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -187,8 +186,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                     "conversationTurnController",
                     new ConversationTurnController(turnContexts, turnCompletion, turns, usage));
             factory.registerSingleton(
-                    "turnContextController",
-                    new TurnContextController(turnContexts, turns, contextLoads, authority, Clock.systemUTC()));
+                    "turnContextController", new TurnContextController(turnContexts, turns, contextLoads, authority));
             factory.registerSingleton("modelRoute", new ModelRoute());
             factory.registerSingleton("fencedReview", review);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {

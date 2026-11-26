@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.conversation.spi;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -21,7 +22,7 @@ public interface TurnRuns {
     UUID enqueue(long workspaceId, UUID conversationId, long ownerAccountId);
 
     /** Queues proactive digest work in the background band until its contact cutoff. */
-    UUID enqueueDigest(long workspaceId, UUID conversationId);
+    UUID enqueueDigest(long workspaceId, UUID conversationId, Instant startBy);
 
     /**
      * Holds the run under {@code epoch} until the caller's transaction ends.

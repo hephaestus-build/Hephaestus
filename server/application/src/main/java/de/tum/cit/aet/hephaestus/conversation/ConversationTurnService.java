@@ -182,7 +182,7 @@ public class ConversationTurnService {
         if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
                         .isPresent()
                 || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
-        UUID runId = runs.enqueueDigest(workspaceId, conversationId);
+        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startBy());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));
         ConversationEntry stimulus = entryService.insert(

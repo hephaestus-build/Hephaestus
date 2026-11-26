@@ -57,7 +57,6 @@ import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
-import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -67,7 +66,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -123,7 +121,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private MeterRegistry meters;
 
-    private final MutableClock clock = new MutableClock(Instant.now(), ZoneOffset.UTC);
     private AgentSandboxes sandboxes;
     private ConversationTurns held;
     private TurnSandboxRunKind kind;
@@ -145,7 +142,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 beans.getBean(PersonDataCopyFence.class),
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -288,7 +284,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(held.held(run, false).turnId()).isEqualTo(first.getId());
         assertThat(turnRows.findById(second.getId()).orElseThrow().getStatus())
                 .isEqualTo(ConversationTurn.Status.QUEUED);
-        assertThat(held.workDeadline(run)).isAfter(clock.instant());
+        assertThat(held.workDeadline(run)).isAfter(runs.conversationDeadlineClock());
         assertThat(runs.find(run.fence().run()).orElseThrow().getDeadline())
                 .isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
         assertThat(sandboxes.lease(
@@ -438,7 +434,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 copyFence,
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -473,7 +468,12 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldAllowOnlyTheEndAfterTheWorkDeadline() {
         ask("Question");
         SandboxRun run = claim();
-        clock.advance(Duration.between(clock.instant(), held.workDeadline(run)).plusMillis(1));
+        transactions.executeWithoutResult(status -> assertThat(runs.limit(
+                        run.fence(),
+                        runs.conversationDeadlineClock()
+                                .plus(TurnRunsAdapter.GRACE)
+                                .minusSeconds(1)))
+                .isTrue());
         assertThatThrownBy(() -> held.held(run, false)).isInstanceOf(ConversationTurns.StopException.class);
         assertThat(held.held(run, true).runId()).isEqualTo(run.fence().runId());
     }
@@ -563,7 +563,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 personFence,
                 copyFence,
-                clock,
                 runs,
                 turns,
                 sandboxes,
@@ -613,7 +612,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 beans.getBean(ConversationAccess.class),
                 observedFence,
                 beans.getBean(PersonDataCopyFence.class),
-                clock,
                 runs,
                 turns,
                 sandboxes,

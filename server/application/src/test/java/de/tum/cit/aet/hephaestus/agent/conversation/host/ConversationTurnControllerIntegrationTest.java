@@ -59,7 +59,6 @@ import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
@@ -81,7 +80,6 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -186,7 +184,6 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
     private LlmUsageRecorder usage;
 
     private ConversationTurns conversationTurns;
-    private final MutableClock turnClock = new MutableClock(Instant.now(), ZoneOffset.UTC);
     private ConversationTurnController controller;
     private MockMvc gateway;
     private MockMvc direct;
@@ -218,7 +215,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
         sandbox = sandboxes.ensure(
                 workspace.getId(), "conversation:" + conversation.getId(), AgentSandboxKind.CONVERSATION);
-        conversationTurns = ConversationTurnFixtures.turns(beans, sandboxes, turnClock);
+        conversationTurns = ConversationTurnFixtures.turns(beans, sandboxes);
         controller = controller(ConversationTurnFixtures.contexts(beans));
         gateway = gateway(controller);
         direct = gateway;
@@ -450,11 +447,10 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
     @ValueSource(longs = {0, 1})
     void shouldAnswerThatTheDeadlinePassedAndStillTakeTheEndWhenTheAttemptRunsPastIt(long millisPastDeadline)
             throws Exception {
-        Instant deadline = Objects.requireNonNull(jdbc.queryForObject(
-                        "SELECT deadline FROM agent_run WHERE id = ?", Timestamp.class, turn.getRunId()))
-                .toInstant()
-                .minus(TurnRunsAdapter.GRACE);
-        turnClock.advance(Duration.between(turnClock.instant(), deadline).plusMillis(millisPastDeadline));
+        jdbc.update("""
+                UPDATE agent_run SET deadline = clock_timestamp() + make_interval(secs => ?) - (? * interval '1 millisecond')
+                WHERE id = ? AND workspace_id = ?
+                """, TurnRunsAdapter.GRACE.toSeconds(), millisPastDeadline, turn.getRunId(), workspace.getId());
 
         direct.perform(post(TURN_PATH + "partial", turn.getRunId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential())

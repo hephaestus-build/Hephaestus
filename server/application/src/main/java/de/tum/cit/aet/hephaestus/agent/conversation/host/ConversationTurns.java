@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.io.Serial;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
@@ -59,7 +58,6 @@ public class ConversationTurns {
     private final ConversationAccess conversations;
     private final PersonDataWriteFence writeFence;
     private final PersonDataCopyFence copyFence;
-    private final Clock clock;
     private final AgentRuns runs;
     private final ConversationTurnService turns;
     private final AgentSandboxes sandboxes;
@@ -138,7 +136,7 @@ public class ConversationTurns {
             Instant deadline = held.deadline();
             if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
             // The run ends a grace after the work deadline, so its holder can still end what it wrote.
-            if (!clock.instant().isBefore(deadline.minus(TurnRunsAdapter.GRACE)))
+            if (!runs.conversationDeadlineClock().isBefore(deadline.minus(TurnRunsAdapter.GRACE)))
                 throw new StopException(Stop.DEADLINE);
         }
         AgentRunFence fence = run.fence();

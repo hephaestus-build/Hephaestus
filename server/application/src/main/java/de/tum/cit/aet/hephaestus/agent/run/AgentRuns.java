@@ -154,6 +154,29 @@ public class AgentRuns {
                 null);
     }
 
+    /** Records the relative window that a server rolled back to the old reader still needs. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueueDigest(long workspaceId, String subject, Instant startBy) {
+        var stamp = generations.stamp(workspaceId);
+        Instant databaseNow = runs.databaseClock();
+        Instant contactNow = Objects.requireNonNullElse(timing.replayNow(), databaseNow);
+        Duration startWithin = Duration.ofSeconds(
+                Math.max(1, Duration.between(contactNow, startBy).toSeconds()));
+        return saveQueued(new AgentRun(
+                UUID.randomUUID(),
+                workspaceId,
+                AgentRunKind.DIGEST,
+                AgentRunBand.BACKGROUND,
+                subject,
+                stamp,
+                0,
+                0,
+                databaseNow,
+                startWithin,
+                Duration.ZERO,
+                null));
+    }
+
     /**
      * Queues the run that continues work whose earlier run ended. Its epochs go on from {@code lastEpoch}, so the
      * claims of a piece of work keep distinct numbers across its runs. A charged continuation spends one attempt more
@@ -272,7 +295,7 @@ public class AgentRuns {
             @Nullable Duration startWithin,
             Duration delay,
             @Nullable Duration executionWindow) {
-        AgentRun run = new AgentRun(
+        return saveQueued(new AgentRun(
                 UUID.randomUUID(),
                 workspaceId,
                 kind,
@@ -284,9 +307,12 @@ public class AgentRuns {
                 runs.databaseClock(),
                 startWithin,
                 delay,
-                executionWindow);
+                executionWindow));
+    }
+
+    private AgentRunRef saveQueued(AgentRun run) {
         runs.save(run);
-        wake(kind);
+        wake(run.getKind());
         return run.ref();
     }
 
@@ -353,7 +379,8 @@ public class AgentRuns {
                         offered.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        timing.read(offered.contains(AgentRunKind.DIGEST)))
+                        timing.readSubjects(
+                                offered.contains(AgentRunKind.DIGEST), List.of(workspaceId), List.of(concurrencyKey)))
                 .map(this::leased);
     }
 
@@ -395,7 +422,7 @@ public class AgentRuns {
                         kinds.stream().map(AgentRunKind::name).toList(),
                         workspaceIds,
                         subjectKeys,
-                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
+                        timing.readSubjects(kinds.contains(AgentRunKind.DIGEST), workspaceIds, subjectKeys))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),

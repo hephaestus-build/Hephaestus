@@ -174,7 +174,9 @@ Live runs use the database clock. During a [replay](./mentoring-evaluation.mdx#i
   A question gets the same window when a requeue makes it due again.
   Java resolves the Monday contact cutoff in the person's time zone. The digest stimulus stores the cutoff as a UTC instant.
   While a rolling upgrade still has an earlier writer, the reader resolves the UTC instant from the week and time zone on each old stimulus.
+  A new writer also records the relative start window so a rollback to an earlier server can still expire the digest.
   Enqueue latency and retries do not move this cutoff.
+  Erasing a digest stimulus stops its turn and cancels its run in the erasure transaction.
 - **Deadline** (`deadline`): it bounds the current claim.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
   Within a claim it only moves earlier (`AgentRuns.endBy`). A review or turn requeue clears it, so the next claim sets its own.

@@ -54,6 +54,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         UUID getConversationId();
 
         long getAccountId();
+
+        String getKind();
+
+        @Nullable
+        UUID getTurnId();
     }
 
     /** How many messages a conversation holds after a sequence number, and when the newest was written. */
@@ -244,16 +249,20 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         String getZone();
     }
 
-    @WorkspaceAgnostic("Reads only queued legacy digest stimulus IDs and calendar windows for fleet claims and reaping")
     @Query(value = """
             SELECT e.id, e.payload #>> '{window,weekStart}' AS "weekStart", e.payload #>> '{window,zone}' AS zone
               FROM conversation_turn t
               JOIN conversation_entry e ON e.turn_id = t.id AND e.workspace_id = t.workspace_id
-             WHERE t.status = 'QUEUED' AND e.kind = 'DIGEST' AND e.redacted_at IS NULL
+             WHERE t.workspace_id IN (:workspaceIds)
+               AND (:allConversations OR t.conversation_id IN (:conversationIds))
+               AND t.status = 'QUEUED' AND e.kind = 'DIGEST' AND e.redacted_at IS NULL
                AND e.payload ->> 'startBy' IS NULL
                AND e.payload #>> '{window,weekStart}' IS NOT NULL AND e.payload #>> '{window,zone}' IS NOT NULL
             """, nativeQuery = true)
-    List<LegacyDigestWindow> findLegacyDigestWindows();
+    List<LegacyDigestWindow> findLegacyDigestWindows(
+            @Param("workspaceIds") Collection<Long> workspaceIds,
+            @Param("conversationIds") Collection<UUID> conversationIds,
+            @Param("allConversations") boolean allConversations);
 
     /** The question of the account's ended turn on a surface, read with its owner check in one statement. */
     @Query("""
@@ -631,12 +640,13 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                    END
              WHERE e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
                             UNION SELECT id FROM covering)
-            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind
+            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind, e.turn_id
             )
             SELECT u.id AS "id", u.workspace_id AS "workspaceId", u.conversation_id AS "conversationId",
-                   c.account_id AS "accountId"
+                   c.account_id AS "accountId", u.kind AS "kind", u.turn_id AS "turnId"
             FROM updated u JOIN conversation c ON (c.id,c.workspace_id)=(u.conversation_id,u.workspace_id)
             WHERE u.kind IN ('USER','ANSWER','DIGEST')
+            ORDER BY u.workspace_id, u.turn_id, u.id
             """, nativeQuery = true)
     List<EntryRef> redactWithCopies(
             @Param("ids") UUID[] ids,

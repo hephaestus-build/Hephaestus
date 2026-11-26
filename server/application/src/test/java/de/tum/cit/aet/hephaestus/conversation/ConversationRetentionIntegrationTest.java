@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
@@ -88,6 +89,12 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Autowired
     private ConversationEntryRepository entryRepository;
+
+    @Autowired
+    private ConversationTurnRepository turnRows;
+
+    @Autowired
+    private TurnRuns turnRuns;
 
     @Autowired
     private PersonDataCopyFence copies;
@@ -339,7 +346,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     /** Redaction that counts, after commit, the entries each erasure reported as changed. */
     private ConversationRedaction reportingRedaction() {
-        return new ConversationRedaction(copies, entryRepository, reporting(), mapper);
+        return new ConversationRedaction(copies, entryRepository, turnRows, turnRuns, reporting(), mapper);
     }
 
     private ApplicationEventPublisher reporting() {
@@ -454,15 +461,16 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         List<UUID> backlog = backlog(main, 17, Instant.parse("1971-02-01T00:00:00Z"));
         UUID thirdBatchSummary = summaryOver(main, before + 11, before + 15);
         AtomicInteger calls = new AtomicInteger();
-        ConversationRedaction dying = new ConversationRedaction(copies, entryRepository, reporting(), mapper) {
-            @Override
-            public void redact(Collection<UUID> entryIds) {
-                super.redact(entryIds);
-                if (calls.incrementAndGet() == 3) {
-                    throw new Crash();
-                }
-            }
-        };
+        ConversationRedaction dying =
+                new ConversationRedaction(copies, entryRepository, turnRows, turnRuns, reporting(), mapper) {
+                    @Override
+                    public void redact(Collection<UUID> entryIds) {
+                        super.redact(entryIds);
+                        if (calls.incrementAndGet() == 3) {
+                            throw new Crash();
+                        }
+                    }
+                };
 
         assertThatThrownBy(() -> sweeper(dying, 5, 10).sweepNow()).isInstanceOf(Crash.class);
 
@@ -561,6 +569,8 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                     new ConversationRedaction(
                                             copies,
                                             entryRepository,
+                                            turnRows,
+                                            turnRuns,
                                             reporting(Objects.requireNonNull(reportedBy.get(replica))),
                                             mapper) {
                                         @Override

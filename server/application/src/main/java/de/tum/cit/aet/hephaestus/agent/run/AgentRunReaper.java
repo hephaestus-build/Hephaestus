@@ -87,10 +87,11 @@ public class AgentRunReaper {
         for (AgentRunHandler handler : handlers.values()) {
             String kind = handler.kind().name();
             drain(skipped -> runs.findExpired(kind, skipped, timing.read(false)), row -> takeBack(handler, row));
+            // A legacy write after this read remains eligible for the next tick's lookup.
+            var windows = timing.read(handler.kind() == AgentRunKind.DIGEST);
             drain(
-                    skipped ->
-                            runs.findOverdueQueued(kind, skipped, timing.read(handler.kind() == AgentRunKind.DIGEST)),
-                    row -> endOverdue(handler, row));
+                    skipped -> runs.findOverdueQueued(kind, skipped, timing.refresh(windows)),
+                    row -> endOverdue(handler, row, windows));
         }
     }
 
@@ -169,18 +170,22 @@ public class AgentRunReaper {
         });
     }
 
-    private void endOverdue(AgentRunHandler handler, AgentRunRepository.ExpiredRow row) {
+    private void endOverdue(
+            AgentRunHandler handler, AgentRunRepository.ExpiredRow row, AgentRunTiming.Reading windows) {
         AgentRunKind kind = handler.kind();
         transactions.executeWithoutResult(status -> {
             var run = new AgentRunRef(row.getId(), row.getWorkspaceId());
             handler.lock(run);
-            var time = timing.read(kind == AgentRunKind.DIGEST);
             var reason = row.getPastDeadline() ? AgentRunStopReason.DEADLINE : AgentRunStopReason.NOT_STARTED;
             handler.ended(run, row.getLeaseEpoch(), reason);
             if (!taken(
                     status,
-                    runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), reason.name(), time)))
-                return;
+                    runs.endExpired(
+                            row.getId(),
+                            row.getWorkspaceId(),
+                            row.getLeaseEpoch(),
+                            reason.name(),
+                            timing.refresh(windows)))) return;
             observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)

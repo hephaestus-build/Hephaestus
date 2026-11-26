@@ -11,6 +11,6 @@ class WorkspaceEvaluationConfiguration {
 
     @Bean
     EvaluationWork.Workspaces evaluationWorkspaces(WorkspaceRepository repository) {
-        return repository::findEvaluationWorkspaceIds;
+        return repository::findIds;
     }
 }

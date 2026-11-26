@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
@@ -940,9 +941,15 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                     workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST));
             if (expired) {
                 assertThat(run.getCreatedAt()).isAfter(cutoff);
+                assertThat(run.getStartWithinSeconds()).isOne();
                 assertThat(lease).as("the cutoff comes from the scheduled week").isEmpty();
             } else {
                 assertThat(run.getCreatedAt()).isBefore(cutoff);
+                assertThat(run.getStartWithinSeconds())
+                        .as("the rollback reader has an expiry")
+                        .isNotNull();
+                assertThat(run.getAvailableAt().plusSeconds(Objects.requireNonNull(run.getStartWithinSeconds())))
+                        .isBetween(cutoff.minusSeconds(1), cutoff);
                 assertThat(lease)
                         .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(run.getId()));
             }
@@ -960,6 +967,51 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
             assertThat(runs.claimSubject(
                             workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST)))
                     .isEmpty();
+        });
+    }
+
+    @Test
+    void shouldLeaseTheNextDigestAfterPersonErasureEndsTheQueuedDigest() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            UUID conversationId =
+                    conversations.findOrCreateMain(workspaceId, accountId).getId();
+            var copy = entries.append(
+                    workspaceId,
+                    conversationId,
+                    new ConversationEntryDraft(
+                            ConversationEntry.Kind.TOOL_RESULT,
+                            ConversationEntry.Surface.SYSTEM,
+                            "",
+                            null,
+                            null,
+                            null,
+                            null));
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
+            UUID erasedTurnId = Objects.requireNonNull(stimulus.getTurnId());
+            var erasedRun = new AgentRunRef(
+                    turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
+
+            redaction.redactPersonCopies(List.of(copy.getId()));
+            assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
+                    .as("the erasure ends the digest turn in its own transaction")
+                    .isEqualTo(ConversationTurn.Status.STOPPED);
+            assertThat(runs.find(erasedRun).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
+
+            String requestId = requestId() + "-next";
+            assertThat(turns.submitDigest(
+                            workspaceId,
+                            conversationId,
+                            new ConversationTurnService.DigestRequest(
+                                    requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
+                    .isTrue();
+            var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
+                    .orElseThrow();
+            assertThat(runs.claimSubject(workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST)))
+                    .hasValueSatisfying(lease -> assertThat(lease.runId()).isEqualTo(next.getRunId()));
         });
     }
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,6 +47,8 @@ public class ConversationRedaction {
 
     private final PersonDataCopyFence copies;
     private final ConversationEntryRepository entries;
+    private final ConversationTurnRepository turns;
+    private final TurnRuns runs;
     private final ApplicationEventPublisher events;
     private final ObjectMapper mapper;
 
@@ -83,6 +86,10 @@ public class ConversationRedaction {
         // Tool results, summaries and system entries are never shown, so only messages change an open conversation.
         Map<Conversation, List<UUID>> byConversation = new LinkedHashMap<>();
         for (ConversationEntryRepository.EntryRef message : messages) {
+            UUID turnId = message.getTurnId();
+            if ("DIGEST".equals(message.getKind()) && turnId != null) {
+                stopErasedDigest(message.getWorkspaceId(), turnId);
+            }
             byConversation
                     .computeIfAbsent(
                             new Conversation(
@@ -93,6 +100,17 @@ public class ConversationRedaction {
         byConversation.forEach((conversation, changed) -> ConversationLedgerEvents.EntryChanged.of(
                         conversation.workspaceId(), conversation.id(), conversation.accountId(), changed)
                 .forEach(events::publishEvent));
+    }
+
+    private void stopErasedDigest(long workspaceId, UUID turnId) {
+        turns.lockByIdAndWorkspaceId(turnId, workspaceId).ifPresent(turn -> {
+            boolean changed = turn.stopIfActive(turns.databaseClock());
+            if (turn.getStatus() == ConversationTurn.Status.STOPPED) {
+                // The erased stimulus cannot drive any more work, including a claim that just started it.
+                runs.stopped(workspaceId, turn.getRunId(), false);
+                if (changed) events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
+            }
+        });
     }
 
     private record Conversation(long workspaceId, UUID id, long accountId) {}

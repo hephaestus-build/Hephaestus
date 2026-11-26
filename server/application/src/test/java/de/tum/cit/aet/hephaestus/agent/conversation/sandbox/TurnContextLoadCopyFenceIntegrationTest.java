@@ -17,10 +17,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -71,7 +69,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
                 var folder = new TurnContextLoads(
                         mock(ConversationTurnAccess.class),
                         beans.getBeanProvider(ContextLoader.class),
-                        Clock.fixed(now, ZoneOffset.UTC),
+                        () -> now,
                         observed,
                         layout,
                         mock(AgentRunAuthority.class))) {
