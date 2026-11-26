@@ -702,20 +702,35 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         seed();
         int lastAttempt = CommitIdentityResolutionJob.MAX_ATTEMPTS - 1;
         jdbc.update("UPDATE commit_identity_resolution SET attempts = ? WHERE commit_id = ?", lastAttempt, waiting);
-        Instant reset = Instant.now().plus(Duration.ofHours(1));
+        Instant reset = Instant.now().plus(Duration.ofHours(1)).truncatedTo(ChronoUnit.SECONDS);
         provider = question -> throttle(reset);
         run(50);
 
         long alternate = workspace();
         when(scopes.getActiveScopesForRepository(eq(project.getNativeId()), eq(github.getId())))
                 .thenReturn(List.of(scope, alternate));
-        provider = question -> null;
+        var healthy = repository();
+        long ready = commit(healthy, null, null, "ready@example.com");
+        jdbc.update("""
+                INSERT INTO commit_identity_resolution(repository_id, commit_id, source, state, attempts)
+                VALUES (?, ?, 'AUTHOR', 'PENDING', 4)
+                """, healthy.getId(), ready);
+        when(scopes.getActiveScopesForRepository(eq(healthy.getNativeId()), eq(github.getId())))
+                .thenReturn(List.of(alternate));
+        provider =
+                question -> question.email().equals(EMAIL) ? null : new Answer.Account(id(right), right.getNativeId());
 
         run(50);
 
-        assertThat(states()).containsOnly("PENDING");
-        assertThat(attempts()).containsOnly(lastAttempt);
-        assertThat(askedCredentials).endsWith(activeScm.withToken(alternate).orElseThrow());
+        assertThat(jdbc.queryForMap(
+                        "SELECT state, attempts, deferred_until FROM commit_identity_resolution WHERE commit_id = ?",
+                        waiting))
+                .containsEntry("state", "PENDING")
+                .containsEntry("attempts", lastAttempt)
+                .containsEntry("deferred_until", Timestamp.from(reset));
+        assertThat(authorOf(ready)).isEqualTo(right.getId());
+        var second = activeScm.withToken(alternate).orElseThrow();
+        assertThat(askedCredentials).hasSize(3).endsWith(second, second);
 
         var expired = Timestamp.from(Instant.EPOCH);
         jdbc.update("UPDATE provider_credential_pause SET paused_until = ? WHERE workspace_id = ?", expired, scope);

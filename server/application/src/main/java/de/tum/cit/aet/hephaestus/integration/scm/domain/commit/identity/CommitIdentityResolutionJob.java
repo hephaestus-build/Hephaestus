@@ -162,8 +162,9 @@ public class CommitIdentityResolutionJob {
                     pausedThisRun.put(generation, until);
                 }
             }
+            boolean hadDueWork = unanswered.stream().anyMatch(PendingEmail::isDue);
             unanswered = applyAnswers(repository, unanswered, batch);
-            if (pause == null || unanswered.isEmpty()) return new Turn(reads, pause == null);
+            if (unanswered.isEmpty() || (pause == null && hadDueWork)) return new Turn(reads, pause == null);
         }
     }
 
@@ -196,7 +197,7 @@ public class CommitIdentityResolutionJob {
                 continue;
             }
             var answer = batch.answers().get(question(email));
-            if (answer == null && batch.pause() != null) {
+            if (answer == null && (!email.isDue() || batch.pause() != null)) {
                 unanswered.add(email);
                 continue;
             }
@@ -242,21 +243,21 @@ public class CommitIdentityResolutionJob {
             @Nullable Instant pausedUntil) {}
 
     private void defer(PendingRepository repository, List<PendingEmail> waiting, RepositoryAccess access) {
-        if (waiting.isEmpty()) return;
+        var due = waiting.stream()
+                .filter(PendingEmail::isDue)
+                .map(PendingEmail::getId)
+                .toList();
+        if (due.isEmpty()) return;
         var generation = access.generation();
         Instant until = Objects.requireNonNull(access.pausedUntil());
-        resolutions.defer(
-                waiting.stream().map(PendingEmail::getId).toList(),
-                generation.connectionId(),
-                generation.generation(),
-                until);
+        resolutions.defer(due, generation.connectionId(), generation.generation(), until);
         meterRegistry
                 .counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "deferred")
-                .increment(waiting.size());
+                .increment(due.size());
         log.info(
                 "Deferred commit link correction until the provider's deadline: repositoryId={}, emails={}, until={}",
                 repository.getRepositoryId(),
-                waiting.size(),
+                due.size(),
                 until);
     }
 

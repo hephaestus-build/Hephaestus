@@ -38,6 +38,8 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
         String getEmail();
 
         int getAttempts();
+
+        boolean isDue();
     }
 
     // A replacement credential can answer pending work without waiting for the old credential's deadline.
@@ -68,6 +70,8 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
     @WorkspaceAgnostic("Instance-wide repair queue over shared commit rows")
     @Query(value = """
         SELECT q.id AS id, gc.sha AS sha, q.attempts AS attempts,
+        """ + DUE + """
+               AS due,
                CASE q.source WHEN 'AUTHOR' THEN gc.author_email
                              WHEN 'COMMITTER' THEN gc.committer_email
                              ELSE cc.email END AS email
