@@ -70,11 +70,12 @@ public class AccountPurger {
         // Sessions before tokens, the order every session operation locks them in.
         erasureRepository.deleteClientSessions(accountId);
         erasureRepository.deleteIssuedTokens(accountId);
-        erasureRepository.deleteExports(accountId);
         erasureRepository.unlinkConsentDecisions(accountId);
         // Rows another module owns are erased by that module, inside this transaction.
         erasureContributors.forEach(contributor -> contributor.eraseAccount(accountId));
         erasureRepository.deleteIdentities(accountId);
+        // Source writes precede export row locks, including the deferred expiry sweep.
+        erasureRepository.deleteExports(accountId);
         // Both a self-deletion and an administrator's erasure of a person end here.
         journal.record(PrivacyJournalKind.ACCOUNT_ERASED, Map.of("accountId", accountId));
 

@@ -83,9 +83,8 @@ class AccountExportFenceDatabaseTest {
     }
 
     /**
-     * Two transactions that each erase a message of two owners, in opposite orders. Each takes the first owner's ready
-     * export, then needs the other's. The instance-wide expiry lock orders them, so the second waits for the first
-     * instead of a deadlock that would roll one back.
+     * Two transactions erase messages of two owners in opposite orders. Each locks the ready exports in id order
+     * after its source writes.
      */
     @Test
     void shouldExpireTheExportsOfTwoOwnersFromCrossedTransactionsWithoutADeadlock() throws Exception {
@@ -123,11 +122,12 @@ class AccountExportFenceDatabaseTest {
             try (Connection observer = connect(PostgreSQLTestContainer.asOwner(INSTALLED))) {
                 Awaitility.await()
                         .atMost(Duration.ofSeconds(10))
-                        .until(() -> Boolean.TRUE.equals(jdbc(observer)
-                                .queryForObject(
-                                        "SELECT EXISTS (SELECT FROM pg_locks WHERE pid = ? AND NOT granted)",
-                                        Boolean.class,
-                                        twoPid)));
+                        .until(() -> crossed.isDone()
+                                || Boolean.TRUE.equals(jdbc(observer)
+                                        .queryForObject(
+                                                "SELECT EXISTS (SELECT FROM pg_locks WHERE pid = ? AND NOT granted)",
+                                                Boolean.class,
+                                                twoPid)));
             }
             erase(oneJdbc, secondMessages[1]);
             one.commit();

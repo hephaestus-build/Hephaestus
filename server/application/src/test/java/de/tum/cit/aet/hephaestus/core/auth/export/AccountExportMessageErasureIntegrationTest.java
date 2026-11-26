@@ -221,6 +221,51 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCommitWorkspacePurgeAndConcurrentMessageRedaction() throws Exception {
+        var scenario = data.scenario();
+        long workspace = scenario.workspace().getId();
+        long firstOwner = Objects.requireNonNull(scenario.account().getId());
+        long secondOwner = Objects.requireNonNull(data.member(workspace).getId());
+        var result = data.result(scenario, ResultOutcome.NOT_MET, AT);
+        UUID delivered = deliveredFeedback(result, firstOwner, "DELIVERED", null, "Feedback to erase.");
+        UUID answer = entry(conversation(workspace, secondOwner), "ANSWER", ERASED);
+        long firstExport = readyExport(firstOwner);
+        long secondExport = readyExport(secondOwner);
+        var transactions = new TransactionTemplate(transactionManager);
+        var feedbackDeleted = new CompletableFuture<Void>();
+        var finishPurge = new CompletableFuture<Void>();
+        var purge = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            jdbc.update("DELETE FROM feedback WHERE id = ? AND workspace_id = ?", delivered, workspace);
+            feedbackDeleted.complete(null);
+            finishPurge.orTimeout(20, TimeUnit.SECONDS).join();
+            admission.admitWorkspacePurge(workspace);
+            jdbc.queryForObject(
+                    "SELECT public.person_row_sweep('WORKSPACE_PURGE', ?, NULL, NULL)", Integer.class, workspace);
+        }));
+
+        feedbackDeleted.get(20, TimeUnit.SECONDS);
+        var redactionPid = new CompletableFuture<Integer>();
+        var redact = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(status -> {
+            redactionPid.complete(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            redaction.redact(List.of(answer));
+        }));
+        try {
+            var pid = redactionPid.get(20, TimeUnit.SECONDS);
+            Awaitility.await()
+                    .atMost(10, TimeUnit.SECONDS)
+                    .until(() -> redact.isDone()
+                            || Boolean.TRUE.equals(jdbc.queryForObject(
+                                    "SELECT cardinality(pg_blocking_pids(?)) > 0", Boolean.class, pid)));
+        } finally {
+            finishPurge.complete(null);
+        }
+
+        CompletableFuture.allOf(purge, redact).get(20, TimeUnit.SECONDS);
+        assertThat(read(firstExport, firstOwner).getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
+        assertThat(read(secondExport, secondOwner).getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
+    }
+
+    @Test
     void shouldExpireTheReadyExportOfTheDeveloperWhoseFeedbackAnErasureDeletes() {
         var scenario = data.scenario();
         long developer = Objects.requireNonNull(scenario.account().getId());

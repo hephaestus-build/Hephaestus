@@ -149,34 +149,30 @@ BEGIN
         GET DIAGNOSTICS counted = ROW_COUNT;
         changed := changed + counted;
     ELSIF rule = 'EXPORT_SOURCES_CHANGED' THEN
-        -- subject_id is an account one of whose exported sources an erasure, an edit, a withdrawal or a retraction has
-        -- just changed: a shown conversation message, or delivered feedback with its copies and responses. The triggers
-        -- on those tables call this rule. It takes the account's export fence shared, then expires the account's ready
-        -- exports. Changes share the fence, so they never wait for each other. The export worker takes it alone before it
-        -- reads those sources (ExportGenerationWorker), and a ready export is published only under it
-        -- (account_export_published_fenced).
-        -- A worker that holds it first has published when this rule gets it, and this expires what it published. A worker
-        -- that comes later, also for an export requested after the change, reads the sources after the change commits.
-        -- The fence is one of 64 buckets of accounts, so a bulk erasure holds at most 64 such locks.
-        IF subject_id IS NULL THEN
-            RAISE EXCEPTION 'person_row_sweep: EXPORT_SOURCES_CHANGED needs the account'
-                USING ERRCODE = 'invalid_parameter_value';
-        END IF;
-        -- Only the triggers that record a change of a source call it; a direct call has no change to record.
         IF pg_catalog.pg_trigger_depth() = 0 THEN
             RAISE EXCEPTION 'person_row_sweep: EXPORT_SOURCES_CHANGED runs only from the triggers of its sources'
                 USING ERRCODE = 'insufficient_privilege';
         END IF;
-        PERFORM pg_catalog.pg_advisory_xact_lock_shared(
-            pg_catalog.hashtext('account-export-sources'), pg_catalog.hashtext(CAST(subject_id AS text)) & 63);
-        -- One transaction can expire the exports of several accounts in any order, in several statements: two
-        -- workspace purges with the same people, or two redactions across the same owners. One instance-wide lock,
-        -- taken before any export row lock, orders those transactions, so their row locks cannot cross. The fence
-        -- holds off a new ready export for this account, so the lock is taken only when there is one to expire.
-        IF EXISTS (SELECT FROM public.account_export WHERE account_id = subject_id AND status = 'READY') THEN
-            PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('account-export-expiry'));
-            UPDATE public.account_export SET status = 'EXPIRED', payload = NULL
-            WHERE account_id = subject_id AND status = 'READY';
+        IF subject_id IS NOT NULL THEN
+            -- Keep publication behind an open source change, but leave export row locks until all source writes finish.
+            PERFORM pg_catalog.pg_advisory_xact_lock_shared(
+                pg_catalog.hashtext('account-export-sources'), pg_catalog.hashtext(CAST(subject_id AS text)) & 63);
+            INSERT INTO lifecycle_private.export_expiry_queue (transaction_id, account_id)
+            VALUES (pg_current_xact_id(), subject_id) ON CONFLICT DO NOTHING;
+        ELSE
+            -- The first deferred trigger drains this transaction's owners in one export row lock order.
+            WITH owners AS (
+                DELETE FROM lifecycle_private.export_expiry_queue
+                WHERE transaction_id = pg_current_xact_id()
+                RETURNING account_id
+            ), due AS MATERIALIZED (
+                SELECT x.id FROM public.account_export x
+                WHERE x.status = 'READY' AND x.account_id IN (SELECT account_id FROM owners)
+                ORDER BY x.id
+                FOR UPDATE OF x
+            )
+            UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
+            FROM due WHERE x.id = due.id;
             GET DIAGNOSTICS changed = ROW_COUNT;
         END IF;
     ELSE
@@ -192,6 +188,27 @@ $$;
     <changeSet id="1795549410482-2" author="hephaestus">
         <comment>An account export holds its owner's conversation messages and received feedback. When an erasure, an edit, a withdrawal or a retraction changes one of them, in the same transaction, the triggers call EXPORT_SOURCES_CHANGED for the owner. A ready export is published only under the owner's export fence.</comment>
         <sql splitStatements="false"><![CDATA[
+-- Pending expiry belongs to the transaction that changed the source and is cleared before commit.
+CREATE TABLE lifecycle_private.export_expiry_queue (
+    transaction_id xid8 NOT NULL,
+    account_id bigint NOT NULL,
+    PRIMARY KEY (transaction_id, account_id)
+);
+ALTER TABLE lifecycle_private.export_expiry_queue OWNER TO hephaestus_owner;
+
+CREATE FUNCTION public.account_export_expire_at_commit() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED', NULL, NULL, NULL);
+    RETURN NULL;
+END
+$$;
+CREATE CONSTRAINT TRIGGER trg_export_expiry_at_commit
+    AFTER INSERT ON lifecycle_private.export_expiry_queue
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION public.account_export_expire_at_commit();
+
 -- The trigger functions run as the role whose statement fires them: the application, or the owner inside another
 -- rule of person_row_sweep. Both may call person_row_sweep, the definer that crosses owners.
 CREATE FUNCTION public.account_export_message_changed() RETURNS trigger
@@ -381,6 +398,9 @@ CREATE TRIGGER trg_account_export_inserted_fenced
             <sql>DROP FUNCTION public.account_export_feedback_deleted()</sql>
             <sql>DROP FUNCTION public.account_export_messages_deleted()</sql>
             <sql>DROP FUNCTION public.account_export_message_changed()</sql>
+            <sql>DROP TRIGGER trg_export_expiry_at_commit ON lifecycle_private.export_expiry_queue</sql>
+            <sql>DROP FUNCTION public.account_export_expire_at_commit()</sql>
+            <sql>DROP TABLE lifecycle_private.export_expiry_queue</sql>
         </rollback>
     </changeSet>
     <changeSet id="1795549410482-3" author="hephaestus">

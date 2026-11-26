@@ -71,6 +71,7 @@ class OwnerFunctionsDatabaseTest {
      * is new, and one older entry is erased already. Each has a ready export past its expiry, and Ada has one that is still valid.
      */
     private static final String SEED = """
+            BEGIN;
             INSERT INTO workspace (id, account_login, account_type, display_name, slug, status)
             VALUES (1, 'first-org', 'ORG', 'First', 'first-org', 'ACTIVE'),
                    (2, 'second-org', 'ORG', 'Second', 'second-org', 'ACTIVE');
@@ -96,6 +97,7 @@ class OwnerFunctionsDatabaseTest {
             UPDATE conversation_entry SET redacted_at = now() WHERE id = '00000000-0000-0000-0000-0000000e0006';
             UPDATE conversation SET slack_team_id = 'T1', slack_user_id = 'U12', slack_channel_id = 'D12'
             WHERE id = '00000000-0000-0000-0000-00000000b001';
+            COMMIT;
             BEGIN;
             -- A ready export is inserted only under its owner's export fence, as the export worker publishes it.
             SELECT pg_advisory_xact_lock(hashtext('account-export-sources'), hashtext(CAST(a AS text)) & 63)
