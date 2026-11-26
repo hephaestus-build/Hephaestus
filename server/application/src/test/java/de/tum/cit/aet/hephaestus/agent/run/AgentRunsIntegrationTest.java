@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -511,7 +512,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
                             return new Continued(next);
                         }
                     };
-                    new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+                    new AgentRunReaper(repository, transactions, List.of(handler), meters, Clock.systemUTC()).reap();
                 }));
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
@@ -571,7 +572,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         };
         var meters = new SimpleMeterRegistry();
         try (var logs = new LogCapture(AgentRunReaper.class)) {
-            new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+            new AgentRunReaper(repository, transactions, List.of(handler), meters, Clock.systemUTC()).reap();
             assertThat(logs.events("agent.run.reaper.failed")).isEmpty();
             assertThat(logs.events("agent.run.continued")).isEmpty();
         }
@@ -599,7 +600,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
             }
         };
         var meters = new SimpleMeterRegistry();
-        new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+        new AgentRunReaper(repository, transactions, List.of(handler), meters, Clock.systemUTC()).reap();
         assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
                 .isEqualTo(1);
         assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPED, "kind", "review", "outcome", "continued")
@@ -624,7 +625,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         expire(orphan.id());
         var meters = new SimpleMeterRegistry();
         try (var logs = new LogCapture(AgentRunReaper.class)) {
-            new AgentRunReaper(repository, transactions, List.of(composeKind), meters).reap();
+            new AgentRunReaper(repository, transactions, List.of(composeKind), meters, Clock.systemUTC()).reap();
             assertThat(logs.events("agent.run.reaper.failed"))
                     .singleElement()
                     .satisfies(fields -> assertThat(fields)
@@ -1083,7 +1084,8 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunReaper reaper(AgentRunHandler handler) {
-        return new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry());
+        return new AgentRunReaper(
+                repository, transactions, List.of(handler), new SimpleMeterRegistry(), Clock.systemUTC());
     }
 
     /** A kind whose domain row is a list: it records what the reaper hands it, in order. */

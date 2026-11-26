@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -13,6 +14,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -69,6 +71,7 @@ public class AgentRuns {
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
     private final AuthorityGenerations generations;
+    private final Clock clock;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -84,11 +87,13 @@ public class AgentRuns {
             AgentRunRepository runs,
             AgentCapacityProperties capacity,
             MeterRegistry meters,
-            AuthorityGenerations generations) {
+            AuthorityGenerations generations,
+            Clock clock) {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
         this.generations = generations;
+        this.clock = clock;
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
@@ -306,7 +311,8 @@ public class AgentRuns {
                         excluded,
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        capacity.bandAging().toSeconds())
+                        capacity.bandAging().toSeconds(),
+                        ControlledClock.replayInstant(clock))
                 .map(this::leased);
     }
 
@@ -329,7 +335,7 @@ public class AgentRuns {
 
     /**
      * Leases the next run of these kinds of one subject, for the sandbox that serves only that subject, or none. The
-     * claim order and the rule of one leased run for each subject are the same as for {@link #claim}.
+     * same queue order and rule of one leased run apply within the subject as for {@link #claim}.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunLease> claimSubject(long workspaceId, String concurrencyKey, Set<AgentRunKind> kinds) {
@@ -349,7 +355,7 @@ public class AgentRuns {
                         offered.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        capacity.bandAging().toSeconds())
+                        ControlledClock.replayInstant(clock))
                 .map(this::leased);
     }
 
@@ -369,7 +375,8 @@ public class AgentRuns {
                         kinds.stream().map(AgentRunKind::name).toList(),
                         offset,
                         limit,
-                        capacity.bandAging().toSeconds())
+                        capacity.bandAging().toSeconds(),
+                        ControlledClock.replayInstant(clock))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),
@@ -386,7 +393,11 @@ public class AgentRuns {
     public List<DueRun> dueOf(Set<AgentRunKind> kinds, Collection<Long> workspaceIds, Collection<String> subjectKeys) {
         if (kinds.isEmpty() || workspaceIds.isEmpty() || subjectKeys.isEmpty()) return List.of();
         return runs
-                .findDueOfSubjects(kinds.stream().map(AgentRunKind::name).toList(), workspaceIds, subjectKeys)
+                .findDueOfSubjects(
+                        kinds.stream().map(AgentRunKind::name).toList(),
+                        workspaceIds,
+                        subjectKeys,
+                        ControlledClock.replayInstant(clock))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),

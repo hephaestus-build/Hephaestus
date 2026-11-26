@@ -105,7 +105,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -915,8 +914,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false, true", "true, true", "true, false"})
-    void shouldUseTheScheduledCutoffWhenAClaimFollowsTheSchedulerSample(boolean legacyStimulus, boolean expired) {
+    @ValueSource(booleans = {true, false})
+    void shouldUseTheScheduledCutoffWhenAClaimFollowsTheSchedulerSample(boolean expired) {
         if (expired) {
             week = WeeklyDigestWindow.previousWeek(Instant.now().minus(Duration.ofDays(7)), BERLIN);
             when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
@@ -934,12 +933,6 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                             .path("startBy")
                             .asString())
                     .isEqualTo(cutoff.toString());
-            if (legacyStimulus) {
-                jdbcTemplate.update(
-                        "UPDATE conversation_entry SET payload = payload - 'startBy' WHERE id = ? AND workspace_id = ?",
-                        stimulus.getId(),
-                        workspaceId);
-            }
             var turn = turnRows.findById(Objects.requireNonNull(stimulus.getTurnId()))
                     .orElseThrow();
             var run = runs.find(new AgentRunRef(turn.getRunId(), workspaceId)).orElseThrow();

@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,13 +43,15 @@ public class AgentRunSampler {
     private record Subject(AgentRunKind kind, AgentRunBand band) {}
 
     private final AgentRunRepository runs;
+    private final Clock clock;
     private final Map<Slot, AtomicLong> open = new HashMap<>();
     private final Map<Subject, AtomicLong> due = new HashMap<>();
     private final Map<Subject, AtomicLong> oldestDue = new HashMap<>();
     private final Counter failures;
 
-    AgentRunSampler(AgentRunRepository runs, MeterRegistry meters) {
+    AgentRunSampler(AgentRunRepository runs, MeterRegistry meters, Clock clock) {
         this.runs = runs;
+        this.clock = clock;
         // Every series exists from the start, so an alert on a backlog that is still empty has a series to read.
         for (AgentRunKind kind : AgentRunKind.values()) {
             for (AgentRunBand band : AgentRunBand.values()) {
@@ -107,7 +111,7 @@ public class AgentRunSampler {
             Map<Slot, Long> counts = new HashMap<>();
             Map<Subject, Long> dueCounts = new HashMap<>();
             Map<Subject, Long> ages = new HashMap<>();
-            for (AgentRunRepository.OpenRow row : runs.open()) {
+            for (AgentRunRepository.OpenRow row : runs.open(ControlledClock.replayInstant(clock))) {
                 AgentRunKind kind = AgentRunKind.valueOf(row.getKind());
                 AgentRunBand band = AgentRunBand.valueOf(row.getBand());
                 String hold = row.getHoldReason();

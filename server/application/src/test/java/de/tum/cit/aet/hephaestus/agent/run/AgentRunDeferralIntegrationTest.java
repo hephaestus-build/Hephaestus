@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -53,7 +54,7 @@ class AgentRunDeferralIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        runs = new AgentRuns(repository, bean.capacity(), meters, generations);
+        runs = new AgentRuns(repository, bean.capacity(), meters, generations, Clock.systemUTC());
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("deferral-" + UUID.randomUUID()))
                 .getId();

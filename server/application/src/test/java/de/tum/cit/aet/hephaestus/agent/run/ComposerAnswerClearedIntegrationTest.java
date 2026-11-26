@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -195,7 +196,8 @@ class ComposerAnswerClearedIntegrationTest extends BaseIntegrationTest {
             @Override
             public void ended(AgentRunRef run, int lastEpoch, AgentRunStopReason reason) {}
         };
-        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry()).reap();
+        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), Clock.systemUTC())
+                .reap();
     }
 
     private void assertCleared(AgentRunLease lease) {

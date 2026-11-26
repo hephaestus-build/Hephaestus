@@ -85,7 +85,11 @@ public class DigestSchedule {
             ZoneId zone = accounts.timeZone(accountId).orElse(AccountDirectory.DEFAULT_TIME_ZONE);
             if (!isDue(now, zone)) continue;
             WeeklyDigestWindow window = WeeklyDigestWindow.previousWeek(now, zone);
-            Instant startBy = now.atZone(zone).with(TOO_LATE).toInstant();
+            Instant startBy = window.weekStart()
+                    .plusWeeks(1)
+                    .atTime(TOO_LATE)
+                    .atZone(zone)
+                    .toInstant();
             if (now.plusSeconds(1).isAfter(startBy)) continue;
             for (var membership : availability.memberships(accountId)) {
                 long workspaceId = membership.workspaceId();

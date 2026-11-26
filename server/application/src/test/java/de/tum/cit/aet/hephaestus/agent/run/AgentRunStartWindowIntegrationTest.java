@@ -112,7 +112,7 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
             }
 
             assertStartPaths(turn, AgentRunKind.TURN, queueState == QueueState.DUE, excluded);
-            var overdue = runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of());
+            var overdue = runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of(), null);
             if (queueState == QueueState.PAST_START_WINDOW || queueState == QueueState.PAST_DEADLINE) {
                 assertThat(overdue).hasValueSatisfying(row -> {
                     assertThat(row.getId()).isEqualTo(run.id());
@@ -150,11 +150,11 @@ class AgentRunStartWindowIntegrationTest extends AbstractWorkspaceIntegrationTes
             try (var migration = RunningMigration.start(dataSource)) {
                 assertStartPaths(expiring, AgentRunKind.TURN, false, List.of(controlRun.id()));
                 assertStartPaths(control, AgentRunKind.TURN, false, List.of(expiredRun.id()));
-                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of()))
+                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of(), null))
                         .isEmpty();
                 // Move the due time on the migration session so the window elapses while the barrier is up.
                 migration.update(ELAPSE_WINDOW, expiredRun.id());
-                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of()))
+                assertThat(runRows.findOverdueQueued(AgentRunKind.TURN.name(), List.of(), null))
                         .map(AgentRunRepository.ExpiredRow::getId)
                         .contains(expiredRun.id());
             }

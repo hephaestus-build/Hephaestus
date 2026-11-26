@@ -183,7 +183,10 @@ class EvaluationDigestIntegrationTest {
                 .jsonPath("$.settled")
                 .isEqualTo(true);
 
-        post(token, "/clock", Map.of("instant", due.toString())).expectStatus().isOk().expectBody(Void.class);
+        post(token, "/clock", Map.of("instant", due.toString()))
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
         UUID runId =
                 jdbc.sql("""
                 SELECT id FROM agent_run WHERE workspace_id = :workspace AND kind = 'DIGEST' AND state = 'QUEUED'

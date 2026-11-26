@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 
 /** A scenario clock. All zone views read the same instant. */
 public final class ControlledClock extends Clock {
@@ -28,6 +29,11 @@ public final class ControlledClock extends Clock {
     /** Keeps infrastructure that admits the scenario driver on wall time. */
     public static Clock operationalClock(Clock applicationClock) {
         return applicationClock instanceof ControlledClock ? Clock.systemUTC() : applicationClock;
+    }
+
+    /** Supplies scenario time to a database comparison that otherwise uses the database clock. */
+    public static @Nullable Instant replayInstant(Clock applicationClock) {
+        return applicationClock instanceof ControlledClock replay ? replay.instant() : null;
     }
 
     @Override

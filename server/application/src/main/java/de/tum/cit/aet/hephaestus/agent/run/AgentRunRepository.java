@@ -17,7 +17,8 @@ import org.springframework.data.repository.query.Param;
 /**
  * Every write of a run is a conditional update on the database clock. A write of a holder names its epoch and changes
  * nothing under another one. {@code clock_timestamp()} rather than {@code now()}: a lease is compared with the time of
- * the statement, not with the start of a transaction that may have waited for a lock.
+ * the statement, not with the start of a transaction that may have waited for a lock. Only the digest contact cutoff
+ * can use scenario time during an evaluation.
  */
 interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
@@ -82,35 +83,23 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                           ))))
             """;
 
-    /** Older digest stimuli record the week and zone of the Monday 21:00 cutoff. An erased stimulus cannot start. */
+    /** Digests store the cutoff as a UTC instant, including those backfilled on upgrade. */
     String DIGEST_START_BY = """
-            SELECT CASE WHEN pg_input_is_valid(cutoff.value, 'timestamp with time zone')
-                        THEN CAST(cutoff.value AS timestamptz)
-                        ELSE CAST('-infinity' AS timestamptz) END
+            SELECT COALESCE(CASE WHEN e.payload ->> 'startBy' ~ '^[0-9T:.+-]+Z$' THEN
+                                CASE WHEN pg_input_is_valid(e.payload ->> 'startBy', 'timestamp with time zone')
+                                     THEN CAST(e.payload ->> 'startBy' AS timestamptz) END
+                            END, CAST('-infinity' AS timestamptz))
               FROM turn_stimuli e
-              CROSS JOIN LATERAL (
-                  SELECT COALESCE(e.payload ->> 'startBy',
-                      CASE WHEN pg_input_is_valid(e.payload #>> '{window,weekStart}', 'date')
-                           THEN CAST(CAST(e.payload #>> '{window,weekStart}' AS date) + 7 AS text) || ' 21:00 ' ||
-                                CASE e.payload #>> '{window,zone}'
-                                    WHEN 'Z' THEN '+00:00'
-                                    WHEN 'UT' THEN '+00:00'
-                                    ELSE regexp_replace(e.payload #>> '{window,zone}', '^(UTC|GMT|UT)(?=[+-])', '')
-                                END
-                      END) AS value
-              ) cutoff
              WHERE e.run_id = r.id AND e.workspace_id = r.workspace_id AND e.kind = 'DIGEST'
             """;
 
-    /** The digest cutoff stays with the stimulus when a retry makes the run due again. */
+    /** A digest stimulus without its cutoff cannot start. Runs without a stimulus use their run-level wait limit. */
     String START_WINDOW_ELAPSED = """
-            COALESCE(COALESCE(
-                CASE WHEN r.kind = 'DIGEST' THEN (
+            COALESCE(CASE WHEN r.kind = 'DIGEST' THEN (
             """ + DIGEST_START_BY + """
-                ) END,
+                ) <= COALESCE(CAST(:replayNow AS timestamptz), clock_timestamp()) END,
                 CASE WHEN r.kind = 'DIGEST' THEN r.created_at ELSE r.available_at END
-                    + make_interval(secs => r.start_within_seconds)
-            ) <= clock_timestamp(), FALSE)
+                    + make_interval(secs => r.start_within_seconds) <= clock_timestamp(), FALSE)
             """;
 
     String PAST_DEADLINE = "(r.deadline IS NOT NULL AND r.deadline <= clock_timestamp())";
@@ -158,9 +147,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                      ) ELSE r.created_at END, r.id
             """;
 
-    String CLAIM_ORDER = ORDER + """
+    String PICK_ONE = """
             LIMIT 1 FOR UPDATE OF r SKIP LOCKED
             """;
+
+    String CLAIM_ORDER = ORDER + PICK_ONE;
 
     /** The lease a claim or a renewal gives: a person waits on a turn, so it is taken back sooner. */
     String LEASE_SECONDS = "CASE WHEN r.kind IN ('TURN','DIGEST') THEN :turnTtlSeconds ELSE :ttlSeconds END";
@@ -195,7 +186,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("kinds") Collection<String> kinds,
             @Param("offset") int offset,
             @Param("limit") int limit,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("agingSeconds") long agingSeconds,
+            @Param("replayNow") @Nullable Instant replayNow);
 
     /**
      * The queued runs of these kinds and subjects that a claim would offer now, in no order: a replica wakes the
@@ -213,7 +205,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     List<DueRow> findDueOfSubjects(
             @Param("kinds") Collection<String> kinds,
             @Param("workspaceIds") Collection<Long> workspaceIds,
-            @Param("subjectKeys") Collection<String> subjectKeys);
+            @Param("subjectKeys") Collection<String> subjectKeys,
+            @Param("replayNow") @Nullable Instant replayNow);
 
     // The start limit can pass while the claim orders its candidates and locks the picked row.
     String LEASE = """
@@ -243,14 +236,15 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("excluded") Collection<UUID> excluded,
             @Param("ttlSeconds") long ttlSeconds,
             @Param("turnTtlSeconds") long turnTtlSeconds,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("agingSeconds") long agingSeconds,
+            @Param("replayNow") @Nullable Instant replayNow);
 
-    /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
+    /** Only the first run of this subject can be eligible, so there is no fleet order to apply. */
     @Query(
             value = TURN_STIMULI + ", picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
             """
-                    + CLAIM_ORDER + ")"
+                    + PICK_ONE + ")"
                     + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claimSubject(
@@ -259,7 +253,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("kinds") Collection<String> kinds,
             @Param("ttlSeconds") long ttlSeconds,
             @Param("turnTtlSeconds") long turnTtlSeconds,
-            @Param("agingSeconds") long agingSeconds);
+            @Param("replayNow") @Nullable Instant replayNow);
 
     String KIND_CLAIM_LOCK = "hashtextextended('agent-run-claim:' || :kind, 0)";
 
@@ -317,7 +311,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
              WHERE o.state <> 'ENDED'
              GROUP BY o.kind, o.band, o.state, o.hold_reason
             """, nativeQuery = true)
-    List<OpenRow> open();
+    List<OpenRow> open(@Param("replayNow") @Nullable Instant replayNow);
 
     @Query(value = """
             UPDATE agent_run r SET leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """
@@ -530,7 +524,10 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                AND (:#{#skipped.isEmpty()} OR r.id NOT IN (:skipped))
              ORDER BY r.available_at, r.id LIMIT 1
             """, nativeQuery = true)
-    Optional<ExpiredRow> findOverdueQueued(@Param("kind") String kind, @Param("skipped") Collection<UUID> skipped);
+    Optional<ExpiredRow> findOverdueQueued(
+            @Param("kind") String kind,
+            @Param("skipped") Collection<UUID> skipped,
+            @Param("replayNow") @Nullable Instant replayNow);
 
     /** The reaper's write: the expired holder's epoch fences it, so a renewal that won the race keeps its lease. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -571,7 +568,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("runId") UUID runId,
             @Param("workspaceId") long workspaceId,
             @Param("epoch") int epoch,
-            @Param("reason") String reason);
+            @Param("reason") String reason,
+            @Param("replayNow") @Nullable Instant replayNow);
 
     /**
      * Settles the model calls that the claim {@code epoch} left open: each ends unverifiable and unpriced, never at zero

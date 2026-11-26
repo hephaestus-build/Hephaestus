@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="20261126012739-1" author="hephaestus">
+        <comment>Record the open weekly digests' contact cutoffs as UTC instants.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.DigestContactCutoffBackfillChange">
+            <param name="selectOpenDigests"><![CDATA[
+                SELECT e.id, e.workspace_id, e.payload #>> '{window,weekStart}', e.payload #>> '{window,zone}'
+                  FROM conversation_entry e
+                  JOIN conversation_turn t ON t.id = e.turn_id AND t.workspace_id = e.workspace_id
+                 WHERE e.kind = 'DIGEST' AND t.status IN ('QUEUED', 'RUNNING')
+                   AND e.payload -> 'startBy' IS NULL
+                   AND e.payload #>> '{window,weekStart}' IS NOT NULL AND e.payload #>> '{window,zone}' IS NOT NULL
+                 FOR UPDATE OF e
+            ]]></param>
+            <param name="recordCutoff"><![CDATA[
+                UPDATE conversation_entry SET payload = jsonb_set(payload, '{startBy}', to_jsonb(CAST(? AS text)))
+                 WHERE id = ? AND workspace_id = ?
+            ]]></param>
+        </customChange>
+        <rollback><stop>Restore the verified database backup taken before the digest cutoff backfill.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>
