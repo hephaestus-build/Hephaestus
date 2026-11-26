@@ -7,20 +7,27 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
 
 class AgentRunSamplerTest extends BaseUnitTest {
 
+    private static final AgentRunTiming.Reading TIME = new AgentRunTiming.Reading(null, "{}");
+    private final AgentRunTiming timing = mock(AgentRunTiming.class);
     private final AgentRunRepository repository = mock(AgentRunRepository.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
+    @BeforeEach
+    void clock() {
+        when(timing.read(true)).thenReturn(TIME);
+    }
+
     @Test
     void shouldStartAtZeroForEveryKindBandStateAndHold() {
-        new AgentRunSampler(repository, meters, Clock.systemUTC());
+        new AgentRunSampler(repository, meters, timing);
 
         for (AgentRunKind kind : AgentRunKind.values()) {
             for (AgentRunBand band : AgentRunBand.values()) {
@@ -37,8 +44,8 @@ class AgentRunSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldPublishEachRowUnderItsOwnLabels() {
-        var sampler = new AgentRunSampler(repository, meters, Clock.systemUTC());
-        when(repository.open(null))
+        var sampler = new AgentRunSampler(repository, meters, timing);
+        when(repository.open(TIME))
                 .thenReturn(List.of(
                         row("REVIEW", "BATCH", "QUEUED", null, 5, 3, 900),
                         row("REVIEW", "BATCH", "QUEUED", "BUDGET", 2, 0, 0),
@@ -63,11 +70,11 @@ class AgentRunSamplerTest extends BaseUnitTest {
     /** A DB blip must not read as "nothing waits" and silence an alert that was firing. */
     @Test
     void shouldKeepTheLastValuesAndCountTheFailureWhenAPassFails() {
-        var sampler = new AgentRunSampler(repository, meters, Clock.systemUTC());
-        when(repository.open(null)).thenReturn(List.of(row("REVIEW", "BATCH", "QUEUED", null, 4, 4, 4000)));
+        var sampler = new AgentRunSampler(repository, meters, timing);
+        when(repository.open(TIME)).thenReturn(List.of(row("REVIEW", "BATCH", "QUEUED", null, 4, 4, 4000)));
         sampler.sample();
 
-        when(repository.open(null)).thenThrow(new QueryTimeoutException("slow"));
+        when(repository.open(TIME)).thenThrow(new QueryTimeoutException("slow"));
         sampler.sample();
 
         assertThat(oldestDue(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isEqualTo(4000);
@@ -78,10 +85,10 @@ class AgentRunSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldReadACombinationWithoutRunsAsZeroAgain() {
-        var sampler = new AgentRunSampler(repository, meters, Clock.systemUTC());
-        when(repository.open(null)).thenReturn(List.of(row("REVIEW", "BATCH", "QUEUED", "BUDGET", 2, 0, 0)));
+        var sampler = new AgentRunSampler(repository, meters, timing);
+        when(repository.open(TIME)).thenReturn(List.of(row("REVIEW", "BATCH", "QUEUED", "BUDGET", 2, 0, 0)));
         sampler.sample();
-        when(repository.open(null)).thenReturn(List.of());
+        when(repository.open(TIME)).thenReturn(List.of());
         sampler.sample();
 
         assertThat(runs(AgentRunKind.REVIEW, AgentRunBand.BATCH, "queued", "budget"))

@@ -921,7 +921,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
             when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
         }
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
-        var cutoff = week.end().atZone(BERLIN).with(DigestSchedule.TOO_LATE).toInstant();
+        var cutoff = week.contactCutoff();
 
         transactionTemplate.executeWithoutResult(status -> {
             status.setRollbackOnly();

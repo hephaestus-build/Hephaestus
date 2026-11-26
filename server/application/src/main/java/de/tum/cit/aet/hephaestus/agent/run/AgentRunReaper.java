@@ -1,14 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,18 +53,18 @@ public class AgentRunReaper {
     private final TransactionTemplate transactions;
     private final Map<AgentRunKind, AgentRunHandler> handlers = new EnumMap<>(AgentRunKind.class);
     private final MeterRegistry meters;
-    private final Clock clock;
+    private final AgentRunTiming timing;
 
     AgentRunReaper(
             AgentRunRepository runs,
             TransactionTemplate transactions,
             List<AgentRunHandler> handlers,
             MeterRegistry meters,
-            Clock clock) {
+            AgentRunTiming timing) {
         this.runs = runs;
         this.transactions = transactions;
         this.meters = meters;
-        this.clock = clock;
+        this.timing = timing;
         for (AgentRunHandler handler : handlers) {
             if (this.handlers.put(handler.kind(), handler) != null)
                 throw new IllegalStateException("Two handlers for runs of kind " + handler.kind());
@@ -88,9 +86,10 @@ public class AgentRunReaper {
     public void reap() {
         for (AgentRunHandler handler : handlers.values()) {
             String kind = handler.kind().name();
-            drain(skipped -> runs.findExpired(kind, skipped), row -> takeBack(handler, row));
+            drain(skipped -> runs.findExpired(kind, skipped, timing.read(false)), row -> takeBack(handler, row));
             drain(
-                    skipped -> runs.findOverdueQueued(kind, skipped, ControlledClock.replayInstant(clock)),
+                    skipped ->
+                            runs.findOverdueQueued(kind, skipped, timing.read(handler.kind() == AgentRunKind.DIGEST)),
                     row -> endOverdue(handler, row));
         }
     }
@@ -141,7 +140,10 @@ public class AgentRunReaper {
                 }
                 if (outcome instanceof AgentRunHandler.Requeue) {
                     long backoff = handler.retryAfter(row.getAttempt() + 1).toSeconds();
-                    if (!taken(status, runs.requeueExpired(lost.runId(), lost.workspaceId(), lost.epoch(), backoff)))
+                    if (!taken(
+                            status,
+                            runs.requeueExpired(
+                                    lost.runId(), lost.workspaceId(), lost.epoch(), backoff, timing.read(false))))
                         return;
                     settle(lost);
                     observe(row, EvaluationObservations.RunState.REQUEUED, null);
@@ -156,12 +158,8 @@ public class AgentRunReaper {
             }
             if (!taken(
                     status,
-                    runs.endExpired(
-                            lost.runId(),
-                            lost.workspaceId(),
-                            lost.epoch(),
-                            reason.name(),
-                            ControlledClock.replayInstant(clock)))) return;
+                    runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name(), timing.read(false))))
+                return;
             settle(lost);
             observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
@@ -176,16 +174,13 @@ public class AgentRunReaper {
         transactions.executeWithoutResult(status -> {
             var run = new AgentRunRef(row.getId(), row.getWorkspaceId());
             handler.lock(run);
+            var time = timing.read(kind == AgentRunKind.DIGEST);
             var reason = row.getPastDeadline() ? AgentRunStopReason.DEADLINE : AgentRunStopReason.NOT_STARTED;
             handler.ended(run, row.getLeaseEpoch(), reason);
             if (!taken(
                     status,
-                    runs.endExpired(
-                            row.getId(),
-                            row.getWorkspaceId(),
-                            row.getLeaseEpoch(),
-                            reason.name(),
-                            ControlledClock.replayInstant(clock)))) return;
+                    runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), reason.name(), time)))
+                return;
             observe(row, EvaluationObservations.RunState.ENDED, reason);
             count(kind, reason.name().toLowerCase(Locale.ROOT));
             event(log.atInfo(), "agent.run.ended", row)

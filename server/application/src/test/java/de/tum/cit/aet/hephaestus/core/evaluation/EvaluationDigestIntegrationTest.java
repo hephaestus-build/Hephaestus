@@ -42,6 +42,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -226,15 +227,14 @@ class EvaluationDigestIntegrationTest {
         when(digestAdmission.refuses(eq(workspaceId), any())).thenReturn(false);
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), workspaceId, digest.subject(), AgentSandboxKind.CONVERSATION);
-        var lease = transactions.execute(status -> {
+        var lease = Objects.requireNonNull(transactions.execute(status -> {
             var claim = runs.claimSubject(workspaceId, digest.subject(), Set.of(AgentRunKind.DIGEST))
                     .orElseThrow();
             assertThat(digestKind.claimed(new SandboxRun(sandbox, claim.fence(), claim.kind(), claim.attempt())))
                     .isTrue();
             return claim;
-        });
-        assertThat(lease).isNotNull();
-        var fence = java.util.Objects.requireNonNull(lease).fence();
+        }));
+        var fence = lease.fence();
         var deadline = DUE.plusSeconds(config.timeoutSeconds()).plus(TurnRunsAdapter.GRACE);
         assertThat(runs.find(digest.run()).orElseThrow().getDeadline()).isEqualTo(deadline);
         setClock(digest.token(), deadline.minusSeconds(1));

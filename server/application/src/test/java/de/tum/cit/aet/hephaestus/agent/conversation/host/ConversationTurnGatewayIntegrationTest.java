@@ -181,7 +181,6 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 beans.getBean(ConversationTurnAccess.class),
                 beans.getBean(ConversationTurnService.class),
                 completion,
-                beans.getBean(Clock.class),
                 beans.getBean(ObjectMapper.class),
                 metrics);
         var runController = new AgentRunController(agentRuns, sandboxes, transactions, List.of(kind));

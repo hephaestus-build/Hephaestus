@@ -236,6 +236,25 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     Optional<ConversationEntry> findByWorkspaceIdAndTurnIdAndKind(
             Long workspaceId, UUID turnId, ConversationEntry.Kind kind);
 
+    interface LegacyDigestWindow {
+        UUID getId();
+
+        String getWeekStart();
+
+        String getZone();
+    }
+
+    @WorkspaceAgnostic("Reads only queued legacy digest stimulus IDs and calendar windows for fleet claims and reaping")
+    @Query(value = """
+            SELECT e.id, e.payload #>> '{window,weekStart}' AS "weekStart", e.payload #>> '{window,zone}' AS zone
+              FROM conversation_turn t
+              JOIN conversation_entry e ON e.turn_id = t.id AND e.workspace_id = t.workspace_id
+             WHERE t.status = 'QUEUED' AND e.kind = 'DIGEST' AND e.redacted_at IS NULL
+               AND e.payload ->> 'startBy' IS NULL
+               AND e.payload #>> '{window,weekStart}' IS NOT NULL AND e.payload #>> '{window,zone}' IS NOT NULL
+            """, nativeQuery = true)
+    List<LegacyDigestWindow> findLegacyDigestWindows();
+
     /** The question of the account's ended turn on a surface, read with its owner check in one statement. */
     @Query("""
             SELECT q.id FROM ConversationEntry q, ConversationTurn t, Conversation c

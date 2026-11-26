@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -14,7 +13,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -71,7 +69,7 @@ public class AgentRuns {
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
     private final AuthorityGenerations generations;
-    private final Clock clock;
+    private final AgentRunTiming timing;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -88,12 +86,12 @@ public class AgentRuns {
             AgentCapacityProperties capacity,
             MeterRegistry meters,
             AuthorityGenerations generations,
-            Clock clock) {
+            AgentRunTiming timing) {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
         this.generations = generations;
-        this.clock = clock;
+        this.timing = timing;
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
@@ -230,7 +228,7 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef continueExpired(AgentRunFence fence, Duration delay, Duration executionWindow) {
-        if (runs.endExpiredForContinuation(fence.runId(), fence.workspaceId(), fence.epoch()) != 1)
+        if (runs.endExpiredForContinuation(fence.runId(), fence.workspaceId(), fence.epoch(), timing.read(false)) != 1)
             throw new StaleRunException(fence);
         int calls = runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch());
         TransactionCallbacks.afterCommit(() -> settled(calls));
@@ -312,7 +310,7 @@ public class AgentRuns {
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds(),
-                        ControlledClock.replayInstant(clock))
+                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
                 .map(this::leased);
     }
 
@@ -355,7 +353,7 @@ public class AgentRuns {
                         offered.stream().map(Enum::name).toList(),
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
-                        ControlledClock.replayInstant(clock))
+                        timing.read(offered.contains(AgentRunKind.DIGEST)))
                 .map(this::leased);
     }
 
@@ -376,7 +374,7 @@ public class AgentRuns {
                         offset,
                         limit,
                         capacity.bandAging().toSeconds(),
-                        ControlledClock.replayInstant(clock))
+                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),
@@ -397,7 +395,7 @@ public class AgentRuns {
                         kinds.stream().map(AgentRunKind::name).toList(),
                         workspaceIds,
                         subjectKeys,
-                        ControlledClock.replayInstant(clock))
+                        timing.read(kinds.contains(AgentRunKind.DIGEST)))
                 .stream()
                 .map(row -> new DueRun(
                         new AgentRunRef(row.getId(), row.getWorkspaceId()),
@@ -420,7 +418,14 @@ public class AgentRuns {
                 fence.workspaceId(),
                 fence.epoch(),
                 capacity.leaseTtl().toSeconds(),
-                capacity.turnLeaseTtl().toSeconds());
+                capacity.turnLeaseTtl().toSeconds(),
+                timing.read(false));
+    }
+
+    /** The clock that bounds conversation work, including work replayed at a scenario time. */
+    public Instant conversationDeadlineClock() {
+        Instant replayNow = timing.replayNow();
+        return replayNow != null ? replayNow : runs.databaseClock();
     }
 
     /**

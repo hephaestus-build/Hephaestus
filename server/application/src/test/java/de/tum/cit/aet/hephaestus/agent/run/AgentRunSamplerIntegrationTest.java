@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
@@ -26,6 +25,9 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentRunRepository repository;
+
+    @Autowired
+    private AgentRunTiming timing;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -74,7 +76,7 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
         transactions.executeWithoutResult(status -> runs.end(finished.fence(), AgentRunStopReason.COMPLETED));
 
-        new AgentRunSampler(repository, meters, Clock.systemUTC()).sample();
+        new AgentRunSampler(repository, meters, timing).sample();
 
         assertThat(runs(AgentRunKind.REVIEW, AgentRunBand.BATCH, "queued", "none"))
                 .as("two due and one in backoff")
@@ -114,7 +116,7 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldNotCountTheRunsOfASuspendedWorkspaceAsDueUntilItIsActiveAgain() {
         dueSince(enqueue(AgentRunKind.REVIEW, AgentRunBand.BATCH, "review:suspended"), "2 hours");
-        var sampler = new AgentRunSampler(repository, meters, Clock.systemUTC());
+        var sampler = new AgentRunSampler(repository, meters, timing);
 
         sampler.sample();
         assertThat(due(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isOne();

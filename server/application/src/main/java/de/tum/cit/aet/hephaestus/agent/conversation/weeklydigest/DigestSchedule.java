@@ -36,7 +36,6 @@ import tools.jackson.databind.ObjectMapper;
 public class DigestSchedule {
     private static final Logger log = LoggerFactory.getLogger(DigestSchedule.class);
     static final LocalTime DUE = LocalTime.of(9, 0);
-    static final LocalTime TOO_LATE = LocalTime.of(21, 0);
 
     private final WeeklyDigestSubscriptions subscriptions;
     private final WeeklyDigestAvailability availability;
@@ -58,7 +57,7 @@ public class DigestSchedule {
         var local = now.atZone(zone);
         return local.getDayOfWeek() == DayOfWeek.MONDAY
                 && !local.toLocalTime().isBefore(DUE)
-                && local.toLocalTime().isBefore(TOO_LATE);
+                && local.toLocalTime().isBefore(WeeklyDigestWindow.CONTACT_END);
     }
 
     @Bean
@@ -85,11 +84,7 @@ public class DigestSchedule {
             ZoneId zone = accounts.timeZone(accountId).orElse(AccountDirectory.DEFAULT_TIME_ZONE);
             if (!isDue(now, zone)) continue;
             WeeklyDigestWindow window = WeeklyDigestWindow.previousWeek(now, zone);
-            Instant startBy = window.weekStart()
-                    .plusWeeks(1)
-                    .atTime(TOO_LATE)
-                    .atZone(zone)
-                    .toInstant();
+            Instant startBy = window.contactCutoff();
             if (now.plusSeconds(1).isAfter(startBy)) continue;
             for (var membership : availability.memberships(accountId)) {
                 long workspaceId = membership.workspaceId();

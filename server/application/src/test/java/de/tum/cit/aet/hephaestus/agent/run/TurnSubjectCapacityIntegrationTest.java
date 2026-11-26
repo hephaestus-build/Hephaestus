@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validator;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -85,7 +84,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                         capacity.modelOutageWindow()),
                 new SimpleMeterRegistry(),
                 beans.getBean(AuthorityGenerations.class),
-                beans.getBean(Clock.class));
+                beans.getBean(AgentRunTiming.class));
     }
 
     @ParameterizedTest

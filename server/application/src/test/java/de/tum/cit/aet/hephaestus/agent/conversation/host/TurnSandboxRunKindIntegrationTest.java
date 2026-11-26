@@ -159,7 +159,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 meters);
     }
@@ -317,7 +316,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 failures);
         var controller = new AgentNextController(
@@ -422,7 +420,6 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
-                clock,
                 beans.getBean(ObjectMapper.class),
                 meters);
         assertThat(probe.during(() -> slowKind.context(run)).isObject()).isTrue();

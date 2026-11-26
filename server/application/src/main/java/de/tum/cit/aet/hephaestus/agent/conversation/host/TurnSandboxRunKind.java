@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -47,7 +46,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     private final ConversationTurnAccess rows;
     private final ConversationTurnService turnService;
     private final ConversationTurnCompletion completion;
-    private final Clock clock;
     private final ObjectMapper mapper;
     private final Counter claimFailures;
 
@@ -60,7 +58,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             ConversationTurnAccess rows,
             ConversationTurnService turnService,
             ConversationTurnCompletion completion,
-            Clock clock,
             ObjectMapper mapper,
             MeterRegistry meters) {
         this.starter = starter;
@@ -71,7 +68,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
         this.rows = rows;
         this.turnService = turnService;
         this.completion = completion;
-        this.clock = clock;
         this.mapper = mapper;
         this.claimFailures = Counter.builder(AgentMetrics.CONVERSATION_TURN_CLAIM_FAILURE)
                 .description("Conversation turns the gateway could not start or admit")
@@ -112,7 +108,8 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             return false;
         }
         ConversationTurn turn = started.get().turn();
-        Instant workDeadline = clock.instant().plusSeconds(started.get().llm().timeoutSeconds());
+        Instant workDeadline =
+                runs.conversationDeadlineClock().plusSeconds(started.get().llm().timeoutSeconds());
         turnRuns.limit(claim.workspaceId(), turn.getId(), claim.runId(), claim.epoch(), workDeadline);
         return true;
     }

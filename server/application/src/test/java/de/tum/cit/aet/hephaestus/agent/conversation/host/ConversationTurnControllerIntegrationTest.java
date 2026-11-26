@@ -79,7 +79,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -243,7 +242,6 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
                 turnAccess,
                 turns,
                 completion,
-                beans.getBean(Clock.class),
                 mapper,
                 metrics);
         var runController =

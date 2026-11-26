@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -37,7 +36,6 @@ public class TurnRunsAdapter implements TurnRuns {
 
     private final AgentRuns runs;
     private final WorkspaceMemberships memberships;
-    private final Clock clock;
 
     /** The subject of a conversation's runs: also the subject of its sandbox. */
     public static String subject(UUID conversationId) {
@@ -95,7 +93,7 @@ public class TurnRunsAdapter implements TurnRuns {
     @Transactional(propagation = Propagation.MANDATORY)
     public void stopped(long workspaceId, UUID runId, boolean wasRunning) {
         AgentRunRef run = new AgentRunRef(runId, workspaceId);
-        if (wasRunning) runs.endBy(run, clock.instant().plus(GRACE));
+        if (wasRunning) runs.endBy(run, runs.conversationDeadlineClock().plus(GRACE));
         else runs.cancel(run);
     }
 
