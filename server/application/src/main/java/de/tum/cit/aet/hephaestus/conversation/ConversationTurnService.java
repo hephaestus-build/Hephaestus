@@ -217,7 +217,15 @@ public class ConversationTurnService {
     /** Freezes the model and rates the attempt runs with, so even a lost attempt is billed at them. */
     @Transactional
     public void admit(long workspaceId, UUID turnId, int epoch, UUID runId, JsonNode admission) {
-        held(workspaceId, turnId, epoch, runId).admit(admission);
+        ConversationTurn turn = held(workspaceId, turnId, epoch, runId);
+        if (admission instanceof ObjectNode document) {
+            long historyEpoch = conversations
+                    .readScopeEpoch(workspaceId, turn.getAccountId())
+                    .orElseThrow();
+            turn.admit(document.deepCopy().put("historyEpoch", historyEpoch));
+        } else {
+            turn.admit(admission);
+        }
     }
 
     /**

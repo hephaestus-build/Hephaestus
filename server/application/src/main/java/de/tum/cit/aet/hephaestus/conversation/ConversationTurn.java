@@ -13,6 +13,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -25,6 +27,7 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Persistable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One question to Hephaestus and the work to answer it. {@link ConversationTurnService} owns execution and
@@ -275,6 +278,21 @@ public class ConversationTurn implements Persistable<UUID> {
 
     void admit(JsonNode admittedWith) {
         this.admission = admittedWith;
+    }
+
+    /** Adds the quoted entries to this attempt's admission. The gateway holds the turn and history locks. */
+    void recordSituationInputs(List<UUID> quotedEntries) {
+        if (!(admission instanceof ObjectNode document)) {
+            throw new IllegalStateException("A conversation turn needs an admission before it can quote history");
+        }
+        ObjectNode updated = document.deepCopy();
+        var recorded = updated.withArray("situationEntryIds");
+        Set<String> ids = new HashSet<>();
+        recorded.forEach(id -> ids.add(id.asString()));
+        for (UUID entryId : quotedEntries) {
+            if (ids.add(entryId.toString())) recorded.add(entryId.toString());
+        }
+        this.admission = updated;
     }
 
     void stop(Instant now) {
