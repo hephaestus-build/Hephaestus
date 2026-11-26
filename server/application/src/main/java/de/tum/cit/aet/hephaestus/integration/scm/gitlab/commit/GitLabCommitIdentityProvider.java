@@ -63,7 +63,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
     }
 
     @Override
-    public Map<Question, Answer> answer(
+    public Batch answer(
             String nameWithOwner, long providerId, long scopeId, ActiveScm initialCredential, Set<Question> questions) {
         Map<Question, Answer> answers = new HashMap<>();
         String serverUrl = Objects.requireNonNull(SourceProviderNamespaces.configuredUrl(initialCredential.config()));
@@ -80,8 +80,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
             var generation = new CredentialGeneration(credential.connectionId(), credential.credentialsGeneration());
             var paused = pauses.pausedUntil(scopeId, generation.connectionId(), generation.generation());
             if (paused.isPresent()) {
-                deferRest(questions, answers, new Answer.Deferred(paused.get(), generation));
-                break;
+                return new Batch(answers, new Pause(paused.get(), generation, true));
             }
             boolean readSucceeded = false;
             try {
@@ -96,8 +95,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                 var reply = response == null ? new ProviderReply.Failed("no response") : classify(exchange, response);
                 if (reply instanceof ProviderReply.Throttled throttled) {
                     clients.recordSuccess();
-                    deferRest(questions, answers, new Answer.Deferred(throttled.until(), generation));
-                    break;
+                    return new Batch(answers, new Pause(throttled.until(), generation));
                 }
                 if (response == null
                         || !(reply instanceof ProviderReply.Ok)
@@ -144,11 +142,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                     answers.put(question, new Answer.Account(local.getId(), nativeId));
                 }
             } catch (CircuitBreakerOpenException exception) {
-                deferRest(
-                        questions,
-                        answers,
-                        new Answer.Deferred(Instant.now().plus(ProviderReply.UNNAMED_WAIT), generation));
-                break;
+                return new Batch(answers, new Pause(Instant.now().plus(ProviderReply.UNNAMED_WAIT), generation));
             } catch (RuntimeException exception) {
                 // A throttle is local to this credential. The circuit breaker is shared.
                 var refusal = ProviderReply.refusalOf(exception);
@@ -156,8 +150,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                     var reply = ProviderReply.classify(ProviderReply.signalOf(refusal), Instant.now());
                     if (reply instanceof ProviderReply.Throttled throttled) {
                         clients.recordSuccess();
-                        deferRest(questions, answers, new Answer.Deferred(throttled.until(), generation));
-                        break;
+                        return new Batch(answers, new Pause(throttled.until(), generation));
                     }
                     if (reply instanceof ProviderReply.AuthLost && !connections.isCurrent(scopeId, credential)) {
                         clients.recordSuccess();
@@ -172,7 +165,7 @@ public class GitLabCommitIdentityProvider implements CommitIdentityProvider {
                         exception.getClass().getSimpleName());
             }
         }
-        return answers;
+        return new Batch(answers, null);
     }
 
     private static void deferRest(Set<Question> questions, Map<Question, Answer> answers, Answer deferred) {

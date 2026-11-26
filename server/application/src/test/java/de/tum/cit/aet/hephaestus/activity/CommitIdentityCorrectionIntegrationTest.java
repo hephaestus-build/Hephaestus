@@ -284,11 +284,10 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
             }
 
             @Override
-            public Map<Question, Answer> answer(
-                    String name, long provider, long scope, ActiveScm credential, Set<Question> questions) {
+            public Batch answer(String name, long provider, long scope, ActiveScm credential, Set<Question> questions) {
                 Map<Question, Answer> answers = new HashMap<>();
                 questions.forEach(question -> answers.put(question, new Answer.Account(correct, 2)));
-                return answers;
+                return new Batch(answers, null);
             }
         };
         return new CommitIdentityResolutionJob(

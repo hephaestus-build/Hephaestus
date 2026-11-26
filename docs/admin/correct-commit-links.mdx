@@ -29,7 +29,8 @@ The correction job runs by default.
    - `skipped`: another attempt already finished the email. No link changed.
    - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
    - `deferred`: the provider limited its rate, so the email waits until the provider's reset and spends no attempt.
-     The wait is at least five minutes, one run of the job, and at most two hours. Every server keeps it.
+     The wait is at least five minutes and at most 24 hours. The upper limit keeps a bad provider clock from parking the queue indefinitely.
+     Every server keeps the credential's wait, even when the provider answered every email in a batch.
      Repositories that use the throttled credential also wait. If you replace that credential, the job can retry the deferred emails on its next run.
 
 ## Check that it worked
