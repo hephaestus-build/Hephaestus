@@ -81,7 +81,8 @@ public class ReviewJobCompletionService {
         var outcome = output == null ? "" : output.path("outcome").asString();
         // The composition claim clears the attempt clock. The measuring run's recorded outcome still proves it ran.
         boolean executionStarted = job.getExecutionStartedAt() != null
-                || (admitted && output != null
+                || (admitted
+                        && output != null
                         && output.path(ReviewJobTerminal.MEASURED).isObject());
         var reason = job.getStatus() == ReviewJobStatus.CANCELLED
                 ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
