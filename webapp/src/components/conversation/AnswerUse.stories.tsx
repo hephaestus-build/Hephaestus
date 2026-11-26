@@ -1,13 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, userEvent } from "storybook/test";
 
+import { minutesBefore } from "@/stories/story-clock";
+
 import { AnswerUse } from "./AnswerUse";
 
 const meta = {
 	component: AnswerUse,
 	parameters: { layout: "padded" },
 	args: {
-		subject: "Hephaestus, 10:42",
+		answeredAt: minutesBefore(5),
 		text: "Your last pull request states how to verify it, but the retry has no test.",
 		used: {
 			recorded: true,
@@ -34,12 +36,12 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		const trigger = canvas.getByRole("button", {
-			name: "What Hephaestus used (Hephaestus, 10:42: Your last pull request states how to verify it,…)",
+			name: /^What Hephaestus used \(Hephaestus, .+: Your last pull request states how to verify it, but the retry has no test\.\)$/u,
 		});
 		await expect(canvas.queryByText("Observations of your work")).toBeNull();
 		await userEvent.click(trigger);
 		await expect(
-			canvas.getByText("The observations and feedback that this answer links to"),
+			canvas.getByText("The observations, problems and feedback that this answer links to"),
 		).toBeVisible();
 		await expect(canvas.getByText("Observations of your work")).toBeVisible();
 		await expect(canvas.getByText("One repository")).toBeVisible();
@@ -101,7 +103,7 @@ export const AskedInSlack: Story = {
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /What Hephaestus used/u }));
-		await expect(canvas.getByText("2 commands over these files")).toBeVisible();
+		await expect(canvas.getByText("2 commands")).toBeVisible();
 		await expect(canvas.getByText(/It also read this conversation\.$/u)).toBeVisible();
 		await expect(canvas.queryByText(/the page you asked from/u)).toBeNull();
 	},
@@ -164,7 +166,7 @@ export const ManySources: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /What Hephaestus used/u }));
 		await expect(canvas.getByText("3 repositories")).toBeVisible();
-		await expect(canvas.getByText("One command over these files")).toBeVisible();
+		await expect(canvas.getByText("One command")).toBeVisible();
 	},
 };
 

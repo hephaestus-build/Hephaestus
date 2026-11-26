@@ -245,36 +245,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             @Param("turnIds") Collection<UUID> turnIds);
 
     /**
-     * The last message of each of these turns that the app shows, over the whole turn and not only one page: an answer
-     * with words, or one that links. What Hephaestus used goes under it, once for each answer, and whether the turn
-     * stored its entries.
+     * The answer messages of these turns in one conversation, oldest first: What Hephaestus used goes under the last one
+     * that the app shows, which can lie on another page than the one being read.
      */
-    @Query(value = """
-            SELECT DISTINCT ON (e.turn_id) e.turn_id AS "turnId", e.id AS "entryId",
-                   e.payload IS NOT NULL AS "recorded"
-            FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId AND e.turn_id IN (:turnIds)
-              AND e.kind = 'ANSWER' AND e.redacted_at IS NULL
-              AND (e.text <> '' OR EXISTS (
-                  SELECT 1 FROM jsonb_array_elements(
-                      CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
-                           THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) b
-                  WHERE b ->> 'type' = 'toolCall' AND b ->> 'name' IN ('link_result', 'link_problem', 'show_feedback')))
-            ORDER BY e.turn_id, e.seq DESC
-            """, nativeQuery = true)
-    List<ReceiptAnchor> findReceiptAnchors(
-            @Param("workspaceId") Long workspaceId,
-            @Param("conversationId") UUID conversationId,
-            @Param("turnIds") Collection<UUID> turnIds);
-
-    /** One row of {@link #findReceiptAnchors}. */
-    interface ReceiptAnchor {
-        UUID getTurnId();
-
-        UUID getEntryId();
-
-        boolean getRecorded();
-    }
+    List<ConversationEntry> findByWorkspaceIdAndConversationIdAndTurnIdInAndKindOrderBySeqAsc(
+            Long workspaceId, UUID conversationId, Collection<UUID> turnIds, ConversationEntry.Kind kind);
 
     /** One row of {@link #findOpeningCalls}. */
     interface ToolCallRow {

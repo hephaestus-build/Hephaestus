@@ -223,11 +223,7 @@ export function ConversationMessage({
 							<LinkBody key={`${link.kind}:${link.id}`} link={link} workspaceSlug={workspaceSlug} />
 						))}
 				{!message.deleted && !streaming && message.used !== undefined && (
-					<AnswerUse
-						used={message.used}
-						subject={messageSubject(message, developer)}
-						text={message.text}
-					/>
+					<AnswerUse used={message.used} answeredAt={message.createdAt} text={message.text} />
 				)}
 				{children}
 				{rendersContent(actions) && <MessageFooter>{actions}</MessageFooter>}

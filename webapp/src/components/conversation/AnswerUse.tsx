@@ -3,6 +3,7 @@ import { ChevronDownIcon } from "lucide-react";
 import type { ConversationAnswerUse, ConversationUsedSource } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { formatDateTime } from "@/lib/dates";
 
 /** The documents that Hephaestus prepares about the person's work, in the person's terms. */
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
@@ -53,7 +54,7 @@ export function usedSourceLabel(source: ConversationUsedSource): string {
 			return times(source.count, "One file", "files");
 		}
 		case "COMMAND": {
-			return times(source.count, "One command over these files", "commands over these files");
+			return times(source.count, "One command", "commands");
 		}
 		case "CONVERSATION_SEARCH": {
 			return times(source.count, "A search of earlier messages", "searches of earlier messages");
@@ -64,10 +65,16 @@ export function usedSourceLabel(source: ConversationUsedSource): string {
 	}
 }
 
-/** The answer's first words, so that each disclosure on the page has its own accessible name. */
-function opening(text: string): string {
+/**
+ * The answer's words, shortened to its opening and its close, so that each disclosure on the page has its own
+ * accessible name: two answers that start alike usually end differently.
+ */
+function excerpt(text: string): string {
 	const words = text.replaceAll(/\s+/gu, " ").trim();
-	return words.length <= 48 ? words : `${words.slice(0, 47).trimEnd()}…`;
+	if (words.length <= 96) {
+		return words;
+	}
+	return `${words.slice(0, 47).trimEnd()} … ${words.slice(-40).trimStart()}`;
 }
 
 function closingLine(used: ConversationAnswerUse): string {
@@ -82,9 +89,9 @@ function closingLine(used: ConversationAnswerUse): string {
 
 export interface AnswerUseProps {
 	used: ConversationAnswerUse;
-	/** Who wrote the answer and when, as the message names it. */
-	subject: string;
-	/** The answer's words; their opening tells this disclosure apart from the others on the page. */
+	/** When the answer was written, to the second. */
+	answeredAt: Date;
+	/** The answer's words; their opening and close tell this disclosure apart from the others on the page. */
 	text: string;
 }
 
@@ -92,11 +99,11 @@ export interface AnswerUseProps {
  * What Hephaestus used for one answer (ADR 0157 decision 8), closed until the person opens it. The server derives it
  * from rows; nothing here is model text. It never claims to be complete: every answer also read the conversation.
  */
-export function AnswerUse({ used, subject, text }: AnswerUseProps) {
+export function AnswerUse({ used, answeredAt, text }: AnswerUseProps) {
 	return (
 		<Collapsible>
 			<CollapsibleTrigger
-				aria-label={`What Hephaestus used (${subject}: ${opening(text)})`}
+				aria-label={`What Hephaestus used (Hephaestus, ${formatDateTime(answeredAt)}: ${excerpt(text)})`}
 				render={
 					<Button variant="ghost" size="xs" className="group -ml-2 w-fit text-muted-foreground" />
 				}
@@ -113,7 +120,7 @@ export function AnswerUse({ used, subject, text }: AnswerUseProps) {
 					{used.cited && (
 						<UseGroup
 							title="Cited"
-							items={["The observations and feedback that this answer links to"]}
+							items={["The observations, problems and feedback that this answer links to"]}
 						/>
 					)}
 					{used.recorded ? (

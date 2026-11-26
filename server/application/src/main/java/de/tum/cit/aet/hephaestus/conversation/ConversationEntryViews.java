@@ -269,10 +269,22 @@ class ConversationEntryViews {
             turnIds.add(row.getTurnId());
         }
         if (turnIds.isEmpty()) return Map.of();
-        Map<UUID, ConversationEntryRepository.ReceiptAnchor> anchors = new HashMap<>();
-        for (var anchor : entries.findReceiptAnchors(workspaceId, conversation.getId(), turnIds)) {
-            if (rowIds.contains(anchor.getEntryId())) anchors.put(anchor.getTurnId(), anchor);
+        // The same rule as the timeline: a message shows when it has words or a link whose call succeeded. The answer's
+        // last shown message gets the receipt, and the answer cites when any of its shown messages links.
+        Set<ConversationPiEntries.ShownCall> shownCalls = entries.shownLinkCalls(workspaceId, turnIds);
+        Map<UUID, UUID> anchors = new HashMap<>();
+        Map<UUID, Boolean> recorded = new HashMap<>();
+        Set<UUID> citing = new HashSet<>();
+        for (ConversationEntry row : entries.findByWorkspaceIdAndConversationIdAndTurnIdInAndKindOrderBySeqAsc(
+                workspaceId, conversation.getId(), turnIds, ConversationEntry.Kind.ANSWER)) {
+            UUID turnId = row.getTurnId();
+            if (turnId == null || row.isRedacted()) continue;
+            recorded.merge(turnId, row.getPayload() != null, Boolean::logicalOr);
+            boolean linked = links(row).stream().anyMatch(link -> shownCalls.contains(link.in(turnId)));
+            if (linked) citing.add(turnId);
+            if (!row.getText().isEmpty() || linked) anchors.put(turnId, row.getId());
         }
+        anchors.values().retainAll(rowIds);
         if (anchors.isEmpty()) return Map.of();
         // The page holds only shown messages, so an assistant entry that holds only calls is read on its own.
         Map<UUID, List<ConversationAnswerUses.ToolUse>> calls = new HashMap<>();
@@ -288,9 +300,6 @@ class ConversationEntryViews {
                                 outcome.getCallId(), outcome.getTool(), outcome.getError()));
             }
         }
-        Set<UUID> citing = entries.shownLinkCalls(workspaceId, anchors.keySet()).stream()
-                .map(ConversationPiEntries.ShownCall::turnId)
-                .collect(Collectors.toSet());
         Set<UUID> fromPage = turns.findAllById(anchors.keySet()).stream()
                 .filter(turn -> turn.getWorkspaceId() == workspaceId)
                 .filter(turn -> hasText(turn.getPageContext()))
@@ -298,9 +307,9 @@ class ConversationEntryViews {
                 .collect(Collectors.toSet());
         Map<UUID, ConversationAnswerUseDTO> uses = new HashMap<>();
         anchors.forEach((turnId, anchor) -> uses.put(
-                anchor.getEntryId(),
+                anchor,
                 ConversationAnswerUses.of(
-                        anchor.getRecorded(),
+                        recorded.getOrDefault(turnId, false),
                         calls.getOrDefault(turnId, List.of()),
                         outcomes.getOrDefault(turnId, List.of()),
                         citing.contains(turnId),

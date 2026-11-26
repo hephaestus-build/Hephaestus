@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationUsedSourceDTO.ContextDocument;
 import de.tum.cit.aet.hephaestus.conversation.ConversationUsedSourceDTO.Kind;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -80,22 +82,27 @@ final class ConversationAnswerUses {
     private static String repository(@Nullable String argument) {
         String path = argument == null ? "" : argument.strip();
         int at = path.indexOf('@');
-        return trimSlashes(path(at < 0 ? path : path.substring(0, at)));
+        return path(at < 0 ? path : path.substring(0, at));
     }
 
-    /** A call's path, relative to the working directory, only to count it once. */
+    /**
+     * A call's path, relative to the working directory and resolved as the sandbox resolves it, only to count each file
+     * once: {@code INDEX.md} and {@code inputs/../INDEX.md} are one file.
+     */
     private static String path(@Nullable String argument) {
         String path = argument == null ? "" : argument.strip();
         if (path.startsWith(ROOT)) path = path.substring(ROOT.length());
-        while (path.startsWith("./")) path = path.substring(2);
-        return path;
-    }
-
-    private static String trimSlashes(String text) {
-        String trimmed = text;
-        while (trimmed.startsWith("/")) trimmed = trimmed.substring(1);
-        while (trimmed.endsWith("/")) trimmed = trimmed.substring(0, trimmed.length() - 1);
-        return trimmed;
+        Deque<String> parts = new ArrayDeque<>();
+        // The limit keeps empty parts, which the loop skips, so a trailing slash cannot change the result.
+        for (String part : path.split("/", -1)) {
+            if (part.isEmpty() || part.equals(".")) continue;
+            if (part.equals("..")) {
+                parts.pollLast();
+            } else {
+                parts.addLast(part);
+            }
+        }
+        return String.join("/", parts);
     }
 
     /**
