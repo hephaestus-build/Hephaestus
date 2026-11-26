@@ -100,18 +100,18 @@ public final class WorkPlaceScope {
         for (JsonNode result : selected)
             for (JsonNode citation : citations(result)) {
                 cited.add(key(citation));
-                citedSources.add(Evidence.text(citation.path("sourceKind")));
+                citedSources.add(value(citation.path("sourceKind")));
             }
 
         var index = ((ObjectNode) sealedIndex).deepCopy();
         var texts = JSON.arrayNode();
         Js.listOf(sealedIndex.path("citableTexts")).stream()
                 .filter(text -> cited.contains(List.of(
-                        Evidence.text(text.path("source")),
-                        Evidence.text(text.path("path")),
+                        value(text.path("source")),
+                        value(text.path("path")),
                         Objects.requireNonNullElse(Js.string(text.path("side")), "NEW"),
-                        Evidence.text(text.path("commit")),
-                        Evidence.text(text.path("sha256")))))
+                        value(text.path("commit")),
+                        value(text.path("sha256")))))
                 .forEach(texts::add);
         index.set("citableTexts", texts);
         var sources = JSON.arrayNode();
@@ -237,11 +237,16 @@ public final class WorkPlaceScope {
     /** A citation's text as {@code StagedEvidence} matches it: source, path, side, commit and the item digest. */
     private static List<String> key(JsonNode citation) {
         return List.of(
-                Evidence.text(citation.path("sourceKind")),
-                Evidence.text(citation.path("path")),
+                value(citation.path("sourceKind")),
+                value(citation.path("path")),
                 Objects.requireNonNullElse(Js.string(citation.path("side")), "NEW"),
-                Evidence.text(citation.path("commit")),
-                Evidence.text(citation.path("verification").path("itemSha256")));
+                value(citation.path("commit")),
+                value(citation.path("verification").path("itemSha256")));
+    }
+
+    /** A key part: a missing field and a null one are the same absent value, whichever way a writer serialized it. */
+    private static String value(JsonNode field) {
+        return Objects.requireNonNullElse(Js.string(field), "");
     }
 
     private static ArrayNode strings(List<String> values) {

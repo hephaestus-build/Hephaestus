@@ -174,6 +174,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -696,6 +697,65 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(again.get("id")).isEqualTo(row.get("id"));
                         assertThat(again.get("payload_digest")).isEqualTo(row.get("payload_digest"));
                     });
+        }
+    }
+
+    @Test
+    void shouldKeepAPrivateSiblingPracticeOutOfTheWorkPlaceCopy() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace().getId(),
+                    "private-sibling",
+                    scenario.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    1,
+                    review.developerId()));
+            admissions.assigned(review.pending(), sibling);
+            // Off: its result stays recorded and may support no feedback on the work.
+            jdbc.update(
+                    "UPDATE practice SET feedback_mode='OFF' WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    sibling.getId());
+            var original = request(review);
+            admission.stage(review.identity(), original);
+            var sent = original.results().getFirst();
+            admission.stage(
+                    review.identity(),
+                    new AdmissionRequestDTO(
+                            3,
+                            review.reviewId(),
+                            review.identity().jobId(),
+                            0,
+                            List.of(new SubmittedResultDTO(
+                                    sibling.getSlug(),
+                                    sent.itemId(),
+                                    sent.itemVersion(),
+                                    sent.candidate(),
+                                    sent.readReceipts())),
+                            List.of()));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+
+            var payload = mapper.readTree(jdbc.queryForObject(
+                    "SELECT payload::text FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    String.class,
+                    review.workspaceId(),
+                    review.reviewId()));
+            assertThat(payload.path("results"))
+                    .extracting(result -> result.path("practiceSlug").asString())
+                    .containsExactly(review.practiceSlug());
+            assertThat(payload.path("notReached").toString()).contains(sibling.getSlug());
+            assertThat(payload.path("files").propertyNames())
+                    .noneMatch(path -> path.endsWith("/" + sibling.getSlug() + ".md"));
+            var catalog = mapper.readTree(Base64.getDecoder()
+                    .decode(payload.path("files").path("inputs/practices/index.json").asString()));
+            assertThat(catalog)
+                    .extracting(practice -> practice.path("slug").asString())
+                    .containsExactly(review.practiceSlug());
         }
     }
 
