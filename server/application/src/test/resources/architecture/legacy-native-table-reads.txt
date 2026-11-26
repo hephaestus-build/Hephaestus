@@ -126,8 +126,8 @@ integration.core de.tum.cit.aet.hephaestus.integration.core.connection.ExactPers
 integration.core de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository reads workspace of workspace x2
 integration.core de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository reads review of practices x1
 integration.core de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceRepository reads account of core x1
-integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.IntegrationOutlinePersonDataCatalog reads connection of integration.core x2
-integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.IntegrationOutlinePersonDataCatalog reads identity_provider of integration.core x2
+integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.IntegrationOutlinePersonDataCatalog reads connection of integration.core x1
+integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.IntegrationOutlinePersonDataCatalog reads identity_provider of integration.core x1
 integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.OutlineCollaboratorPersonDataContributor reads connection of integration.core x1
 integration.outline de.tum.cit.aet.hephaestus.integration.outline.adapter.OutlineCollaboratorPersonDataContributor reads identity_provider of integration.core x1
 integration.outline de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository reads account of core x3

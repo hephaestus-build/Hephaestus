@@ -104,11 +104,13 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                     resolvedAccount));
         }
         includeEquivalentProviders(identities);
-        // A mirror is keyed by instance and native user, not by the OAuth workspace.
-        // Normalize after account closure so account-only requests install the same control.
-        for (PersonIdentity identity : List.copyOf(identities)) {
-            if (validateProvider(identity).equals("OUTLINE"))
-                identities.add(new PersonIdentity(identity.providerId(), identity.subject(), null));
+        // An account-only request also covers Outline mirrors without a team key.
+        // A supplied scope, including one used to revalidate a preview, keeps its team keys.
+        if (supplied.isEmpty()) {
+            for (PersonIdentity identity : List.copyOf(identities)) {
+                if (validateProvider(identity).equals("OUTLINE"))
+                    identities.add(new PersonIdentity(identity.providerId(), identity.subject(), null));
+            }
         }
         List<Long> users = new ArrayList<>();
         for (PersonIdentity identity : identities) {

@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentEvents;
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentPermission;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +37,7 @@ public class OutlinePersonSourceIdentityContributor implements PersonSourceIdent
     public List<Long> sourceIds(PersonScope person) {
         Set<Long> ids = new TreeSet<>();
         for (var identity : person.identities())
-            ids.addAll(repository.findPersonSourceIds(
-                    identity.providerId(), identity.subject(), Objects.requireNonNullElse(identity.teamId(), "")));
+            ids.addAll(repository.findPersonSourceIds(identity.providerId(), identity.subject(), identity.teamKey()));
         return List.copyOf(ids);
     }
 

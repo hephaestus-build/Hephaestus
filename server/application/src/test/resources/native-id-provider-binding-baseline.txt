@@ -17,39 +17,6 @@ src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalo
 # src/main/java/de/tum/cit/aet/hephaestus/core/privacy/IdentityRestrictionService.java:215 s.provider_user_key=i.provider_user_key
 src/main/java/de/tum/cit/aet/hephaestus/core/privacy/IdentityRestrictionService.java | s.provider_user_key=i.provider_user_key | 9d657ad8a91273578dfeb70234c04dd6608dafdbc021d48758514739466a3442
 
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java:36 i.subject=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java | i.subject= | a75542aaa1999a8a0f084ab344017ab35008a3054c83cc0f997890ff13db1251
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java:56 i.subject=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/adapter/IntegrationOutlinePersonDataCatalog.java | i.subject= | ef4c807016dd81a9572076964a502007136bb79159a40d1359764678f44047c9
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 i.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 i.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 s.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:44 s.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 99eb98f5b50936fb372a9d23cdf42c1385fa35a0205419945e45ec7044aea41d
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 i.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 i.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | i.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 s.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:164 s.provider_user_key=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | s.provider_user_key= | 5dc0ad9ead860ba93b501b0cf521305d15e1944da5cbaa39a5b6957ce9c2acf5
-
-# src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java:261 authors.subject=
-src/main/java/de/tum/cit/aet/hephaestus/integration/outline/domain/OutlineDocumentRepository.java | authors.subject= | c528dff81f4b1135e6db018bf66ec918ff26526b0d1b63e72d39d6519dcfba91
-
 # src/main/java/de/tum/cit/aet/hephaestus/integration/scm/ScmPersonSourceIdentityContributor.java:114 rm.native_id=
 src/main/java/de/tum/cit/aet/hephaestus/integration/scm/ScmPersonSourceIdentityContributor.java | rm.native_id= | e14fc9d806cad218ef4fac1370f0f76bb32010d538bc8030297090e7705558fc
 

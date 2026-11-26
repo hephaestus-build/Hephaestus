@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlinePersonTeam;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,9 @@ final class OutlineCollaboratorPersonDataContributor implements PersonDataContri
                 JOIN connection c ON c.id=t.connection_id AND c.workspace_id=t.workspace_id
                 JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
                 JOIN jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
-                  ON i."providerId"=p.id AND COALESCE(i."teamId",'')=COALESCE(c.instance_key,'') AND jsonb_exists(COALESCE(t.collaborator_subjects,'[]'::jsonb),i.subject)
+                  ON i."providerId"=p.id AND jsonb_exists(t.collaborator_subjects,i.subject)
+                WHERE c.kind='OUTLINE' AND COALESCE(i."teamId",'')""" + OutlinePersonTeam.SQL_MATCH + """
+
                 GROUP BY t.id ORDER BY t.id
                 """,
                 JdbcPersonDataStore.parameters(person, mapper),

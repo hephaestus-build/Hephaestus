@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlinePersonTeam;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -22,6 +23,14 @@ import tools.jackson.databind.ObjectMapper;
     "outline_document_collaborator"
 })
 public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
+    private static final String DOCUMENT_AUTHOR_SCOPE = """
+        EXISTS (SELECT 1
+          FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
+          JOIN identity_provider p ON i."providerId"=p.id AND p.type='OUTLINE'
+          JOIN connection c ON c.config->>'serverUrl'=p.server_url AND c.kind='OUTLINE'
+          WHERE c.id=t.connection_id AND c.workspace_id=t.workspace_id
+            AND COALESCE(i."teamId",'')""" + OutlinePersonTeam.SQL_MATCH;
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
@@ -33,7 +42,7 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "outline_document",
                         "outline_document",
-                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" JOIN connection c ON c.config->>'serverUrl'=p.server_url WHERE p.type='OUTLINE' AND c.id=t.connection_id AND c.workspace_id=t.workspace_id AND COALESCE(i.\"teamId\",'')=COALESCE(c.instance_key,'') AND i.subject=t.created_by_subject)",
+                        DOCUMENT_AUTHOR_SCOPE + " AND t.created_by_subject=i.subject)",
                         "id,workspace_id,connection_id,document_id,collection_id,collection_slug,parent_document_id,title,slug,body_markdown,content_hash,outline_updated_at,deleted_at,last_materialized_at,created_at,updated_at,created_by_subject,created_by_name,outline_created_at,body_evicted_at,archived_at,version",
                         "id",
                         "created_by_subject=NULL,created_by_name=NULL,title=NULL,slug=NULL,body_markdown=NULL,content_hash=NULL",
@@ -53,7 +62,7 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "outline_document_editor",
                         "outline_document",
-                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" JOIN connection c ON c.config->>'serverUrl'=p.server_url WHERE p.type='OUTLINE' AND c.id=t.connection_id AND c.workspace_id=t.workspace_id AND COALESCE(i.\"teamId\",'')=COALESCE(c.instance_key,'') AND i.subject=t.updated_by_subject)",
+                        DOCUMENT_AUTHOR_SCOPE + " AND t.updated_by_subject=i.subject)",
                         "id,workspace_id,connection_id,document_id,updated_by_subject,updated_by_name,outline_updated_at",
                         "id",
                         "updated_by_subject=NULL,updated_by_name=NULL",

@@ -26,6 +26,7 @@ A member can also delete their own account under [Danger zone](/user/user-settin
 1. Open **Instance administration → Person data**.
 2. Under **Find a person**, enter the **Account ID**, or select a **Provider instance** and enter the **Provider user ID**.
 3. For a Slack identity, also enter the **Slack workspace ID**.
+   For Outline, the provider instance and user ID cover every team on that Outline instance.
 4. To add another verified identity of the same person, select **Add provider identity**.
 5. Select **Preview data**.
 6. Check the resolved identities and the row count of each store.
@@ -83,6 +84,9 @@ Results and feedback about another developer stay, also when the person commente
 For the other developer's reviews, erasure removes the captured inputs and the hidden memory of Hephaestus.
 After the erasure, Hephaestus stops processing the person's exact provider identities.
 The [personal-data map](./dsms/personal-data-map.mdx) gives what each store keeps.
+
+For Outline, erasure hides the selected documents from Hephaestus when the request starts.
+It removes the person's local document data and redacts context copies and their answers before the request completes.
 
 The receipt keeps the acting instance admin, the state, the times and the counts.
 It keeps no erased content and no identity of the person.

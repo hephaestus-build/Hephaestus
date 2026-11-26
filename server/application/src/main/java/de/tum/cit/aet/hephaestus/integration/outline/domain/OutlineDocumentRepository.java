@@ -36,26 +36,26 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
         AND NOT EXISTS (SELECT 1 FROM IdentityRestriction s, IdentityProvider p, Connection c
           WHERE s.kind=de.tum.cit.aet.hephaestus.core.privacy.IdentityRestriction.Kind.ERASED AND s.providerId=p.id AND c.id=d.connectionId AND c.workspace.id=:workspaceId
             AND p.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.OUTLINE
-            AND p.serverUrl=FUNCTION('jsonb_extract_path_text',c.config,'serverUrl') AND s.teamKey=COALESCE(c.instanceKey,'')
+            AND p.serverUrl=FUNCTION('jsonb_extract_path_text',c.config,'serverUrl')
             AND (s.providerUserKey=d.createdBySubject OR s.providerUserKey=d.updatedBySubject
-              OR FUNCTION('jsonb_exists',d.collaboratorSubjects,s.providerUserKey)=TRUE))
-        """;
+              OR FUNCTION('jsonb_exists',d.collaboratorSubjects,s.providerUserKey)=TRUE)
+            AND s.teamKey""" + OutlinePersonTeam.JPQL_MATCH + ") ";
 
     String PERSON_PROJECTION_SQL_GUARD = """
             AND EXISTS (SELECT 1 FROM connection active WHERE active.id=d.connection_id AND active.workspace_id=:workspaceId
               AND active.kind='OUTLINE' AND active.state='ACTIVE')
-            AND NOT EXISTS (SELECT 1 FROM identity i JOIN identity_provider p ON p.id=i.provider_id
+            AND NOT EXISTS (SELECT 1 FROM identity i JOIN identity_provider p ON i.provider_id=p.id
               JOIN account a ON a.id=i.account_id JOIN connection c ON c.id=d.connection_id AND c.workspace_id=:workspaceId
               WHERE p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl' AND i.team_key=COALESCE(c.instance_key,'')
                 AND a.ai_choice='NO_AI' AND (i.provider_user_key=d.created_by_subject OR i.provider_user_key=d.updated_by_subject
                   OR jsonb_exists(d.collaborator_subjects,i.provider_user_key)))
         AND NOT EXISTS (SELECT 1 FROM identity_restriction s
-          JOIN identity_provider p ON p.id=s.provider_id
+          JOIN identity_provider p ON s.provider_id=p.id
           JOIN connection c ON c.id=d.connection_id AND c.workspace_id=:workspaceId
-          WHERE s.kind='ERASED' AND p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl' AND s.team_key=COALESCE(c.instance_key,'')
+          WHERE s.kind='ERASED' AND p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
             AND (s.provider_user_key=d.created_by_subject OR s.provider_user_key=d.updated_by_subject
-              OR jsonb_exists(d.collaborator_subjects,s.provider_user_key)))
-        """;
+              OR jsonb_exists(d.collaborator_subjects,s.provider_user_key))
+            AND s.team_key""" + OutlinePersonTeam.SQL_MATCH + ") ";
 
     boolean existsByWorkspaceIdAndId(Long workspaceId, Long id);
 
@@ -247,17 +247,14 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
         String getTeamId();
     }
 
-    @WorkspaceAgnostic("Instance-admin person selection pins an exact provider and native identity across workspaces")
+    @WorkspaceAgnostic("Instance-admin person selection pins the Outline provider and subject across workspaces")
     @Query(value = """
-        SELECT DISTINCT d.id
-                FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
-                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
-                CROSS JOIN LATERAL (
-                    SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
-                    UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))
-                ) authors
-                 WHERE p.id=:providerId AND authors.subject=:subject AND COALESCE(c.instance_key,'')=:teamId
-        """, nativeQuery = true)
+        SELECT d.id
+        FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+        JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+        WHERE p.id=:providerId AND c.kind='OUTLINE'
+          AND (:subject IN (d.created_by_subject,d.updated_by_subject) OR jsonb_exists(d.collaborator_subjects,:subject))
+          AND :teamId""" + OutlinePersonTeam.SQL_MATCH, nativeQuery = true)
     List<Long> findPersonSourceIds(
             @Param("providerId") long providerId, @Param("subject") String subject, @Param("teamId") String teamId);
 
