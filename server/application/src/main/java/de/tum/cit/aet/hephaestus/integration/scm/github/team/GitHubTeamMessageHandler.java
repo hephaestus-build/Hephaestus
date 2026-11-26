@@ -116,7 +116,6 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             if (event.actionType() == GitHubEventAction.Team.REMOVED_FROM_REPOSITORY) {
                 // The mirror may hold no permission row to delete, so the proof itself ends; that only narrows.
                 once.accept(() -> readerRemovals.teamAccessRemoved(
-                        gitHubProviderId(),
                         event.repository() == null ? null : event.repository().id()));
             }
             log.debug("Left team repository access to the reconciliation: action={}", event.action());
@@ -164,13 +163,6 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
                     readFailed.getClass().getSimpleName());
             return Optional.empty();
         }
-    }
-
-    private long gitHubProviderId() {
-        return Objects.requireNonNull(providerNamespaces
-                .findForMirror(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow(() -> new IllegalStateException("GitHub provider not configured"))
-                .getId());
     }
 
     private void grantRepositoryAccess(GitHubTeamEventDTO event, String role) {

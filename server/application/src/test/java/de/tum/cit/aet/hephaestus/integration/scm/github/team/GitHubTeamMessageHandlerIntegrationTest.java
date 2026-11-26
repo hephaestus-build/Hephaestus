@@ -15,7 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryAccessNarrowing;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -95,7 +96,10 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     // Repository access events read GitHub's current access; a plain mock answers for GitHub.
     private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
-    private final RepositoryReadersProvider readers = mock(RepositoryReadersProvider.class);
+    private final RepositoryAccessNarrowing readers = mock(RepositoryAccessNarrowing.class);
+
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     private IdentityProvider gitProvider;
     private Organization testOrganization;
@@ -364,7 +368,7 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 repositoryRepository,
                 permissionRepository,
                 accessReader,
-                new GitHubReaderRemovals(readers, repositoryRepository),
+                new GitHubReaderRemovals(readers, repositoryRepository, providerLookup),
                 deserializer,
                 transactionTemplate);
         accessHandler.dispatchTeamEvent(

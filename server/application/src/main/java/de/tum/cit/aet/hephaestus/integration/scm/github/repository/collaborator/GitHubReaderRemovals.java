@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryAccessNarrowing;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +18,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class GitHubReaderRemovals {
 
-    private final RepositoryReadersProvider readers;
+    private final RepositoryAccessNarrowing readers;
     private final RepositoryRepository repositories;
+    private final IdentityProviderLookup providers;
 
     /** GitHub removed the person as a collaborator of one repository. */
     public void removedFromRepository(
@@ -46,9 +49,11 @@ public class GitHubReaderRemovals {
      * GitHub removed a team's access to one repository. The mirror cannot show which members the team gave their only
      * access, so the repository's listing stops proving its readers until the next one.
      */
-    public void teamAccessRemoved(long providerId, @Nullable Long repositoryNativeId) {
+    public void teamAccessRemoved(@Nullable Long repositoryNativeId) {
         if (repositoryNativeId != null) {
-            readers.recordRepositoryReadersStale(providerId, repositoryNativeId);
+            providers
+                    .findId(IdentityProviderType.GITHUB, "https://github.com")
+                    .ifPresent(providerId -> readers.recordRepositoryReadersStale(providerId, repositoryNativeId));
         }
     }
 }

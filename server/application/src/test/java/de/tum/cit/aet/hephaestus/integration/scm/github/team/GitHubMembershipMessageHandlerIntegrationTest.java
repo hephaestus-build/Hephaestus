@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryAccessNarrowing;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -49,7 +49,10 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
     // The handler reads GitHub's current team membership; a plain mock answers for GitHub.
     private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
-    private final RepositoryReadersProvider readers = mock(RepositoryReadersProvider.class);
+    private final RepositoryAccessNarrowing readers = mock(RepositoryAccessNarrowing.class);
+
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     @Autowired
     private RepositoryRepository repositories;
@@ -107,7 +110,7 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
                 teamMembershipRepository,
                 scopeIdResolver,
                 accessReader,
-                new GitHubReaderRemovals(readers, repositories),
+                new GitHubReaderRemovals(readers, repositories, providerLookup),
                 deserializer,
                 transactionTemplate);
         githubReportsTeamMember(true);

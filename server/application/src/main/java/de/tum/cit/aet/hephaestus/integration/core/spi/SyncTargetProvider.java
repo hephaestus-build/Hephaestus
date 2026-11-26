@@ -23,7 +23,8 @@ public interface SyncTargetProvider
                 BackfillStateProvider,
                 RepositoryAvailabilityProvider,
                 BackfillRestartProvider,
-                RepositoryReadersProvider {
+                RepositoryReadersProvider,
+                RepositoryAccessNarrowing {
     /**
      * @return list of sync targets for the scope, never null (may be empty if scope not found)
      */
