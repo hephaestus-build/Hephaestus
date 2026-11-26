@@ -40,7 +40,6 @@ import org.slf4j.MDC;
 import org.slf4j.event.Level;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.NestedExceptionUtils;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -675,7 +674,7 @@ class LlmProxyService {
                             reviewStream);
                 }
             } catch (Exception e) {
-                if (NestedExceptionUtils.getMostSpecificCause(e) instanceof ProxyRoutingService.ModelRequestRefused) {
+                if (e instanceof ProxyRoutingService.ModelRequestRefused) {
                     permit.released();
                     return refusal(
                             HttpStatus.CONFLICT,
@@ -962,6 +961,7 @@ class LlmProxyService {
                 : stream -> ProxyStreamingUtils.endingWhenIdle(stream.takeUntilOther(stop), bounds.idle());
         AtomicBoolean answered = new AtomicBoolean();
         AtomicBoolean cancelledFirst = new AtomicBoolean();
+        AtomicBoolean sendRefused = new AtomicBoolean();
         var admit = exchange.admitSend();
         var sending = admit == null
                 ? request.bodyValue(outgoingBody)
@@ -974,6 +974,8 @@ class LlmProxyService {
                                     admit.accept(() ->
                                             sink.success(output.bufferFactory().wrap(outgoingBody)));
                                 } catch (RuntimeException failure) {
+                                    // A pooled connection can report its close before the request-body error.
+                                    if (failure instanceof ProxyRoutingService.ModelRequestRefused) sendRefused.set(true);
                                     sink.error(failure);
                                 }
                             });
@@ -999,12 +1001,16 @@ class LlmProxyService {
         try {
             UpstreamResult result =
                     ProxyStreamingUtils.forward(parts, limit, response, capture == null ? tap : both(tap, capture));
+            if (sendRefused.get()) throw new ProxyRoutingService.ModelRequestRefused();
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
             return cancelled.get() && !result.streamed() ? null : result;
-        } catch (IllegalStateException noHead) {
-            if (cancelledFirst.get()) return null;
-            throw noHead;
+        } catch (RuntimeException failure) {
+            if (sendRefused.get() && !(failure instanceof ProxyRoutingService.ModelRequestRefused)) {
+                throw new ProxyRoutingService.ModelRequestRefused(failure);
+            }
+            if (failure instanceof IllegalStateException && cancelledFirst.get()) return null;
+            throw failure;
         } finally {
             transport.finish(completed);
         }

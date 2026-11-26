@@ -341,7 +341,9 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             modelExchange = (request, next) -> {
                 if (number.getAndIncrement() != expectedSent) return next.exchange(request);
                 prepared.countDown();
-                return resume.asMono().flatMap(ignored -> next.exchange(request));
+                var exchange = resume.asMono().flatMap(ignored -> next.exchange(request));
+                // On the reused connection, the close can reach the exchange before the body error.
+                return usageFallback ? exchange.onErrorMap(ignored -> new IOException("Connection closed")) : exchange;
             };
             var request = HttpRequest.newBuilder(
                             URI.create("http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
