@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -269,7 +268,13 @@ public class ScmItemEventRecorder {
                 version = items.pin(item, null).version();
             } catch (ItemCaptureException unavailable) {
                 if (unavailable.code() == ItemCaptureCode.ITEM_REMOVED) {
-                    withhold(workspace, item.itemId(), ReviewRequestReason.ITEM_GONE);
+                    for (var event : events.unresolved(workspace, item.itemId())) {
+                        withhold(
+                                workspace,
+                                event,
+                                OccasionSettlement.Outcome.ITEM_UNAVAILABLE,
+                                ReviewRequestReason.ITEM_GONE);
+                    }
                     continue;
                 }
                 if (unavailable.code() != ItemCaptureCode.VERSION_UNAVAILABLE
@@ -280,11 +285,10 @@ public class ScmItemEventRecorder {
             }
             for (var event : events.unresolved(workspace, item.itemId())) {
                 if (!event.pendingFence().equals(fence))
-                    events.decide(
+                    withhold(
                             workspace,
-                            event.id(),
-                            event.state(),
-                            ItemEventState.WITHHELD,
+                            event,
+                            OccasionSettlement.Outcome.REFUSED_NEWEST,
                             ReviewRequestReason.VERSION_SUPERSEDED);
                 else if (version != null) {
                     String completed;
@@ -311,16 +315,16 @@ public class ScmItemEventRecorder {
         }
     }
 
-    private void withhold(long workspace, long itemId, ReviewRequestReason reason) {
-        for (var event : events.unresolved(workspace, itemId))
-            if (OccasionSettlement.next(
-                                    event.state(),
-                                    OccasionSettlement.Role.NEWEST,
-                                    OccasionSettlement.Outcome.ITEM_UNAVAILABLE,
-                                    reason)
-                            .orElse(null)
-                    instanceof OccasionSettlement.Next.Decide withheld)
-                events.decide(workspace, event.id(), event.state(), withheld.state(), withheld.reason());
+    private void withhold(
+            long workspace,
+            ItemEventService.Unresolved event,
+            OccasionSettlement.Outcome outcome,
+            ReviewRequestReason reason) {
+        // An unresolved event has no window. The refusal applies to the event itself.
+        if (OccasionSettlement.next(event.state(), OccasionSettlement.Role.NEWEST, outcome, reason)
+                        .orElse(null)
+                instanceof OccasionSettlement.Next.Decide withheld)
+            events.decide(workspace, event.id(), event.state(), withheld.state(), withheld.reason());
     }
 
     /** The item's pending fence, or null while the source cannot compose one (no head stored, or not visible). */
