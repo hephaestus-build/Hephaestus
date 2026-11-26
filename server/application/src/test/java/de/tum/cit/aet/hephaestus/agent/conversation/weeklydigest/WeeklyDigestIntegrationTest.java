@@ -739,7 +739,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST)));
         assertThat(next)
                 .as("the question is the next claim of its thread")
-                .hasValueSatisfying(lease -> assertThat(lease.runId()).isEqualTo(asked.turn().getRunId()));
+                .hasValueSatisfying(lease ->
+                        assertThat(lease.runId()).isEqualTo(asked.turn().getRunId()));
     }
 
     @Test
