@@ -62,7 +62,7 @@ public class ConversationTurnStarter {
     private final LlmConnectionHealth connections;
 
     /** A claimed and admitted turn attempt: what its host runs, for whom, with which model. */
-    public record StartedTurn(ConversationTurn turn, long accountId, ConversationLlmConfig llm) {}
+    public record StartedTurn(ConversationTurn turn, long accountId, ConversationLlmConfig llm, Instant startedAt) {}
 
     /**
      * Starts and admits the turn of a run that a sandbox's pull claimed, in the pull's transaction.
@@ -97,8 +97,8 @@ public class ConversationTurnStarter {
         if (digests.refuses(turn.getWorkspaceId(), turn.getId())) return decline(turn, DigestAdmission.REFUSED);
         if (turn.getSurface() != ConversationTurn.Surface.SYSTEM)
             meters.counter(AgentMetrics.CONVERSATION_TURN_STARTED).increment();
-        Instant startedAt = turn.getStartedAt();
-        if (turn.getSurface() != ConversationTurn.Surface.SYSTEM && turn.getAttempt() == 1 && startedAt != null) {
+        Instant startedAt = Objects.requireNonNull(turn.getStartedAt());
+        if (turn.getSurface() != ConversationTurn.Surface.SYSTEM && turn.getAttempt() == 1) {
             // A retry waited since its lease expired, which the row does not keep.
             Timer.builder(AgentMetrics.CONVERSATION_TURN_QUEUE_WAIT)
                     .description("From a question to the start of its first attempt")
@@ -137,7 +137,7 @@ public class ConversationTurnStarter {
         if (!admitted) {
             return decline(turn, PERSON_DATA_HELD);
         }
-        return Optional.of(new StartedTurn(turn, accountId, llm));
+        return Optional.of(new StartedTurn(turn, accountId, llm, startedAt));
     }
 
     /**

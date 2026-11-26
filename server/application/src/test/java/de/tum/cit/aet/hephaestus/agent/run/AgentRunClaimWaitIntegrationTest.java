@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.conversation.ErasedDigestTurns;
 import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -30,6 +31,9 @@ class AgentRunClaimWaitIntegrationTest extends BaseIntegrationTest {
     private AgentRunTiming timing;
 
     @Autowired
+    private ErasedDigestTurns erasedDigests;
+
+    @Autowired
     private AgentRuns bean;
 
     @Autowired
@@ -51,7 +55,7 @@ class AgentRunClaimWaitIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        runs = new AgentRuns(repository, bean.capacity(), meters, generations, timing);
+        runs = new AgentRuns(repository, bean.capacity(), meters, generations, timing, erasedDigests);
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("claim-wait-" + UUID.randomUUID()))
                 .getId();

@@ -33,22 +33,31 @@ class AgentRunTiming {
     }
 
     Reading read(boolean includeDigests) {
-        String cutoffs = includeDigests ? legacy.read(workspaces.findIds(), List.of(), true) : "{}";
+        String cutoffs = includeDigests ? legacy.read(workspaceIds(), List.of(), true) : "{}";
         return new Reading(replayNow(), cutoffs);
+    }
+
+    List<Long> workspaceIds() {
+        return workspaces.findIds();
     }
 
     Reading readSubjects(boolean includeDigests, Collection<Long> workspaceIds, Collection<String> subjects) {
         if (!includeDigests) return read(false);
         var conversations = new ArrayList<UUID>();
         for (String subject : subjects) {
-            if (!subject.startsWith("conversation:")) continue;
-            try {
-                conversations.add(UUID.fromString(subject.substring("conversation:".length())));
-            } catch (IllegalArgumentException ignored) {
-                // A subject without a conversation ID has no digest stimulus.
-            }
+            UUID id = conversationId(subject);
+            if (id != null) conversations.add(id);
         }
         return new Reading(replayNow(), legacy.read(workspaceIds, conversations, false));
+    }
+
+    static @Nullable UUID conversationId(String subject) {
+        if (!subject.startsWith("conversation:")) return null;
+        try {
+            return UUID.fromString(subject.substring("conversation:".length()));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     Reading refresh(Reading reading) {

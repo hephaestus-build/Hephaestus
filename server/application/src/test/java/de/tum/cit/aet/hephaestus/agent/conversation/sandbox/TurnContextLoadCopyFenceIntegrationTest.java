@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -62,7 +64,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
         var reading = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var beans = new DefaultListableBeanFactory();
-        beans.registerSingleton("loader", loader(layout, source, reading, release));
+        beans.registerSingleton("loader", loader(layout, copy -> source.set(copy.path()), reading, release));
         Instant now = Instant.now();
         var turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
         try (var preparations = Executors.newVirtualThreadPerTaskExecutor();
@@ -126,8 +128,58 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
         }
     }
 
+    @Test
+    void shouldReleaseTheCopyWhenTheRequestClockReadFails() throws Exception {
+        var layout = new FabricLayout(temp.toString());
+        var source = new AtomicReference<EvidenceSpool.Copy>();
+        var reading = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("loader", loader(layout, source::set, reading, release));
+        Instant now = Instant.now();
+        var turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
+        Thread request = Thread.currentThread();
+        var requestReads = new AtomicInteger();
+        var clockFailure = new IllegalStateException("Database clock unavailable");
+        try (var workers = Executors.newVirtualThreadPerTaskExecutor();
+                var folder = new TurnContextLoads(
+                        mock(ConversationTurnAccess.class),
+                        beans.getBeanProvider(ContextLoader.class),
+                        () -> {
+                            if (Thread.currentThread() == request && requestReads.incrementAndGet() == 2) {
+                                await().atMost(Duration.ofSeconds(5)).until(() -> reading.getCount() == 0);
+                                throw clockFailure;
+                            }
+                            return now;
+                        },
+                        copies,
+                        layout,
+                        mock(AgentRunAuthority.class))) {
+            try {
+                assertThatThrownBy(() -> folder.prepare(turn, now.plusSeconds(30), "repos/fixture"))
+                        .isSameAs(clockFailure);
+                var erasure = workers.submit(() -> {
+                    try (var erased = copies.erase()) {
+                        return erased.jdbc().queryForObject("SELECT true", Boolean.class);
+                    }
+                });
+                release.countDown();
+                await().atMost(Duration.ofSeconds(5))
+                        .alias("the abandoned copy releases the erasure fence")
+                        .until(erasure::isDone);
+                assertThat(erasure.get()).isTrue();
+                assertThat(Objects.requireNonNull(source.get()).path()).doesNotExist();
+            } finally {
+                release.countDown();
+                await().atMost(Duration.ofSeconds(5)).until(() -> folder.loadsRunning() == 0);
+                var copy = source.get();
+                if (copy != null) copy.close();
+            }
+        }
+    }
+
     private static ContextLoader loader(
-            FabricLayout layout, AtomicReference<Path> source, CountDownLatch reading, CountDownLatch release) {
+            FabricLayout layout, Consumer<EvidenceSpool.Copy> source, CountDownLatch reading, CountDownLatch release) {
         return new ContextLoader() {
             @Override
             public String prefix() {
@@ -144,7 +196,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
                 EvidenceSpool.Copy copy;
                 try {
                     copy = layout.spool().directory(workspaceId);
-                    source.set(copy.path());
+                    source.accept(copy);
                     reading.countDown();
                     release.await();
                     Files.writeString(copy.path().resolve("private.md"), "personal data");

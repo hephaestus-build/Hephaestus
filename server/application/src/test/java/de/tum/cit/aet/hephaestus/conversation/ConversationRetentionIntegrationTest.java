@@ -97,6 +97,9 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     private TurnRuns turnRuns;
 
     @Autowired
+    private ErasedDigestTurns digestTurns;
+
+    @Autowired
     private PersonDataCopyFence copies;
 
     @Autowired
@@ -346,7 +349,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     /** Redaction that counts, after commit, the entries each erasure reported as changed. */
     private ConversationRedaction reportingRedaction() {
-        return new ConversationRedaction(copies, entryRepository, turnRows, turnRuns, reporting(), mapper);
+        return new ConversationRedaction(copies, entryRepository, turnRows, digestTurns, turnRuns, reporting(), mapper);
     }
 
     private ApplicationEventPublisher reporting() {
@@ -462,7 +465,8 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         UUID thirdBatchSummary = summaryOver(main, before + 11, before + 15);
         AtomicInteger calls = new AtomicInteger();
         ConversationRedaction dying =
-                new ConversationRedaction(copies, entryRepository, turnRows, turnRuns, reporting(), mapper) {
+                new ConversationRedaction(
+                        copies, entryRepository, turnRows, digestTurns, turnRuns, reporting(), mapper) {
                     @Override
                     public void redact(Collection<UUID> entryIds) {
                         super.redact(entryIds);
@@ -570,6 +574,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                             copies,
                                             entryRepository,
                                             turnRows,
+                                            digestTurns,
                                             turnRuns,
                                             reporting(Objects.requireNonNull(reportedBy.get(replica))),
                                             mapper) {

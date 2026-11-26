@@ -282,20 +282,13 @@ public class TurnContextLoads implements AutoCloseable {
         }
         var permit = prepared.whenComplete((loaded, failure) -> loading.release());
         log.trace("Load permit held until the load ends: {}", permit);
+        boolean transferred = false;
         try {
-            return prepared.get(Math.max(0, timeLeft(deadline).toMillis()), TimeUnit.MILLISECONDS);
+            Load load = prepared.get(Math.max(0, timeLeft(deadline).toMillis()), TimeUnit.MILLISECONDS);
+            transferred = true;
+            return load;
         } catch (TimeoutException | InterruptedException waited) {
             if (waited instanceof InterruptedException) Thread.currentThread().interrupt();
-            // The preparation owns capture admission until its late archive and source directory are removed.
-            var discarded = prepared.thenAccept(load -> {
-                if (load instanceof Prepared archive) archive.close();
-            });
-            discarded.exceptionally(failure -> {
-                log.warn(
-                        "Could not remove an abandoned load archive: {}",
-                        failure.getClass().getSimpleName());
-                return null;
-            });
             throw new Abandoned(waited);
         } catch (ExecutionException failed) {
             if (failed.getCause() instanceof RuntimeException cause) {
@@ -303,6 +296,20 @@ public class TurnContextLoads implements AutoCloseable {
                 throw cause;
             }
             throw new CompletionException(failed);
+        } finally {
+            if (!transferred) {
+                // The preparation owns capture admission until its late archive and source directory are removed.
+                prepared.handle((load, failure) -> {
+                            if (load instanceof Prepared archive) archive.close();
+                            return null;
+                        })
+                        .exceptionally(failure -> {
+                            log.warn(
+                                    "Could not remove an abandoned load archive: {}",
+                                    failure.getClass().getSimpleName());
+                            return null;
+                        });
+            }
         }
     }
 

@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.context.annotation.Profile;
@@ -108,9 +107,11 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             return false;
         }
         ConversationTurn turn = started.get().turn();
-        Instant workDeadline =
-                runs.conversationDeadlineClock().plusSeconds(started.get().llm().timeoutSeconds());
-        turnRuns.limit(claim.workspaceId(), turn.getId(), claim.runId(), claim.epoch(), workDeadline);
+        turnRuns.setWorkDeadline(
+                claim,
+                turn.getId(),
+                started.get().startedAt(),
+                started.get().llm().timeoutSeconds());
         return true;
     }
 

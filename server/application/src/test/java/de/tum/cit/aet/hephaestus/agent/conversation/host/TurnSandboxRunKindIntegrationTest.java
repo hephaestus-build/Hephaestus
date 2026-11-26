@@ -59,6 +59,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -284,7 +285,13 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(held.held(run, false).turnId()).isEqualTo(first.getId());
         assertThat(turnRows.findById(second.getId()).orElseThrow().getStatus())
                 .isEqualTo(ConversationTurn.Status.QUEUED);
-        assertThat(held.workDeadline(run)).isAfter(runs.conversationDeadlineClock());
+        Instant startedAt = Objects.requireNonNull(
+                turnRows.findById(first.getId()).orElseThrow().getStartedAt());
+        assertThat(held.workDeadline(run))
+                .as("the work deadline is anchored to the database start")
+                .isEqualTo(startedAt.plusSeconds(
+                        LlmCatalogTestFixtures.admittedConversationConfig().timeoutSeconds()))
+                .isAfter(runs.conversationDeadlineClock());
         assertThat(runs.find(run.fence().run()).orElseThrow().getDeadline())
                 .isEqualTo(held.workDeadline(run).plus(TurnRunsAdapter.GRACE));
         assertThat(sandboxes.lease(

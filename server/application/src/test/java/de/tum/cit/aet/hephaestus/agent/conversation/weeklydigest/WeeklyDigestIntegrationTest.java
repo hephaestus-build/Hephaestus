@@ -1023,6 +1023,52 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(digestEntry()).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldLeaseTheNextDigestAfterAnEarlierReplicaErasedTheQueuedDigest(boolean subjectClaim) {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        transactionTemplate.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            assertThat(schedule(Clock.fixed(due(), BERLIN)).enqueueDue()).isOne();
+            var stimulus = digestEntry().orElseThrow();
+            var payload = Objects.requireNonNull(stimulus.getPayload()).deepCopy();
+            UUID erasedTurnId = Objects.requireNonNull(stimulus.getTurnId());
+            var erasedRun = new AgentRunRef(
+                    turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
+            // rc.16 erased the stimulus without changing the queued turn or run.
+            assertThat(jdbcTemplate.update("""
+                            UPDATE conversation_entry
+                               SET redacted_at = clock_timestamp(), payload = NULL, text = '', search_text = ''
+                             WHERE workspace_id = ? AND id = ?
+                            """, workspaceId, stimulus.getId())).isOne();
+
+            UUID conversationId = stimulus.getConversationId();
+            String requestId = requestId() + "-next";
+            assertThat(turns.submitDigest(
+                            workspaceId,
+                            conversationId,
+                            new ConversationTurnService.DigestRequest(
+                                    requestId, "Next digest", objectMapper.valueToTree(payload), week.contactCutoff())))
+                    .isTrue();
+            var next = turnRows.findByWorkspaceIdAndRequestId(workspaceId, requestId)
+                    .orElseThrow();
+            assertThat(runs.find(erasedRun).orElseThrow().getStartWithinSeconds())
+                    .as("the older writer set the relative window")
+                    .isPositive();
+
+            var kinds = Set.of(AgentRunKind.DIGEST);
+            var lease = subjectClaim
+                    ? runs.claimSubject(workspaceId, "conversation:" + conversationId, kinds)
+                    : runs.claim(kinds, List.of());
+            assertThat(lease)
+                    .as("the erased digest releases its queue position during the claim")
+                    .hasValueSatisfying(claim -> assertThat(claim.runId()).isEqualTo(next.getRunId()));
+            assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
+                    .isEqualTo(ConversationTurn.Status.STOPPED);
+            assertThat(runs.find(erasedRun).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.CANCELLED);
+        });
+    }
+
     private static WeeklyDigestTransport transport(WeeklyDigestPointer pointer, boolean reaches) {
         WeeklyDigestTransport transport = mock(WeeklyDigestTransport.class);
         when(transport.pointer()).thenReturn(pointer);

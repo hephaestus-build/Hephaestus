@@ -198,7 +198,7 @@ class ComposerAnswerClearedIntegrationTest extends BaseIntegrationTest {
             @Override
             public void ended(AgentRunRef run, int lastEpoch, AgentRunStopReason reason) {}
         };
-        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), timing).reap();
+        new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), timing, runs).reap();
     }
 
     private void assertCleared(AgentRunLease lease) {

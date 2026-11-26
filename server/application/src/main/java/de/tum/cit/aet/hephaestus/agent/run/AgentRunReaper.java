@@ -54,17 +54,20 @@ public class AgentRunReaper {
     private final Map<AgentRunKind, AgentRunHandler> handlers = new EnumMap<>(AgentRunKind.class);
     private final MeterRegistry meters;
     private final AgentRunTiming timing;
+    private final AgentRuns lifecycle;
 
     AgentRunReaper(
             AgentRunRepository runs,
             TransactionTemplate transactions,
             List<AgentRunHandler> handlers,
             MeterRegistry meters,
-            AgentRunTiming timing) {
+            AgentRunTiming timing,
+            AgentRuns lifecycle) {
         this.runs = runs;
         this.transactions = transactions;
         this.meters = meters;
         this.timing = timing;
+        this.lifecycle = lifecycle;
         for (AgentRunHandler handler : handlers) {
             if (this.handlers.put(handler.kind(), handler) != null)
                 throw new IllegalStateException("Two handlers for runs of kind " + handler.kind());
@@ -87,6 +90,9 @@ public class AgentRunReaper {
         for (AgentRunHandler handler : handlers.values()) {
             String kind = handler.kind().name();
             drain(skipped -> runs.findExpired(kind, skipped, timing.read(false)), row -> takeBack(handler, row));
+            if (handler.kind() == AgentRunKind.DIGEST) {
+                transactions.executeWithoutResult(_ -> lifecycle.cancelErasedDigests());
+            }
             // A legacy write after this read remains eligible for the next tick's lookup.
             var windows = timing.read(handler.kind() == AgentRunKind.DIGEST);
             drain(

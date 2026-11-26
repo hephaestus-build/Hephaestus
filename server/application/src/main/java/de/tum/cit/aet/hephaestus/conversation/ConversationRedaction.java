@@ -48,6 +48,7 @@ public class ConversationRedaction {
     private final PersonDataCopyFence copies;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
+    private final ErasedDigestTurns digestTurns;
     private final TurnRuns runs;
     private final ApplicationEventPublisher events;
     private final ObjectMapper mapper;
@@ -104,11 +105,10 @@ public class ConversationRedaction {
 
     private void stopErasedDigest(long workspaceId, UUID turnId) {
         turns.lockByIdAndWorkspaceId(turnId, workspaceId).ifPresent(turn -> {
-            boolean changed = turn.stopIfActive(turns.databaseClock());
+            digestTurns.stop(turn, turns.databaseClock());
             if (turn.getStatus() == ConversationTurn.Status.STOPPED) {
                 // The erased stimulus cannot drive any more work, including a claim that just started it.
                 runs.stopped(workspaceId, turn.getRunId(), false);
-                if (changed) events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
             }
         });
     }

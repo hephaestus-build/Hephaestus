@@ -177,7 +177,10 @@ Live runs use the database clock. During a [replay](./mentoring-evaluation.mdx#i
   A new writer also records the relative start window so a rollback to an earlier server can still expire the digest.
   Enqueue latency and retries do not move this cutoff.
   Erasing a digest stimulus stops its turn and cancels its run in the erasure transaction.
+  A claim and the reaper also stop queued digests that an earlier server erased without ending the run.
 - **Deadline** (`deadline`): it bounds the current claim.
+  A live conversation attempt stores its absolute work limit from the turn's database start plus the model timeout.
+  The run deadline includes the grace to end the attempt.
   A leased run is not renewed past it, and the reaper ends it there, even while its lease is live.
   Within a claim it only moves earlier (`AgentRuns.endBy`). A review or turn requeue clears it, so the next claim sets its own.
   The trigger `guard_agent_run` refuses any other change.

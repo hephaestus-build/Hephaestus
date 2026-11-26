@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -61,14 +60,11 @@ public final class ConversationTurnStarts {
                     .claimSubject(workspaceId, TurnRunsAdapter.subject(conversationId), Set.of(AgentRunKind.TURN))
                     .flatMap(lease -> starter.startClaimed(lease.fence()).map(started -> {
                         beans.getBean(TurnRunsAdapter.class)
-                                .limit(
-                                        workspaceId,
+                                .setWorkDeadline(
+                                        lease.fence(),
                                         started.turn().getId(),
-                                        lease.runId(),
-                                        lease.epoch(),
-                                        beans.getBean(Clock.class)
-                                                .instant()
-                                                .plusSeconds(started.llm().timeoutSeconds()));
+                                        started.startedAt(),
+                                        started.llm().timeoutSeconds());
                         return started;
                     }));
         }));

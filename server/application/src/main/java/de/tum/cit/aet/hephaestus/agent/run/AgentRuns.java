@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.conversation.ErasedDigestTurns;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -70,6 +71,7 @@ public class AgentRuns {
     private final MeterRegistry meters;
     private final AuthorityGenerations generations;
     private final AgentRunTiming timing;
+    private final ErasedDigestTurns erasedDigests;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -86,12 +88,14 @@ public class AgentRuns {
             AgentCapacityProperties capacity,
             MeterRegistry meters,
             AuthorityGenerations generations,
-            AgentRunTiming timing) {
+            AgentRunTiming timing,
+            ErasedDigestTurns erasedDigests) {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
         this.generations = generations;
         this.timing = timing;
+        this.erasedDigests = erasedDigests;
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
@@ -328,6 +332,7 @@ public class AgentRuns {
 
     private Optional<AgentRunLease> claimNext(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
         if (kinds.isEmpty()) return Optional.empty();
+        if (kinds.contains(AgentRunKind.DIGEST)) cancelErasedDigests(timing.workspaceIds(), null);
         // Only the oldest queued run of a subject is offered, and a claim skips a locked one, so two claims never lease
         // two runs of one subject; the partial unique index on the leased subject refuses it if they did.
         return runs.claim(
@@ -373,6 +378,10 @@ public class AgentRuns {
             offered.removeIf(AgentRunKind::conversation);
             if (offered.isEmpty()) return Optional.empty();
         }
+        if (offered.contains(AgentRunKind.DIGEST)) {
+            UUID conversationId = AgentRunTiming.conversationId(concurrencyKey);
+            if (conversationId != null) cancelErasedDigests(List.of(workspaceId), conversationId);
+        }
         return runs.claimSubject(
                         workspaceId,
                         concurrencyKey,
@@ -382,6 +391,18 @@ public class AgentRuns {
                         timing.readSubjects(
                                 offered.contains(AgentRunKind.DIGEST), List.of(workspaceId), List.of(concurrencyKey)))
                 .map(this::leased);
+    }
+
+    /** Takes a batch of queued runs that an earlier replica left behind during erasure. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelErasedDigests() {
+        cancelErasedDigests(timing.workspaceIds(), null);
+    }
+
+    private void cancelErasedDigests(Collection<Long> workspaceIds, @Nullable UUID conversationId) {
+        for (var run : erasedDigests.stopQueued(workspaceIds, conversationId, AgentRunReaper.BATCH)) {
+            cancelInTransaction(new AgentRunRef(run.runId(), run.workspaceId()));
+        }
     }
 
     /** A queued run that its sandbox claims next. */
@@ -453,6 +474,11 @@ public class AgentRuns {
     public Instant conversationDeadlineClock() {
         Instant replayNow = timing.replayNow();
         return replayNow != null ? replayNow : runs.databaseClock();
+    }
+
+    /** The start stamped on the turn by PostgreSQL, or the scenario's start during a replay. */
+    public Instant conversationWorkStart(Instant databaseStartedAt) {
+        return Objects.requireNonNullElse(timing.replayNow(), databaseStartedAt);
     }
 
     /**
@@ -597,6 +623,10 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean cancel(AgentRunRef run) {
+        return cancelInTransaction(run);
+    }
+
+    private boolean cancelInTransaction(AgentRunRef run) {
         if (runs.cancel(run.id(), run.workspaceId()) != 1) return false;
         settled(runs.settleOpenCallsOfRun(run.id(), run.workspaceId()));
         if (evaluation != null)

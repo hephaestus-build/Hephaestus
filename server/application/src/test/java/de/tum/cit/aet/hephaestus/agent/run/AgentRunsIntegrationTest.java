@@ -514,7 +514,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
                             return new Continued(next);
                         }
                     };
-                    new AgentRunReaper(repository, transactions, List.of(handler), meters, timing).reap();
+                    new AgentRunReaper(repository, transactions, List.of(handler), meters, timing, runs).reap();
                 }));
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
@@ -574,7 +574,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         };
         var meters = new SimpleMeterRegistry();
         try (var logs = new LogCapture(AgentRunReaper.class)) {
-            new AgentRunReaper(repository, transactions, List.of(handler), meters, timing).reap();
+            new AgentRunReaper(repository, transactions, List.of(handler), meters, timing, runs).reap();
             assertThat(logs.events("agent.run.reaper.failed")).isEmpty();
             assertThat(logs.events("agent.run.continued")).isEmpty();
         }
@@ -602,7 +602,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
             }
         };
         var meters = new SimpleMeterRegistry();
-        new AgentRunReaper(repository, transactions, List.of(handler), meters, timing).reap();
+        new AgentRunReaper(repository, transactions, List.of(handler), meters, timing, runs).reap();
         assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
                 .isEqualTo(1);
         assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPED, "kind", "review", "outcome", "continued")
@@ -627,7 +627,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         expire(orphan.id());
         var meters = new SimpleMeterRegistry();
         try (var logs = new LogCapture(AgentRunReaper.class)) {
-            new AgentRunReaper(repository, transactions, List.of(composeKind), meters, timing).reap();
+            new AgentRunReaper(repository, transactions, List.of(composeKind), meters, timing, runs).reap();
             assertThat(logs.events("agent.run.reaper.failed"))
                     .singleElement()
                     .satisfies(fields -> assertThat(fields)
@@ -1086,7 +1086,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunReaper reaper(AgentRunHandler handler) {
-        return new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), timing);
+        return new AgentRunReaper(repository, transactions, List.of(handler), new SimpleMeterRegistry(), timing, runs);
     }
 
     /** A kind whose domain row is a list: it records what the reaper hands it, in order. */

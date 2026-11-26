@@ -97,13 +97,15 @@ public class TurnRunsAdapter implements TurnRuns {
     }
 
     /**
-     * Bounds the claim that starts a turn's attempt: its run ends {@link #GRACE} after {@code workDeadline}, so its
+     * Bounds the claim from its stored start. Its run ends {@link #GRACE} after the work deadline, so its
      * holder can still end what it wrote, and the run reaper ends it then.
      */
-    @Transactional
-    public void limit(long workspaceId, UUID turnId, UUID runId, int epoch, Instant workDeadline) {
-        if (!runs.limit(new AgentRunFence(runId, workspaceId, epoch), workDeadline.plus(GRACE)))
-            throw new ConversationLeaseLostException(turnId, epoch);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void setWorkDeadline(AgentRunFence claim, UUID turnId, Instant startedAt, int timeoutSeconds) {
+        Instant deadline = runs.conversationWorkStart(startedAt)
+                .plusSeconds(timeoutSeconds)
+                .plus(GRACE);
+        if (!runs.limit(claim, deadline)) throw new ConversationLeaseLostException(turnId, claim.epoch());
     }
 
     /** Renews the attempt's claim of its turn's run; false once it lost the run, or the run passed its deadline. */
