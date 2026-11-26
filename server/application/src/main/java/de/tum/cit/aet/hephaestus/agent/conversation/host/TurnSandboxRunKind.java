@@ -140,13 +140,18 @@ public class TurnSandboxRunKind implements SandboxRunKind {
                 .filter(turn -> turn.getAttempt() == claim.epoch());
         if (held.isEmpty()) return false;
         ConversationTurn turn = held.get();
-        if (turn.getStatus() == ConversationTurn.Status.QUEUED) return false;
-        if (turn.getStatus() == ConversationTurn.Status.DONE || turn.getStatus() == ConversationTurn.Status.FAILED)
-            return runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
-        if (!runs.isCurrent(claim.run(), claim.epoch()))
-            return turn.getStatus() == ConversationTurn.Status.STOPPED
-                    && runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
-        if (outcome == Outcome.HANDED_ON) {
+        var turnStatus = turn.getStatus();
+        if (turnStatus == ConversationTurn.Status.QUEUED) return false;
+        if (turnStatus == ConversationTurn.Status.DONE || turnStatus == ConversationTurn.Status.FAILED)
+            return runs.end(claim, TurnRunsAdapter.endReason(turnStatus)) != AgentRuns.EndOutcome.STALE;
+        boolean handingOn = outcome == Outcome.HANDED_ON;
+        boolean current = (handingOn && turnStatus == ConversationTurn.Status.RUNNING)
+                ? runs.lockConversationHandoff(claim)
+                : runs.isCurrent(claim.run(), claim.epoch());
+        if (!current)
+            return turnStatus == ConversationTurn.Status.STOPPED
+                    && runs.end(claim, TurnRunsAdapter.endReason(turnStatus)) != AgentRuns.EndOutcome.STALE;
+        if (handingOn) {
             ConversationTurnService.LostAttempt taken = turnService.takeBack(turn, true);
             completion.billLostAttempt(taken);
             return turn.getStatus() == ConversationTurn.Status.QUEUED

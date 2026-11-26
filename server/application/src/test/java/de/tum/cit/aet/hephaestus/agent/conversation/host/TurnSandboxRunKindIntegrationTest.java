@@ -31,8 +31,10 @@ import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.RunLockProbe;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -506,10 +508,66 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldRequeueTheTurnWhenItsSandboxHandsTheRunOn() {
         ConversationTurn turn = ask("Question");
         SandboxRun run = claim();
-        assertThat(Boolean.TRUE.equals(transactions.execute(status -> kind.end(run, SandboxRunKind.Outcome.HANDED_ON))))
-                .isTrue();
+        transactions.executeWithoutResult(status -> {
+            // The work window has closed. A handoff can still settle during the run's closing grace.
+            assertThat(runs.limit(run.fence(), runs.conversationDeadlineClock().plusSeconds(10)))
+                    .isTrue();
+            assertThat(kind.end(run, SandboxRunKind.Outcome.HANDED_ON)).isTrue();
+        });
         assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
-        assertThat(runs.find(run.fence().run()).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+        var queued = runs.find(run.fence().run()).orElseThrow();
+        assertThat(queued.getState()).isEqualTo(AgentRunState.QUEUED);
+        assertThat(queued.getDeadline()).isNull();
+        assertThat(queued.getAttempt()).isOne();
+    }
+
+    @Test
+    void shouldLeaveTheRunningTurnForTheReaperWhenItsSandboxHandsItOnAfterTheDeadline() {
+        var turn = ask("Question");
+        var run = claim();
+        var fence = run.fence();
+        transactions.executeWithoutResult(status -> {
+            var elapsed = runs.conversationDeadlineClock().minusSeconds(1);
+            assertThat(runs.limit(fence, elapsed)).isTrue();
+            var live = runs.find(fence.run()).orElseThrow();
+            assertThat(runs.isCurrent(fence.run(), fence.epoch())).isTrue();
+
+            assertThat(kind.end(run, SandboxRunKind.Outcome.HANDED_ON)).isFalse();
+
+            assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ConversationTurn.Status.RUNNING);
+            var untouched = runs.find(fence.run()).orElseThrow();
+            assertThat(untouched.getState()).isEqualTo(AgentRunState.LEASED);
+            assertThat(untouched.getDeadline()).isEqualTo(elapsed);
+            assertThat(untouched.getLeasedUntil()).isEqualTo(live.getLeasedUntil());
+            assertThat(untouched.getAttempt()).isEqualTo(live.getAttempt());
+        });
+
+        beans.getBean(AgentRunReaper.class).reap();
+
+        assertThat(runs.find(fence.run()).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.DEADLINE);
+        assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.FAILED);
+    }
+
+    @Test
+    void shouldAcceptTheHandoffOfALiveLegacyTurnWithoutADeadline() {
+        var turn = ask("Question");
+        var sandbox = sandbox();
+        transactions.executeWithoutResult(status -> {
+            kind.beforeWrite(sandbox);
+            var lease = runs.claimSubject(workspace.getId(), sandbox.subjectKey(), Set.of(AgentRunKind.TURN))
+                    .orElseThrow();
+            assertThat(turns.start(workspace.getId(), lease.runId(), lease.epoch()))
+                    .isPresent();
+            assertThat(runs.find(lease.fence().run()).orElseThrow().getDeadline())
+                    .isNull();
+
+            assertThat(kind.end(
+                            new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()),
+                            SandboxRunKind.Outcome.HANDED_ON))
+                    .isTrue();
+        });
+        assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
     }
 
     /**
