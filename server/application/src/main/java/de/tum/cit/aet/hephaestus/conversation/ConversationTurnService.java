@@ -222,7 +222,12 @@ public class ConversationTurnService {
             long historyEpoch = conversations
                     .readScopeEpoch(workspaceId, turn.getAccountId())
                     .orElseThrow();
-            turn.admit(document.deepCopy().put("historyEpoch", historyEpoch));
+            ObjectNode admitted = document.deepCopy();
+            // The JSON column reads a small number back as an int node, which never equals a long node. A long would
+            // make the turn look changed after every flush, so each flush would write the row again.
+            if (historyEpoch <= Integer.MAX_VALUE) admitted.put("historyEpoch", (int) historyEpoch);
+            else admitted.put("historyEpoch", historyEpoch);
+            turn.admit(admitted);
         } else {
             turn.admit(admission);
         }
