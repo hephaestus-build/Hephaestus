@@ -185,7 +185,7 @@ It uses the result and the question state to decide what the outbox does next.
 | --- | --- | --- | --- |
 | Absent | Skipped | Attempt the post with fresh admission. | Withdraw the reply. |
 | Present | Matching post found | Confirm delivery. | Confirm delivery. |
-| Present | Complete history, no match | Retry. The outbox clears the marker so the next attempt needs fresh admission. | Withdraw the reply. |
+| Present | Complete history, no match | Retry. The outbox clears the marker so the next attempt needs fresh admission. The last attempt ends as `FAILED/ATTEMPTS_EXHAUSTED`. | Withdraw the reply. |
 | Present | Incomplete history, no match | Keep the marker and read again. | Keep the marker and read again. |
 | Present | Unreadable history | Keep the marker and read again. | Keep the marker and read again. |
 

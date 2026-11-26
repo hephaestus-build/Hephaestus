@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackGatewayTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker;
@@ -341,8 +342,11 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     @Test
-    void shouldReadBackAMessageAfterTheProviderReceiptWasLostWithoutPostingAgain() {
+    void shouldReadBackAnAcceptedReplyWhenTheAppClockIsAheadOfSlack() {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
+        String replyTs = "200.1";
+        assertThat(SlackTs.compare(replyTs, SlackTs.ofInstant(asked.question().getCreatedAt())))
+                .isNegative();
         var running = claims.claim(asked.turn());
         end(running, "Complete answer");
         when(slack.postAdmitted(anyLong(), any(), any())).thenAnswer(admittedPost(invocation -> {
@@ -350,16 +354,20 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         }));
         changed(running);
         when(slack.readWorkspaceMessages(anyLong(), eq("D9"), isNull(), anyString(), any()))
-                .thenReturn(new SlackMessageService.Matches(List.of("200.1"), false));
+                .thenAnswer(call -> new SlackMessageService.Matches(
+                        SlackTs.compare(call.getArgument(3), replyTs) <= 0 ? List.of(replyTs) : List.of(), false));
         attempt(asked);
-        verify(slack, times(1)).postAdmitted(anyLong(), any(), any());
         assertThat(replies.delivery(workspace.getId(), key(asked)))
                 .isEqualTo(ConversationEntry.SlackDelivery.DELIVERED);
+        verify(slack)
+                .readWorkspaceMessages(
+                        anyLong(), eq("D9"), isNull(), eq(asked.question().getSlackTs()), any());
+        verify(slack, times(1)).postAdmitted(anyLong(), any(), any());
         assertThat(jdbc.queryForObject(
                         "SELECT slack_ts FROM conversation_entry WHERE turn_id=? AND kind='ANSWER' ORDER BY seq DESC LIMIT 1",
                         String.class,
                         running.getId()))
-                .isEqualTo("200.1");
+                .isEqualTo(replyTs);
     }
 
     @Test

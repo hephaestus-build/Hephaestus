@@ -48,6 +48,10 @@ public class ConversationSlackMessages {
             return threadTs != null;
         }
 
+        public @Nullable String questionSlackTs() {
+            return question.getSlackTs();
+        }
+
         /** Hephaestus's answer: the last message of the turn. Its Slack post carries the reply. */
         public @Nullable UUID answerId() {
             return messages.isEmpty() ? null : messages.getLast().id();

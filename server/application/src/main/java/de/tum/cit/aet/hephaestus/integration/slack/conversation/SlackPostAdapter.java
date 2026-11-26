@@ -103,10 +103,11 @@ class SlackPostAdapter implements ActionAdapter {
         var found = messages.slackTurn(workspace, payload.turnId());
         if (found.isEmpty()) return unavailable(attempt, ActionStopReason.WITHDRAWN);
         var turn = found.get();
+        String questionTs = turn.questionSlackTs();
         var destination = new Destination(
                 turn.channelId(),
                 turn.threadTs(),
-                SlackTs.ofInstant(turn.question().getCreatedAt()),
+                questionTs == null ? SlackTs.ofInstant(turn.question().getCreatedAt()) : questionTs,
                 null);
         if (attempt.writeStarted()) return readReply(attempt, workspace, payload.entryId(), destination);
         if (turn.question().isRedacted()) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
