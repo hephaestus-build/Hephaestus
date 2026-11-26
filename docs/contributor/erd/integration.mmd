@@ -78,6 +78,7 @@ erDiagram
         TIMESTAMPTZ provider_teardown_requested_at
         BIGINT lifecycle_generation "NOT NULL"
         BIGINT provider_repair_capture_generation
+        VARCHAR(512) outline_origin
     }
 
     ConnectionActivity {
@@ -161,6 +162,7 @@ erDiagram
         VARCHAR(10) type UK "NOT NULL"
         VARCHAR(512) server_url UK "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(512) outline_origin
     }
 
     Issue {
