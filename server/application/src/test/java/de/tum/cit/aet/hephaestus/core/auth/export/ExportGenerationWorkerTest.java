@@ -141,7 +141,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         pendingExport();
         var bundle = mock(ExportBundle.class);
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
-        when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
+        // The export row lookup fails before the writer builds the payload.
         when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
         AccountExport export = new AccountExport(ACCOUNT_ID);
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
