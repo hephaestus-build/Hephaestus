@@ -268,7 +268,10 @@ class ConversationLiveHubTest extends BaseUnitTest {
     @Test
     void shouldEndEveryStreamBeforeTheWebServerDrainsWhenTheContextCloses() {
         boolean ended = WebServerDrainProbe.heldWhenTheWebServerDrains(
-                ConversationLiveHub.class, hub, () -> hub.subscribe(WORKSPACE, ACCOUNT, emitter), emitter.completed::get);
+                ConversationLiveHub.class,
+                hub,
+                () -> hub.subscribe(WORKSPACE, ACCOUNT, emitter),
+                emitter.completed::get);
 
         assertThat(ended).isTrue();
     }

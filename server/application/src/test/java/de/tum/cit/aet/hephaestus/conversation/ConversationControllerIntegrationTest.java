@@ -718,11 +718,13 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                             null,
                             null));
             assertThat(reader.readLine()).isEqualTo("event:entry");
-            assertTimeout(Duration.ofSeconds(3), () -> write("DELETE", "/entries/" + entry.getId(), null)
-                    .expectStatus()
-                    .isNoContent()
-                    .expectHeader()
-                    .valueEquals("X-Conversation-Scope-Epoch", "1"));
+            assertTimeout(
+                    Duration.ofSeconds(3),
+                    () -> write("DELETE", "/entries/" + entry.getId(), null)
+                            .expectStatus()
+                            .isNoContent()
+                            .expectHeader()
+                            .valueEquals("X-Conversation-Scope-Epoch", "1"));
 
             var tail = new StringWriter();
             try {
