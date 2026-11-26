@@ -231,11 +231,11 @@ class ResultFreshnessTest {
     }
 
     /**
-     * One read reads each kind of a piece of work once. A later check reads only the kinds that no check read yet, and
-     * outside one read every check reads.
+     * One read keeps what a read of a piece of work answered. A later check of fewer kinds takes that answer; a check
+     * that names another kind reads all of them again, as one read. Outside one read every check reads.
      */
     @Test
-    void shouldReadEachSourceOfAPieceOfWorkOnceInOneRead() {
+    void shouldReuseAReadThatAnsweredEveryKindInOneRead() {
         var core = new SourceKind("scm.pull-request.core");
         var checks = new SourceKind("scm.pull-request.checks");
         var coreOnly = result();
@@ -259,18 +259,18 @@ class ResultFreshnessTest {
 
         assertThat(states).extracting(Freshness::currentness).containsOnly(Currentness.CURRENT);
         verify(items).read(item, Set.of(core), null);
-        verify(items).read(item, Set.of(checks), null);
+        verify(items).read(item, Set.of(core, checks), null);
         verify(items, times(2)).read(eq(item), any(), any());
         freshness.freshness(1, facts(List.of(coreOnly)), refs);
         verify(items, times(3)).read(eq(item), any(), any());
     }
 
     /**
-     * A read that fails keeps no answer. Within one read, a later check of the same or more kinds answers nothing without
-     * reading again, as its own read would fail, while a check of fewer kinds still reads its own.
+     * A read that fails keeps no answer, so a later check reads again. A result whose kinds are the shared read's own
+     * takes its failure without a second read of the same kinds, and a check of fewer kinds reads its own.
      */
     @Test
-    void shouldAnswerNothingForMoreKindsThanAReadThatFailedInOneRead() {
+    void shouldKeepNoAnswerOfAReadThatFailedInOneRead() {
         var core = new SourceKind("scm.pull-request.core");
         var both = result();
         var coreOnly = result();
@@ -295,9 +295,9 @@ class ResultFreshnessTest {
         assertThat(states)
                 .extracting(Freshness::currentness)
                 .containsExactly(Currentness.UNVERIFIABLE, Currentness.UNVERIFIABLE, Currentness.CURRENT);
-        verify(items).read(item, Set.of(core, LINKED), null);
+        verify(items, times(2)).read(item, Set.of(core, LINKED), null);
         verify(items).read(item, Set.of(core), null);
-        verify(items, times(2)).read(eq(item), any(), any());
+        verify(items, times(3)).read(eq(item), any(), any());
     }
 
     @Test

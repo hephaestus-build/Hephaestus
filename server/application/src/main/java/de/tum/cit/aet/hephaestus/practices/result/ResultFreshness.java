@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,15 +44,15 @@ public class ResultFreshness implements FreshnessRead {
     private final ProductItemQuery items;
 
     /**
-     * Runs {@code read} as one read of the workspace's sources: a kind of a piece of work that a check inside it read is
-     * not read again for a later check. A read already open for the workspace on this thread is joined, and the answers
+     * Runs {@code read} as one read of the workspace's sources: a later check of a piece of work takes the answer of an
+     * earlier read of the same work that read every kind the check names. A read already open for the workspace on this thread is joined, and the answers
      * are dropped when the outermost read returns.
      */
     @Override
     public <T> T asOneRead(long workspaceId, Supplier<T> read) {
         var open = ACTIVE_READ.get();
         if (open != null && open.workspaceId() == workspaceId) return read.get();
-        ACTIVE_READ.set(new OneRead(workspaceId, new HashMap<>(), new HashMap<>()));
+        ACTIVE_READ.set(new OneRead(workspaceId, new HashMap<>()));
         try {
             return read.get();
         } finally {
@@ -192,7 +191,9 @@ public class ResultFreshness implements FreshnessRead {
             var compared = expected.getOrDefault(result.id(), Map.of());
             var read = WorkRead.of(result, occasions);
             var answered = Objects.requireNonNull(currentByRead.get(read));
-            if (!answered.keySet().containsAll(compared.keySet()))
+            // A result that compares every kind of the shared read would read the same kinds again.
+            if (!answered.keySet().containsAll(compared.keySet())
+                    && !compared.keySet().equals(kindsByRead.get(read)))
                 answered = currentByScope.computeIfAbsent(
                         new ReadScope(read.itemId(), compared.keySet(), read.occasion()),
                         scope -> currentFingerprints(refs, read, scope.kinds()));
@@ -202,10 +203,11 @@ public class ResultFreshness implements FreshnessRead {
     }
 
     /**
-     * The work's current fingerprints of {@code kinds}. Inside {@link #asOneRead}, a later check reads only the kinds that
-     * no earlier read answered: a reader answers each kind on its own and a read of fewer kinds does part of the same
-     * work, so a kept answer is the answer of a read of just those kinds. A read that fails keeps no answer, and fails
-     * every read of more kinds, so such a check answers nothing, as its own read would.
+     * The work's current fingerprints of {@code kinds}, from one read. Inside {@link #asOneRead}, a check whose kinds a
+     * kept read of the work answered takes that read's answer, so the read checks the work once. A check that names
+     * another kind reads all of them again, kept and new, and that read is kept: every answer still comes from a single
+     * read, so it never mixes what the work held at two moments. A read that fails is not kept. When it read more kinds
+     * than the check names, the check reads its own kinds, so a failing source fails only the results that compare it.
      */
     private Map<SourceKind, String> currentFingerprints(Map<Long, ItemRef> refs, WorkRead read, Set<SourceKind> kinds) {
         if (kinds.isEmpty()) return Map.of();
@@ -213,27 +215,17 @@ public class ResultFreshness implements FreshnessRead {
         var open = ACTIVE_READ.get();
         if (open == null || open.workspaceId() != item.workspaceId())
             return items.read(item, Set.copyOf(kinds), read.occasion()).fingerprints();
-        var failed = open.failed().computeIfAbsent(read, ignored -> new ArrayList<>());
-        if (failed.stream().anyMatch(kinds::containsAll)) return Map.of();
-        var unread = kinds.stream()
-                .filter(kind -> !open.answers().containsKey(new WorkSource(read, kind)))
-                .collect(Collectors.toSet());
-        if (!unread.isEmpty()) {
-            var answer = items.read(item, unread, read.occasion());
-            if (answer.unreadReason() != null) {
-                failed.add(Set.copyOf(unread));
-                return Map.of();
-            }
-            unread.forEach(kind -> open.answers()
-                    .put(
-                            new WorkSource(read, kind),
-                            Optional.ofNullable(answer.fingerprints().get(kind))));
-        }
-        var answered = new HashMap<SourceKind, String>();
-        for (var kind : kinds)
-            Objects.requireNonNull(open.answers().get(new WorkSource(read, kind)))
-                    .ifPresent(fingerprint -> answered.put(kind, fingerprint));
-        return Map.copyOf(answered);
+        var kept = open.reads().get(read);
+        if (kept != null && kept.kinds().containsAll(kinds)) return kept.fingerprints();
+        var wanted = new HashSet<>(kinds);
+        if (kept != null) wanted.addAll(kept.kinds());
+        var answer = items.read(item, Set.copyOf(wanted), read.occasion());
+        if (answer.unreadReason() != null)
+            return kept == null
+                    ? Map.of()
+                    : items.read(item, Set.copyOf(kinds), read.occasion()).fingerprints();
+        open.reads().put(read, new KeptRead(Set.copyOf(wanted), answer.fingerprints()));
+        return answer.fingerprints();
     }
 
     /**
@@ -290,10 +282,10 @@ public class ResultFreshness implements FreshnessRead {
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}
 
-    private record WorkSource(WorkRead read, SourceKind kind) {}
+    /** A read of {@code kinds} of a piece of work that ran, and what it answered. */
+    private record KeptRead(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {}
 
-    private record OneRead(
-            long workspaceId, Map<WorkSource, Optional<String>> answers, Map<WorkRead, List<Set<SourceKind>>> failed) {}
+    private record OneRead(long workspaceId, Map<WorkRead, KeptRead> reads) {}
 
     private record ReadScope(
             long itemId, Set<SourceKind> kinds, @Nullable UUID occasion) {}
