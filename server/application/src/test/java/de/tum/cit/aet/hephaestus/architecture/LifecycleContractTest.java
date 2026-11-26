@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.core.ContinuingLifecycle;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
+import de.tum.cit.aet.hephaestus.conversation.InboxItem;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
@@ -82,6 +83,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(PracticeState.ACTIVE)),
                 new Contract<>(
                         FeedbackThreadResolutionState.class, Set.of(FeedbackThreadResolutionState.PENDING), Set.of()),
+                new Contract<>(
+                        InboxItem.State.class,
+                        Set.of(InboxItem.State.PENDING),
+                        Set.of(InboxItem.State.CONSUMED, InboxItem.State.EXPIRED, InboxItem.State.DROPPED)),
                 new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),

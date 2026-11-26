@@ -368,8 +368,14 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
         first.commitAfter(overlapping);
 
-        assertThat(overlapping.get(20, TimeUnit.SECONDS)).isZero();
+        assertThat(overlapping.get(20, TimeUnit.SECONDS))
+                .as("the overlapping run writes its inbox item before the first digest commits")
+                .isOne();
         assertThat(written()).isEmpty();
+        assertThat(item(main.getId()))
+                .containsEntry("state", "CONSUMED")
+                .containsEntry("reason", "ALREADY_WRITTEN")
+                .containsEntry("turn_id", null);
         // A second run in the same window finds the digest and writes nothing either.
         assertThat(schedule(Clock.fixed(due().plus(Duration.ofHours(3)), ZoneOffset.UTC))
                         .enqueueDue())
@@ -735,12 +741,17 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         // The holder settles within the grace and stores nothing; then the question is the next claim.
         transactionTemplate.executeWithoutResult(tx -> runs.end(claim.fence(), AgentRunStopReason.CANCELLED));
-        var next = transactionTemplate.execute(tx -> runs.claimSubject(
-                workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST)));
-        assertThat(next)
+        var next = transactionTemplate.execute(tx -> {
+            assertThat(writeFence.holdForAccountWrite(accountId)).isTrue();
+            var lease = runs.claimSubject(
+                            workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST))
+                    .orElseThrow();
+            assertThat(turns.start(workspaceId, lease.runId(), lease.epoch())).isPresent();
+            return lease;
+        });
+        assertThat(Objects.requireNonNull(next).runId())
                 .as("the question is the next claim of its thread")
-                .hasValueSatisfying(lease ->
-                        assertThat(lease.runId()).isEqualTo(asked.turn().getRunId()));
+                .isEqualTo(asked.turn().getRunId());
     }
 
     @Test

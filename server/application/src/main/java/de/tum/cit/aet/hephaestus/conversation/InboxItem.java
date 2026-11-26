@@ -97,6 +97,8 @@ public class InboxItem {
         DELIVERED,
         /** At its start nothing was left to say. */
         NOTHING_TO_SAY,
+        /** Its message was already written under the same request, as by an overlapping run. */
+        ALREADY_WRITTEN,
         /** It stopped being eligible, as when the person turned the schedule off. */
         NO_LONGER_ELIGIBLE,
         /** Its deadline passed before a turn delivered it. */
@@ -205,7 +207,7 @@ public class InboxItem {
     }
 
     /** The item ends, for this reason. */
-    void settle(State end, Reason why, Instant now) {
+    void finish(State end, Reason why, Instant now) {
         if (end.open()) throw new IllegalArgumentException("An item settles in an end state, not " + end);
         moveTo(end);
         reason = why;

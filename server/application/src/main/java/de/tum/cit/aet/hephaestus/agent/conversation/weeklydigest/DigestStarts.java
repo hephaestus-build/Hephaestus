@@ -115,8 +115,8 @@ public class DigestStarts {
 
     /**
      * Starts the digest of an item under its thread's lock, with the facts as they are now. Silent when the person
-     * turned the digest off since the item was scheduled, or became unavailable, or when nothing is left to say. The
-     * first turn keeps the week's request id; a later one adds its number.
+     * turned the digest off since the item was scheduled, or became unavailable, when nothing is left to say, or when
+     * another writer already wrote the request. The first turn keeps the week's request id; a later one adds its number.
      */
     private InboxItems.Start startDigest(
             long workspaceId, UUID conversationId, long accountId, int start, JsonNode payload) {
@@ -142,7 +142,7 @@ public class DigestStarts {
                                 facts.get().toJson(mapper),
                                 window.contactCutoff()))
                 .<InboxItems.Start>map(InboxItems.Started::new)
-                .orElseGet(() -> new InboxItems.Silent(InboxItem.Reason.NO_LONGER_ELIGIBLE));
+                .orElseGet(() -> new InboxItems.Silent(InboxItem.Reason.ALREADY_WRITTEN));
     }
 
     /**

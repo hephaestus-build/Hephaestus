@@ -41,6 +41,7 @@ The start policy in `InboxItems` decides each item at once, then on the `DigestS
 | Claimed | Its turn ended `DONE` with an answer | Consumed | `DELIVERED` |
 | Claimed | Its turn ended `DONE` with no answer | Consumed | `NOTHING_TO_SAY` |
 | Pending | At its start, the facts are empty | Consumed | `NOTHING_TO_SAY` |
+| Pending | At its start, another writer already wrote the week's request | Consumed | `ALREADY_WRITTEN` |
 | Pending or claimed | The consent changed, the person is no longer available, the message was erased, or admission refuses the captured facts | Dropped | `NO_LONGER_ELIGIBLE` |
 | Pending | Its deadline passed | Expired, with no model | `DEADLINE_PASSED` |
 | Pending | 5 of its turns ran and did not deliver it | Expired | `ATTEMPTS_SPENT` |

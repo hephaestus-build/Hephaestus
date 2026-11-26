@@ -130,11 +130,11 @@ public class InboxItems {
             if (item.getState() == InboxItem.State.CLAIMED) settleClaim(item, producer, now);
             if (item.getState() != InboxItem.State.PENDING) return item.getState();
             if (!writable) {
-                item.settle(InboxItem.State.DROPPED, InboxItem.Reason.NO_LONGER_ELIGIBLE, now);
+                item.finish(InboxItem.State.DROPPED, InboxItem.Reason.NO_LONGER_ELIGIBLE, now);
             } else if (!now.isBefore(item.getDeadlineAt())) {
-                item.settle(InboxItem.State.EXPIRED, InboxItem.Reason.DEADLINE_PASSED, now);
+                item.finish(InboxItem.State.EXPIRED, InboxItem.Reason.DEADLINE_PASSED, now);
             } else if (item.getAttempts() >= MAX_ATTEMPTS) {
-                item.settle(InboxItem.State.EXPIRED, InboxItem.Reason.ATTEMPTS_SPENT, now);
+                item.finish(InboxItem.State.EXPIRED, InboxItem.Reason.ATTEMPTS_SPENT, now);
             } else if (!idle(item, now)) {
                 item.defer(InboxItem.Reason.DEFERRED_ACTIVE);
             } else {
@@ -146,8 +146,9 @@ public class InboxItems {
                         item.getPayload())) {
                     case Started started -> item.claim(started.turnId());
                     case Silent silent ->
-                        item.settle(
+                        item.finish(
                                 silent.reason() == InboxItem.Reason.NOTHING_TO_SAY
+                                                || silent.reason() == InboxItem.Reason.ALREADY_WRITTEN
                                         ? InboxItem.State.CONSUMED
                                         : InboxItem.State.DROPPED,
                                 silent.reason(),
@@ -221,7 +222,7 @@ public class InboxItems {
         if (!turn.getStatus().isTerminal()) return;
         var ended = producer.ended(item.getWorkspaceId(), turnId, turn.getStatus());
         if (ended.isPresent()) {
-            item.settle(ended.get().state(), ended.get().reason(), now);
+            item.finish(ended.get().state(), ended.get().reason(), now);
             return;
         }
         boolean ran = turn.getStartedAt() != null;
