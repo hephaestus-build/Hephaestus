@@ -369,6 +369,14 @@ Their only labels are `user`, `datname` and `queryid`.
 The query text stays in PostgreSQL.
 To read the text of a `queryid`, run `SELECT query FROM monitoring.pg_stat_statements WHERE queryid = <id>` in the application's database.
 
+The database dashboard shows the share of time for the five most expensive exported statements in the last hour.
+Each share uses the sum of exported statement time for that database and excludes the exporter's own queries.
+The shares describe the collected sample. Increase `postgresql.metrics.statementLimit` when you need a broader sample.
+The dashboard also shows connections, lock counts, estimated dead rows, replica replay lag and database size.
+
+Lock counts include held locks. Use `pg_stat_activity` with `wait_event_type = 'Lock'` to find waiting sessions.
+Dead rows help diagnose vacuum pressure. Use volume free space to check disk pressure because WAL and other files also use it.
+
 The rule group `hephaestus-postgresql` alerts on these metrics:
 
 | Alert | Fires when |

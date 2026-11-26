@@ -40,6 +40,73 @@
 			]
 		},
 		{
+			"title": "Which statements take the most time?",
+			"panels": [
+				{
+					"title": "Top statement time share",
+					"description": "Percent of execution time among exported statements in the last hour, per database. The exporter limits this set by lifetime execution time.",
+					"expr": [
+						"topk by (namespace, instance, datname) (5, 100 * sum by (namespace, instance, datname, queryid) (rate(pg_stat_statements_seconds_total{job=\"postgresql\",user!=\"hephaestus_monitor\"}[1h])) / on (namespace, instance, datname) group_left sum by (namespace, instance, datname) (rate(pg_stat_statements_seconds_total{job=\"postgresql\",user!=\"hephaestus_monitor\"}[1h])) > 0)"
+					],
+					"alias": ["{{datname}} {{queryid}} ({{instance}})"],
+					"unit": "%",
+					"showLegend": true,
+					"width": 12
+				}
+			]
+		},
+		{
+			"title": "How busy is PostgreSQL?",
+			"panels": [
+				{
+					"title": "Connections by database",
+					"expr": ["pg_stat_database_numbackends{job=\"postgresql\"}"],
+					"alias": ["{{datname}} ({{instance}})"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Locks held or requested, by mode",
+					"description": "This count includes held locks. Use pg_stat_activity to check which sessions wait.",
+					"expr": ["pg_locks_count{job=\"postgresql\"}"],
+					"alias": ["{{datname}} {{mode}} ({{instance}})"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Dead rows by table",
+					"description": "The ten highest dead-row estimates. This shows vacuum pressure.",
+					"expr": ["topk(10, pg_stat_user_tables_n_dead_tup{job=\"postgresql\"} > 0)"],
+					"alias": ["{{datname}} {{schemaname}}.{{relname}} ({{instance}})"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Replica replay lag",
+					"description": "Shown for replicas. Idle replicas can go without replay.",
+					"expr": [
+						"pg_replication_lag_seconds{job=\"postgresql\"} and on (namespace, instance) pg_replication_is_replica{job=\"postgresql\"} == 1"
+					],
+					"alias": ["{{instance}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Database sizes and bundled volume capacity",
+					"description": "Compare the database sizes with the provisioned capacity. WAL and other files also use the volume.",
+					"expr": [
+						"pg_database_size_bytes{job=\"postgresql\"}",
+						"max by (namespace) (database_volume_capacity_bytes{job=\"hephaestus\"})"
+					],
+					"alias": ["{{datname}} ({{instance}})", "{{namespace}} bundled volume"],
+					"unit": "bytes",
+					"showLegend": true,
+					"width": 12
+				}
+			]
+		},
+		{
 			"title": "Does tenancy hold?",
 			"panels": [
 				{
