@@ -148,6 +148,7 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
    A server can drain for up to its configured timeout. If phase 1 times out, keep `server.stopped=true` and wait for every old Pod to stop.
 3. Remove the remaining sandbox workloads, as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes.
 4. Take and verify the final restore point while the server is stopped.
+   Without `postgresql.backup.enabled`, take a [logical restore point](#take-a-logical-restore-point-without-backups) from the host.
 5. Do phase 2.
    Expect one PostgreSQL restart: each release builds its PostgreSQL image again with current security fixes.
    Find the migration Job of the new Helm revision. For the release `hephaestus`, its name is `hephaestus-migration-<revision>`.
@@ -183,6 +184,41 @@ Remove the setting at a later upgrade. The removal restarts PostgreSQL once.
 A refused migration can follow changesets that it already committed.
 An image or Helm rollback does not undo them.
 Before you return to the old release, restore the matching pre-upgrade backup.
+
+### Take a logical restore point without backups
+
+The bundled PostgreSQL has no backup repository unless `postgresql.backup.enabled` is on.
+Without one, take a logical dump from the host while the server is stopped.
+The dump runs on the host, so no command runs in a container.
+
+1. Install the PostgreSQL client of the server's major version on the host.
+   On Ubuntu 26.04, run `sudo apt-get install -y --no-install-recommends postgresql-client-18`.
+   It also installs `libpq5` and `postgresql-client-common`, and adds no service.
+   Hephaestus tested `postgresql-client-18` and `libpq5` 18.6-0ubuntu0.26.04.1, with `postgresql-client-common` 290ubuntu1.
+2. Start a port forward on the loopback address, and note its PID:
+
+   ```bash
+   kubectl --namespace hephaestus port-forward --address 127.0.0.1 svc/hephaestus-postgresql 15432:5432 > port-forward.log 2>&1 &
+   ```
+
+   Wait until `port-forward.log` shows `Forwarding from 127.0.0.1:15432`.
+   Do not test the port with `pg_isready`. It closes its connection abruptly, and the port forward then stops with `lost connection to pod`.
+3. Dump as the database admin role of the release Secret (`secret.name`).
+   The app role cannot read the `lifecycle_private`, `partman` and `monitoring` schemas, so its dump is incomplete.
+   Read the credentials into the command's environment only, so that no file or shell history keeps them:
+
+   ```bash
+   secret() { kubectl --namespace hephaestus get secret <release secret> -o jsonpath="{.data.$1}" | base64 -d; }
+   PGUSER="$(secret DATABASE_ADMIN_USERNAME)" PGPASSWORD="$(secret DATABASE_ADMIN_PASSWORD)" \
+     pg_dump "host=127.0.0.1 port=15432 dbname=hephaestus sslmode=require" --format=custom --file=final.dump
+   ```
+
+4. Restrict the file with `chmod 600 final.dump`, and record its `sha256sum`.
+5. Read the whole dump with `pg_restore --file=/dev/null final.dump`.
+   Count its tables with `pg_restore --list final.dump | grep -c 'TABLE DATA'`.
+6. Stop the port forward by its PID.
+
+Keep the dump on the host, with the signed release lock and the encryption keys of the release.
 
 ## Change a volume size
 
