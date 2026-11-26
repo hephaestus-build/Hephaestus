@@ -41,6 +41,9 @@ class WorkPlaceShadowComparisonTest {
     private static final JsonMapper MAPPER = new JsonMapper();
     private static final Instant SEALED = Instant.parse("2026-11-26T12:00:00Z");
 
+    /** Built at run time: the character itself in source is refused as a way to conceal code. */
+    private static final String RIGHT_TO_LEFT_OVERRIDE = String.valueOf((char) 0x202E);
+
     @Test
     void shouldRenderTheLegacyReviewTurnFromTheHandoffForEveryEvalCase() throws Exception {
         var scenarios = CompositionEvalCases.load();
@@ -200,7 +203,7 @@ class WorkPlaceShadowComparisonTest {
                 "Ask @octocat why fetches retry.",
                 "The description should say <b>why</b> fetches retry.",
                 "![retry](https://example.com/retry.png) says why fetches retry.",
-                "The description should say why fetches retry.‮",
+                "The description should say why fetches retry." + RIGHT_TO_LEFT_OVERRIDE,
                 "See https://internal.example/run/7 for why fetches retry.")) {
             var copy = draft.deepCopy();
             ((ObjectNode) copy.path("summary")).put("body", hostile);
