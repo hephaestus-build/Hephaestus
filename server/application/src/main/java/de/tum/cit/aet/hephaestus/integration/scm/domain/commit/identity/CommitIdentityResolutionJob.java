@@ -5,20 +5,27 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections.ActiveScm;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Batch;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.NextRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.PendingEmail;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.PendingRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,7 +39,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Corrects commit links from the provider's own answer. Each run skips deferred work and processes one batch that the
+ * Corrects commit links from the provider's own answer. Each run skips paused credentials and processes one batch that the
  * provider can read. The queue survives a restart. No transaction is open during a provider call.
  */
 @Slf4j
@@ -55,13 +62,10 @@ public class CommitIdentityResolutionJob {
     /** One pass of the job: a deadline shorter than that would bring the same email back first at the next pass. */
     static final Duration MIN_DEFERRAL = Duration.ofMinutes(5);
 
-    /** How many repositories one run takes, at most: each deferred one costs at most one request of its credential. */
-    static final int MAX_REPOSITORIES_PER_RUN = 50;
+    /** Bound repository batch reads. A stored pause takes no read slot. */
+    static final int MAX_READS_PER_RUN = 50;
 
-    private enum Turn {
-        ANSWERED,
-        DEFERRED
-    }
+    private record Turn(int reads, boolean complete) {}
 
     private final CommitIdentityResolutionRepository resolutions;
     private final ProviderCredentialPauseRepository pauses;
@@ -100,62 +104,100 @@ public class CommitIdentityResolutionJob {
     @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT2M")
     @SchedulerLock(name = "commit-identity-resolution", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void run() {
-        // A deferred repository leaves the queue until its deadline, so the run takes the next due one: a throttled
-        // credential never holds up a healthy one. The run ends with the first repository that it answered.
-        for (int taken = 0; taken < MAX_REPOSITORIES_PER_RUN; taken++) {
-            var next = resolutions.findNextRepository();
-            if (next.isEmpty() || resolve(next.get()) == Turn.ANSWERED) break;
+        Map<CredentialGeneration, Instant> pausedThisRun = new HashMap<>();
+        int remaining = MAX_READS_PER_RUN;
+        for (var repository : resolutions.findPendingRepositories()) {
+            var turn = resolve(repository, remaining, pausedThisRun);
+            remaining -= turn.reads();
+            if (turn.complete() || remaining == 0) break;
         }
         pending.set(resolutions.countPending());
     }
 
-    private Turn resolve(NextRepository repository) {
-        var emails = resolutions.findPendingEmails(repository.getRepositoryId(), properties.batchSize());
+    private Turn resolve(PendingRepository repository, int budget, Map<CredentialGeneration, Instant> pausedThisRun) {
         var provider = providers.stream()
                 .filter(candidate -> candidate.kind().name().equals(repository.getProviderType()))
                 .findFirst();
-        var access = provider.flatMap(candidate ->
-                scopes.getActiveScopesForRepository(repository.getNativeId(), repository.getProviderId()).stream()
-                        .flatMap(scopeId -> access(scopeId, repository).stream())
-                        .findFirst());
-        if (access.isEmpty()) {
-            emails.forEach(this::miss);
-            return Turn.ANSWERED;
+        var triedScopes = new HashSet<Long>();
+        List<PendingEmail> unanswered = List.of();
+        int reads = 0;
+        while (true) {
+            var candidates = provider.isEmpty()
+                    ? List.<RepositoryAccess>of()
+                    : scopes.getActiveScopesForRepository(repository.getNativeId(), repository.getProviderId()).stream()
+                            .flatMap(scopeId -> access(scopeId, repository, pausedThisRun).stream())
+                            .toList();
+            var selected = candidates.stream()
+                    .filter(access -> access.pausedUntil() == null && !triedScopes.contains(access.scopeId()))
+                    .findFirst()
+                    .orElse(null);
+            if (selected == null) {
+                var waiting = reads == 0 ? pendingEmails(repository, false) : unanswered;
+                return new Turn(reads, deferOrMiss(repository, waiting, candidates, reads > 0));
+            }
+            if (reads == budget) return new Turn(reads, false);
+            if (reads == 0) unanswered = pendingEmails(repository, true);
+            if (unanswered.isEmpty()) return new Turn(reads, false);
+
+            var questions = unanswered.stream()
+                    .filter(email -> email.getEmail() != null)
+                    .map(CommitIdentityResolutionJob::question)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            triedScopes.add(selected.scopeId());
+            reads++;
+            var batch = provider.orElseThrow()
+                    .answer(
+                            repository.getNameWithOwner(),
+                            repository.getProviderId(),
+                            selected.scopeId(),
+                            selected.credential(),
+                            questions);
+            var pause = batch.pause();
+            if (pause != null) {
+                var generation = pause.credential();
+                Instant until = pause.alreadyStored() ? pause.until() : bounded(pause.until());
+                if (pause.alreadyStored()
+                        || pauses.pause(selected.scopeId(), generation.connectionId(), generation.generation(), until)
+                                > 0) {
+                    pausedThisRun.put(generation, until);
+                }
+            }
+            unanswered = applyAnswers(repository, unanswered, batch);
+            if (pause == null || unanswered.isEmpty()) return new Turn(reads, pause == null);
         }
-        var selected = access.orElseThrow();
-        long scopeId = selected.scopeId();
-        var credential = selected.credential();
-        var paused = pauses.pausedUntil(scopeId, credential.connectionId(), credential.credentialsGeneration());
-        if (paused.isPresent()) {
-            defer(
-                    repository,
-                    emails.stream().map(PendingEmail::getId).toList(),
-                    credential.connectionId(),
-                    credential.credentialsGeneration(),
-                    paused.get());
-            return Turn.DEFERRED;
+    }
+
+    private boolean deferOrMiss(
+            PendingRepository repository,
+            List<PendingEmail> waiting,
+            List<RepositoryAccess> candidates,
+            boolean attempted) {
+        if (candidates.isEmpty() && !attempted) {
+            waiting.forEach(this::miss);
+            return !waiting.isEmpty();
         }
-        var questions = emails.stream()
-                .filter(email -> email.getEmail() != null)
-                .map(CommitIdentityResolutionJob::question)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        var batch = provider.orElseThrow()
-                .answer(repository.getNameWithOwner(), repository.getProviderId(), scopeId, credential, questions);
-        var pause = batch.pause();
-        Instant until = pause == null ? null : pause.alreadyStored() ? pause.until() : bounded(pause.until());
-        if (pause != null && !pause.alreadyStored()) {
-            var generation = pause.credential();
-            pauses.pause(scopeId, generation.connectionId(), generation.generation(), Objects.requireNonNull(until));
+        if (candidates.stream().allMatch(access -> access.pausedUntil() != null)) {
+            candidates.stream()
+                    .min(Comparator.comparing(access -> Objects.requireNonNull(access.pausedUntil())))
+                    .ifPresent(access -> defer(repository, waiting, access));
         }
-        List<Long> deferred = new ArrayList<>();
+        return false;
+    }
+
+    private List<PendingEmail> pendingEmails(PendingRepository repository, boolean includeDeferred) {
+        return resolutions.findPendingEmails(repository.getRepositoryId(), properties.batchSize(), includeDeferred);
+    }
+
+    private List<PendingEmail> applyAnswers(PendingRepository repository, List<PendingEmail> emails, Batch batch) {
+        List<PendingEmail> unanswered = new ArrayList<>();
         for (var email : emails) {
             if (email.getEmail() == null) {
                 count(service.miss(email.getId(), MAX_ATTEMPTS, MAX_ATTEMPTS));
                 continue;
             }
             var answer = batch.answers().get(question(email));
-            if (answer == null && pause != null) {
-                deferred.add(email.getId());
+            if (answer == null && batch.pause() != null) {
+                unanswered.add(email);
                 continue;
             }
             if (answer instanceof Answer.RetryAfterCredentialChange) {
@@ -164,45 +206,57 @@ public class CommitIdentityResolutionJob {
             }
             apply(repository, email, answer);
         }
-        if (pause != null) {
-            var generation = pause.credential();
-            defer(
-                    repository,
-                    deferred,
-                    generation.connectionId(),
-                    generation.generation(),
-                    Objects.requireNonNull(until));
-        }
-        return deferred.isEmpty() ? Turn.ANSWERED : Turn.DEFERRED;
+        return unanswered;
     }
 
-    private Optional<RepositoryAccess> access(long scopeId, NextRepository repository) {
+    private Optional<RepositoryAccess> access(
+            long scopeId, PendingRepository repository, Map<CredentialGeneration, Instant> pausedThisRun) {
         try {
             return connections
                     .withToken(scopeId)
+                    .filter(credential -> credential.bearer() != null || credential.config() instanceof GitHubAppConfig)
                     .filter(credential -> credential.kind().name().equals(repository.getProviderType())
                             && repository
                                     .getServerUrl()
                                     .equals(SourceProviderNamespaces.configuredUrl(credential.config())))
-                    .map(credential -> new RepositoryAccess(scopeId, credential));
+                    .map(credential -> {
+                        var generation =
+                                new CredentialGeneration(credential.connectionId(), credential.credentialsGeneration());
+                        Instant paused = pausedThisRun.get(generation);
+                        if (paused == null) {
+                            paused = pauses.pausedUntil(scopeId, generation.connectionId(), generation.generation())
+                                    .orElse(null);
+                        }
+                        return new RepositoryAccess(scopeId, credential, generation, paused);
+                    });
         } catch (CredentialUnreadableException | MissingCredentialKeyException ignored) {
             // The connection records the unreadable credential. Another workspace may still have access.
             return Optional.empty();
         }
     }
 
-    private record RepositoryAccess(long scopeId, ActiveScm credential) {}
+    private record RepositoryAccess(
+            long scopeId,
+            ActiveScm credential,
+            CredentialGeneration generation,
+            @Nullable Instant pausedUntil) {}
 
-    private void defer(NextRepository repository, List<Long> ids, long connectionId, long generation, Instant until) {
-        if (ids.isEmpty()) return;
-        resolutions.defer(ids, connectionId, generation, until);
+    private void defer(PendingRepository repository, List<PendingEmail> waiting, RepositoryAccess access) {
+        if (waiting.isEmpty()) return;
+        var generation = access.generation();
+        Instant until = Objects.requireNonNull(access.pausedUntil());
+        resolutions.defer(
+                waiting.stream().map(PendingEmail::getId).toList(),
+                generation.connectionId(),
+                generation.generation(),
+                until);
         meterRegistry
                 .counter(ScmMetrics.COMMIT_IDENTITY_RESOLUTIONS, "outcome", "deferred")
-                .increment(ids.size());
+                .increment(waiting.size());
         log.info(
                 "Deferred commit link correction until the provider's deadline: repositoryId={}, emails={}, until={}",
                 repository.getRepositoryId(),
-                ids.size(),
+                waiting.size(),
                 until);
     }
 
@@ -213,7 +267,7 @@ public class CommitIdentityResolutionJob {
         return until.isBefore(earliest) ? earliest : until.isAfter(latest) ? latest : until;
     }
 
-    private void apply(NextRepository repository, PendingEmail email, @Nullable Answer answer) {
+    private void apply(PendingRepository repository, PendingEmail email, @Nullable Answer answer) {
         if (answer == null) {
             miss(email);
             return;

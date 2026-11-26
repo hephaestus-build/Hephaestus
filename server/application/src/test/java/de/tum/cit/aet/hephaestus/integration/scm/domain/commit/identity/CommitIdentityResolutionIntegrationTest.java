@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Batch;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.CredentialGeneration;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Pause;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
@@ -600,39 +601,50 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         assertThat(revoked).hasValue(rotateOnRequest == 1 ? 0 : 1);
     }
 
-    @Test
-    void shouldCorrectAHealthyRepositoryBehindAThrottledOne() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCorrectAHealthyRepositoryBehindMoreThanFiftyPausedRepositories(boolean answersThrottledBatch)
+            throws Exception {
         User wrong = user("wrong");
         User right = user("right");
         String throttledEmail = "throttled@example.com";
         Repository throttled = repository();
+        long waiting = commit(throttled, wrong, null, throttledEmail);
+        for (int index = 0; index < 50; index++) {
+            commit(repository(), wrong, null, throttledEmail);
+        }
         Repository healthy = repository();
         when(scopes.getActiveScopesForRepository(eq(throttled.getNativeId()), anyLong()))
                 .thenReturn(List.of(scope));
         when(scopes.getActiveScopesForRepository(eq(healthy.getNativeId()), anyLong()))
                 .thenReturn(List.of(workspace()));
-        long waiting = commit(throttled, wrong, null, throttledEmail);
         long corrected = commit(healthy, wrong, null, EMAIL);
         seed();
-        assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
+        assertThat(resolutions.findPendingRepositories().getFirst().getRepositoryId())
                 .as("the throttled repository stands first in the queue")
                 .isEqualTo(throttled.getId());
+        var credential = activeScm.withToken(scope).orElseThrow();
+        pauses.pause(
+                scope,
+                credential.connectionId(),
+                credential.credentialsGeneration(),
+                Instant.now().minusSeconds(1));
         List<String> asked = new ArrayList<>();
         provider = question -> {
             asked.add(question.email());
-            return question.email().equals(throttledEmail)
-                    ? throttle(Instant.now().plus(Duration.ofMinutes(40)))
-                    : new Answer.Account(id(right), right.getNativeId());
+            if (question.email().equals(throttledEmail)) {
+                throttle(Instant.now());
+                if (!answersThrottledBatch) return null;
+            }
+            return new Answer.Account(id(right), right.getNativeId());
         };
 
-        run(50);
-        run(50);
         run(50);
 
         assertThat(authorOf(corrected))
                 .as("the repository behind the throttled one is corrected")
                 .isEqualTo(right.getId());
-        assertThat(authorOf(waiting)).isEqualTo(wrong.getId());
+        assertThat(authorOf(waiting)).isEqualTo(answersThrottledBatch ? right.getId() : wrong.getId());
         assertThat(asked)
                 .as("the throttled repository is not asked again before its deadline")
                 .containsExactly(throttledEmail, EMAIL);
@@ -640,10 +652,95 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                         "SELECT attempts FROM commit_identity_resolution WHERE repository_id = ?",
                         Integer.class,
                         throttled.getId()))
-                .isZero();
-        assertThat(meters.counter("commit.identity.resolutions", "outcome", "deferred")
-                        .count())
-                .isEqualTo(1);
+                .isEqualTo(answersThrottledBatch ? 1 : 0);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReadAnAlreadyDeferredRepositoryThroughAnotherScope(boolean rotateAlternate) throws Exception {
+        var project = repository();
+        long queued = commit(project, null, null, EMAIL);
+        seed();
+        long alternate = workspace();
+        when(scopes.getActiveScopesForRepository(
+                        eq(project.getNativeId()), eq(project.getProvider().getId())))
+                .thenReturn(List.of(scope, alternate));
+        var first = activeScm.withToken(scope).orElseThrow();
+        var second = activeScm.withToken(alternate).orElseThrow();
+        Instant reset = Instant.now().plus(Duration.ofHours(1)).truncatedTo(ChronoUnit.SECONDS);
+        pauses.pause(scope, first.connectionId(), first.credentialsGeneration(), reset);
+        var ids = jdbc
+                .queryForList("SELECT id FROM commit_identity_resolution WHERE commit_id = ?", Long.class, queued)
+                .stream()
+                .map(Objects::requireNonNull)
+                .toList();
+        resolutions.defer(ids, first.connectionId(), first.credentialsGeneration(), reset);
+        if (rotateAlternate) {
+            pauses.pause(alternate, second.connectionId(), second.credentialsGeneration(), reset.plusSeconds(60));
+            assertThat(connections.rotateBearerToken(
+                            alternate, IntegrationKind.GITHUB, new BearerToken("healthy-replacement", null), null))
+                    .isPresent();
+        }
+        var right = user("right");
+        provider = question -> new Answer.Account(id(right), right.getNativeId());
+
+        run(50);
+
+        assertThat(askedCredentials)
+                .containsExactly(activeScm.withToken(alternate).orElseThrow());
+        assertThat(authorOf(queued)).isEqualTo(right.getId());
+        assertThat(pauses.pausedUntil(scope, first.connectionId(), first.credentialsGeneration()))
+                .contains(reset);
+    }
+
+    @Test
+    void shouldKeepPartialAnswersAndTryAnotherScopeWhenAReplacementIsPaused() throws Exception {
+        var project = repository();
+        String firstEmail = "partial@example.com";
+        long first = commit(project, null, null, firstEmail);
+        long second = commit(project, null, null, EMAIL);
+        seed();
+        long alternate = workspace();
+        when(scopes.getActiveScopesForRepository(eq(project.getNativeId()), eq(github.getId())))
+                .thenReturn(List.of(scope, alternate));
+        var right = user("right");
+        var account = new Answer.Account(id(right), right.getNativeId());
+        var adapter = mock(CommitIdentityProvider.class);
+        when(adapter.kind()).thenReturn(IntegrationKind.GITHUB);
+        when(adapter.answer(any(), anyLong(), eq(scope), any(), any())).thenAnswer(call -> {
+            assertThat(connections.rotateBearerToken(
+                            scope, IntegrationKind.GITHUB, new BearerToken("paused-replacement", null), null))
+                    .isPresent();
+            var replacement = activeScm.withToken(scope).orElseThrow();
+            var generation = new CredentialGeneration(replacement.connectionId(), replacement.credentialsGeneration());
+            Instant reset = Instant.now().plus(Duration.ofHours(1));
+            pauses.pause(scope, generation.connectionId(), generation.generation(), reset);
+            Set<Question> questions = call.getArgument(4);
+            var answered = questions.stream()
+                    .filter(question -> question.email().equals(firstEmail))
+                    .findFirst()
+                    .orElseThrow();
+            return new Batch(Map.of(answered, account), new Pause(reset, generation, true));
+        });
+        when(adapter.answer(any(), anyLong(), eq(alternate), any(), any())).thenAnswer(call -> {
+            Set<Question> questions = call.getArgument(4);
+            assertThat(questions).extracting(Question::email).containsExactly(EMAIL);
+            return new Batch(Map.of(questions.iterator().next(), account), null);
+        });
+        job = new CommitIdentityResolutionJob(
+                resolutions,
+                pauses,
+                service,
+                new CommitIdentityResolutionProperties(true, 50),
+                List.of(adapter),
+                scopes,
+                activeScm,
+                meters);
+
+        run(50);
+
+        assertThat(authorOf(first)).isEqualTo(right.getId());
+        assertThat(authorOf(second)).isEqualTo(right.getId());
     }
 
     @Test
