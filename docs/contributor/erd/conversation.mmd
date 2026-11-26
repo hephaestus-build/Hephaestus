@@ -67,6 +67,25 @@ erDiagram
         JSONB outline_context
     }
 
+    InboxItem {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID conversation_id FK,UK "NOT NULL"
+        VARCHAR(32) kind "NOT NULL"
+        VARCHAR(255) source_key UK "NOT NULL"
+        VARCHAR(16) custody "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(32) reason "NOT NULL"
+        TIMESTAMPTZ due_at "NOT NULL"
+        TIMESTAMPTZ deadline_at "NOT NULL"
+        INTEGER starts "NOT NULL"
+        INTEGER attempts "NOT NULL"
+        UUID turn_id
+        JSONB payload "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ settled_at
+    }
+
     Account["Account · Core"]
     AgentRun["AgentRun · Agent"]
     Workspace["Workspace · Workspace (Tenancy)"]
@@ -85,6 +104,8 @@ erDiagram
     Workspace ||--o{ ConversationEntry : has
     Conversation ||--o{ ConversationTurn : has
     Workspace ||--o{ ConversationTurn : has
+    Conversation ||--o{ InboxItem : has
+    Workspace ||--o{ InboxItem : has
 
     %% Styling
     classDef primaryEntity stroke-width:2px

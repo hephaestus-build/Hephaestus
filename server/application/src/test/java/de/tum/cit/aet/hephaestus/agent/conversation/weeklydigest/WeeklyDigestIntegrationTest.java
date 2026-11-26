@@ -717,8 +717,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         UUID digestTurn = Objects.requireNonNull(stimulus.getTurnId());
         var claim = Objects.requireNonNull(transactionTemplate.execute(tx -> {
             assertThat(writeFence.holdForAccountWrite(accountId)).isTrue();
-            var leased = runs.claimSubject(
-                            workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST))
+            var leased = runs.claimSubject(workspaceId, "conversation:" + conversationId, Set.of(AgentRunKind.DIGEST))
                     .orElseThrow();
             assertThat(turns.start(workspaceId, leased.runId(), leased.epoch())).isPresent();
             return leased;
@@ -735,8 +734,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .as("the digest's holder gets the stop grace, not the rest of its work")
                 .isTrue();
         // The holder settles within the grace and stores nothing; then the question is the next claim.
-        transactionTemplate.executeWithoutResult(
-                tx -> runs.end(claim.fence(), AgentRunStopReason.CANCELLED));
+        transactionTemplate.executeWithoutResult(tx -> runs.end(claim.fence(), AgentRunStopReason.CANCELLED));
         assertThat(transactionTemplate.execute(tx -> runs.claimSubject(
                                 workspaceId,
                                 "conversation:" + conversationId,
@@ -754,15 +752,12 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
         assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
         assertThat(digestEntry()).as("no digest turn while the question waits").isEmpty();
-        assertThat(item(main.getId()))
-                .containsEntry("state", "PENDING")
-                .containsEntry("reason", "DEFERRED_ACTIVE");
+        assertThat(item(main.getId())).containsEntry("state", "PENDING").containsEntry("reason", "DEFERRED_ACTIVE");
 
         turns.stop(workspaceId, asked.turn().getId());
-        schedule(Clock.fixed(week.contactCutoff().plusSeconds(1), ZoneOffset.UTC)).startDue();
-        assertThat(item(main.getId()))
-                .containsEntry("state", "EXPIRED")
-                .containsEntry("reason", "DEADLINE_PASSED");
+        schedule(Clock.fixed(week.contactCutoff().plusSeconds(1), ZoneOffset.UTC))
+                .startDue();
+        assertThat(item(main.getId())).containsEntry("state", "EXPIRED").containsEntry("reason", "DEADLINE_PASSED");
         assertThat(digestEntry()).as("a late digest is never written").isEmpty();
     }
 
@@ -775,12 +770,11 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(schedule.enqueueDue()).isEqualTo(1);
 
         // Opted out and in again: a new consent, which the item was not scheduled under.
-        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start().plusSeconds(60)));
+        when(subscriptions.enabledSince(accountId))
+                .thenReturn(Optional.of(week.start().plusSeconds(60)));
         turns.stop(workspaceId, asked.turn().getId());
         schedule.startDue();
-        assertThat(item(main.getId()))
-                .containsEntry("state", "DROPPED")
-                .containsEntry("reason", "NO_LONGER_ELIGIBLE");
+        assertThat(item(main.getId())).containsEntry("state", "DROPPED").containsEntry("reason", "NO_LONGER_ELIGIBLE");
         assertThat(digestEntry()).isEmpty();
     }
 

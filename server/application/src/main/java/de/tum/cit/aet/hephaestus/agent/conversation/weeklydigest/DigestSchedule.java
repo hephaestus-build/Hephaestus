@@ -145,7 +145,8 @@ public class DigestSchedule {
                     || !availability.available(workspaceId, accountId)
                     || facts.compose(workspaceId, accountId, window).isEmpty()) return null;
             var main = conversations.findOrCreateMain(workspaceId, accountId);
-            // The item is bound to the consent it was scheduled under: a later opt-out and opt-in starts no turn for it.
+            // The item is bound to the consent it was scheduled under: a later opt-out and opt-in starts no turn for
+            // it.
             var payload = mapper.createObjectNode()
                     .put(WEEK_START, window.weekStart().toString())
                     .put(ZONE, window.zone().getId())
@@ -163,7 +164,8 @@ public class DigestSchedule {
                     .orElse(null);
         });
         if (enqueued == null) return false;
-        // Decided at once: an idle thread starts its digest now, as before the inbox, and a busy one waits for the pass.
+        // Decided at once: an idle thread starts its digest now, as before the inbox, and a busy one waits for the
+        // pass.
         inbox.decide(enqueued, producer, now);
         return true;
     }

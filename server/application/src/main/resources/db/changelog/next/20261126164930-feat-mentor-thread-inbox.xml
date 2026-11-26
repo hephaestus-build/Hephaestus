@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795711770434-1" author="hephaestus">
+        <comment>Each thread holds the inputs that no person typed as inbox items, with IDs only (ADR 0120).</comment>
+        <createTable tableName="inbox_item">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="inbox_itemPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conversation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="custody" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="due_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deadline_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="starts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="turn_id" type="UUID"/>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="settled_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795711770434-2" author="hephaestus">
+        <comment>One item per source on a thread: a redelivered source writes nothing.</comment>
+        <addUniqueConstraint columnNames="conversation_id, source_key" constraintName="uk_inbox_item_source" tableName="inbox_item"/>
+        <addUniqueConstraint columnNames="id, workspace_id" constraintName="uk_inbox_item_tenant" tableName="inbox_item"/>
+        <createIndex indexName="ix_inbox_item_due" tableName="inbox_item">
+            <column name="due_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795711770434-3" author="hephaestus">
+        <comment>An item goes with its thread, within its thread's workspace.</comment>
+        <addForeignKeyConstraint baseTableName="inbox_item" baseColumnNames="conversation_id,workspace_id" constraintName="sfk_inbox_item_conversation" referencedTableName="conversation" referencedColumnNames="id,workspace_id" onDelete="CASCADE" validate="true"/>
+        <addForeignKeyConstraint baseTableName="inbox_item" baseColumnNames="workspace_id" constraintName="sfk_inbox_item_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="RESTRICT" validate="true"/>
+    </changeSet>
+    <changeSet id="1795711770434-4" author="hephaestus">
+        <comment>The closed sets of an inbox item: its kind, custody and state.</comment>
+        <sql>ALTER TABLE public.inbox_item ADD CONSTRAINT ck_inbox_item_kind CHECK (kind IN ('SCHEDULE_DUE')), ADD CONSTRAINT ck_inbox_item_custody CHECK (custody IN ('OPTIONAL', 'REQUIRED')), ADD CONSTRAINT ck_inbox_item_state CHECK (state IN ('PENDING', 'CLAIMED', 'CONSUMED', 'EXPIRED', 'DROPPED'))</sql>
+        <rollback>
+            <sql>ALTER TABLE public.inbox_item DROP CONSTRAINT ck_inbox_item_kind, DROP CONSTRAINT ck_inbox_item_custody, DROP CONSTRAINT ck_inbox_item_state</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

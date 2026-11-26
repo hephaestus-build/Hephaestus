@@ -143,14 +143,19 @@ public class InboxItems {
                 item.defer(InboxItem.Reason.DEFERRED_ACTIVE);
             } else {
                 switch (producer.start(
-                        item.getWorkspaceId(), item.getConversationId(), accountId, item.getStarts(), item.getPayload())) {
+                        item.getWorkspaceId(),
+                        item.getConversationId(),
+                        accountId,
+                        item.getStarts(),
+                        item.getPayload())) {
                     case Started started -> item.claim(started.turnId());
-                    case Silent silent -> item.settle(
-                            silent.reason() == InboxItem.Reason.NOTHING_TO_SAY
-                                    ? InboxItem.State.CONSUMED
-                                    : InboxItem.State.DROPPED,
-                            silent.reason(),
-                            now);
+                    case Silent silent ->
+                        item.settle(
+                                silent.reason() == InboxItem.Reason.NOTHING_TO_SAY
+                                        ? InboxItem.State.CONSUMED
+                                        : InboxItem.State.DROPPED,
+                                silent.reason(),
+                                now);
                 }
             }
             return item.getState();
@@ -166,8 +171,8 @@ public class InboxItems {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void yieldToQuestion(ConversationLedgerEvents.TurnChanged changed) {
-        if (changed.surface() == ConversationTurn.Surface.SYSTEM
-                || changed.status() != ConversationTurn.Status.QUEUED) return;
+        if (changed.surface() == ConversationTurn.Surface.SYSTEM || changed.status() != ConversationTurn.Status.QUEUED)
+            return;
         yieldThread(changed.workspaceId(), changed.conversationId());
     }
 
@@ -180,8 +185,8 @@ public class InboxItems {
     public int yieldWhereQuestionsWait(int limit) {
         int yielded = 0;
         for (var thread : turns.findThreadsWithBackgroundBeforeQuestion(limit)) {
-            Integer stopped = transactions.execute(
-                    status -> yieldThread(thread.getWorkspaceId(), thread.getConversationId()));
+            Integer stopped =
+                    transactions.execute(status -> yieldThread(thread.getWorkspaceId(), thread.getConversationId()));
             if (stopped != null && stopped > 0) yielded++;
         }
         return yielded;
