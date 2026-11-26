@@ -17,7 +17,7 @@ interface InboxItemRepository extends Repository<InboxItem, UUID> {
     InboxItem save(InboxItem item);
 
     /** Whether the thread already holds an item of this source: its producer writes it once. */
-    boolean existsByConversationIdAndSourceKey(UUID conversationId, String sourceKey);
+    boolean existsByWorkspaceIdAndConversationIdAndSourceKey(long workspaceId, UUID conversationId, String sourceKey);
 
     /** An open item that is due, as the start pass reads it, without a lock. */
     record Due(UUID id, long workspaceId, UUID conversationId) {}

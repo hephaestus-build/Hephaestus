@@ -97,7 +97,8 @@ public class InboxItems {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Due> enqueue(NewItem item, Instant now) {
-        if (items.existsByConversationIdAndSourceKey(item.conversationId(), item.sourceKey())) return Optional.empty();
+        if (items.existsByWorkspaceIdAndConversationIdAndSourceKey(
+                item.workspaceId(), item.conversationId(), item.sourceKey())) return Optional.empty();
         var saved = items.save(new InboxItem(UUID.randomUUID(), item, now));
         return Optional.of(new Due(saved.getId(), saved.getWorkspaceId(), saved.getConversationId()));
     }

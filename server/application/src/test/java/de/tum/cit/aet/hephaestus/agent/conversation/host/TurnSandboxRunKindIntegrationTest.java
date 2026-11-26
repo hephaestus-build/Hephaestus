@@ -222,7 +222,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    void shouldStartAQuestionAheadOfAnOlderQueuedDigest() {
+    void shouldStopAnOlderQueuedDigestSoTheQuestionStartsFirst() {
         var digest = queueDigest();
         var question = ask("Answer my question before the weekly recap");
         assertThat(turnRows.findClaimableIds(workspace.getId(), List.of(question.getId())))
@@ -236,7 +236,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(turnRows.findById(digest.getId()))
                 .get()
                 .extracting(ConversationTurn::getStatus)
-                .isEqualTo(ConversationTurn.Status.QUEUED);
+                .as("the digest yields to the question; its inbox item waits for the next idle moment")
+                .isEqualTo(ConversationTurn.Status.STOPPED);
     }
 
     @Test

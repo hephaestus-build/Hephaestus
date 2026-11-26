@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -55,8 +56,11 @@ public class InboxItem {
         REQUIRED
     }
 
-    /** Where the item is. Only {@code PENDING} and {@code CLAIMED} are open. */
-    public enum State {
+    /**
+     * Where the item is. Only {@code PENDING} and {@code CLAIMED} are open. A claimed item settles by its turn's end, or
+     * waits again; only a pending one expires, so its deadline and attempts are read once its turn has ended.
+     */
+    public enum State implements Lifecycle<State> {
         PENDING,
         CLAIMED,
         CONSUMED,
@@ -65,6 +69,15 @@ public class InboxItem {
 
         public boolean open() {
             return this == PENDING || this == CLAIMED;
+        }
+
+        @Override
+        public boolean canTransitionTo(State next) {
+            return switch (this) {
+                case PENDING -> next != PENDING;
+                case CLAIMED -> next == PENDING || next == CONSUMED || next == DROPPED;
+                case CONSUMED, EXPIRED, DROPPED -> false;
+            };
         }
     }
 
@@ -168,7 +181,7 @@ public class InboxItem {
 
     /** A turn started for the item. */
     void claim(UUID turn) {
-        state = State.CLAIMED;
+        moveTo(State.CLAIMED);
         reason = Reason.STARTED;
         turnId = turn;
         starts++;
@@ -180,7 +193,7 @@ public class InboxItem {
      * @param charged whether its turn ran, so that the attempt counts against the item's limit
      */
     void release(Reason why, boolean charged) {
-        state = State.PENDING;
+        moveTo(State.PENDING);
         reason = why;
         turnId = null;
         if (charged) attempts++;
@@ -194,8 +207,13 @@ public class InboxItem {
     /** The item ends, for this reason. */
     void settle(State end, Reason why, Instant now) {
         if (end.open()) throw new IllegalArgumentException("An item settles in an end state, not " + end);
-        state = end;
+        moveTo(end);
         reason = why;
         settledAt = now;
+    }
+
+    private void moveTo(State next) {
+        if (!state.canTransitionTo(next)) throw new IllegalStateException("An inbox item cannot go from " + state + " to " + next);
+        state = next;
     }
 }
