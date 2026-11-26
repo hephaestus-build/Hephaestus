@@ -709,6 +709,8 @@ A live send shares the owner's history lock from its epoch check through one tra
 The removal transaction takes the exclusive form of that lock before it advances the epoch.
 A removal therefore commits before the check or after the handoff.
 The SSE writer holds the lock for one event or reconnect snapshot.
+It stops the connection if the socket write takes more than one second.
+The client reconnects to get a new snapshot.
 The model proxy hands one buffered request to the connected channel under the lock.
 The lock ends when the handoff returns, without waiting for the response.
 

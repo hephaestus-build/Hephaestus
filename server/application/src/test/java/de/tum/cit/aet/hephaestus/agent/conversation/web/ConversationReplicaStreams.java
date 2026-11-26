@@ -30,9 +30,9 @@ public final class ConversationReplicaStreams {
     public static String reconnect(ApplicationContext beans, ConversationReplica replica, long workspace, long owner)
             throws InterruptedException {
         var sent = new ArrayBlockingQueue<String>(1);
-        var hub = hub(beans, replica, sent::add);
+        var hub = hub(beans, replica);
         try {
-            hub.subscribe(workspace, owner);
+            hub.subscribe(workspace, owner, emitter(sent::add));
             return Objects.requireNonNull(sent.poll(5, TimeUnit.SECONDS), "The replica did not send its snapshot");
         } finally {
             hub.shutdown();
@@ -47,12 +47,13 @@ public final class ConversationReplicaStreams {
         var entered = new CompletableFuture<Integer>();
         var release = new CompletableFuture<Void>();
         var jdbc = beans.getBean(JdbcTemplate.class);
-        var hub = hub(beans, replica, frame -> {
+        var hub = hub(beans, replica);
+        var emitter = emitter(frame -> {
             entered.complete(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
             release.orTimeout(15, TimeUnit.SECONDS).join();
         });
         try {
-            hub.subscribe(workspace, owner);
+            hub.subscribe(workspace, owner, emitter);
             int sender = entered.get(10, TimeUnit.SECONDS);
             var removal = CompletableFuture.runAsync(remove);
             try {
@@ -73,9 +74,8 @@ public final class ConversationReplicaStreams {
         }
     }
 
-    private static ConversationLiveHub hub(
-            ApplicationContext beans, ConversationReplica replica, Consumer<String> outgoing) {
-        var emitter = new SseEmitter() {
+    private static SseEmitter emitter(Consumer<String> outgoing) {
+        return new SseEmitter() {
             @Override
             public void send(Set<DataWithMediaType> data) {
                 var wire = new StringBuilder();
@@ -83,6 +83,9 @@ public final class ConversationReplicaStreams {
                 outgoing.accept(wire.toString());
             }
         };
+    }
+
+    private static ConversationLiveHub hub(ApplicationContext beans, ConversationReplica replica) {
         return new ConversationLiveHub(
                 mock(ConversationLedgerNotifications.class),
                 replica.timeline(),
@@ -92,7 +95,6 @@ public final class ConversationReplicaStreams {
                 beans.getBean(TransactionTemplate.class),
                 beans.getBean(ObjectMapper.class),
                 new SimpleMeterRegistry(),
-                () -> emitter,
                 10);
     }
 }

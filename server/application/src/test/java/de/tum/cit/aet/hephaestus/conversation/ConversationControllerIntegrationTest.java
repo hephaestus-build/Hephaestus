@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
@@ -14,6 +15,15 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.StringWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -25,6 +35,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -43,6 +54,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     /** Signs in as the user with login {@code conversation}. */
     private static final String MEMBER = "mock-jwt-token-for-mentor-user";
+
+    @LocalServerPort
+    private int port;
 
     @Autowired
     private WebTestClient client;
@@ -678,6 +692,72 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(ProblemType.CONVERSATION_REJECTED.uri().toString())
                 .jsonPath("$.label.code")
                 .isEqualTo("conversation.rejected.not-deletable");
+    }
+
+    @Test
+    void shouldDeleteWhileALiveClientIsStalledInTheMiddleOfAnEvent() throws IOException {
+        String removed = "Words at the end of the stalled message";
+        var main = main();
+        try (var slow = new Socket()) {
+            slow.setReceiveBufferSize(1_024);
+            var reader = openLiveStream(slow);
+            assertThat(reader.readLine()).startsWith("data:");
+            assertThat(reader.readLine()).isEmpty();
+
+            // The event is larger than the socket buffers. Read its first line, then stop receiving mid-frame.
+            var entry = entryService.append(
+                    workspace.getId(),
+                    main.getId(),
+                    new ConversationEntryDraft(
+                            ConversationEntry.Kind.USER,
+                            ConversationEntry.Surface.APP,
+                            "word ".repeat(1_200_000) + removed,
+                            "",
+                            null,
+                            null,
+                            null,
+                            null));
+            assertThat(reader.readLine()).isEqualTo("event:entry");
+            assertTimeout(Duration.ofSeconds(3), () -> write("DELETE", "/entries/" + entry.getId(), null)
+                    .expectStatus()
+                    .isNoContent()
+                    .expectHeader()
+                    .valueEquals("X-Conversation-Scope-Epoch", "1"));
+
+            var tail = new StringWriter();
+            try {
+                reader.transferTo(tail);
+            } catch (SocketException reset) {
+                // The server can reset the socket to discard the pending output.
+            }
+            assertThat(tail.toString()).doesNotContain(removed, "\n\n");
+        }
+        try (var fresh = new Socket()) {
+            var snapshot = openLiveStream(fresh);
+            assertThat(snapshot.readLine()).contains("\"scopeEpoch\":1").doesNotContain(removed);
+        }
+        get("/entries")
+                .jsonPath("$.content[0].deleted")
+                .isEqualTo(true)
+                .jsonPath("$.content[0].text")
+                .isEqualTo("");
+    }
+
+    private BufferedReader openLiveStream(Socket socket) throws IOException {
+        socket.connect(new InetSocketAddress("127.0.0.1", port));
+        socket.setSoTimeout(5_000);
+        socket.getOutputStream()
+                .write(("GET /workspaces/ask-api/conversation/events HTTP/1.0\r\n"
+                                + "Accept: text/event-stream\r\nAuthorization: Bearer " + MEMBER + "\r\n\r\n")
+                        .getBytes(StandardCharsets.US_ASCII));
+        var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+        assertThat(reader.readLine()).contains(" 200 ");
+        String header;
+        do {
+            header = reader.readLine();
+        } while (header != null && !header.isEmpty());
+        assertThat(reader.readLine()).isEqualTo("event:snapshot");
+        return reader;
     }
 
     @Test

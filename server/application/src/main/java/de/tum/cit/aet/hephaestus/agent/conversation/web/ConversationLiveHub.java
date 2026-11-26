@@ -68,7 +68,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     private static final Logger log = LoggerFactory.getLogger(ConversationLiveHub.class);
 
-    private static final long TIMEOUT_MS = Duration.ofMinutes(30).toMillis();
     private static final long HEARTBEAT_INTERVAL_MS = 20_000L;
 
     /** Limits the streams one developer holds open; CORS does not prevent opening a stream. */
@@ -83,7 +82,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     private final OwnerScope owners;
     private final TransactionOperations transactions;
     private final ObjectMapper mapper;
-    private final Supplier<SseEmitter> emitters;
     private final int queueCapacity;
 
     /** Each stream under its account, which owns the conversation. */
@@ -118,7 +116,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 readOnly(transactionManager),
                 mapper,
                 meters,
-                () -> new ConversationEventEmitter(TIMEOUT_MS),
                 QUEUE_CAPACITY);
     }
 
@@ -131,7 +128,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
             TransactionOperations transactions,
             ObjectMapper mapper,
             MeterRegistry meters,
-            Supplier<SseEmitter> emitters,
             int queueCapacity) {
         this.notifications = notifications;
         this.timeline = timeline;
@@ -140,7 +136,6 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         this.owners = owners;
         this.transactions = transactions;
         this.mapper = mapper;
-        this.emitters = emitters;
         this.queueCapacity = queueCapacity;
         Gauge.builder(AgentMetrics.CONVERSATION_LIVE_STREAMS, streams, ConversationLiveHub::count)
                 .description("Live Hephaestus streams open on this server")
@@ -166,11 +161,10 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
      * @param accountId the account that opens the stream: the owner of every read for it, and whose membership every
      *     delivery checks again
      */
-    public SseEmitter subscribe(long workspaceId, long accountId) {
+    SseEmitter subscribe(long workspaceId, long accountId, SseEmitter emitter) {
         if (listening.compareAndSet(false, true)) {
             notifications.subscribe(this);
         }
-        SseEmitter emitter = emitters.get();
         Stream stream = new Stream(workspaceId, accountId, emitter);
         emitter.onCompletion(() -> remove(stream));
         emitter.onTimeout(() -> close(stream));
