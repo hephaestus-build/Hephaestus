@@ -694,6 +694,40 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheLastAttemptWhenAnAlternateCannotAnswerAnAlreadyDeferredEmail() throws Exception {
+        var project = repository();
+        var wrong = user("wrong");
+        var right = user("right");
+        long waiting = commit(project, wrong, null, EMAIL);
+        seed();
+        int lastAttempt = CommitIdentityResolutionJob.MAX_ATTEMPTS - 1;
+        jdbc.update("UPDATE commit_identity_resolution SET attempts = ? WHERE commit_id = ?", lastAttempt, waiting);
+        Instant reset = Instant.now().plus(Duration.ofHours(1));
+        provider = question -> throttle(reset);
+        run(50);
+
+        long alternate = workspace();
+        when(scopes.getActiveScopesForRepository(eq(project.getNativeId()), eq(github.getId())))
+                .thenReturn(List.of(scope, alternate));
+        provider = question -> null;
+
+        run(50);
+
+        assertThat(states()).containsOnly("PENDING");
+        assertThat(attempts()).containsOnly(lastAttempt);
+        assertThat(askedCredentials).endsWith(activeScm.withToken(alternate).orElseThrow());
+
+        var expired = Timestamp.from(Instant.EPOCH);
+        jdbc.update("UPDATE provider_credential_pause SET paused_until = ? WHERE workspace_id = ?", expired, scope);
+        jdbc.update("UPDATE commit_identity_resolution SET deferred_until = ? WHERE commit_id = ?", expired, waiting);
+        provider = question -> new Answer.Account(id(right), right.getNativeId());
+
+        run(50);
+
+        assertThat(authorOf(waiting)).isEqualTo(right.getId());
+    }
+
+    @Test
     void shouldKeepPartialAnswersAndTryAnotherScopeWhenAReplacementIsPaused() throws Exception {
         var project = repository();
         String firstEmail = "partial@example.com";
