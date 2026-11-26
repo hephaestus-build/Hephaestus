@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
@@ -48,6 +49,7 @@ class SlackPostAdapter implements ActionAdapter {
     private final ModelLinkHosts linkHosts;
     private final ObjectMapper mapper;
     private final WorkspaceSummaryQuery workspaces;
+    private final OutboundEgressGuard egressGuard;
 
     record Recipient(String teamId, String userId) {}
 
@@ -75,8 +77,16 @@ class SlackPostAdapter implements ActionAdapter {
     public boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode body) {
         var payload = replies.payload(body);
         var turnId = payload.turnId();
-        return turnId == null
-                || replies.holdQuestionForSend(Objects.requireNonNull(workspaceId), payload.entryId(), turnId);
+        if (turnId != null) {
+            return messages.admitReply(
+                    Objects.requireNonNull(workspaceId), payload.entryId(), turnId, this::requireWriteAllowed);
+        }
+        requireWriteAllowed();
+        return true;
+    }
+
+    void requireWriteAllowed() {
+        egressGuard.requireDeliveryAllowed("slack.write");
     }
 
     @Override

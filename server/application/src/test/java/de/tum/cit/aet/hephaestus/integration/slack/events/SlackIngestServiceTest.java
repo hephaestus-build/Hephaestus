@@ -363,7 +363,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
             logger.detachAppender(appender);
         }
 
-        // The erasure log gives recovery its ids and cutoff.
+        // The erasure log gives recovery its ids and cutoffs.
         assertThat(appender.list)
                 .singleElement()
                 .satisfies(event -> assertThat(event.getKeyValuePairs())
@@ -372,7 +372,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
                                 "event.name=slack.channel_erased",
                                 "workspace.id=7",
                                 "slack.channel.id=C1",
-                                "slack.channel.erased_at=" + erasedAt));
+                                "slack.channel.erased_at=" + erasedAt,
+                                "slack.channel.copies_erased_through=" + erasedAt));
 
         // Consent flip stops future ingestion + drops threads out of the ACTIVE-consent projectors…
         verify(monitoredChannelRepository).revokeConsent(7L, "C1");
@@ -385,7 +386,15 @@ class SlackIngestServiceTest extends BaseUnitTest {
         assertThat(journal.facts())
                 .containsExactly(new Fact(
                         PrivacyJournalKind.SLACK_CHANNEL_ERASED,
-                        Map.of("workspaceId", 7L, "channelId", new NativeId("C1"), "erasedAt", erasedAt)));
+                        Map.of(
+                                "workspaceId",
+                                7L,
+                                "channelId",
+                                new NativeId("C1"),
+                                "erasedAt",
+                                erasedAt,
+                                "copiesErasedThrough",
+                                erasedAt)));
     }
 
     @Test

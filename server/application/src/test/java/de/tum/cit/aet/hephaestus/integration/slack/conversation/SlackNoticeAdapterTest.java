@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
@@ -67,7 +68,8 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
                 mock(ConversationTurnCompletion.class),
                 mock(ModelLinkHosts.class),
                 mapper,
-                mock(WorkspaceSummaryQuery.class));
+                mock(WorkspaceSummaryQuery.class),
+                new OutboundEgressGuard(() -> false));
         adapter =
                 new SlackNoticeAdapter(posts, beans.getBeanProvider(SlackOnboardingService.class), connections, mapper);
         when(connections.findSlackConfig(WORKSPACE))

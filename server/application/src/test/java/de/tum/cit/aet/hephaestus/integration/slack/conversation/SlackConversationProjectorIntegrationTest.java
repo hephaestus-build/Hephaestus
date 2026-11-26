@@ -63,6 +63,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
@@ -148,6 +149,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private ActionExecutor executorFor(SlackMessageService transport) {
+        return executorFor(transport, new OutboundEgressGuard(() -> false));
+    }
+
+    private ActionExecutor executorFor(SlackMessageService transport, OutboundEgressGuard guard) {
         var beans = new StaticListableBeanFactory(Map.of("slack", transport));
         var adapter = new SlackPostAdapter(
                 beans.getBeanProvider(SlackMessageService.class),
@@ -157,7 +162,8 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                 completion,
                 linkHosts,
                 mapper,
-                workspaceSummaries);
+                workspaceSummaries,
+                guard);
         return ActionTestSupport.withAdapter(context, adapter);
     }
 
@@ -442,6 +448,44 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     @Test
+    void shouldSuppressTheReplyBeforeMarkingItsWriteWhenSilentModeEngagesDuringAdmission() throws Exception {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        end(claims.claim(asked.turn()), "Complete reply");
+        var actionId = action(asked);
+        var credentials = mock(SlackCredentialProvider.class);
+        when(credentials.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
+        var silentModeEngaged = new AtomicBoolean();
+        var guard = new OutboundEgressGuard(silentModeEngaged::get);
+
+        try (var slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(acceptedPost());
+            try (var gateway = gateway(slackApi, credentials, guard)) {
+                var outbox = executorFor(gateway, guard);
+                var questionLock = HeldTransaction.holdIn(
+                        transactions,
+                        jdbc,
+                        () -> jdbc.queryForObject(
+                                "SELECT id FROM conversation_entry WHERE id = ? FOR UPDATE",
+                                UUID.class,
+                                asked.question().getId()));
+                var attempt = CompletableFuture.supplyAsync(() -> ActionTestSupport.runLane(outbox, jdbc, key(asked)));
+                questionLock.commitAfter(attempt, () -> silentModeEngaged.set(true));
+
+                assertThat(attempt.get(20, TimeUnit.SECONDS))
+                        .contains(new ActionResult.Cancelled(ActionStopReason.SILENCED));
+                assertThat(jdbc.queryForObject(
+                                "SELECT write_started_at IS NULL FROM agent_action WHERE id = ?",
+                                Boolean.class,
+                                actionId))
+                        .as("Silent Mode must refuse the write before the outbox records its start")
+                        .isTrue();
+            }
+            assertThat(slackApi.getRequestCount()).isZero();
+        }
+    }
+
+    @Test
     void shouldWithdrawTheReplyWhenItsQuestionIsDeletedDuringSlackBackoff() throws Exception {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         end(claims.claim(asked.turn()), "Complete reply to the deleted question");
@@ -474,11 +518,16 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private static SlackMessageService gateway(MockWebServer slackApi, SlackCredentialProvider credentials) {
+        return gateway(slackApi, credentials, new OutboundEgressGuard(() -> false));
+    }
+
+    private static SlackMessageService gateway(
+            MockWebServer slackApi, SlackCredentialProvider credentials, OutboundEgressGuard guard) {
         var metrics = new SimpleMeterRegistry();
         return new SlackMessageService(
                 credentials,
                 new SlackRateLimitTracker(metrics),
-                new OutboundEgressGuard(() -> false),
+                guard,
                 new SlackMetrics(metrics),
                 new SlackProperties(slackApi.url("/").toString()));
     }

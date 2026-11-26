@@ -420,14 +420,20 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
+    interface CopyingToolResult {
+        UUID getId();
+
+        Instant getCreatedAt();
+    }
+
     /** The tool results of a workspace not erased yet that can copy anyone's data. */
     @Query(value = """
-            SELECT e.id FROM conversation_entry e
+            SELECT e.id AS "id", e.created_at AS "createdAt" FROM conversation_entry e
             WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL
               AND (CAST(:cutoff AS timestamptz) IS NULL OR e.created_at <= :cutoff)
               AND
             """ + COPIES_PERSON_DATA, nativeQuery = true)
-    List<UUID> findUnredactedCopyingToolResultIds(
+    List<CopyingToolResult> findUnredactedCopyingToolResults(
             @Param("workspaceId") long workspaceId, @Param("cutoff") @Nullable Instant cutoff);
 
     /** The messages of the account's conversations as the app shows them, in every workspace, oldest first. */

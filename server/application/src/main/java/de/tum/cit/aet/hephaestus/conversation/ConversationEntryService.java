@@ -253,11 +253,18 @@ public class ConversationEntryService {
      * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them, when a source that they could
      * have read leaves the workspace. No record says which source a result copied.
      *
-     * @param cutoff the original erasure time on replay, or null to erase all existing results during live erasure
+     * @param cutoff the recorded copy-erasure cutoff on replay, or null to erase all existing results
+     * @return the latest creation time of the selected results, if any
      */
     @Transactional
-    public void redactCopyingToolResults(long workspaceId, @Nullable Instant cutoff) {
-        redaction.redact(entries.findUnredactedCopyingToolResultIds(workspaceId, cutoff));
+    public Optional<Instant> redactCopyingToolResults(long workspaceId, @Nullable Instant cutoff) {
+        var results = entries.findUnredactedCopyingToolResults(workspaceId, cutoff);
+        redaction.redact(results.stream()
+                .map(ConversationEntryRepository.CopyingToolResult::getId)
+                .toList());
+        return results.stream()
+                .map(ConversationEntryRepository.CopyingToolResult::getCreatedAt)
+                .max(Instant::compareTo);
     }
 
     /** Full-text search over a conversation tree ({@link ConversationEntryRepository#searchByWorkspaceId}). */

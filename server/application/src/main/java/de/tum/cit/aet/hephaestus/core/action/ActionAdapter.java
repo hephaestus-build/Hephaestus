@@ -24,8 +24,9 @@ public interface ActionAdapter {
     ActionResult execute(ActionAttempt attempt);
 
     /**
-     * Checks the source of a new provider write, in the transaction that starts it and after the action is locked.
-     * A source check locks the domain row until admission commits. Returning false withdraws the action.
+     * Checks the source and delivery eligibility of a new provider write in its admission transaction,
+     * after the action is locked. A source check locks the domain row until admission commits.
+     * Returning false withdraws the action.
      */
     default boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode payload) {
         return true;

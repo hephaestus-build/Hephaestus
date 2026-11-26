@@ -177,8 +177,9 @@ public class SlackMessageService implements AutoCloseable {
             String channelId, @Nullable String threadTs) {}
 
     /**
-     * Posts once, after resolving credentials and admitting the write. A 429 returns to the outbox for a fresh
-     * attempt. Returns null when the outbox refuses admission.
+     * Posts once, after resolving credentials and admitting the write. The admission callback checks the source
+     * and Silent Mode in the outbox transaction. A 429 returns to the outbox for a fresh attempt.
+     * Returns null when the outbox refuses admission.
      */
     public @Nullable Posted postMessage(
             long workspaceId,
@@ -186,7 +187,7 @@ public class SlackMessageService implements AutoCloseable {
             List<LayoutBlock> blocks,
             String text,
             Message.@Nullable Metadata metadata,
-            BooleanSupplier admit) {
+            BooleanSupplier admitAtSend) {
         String channelId = destination.channelId();
         String threadTs = destination.threadTs();
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
@@ -200,8 +201,8 @@ public class SlackMessageService implements AutoCloseable {
             request.threadTs(threadTs);
         }
         ChatPostMessageRequest built = request.build();
-        ChatPostMessageResponse response =
-                callWrite(workspaceId, null, channelId, () -> true, admit, methods -> methods.chatPostMessage(built));
+        ChatPostMessageResponse response = callWrite(
+                workspaceId, null, channelId, () -> true, admitAtSend, methods -> methods.chatPostMessage(built));
         if (response == null) return null;
         String postedTo = response.getChannel();
         String ts = response.getTs();
@@ -308,8 +309,8 @@ public class SlackMessageService implements AutoCloseable {
     }
 
     /**
-     * Silent Mode refuses writes before credential lookup and immediately before each provider call.
-     * An outbox post also checks it before admission, which can wait for a source lock.
+     * Silent Mode refuses writes before credential lookup and after it returns. The outbox also checks under
+     * admission after taking the source lock. Other writes check just before each attempt.
      * A 429 returns to the outbox for a new attempt. Other writes can wait within the interactive budget.
      */
     private <T extends SlackApiTextResponse> @Nullable T callWrite(
@@ -317,7 +318,7 @@ public class SlackMessageService implements AutoCloseable {
             @Nullable String teamId,
             String channel,
             BooleanSupplier eligible,
-            @Nullable BooleanSupplier admit,
+            @Nullable BooleanSupplier admitAtSend,
             WriteCall<T> call) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
@@ -332,15 +333,14 @@ public class SlackMessageService implements AutoCloseable {
         try {
             MethodsClient methods = slack.methods(token);
             T response;
-            if (admit == null) {
+            if (admitAtSend == null) {
                 response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
                     egressGuard.requireDeliveryAllowed("slack.write");
                     return call.call(methods);
                 });
             } else {
                 egressGuard.requireDeliveryAllowed("slack.write");
-                if (!admit.getAsBoolean()) return null;
-                egressGuard.requireDeliveryAllowed("slack.write");
+                if (!admitAtSend.getAsBoolean()) return null;
                 response = call.call(methods);
             }
             if (!response.isOk()) {
@@ -356,7 +356,7 @@ public class SlackMessageService implements AutoCloseable {
                     ? SlackSendException.NOT_RATE_LIMITED
                     : SlackBackoff.retryAfterMillis(refused.code(), refused.header("Retry-After"));
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
-                if (admit != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
+                if (admitAtSend != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);

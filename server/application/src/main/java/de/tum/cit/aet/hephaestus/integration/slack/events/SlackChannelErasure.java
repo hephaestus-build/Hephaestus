@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Erases a Slack channel from the workspace: revokes its consent so ingestion stops, and deletes its stored provider
  * events, its messages, its thread aggregates (which hold {@code participant_account_ids}) and the conversation feedback
  * derived from them. Live erasure redacts tool results that could have copied the stored channel content.
- * Replay bounds that redaction by the original erasure time and reads no Slack API.
+ * Replay uses the recorded cutoff for copying tool results and reads no Slack API.
  */
 @Component
 @ConditionalOnServerRole
@@ -65,21 +65,29 @@ public class SlackChannelErasure {
     public void erase(long workspaceId, String channelId, Instant erasedAt) {
         eraseChannelRows(workspaceId, channelId);
         // Slack may deliver a deletion after its event time, while the channel content is still available.
-        conversationEntries.redactCopyingToolResults(workspaceId, null);
+        Instant copiesErasedThrough = conversationEntries
+                .redactCopyingToolResults(workspaceId, null)
+                .filter(createdAt -> createdAt.isAfter(erasedAt))
+                .orElse(erasedAt);
         journal.record(
                 PrivacyJournalKind.SLACK_CHANNEL_ERASED,
-                Map.of("workspaceId", workspaceId, "channelId", new NativeId(channelId), "erasedAt", erasedAt));
-        // A recovery manifest lists each channel erasure after its recovery point, by ids and time.
+                Map.of(
+                        "workspaceId", workspaceId,
+                        "channelId", new NativeId(channelId),
+                        "erasedAt", erasedAt,
+                        "copiesErasedThrough", copiesErasedThrough));
+        // A recovery manifest lists each channel erasure after its recovery point, with its cutoffs.
         TransactionCallbacks.afterCommit(() -> log.atInfo()
                 .addKeyValue("event.name", "slack.channel_erased")
                 .addKeyValue("workspace.id", workspaceId)
                 .addKeyValue("slack.channel.id", channelId)
                 .addKeyValue("slack.channel.erased_at", erasedAt)
+                .addKeyValue("slack.channel.copies_erased_through", copiesErasedThrough)
                 .log("A Slack channel was erased"));
     }
 
     @Transactional
-    public void replay(long workspaceId, String channelId, Instant erasedAt) {
+    public void replay(long workspaceId, String channelId, Instant erasedAt, Instant copiesErasedThrough) {
         var channel = channels.findForUpdate(workspaceId, channelId);
         // A registration after the cutoff starts a new period. The prior revoke or disconnect erased the old rows.
         boolean registeredAgain = channel.isPresent()
@@ -87,7 +95,7 @@ public class SlackChannelErasure {
                         || consentEvents.existsByWorkspaceIdAndSlackChannelIdAndToStateAndCreatedAtAfter(
                                 workspaceId, channelId, ConsentState.PENDING, erasedAt));
         if (!registeredAgain) eraseChannelRows(workspaceId, channelId);
-        conversationEntries.redactCopyingToolResults(workspaceId, erasedAt);
+        conversationEntries.redactCopyingToolResults(workspaceId, copiesErasedThrough);
     }
 
     private void eraseChannelRows(long workspaceId, String channelId) {

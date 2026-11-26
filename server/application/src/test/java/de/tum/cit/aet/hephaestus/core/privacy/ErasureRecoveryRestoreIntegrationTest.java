@@ -355,26 +355,50 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    void shouldRedactCopiesMadeAfterSlackDeletedTheChannelButBeforeErasure() {
+    void shouldEraseDelayedSlackCopiesAgainAfterRestoringABackup() throws Exception {
         long workspaceId = workspace.getId();
         jdbc.update("""
-                INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)
-                VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')
+                INSERT INTO slack_monitored_channel
+                    (workspace_id, slack_team_id, slack_channel_id, consent_state, created_at)
+                VALUES (?, 'T-restore', 'C-erased', 'ACTIVE', '2025-12-31T00:00:00Z')
                 """, workspaceId);
         long stored = slackMessage("1700000003.000300", "Channel words still stored after deletion in Slack");
         jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", stored);
-        UUID copy = copyingToolResult("2026-01-03T00:00:00Z", "Copied while the channel words were still stored");
+        String copiedAt = "2026-01-03T00:00:00Z";
+        String copiedWords = "Copied while the channel words were still stored";
+        UUID copy = copyingToolResult(copiedAt, copiedWords);
+        var backup = Backup.of(jdbc, workspaceId);
         Instant providerDeletion = Instant.parse("2026-01-02T00:00:00Z");
 
         channelErasure.erase(workspaceId, "C-erased", providerDeletion);
 
         assertThat(slackRows("C-erased")).isZero();
         assertThat(words(copy)).isBlank();
-        String recorded = Objects.requireNonNull(jdbc.queryForObject("""
-                SELECT (refs->'erasedAt')::text FROM privacy_journal
+        String references = Objects.requireNonNull(jdbc.queryForObject("""
+                SELECT refs::text FROM privacy_journal
                 WHERE kind = 'SLACK_CHANNEL_ERASED' AND refs->>'workspaceId' = ? AND refs->>'channelId' = 'C-erased'
                 """, String.class, Long.toString(workspaceId)));
-        assertThat(mapper.readValue(recorded, Instant.class)).isEqualTo(providerDeletion);
+        assertThat(mapper.treeToValue(mapper.readTree(references).get("erasedAt"), Instant.class))
+                .isEqualTo(providerDeletion);
+
+        backup.restore();
+        assertThat(words(copy)).contains(copiedWords);
+        UUID later = copyingToolResult("2026-01-04T00:00:00Z", "Work after the recorded copy cutoff");
+        String manifest = """
+                {"version":4,"restorePoint":"2026-01-03T01:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackMessageChanges":[],"slackChannelErasures":[%s]}
+                """.formatted(references);
+
+        recover(manifest);
+
+        assertThat(slackRows("C-erased")).isZero();
+        assertThat(words(copy))
+                .as("replaying the journal must erase the restored delayed copy")
+                .isBlank();
+        assertThat(jdbc.queryForObject("SELECT payload::text FROM conversation_entry WHERE id = ?", String.class, copy))
+                .doesNotContain(copiedWords);
+        assertThat(words(later)).contains("Work after the recorded copy cutoff");
     }
 
     @Test

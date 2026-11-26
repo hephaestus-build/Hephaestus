@@ -8,6 +8,6 @@ import java.time.Instant;
  */
 public interface RestoredSlackChannelErasures {
 
-    /** Revokes consent, deletes restored channel content, and redacts tool results through the original cutoff. */
-    void eraseAgain(long workspaceId, String channelId, Instant erasedAt);
+    /** Erases the original consent period and redacts restored tool results through the recorded copy cutoff. */
+    void eraseAgain(long workspaceId, String channelId, Instant erasedAt, Instant copiesErasedThrough);
 }

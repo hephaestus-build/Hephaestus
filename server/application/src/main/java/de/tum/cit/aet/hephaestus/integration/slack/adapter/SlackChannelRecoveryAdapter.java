@@ -17,7 +17,7 @@ class SlackChannelRecoveryAdapter implements RestoredSlackChannelErasures {
     }
 
     @Override
-    public void eraseAgain(long workspaceId, String channelId, Instant erasedAt) {
-        erasure.replay(workspaceId, channelId, erasedAt);
+    public void eraseAgain(long workspaceId, String channelId, Instant erasedAt, Instant copiesErasedThrough) {
+        erasure.replay(workspaceId, channelId, erasedAt, copiesErasedThrough);
     }
 }

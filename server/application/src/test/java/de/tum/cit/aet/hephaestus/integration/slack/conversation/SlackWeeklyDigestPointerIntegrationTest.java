@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
@@ -147,7 +148,8 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 completion,
                 linkHosts,
                 objectMapper,
-                workspaces);
+                workspaces,
+                new OutboundEgressGuard(() -> false));
         beans.addBean("post", adapter);
         executor = ActionTestSupport.withAdapter(context, adapter);
         pointer = new SlackWeeklyDigestPointer(

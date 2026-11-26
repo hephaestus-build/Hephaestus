@@ -296,14 +296,14 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSuppressAPostWhenSilentModeEngagesDuringAdmission() throws Exception {
+    void shouldPostWithoutReadingSilentModeAgainAfterAdmission() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
             slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
             SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
             config.getMethodsConfig().setStatsEnabled(false);
             try (SlackMessageService local = localService(config)) {
-                assertThatThrownBy(() -> local.postMessage(
+                assertThat(local.postMessage(
                                 7L,
                                 new SlackMessageService.PostDestination("D1ABCDEFGH", null),
                                 List.of(),
@@ -313,11 +313,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
                                     silentModeEngaged = true;
                                     return true;
                                 }))
-                        .isInstanceOfSatisfying(
-                                SlackSendException.class,
-                                e -> assertThat(e.slackError()).isEqualTo("silent_mode_engaged"));
+                        .isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
             }
-            assertThat(slackApi.getRequestCount()).isZero();
+            assertThat(slackApi.getRequestCount()).isOne();
         }
     }
 

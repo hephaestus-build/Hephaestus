@@ -101,7 +101,9 @@ The provider call must end within those 60 seconds.
 If the lease check refuses, the adapter must not call the provider and returns `Abandoned`.
 For a new Slack reply, admission runs after credential lookup.
 The write transaction locks the question and checks that it is still present and unredacted.
+For a Slack post, the same transaction checks Silent Mode after the source check.
 It checks the remaining lease again before it sets the write marker.
+After that transaction commits, the gateway calls Slack without another settings read.
 If the source check refuses, the executor ends the action as `CANCELLED` with `WITHDRAWN`.
 A Slack 429 defers the action so the next attempt checks its source again.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.mdx)).

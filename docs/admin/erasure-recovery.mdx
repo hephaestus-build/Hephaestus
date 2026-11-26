@@ -43,11 +43,11 @@ Restrict access to the recovery log and keep it while the oldest retained backup
 5. List each conversation message that a developer deleted under `messageDeletions`, with its workspace ID and entry ID.
    The log event `conversation.message_deleted` carries both IDs as `workspace.id` and `conversation.entry.id`. It never carries the words.
 6. List each Slack channel that an admin revoked, or that Slack deleted, under `slackChannelErasures`.
-   Give its workspace ID, Slack channel ID and original erasure time as `erasedAt`.
-   The log event `slack.channel_erased` carries these fields as `workspace.id`, `slack.channel.id` and `slack.channel.erased_at`.
-   Recovery erases copying tool results up to and including that time.
-   If an admin registered the channel again after that time, recovery preserves its new consent and channel data.
-   A manifest without `erasedAt` uses the recovery point as the cutoff for those results.
+   Give its workspace ID, Slack channel ID, original erasure time as `erasedAt` and the copy cutoff as `copiesErasedThrough`.
+   The log event `slack.channel_erased` carries these fields as `workspace.id`, `slack.channel.id`, `slack.channel.erased_at` and `slack.channel.copies_erased_through`.
+   Recovery erases copying tool results through `copiesErasedThrough`, including copies made while the Slack deletion event was in transit.
+   If an admin registered the channel again after `erasedAt`, recovery preserves its new consent and channel data.
+   Older manifests use `erasedAt` as the copy cutoff or the recovery point if both times are absent.
 7. List each stored Slack message that its author edited or deleted in Slack under `slackMessageChanges`.
    Give its workspace ID, its message ID, and the change: `EDITED` or `DELETED`.
    The log event `slack.message_changed` carries them as `workspace.id`, `slack.message.id` and `slack.message.change`. It never carries the words.
@@ -85,7 +85,12 @@ The manifest has this structure:
     {"workspaceId": 3, "entryId": "0f2d6c1e-5b7a-4c3e-9a41-2b8d7e6f1a90"}
   ],
   "slackChannelErasures": [
-    {"workspaceId": 3, "channelId": "C0123456789", "erasedAt": "2026-11-01T03:15:00Z"}
+    {
+      "workspaceId": 3,
+      "channelId": "C0123456789",
+      "erasedAt": "2026-11-01T03:15:00Z",
+      "copiesErasedThrough": "2026-11-01T03:17:00Z"
+    }
   ],
   "slackMessageChanges": [
     {"workspaceId": 3, "messageId": 9182, "change": "EDITED"}

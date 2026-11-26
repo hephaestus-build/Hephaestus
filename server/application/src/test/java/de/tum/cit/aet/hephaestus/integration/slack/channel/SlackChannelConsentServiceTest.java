@@ -236,7 +236,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
 
         service().transition(WS, CHANNEL, ConsentState.REVOKED, null);
 
-        verify(ingestService).eraseChannel(WS, CHANNEL);
+        verify(ingestService).eraseChannel(eq(WS), eq(CHANNEL), any(Instant.class));
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
     }
 

@@ -9,6 +9,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** The admitted messages and destination of a Slack reply; delivery state belongs to the outbox. */
@@ -119,6 +120,16 @@ public class ConversationSlackMessages {
         return entries.findByIdAndWorkspaceId(questionId, workspaceId)
                 .map(ConversationEntry::getTurnId)
                 .flatMap(turn -> turns.findByIdAndWorkspaceId(turn, workspaceId));
+    }
+
+    /** Checks delivery while the question is locked in the transaction that admits the Slack reply. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean admitReply(long workspaceId, UUID questionId, UUID turnId, Runnable requireDeliveryAllowed) {
+        boolean unchanged =
+                entries.lockUnredactedQuestion(workspaceId, questionId, turnId).isPresent();
+        if (!unchanged) return false;
+        requireDeliveryAllowed.run();
+        return true;
     }
 
     /** Binds an admitted ledger message to the Slack message that confirmed it. */

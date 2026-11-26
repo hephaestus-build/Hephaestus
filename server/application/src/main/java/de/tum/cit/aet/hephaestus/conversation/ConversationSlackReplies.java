@@ -62,12 +62,6 @@ public class ConversationSlackReplies {
         return mapper.treeToValue(payload, Payload.class);
     }
 
-    /** Holds the question in its current state until the outbox write admission commits. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public boolean holdQuestionForSend(long workspaceId, UUID entryId, UUID turnId) {
-        return entries.lockUnredactedQuestion(workspaceId, entryId, turnId).isPresent();
-    }
-
     /** How a post stands, as its action shows it; {@code null} without an action. */
     public static ConversationEntry.@Nullable SlackDelivery delivery(@Nullable LaneAction post) {
         if (post == null) return null;

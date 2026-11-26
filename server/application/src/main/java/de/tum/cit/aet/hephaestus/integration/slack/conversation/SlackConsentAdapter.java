@@ -17,8 +17,10 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService
 import java.time.Duration;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Confirms the public announcement before the domain can enable ingestion. */
@@ -39,6 +41,12 @@ class SlackConsentAdapter implements ActionAdapter {
     @Override
     public ActionVariants variants() {
         return ActionVariants.one(SlackConsentAnnouncement.class);
+    }
+
+    @Override
+    public boolean sourceIsCurrent(@Nullable Long workspaceId, JsonNode body) {
+        posts.requireWriteAllowed();
+        return true;
     }
 
     @Override
