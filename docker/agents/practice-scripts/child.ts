@@ -24,6 +24,7 @@ import { guardScriptImports } from "./lib/core/script-imports.ts";
 guardScriptImports();
 
 const send = process.send?.bind(process);
+const exit = process.exit.bind(process);
 if (send === undefined) {
 	throw new Error("The program child runs only as a process forked by the program host");
 }
@@ -45,6 +46,7 @@ function isHostMessage(value: unknown): value is HostMessage {
 }
 
 const jobArrived = once(process, "message");
+process.once("disconnect", () => exit(0));
 process.on("message", (message: unknown) => {
 	if (!isHostMessage(message) || message.kind === "job") {
 		return;
@@ -52,6 +54,9 @@ process.on("message", (message: unknown) => {
 	if (message.kind === "meta-accepted") {
 		metaReply.resolve(undefined);
 		return;
+	}
+	if (message.kind === "exit") {
+		return exit(0);
 	}
 	if (message.kind === "abort") {
 		stopped.abort(
@@ -140,5 +145,8 @@ try {
 		message: error instanceof Error ? error.message : String(error),
 		...(error instanceof UnratedError ? { reason: error.reason } : {}),
 	});
+} finally {
+	if (process.connected) {
+		process.disconnect();
+	}
 }
-process.disconnect();

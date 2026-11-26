@@ -28,8 +28,9 @@ import { isJsonObject } from "./json.ts";
 import { reasonOf, UnratedError } from "./practice-script.ts";
 
 const CHILD_HEAP_MB = 256;
-/** A program's process is killed this long after its deadline, so a program that unwinds still returns. */
+/** Time reserved to settle a program and its requests. */
 export const RETURN_MS = 5000;
+const STOP_STEP_MS = 1000;
 /** The most memory that one script process can hold on its heap. */
 export const SCRIPT_HEAP_BYTES = CHILD_HEAP_MB * 1024 * 1024;
 
@@ -50,8 +51,8 @@ export interface ProgramStart {
 export interface ProgramProcess {
 	readonly connected: boolean;
 	send: (message: HostMessage) => void;
-	/** Ends the process at once. */
-	kill: () => void;
+	disconnect: () => void;
+	kill: (signal?: "SIGTERM" | "SIGKILL") => void;
 	onOutput: (listener: (chunk: Buffer) => void) => void;
 	onMessage: (listener: (raw: unknown) => void) => void;
 	/** `signal` names what killed the process, if a signal did. */
@@ -71,6 +72,19 @@ export function forkedProgram(start: ProgramStart): ProgramProcess {
 			serialization: "advanced",
 		},
 	);
+	const closed = Promise.withResolvers<string | null>();
+	child.once("close", (_code, signal) => closed.resolve(signal));
+	const exited = Promise.withResolvers<string | null>();
+	child.once("exit", (_code, signal) => exited.resolve(signal));
+	const outputClosed = Promise.all(
+		[child.stdout, child.stderr].map(async (stream) => {
+			if (stream !== null && !stream.closed) {
+				const end = Promise.withResolvers<undefined>();
+				stream.once("close", () => end.resolve(undefined));
+				await end.promise;
+			}
+		}),
+	);
 	return {
 		get connected() {
 			return child.connected;
@@ -78,8 +92,20 @@ export function forkedProgram(start: ProgramStart): ProgramProcess {
 		send: (message) => {
 			child.send(message);
 		},
-		kill: () => {
-			child.kill("SIGKILL");
+		disconnect: () => {
+			if (child.connected) {
+				const disconnected = Promise.withResolvers<undefined>();
+				child.once("disconnect", () => disconnected.resolve(undefined));
+				child.disconnect();
+				// Node can omit the child's close event after a parent-initiated IPC disconnect.
+				void (async () => {
+					const [signal] = await Promise.all([exited.promise, disconnected.promise, outputClosed]);
+					closed.resolve(signal);
+				})();
+			}
+		},
+		kill: (signal = "SIGKILL") => {
+			child.kill(signal);
 		},
 		onOutput: (listener) => {
 			child.stdout?.on("data", listener);
@@ -89,14 +115,55 @@ export function forkedProgram(start: ProgramStart): ProgramProcess {
 			child.on("message", listener);
 		},
 		onClose: (listener) => {
-			child.once("close", (_code, signal) => {
-				listener(signal);
-			});
+			void (async () => listener(await closed.promise))();
 		},
 		onError: (listener) => {
 			child.on("error", listener);
 		},
 	};
+}
+
+interface ProcessClose {
+	signal: string | null;
+}
+
+const CLOSE_FAILURE =
+	"the program did not close after IPC exit, IPC disconnect, SIGTERM, and SIGKILL";
+
+/** The container can deny signals. Try the two child-owned exits before sending a signal. */
+async function stopScript(
+	child: ProgramProcess,
+	closed: Promise<ProcessClose>,
+): Promise<ProcessClose | null> {
+	for (const step of [
+		() => {
+			if (child.connected) {
+				child.send({ kind: "exit" });
+			}
+		},
+		() => child.disconnect(),
+		() => child.kill("SIGTERM"),
+		() => child.kill("SIGKILL"),
+	]) {
+		try {
+			step();
+		} catch {
+			// A failed stop can race with close. Observe close before trying the next step.
+		}
+		const timer = new AbortController();
+		try {
+			const result = await Promise.race([
+				closed,
+				sleep(STOP_STEP_MS, null, { signal: timer.signal }),
+			]);
+			if (result !== null) {
+				return result;
+			}
+		} finally {
+			timer.abort();
+		}
+	}
+	return null;
 }
 
 /** What the host gives one practice's program. */
@@ -225,29 +292,39 @@ export async function runCustomProgram(
 	// The program ends at its review (see answerReview), so its exit does not stop the session it handed to.
 	const handOff = { happened: false };
 	const reviewEnded = Promise.withResolvers<undefined>();
-	const processGone = Promise.withResolvers<string | null>();
+	const processClosed = Promise.withResolvers<ProcessClose>();
+	const processDone = Promise.withResolvers<ProcessClose | null>();
+	let stopping = false;
+	const stopChild = () => {
+		if (!stopping) {
+			stopping = true;
+			void (async () => {
+				processDone.resolve(await stopScript(child, processClosed.promise));
+			})();
+		}
+	};
 	const endProgram = () => {
 		ended = true;
 		stopped.abort(new UnratedError("deadline", "the program ended"));
 	};
 	child.onClose((exitSignal) => {
-		processGone.resolve(exitSignal);
+		const exit = { signal: exitSignal };
+		processClosed.resolve(exit);
+		processDone.resolve(exit);
+		stopping = true;
 		if (!handOff.happened) {
 			endProgram();
 		}
 	});
-	const signal = AbortSignal.any([
-		stopped.signal,
-		services.signal,
-		AbortSignal.timeout(Math.max(0, job.deadline - Date.now())),
-	]);
+	const signal = AbortSignal.any([stopped.signal, services.signal]);
 	let aborted: AbortReason | undefined;
 	/** Why the host stopped the program. The program hears only `aborted`, which has no word for a lost side. */
 	let hostStop: StopReason | undefined;
 	const open = new Map<number, OpenRequest>();
 	let lastRequestId = -1;
 	const outstanding = new Map<OpenRequest, Promise<void>>();
-	const reply = (message: Exclude<HostMessage, { kind: "job" | "abort" | "meta-accepted" }>) => {
+	let reviewDrainTimer: ReturnType<typeof setTimeout> | undefined;
+	const reply = (message: Extract<HostMessage, { id: number }>) => {
 		if (open.has(message.id) && child.connected && !handOff.happened) {
 			child.send(message);
 		}
@@ -277,7 +354,10 @@ export async function runCustomProgram(
 			refuseRequest(request.kind, id, reason);
 		}
 		open.clear();
-		killLater = setTimeout(stopAtLimit, RETURN_MS);
+		stopChild();
+		if (handOff.happened) {
+			reviewDrainTimer = setTimeout(() => reviewEnded.resolve(undefined), RETURN_MS);
+		}
 	};
 	signal.addEventListener(
 		"abort",
@@ -294,21 +374,13 @@ export async function runCustomProgram(
 		{ once: true },
 	);
 
-	const limit = { reached: false };
-	const stopAtLimit = () => {
-		limit.reached = true;
-		child.kill();
-		reviewEnded.resolve(undefined);
-	};
-	let killLater: ReturnType<typeof setTimeout> | undefined;
-
 	let settled: Omit<ProgramExecution, "calls"> | undefined;
 	let finished = false;
 	let metaAccepted = false;
 
 	const fail = (stopReason: StopReason, error: string) => {
 		settled ??= { failure: { stopReason, error: cut(error) } };
-		child.kill();
+		stopChild();
 	};
 
 	/**
@@ -332,8 +404,12 @@ export async function runCustomProgram(
 				request.call.abort(new UnratedError("cancelled", "the program ended at its review"));
 			}
 		}
-		child.kill();
+		stopChild();
 		try {
+			if ((await processDone.promise) === null) {
+				return;
+			}
+			call.throwIfAborted();
 			const candidate = await services.review(parsed.options, call);
 			settled ??= {
 				value: structuredClone(candidate),
@@ -431,7 +507,7 @@ export async function runCustomProgram(
 			settled = {
 				failure: { stopReason: "error", error: "the program sent a second final message" },
 			};
-			child.kill();
+			stopChild();
 			return;
 		}
 		if (settled !== undefined && aborted === undefined) {
@@ -462,6 +538,7 @@ export async function runCustomProgram(
 					return;
 				}
 				settled = { value: message.value, captureFailures: message.captureFailures };
+				stopChild();
 				return;
 			}
 			case "failed": {
@@ -473,6 +550,7 @@ export async function runCustomProgram(
 						error: cut(message.message),
 					},
 				};
+				stopChild();
 				return;
 			}
 			case "read":
@@ -506,19 +584,29 @@ export async function runCustomProgram(
 		}
 	});
 	child.onError((failure) => {
-		// A send to a process that the host just ended raises an error event, which must not fail the review.
-		if (!handOff.happened) {
-			settled ??= { failure: { stopReason: "error", error: cut(messageOf(failure)) } };
+		// IPC and signals can fail during stop. The close deadline decides that outcome.
+		if (!stopping) {
+			fail("error", messageOf(failure));
 		}
 	});
-	const deadlineLimit = setTimeout(stopAtLimit, Math.max(0, job.deadline - Date.now()) + RETURN_MS);
+	const deadline = setTimeout(() => sendAbort("deadline"), Math.max(0, job.deadline - Date.now()));
 	child.send({ kind: "job", job: { ...job, modulePath } } satisfies HostMessage);
-	const exitSignal = await processGone.promise;
-	if (handOff.happened) {
+	const exit = await processDone.promise;
+	if (exit !== null && handOff.happened) {
 		await reviewEnded.promise;
 	}
-	clearTimeout(deadlineLimit);
-	clearTimeout(killLater);
+	clearTimeout(deadline);
+	clearTimeout(reviewDrainTimer);
+	if (exit === null) {
+		endProgram();
+		return {
+			failure: {
+				stopReason: hostStop ?? settled?.failure?.stopReason ?? "error",
+				error: CLOSE_FAILURE,
+			},
+			calls,
+		};
+	}
 	const drainTimer = new AbortController();
 	try {
 		const drained = await Promise.race([
@@ -538,7 +626,7 @@ export async function runCustomProgram(
 	if (settled !== undefined) {
 		return done(settled);
 	}
-	if (limit.reached || aborted !== undefined) {
+	if (aborted !== undefined) {
 		return done({
 			failure: {
 				stopReason: hostStop ?? "deadline",
@@ -550,9 +638,9 @@ export async function runCustomProgram(
 		failure: {
 			stopReason: "error",
 			error:
-				typeof exitSignal === "string"
-					? `the program's process was killed by ${exitSignal}`
-					: "the program's process ended without a result",
+				exit.signal === null
+					? "the program's process ended without a result"
+					: `the program's process was killed by ${exit.signal}`,
 		},
 	});
 }

@@ -1,0 +1,6 @@
+---
+"hephaestus": patch
+---
+
+Practice reviews can record results when the sandbox blocks signals between the runner and its practice scripts.
+A script that leaves a timer running after it returns no longer holds up the review.
