@@ -19,8 +19,9 @@ const record = (value: unknown, what: string): Record<string, unknown> => {
 	return value;
 };
 
-void test("a merge group that changes the drill or its migration inputs runs the seeded upgrade on its own images", () => {
+void test("a main push or merge group that changes the upgrade inputs runs it on its own images", () => {
 	const cicd = workflow("cicd.yml");
+	assert.deepEqual(record(record(cicd.on, "on").push, "push").branches, ["main"]);
 	const jobs = record(cicd.jobs, "jobs");
 	const filter =
 		pathFilters(readFileSync(".github/workflows/cicd.yml", "utf8"))["database-upgrade"] ?? [];
@@ -56,10 +57,17 @@ void test("a merge group that changes the drill or its migration inputs runs the
 	);
 
 	const outputs = record(record(jobs["detect-changes"], "detect-changes").outputs, "outputs");
-	assert.match(
-		String(outputs["queue-upgrade"]),
-		/^\$\{\{ \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'\) \}\}$/u,
-	);
+	for (const event of ["push", "merge_group", "pull_request", "workflow_dispatch"]) {
+		for (const changed of ["true", "false"]) {
+			assert.equal(
+				evaluateTierOutput(String(outputs["seeded-upgrade"]), event, {
+					filter: { "database-upgrade": changed },
+				}),
+				String(changed === "true" && (event === "push" || event === "merge_group")),
+				`${event} with upgrade inputs changed=${changed}`,
+			);
+		}
+	}
 	assert.match(
 		String(outputs["server-image"]),
 		/github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'/u,
@@ -68,21 +76,21 @@ void test("a merge group that changes the drill or its migration inputs runs the
 	const upgrade = record(jobs["Database-upgrade"], "Database-upgrade");
 	assert.equal(upgrade.uses, "./.github/workflows/release-upgrade.yml");
 	assert.deepEqual(upgrade.needs, ["detect-changes", "Docker"]);
-	assert.match(String(upgrade.if), /needs\.detect-changes\.outputs\.queue-upgrade == 'true'/u);
+	assert.match(String(upgrade.if), /needs\.detect-changes\.outputs\.seeded-upgrade == 'true'/u);
 	// Without inputs the reusable workflow resolves the last release and this commit's images.
 	assert.equal(upgrade.with, undefined);
 
 	const gate = record(jobs["all-ci-passed"], "all-ci-passed");
 	assert.ok(Array.isArray(gate.needs) && gate.needs.includes("Database-upgrade"));
-	// A skipped upgrade does not pass a merge group that needed one.
+	// A selected upgrade must pass.
 	assert.match(
 		JSON.stringify(gate.steps),
-		/needs\.detect-changes\.outputs\.queue-upgrade == 'true' && needs\.Database-upgrade\.result != 'success'/u,
+		/needs\.detect-changes\.outputs\.seeded-upgrade == 'true' && needs\.Database-upgrade\.result != 'success'/u,
 	);
 	const docker = record(record(jobs.Docker, "Docker").with, "Docker.with");
 	assert.match(
 		String(docker.postgres_image_changed),
-		/needs\.detect-changes\.outputs\.queue-upgrade == 'true'/u,
+		/needs\.detect-changes\.outputs\.seeded-upgrade == 'true'/u,
 	);
 
 	const call = record(
@@ -110,7 +118,7 @@ void test("a workflow-only drill change packages the server and requires both pu
 			outputs: {
 				"any-code": output("any-code"),
 				"ci-config": output("ci-config"),
-				"queue-upgrade": output("queue-upgrade"),
+				"seeded-upgrade": output("seeded-upgrade"),
 				"server-image": output("server-image"),
 				images: "true",
 				publishable: "true",

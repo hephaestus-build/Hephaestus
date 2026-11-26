@@ -23,6 +23,7 @@ import {
 	CHANGELOG_DIRECTORY,
 	NEXT_CHANGELOG_DIRECTORY,
 	migrationFilename,
+	migrationTime,
 } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
@@ -56,7 +57,7 @@ export function reorder(
 	if (newest === undefined || first === undefined || path.posix.basename(first) > newest) {
 		return [];
 	}
-	const taken = [newest];
+	const taken = [newest, ...mine];
 	return mine.map((from) => {
 		const name = migrationFilename(slugOf(from), taken, now);
 		taken.push(name);
@@ -171,6 +172,54 @@ function git(cwd: string, ...args: string[]): string[] {
 
 const changelogsAt = (cwd: string, revision: string, directory: string): string[] =>
 	git(cwd, "ls-tree", "-r", "--name-only", `${revision}^{tree}`, "--", `${directory}/`);
+
+/** Check the event's additions even if the checkout is a merge with an older main. */
+function checkCiOrder(eventBase: string, cwd: string): void {
+	const base = git(cwd, "rev-parse", "--verify", "--end-of-options", `${eventBase}^{commit}`)[0];
+	if (base === undefined) {
+		throw new Error("Could not resolve the event base.");
+	}
+	const changes = (revision: string, filter: string) =>
+		git(
+			cwd,
+			"diff",
+			"--no-renames",
+			"--name-only",
+			`--diff-filter=${filter}`,
+			revision,
+			"HEAD",
+			"--",
+			`${NEXT_CHANGELOG_DIRECTORY}/`,
+		).filter(
+			(file) => file.endsWith(".xml") && path.posix.dirname(file) === NEXT_CHANGELOG_DIRECTORY,
+		);
+	const added = changes(base, "A");
+	if (added.length === 0) {
+		return;
+	}
+	const mainRef = "refs/remotes/origin/main";
+	git(cwd, "fetch", "--no-tags", "--quiet", "origin", `+refs/heads/main:${mainRef}`);
+	// A rerun can see a migration from this event already on main. Identical files are now history.
+	const changedFromMain = new Set(changes(mainRef, "AMT"));
+	const pending = added.filter((file) => changedFromMain.has(file));
+	for (const file of pending) {
+		migrationTime(file);
+	}
+	const history = [mainRef, base].flatMap((revision) =>
+		changelogsAt(cwd, revision, NEXT_CHANGELOG_DIRECTORY).filter((file) => file.endsWith(".xml")),
+	);
+	const renames = reorder(history, pending, 0);
+	if (renames.length > 0) {
+		const newest = history.toSorted().at(-1);
+		throw new Error(
+			[
+				`New migrations must sort after ${path.posix.basename(newest ?? "")}, the latest migration on main or in the queue entry ahead.`,
+				...renames.map(({ from, to }) => `git mv -- ${from} ${to}`),
+				"Commit and push the rename. Run `vp run db:reorder` to rename against the latest main and queue.",
+			].join("\n"),
+		);
+	}
+}
 
 /** The base's `next/` files, and the tracked or untracked ones the base does not have. */
 export function migrations(
@@ -297,10 +346,21 @@ function refuseFork(cwd: string): void {
 
 function main(): void {
 	const { values } = parseArgs({
-		options: { base: { type: "string", default: "origin/main" }, check: { type: "boolean" } },
+		options: {
+			base: { type: "string", default: "origin/main" },
+			check: { type: "boolean" },
+			from: { type: "string" },
+		},
 	});
 	const { base } = values;
 	const cwd = git(process.cwd(), "rev-parse", "--show-toplevel")[0] ?? process.cwd();
+	if (values.from !== undefined) {
+		if (values.check !== true) {
+			throw new Error("--from requires --check.");
+		}
+		checkCiOrder(values.from, cwd);
+		return;
+	}
 	if (values.check === true) {
 		const problem = orderProblem(base, cwd, readQueue(cwd));
 		if (problem !== undefined) {

@@ -3,6 +3,7 @@ name: CI / Scheduled failures
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Trusted metadata only; no upstream code or artifacts run.
     workflows:
+      - "CI/CD"
       - "Cache / Mirror pinned CI tools"
       - "CI / Kubernetes nightly"
       - "Security / Rescan images"
@@ -19,17 +20,19 @@ on:
       - "Security / OpenSSF Scorecard"
       - "Security / Scorecard ratchet"
     types: [completed]
+    branches: [main]
 
 permissions: {}
 
 concurrency:
-  group: scheduled-failure-${{ github.event.workflow_run.workflow_id }}
+  group: scheduled-failure-${{ github.event.workflow_run.name == 'CI/CD' && github.event.workflow_run.id || github.event.workflow_run.workflow_id }}
   cancel-in-progress: false
 
 jobs:
   report:
     if: >-
-      github.event.workflow_run.event == 'schedule' &&
+      (github.event.workflow_run.event == 'schedule' ||
+        (github.event.workflow_run.name == 'CI/CD' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')) &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
     runs-on: ubuntu-slim
@@ -39,28 +42,33 @@ jobs:
       actions: read
       contents: read
     steps:
-      - name: Notify maintainers of a failed scheduled run
+      - name: Notify maintainers of a failed check
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 2
           script: |
             const run = context.payload.workflow_run;
-            let jobs = [];
-            if (['CI / Kubernetes nightly', 'Security / Rescan images', 'Release / Host watch'].includes(run.name)) {
-              jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+            const mainPush = run.name === 'CI/CD';
+            const ownReporter = ['CI / Kubernetes nightly', 'Security / Rescan images', 'Release / Host watch'].includes(run.name);
+            const failed = job => ['failure', 'timed_out'].includes(job.conclusion);
+            if (mainPush || ownReporter) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });
+              if (mainPush && !jobs.some(job =>
+                job.name === 'Seeded upgrade from the last release / Migrate a seeded database' && failed(job))) return;
               // scripts/scheduled-failures.test.ts keeps this list equal to their failure() steps.
               const reporters = ['Report a failed rescan', 'Notify vulnerability response tracking',
                 'Report a failed deployed rescan', 'Notify maintainers when the rescan is unavailable'];
-              const failed = jobs.filter(job => ['failure', 'timed_out'].includes(job.conclusion));
+              const failures = jobs.filter(failed);
               const handled = jobs.some(job => job.name === 'Report a failure' && job.conclusion === 'success')
-                || (failed.length > 0 && failed.every(job => job.steps?.some(step =>
+                || (failures.length > 0 && failures.every(job => job.steps?.some(step =>
                   reporters.includes(step.name) && step.conclusion === 'success')));
               // Keep the specific issue when its owner notified maintainers. Timeouts still need a reporter.
-              if (handled) return;
+              if (ownReporter && handled) return;
             }
-            const marker = `<!-- hephaestus:scheduled-failure:${run.workflow_id} -->`;
+            const check = mainPush ? 'Seeded upgrade on main' : `Scheduled check ${run.name}`;
+            const marker = mainPush ? `<!-- hephaestus:main-upgrade-failure:${run.id} -->` : `<!-- hephaestus:scheduled-failure:${run.workflow_id} -->`;
             const attempt = `<!-- run:${run.id}:${run.run_attempt} -->`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
@@ -68,13 +76,14 @@ jobs:
             const existing = issues.find(issue => !issue.pull_request && issue.body?.startsWith(marker));
             const body = [
               marker, attempt,
-              '@hephaestus-build/maintainer: a scheduled check needs attention.',
+              `@hephaestus-build/maintainer ${check} needs attention.`,
               '',
               `[${run.name}, attempt ${run.run_attempt}](${run.html_url}) finished with ${run.conclusion}.`,
               'Inspect the run logs. Close this issue after a successful run or a recorded decision.',
             ].join('\n');
             if (!existing) {
-              await github.rest.issues.create({ ...context.repo, title: `Scheduled check failed: ${run.name}`, body });
+              const title = mainPush ? 'Seeded upgrade failed on main' : `Scheduled check failed: ${run.name}`;
+              await github.rest.issues.create({ ...context.repo, title, body });
               return;
             }
             const comments = await github.paginate(github.rest.issues.listComments, {
