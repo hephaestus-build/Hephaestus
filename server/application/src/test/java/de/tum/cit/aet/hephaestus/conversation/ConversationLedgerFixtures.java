@@ -121,16 +121,17 @@ public final class ConversationLedgerFixtures {
                 .put("thinkingLevel", "off");
     }
 
-    /** One of Hephaestus's app messages, with its Pi entry. */
+    /** One of Hephaestus's app messages, with its Pi entry, written by an attempt whose basis read nothing. */
     public static ConversationEntryDraft hephaestus(String text) {
         return new ConversationEntryDraft(
-                ConversationEntry.Kind.ANSWER,
-                ConversationEntry.Surface.APP,
-                text,
-                answer(piId(), text),
-                null,
-                null,
-                null);
+                        ConversationEntry.Kind.ANSWER,
+                        ConversationEntry.Surface.APP,
+                        text,
+                        answer(piId(), text),
+                        null,
+                        null,
+                        null)
+                .withBasis(UUID.randomUUID());
     }
 
     static ConversationEntryDraft digest(String requestId) {

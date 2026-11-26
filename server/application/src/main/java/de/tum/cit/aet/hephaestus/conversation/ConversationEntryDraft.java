@@ -9,6 +9,8 @@ import tools.jackson.databind.JsonNode;
  *
  * @param searchText the words the app shows ({@link ConversationEntry#getSearchText}): the text of a message, nothing for
  *     any other entry; a Hephaestus message also has the words of its successful link calls ({@link ConversationPiEntries})
+ * @param basisId the basis of the attempt that wrote the entry ({@link ConversationEntry#getBasisId}); {@code null} for a
+ *     question or a digest
  */
 public record ConversationEntryDraft(
         ConversationEntry.Kind kind,
@@ -18,7 +20,20 @@ public record ConversationEntryDraft(
         @Nullable JsonNode payload,
         @Nullable UUID turnId,
         @Nullable String requestId,
-        @Nullable String slackTs) {
+        @Nullable String slackTs,
+        @Nullable UUID basisId) {
+
+    public ConversationEntryDraft(
+            ConversationEntry.Kind kind,
+            ConversationEntry.Surface surface,
+            String text,
+            String searchText,
+            @Nullable JsonNode payload,
+            @Nullable UUID turnId,
+            @Nullable String requestId,
+            @Nullable String slackTs) {
+        this(kind, surface, text, searchText, payload, turnId, requestId, slackTs, null);
+    }
 
     /** A draft whose shown words are its text: a message without link calls, or no message at all. */
     public ConversationEntryDraft(
@@ -29,7 +44,12 @@ public record ConversationEntryDraft(
             @Nullable UUID turnId,
             @Nullable String requestId,
             @Nullable String slackTs) {
-        this(kind, surface, text, kind.isMessage() ? text : "", payload, turnId, requestId, slackTs);
+        this(kind, surface, text, kind.isMessage() ? text : "", payload, turnId, requestId, slackTs, null);
+    }
+
+    /** The same draft, written by the attempt whose basis this is. */
+    public ConversationEntryDraft withBasis(UUID basis) {
+        return new ConversationEntryDraft(kind, surface, text, searchText, payload, turnId, requestId, slackTs, basis);
     }
 
     /** The system's weekly digest stimulus, owned by the same turn that writes its model answer. */

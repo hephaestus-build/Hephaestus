@@ -233,11 +233,12 @@ public class ConversationTurnContexts {
     public record SearchHit(
             UUID entryId, String branch, String createdAt, String surface, String kind, String excerpt) {}
 
+    /** The hits of {@code search_conversation}, each bound to the attempt's basis before it answers. */
     public List<SearchHit> search(TurnAttempt turn, ConversationEntryService.SearchQuery query) {
         UUID main =
                 conversations.require(turn.workspaceId(), turn.conversationId()).rootId();
         ZoneId zone = zone(turn);
-        return entries.search(turn.workspaceId(), turn.conversationId(), query).stream()
+        return entries.searchForTurn(turn.workspaceId(), turn.turnId(), query).stream()
                 .map(hit -> new SearchHit(
                         hit.entryId(),
                         hit.conversationId().equals(turn.conversationId())

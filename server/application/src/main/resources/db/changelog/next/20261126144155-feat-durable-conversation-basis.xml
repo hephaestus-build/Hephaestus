@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795704115872-1" author="hephaestus">
+        <createTable tableName="basis_edge">
+            <column name="basis_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_edgePK"/>
+            </column>
+            <column name="source_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_edgePK"/>
+            </column>
+            <column name="source_kind" type="VARCHAR(16)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_edgePK"/>
+            </column>
+            <column name="source_revision" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795704115872-2" author="hephaestus">
+        <addColumn tableName="conversation_entry">
+            <column name="basis_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795704115872-3" author="hephaestus">
+        <addColumn tableName="conversation_entry">
+            <column defaultValueNumeric="0" name="revision" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795704115872-4" author="hephaestus">
+        <addColumn tableName="conversation_turn">
+            <column name="basis_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795704115872-5" author="hephaestus">
+        <createIndex indexName="idx_basis_edge_source" tableName="basis_edge">
+            <column name="source_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795704115872-6" author="hephaestus">
+        <createIndex indexName="idx_conversation_entry_basis" tableName="conversation_entry">
+            <column name="basis_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795704115872-7" author="hephaestus">
+        <comment>A source of a basis is an entry of the same workspace, and its rows go with the entry.</comment>
+        <sql>ALTER TABLE public.basis_edge ADD CONSTRAINT sfk_basis_edge_source FOREIGN KEY (source_id, workspace_id) REFERENCES public.conversation_entry (id, workspace_id) ON DELETE CASCADE</sql>
+        <rollback>
+            <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT sfk_basis_edge_source</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

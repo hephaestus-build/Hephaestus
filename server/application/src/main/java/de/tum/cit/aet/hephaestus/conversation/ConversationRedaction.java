@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,6 +32,10 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>A {@code SUMMARY} covers its own conversation's entries in its {@code fromSeq..toSeq} payload range. A
  *       thread's summary may also have read its main conversation, so a redaction there erases the summaries of all
  *       its threads: one more compaction costs less than erased words in Hephaestus's context.
+ *   <li>A developer's delete and a person erasure also erase what derives from the erased entries: every entry whose
+ *       attempt's basis read one of them ({@link ConversationBasis}), and on through the entries derived from those.
+ *       Retention, a Slack edit and the other redactions keep the derived entries: each has its own retention, and an
+ *       edit keeps Hephaestus's answers to the earlier words.
  * </ul>
  *
  * <p>A redaction or an edit locks the main conversation row of every tree it changes, in id order, before it reads
@@ -53,6 +58,7 @@ public class ConversationRedaction {
     private final TurnRuns runs;
     private final ApplicationEventPublisher events;
     private final ObjectMapper mapper;
+    private final ConversationBasis basis;
 
     /** An attempt may have retained copied context even when it made no new tool call. */
     @Transactional(readOnly = true)
@@ -60,11 +66,25 @@ public class ConversationRedaction {
         return copies.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt);
     }
 
-    /** Redacts history and fences the running turns that can read it in one transaction. */
+    /**
+     * Redacts history whose retention ended and fences the running turns that can read it in one transaction. What
+     * derives from it keeps its own retention.
+     */
     @Transactional
     public boolean removeHistory(long workspaceId, long accountId, List<UUID> entryIds) {
         if (!historyRemoval.fence(workspaceId, accountId, entryIds)) return false;
         redactWithCopies(entryIds);
+        return true;
+    }
+
+    /**
+     * Redacts history that the developer took back, with every entry derived from it, and fences the running turns that
+     * can read it, in one transaction.
+     */
+    @Transactional
+    public boolean deleteHistory(long workspaceId, long accountId, List<UUID> entryIds) {
+        if (!historyRemoval.fence(workspaceId, accountId, entryIds)) return false;
+        redactWithCopies(entryIds, true);
         return true;
     }
 
@@ -74,7 +94,7 @@ public class ConversationRedaction {
         redactWithCopies(entryIds);
     }
 
-    /** Person-copy erasure also removes answers that may have used the copied data. */
+    /** Person-copy erasure also removes answers that may have used the copied data, and what derives from them. */
     @Transactional
     public void redactPersonCopies(Collection<UUID> entryIds) {
         redactWithCopies(entryIds, true);
@@ -139,24 +159,29 @@ public class ConversationRedaction {
     /**
      * Erases the copies an attempt just appended that read an entry erased or edited since the attempt started: a
      * {@code search_conversation} result that quotes one, or a summary whose range holds one. An entry erased or edited
-     * before the attempt started was in its path as it is now. The caller holds the main conversation row of the
+     * before the attempt started was in its path as it is now. It erases every entry that the attempt appended but its
+     * question when the attempt read words that were erased since. The caller holds the main conversation row of the
      * attempt's tree.
      *
+     * @param attempt the turn whose attempt appended the entries, with its start and its basis
      * @param personErased whether the person-erasure step that redacts the tool results that copy anyone's data
      *     ({@link ConversationEntryRepository#COPIES_PERSON_DATA}) ran since the attempt started. That step runs after every
-     *     step that erases a source, so the attempt may have read the person's data; its own such results, and the
-     *     answers and summaries derived from earlier context, are erased too. The step records no workspace, so a step for a person in any workspace
-     *     counts.
+     *     step that erases a source, so the attempt may have read the person's data. The step records no workspace, so a
+     *     step for a person in any workspace counts.
+     * @return whether an entry of the attempt's basis was erased after the attempt read it ({@link ConversationBasis})
      */
     @Transactional
-    public void eraseStaleCopies(List<ConversationEntry> appended, Instant attemptStart, boolean personErased) {
+    public boolean eraseStaleCopies(ConversationTurn attempt, List<ConversationEntry> appended, boolean personErased) {
+        Instant attemptStart = Objects.requireNonNull(attempt.getStartedAt(), "A held turn has started");
+        UUID attemptBasis = attempt.getBasisId();
+        boolean basisLost = attemptBasis != null && basis.lostSource(attempt.getWorkspaceId(), attemptBasis);
         List<UUID> stale = new ArrayList<>();
         for (ConversationEntry entry : appended) {
             if (isStaleSummary(entry, attemptStart) || quotesChanged(entry, attemptStart)) {
                 stale.add(entry.getId());
             }
         }
-        if (personErased) {
+        if (personErased || basisLost) {
             // System prompt snapshots and context edits can hold copied words too.
             appended.stream()
                     .filter(entry -> entry.getKind() != ConversationEntry.Kind.USER)
@@ -164,6 +189,7 @@ public class ConversationRedaction {
                     .forEach(stale::add);
         }
         redactWithCopies(stale);
+        return basisLost;
     }
 
     private boolean isStaleSummary(ConversationEntry entry, Instant attemptStart) {

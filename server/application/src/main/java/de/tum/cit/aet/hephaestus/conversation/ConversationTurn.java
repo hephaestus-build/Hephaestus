@@ -236,6 +236,14 @@ public class ConversationTurn implements Persistable<UUID> {
     @ColumnDefault("0")
     private int toolsLoads;
 
+    /**
+     * The basis of the current or last attempt ({@link ConversationBasis}): what it read, and what the entries it stores
+     * derive from. Each start begins a new basis. {@code null} before the first start.
+     */
+    @Nullable
+    @Column(name = "basis_id")
+    private UUID basisId;
+
     @Transient
     private boolean fresh;
 
@@ -265,6 +273,7 @@ public class ConversationTurn implements Persistable<UUID> {
         this.status = Status.RUNNING;
         this.attempt = epoch;
         this.startedAt = now;
+        this.basisId = TimeOrderedIds.next();
         this.toolsLoads = 0;
         this.admission = null;
         this.error = null;

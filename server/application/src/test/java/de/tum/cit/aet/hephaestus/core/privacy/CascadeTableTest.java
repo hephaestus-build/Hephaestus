@@ -99,6 +99,7 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String SLACK = "integration.slack.conversation.SlackConversationProjectorIntegrationTest#";
     private static final String SANDBOX_RUNS = "agent.conversation.host.TurnSandboxRunKindIntegrationTest#";
     private static final String DERIVED_RESULTS = "practices.adapter.ProviderDerivedErasureIntegrationTest#";
+    private static final String BASIS = "conversation.ConversationBasisIntegrationTest#";
 
     private static final String DELETE_PROOF =
             ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt";
@@ -274,11 +275,15 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.KEEP,
                     List.of(
                             DELETE_PROOF,
+                            BASIS + "shouldEraseEveryEntryDerivedFromAMessageWhenTheDeveloperDeletesIt",
                             RETENTION
                                     + "shouldEraseACopyingToolResultWithTheSlackRetentionAndKeepTheMessagesAndOtherResults"),
-                    "An answer is Hephaestus's own message: it stays when the developer deletes the question, also where"
-                            + " it repeats it. A tool result that its retention erases leaves the answers that used it to"
-                            + " the conversation retention (personal-data map, conversations)."),
+                    "The developer's delete erases every answer whose attempt read the message, through the context or a"
+                            + " search, and every answer derived from those. An entry whose retention ends leaves the"
+                            + " answers that used it to the"
+                            + " conversation retention (personal-data map, conversations). An answer written before"
+                            + " attempts recorded their basis has unknown sources: it stays app history, and"
+                            + " Hephaestus never reads it again."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.DERIVED_ANSWER,

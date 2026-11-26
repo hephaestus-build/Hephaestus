@@ -202,7 +202,8 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
         entries.deleteMessage(workspace.getId(), keptQuestion.getId());
 
         List<ObjectNode> path = mainPath();
-        assertThat(texts(path)).containsExactly("Kept answer", "summary:Old talk");
+        // The answer derives from the deleted question, so it keeps only its skeleton.
+        assertThat(texts(path)).containsExactly(ConversationRedaction.ERASED, "summary:Old talk");
         // Pi keeps the entries before a compaction only from the one it names.
         assertThat(path.get(1).path("firstKeptEntryId").asString())
                 .isEqualTo(path.getFirst().path("id").asString());
@@ -362,14 +363,17 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
         assertThat(text(path.get(1))).isEqualTo(ConversationRedaction.ERASED);
     }
 
+    /** A summary that a turn's attempt wrote, with a basis that read nothing. */
     private static ConversationEntryDraft summary(String text, String firstKeptEntryId, UUID turnId) {
         return new ConversationEntryDraft(
-                ConversationEntry.Kind.SUMMARY,
-                ConversationEntry.Surface.APP,
-                text,
-                ConversationLedgerFixtures.compaction(ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
-                turnId,
-                null,
-                null);
+                        ConversationEntry.Kind.SUMMARY,
+                        ConversationEntry.Surface.APP,
+                        text,
+                        ConversationLedgerFixtures.compaction(
+                                ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
+                        turnId,
+                        null,
+                        null)
+                .withBasis(UUID.randomUUID());
     }
 }
