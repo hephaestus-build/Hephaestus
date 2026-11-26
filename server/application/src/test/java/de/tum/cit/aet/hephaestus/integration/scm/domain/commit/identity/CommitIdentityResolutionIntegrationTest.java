@@ -22,7 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReply;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReplyTest;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderReplyTest.ReplyCase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
@@ -35,6 +39,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnrichmentService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitIdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitIdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -59,25 +69,38 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import liquibase.database.core.PostgresDatabase;
 import liquibase.database.jvm.JdbcConnection;
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ExchangeFunctions;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
@@ -140,6 +163,14 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ConnectionService connections;
 
+    @Autowired
+    @Qualifier("gitHubGraphQlClient")
+    private HttpGraphQlClient githubClient;
+
+    @Autowired
+    @Qualifier("gitLabGraphQlClient")
+    private HttpGraphQlClient gitlabClient;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
@@ -167,6 +198,177 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 new ConnectionConfig.GitHubPatConfig("identity", "https://github.com", Set.of()),
                 token,
                 UUID.randomUUID().toString());
+    }
+
+    static Stream<Arguments> providerReplies() {
+        Instant tableTime = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        return ProviderReplyTest.responsesAt(tableTime).map(reply -> Arguments.of(reply, tableTime));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("providerReplies")
+    void shouldApplyProviderRepliesToTheQueue(ReplyCase reply, Instant tableTime) throws Exception {
+        Repository project;
+        if (reply.kind() == IntegrationKind.GITLAB) {
+            String server = "https://gitlab.com";
+            connectGitLab(server);
+            project = repository(provider(IdentityProviderType.GITLAB, server));
+        } else {
+            project = repository();
+        }
+        long commit = queueAtLastAttempt(project, EMAIL);
+        if (reply.signal().errors().stream().anyMatch(ProviderReply.BodyError::underAlias)) {
+            queueAtLastAttempt(project, "missing-alias@example.com");
+        }
+
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            MockResponse response = wireResponse(reply);
+            upstream.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    return response;
+                }
+            });
+            var adapter = providerAt(reply.kind(), upstream.url("/graphql").toString());
+            job = new CommitIdentityResolutionJob(
+                    resolutions,
+                    pauses,
+                    service,
+                    new CommitIdentityResolutionProperties(true, 50),
+                    List.of(adapter),
+                    scopes,
+                    activeScm,
+                    meters);
+            Instant before = Instant.now();
+
+            run(50);
+
+            var row = jdbc.queryForMap(
+                    "SELECT state, attempts, deferred_until FROM commit_identity_resolution WHERE commit_id = ?",
+                    commit);
+            assertThat(upstream.getRequestCount()).isPositive();
+            if (reply.expected() instanceof ProviderReply.Throttled throttled) {
+                assertThat(row).containsEntry("state", "PENDING").containsEntry("attempts", 4);
+                assertThat(row.get("deferred_until")).isInstanceOf(Timestamp.class);
+                assertThat(upstream.getRequestCount()).isEqualTo(1);
+                assertDeadline(
+                        (Timestamp) Objects.requireNonNull(row.get("deferred_until")),
+                        reply.signal(),
+                        throttled.until(),
+                        tableTime,
+                        before);
+            } else {
+                String state = reply.expected() instanceof ProviderReply.Ok ? "NO_ACCOUNT" : "UNANSWERED";
+                assertThat(row)
+                        .containsEntry("state", state)
+                        .containsEntry("attempts", 5)
+                        .containsEntry("deferred_until", null);
+            }
+        }
+    }
+
+    private long queueAtLastAttempt(Repository project, String email) {
+        long queued = commit(project, null, null, email);
+        jdbc.update("""
+                INSERT INTO commit_identity_resolution(repository_id, commit_id, source, state, attempts)
+                VALUES (?, ?, 'AUTHOR', 'PENDING', 4)
+                """, project.getId(), queued);
+        return queued;
+    }
+
+    private static MockResponse wireResponse(ReplyCase reply) {
+        var signal = reply.signal();
+        var body = JsonNodeFactory.instance.objectNode();
+        if (signal.status() / 100 == 2) {
+            if (reply.expected() instanceof ProviderReply.Ok) {
+                body.putObject("data")
+                        .putObject("repository")
+                        .putObject("commit0")
+                        .putObject("author")
+                        .put("email", EMAIL)
+                        .putNull("user");
+            } else {
+                body.putNull("data");
+            }
+            if (!signal.errors().isEmpty()) {
+                var errors = body.putArray("errors");
+                for (var error : signal.errors()) {
+                    var entry = errors.addObject().put("message", error.message());
+                    if (error.type() != null) entry.put("type", error.type());
+                    if (error.underAlias())
+                        entry.putArray("path").add("repository").add("commit1");
+                }
+            }
+        } else if (!signal.errors().isEmpty()) {
+            body.put("message", signal.errors().getFirst().message());
+        }
+        var response = new MockResponse.Builder()
+                .code(signal.status())
+                .body(body.toString())
+                .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+        signal.headers().forEach(response::addHeader);
+        return response.build();
+    }
+
+    private CommitIdentityProvider providerAt(IntegrationKind kind, String endpoint) {
+        var suppression = mock(PersonProcessingSuppression.class);
+        if (kind == IntegrationKind.GITLAB) {
+            var clients = mock(GitLabGraphQlClientProvider.class);
+            when(clients.forCredential(anyLong(), any(), any()))
+                    .thenAnswer(call -> redirect(
+                            gitlabClient,
+                            endpoint,
+                            GitLabGraphQlClientProvider.EXCHANGE_ATTRIBUTE,
+                            call.getArgument(2)));
+            var properties = mock(GitLabProperties.class);
+            when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(10));
+            return new GitLabCommitIdentityProvider(
+                    clients, properties, mock(GitLabUserService.class), suppression, activeScm, pauses);
+        }
+        var clients = mock(GitHubGraphQlClientProvider.class);
+        when(clients.forCredential(anyLong(), any(), any()))
+                .thenAnswer(call -> redirect(
+                        githubClient, endpoint, GitHubGraphQlClientProvider.EXCHANGE_ATTRIBUTE, call.getArgument(2)));
+        var users = mock(GitHubUserProcessor.class);
+        var reader = new CommitAuthorEnrichmentService(
+                commits,
+                resolutions,
+                mock(CommitAuthorResolver.class),
+                clients,
+                mock(GitHubGraphQlSyncCoordinator.class),
+                mock(GitHubExceptionClassifier.class),
+                users,
+                mock(ApplicationEventPublisher.class),
+                Clock.systemUTC());
+        return new GitHubCommitIdentityProvider(reader, users, suppression);
+    }
+
+    /** Keep the real client filters and codecs. Use an HTTP socket in place of the shared scripted exchange. */
+    private static HttpGraphQlClient redirect(
+            HttpGraphQlClient client, String endpoint, String attribute, ProviderReply.Exchange exchange) {
+        return client.mutate()
+                .webClient(builder -> builder.baseUrl(endpoint)
+                        .exchangeFunction(ExchangeFunctions.create(
+                                new ReactorClientHttpConnector(), ExchangeStrategies.withDefaults()))
+                        .defaultRequest(request -> request.attribute(attribute, exchange)))
+                .build();
+    }
+
+    private static void assertDeadline(
+            Timestamp stored, ProviderReply.Signal signal, Instant expected, Instant tableTime, Instant before) {
+        Instant observed = stored.toInstant();
+        Duration wait = Duration.between(tableTime, expected);
+        Duration minimum = Duration.ofMinutes(5);
+        Duration maximum = Duration.ofHours(24);
+        if (wait.compareTo(minimum) < 0) wait = minimum;
+        else if (wait.compareTo(maximum) > 0) wait = maximum;
+        else if (signal.headers().containsValue(Long.toString(expected.getEpochSecond()))
+                || signal.headers().getOrDefault("retry-after", "").contains("GMT")) {
+            assertThat(observed).isEqualTo(expected);
+            return;
+        }
+        assertThat(observed).isBetween(before.plus(wait), Instant.now().plus(wait));
     }
 
     @Test
@@ -517,19 +719,7 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     @ValueSource(ints = {1, 2})
     void shouldKeepTheLastAttemptAvailableWhenGitLabRotatesATokenMidBatch(int rotateOnRequest) throws Exception {
         String server = "https://gitlab.com";
-        var workspace = workspaces.findById(scope).orElseThrow();
-        var original = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
-        connections.transition(
-                original,
-                new ConnectionService.TransitionRequest(
-                        IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
-        connections.provisionPatConnection(
-                workspace,
-                IntegrationKind.GITLAB,
-                "test-gitlab",
-                new ConnectionConfig.GitLabConfig(server, 1L, null, Set.of(), null),
-                "old-test-token",
-                UUID.randomUUID().toString());
+        connectGitLab(server);
         var repository = repository(provider(IdentityProviderType.GITLAB, server));
         long first = commit(repository, null, null, "first@example.com");
         long second = commit(repository, null, null, EMAIL);
@@ -937,6 +1127,22 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
     private Repository repository() {
         return repository(github);
+    }
+
+    private void connectGitLab(String server) {
+        var workspace = workspaces.findById(scope).orElseThrow();
+        var original = connections.findActive(scope, IntegrationKind.GITHUB).orElseThrow();
+        connections.transition(
+                original,
+                new ConnectionService.TransitionRequest(
+                        IntegrationState.SUSPENDED, "SUSPEND", "SYSTEM", null, null, null));
+        connections.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITLAB,
+                "test-gitlab",
+                new ConnectionConfig.GitLabConfig(server, 1L, null, Set.of(), null),
+                "old-test-token",
+                UUID.randomUUID().toString());
     }
 
     private Repository repository(IdentityProvider provider) {
