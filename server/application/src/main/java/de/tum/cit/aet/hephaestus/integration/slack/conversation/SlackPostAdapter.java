@@ -188,17 +188,14 @@ class SlackPostAdapter implements ActionAdapter {
             if (found != null) return found;
         }
         try {
-            var posted = client.postMessage(
+            var posted = client.postAdmitted(
                     workspace,
-                    new SlackMessageService.PostDestination(post.channelId(), post.threadTs()),
-                    post.blocks(),
-                    post.text(),
-                    metadata,
+                    new SlackMessageService.Outgoing(
+                            post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata),
                     attempt.fence()::beginWrite);
-            return posted == null
-                    ? new ActionResult.Abandoned()
-                    : done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
+            return done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
         } catch (SlackSendException failed) {
+            if ("not_admitted".equals(failed.slackError())) return new ActionResult.Abandoned();
             if ("no_active_slack_connection".equals(failed.slackError()))
                 return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
             if ("silent_mode_engaged".equals(failed.slackError()))

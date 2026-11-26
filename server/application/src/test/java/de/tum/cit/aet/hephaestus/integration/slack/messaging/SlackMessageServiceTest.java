@@ -94,13 +94,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
         return Stream.of(
                 Arguments.of("sendEphemeralForWorkspace", (ThrowingSend)
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
-                Arguments.of("postMessage", (ThrowingSend) s -> s.postMessage(
-                        7L,
-                        new SlackMessageService.PostDestination("D1ABCDEFGH", null),
-                        List.of(),
-                        "hi",
-                        null,
-                        () -> true)),
+                Arguments.of("postAdmitted", (ThrowingSend) s -> s.postAdmitted(
+                        7L, new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null), () -> true)),
                 Arguments.of("joinPublicChannel", (ThrowingSend) s -> s.joinPublicChannel(7L, "C1ABCDEFGH")));
     }
 
@@ -119,7 +114,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
             var local = new SlackMessageService(
-                    localConfig(slackApi, 1000),
+                    SlackSendFence.client(localConfig(slackApi, 1000)),
                     credentialProvider,
                     new SlackRateLimitTracker(new SimpleMeterRegistry()),
                     new OutboundEgressGuard(() -> false),
@@ -164,7 +159,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
             when(credentialProvider.resolveActiveTeam(7L, "T123", eligible))
                     .thenReturn(Optional.of(new BearerToken("xoxb-test", null)));
             var local = new SlackMessageService(
-                    config,
+                    SlackSendFence.client(config),
                     credentialProvider,
                     new SlackRateLimitTracker(new SimpleMeterRegistry()),
                     new OutboundEgressGuard(() -> false),
@@ -197,12 +192,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
     void postMessage_noToken_throwsSlackSendException() {
         when(credentialProvider.resolve(any(IntegrationRef.class))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.postMessage(
+        assertThatThrownBy(() -> service.postAdmitted(
                         7L,
-                        new SlackMessageService.PostDestination("C1ABCDEFGH", null),
-                        List.of(),
-                        "fallback",
-                        null,
+                        new SlackMessageService.Outgoing("C1ABCDEFGH", null, List.of(), "fallback", null),
                         () -> true))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(ex -> {
@@ -220,12 +212,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
             return Optional.of(new BearerToken("token", null));
         });
 
-        assertThatThrownBy(() -> service.postMessage(
+        assertThatThrownBy(() -> service.postAdmitted(
                         7L,
-                        new SlackMessageService.PostDestination("C1ABCDEFGH", null),
-                        List.of(),
-                        "message",
-                        null,
+                        new SlackMessageService.Outgoing("C1ABCDEFGH", null, List.of(), "message", null),
                         () -> true))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(
@@ -274,12 +263,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
             config.getMethodsConfig().setStatsEnabled(false);
             SlackMessageService local = localService(config);
             try {
-                assertThatThrownBy(() -> local.postMessage(
+                assertThatThrownBy(() -> local.postAdmitted(
                                 7L,
-                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
-                                List.of(),
-                                "hi",
-                                null,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
                                 () -> true))
                         .isInstanceOfSatisfying(
                                 SlackSendException.class,
@@ -303,13 +289,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
             SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
             config.getMethodsConfig().setStatsEnabled(false);
             try (SlackMessageService local = localService(config)) {
-                assertThat(local.postMessage(
-                                7L,
-                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
-                                List.of(),
-                                "hi",
-                                null,
-                                () -> {
+                assertThat(local.postAdmitted(
+                                7L, new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null), () -> {
                                     silentModeEngaged = true;
                                     return true;
                                 }))
@@ -327,12 +308,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
             SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
             config.getMethodsConfig().setStatsEnabled(false);
             try (SlackMessageService local = localService(config)) {
-                assertThatThrownBy(() -> local.postMessage(
+                assertThatThrownBy(() -> local.postAdmitted(
                                 7L,
-                                new SlackMessageService.PostDestination("D1ABCDEFGH", null),
-                                List.of(),
-                                "hi",
-                                null,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
                                 () -> true))
                         .isInstanceOfSatisfying(
                                 SlackSendException.class,
@@ -428,7 +406,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
         when(credentialProvider.resolve(any(IntegrationRef.class)))
                 .thenReturn(Optional.of(new BearerToken("xoxb-" + UUID.randomUUID(), null)));
         return new SlackMessageService(
-                config,
+                SlackSendFence.client(config),
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> silentModeEngaged),

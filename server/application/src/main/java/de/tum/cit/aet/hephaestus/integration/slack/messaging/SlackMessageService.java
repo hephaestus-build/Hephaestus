@@ -114,21 +114,27 @@ public class SlackMessageService implements AutoCloseable {
             OutboundEgressGuard egressGuard,
             SlackMetrics metrics,
             SlackProperties properties) {
-        this(nativeConfig(properties), credentialProvider, rateLimitTracker, egressGuard, metrics, SlackTime.SYSTEM);
+        this(
+                SlackSendFence.client(nativeConfig(properties)),
+                credentialProvider,
+                rateLimitTracker,
+                egressGuard,
+                metrics,
+                SlackTime.SYSTEM);
     }
 
     /**
-     * @param config the Slack client configuration; a test can set its API origin or deadline
+     * @param slack the gateway's Slack client with its send fence
      * @param time the time of the throttle budgets; a test passes virtual time, so no throttle wait takes real time
      */
     SlackMessageService(
-            SlackConfig config,
+            Slack slack,
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
             SlackMetrics metrics,
             SlackTime time) {
-        this.slack = SlackPostTransport.client(config);
+        this.slack = slack;
         this.credentialProvider = credentialProvider;
         this.rateLimitTracker = rateLimitTracker;
         this.egressGuard = egressGuard;
@@ -167,37 +173,34 @@ public class SlackMessageService implements AutoCloseable {
      */
     public record Posted(String channelId, String ts) {}
 
-    public record PostDestination(
-            String channelId, @Nullable String threadTs) {}
-
-    /**
-     * Posts once, after resolving credentials and admitting the write. The admission callback checks the source
-     * and Silent Mode in the outbox transaction. A 429 returns to the outbox for a fresh attempt.
-     * Returns null when the outbox refuses admission.
-     */
-    public @Nullable Posted postMessage(
-            long workspaceId,
-            PostDestination destination,
+    /** A message to post: where it goes, what it shows, and the metadata that finds it again. */
+    public record Outgoing(
+            String channelId,
+            @Nullable String threadTs,
             List<LayoutBlock> blocks,
             String text,
-            Message.@Nullable Metadata metadata,
-            BooleanSupplier admitAtSend) {
-        String channelId = destination.channelId();
-        String threadTs = destination.threadTs();
+            Message.@Nullable Metadata metadata) {}
+
+    /**
+     * Admits a post after connection setup, immediately before the write. A refusal fails with
+     * {@code not_admitted}. A 429 returns to the outbox for a fresh attempt when it supplies admission.
+     */
+    public Posted postAdmitted(long workspaceId, Outgoing post, @Nullable BooleanSupplier admitAtSend) {
+        String channelId = post.channelId();
+        String threadTs = post.threadTs();
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
                 .channel(channelId)
-                .blocks(blocks)
-                .text(text)
+                .blocks(post.blocks())
+                .text(post.text())
                 .unfurlLinks(false)
                 .unfurlMedia(false)
-                .metadata(metadata);
+                .metadata(post.metadata());
         if (threadTs != null && !threadTs.isBlank()) {
             request.threadTs(threadTs);
         }
         ChatPostMessageRequest built = request.build();
         ChatPostMessageResponse response = callWrite(
                 workspaceId, null, channelId, () -> true, admitAtSend, methods -> methods.chatPostMessage(built));
-        if (response == null) return null;
         String postedTo = response.getChannel();
         String ts = response.getTs();
         if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channelId, "invalid_receipt");
@@ -307,7 +310,7 @@ public class SlackMessageService implements AutoCloseable {
      * admission after taking the source lock. Other writes check just before each attempt.
      * A 429 returns to the outbox for a new attempt. Other writes can wait within the interactive budget.
      */
-    private <T extends SlackApiTextResponse> @Nullable T callWrite(
+    private <T extends SlackApiTextResponse> T callWrite(
             long workspaceId,
             @Nullable String teamId,
             String channel,
@@ -334,8 +337,12 @@ public class SlackMessageService implements AutoCloseable {
                 });
             } else {
                 egressGuard.requireDeliveryAllowed("slack.write");
-                if (!admitAtSend.getAsBoolean()) return null;
-                response = call.call(methods);
+                SlackSendFence.ADMISSION.set(new SlackSendFence.Admission(admitAtSend));
+                try {
+                    response = call.call(methods);
+                } finally {
+                    SlackSendFence.ADMISSION.remove();
+                }
             }
             if (!response.isOk()) {
                 String error = response.getError();
@@ -354,6 +361,8 @@ public class SlackMessageService implements AutoCloseable {
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
+        } catch (SlackSendFence.NotAdmitted e) {
+            throw new SlackSendException(workspaceId, channel, "not_admitted", e);
         } catch (IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }

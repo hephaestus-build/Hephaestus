@@ -99,7 +99,7 @@ It sets `write_started_at` in its own short transaction.
 It refuses when another claim took the action, when an erasure deleted it, or when less than 60 seconds of the lease are left.
 The provider call must end within those 60 seconds.
 If the lease check refuses, the adapter must not call the provider and returns `Abandoned`.
-For a new Slack reply, admission runs after credential lookup.
+For a new Slack reply, admission runs after credential lookup and connection setup, immediately before the HTTP write.
 The write transaction locks the question and checks that it is still present and unredacted.
 For a Slack post, the same transaction checks Silent Mode after the source check.
 It checks the remaining lease again before it sets the write marker.

@@ -4,6 +4,8 @@ import com.slack.api.Slack;
 import com.slack.api.SlackConfig;
 import com.slack.api.util.http.SlackHttpClient;
 import java.io.IOException;
+import java.net.ProtocolException;
+import java.util.function.BooleanSupplier;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
 import okhttp3.RequestBody;
@@ -11,14 +13,22 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import org.jspecify.annotations.Nullable;
 
-/** Limits each outbox admission to one Slack post at the HTTP layer. */
-final class SlackPostTransport {
-    private SlackPostTransport() {}
+/** Admits a Slack post after connection setup, just before OkHttp writes the request. */
+final class SlackSendFence implements Interceptor {
+
+    /** The synchronous Slack SDK runs its network interceptor on the calling thread. */
+    static final ThreadLocal<@Nullable Admission> ADMISSION = new ThreadLocal<>();
+
+    private static final SlackSendFence INSTANCE = new SlackSendFence();
+    private static final String POST_MESSAGE = "/chat.postMessage";
+
+    private SlackSendFence() {}
 
     static Slack client(SlackConfig config) {
         var http = SlackHttpClient.buildOkHttpClient(config)
                 .newBuilder()
-                .addInterceptor(SlackPostTransport::sendPostOnce)
+                .addInterceptor(SlackSendFence::sendPostOnce)
+                .addNetworkInterceptor(INSTANCE)
                 .build();
         return Slack.getInstance(config, new SlackHttpClient(http));
     }
@@ -26,13 +36,42 @@ final class SlackPostTransport {
     private static Response sendPostOnce(Interceptor.Chain chain) throws IOException {
         var request = chain.request();
         var body = request.body();
-        if (body == null || !request.url().encodedPath().endsWith("/chat.postMessage")) {
+        if (body == null || !request.url().encodedPath().endsWith(POST_MESSAGE)) {
             return chain.proceed(request);
         }
         // The SDK disables redirects. A one-shot body also stops HTTP follow-ups such as 503 with Retry-After: 0.
         // Only a fresh outbox attempt can authorize sending the form again.
         return chain.withRetryOnConnectionFailure(false)
                 .proceed(request.newBuilder().post(oneShot(body)).build());
+    }
+
+    static final class Admission {
+        private final BooleanSupplier admit;
+        private boolean asked;
+
+        Admission(BooleanSupplier admit) {
+            this.admit = admit;
+        }
+    }
+
+    static final class NotAdmitted extends ProtocolException {
+        private static final long serialVersionUID = 1L;
+
+        NotAdmitted() {
+            super("The post was not admitted at its send boundary");
+        }
+    }
+
+    @Override
+    public Response intercept(Chain chain) throws IOException {
+        var request = chain.request();
+        Admission admission = ADMISSION.get();
+        if (admission != null && request.url().encodedPath().endsWith(POST_MESSAGE)) {
+            if (admission.asked) throw new ProtocolException("An admitted post is sent once");
+            admission.asked = true;
+            if (!admission.admit.getAsBoolean()) throw new NotAdmitted();
+        }
+        return chain.proceed(request);
     }
 
     private static RequestBody oneShot(RequestBody body) {

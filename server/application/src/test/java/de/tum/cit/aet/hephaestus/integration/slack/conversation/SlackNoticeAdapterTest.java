@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -99,25 +98,21 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldPostOneNoticeWithItsOwnReadbackMarker() {
-        when(client.postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any()))
+        when(client.postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any()))
                 .thenAnswer(admittedPost(invocation -> new SlackMessageService.Posted(CHANNEL, "101.0")));
 
         var result = adapter.execute(attempt(false, true));
 
         assertThat(result).isInstanceOf(ActionResult.Done.class);
         verify(client)
-                .postMessage(
+                .postAdmitted(
                         eq(WORKSPACE),
-                        eq(new SlackMessageService.PostDestination(CHANNEL, null)),
-                        eq(List.of()),
-                        eq("Not available"),
-                        eq(SlackConversationPosts.noticeMetadata(ACTION)),
+                        eq(new SlackMessageService.Outgoing(
+                                CHANNEL,
+                                null,
+                                List.of(),
+                                "Not available",
+                                SlackConversationPosts.noticeMetadata(ACTION))),
                         any());
         var notice = message(SlackConversationPosts.noticeMetadata(ACTION));
         assertThat(SlackConversationPosts.isNoticeOf(notice, ACTION)).isTrue();
@@ -127,13 +122,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
     @Test
     void shouldRecoverAnUnknownWriteFromItsNoticeMetadataWithoutPostingAgain() {
         when(client.isConnected(WORKSPACE)).thenReturn(true);
-        when(client.postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any()))
+        when(client.postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any()))
                 .thenAnswer(admittedPost(invocation -> {
                     throw new SlackSendException(WORKSPACE, CHANNEL, "transport_failure");
                 }));
@@ -150,13 +139,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
         assertThat(adapter.execute(attempt(false, true))).isInstanceOf(ActionResult.Reread.class);
         assertThat(adapter.execute(attempt(true, true))).isInstanceOf(ActionResult.Done.class);
         verify(client, times(1))
-                .postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any());
+                .postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any());
     }
 
     @Test
@@ -166,7 +149,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
                 .thenReturn(new SlackMessageService.Matches(List.of(), true));
 
         assertThat(adapter.execute(attempt(true, true))).isInstanceOf(ActionResult.Reread.class);
-        verify(client, never()).postMessage(any(Long.class), any(), anyList(), any(), any(), any());
+        verify(client, never()).postAdmitted(any(Long.class), any(), any());
     }
 
     @Test
@@ -176,18 +159,12 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
                 .thenReturn(new SlackMessageService.Matches(List.of(), false));
 
         assertThat(adapter.execute(attempt(true, true))).isEqualTo(new ActionResult.Failed(ActionStopReason.REJECTED));
-        verify(client, never()).postMessage(any(Long.class), any(), anyList(), any(), any(), any());
+        verify(client, never()).postAdmitted(any(Long.class), any(), any());
     }
 
     @Test
     void shouldRespectTheProviderRetryAfterWithoutSpendingAnAttempt() {
-        when(client.postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any()))
+        when(client.postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any()))
                 .thenAnswer(admittedPost(invocation -> {
                     throw new SlackSendException(WORKSPACE, CHANNEL, "ratelimited", 120_000);
                 }));
@@ -197,13 +174,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldHonorTheWriteFence() {
-        when(client.postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any()))
+        when(client.postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any()))
                 .thenAnswer(admittedPost(invocation -> {
                     throw new AssertionError("Slack received a post after admission refused");
                 }));
@@ -213,13 +184,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldCancelBeforeWritingWhenSilentModeIsEngaged() {
-        when(client.postMessage(
-                        eq(WORKSPACE),
-                        argThat(destination -> CHANNEL.equals(destination.channelId())),
-                        anyList(),
-                        any(),
-                        any(),
-                        any()))
+        when(client.postAdmitted(eq(WORKSPACE), argThat(destination -> CHANNEL.equals(destination.channelId())), any()))
                 .thenAnswer(admittedPost(invocation -> {
                     throw new SlackSendException(WORKSPACE, CHANNEL, "silent_mode_engaged");
                 }));
@@ -242,6 +207,6 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
                 .thenReturn(Optional.of(new ConnectionConfig.SlackConfig("T_REPLACEMENT", "Slack", null, Set.of())));
         assertThat(adapter.execute(attempt(false, true)))
                 .isEqualTo(new ActionResult.Cancelled(ActionStopReason.RECIPIENT_UNAVAILABLE));
-        verify(client, never()).postMessage(any(Long.class), any(), anyList(), any(), any(), any());
+        verify(client, never()).postAdmitted(any(Long.class), any(), any());
     }
 }
