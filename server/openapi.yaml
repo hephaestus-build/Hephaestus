@@ -8233,6 +8233,13 @@ paths:
       responses:
         "204":
           description: The message is deleted
+          headers:
+            X-Conversation-Scope-Epoch:
+              description: The current conversation tree epoch after the deletion
+              schema:
+                type: integer
+                format: int64
+              style: simple
         "409":
           content:
             application/problem+json:

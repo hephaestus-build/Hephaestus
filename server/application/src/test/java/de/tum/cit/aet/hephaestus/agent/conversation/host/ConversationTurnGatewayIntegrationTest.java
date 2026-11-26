@@ -101,8 +101,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
-import reactor.core.publisher.Sinks;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import reactor.core.publisher.Sinks;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -203,7 +203,8 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
-            factory.registerSingleton("llmProxyController",
+            factory.registerSingleton(
+                    "llmProxyController",
                     SandboxModelProxy.controller(beans, (request, next) -> modelExchange.filter(request, next)));
             factory.registerSingleton("attemptTokenVerifier", verifier);
 
@@ -320,12 +321,17 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
         try (var upstream = new MockWebServer()) {
             upstream.start();
             if (usageFallback) {
-                upstream.enqueue(new MockResponse.Builder().code(400)
+                upstream.enqueue(new MockResponse.Builder()
+                        .code(400)
                         .addHeader("Content-Type", "application/json")
-                        .body("{\"error\":\"stream_options is unsupported\"}").build());
+                        .body("{\"error\":\"stream_options is unsupported\"}")
+                        .build());
             }
-            upstream.enqueue(new MockResponse.Builder().code(200)
-                    .addHeader("Content-Type", "application/json").body("{\"choices\":[]}").build());
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"choices\":[]}")
+                    .build());
             admitModel(upstream.url("/v1").toString());
 
             var prepared = new CountDownLatch(1);
@@ -337,11 +343,13 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 prepared.countDown();
                 return resume.asMono().flatMap(ignored -> next.exchange(request));
             };
-            var request = HttpRequest.newBuilder(URI.create(
-                            "http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
+            var request = HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
                     .header("Authorization", "Bearer " + credential())
                     .header("Content-Type", "application/json")
-                    .header(SandboxRunArgumentResolver.RUN_HEADER, turn.getRunId().toString())
+                    .header(
+                            SandboxRunArgumentResolver.RUN_HEADER,
+                            turn.getRunId().toString())
                     .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(turn.getAttempt()))
                     .POST(HttpRequest.BodyPublishers.ofString("""
                             {"model":"restart-model","stream":true,"messages":[{"role":"user","content":"Private question"}]}
@@ -354,8 +362,8 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                     var first = Objects.requireNonNull(upstream.takeRequest(2, TimeUnit.SECONDS));
                     assertThat(Objects.requireNonNull(first.getBody()).utf8()).contains("stream_options");
                 }
-                var question = beans.getBean(ConversationEntryRepository.class)
-                        .findStimulus(workspace.getId(), turn.getId());
+                var question =
+                        beans.getBean(ConversationEntryRepository.class).findStimulus(workspace.getId(), turn.getId());
                 beans.getBean(ConversationEntryService.class).deleteMessage(workspace.getId(), question.getId());
             } finally {
                 resume.tryEmitValue(true);

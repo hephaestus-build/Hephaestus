@@ -313,24 +313,21 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 		},
 		onVote: vote,
 		onDelete: (entry) => {
-			remove.mutate(
-				entry.id,
-				{
-					onSuccess: (epoch) => {
-						if (Number.isSafeInteger(epoch) && epoch >= 0) {
-							observeScopeEpoch(queryClient, workspaceSlug, epoch);
-						}
-						patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
-							...shown,
-							deleted: true,
-							text: "",
-						}));
-						rereadInOrder(queryClient, workspaceSlug, async () =>
-							rereadConversation(queryClient, workspaceSlug),
-						);
-					},
+			remove.mutate(entry.id, {
+				onSuccess: (epoch) => {
+					if (Number.isSafeInteger(epoch) && epoch >= 0) {
+						observeScopeEpoch(queryClient, workspaceSlug, epoch);
+					}
+					patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
+						...shown,
+						deleted: true,
+						text: "",
+					}));
+					rereadInOrder(queryClient, workspaceSlug, async () =>
+						rereadConversation(queryClient, workspaceSlug),
+					);
 				},
-			);
+			});
 		},
 	};
 }

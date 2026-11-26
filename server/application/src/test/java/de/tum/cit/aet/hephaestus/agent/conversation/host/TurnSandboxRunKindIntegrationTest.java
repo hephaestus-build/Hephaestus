@@ -598,14 +598,17 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .contains(secret);
         }
 
-        ConversationReplicaStreams.removeWhileSending(beans, replicas.getFirst(), workspaceId, developerAccountId, () -> {
-            if (retention) {
-                jdbc.update("UPDATE conversation_entry SET created_at = '2001-01-01' WHERE id = ?", removed.getId());
-                beans.getBean(ConversationRetentionSweeper.class).sweepNow();
-            } else {
-                entries.deleteMessage(workspaceId, removed.getId());
-            }
-        });
+        ConversationReplicaStreams.removeWhileSending(
+                beans, replicas.getFirst(), workspaceId, developerAccountId, () -> {
+                    if (retention) {
+                        jdbc.update(
+                                "UPDATE conversation_entry SET created_at = '2001-01-01' WHERE id = ?",
+                                removed.getId());
+                        beans.getBean(ConversationRetentionSweeper.class).sweepNow();
+                    } else {
+                        entries.deleteMessage(workspaceId, removed.getId());
+                    }
+                });
 
         assertThat(sandboxes.hasLive(workspaceId, activeRun.sandbox().subjectKey()))
                 .isFalse();

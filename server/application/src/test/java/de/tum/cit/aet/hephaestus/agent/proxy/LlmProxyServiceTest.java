@@ -161,11 +161,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        lenient().doAnswer(invocation -> {
-            Runnable handoff = invocation.getArgument(1);
-            handoff.run();
-            return null;
-        }).when(routingService).sendConversationRequest(any(), any());
+        lenient()
+                .doAnswer(invocation -> {
+                    Runnable handoff = invocation.getArgument(1);
+                    handoff.run();
+                    return null;
+                })
+                .when(routingService)
+                .sendConversationRequest(any(), any());
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
         lenient().when(routingService.ownsAttempt(any())).thenReturn(true);
         lenient().when(callLedger.open(any(), any(), any(), any())).thenReturn(CALL);

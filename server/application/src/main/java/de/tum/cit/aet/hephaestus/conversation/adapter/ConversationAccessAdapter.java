@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.conversation.adapter;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
-import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import java.util.List;

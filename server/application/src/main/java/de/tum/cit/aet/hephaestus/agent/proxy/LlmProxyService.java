@@ -573,7 +573,9 @@ class LlmProxyService {
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
                     poolPermit.revoked(),
                     transports,
-                    routing.conversationTurn() ? handoff -> routingService.sendConversationRequest(routing, handoff) : null,
+                    routing.conversationTurn()
+                            ? handoff -> routingService.sendConversationRequest(routing, handoff)
+                            : null,
                     headers -> callPermits.learning().served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             tap.onFirstContent(waited -> callPermits.learning().firstToken(poolPermit, waited, instanceCredential));
@@ -676,7 +678,9 @@ class LlmProxyService {
                 if (NestedExceptionUtils.getMostSpecificCause(e) instanceof ProxyRoutingService.ModelRequestRefused) {
                     permit.released();
                     return refusal(
-                            HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                            HttpStatus.CONFLICT,
+                            ProxyRefusal.ATTEMPT_ENDED,
+                            JobTokenAuthenticationFilter.ATTEMPT_ENDED);
                 }
                 if (rechecking) {
                     // The retry failed before it left, so the provider's health takes no failure from it.
@@ -966,7 +970,8 @@ class LlmProxyService {
                     // synchronously on emission. The database check runs off the transport event loop.
                     Thread.ofVirtual().name("conversation-model-send").start(() -> {
                         try {
-                            admit.accept(() -> sink.success(output.bufferFactory().wrap(outgoingBody)));
+                            admit.accept(
+                                    () -> sink.success(output.bufferFactory().wrap(outgoingBody)));
                         } catch (RuntimeException failure) {
                             sink.error(failure);
                         }

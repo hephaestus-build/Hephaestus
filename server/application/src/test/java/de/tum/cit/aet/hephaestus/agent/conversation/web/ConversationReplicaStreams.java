@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -16,9 +17,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.awaitility.Awaitility;
-import java.time.Duration;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.context.ApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
@@ -56,8 +56,10 @@ public final class ConversationReplicaStreams {
             int sender = entered.get(10, TimeUnit.SECONDS);
             var removal = CompletableFuture.runAsync(remove);
             try {
-                Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> removal.isDone()
-                        || Boolean.TRUE.equals(jdbc.queryForObject("""
+                Awaitility.await()
+                        .atMost(Duration.ofSeconds(10))
+                        .until(() -> removal.isDone()
+                                || Boolean.TRUE.equals(jdbc.queryForObject("""
                                 SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))
                                 """, Boolean.class, sender)));
                 assertThat(removal).isNotDone();

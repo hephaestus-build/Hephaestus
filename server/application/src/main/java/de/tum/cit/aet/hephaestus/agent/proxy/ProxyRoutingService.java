@@ -137,7 +137,8 @@ class ProxyRoutingService {
         var attempt = routing.attempt();
         long workspaceId = Objects.requireNonNull(routing.workspaceId());
         UUID runId = Objects.requireNonNull(attempt.runId());
-        var scope = conversationTurns.runningScope(workspaceId, attempt.sourceId(), attempt.epoch(), runId)
+        var scope = conversationTurns
+                .runningScope(workspaceId, attempt.sourceId(), attempt.epoch(), runId)
                 .orElseThrow(ModelRequestRefused::new);
         if (!scopeFence.admit(scope, () -> ownsAttempt(routing), handoff)) throw new ModelRequestRefused();
     }

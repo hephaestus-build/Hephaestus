@@ -550,7 +550,8 @@ public class SecurityConfig {
                 // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
                 // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
                 HttpHeaders.IF_MATCH));
-        configuration.setExposedHeaders(List.of(RequestReference.HEADER, ConversationEntryController.SCOPE_EPOCH_HEADER));
+        configuration.setExposedHeaders(
+                List.of(RequestReference.HEADER, ConversationEntryController.SCOPE_EPOCH_HEADER));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -384,9 +384,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 if (epoch == null) {
                     stream.emitter.send(event.data());
                 } else if (!scopeFence.admit(
-                        new Scope(stream.workspaceId, stream.accountId, epoch),
-                        () -> !stream.closed.get(),
-                        () -> {
+                        new Scope(stream.workspaceId, stream.accountId, epoch), () -> !stream.closed.get(), () -> {
                             try {
                                 stream.emitter.send(event.data());
                             } catch (IOException failure) {

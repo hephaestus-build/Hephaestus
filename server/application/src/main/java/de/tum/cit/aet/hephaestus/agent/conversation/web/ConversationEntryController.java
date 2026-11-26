@@ -77,10 +77,11 @@ public class ConversationEntryController {
     @ApiResponse(
             responseCode = "204",
             description = "The message is deleted",
-            headers = @Header(
-                    name = SCOPE_EPOCH_HEADER,
-                    description = "The current conversation tree epoch after the deletion",
-                    schema = @Schema(type = "integer", format = "int64")))
+            headers =
+                    @Header(
+                            name = SCOPE_EPOCH_HEADER,
+                            description = "The current conversation tree epoch after the deletion",
+                            schema = @Schema(type = "integer", format = "int64")))
     @ApiResponse(
             responseCode = "409",
             description = "Only the developer's own questions can be deleted",
