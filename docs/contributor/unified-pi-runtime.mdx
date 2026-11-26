@@ -706,7 +706,7 @@ The DELETE response carries the current epoch, so the deleting tab drops older p
 The client also drops older partials when a live event or snapshot carries a later epoch.
 
 A live send shares the owner's history lock from its epoch check through one transport handoff.
-The removal transaction holds that lock exclusively before it advances the epoch.
+The removal transaction takes the exclusive form of that lock before it advances the epoch.
 A removal therefore commits before the check or after the handoff.
 The SSE writer holds the lock for one event or reconnect snapshot.
 The model proxy hands one buffered request to the connected channel under the lock.
