@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventOffered;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -177,11 +178,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -3837,7 +3841,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private long offers(UUID occasion) {
-        return applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion)
+        return Stream.concat(
+                        applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion),
+                        applicationEvents.stream(ItemEventOffered.class, ItemEventOffered::eventId, occasion))
                 .count();
     }
 
@@ -5130,6 +5136,45 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     @Nested
     @TestPropertySource(properties = "hephaestus.item-event-ledger.quiet-window=2m")
     class QuietWindow {
+        @Test
+        @ExtendWith(OutputCaptureExtension.class)
+        void shouldReofferAFailedWindowWithoutWritingAPublication(CapturedOutput output) {
+            var prepared = prepare(IdentityProviderType.GITHUB, false);
+            publish(prepared);
+            var occasion = event(prepared);
+            assertThat(occasion.getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
+            assertThat(incompletePublications(occasion)).isEmpty();
+            String retained = Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT evidence::text FROM item_event WHERE id=?", String.class, occasion.getId()));
+            jdbc.update(
+                    "UPDATE item_event SET evidence = jsonb_set(evidence, '{sourceId}', '0'),"
+                            + " decided_at=now()-interval '3 minutes' WHERE id=?",
+                    occasion.getId());
+
+            for (int offer = 0; offer < 2; offer++) {
+                closeWindows(prepared);
+                var waiting = events.findById(occasion.getId()).orElseThrow();
+                assertThat(waiting.getState()).isEqualTo(ItemEventState.WAITING);
+                assertThat(waiting.getRetryAt()).isAfter(clock.instant());
+                assertThat(incompletePublications(occasion)).isEmpty();
+            }
+            assertThat(itemReviews(prepared)).isEmpty();
+            assertThat(output.getAll()
+                            .lines()
+                            .filter(line ->
+                                    line.contains("The occasion offer failed and will be tried again from the ledger"))
+                            .count())
+                    .isEqualTo(2);
+
+            jdbc.update("UPDATE item_event SET evidence=CAST(? AS jsonb) WHERE id=?", retained, occasion.getId());
+            closeWindows(prepared);
+
+            assertThat(events.findById(occasion.getId()).orElseThrow().getState())
+                    .isEqualTo(ItemEventState.STARTED);
+            assertThat(itemReviews(prepared)).hasSize(1);
+            assertThat(incompletePublications(occasion)).isEmpty();
+        }
+
         @Test
         void shouldStartOneReviewAtTheNewestOccasionWhenTheWindowCloses() {
             var prepared = prepare(
