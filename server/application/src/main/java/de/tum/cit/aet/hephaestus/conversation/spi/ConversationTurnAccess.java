@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation.spi;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence.Scope;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import java.time.Instant;
 import java.util.Optional;
@@ -20,6 +21,9 @@ public interface ConversationTurnAccess {
      * @return empty when the claim lost the run or its turn ended
      */
     Optional<RunAttempt> runAttempt(long workspaceId, UUID runId, int epoch);
+
+    /** The scope and current epoch of a running attempt that holds its lease. */
+    Optional<Scope> runningScope(long workspaceId, UUID turnId, int epoch, UUID runId);
 
     /** Whether the attempt holds its live lease and still runs, on the database clock. */
     boolean hasLiveLease(long workspaceId, UUID turnId, int epoch, UUID runId);

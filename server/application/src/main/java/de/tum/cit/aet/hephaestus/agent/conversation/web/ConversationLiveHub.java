@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
 import de.tum.cit.aet.hephaestus.conversation.ConversationReadDTO;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence.Scope;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
@@ -13,6 +15,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -75,6 +78,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     private final ConversationLedgerNotifications notifications;
     private final ConversationTimeline timeline;
+    private final ConversationScopeFence scopeFence;
     private final AccountMembershipQuery memberships;
     private final OwnerScope owners;
     private final TransactionOperations transactions;
@@ -99,6 +103,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     public ConversationLiveHub(
             ConversationLedgerNotifications notifications,
             ConversationTimeline timeline,
+            ConversationScopeFence scopeFence,
             AccountMembershipQuery memberships,
             OwnerScope owners,
             PlatformTransactionManager transactionManager,
@@ -107,6 +112,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         this(
                 notifications,
                 timeline,
+                scopeFence,
                 memberships,
                 owners,
                 readOnly(transactionManager),
@@ -119,6 +125,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     ConversationLiveHub(
             ConversationLedgerNotifications notifications,
             ConversationTimeline timeline,
+            ConversationScopeFence scopeFence,
             AccountMembershipQuery memberships,
             OwnerScope owners,
             TransactionOperations transactions,
@@ -128,6 +135,7 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
             int queueCapacity) {
         this.notifications = notifications;
         this.timeline = timeline;
+        this.scopeFence = scopeFence;
         this.memberships = memberships;
         this.owners = owners;
         this.transactions = transactions;
@@ -373,19 +381,23 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                     return;
                 }
                 Long epoch = event.scopeEpoch();
-                if (epoch != null
-                        && epoch
-                                != owned(
-                                                stream.accountId,
-                                                () -> timeline.scopeEpoch(stream.workspaceId, stream.accountId))
-                                        .longValue()) {
+                if (epoch == null) {
+                    stream.emitter.send(event.data());
+                } else if (!scopeFence.admit(
+                        new Scope(stream.workspaceId, stream.accountId, epoch),
+                        () -> !stream.closed.get(),
+                        () -> {
+                            try {
+                                stream.emitter.send(event.data());
+                            } catch (IOException failure) {
+                                throw new UncheckedIOException(failure);
+                            }
+                        })) {
                     synchronized (stream.queue) {
                         stream.queue.clear();
                     }
                     read(() -> snapshot(stream));
-                    continue;
                 }
-                stream.emitter.send(event.data());
             } catch (IOException | RuntimeException gone) {
                 log.debug(
                         "Hephaestus live stream closed while sending: {}",

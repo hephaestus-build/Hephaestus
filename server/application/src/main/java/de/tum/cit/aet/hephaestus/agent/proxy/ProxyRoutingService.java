@@ -14,12 +14,14 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import java.io.Serial;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -34,6 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 class ProxyRoutingService {
     private final ReviewJobRepository agentJobRepository;
     private final ConversationTurnAccess conversationTurns;
+    private final ConversationScopeFence scopeFence;
     private final ObjectMapper objectMapper;
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
@@ -44,6 +47,7 @@ class ProxyRoutingService {
     ProxyRoutingService(
             ReviewJobRepository jobs,
             ConversationTurnAccess conversationTurns,
+            ConversationScopeFence scopeFence,
             ObjectMapper mapper,
             ReviewSnapshotQuery reviews,
             AgentRuns runs,
@@ -56,6 +60,7 @@ class ProxyRoutingService {
         this.agentJobRepository = jobs;
         this.runs = runs;
         this.conversationTurns = conversationTurns;
+        this.scopeFence = scopeFence;
         this.objectMapper = mapper;
         this.reviews = reviews;
     }
@@ -126,6 +131,20 @@ class ProxyRoutingService {
         } catch (StaleRunException ended) {
             return ProxyRefusal.ATTEMPT_ENDED;
         }
+    }
+
+    void sendConversationRequest(ProxyRouting routing, Runnable handoff) {
+        var attempt = routing.attempt();
+        long workspaceId = Objects.requireNonNull(routing.workspaceId());
+        UUID runId = Objects.requireNonNull(attempt.runId());
+        var scope = conversationTurns.runningScope(workspaceId, attempt.sourceId(), attempt.epoch(), runId)
+                .orElseThrow(ModelRequestRefused::new);
+        if (!scopeFence.admit(scope, () -> ownsAttempt(routing), handoff)) throw new ModelRequestRefused();
+    }
+
+    static final class ModelRequestRefused extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
     }
 
     ProxyRouting resolve(ProxyIdentity identity) {

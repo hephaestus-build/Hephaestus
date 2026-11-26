@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,6 +36,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
 @RequiredArgsConstructor
 public class ConversationEntryController {
+
+    public static final String SCOPE_EPOCH_HEADER = "X-Conversation-Scope-Epoch";
 
     private final ConversationTimeline timeline;
     private final ConversationEntryService entries;
@@ -71,7 +74,13 @@ public class ConversationEntryController {
             description =
                     "Erases its text and every summary that read it. A question Hephaestus has not answered yet is "
                             + "not answered.")
-    @ApiResponse(responseCode = "204", description = "The message is deleted")
+    @ApiResponse(
+            responseCode = "204",
+            description = "The message is deleted",
+            headers = @Header(
+                    name = SCOPE_EPOCH_HEADER,
+                    description = "The current conversation tree epoch after the deletion",
+                    schema = @Schema(type = "integer", format = "int64")))
     @ApiResponse(
             responseCode = "409",
             description = "Only the developer's own questions can be deleted",
@@ -83,7 +92,9 @@ public class ConversationEntryController {
         return scope.write(account -> {
             timeline.requireOwnedEntry(workspace.id(), account, entryId);
             entries.deleteMessage(workspace.id(), entryId);
-            return ResponseEntity.noContent().build();
+            return ResponseEntity.noContent()
+                    .header(SCOPE_EPOCH_HEADER, Long.toString(timeline.scopeEpoch(workspace.id(), account)))
+                    .build();
         });
     }
 

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
@@ -42,6 +43,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,6 +65,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     private static final Duration WAIT = Duration.ofSeconds(5);
 
     private final ConversationTimeline timeline = mock(ConversationTimeline.class);
+    private final ConversationScopeFence scopeFence = mock(ConversationScopeFence.class);
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final OwnerScope owners = mock(OwnerScope.class);
     private final AtomicBoolean member = new AtomicBoolean(true);
@@ -70,6 +73,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     private final ConversationLiveHub hub = new ConversationLiveHub(
             mock(ConversationLedgerNotifications.class),
             timeline,
+            scopeFence,
             memberships,
             owners,
             TransactionOperations.withoutTransaction(),
@@ -81,6 +85,15 @@ class ConversationLiveHubTest extends BaseUnitTest {
     /** Stubs are set before the hub's reader thread runs: Mockito stubbing is not safe while another thread calls the mock. */
     @BeforeEach
     void stubTimeline() {
+        when(scopeFence.admit(any(), any(), any())).thenAnswer(call -> {
+            ConversationScopeFence.Scope scope = call.getArgument(0);
+            BooleanSupplier current = call.getArgument(1);
+            Runnable handoff = call.getArgument(2);
+            if (timeline.scopeEpoch(scope.workspaceId(), scope.accountId()) != scope.epoch()
+                    || !current.getAsBoolean()) return false;
+            handoff.run();
+            return true;
+        });
         when(memberships.isActiveVisibleMember(WORKSPACE, ACCOUNT)).thenAnswer(call -> member.get());
         when(timeline.conversation(anyLong(), anyLong()))
                 .thenReturn(new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null));

@@ -40,6 +40,7 @@ import org.slf4j.MDC;
 import org.slf4j.event.Level;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -572,6 +573,7 @@ class LlmProxyService {
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
                     poolPermit.revoked(),
                     transports,
+                    routing.conversationTurn() ? handoff -> routingService.sendConversationRequest(routing, handoff) : null,
                     headers -> callPermits.learning().served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             tap.onFirstContent(waited -> callPermits.learning().firstToken(poolPermit, waited, instanceCredential));
@@ -671,6 +673,11 @@ class LlmProxyService {
                             reviewStream);
                 }
             } catch (Exception e) {
+                if (NestedExceptionUtils.getMostSpecificCause(e) instanceof ProxyRoutingService.ModelRequestRefused) {
+                    permit.released();
+                    return refusal(
+                            HttpStatus.CONFLICT, ProxyRefusal.ATTEMPT_ENDED, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                }
                 if (rechecking) {
                     // The retry failed before it left, so the provider's health takes no failure from it.
                     permit.released();
@@ -902,6 +909,7 @@ class LlmProxyService {
             @Nullable Bounds bounds,
             Mono<Void> cancelled,
             ProxyTransportClosure transports,
+            @Nullable Consumer<Runnable> admitSend,
             Consumer<HttpHeaders> served) {}
 
     /**
@@ -950,8 +958,21 @@ class LlmProxyService {
                 : stream -> ProxyStreamingUtils.endingWhenIdle(stream.takeUntilOther(stop), bounds.idle());
         AtomicBoolean answered = new AtomicBoolean();
         AtomicBoolean cancelledFirst = new AtomicBoolean();
-        var parts = request.bodyValue(outgoingBody)
-                .exchangeToFlux(upstream -> {
+        var admit = exchange.admitSend();
+        var sending = admit == null
+                ? request.bodyValue(outgoingBody)
+                : request.body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
+                    // Reactor Netty's single-buffer send hands the whole request to the connected channel
+                    // synchronously on emission. The database check runs off the transport event loop.
+                    Thread.ofVirtual().name("conversation-model-send").start(() -> {
+                        try {
+                            admit.accept(() -> sink.success(output.bufferFactory().wrap(outgoingBody)));
+                        } catch (RuntimeException failure) {
+                            sink.error(failure);
+                        }
+                    });
+                })));
+        var parts = sending.exchangeToFlux(upstream -> {
                     answered.set(true);
                     tap.answered(upstream.statusCode().is2xxSuccessful());
                     // A stream's end comes minutes later, when these numbers are old.

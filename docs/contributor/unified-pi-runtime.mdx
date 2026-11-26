@@ -702,8 +702,15 @@ The sandbox reaper deletes the revoked copies.
 
 The gateway checks the lease before it publishes a partial frame.
 Each replica checks the frame's epoch against the database before it accepts the frame.
-The replica checks the epoch again before it sends an SSE event or snapshot.
-The client drops older partial answers when it sees a later epoch.
+The DELETE response carries the current epoch, so the deleting tab drops older partials at once.
+The client also drops older partials when a live event or snapshot carries a later epoch.
+
+A live send shares the owner's history lock from its epoch check through one transport handoff.
+The removal transaction holds that lock exclusively before it advances the epoch.
+A removal therefore commits before the check or after the handoff.
+The SSE writer holds the lock for one event or reconnect snapshot.
+The model proxy hands one buffered request to the connected channel under the lock.
+It waits for the provider's response after the lock is released.
 
 One `LISTEN` connection serves each server replica.
 `ConversationLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).

@@ -17,15 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConversationHistoryRemoval {
 
     private final ConversationRepository conversations;
+    private final ConversationScopeFence scope;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
     private final TurnRuns runs;
     private final ApplicationEventPublisher events;
     private final Clock clock;
-
-    public static String lockKey(long workspaceId, long accountId) {
-        return "conversation-history:" + workspaceId + ":" + accountId;
-    }
 
     /**
      * Locks out claims and gateway writes, then cancels turns before locking the ledger.
@@ -33,7 +30,7 @@ public class ConversationHistoryRemoval {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean fence(long workspaceId, long accountId, List<UUID> entryIds) {
-        conversations.lockScope(lockKey(workspaceId, accountId));
+        scope.exclude(workspaceId, accountId);
         if (!entries.hasHistoryToRemove(workspaceId, accountId, entryIds.toArray(UUID[]::new))) return false;
 
         // The sandbox listener revokes before commit. The ledger delivers this change only on commit.

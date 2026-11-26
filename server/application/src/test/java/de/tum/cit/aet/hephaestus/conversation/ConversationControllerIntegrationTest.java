@@ -650,6 +650,8 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
         write("DELETE", "/entries/" + question.question().getId(), null)
                 .expectStatus()
                 .isNoContent()
+                .expectHeader()
+                .valueEquals("X-Conversation-Scope-Epoch", "1")
                 .expectBody(Void.class);
 
         ConversationEntry deleted =
