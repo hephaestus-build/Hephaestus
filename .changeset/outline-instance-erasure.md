@@ -1,5 +1,5 @@
 ---
-"hephaestus": patch
+"hephaestus": minor
 ---
 
 Erasing an Outline contributor by provider instance and user ID now covers every team on that instance.
