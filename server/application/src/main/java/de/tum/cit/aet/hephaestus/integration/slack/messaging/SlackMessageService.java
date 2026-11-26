@@ -340,7 +340,7 @@ public class SlackMessageService implements AutoCloseable {
                 });
             } else {
                 egressGuard.requireDeliveryAllowed("slack.write");
-                Duration remaining = rateLimitTracker.remainingThrottle(workspaceId);
+                Duration remaining = rateLimitTracker.remainingPostThrottle(workspaceId);
                 if (remaining.isPositive()) {
                     // The outbox stores retry delays in whole seconds. Round up to preserve the provider deadline.
                     long seconds = remaining.plusSeconds(1).minusNanos(1).toSeconds();
@@ -367,7 +367,7 @@ public class SlackMessageService implements AutoCloseable {
                     ? SlackSendException.NOT_RATE_LIMITED
                     : SlackBackoff.retryAfterMillis(refused.code(), refused.header("Retry-After"));
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
-                if (admitAtSend != null) rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
+                if (admitAtSend != null) rateLimitTracker.recordPostThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             }
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);

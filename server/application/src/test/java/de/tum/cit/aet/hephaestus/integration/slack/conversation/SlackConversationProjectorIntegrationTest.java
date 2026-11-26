@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
 import static de.tum.cit.aet.hephaestus.testconfig.SlackPostTestSupport.admittedPost;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -655,6 +656,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
 
         try (var slackApi = new MockWebServer()) {
             slackApi.start();
+            slackApi.enqueue(new MockResponse.Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "121")
+                    .build());
             slackApi.enqueue(acceptedPost());
             try (var gateway = new SlackMessageService(
                     credentials,
@@ -664,13 +669,20 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                     new SlackProperties(slackApi.url("/").toString()))) {
                 var outbox = executorFor(gateway);
                 long workspaceId = workspace.getId();
-                throttles.recordThrottle(workspaceId, 120_750L);
+                assertThatThrownBy(() -> gateway.postAdmitted(
+                                workspaceId,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "First post", null),
+                                () -> true))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                failure -> assertThat(failure.isRateLimited()).isTrue());
                 var observation = Objects.requireNonNull(throttles.snapshot(workspaceId));
                 var deadline = Timestamp.from(Objects.requireNonNull(observation.throttledUntil()));
 
                 assertThat(ActionTestSupport.runLane(outbox, jdbc, key(asked)))
                         .hasValueSatisfying(result -> assertThat(result).isInstanceOf(ActionResult.Defer.class));
-                assertThat(slackApi.getRequestCount()).isZero();
+                assertThat(slackApi.getRequestCount()).isOne();
+                assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
                 assertThat(jdbc.queryForObject("""
                                 SELECT next_attempt_at >= ? AND attempts = 0 AND write_started_at IS NULL
                                 FROM agent_action WHERE lane_key = ?

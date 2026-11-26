@@ -40,7 +40,8 @@ import org.springframework.stereotype.Component;
  * {@code Retry-After: 60} — an admin currently has no way to see that their Slack sync is crawling for
  * that reason.
  *
- * The tracker exposes the recorded time remaining. The gateway and outbox decide when to try again.
+ * The tracker also exposes the time remaining on the separate {@code chat.postMessage} throttle. The gateway and outbox
+ * decide when to try again.
  */
 @Component
 @Slf4j
@@ -60,29 +61,43 @@ public class SlackRateLimitTracker {
         this.meterRegistry = meterRegistry;
     }
 
-    /** Time left on the recorded workspace throttle. Zero when the deadline is absent or has elapsed. */
-    Duration remainingThrottle(long workspaceId) {
+    /** Time left on the workspace's recorded post throttle. Zero when the deadline is absent or has elapsed. */
+    Duration remainingPostThrottle(long workspaceId) {
         var state = stateByWorkspace.get(workspaceId);
-        Instant until = state == null ? null : state.throttledUntil.get();
+        Instant until = state == null ? null : state.postThrottledUntil.get();
         if (until == null) return Duration.ZERO;
         Duration remaining = Duration.between(Instant.now(), until);
         return remaining.isPositive() ? remaining : Duration.ZERO;
     }
 
     /**
-     * Records an observed 429. Called from the one place Slack throttles are already recognized.
+     * Records an observed 429 for display and metrics.
      *
      * @param workspaceId     the workspace whose token was throttled
      * @param retryAfterMillis the {@code Retry-After} wait Slack asked for, in milliseconds
      */
     public void recordThrottle(long workspaceId, long retryAfterMillis) {
+        recordThrottle(workspaceId, retryAfterMillis, false);
+    }
+
+    /** Records a 429 from {@code chat.postMessage} for post deferral and for display and metrics. */
+    void recordPostThrottle(long workspaceId, long retryAfterMillis) {
+        recordThrottle(workspaceId, retryAfterMillis, true);
+    }
+
+    private void recordThrottle(long workspaceId, long retryAfterMillis, boolean post) {
         if (retryAfterMillis < 0) {
             return;
         }
         Instant observedAt = Instant.now();
+        Instant until = observedAt.plusMillis(retryAfterMillis);
         WorkspaceThrottleState state = getOrCreateState(workspaceId);
+        if (post) {
+            state.postThrottledUntil.updateAndGet(
+                    previous -> previous == null || until.isAfter(previous) ? until : previous);
+        }
         state.lastThrottledAt.set(observedAt);
-        state.throttledUntil.set(observedAt.plusMillis(retryAfterMillis));
+        state.throttledUntil.set(until);
         state.throttleCount.incrementAndGet();
         log.debug(
                 "slack.ratelimit: observed 429: workspaceId={}, retryAfterMs={}, throttledUntil={}",
@@ -178,6 +193,7 @@ public class SlackRateLimitTracker {
 
         final AtomicReference<Instant> lastThrottledAt = new AtomicReference<>();
         final AtomicReference<Instant> throttledUntil = new AtomicReference<>();
+        final AtomicReference<Instant> postThrottledUntil = new AtomicReference<>();
         final AtomicInteger throttleCount = new AtomicInteger(0);
     }
 }
