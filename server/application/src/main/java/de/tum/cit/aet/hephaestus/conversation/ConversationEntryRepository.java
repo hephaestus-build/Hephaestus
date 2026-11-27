@@ -211,6 +211,76 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     List<ShownLinkCall> findShownLinkCalls(
             @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
 
+    /**
+     * Whether each call of a tool that opens a source ended in an error, for these turns: the turn, the tool call id, the
+     * tool and the error flag. Reads only these fields of the tool results, never their content.
+     */
+    @Query(value = """
+            SELECT r.turn_id AS "turnId", r.payload -> 'message' ->> 'toolCallId' AS "callId",
+                   r.payload -> 'message' ->> 'toolName' AS "tool",
+                   COALESCE(r.payload -> 'message' ->> 'isError', 'false') = 'true' AS "error"
+            FROM conversation_entry r
+            WHERE r.workspace_id = :workspaceId AND r.conversation_id = :conversationId AND r.turn_id IN (:turnIds)
+              AND r.kind = 'TOOL_RESULT'
+              AND r.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'search_conversation')
+            """, nativeQuery = true)
+    List<ToolOutcome> findToolOutcomes(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * The calls of the tools that open a source, in these turns, in call order: the turn, the call id, the tool and the
+     * {@code path} argument. It reads the assistant entries, which the page of messages leaves out when they hold only
+     * calls, and no tool result.
+     */
+    @Query(value = """
+            SELECT e.turn_id AS "turnId", c.block ->> 'id' AS "callId", c.block ->> 'name' AS "tool",
+                   c.block -> 'arguments' ->> 'path' AS "path"
+            FROM conversation_entry e
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
+                     THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS c(block, position)
+            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId AND e.turn_id IN (:turnIds)
+              AND e.kind = 'ANSWER' AND e.redacted_at IS NULL AND c.block ->> 'type' = 'toolCall'
+              AND c.block ->> 'name' IN ('read', 'bash', 'load_context', 'search_conversation')
+            ORDER BY e.turn_id, e.seq, c.position
+            """, nativeQuery = true)
+    List<ToolCallRow> findOpeningCalls(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * The answer messages of these turns in one conversation, oldest first: What Hephaestus used goes under the last one
+     * that the app shows, which can lie on another page than the one being read.
+     */
+    List<ConversationEntry> findByWorkspaceIdAndConversationIdAndTurnIdInAndKindOrderBySeqAsc(
+            Long workspaceId, UUID conversationId, Collection<UUID> turnIds, ConversationEntry.Kind kind);
+
+    /** One row of {@link #findOpeningCalls}. */
+    interface ToolCallRow {
+        UUID getTurnId();
+
+        String getCallId();
+
+        String getTool();
+
+        @Nullable
+        String getPath();
+    }
+
+    /** One row of {@link #findToolOutcomes}. */
+    interface ToolOutcome {
+        UUID getTurnId();
+
+        String getCallId();
+
+        String getTool();
+
+        boolean getError();
+    }
+
     /** One row of {@link #findShownLinkCalls}. */
     interface ShownLinkCall {
         UUID getTurnId();

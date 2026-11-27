@@ -80,7 +80,13 @@ public record ConversationEntryDTO(
 
         @Schema(description = "The weekly digest as it reads now; only on a weekly digest that was not erased")
         @Nullable
-        WeeklyDigestDTO digest) {
+        WeeklyDigestDTO digest,
+
+        @Schema(
+                description = "What Hephaestus opened for this answer and what it could not open; only on the last"
+                        + " message of an answer. Its links are what it cited.")
+        @Nullable
+        ConversationAnswerUseDTO used) {
 
     /** Who wrote a message the app shows. */
     public enum Kind {
