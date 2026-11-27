@@ -162,7 +162,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
                     SELECT workspace_id FROM slack_message
                     UNION SELECT workspace_id FROM slack_dm_producer_pin
                     """, nativeQuery = true)
-    List<Long> findWorkspaceIdsWithRetainedData();
+    List<Long> findDistinctWorkspaceIds();
 
     /**
      * Idempotent ingest: insert the rendered message and no-op on the unique

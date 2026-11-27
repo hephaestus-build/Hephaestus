@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
  * continues.
  *
  * <p>This bean owns only scheduling, cross-pod locking, and window arithmetic. It is
- * {@link WorkspaceAgnostic} because {@link SlackMessageRepository#findWorkspaceIdsWithRetainedData()} is an
+ * {@link WorkspaceAgnostic} because {@link SlackMessageRepository#findDistinctWorkspaceIds()} is an
  * unscoped native query — the tenancy inspector would otherwise reject it — and because the sweep is
  * inherently cross-workspace. Scheduling is gated to the server role, and {@link SchedulerLock}
  * stops concurrent pods from both running it.
@@ -76,7 +76,7 @@ public class SlackRetentionSweeper implements CopyingSourceRetention {
      * @return the total number of {@code slack_message} rows deleted across all workspaces
      */
     public long sweepNow() {
-        List<Long> workspaceIds = slackMessageRepository.findWorkspaceIdsWithRetainedData();
+        List<Long> workspaceIds = slackMessageRepository.findDistinctWorkspaceIds();
         long totalDeleted = 0;
         Instant now = Instant.now();
         for (Long workspaceId : workspaceIds) {
@@ -102,7 +102,7 @@ public class SlackRetentionSweeper implements CopyingSourceRetention {
      */
     @Override
     public Map<Long, Duration> retentionByWorkspace() {
-        Set<Long> workspaceIds = new TreeSet<>(slackMessageRepository.findWorkspaceIdsWithRetainedData());
+        Set<Long> workspaceIds = new TreeSet<>(slackMessageRepository.findDistinctWorkspaceIds());
         workspaceIds.addAll(connectionService.findWorkspaceIdsWithConnection(
                 IntegrationKind.SLACK, IntegrationState.ACTIVE, IntegrationState.SUSPENDED));
         Map<Long, Duration> retention = new TreeMap<>();
