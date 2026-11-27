@@ -79,6 +79,11 @@ class AdviceTextTest extends BaseUnitTest {
                     Split it into two commits so each review reads one change. | refuse
                     This review found two missing tests. | refuse
                     Add two tests before the review. | refuse
+                    You had never added tests before. Pull requests without tests: 3. | refuse
+                    Nothing changed after. Merge requests with no description: 4. | refuse
+                    You opened 3PRs without tests. | refuse
+                    More than once you merged a pull request without review. | refuse
+                    Your thirtieth pull request had no tests. | refuse
                     Add two tests before review. | admit
                     Add two tests before reviews start. | admit
                     Name the risk of the migration, so a reviewer can check it. | admit
@@ -91,10 +96,12 @@ class AdviceTextTest extends BaseUnitTest {
         assertThat(AdviceText.admits(text) ? "admit" : "refuse").isEqualTo(expected);
     }
 
-    @Test
-    void shouldRefuseACountThatALineBreakSeparatesFromItsWork() {
-        assertThat(AdviceText.admits("Three of your\npull requests had no tests."))
-                .isFalse();
+    /** A line break ends no count, and a "before" or "after" before it exempts no work noun after it. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"Three of your\npull requests had no tests.", "- No tests, same as before\n- PRs affected: 3"})
+    void shouldRefuseACountThatALineBreakSeparatesFromItsWork(String text) {
+        assertThat(AdviceText.admits(text)).isFalse();
     }
 
     @ParameterizedTest

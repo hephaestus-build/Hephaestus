@@ -24,6 +24,17 @@ final class AdviceText {
     /** Anything that is not a letter or a digit: punctuation, symbols, dashes and Markdown. */
     private static final Pattern NOT_A_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 
+    private static final String WORK_NOUN = "(?:(?:pull|merge) +requests?|prs?|mrs?|issues?|reviews?)";
+
+    /**
+     * A work noun right after "before" or "after", with only spaces between them, is a moment, not work: "add two tests
+     * before review". Any other character between them, such as a full stop or a line break, keeps the noun.
+     */
+    private static final Pattern MOMENT = Pattern.compile("\\b(?:before|after) +" + WORK_NOUN + "\\b");
+
+    /** A numeral written against a work noun, such as "3PRs", is a number and a work noun. */
+    private static final Pattern NUMERAL_ON_WORK = Pattern.compile("(\\p{N})(?=" + WORK_NOUN + "\\b)");
+
     private static final Pattern NUMERAL = Pattern.compile("\\p{N}+\\p{L}*");
     private static final Set<String> NUMBER_WORDS = Set.of(
             "zero",
@@ -71,8 +82,12 @@ final class AdviceText {
             "numerous",
             "various",
             "single",
+            "once",
             "twice",
             "thrice",
+            "trio",
+            "million",
+            "millions",
             "first",
             "second",
             "third",
@@ -92,7 +107,16 @@ final class AdviceText {
             "seventeenth",
             "eighteenth",
             "nineteenth",
-            "twentieth");
+            "twentieth",
+            "thirtieth",
+            "fortieth",
+            "fiftieth",
+            "sixtieth",
+            "seventieth",
+            "eightieth",
+            "ninetieth",
+            "hundredth",
+            "thousandth");
     private static final Set<String> WORK = Set.of("pr", "prs", "mr", "mrs", "issue", "issues", "review", "reviews");
 
     private AdviceText() {}
@@ -108,16 +132,13 @@ final class AdviceText {
 
     /**
      * Whether the text names a number and a piece of work: a pull or merge request, a PR, an MR, an issue or a review. A
-     * work noun right after "before" or "after" is a moment, not work, so "add two tests before review" counts nothing.
+     * moment ({@link #MOMENT}) is not work, so "add two tests before review" counts nothing.
      */
     private static boolean countsWork(String text) {
-        List<String> words = words(text);
-        if (words.stream().noneMatch(AdviceText::isNumber)) return false;
-        for (int i = 0; i < words.size(); i++) {
-            if (!workAt(words, i)) continue;
-            if (i > 0 && (words.get(i - 1).equals("before") || words.get(i - 1).equals("after"))) continue;
-            return true;
-        }
+        String lower = NUMERAL_ON_WORK.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("$1 ");
+        if (words(lower).stream().noneMatch(AdviceText::isNumber)) return false;
+        List<String> work = words(MOMENT.matcher(lower).replaceAll(" "));
+        for (int i = 0; i < work.size(); i++) if (workAt(work, i)) return true;
         return false;
     }
 
@@ -135,11 +156,8 @@ final class AdviceText {
         return NUMBER_WORDS.contains(word) || NUMERAL.matcher(word).matches();
     }
 
-    /** The text as lowercase words: punctuation, symbols, dashes, line breaks and Markdown become word breaks. */
-    private static List<String> words(String text) {
-        return NOT_A_WORD
-                .splitAsStream(text.toLowerCase(Locale.ROOT))
-                .filter(word -> !word.isEmpty())
-                .toList();
+    /** The lowercase text as words: punctuation, symbols, dashes, line breaks and Markdown become word breaks. */
+    private static List<String> words(String lower) {
+        return NOT_A_WORD.splitAsStream(lower).filter(word -> !word.isEmpty()).toList();
     }
 }
