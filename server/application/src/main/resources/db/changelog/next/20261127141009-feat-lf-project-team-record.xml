@@ -24,7 +24,7 @@
         </createIndex>
     </changeSet>
     <changeSet id="1795788609699-2" author="hephaestus">
-        <comment>The members of a project team. A row needs a workspace membership and goes with it.</comment>
+        <comment>The members of a project team. A row needs a workspace membership and goes with it. The membership key comes first: a server that deletes memberships beside this migration locks membership before the team tables, and the same order here cannot deadlock with it.</comment>
         <createTable tableName="project_team_member">
             <column name="id" type="UUID">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="project_team_memberPK"/>
@@ -43,8 +43,8 @@
             </column>
         </createTable>
         <addUniqueConstraint tableName="project_team_member" columnNames="team_id, account_id" constraintName="uk_project_team_member_account"/>
-        <addForeignKeyConstraint baseTableName="project_team_member" baseColumnNames="team_id,workspace_id" constraintName="sfk_project_team_member_team" onDelete="CASCADE" referencedTableName="project_team" referencedColumnNames="id,workspace_id"/>
         <addForeignKeyConstraint baseTableName="project_team_member" baseColumnNames="account_id,workspace_id" constraintName="sfk_project_team_member_membership" onDelete="CASCADE" referencedTableName="membership" referencedColumnNames="account_id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="project_team_member" baseColumnNames="team_id,workspace_id" constraintName="sfk_project_team_member_team" onDelete="CASCADE" referencedTableName="project_team" referencedColumnNames="id,workspace_id"/>
         <createIndex tableName="project_team_member" indexName="idx_project_team_member_team">
             <column name="team_id"/>
             <column name="workspace_id"/>
@@ -55,7 +55,7 @@
         </createIndex>
     </changeSet>
     <changeSet id="1795788609699-3" author="hephaestus">
-        <comment>A team membership holds only while the workspace membership does. Ending the workspace membership ends it, and no row is accepted for an ended one. The share lock makes a write wait for an end that runs beside it. The update guard only validates, so it runs after the row write.</comment>
+        <comment>A team membership holds only while the workspace membership does. Ending the workspace membership ends it, and no row is accepted for an ended one. The share lock makes a write wait for an end that runs beside it. The update guard only validates, so it runs after the row write. The trigger on membership comes first, so that this migration locks membership before the member table, as a server that deletes memberships does.</comment>
         <createProcedure>
 CREATE FUNCTION public.refuse_ended_project_team_member() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -77,12 +77,12 @@ BEGIN
 END $$
         </createProcedure>
         <sql>
+CREATE TRIGGER membership_end_project_teams AFTER UPDATE OF left_at ON public.membership
+    FOR EACH ROW WHEN (NEW.left_at IS NOT NULL) EXECUTE FUNCTION public.end_project_team_memberships();
 CREATE TRIGGER project_team_member_current BEFORE INSERT ON public.project_team_member
     FOR EACH ROW EXECUTE FUNCTION public.refuse_ended_project_team_member();
 CREATE TRIGGER project_team_member_still_current AFTER UPDATE OF account_id, workspace_id ON public.project_team_member
     FOR EACH ROW EXECUTE FUNCTION public.refuse_ended_project_team_member();
-CREATE TRIGGER membership_end_project_teams AFTER UPDATE OF left_at ON public.membership
-    FOR EACH ROW WHEN (NEW.left_at IS NOT NULL) EXECUTE FUNCTION public.end_project_team_memberships();
         </sql>
         <rollback>
 DROP TRIGGER membership_end_project_teams ON public.membership;
