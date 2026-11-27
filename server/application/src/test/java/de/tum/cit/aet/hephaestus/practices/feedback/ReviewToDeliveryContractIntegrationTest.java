@@ -1023,7 +1023,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     author);
             assertThat(admitSealed(first, "a".repeat(64))).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
             var inSecond = new MentorReviewIntake.SealedReview(
-                    second.workspaceId(), second.reviewId(), second.identity().jobId(), author, "b".repeat(64), Instant.now());
+                    second.workspaceId(),
+                    second.reviewId(),
+                    second.identity().jobId(),
+                    author,
+                    "b".repeat(64),
+                    Instant.now());
             MentorReviewIntake.Outcome admittedInSecond =
                     Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(inSecond)));
             assertThat(admittedInSecond).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
