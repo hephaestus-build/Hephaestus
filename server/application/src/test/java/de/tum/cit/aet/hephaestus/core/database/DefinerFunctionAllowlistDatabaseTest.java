@@ -37,6 +37,8 @@ class DefinerFunctionAllowlistDatabaseTest {
             "public.mentoring_due_work(work_kind text, max_age_seconds bigint, scope_workspace_id bigint,"
                     + " after_due timestamp with time zone, after_id uuid, skip_workspace_ids bigint[],"
                     + " skip_account_ids bigint[], max_rows integer)",
+            "public.mentor_erase_workspace(workspace bigint)",
+            "public.mentor_source_owner(binding bigint, container text, message text)",
             "public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)");
 
     /** A fresh install: the roles first, then the owner migrates the empty database. */

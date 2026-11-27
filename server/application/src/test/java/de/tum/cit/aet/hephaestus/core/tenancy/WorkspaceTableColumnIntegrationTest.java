@@ -58,6 +58,9 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             "an account's audit trail; workspace_id only names the workspace of an event that has one",
             "github_installation_request",
             "an instance-level installation request; workspace_id only names the workspace an adoption created",
+            "mentor_source",
+            "an account-owned row under row-level security; workspace_id names the binding's workspace, so its purge"
+                    + " and its Slack disconnect erase the row",
             "llm_call_permit",
             "instance-owned admission to shared provider capacity; workspace_id only orders fair grants, and is NULL"
                     + " only for a product feedback call",

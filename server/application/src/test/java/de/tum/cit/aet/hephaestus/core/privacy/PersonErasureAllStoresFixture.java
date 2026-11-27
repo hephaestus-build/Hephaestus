@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -23,6 +24,8 @@ import tools.jackson.databind.ObjectMapper;
 /** Additional rows of one person, linked to the integration scenario's real account, workspace and review. */
 final class PersonErasureAllStoresFixture {
     static final String CANARY = "person-all-stores-canary";
+    /** Row-level security hides these rows from the application role with no owner bound, so the owner seeds them. */
+    private static final Set<String> OWNER_SECURED = Set.of("mentor_event", "mentor_request", "mentor_source");
     private final JdbcTemplate jdbc;
     private final JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
     private final SchemaRowSeeder rows;
@@ -159,6 +162,10 @@ final class PersonErasureAllStoresFixture {
                 "payload",
                 CANARY.getBytes(StandardCharsets.UTF_8));
         row("notification_subscription", "account_id", account, "kind", "WEEKLY_DIGEST", "enabled", true);
+        UUID mentorSource = UUID.randomUUID();
+        row("mentor_source", "id", mentorSource, "account_id", account, "native_message_id", CANARY, "state", "LIVE");
+        row("mentor_event", "account_id", account, "source_id", mentorSource, "native_event_id", CANARY);
+        row("mentor_request", "account_id", account, "source_id", mentorSource, "state", "OPEN");
         UUID report = UUID.randomUUID();
         row(
                 "product_feedback",
@@ -958,6 +965,8 @@ final class PersonErasureAllStoresFixture {
                         owner.queryForList(ReadyExportFence.LOCK, values.get("account_id"));
                         new SchemaRowSeeder(owner).insert(table, values);
                     });
+        } else if (OWNER_SECURED.contains(table)) {
+            new SchemaRowSeeder(owner).insert(table, values);
         } else {
             rows.insert(table, values);
         }
@@ -981,7 +990,8 @@ final class PersonErasureAllStoresFixture {
             predicates.add("t.\"" + key + "\"=?");
             arguments.add(value);
         });
-        JdbcTemplate reader = "account_export".equals(row.table()) ? owner : jdbc;
+        JdbcTemplate reader =
+                "account_export".equals(row.table()) || OWNER_SECURED.contains(row.table()) ? owner : jdbc;
         return reader.query(
                 "SELECT to_jsonb(t)::text FROM \"" + row.table() + "\" t WHERE " + String.join(" AND ", predicates),
                 (result, index) -> Objects.requireNonNull(result.getString(1)),
