@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.mentor.spi.VerifiedActor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -43,6 +44,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
@@ -56,6 +58,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -463,7 +466,10 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
         var admitted = new CountDownLatch(1);
         var commit = new CountDownLatch(1);
+        var holder = new AtomicInteger();
         var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+            holder.set(Objects.requireNonNull(
+                    jdbcClient.sql("SELECT pg_backend_pid()").query(Integer.class).single()));
             Admission result = intake.admit(envelope(first, "e1", message, FIRST, actor()), Producer.MENTOR);
             admitted.countDown();
             await(commit);
@@ -471,10 +477,16 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         }));
         assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
         var loser = CompletableFuture.supplyAsync(() -> admit(second, "e2", message, FIRST));
-        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> loser.isDone() || waitingTransactions() > 0);
-        assertThat(loser.isDone()).isFalse();
-        assertThat(waitingTransactions()).isPositive();
-        commit.countDown();
+        try {
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(10))
+                    .until(() -> loser.isDone() || waitingOn(holder.get()) > 0);
+            assertThat(loser.isDone()).isFalse();
+            assertThat(waitingOn(holder.get())).isPositive();
+        } finally {
+            // A failed assertion must not leave the winner's transaction, and its locks, open.
+            commit.countDown();
+        }
         Admission one = winner.get(30, TimeUnit.SECONDS);
         Admission two = loser.get(30, TimeUnit.SECONDS);
 
@@ -518,9 +530,12 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         }));
         assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
 
-        assertThatThrownBy(() -> admit(second, "e3", message, FIRST))
-                .isInstanceOf(PessimisticLockingFailureException.class);
-        commit.countDown();
+        try {
+            assertThatThrownBy(() -> admit(second, "e3", message, FIRST))
+                    .isInstanceOf(PessimisticLockingFailureException.class);
+        } finally {
+            commit.countDown();
+        }
         Admission one = winner.get(30, TimeUnit.SECONDS);
         Admission retry = admit(second, "e3", message, FIRST);
 
@@ -533,6 +548,63 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
             UUID request = opened(one).requestId();
             assertThat(retry).isEqualTo(admitted("e3", new RequestRef(request, 1)));
             assertThat(column(request, "state")).isEqualTo("STOPPED");
+        }
+    }
+
+    /**
+     * The delete's source statement takes its snapshot, a second create then commits, and only after that does the
+     * delete lock the source row. A test-only restrictive policy holds the delete inside that one statement. Intake reads
+     * the request after the lock, so the delete stops the request that the create opened (SONNET-V5433-delta2).
+     */
+    @Test
+    void shouldStopTheRequestWhenADeleteLocksTheSourceAfterASecondCreateCommitted() throws Exception {
+        String message = message();
+        var refused = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
+        assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR)))
+                .isEqualTo(admitted("e1", null));
+        var root = PostgreSQLTestContainer.administrator();
+        var admin = new JdbcTemplate(new DriverManagerDataSource(root.jdbcUrl(), root.username(), root.password()));
+        admin.execute("CREATE FUNCTION public.mentor_probe_gate() RETURNS boolean LANGUAGE plpgsql VOLATILE AS $$"
+                + " BEGIN IF current_setting('mentor.probe', true) = 'on' THEN"
+                + " PERFORM pg_advisory_xact_lock_shared(54330001); END IF; RETURN true; END $$");
+        admin.execute("CREATE POLICY mentor_probe ON public.mentor_source AS RESTRICTIVE FOR SELECT"
+                + " TO hephaestus_app USING (public.mentor_probe_gate())");
+        try (var gate = DriverManager.getConnection(root.jdbcUrl(), root.username(), root.password());
+                var statement = gate.createStatement()) {
+            statement.execute("SELECT pg_advisory_lock(54330001)");
+            var delete = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+                jdbcClient
+                        .sql("SELECT set_config('mentor.probe', 'on', true)")
+                        .query(String.class)
+                        .single();
+                return intake.admit(
+                        envelope(IngressKind.MESSAGE_DELETED, "e3", message, FIRST, actor()), Producer.MENTOR);
+            }));
+            String waiting = "SELECT a.query FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid"
+                    + " WHERE NOT l.granted AND l.locktype = 'advisory' AND l.objid = 54330001";
+            try {
+                Awaitility.await()
+                        .atMost(Duration.ofSeconds(20))
+                        .until(() -> delete.isDone()
+                                || !admin.queryForList(waiting, String.class).isEmpty());
+                assertThat(delete.isDone()).isFalse();
+                assertThat(admin.queryForList(waiting, String.class))
+                        .singleElement()
+                        .asString()
+                        .contains("FOR UPDATE OF s NOWAIT");
+
+                UUID request = opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).requestId();
+                statement.execute("SELECT pg_advisory_unlock(54330001)");
+
+                assertThat(delete.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e3", new RequestRef(request, 1)));
+                assertThat(source(message)).containsEntry("state", "DELETED");
+                assertThat(column(request, "state")).isEqualTo("STOPPED");
+            } finally {
+                statement.execute("SELECT pg_advisory_unlock_all()");
+            }
+        } finally {
+            admin.execute("DROP POLICY mentor_probe ON public.mentor_source");
+            admin.execute("DROP FUNCTION public.mentor_probe_gate()");
         }
     }
 
@@ -710,9 +782,9 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * Two new event ids can both find no request when the second statement's snapshot predates the first commit. The
-     * interleaving falls inside one statement, so this drives its outcome: the second request raises on the per-source
-     * key and fails the receive, and its retry records the event with exactly one request.
+     * Intake reads a source's request only under the source lock, so a second create finds the first one's request.
+     * The per-source key stays as the backstop: a second request opened directly raises on it and fails the receive, and
+     * a retry records the event with exactly one request.
      */
     @Test
     void shouldKeepOneRequestWhenASecondRequestIsOpenedForTheSameSource() {
@@ -828,10 +900,12 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         return random.nextLong(1_000_000_000L, 9_999_999_999L) + "." + random.nextInt(100_000, 999_999);
     }
 
-    /** Transactions that wait for another one's lock: the loser of a forced-order race. */
-    private int waitingTransactions() {
+    /** The sessions that wait for a lock of this test's winner, by its backend: the loser of a forced-order race. */
+    private int waitingOn(int holder) {
         return Objects.requireNonNull(owner.queryForObject(
-                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'", Integer.class));
+                "SELECT count(DISTINCT l.pid) FROM pg_locks l WHERE NOT l.granted AND ? = ANY (pg_blocking_pids(l.pid))",
+                Integer.class,
+                holder));
     }
 
     private static void await(CyclicBarrier barrier) {
