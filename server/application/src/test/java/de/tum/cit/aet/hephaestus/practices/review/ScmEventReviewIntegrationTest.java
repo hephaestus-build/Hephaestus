@@ -187,6 +187,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -298,6 +299,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ObjectMapper mapper;
+
+    @Autowired
+    ApplicationContext context;
 
     @Autowired
     ReviewStart starts;
@@ -764,7 +768,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(lateRow.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.findById(newerResult).orElseThrow().getEndedAt()).isNull();
 
-        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece)
+        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece, context)
                 .orElseThrow();
         assertThat(delivery.claim(item.workspaceId(), oldPiece, oldOwner)).isNotNull();
         assertThat(delivery.fence(
@@ -791,7 +795,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 publication.issue(
                         item.workspaceId(), item.itemId(), newer.review().getId(), List.of(developer)));
         assertThat(feedbackRows.findById(newerPiece).orElseThrow().getState()).isEqualTo(FeedbackState.READY);
-        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece)
+        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece, context)
                 .orElseThrow();
         var summary = FeedbackIds.copy(newerPiece, FeedbackCopyKind.SUMMARY, 0);
         assertThat(delivery.claim(item.workspaceId(), newerPiece, newerOwner)).isNotNull();

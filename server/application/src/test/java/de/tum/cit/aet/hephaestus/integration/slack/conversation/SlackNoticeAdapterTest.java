@@ -92,7 +92,7 @@ class SlackNoticeAdapterTest extends BaseUnitTest {
                 started ? 2L : 1L,
                 started,
                 null,
-                () -> fence,
+                proof -> fence && proof.getAsBoolean(),
                 new PersonIdentity(7L, "U1", "T1"));
     }
 

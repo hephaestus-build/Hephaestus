@@ -189,10 +189,12 @@ class ActionStore {
 
     /** Commits on its own, also inside a caller's transaction: the fence must be durable before the provider call. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean beginWrite(Claim claim, Duration margin, BooleanSupplier sourceIsCurrent) {
+    public boolean beginWrite(
+            Claim claim, Duration margin, BooleanSupplier sourceIsCurrent, BooleanSupplier additionalProof) {
         if (actions.lockForWrite(claim.id(), claim.workspaceId(), claim.epoch(), margin.toSeconds())
                 .isEmpty()) return false;
         if (!sourceIsCurrent.getAsBoolean()) throw new SourceWithdrawn();
+        if (!additionalProof.getAsBoolean()) return false;
         return actions.beginWrite(claim.id(), claim.epoch(), margin.toSeconds()) == 1;
     }
 
