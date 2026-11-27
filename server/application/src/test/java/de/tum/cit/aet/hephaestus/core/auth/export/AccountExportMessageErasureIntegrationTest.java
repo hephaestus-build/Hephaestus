@@ -40,6 +40,8 @@ import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -517,33 +519,63 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("The original words of the feedback.");
     }
 
-    /**
-     * The feedback trigger names the states that an export shows twice: the state it leaves and the state it enters.
-     * Each list holds exactly those states, so a new state cannot slip past either one.
-     */
     @Test
     void shouldWatchExactlyTheFeedbackStatesThatAnExportShows() {
         String definition = Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_feedback_changed_exports'",
+                "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid = 'public.feedback'::regclass"
+                        + " AND tgname = 'trg_feedback_changed_exports'",
                 String.class));
-        int left = definition.indexOf("old.state");
-        int entered = definition.indexOf("new.state");
-        int otherFields = definition.indexOf(" OR ", entered);
-        assertThat(left).as("the state the feedback leaves").isNotNegative().isLessThan(entered);
-        assertThat(otherFields)
-                .as("the exported fields after the state it enters")
-                .isGreaterThan(entered);
-        String leaves = definition.substring(left, entered);
-        String enters = definition.substring(entered, otherFields);
+        assertThat(definition)
+                .contains("old.person_account_id IS NOT NULL")
+                .containsPattern("(?:public\\.)?account_export_feedback_state_visible\\(old\\.state\\)")
+                .containsPattern("NOT (?:public\\.)?account_export_feedback_state_visible\\(new\\.state\\)");
         for (FeedbackState state : FeedbackState.values()) {
-            boolean shown = FeedbackState.VISIBLE_TO_DEVELOPER.contains(state);
-            assertThat(leaves.contains("'" + state.name() + "'"))
-                    .as("leaves " + state.name())
-                    .isEqualTo(shown);
-            assertThat(enters.contains("'" + state.name() + "'"))
-                    .as("enters " + state.name())
-                    .isEqualTo(shown);
+            assertThat(jdbc.queryForObject(
+                            "SELECT public.account_export_feedback_state_visible(?)", Boolean.class, state.name()))
+                    .as("export visibility of %s", state)
+                    .isEqualTo(FeedbackState.VISIBLE_TO_DEVELOPER.contains(state));
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "DELIVERED, true,  FAILED,    false, READY",
+        "DELIVERED, true,  FAILED,    true,  EXPIRED",
+        "DELIVERED, true,  REPLACED,  false, EXPIRED",
+        "REPLACED,  true,  DELIVERED, true,  READY",
+        "READY,     false, DELIVERED, true,  READY"
+    })
+    void shouldExpireOnlyExportsThatShowTheChangedFeedback(
+            FeedbackState before,
+            boolean delivered,
+            FeedbackState after,
+            boolean bodyChanged,
+            AccountExport.Status status) {
+        var scenario = data.scenario();
+        long developer = Objects.requireNonNull(scenario.account().getId());
+        var result = data.result(scenario, ResultOutcome.NOT_MET, AT);
+        String words = "Feedback before the update.";
+        UUID id = deliveredFeedback(result, developer, before.name(), null, words);
+        if (!delivered) {
+            jdbc.update(
+                    "UPDATE feedback SET delivered_at = NULL WHERE workspace_id = ? AND id = ?",
+                    result.getWorkspaceId(),
+                    id);
+        }
+        long exportId = readyExport(developer);
+
+        jdbc.update(
+                "UPDATE feedback SET state = ?, body = ?, delivered_at = ? WHERE workspace_id = ? AND id = ?",
+                after.name(),
+                bodyChanged ? "Feedback after the update." : words,
+                Timestamp.from(AT),
+                result.getWorkspaceId(),
+                id);
+
+        var export = read(exportId, developer);
+        assertThat(export.getStatus()).isEqualTo(status);
+        if (status == AccountExport.Status.EXPIRED)
+            assertThat(export.getPayload()).isNull();
     }
 
     private void moveOriginal(long workspaceId, UUID feedbackId, FeedbackState state) {
