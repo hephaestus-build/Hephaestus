@@ -1167,6 +1167,42 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(transferred.value()).isFalse();
     }
 
+    /**
+     * In one read-only snapshot, as a page read runs ({@code PageReadSnapshot}), a second check of the same item reads
+     * nothing: every check in it reads the same rows. Outside one, each check reads again, so a transfer that commits
+     * between two checks refuses the later one (above).
+     */
+    @Test
+    void shouldCheckAnItemOnceWhenItIsCheckedAgainInOneSnapshot() {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        long workspaceId = fixture.workspace().getId();
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        var issue = progressIssue(fixture, 330, null);
+        var ref = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        // measure() reads in a READ COMMITTED transaction of its own; a page read's snapshot starts its own.
+        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        var once = reads.measure(
+                () -> Objects.requireNonNull(snapshot.execute(status -> sourceAccess.permits(ref, purpose))));
+        var twice = reads.measure(() -> Objects.requireNonNull(snapshot.execute(status -> {
+            assertThat(sourceAccess.permits(ref, purpose)).isTrue();
+            return sourceAccess.permits(ref, purpose);
+        })));
+
+        assertThat(once.value()).isTrue();
+        assertThat(twice.value()).isTrue();
+        assertThat(twice.cost().statements())
+                .as("statements of two checks of one item in one snapshot, %s", twice.sql())
+                .isPositive()
+                .isEqualTo(once.cost().statements());
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,
