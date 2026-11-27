@@ -18,6 +18,12 @@ public interface AccountMembershipQuery {
 
     boolean isActiveVisibleMember(long workspaceId, long accountId);
 
+    /**
+     * Whether the account is a current, visible member, holding its membership row until the caller's transaction ends:
+     * a leave or a hide then commits after it. MANDATORY.
+     */
+    boolean holdActiveVisibleMember(long workspaceId, long accountId);
+
     record WorkspaceView(String workspaceSlug, String workspaceName) {}
 
     record MembershipView(Long workspaceId, String workspaceSlug, String workspaceName, Role role) {}

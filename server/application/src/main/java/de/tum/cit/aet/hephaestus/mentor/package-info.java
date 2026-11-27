@@ -4,7 +4,14 @@
  */
 @ApplicationModule(
         displayName = "Mentor",
-        allowedDependencies = {"core", "core::person-data", "core::runtime", "workspace::spi"})
+        allowedDependencies = {
+            "core",
+            "core::auth-spi",
+            "core::auth-types",
+            "core::person-data",
+            "core::runtime",
+            "workspace::spi"
+        })
 @NullMarked
 package de.tum.cit.aet.hephaestus.mentor;
 

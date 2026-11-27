@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -48,6 +49,12 @@ public class AccountMembershipQueryAdapter implements AccountMembershipQuery {
     @Override
     public boolean isActiveVisibleMember(long workspaceId, long accountId) {
         return memberships.isActiveVisibleMember(workspaceId, accountId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdActiveVisibleMember(long workspaceId, long accountId) {
+        return !memberships.lockActiveVisibleMembership(workspaceId, accountId).isEmpty();
     }
 
     @Override

@@ -7,14 +7,16 @@ import com.tngtech.archunit.core.domain.JavaCodeUnit;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.domain.JavaFieldAccess;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorReviewSealedIntake;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorIntake;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository;
@@ -61,6 +63,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:event|request|source)\"?(?![\\w$])",
             Pattern.CASE_INSENSITIVE);
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
+    private static final String MENTOR_EVENT_REPOSITORY = "de.tum.cit.aet.hephaestus.mentor.runtime.MentorEventRepository";
     private static final String ERASURE_REPOSITORY = "de.tum.cit.aet.hephaestus.core.auth.AccountErasureRepository";
 
     @Test
@@ -108,20 +111,22 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
     }
 
     /**
-     * Only the intake writes the mentor's rows, after the account's write fence: the repository holds their DML, and
-     * only the intake calls its writes. A workspace erasure uses the owner function.
+     * Mentor DML lives in two repositories, and only each one's own intake writes through it, after the account's write
+     * fence and with the owner bound: a provider event through {@link MentorIntake}, a sealed review's event through
+     * {@link MentorReviewSealedIntake}.
      */
     @Test
-    void shouldKeepMentorWritesBehindTheFencedIntake() throws IOException {
-        var repository =
-                Path.of("src/main/java", MentorSourceRepository.class.getName().replace('.', '/') + ".java");
+    void shouldKeepMentorWritesBehindTheFencedIntakes() throws IOException {
+        var writers = Set.of(
+                Path.of("src/main/java", MentorSourceRepository.class.getName().replace('.', '/') + ".java"),
+                Path.of("src/main/java", MENTOR_EVENT_REPOSITORY.replace('.', '/') + ".java"));
         try (var files = Files.walk(PRODUCTION_SOURCES)) {
             for (Path file :
                     files.filter(path -> path.toString().endsWith(".java")).toList()) {
                 var dml = SourceSql.statements(Files.readString(file)).stream()
                         .filter(sql -> MENTOR_DML.matcher(sql).find())
                         .toList();
-                assertThat(file.equals(repository) || dml.isEmpty())
+                assertThat(writers.contains(file) || dml.isEmpty())
                         .as("Direct mentor DML in %s", file)
                         .isTrue();
             }
@@ -133,10 +138,22 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         .filter(call -> !readsAndErasure.contains(call.getName()))
                         .filter(call -> !call.getOriginOwner().isEquivalentTo(MentorIntake.class))
                         .map(call -> call.getDescription()))
-                .as("Write the mentor's rows through MentorIntake")
+                .as("Write the mentor's provider rows through MentorIntake")
                 .isEmpty();
-        JavaMethod admit = classes.get(MentorIntake.class).getMethod("admit", IngressEnvelope.class, Producer.class);
+        assertThat(classes.stream()
+                        .flatMap(type -> type.getMethodCallsFromSelf().stream())
+                        .filter(call -> call.getTargetOwner().getName().equals(MENTOR_EVENT_REPOSITORY))
+                        .filter(call -> !call.getOriginOwner().isEquivalentTo(MentorReviewSealedIntake.class))
+                        .map(call -> call.getDescription()))
+                .as("Write a sealed review's event through MentorReviewSealedIntake")
+                .isEmpty();
+        fenced(classes.get(MentorIntake.class).getMethod("admit", IngressEnvelope.class, Producer.class));
+        fenced(classes.get(MentorReviewSealedIntake.class).getMethod("admit", MentorReviewIntake.SealedReview.class));
+    }
+
+    private static void fenced(JavaMethod admit) {
         assertThat(admit.getMethodCallsFromSelf())
+                .as(admit.getFullName())
                 .anyMatch(call -> call.getTargetOwner().isAssignableTo(PersonDataWriteFence.class)
                         && call.getName().equals("holdForAccountWrite"))
                 .anyMatch(call -> call.getTargetOwner().isAssignableTo(OwnerScope.class)

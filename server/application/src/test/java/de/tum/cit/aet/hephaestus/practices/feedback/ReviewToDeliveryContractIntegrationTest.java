@@ -8,6 +8,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
@@ -385,6 +388,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ApplicationContext context;
+
+    @Autowired
+    private MentorReviewIntake mentorIntake;
+
+    @Autowired
+    private OwnerScope owners;
+
+    @Autowired
+    private MentorWorkspaceErasure workspaceErasure;
 
     @BeforeEach
     void deliverPublicCopies() {
@@ -871,6 +883,97 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .extracting(practice -> practice.path("slug").asString())
                     .containsExactly(review.practiceSlug());
         }
+    }
+
+    @Test
+    void shouldWriteOneReviewSealedEventForAnAuthorWhoMayHaveAMentor() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            var digest = "a".repeat(64);
+
+            var admitted = admitSealed(review, digest);
+            assertThat(admitted).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+            assertThat(admitSealed(review, digest)).as("the same seal again").isEqualTo(admitted);
+            assertThat(admitSealed(review, "b".repeat(64)))
+                    .as("another admission of the review")
+                    .isEqualTo(new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.EVENT_MISMATCH));
+
+            assertThat(mentorEvents(review))
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.get("id")).isEqualTo(((MentorReviewIntake.Outcome.Admitted) admitted).eventId());
+                        assertThat(event.get("kind")).isEqualTo("REVIEW_SEALED");
+                        assertThat(event.get("disposition")).isEqualTo("PENDING");
+                        assertThat(event.get("account_id")).isEqualTo(review.developerId());
+                        assertThat(event.get("job_id")).isEqualTo(review.identity().jobId());
+                        assertThat(event.get("admission_digest")).isEqualTo(digest);
+                        assertThat(event.get("source_id")).isNull();
+                        assertThat(event.get("binding_id")).isNull();
+                    });
+            // A Slack disconnect erases only the provider events of the workspace.
+            transactions.executeWithoutResult(status -> workspaceErasure.eraseWorkspace(review.workspaceId()));
+            assertThat(mentorEvents(review)).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldWriteNoReviewSealedEventForAnAuthorWhoMayHaveNoMentor() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            long account = review.developerId();
+            var cases = List.of(
+                    Map.entry("UPDATE account SET ai_choice=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET ai_choice='NO_AI' WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET feedback_delivery_enabled=false WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET status='UNCLAIMED' WHERE id=?", "AUTHOR_INACTIVE"),
+                    Map.entry("UPDATE account SET status='BLOCKED' WHERE id=?", "OWNER_REFUSED"),
+                    Map.entry("UPDATE account SET status='DELETING' WHERE id=?", "OWNER_REFUSED"),
+                    Map.entry(
+                            "UPDATE membership SET hidden=true WHERE workspace_id=" + review.workspaceId()
+                                    + " AND account_id=?",
+                            "AUTHOR_NOT_MEMBER"));
+            for (var refused : cases) {
+                jdbc.update(refused.getKey(), account);
+                assertThat(admitSealed(review, "a".repeat(64)))
+                        .as(refused.getKey())
+                        .isEqualTo(new MentorReviewIntake.Outcome.Refused(
+                                MentorReviewIntake.Refusal.valueOf(refused.getValue())));
+                assertThat(mentorEvents(review)).as(refused.getKey()).isEmpty();
+                mayHaveMentor(review);
+            }
+        }
+    }
+
+    /** An active, visible member who made an explicit AI choice and keeps practice feedback delivery on. */
+    private void mayHaveMentor(ClaimedReview review) {
+        jdbc.update(
+                "UPDATE account SET status='ACTIVE', ai_choice='CLOUD', feedback_delivery_enabled=true WHERE id=?",
+                review.developerId());
+        jdbc.update(
+                "UPDATE membership SET hidden=false, left_at=NULL WHERE workspace_id=? AND account_id=?",
+                review.workspaceId(),
+                review.developerId());
+    }
+
+    private MentorReviewIntake.Outcome admitSealed(ClaimedReview review, String digest) {
+        return Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                review.workspaceId(),
+                review.reviewId(),
+                review.identity().jobId(),
+                review.developerId(),
+                digest,
+                Instant.now()))));
+    }
+
+    /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */
+    private List<Map<String, Object>> mentorEvents(ClaimedReview review) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            owners.ofJob(review.developerId());
+            return jdbc.queryForList(
+                    "SELECT * FROM mentor_event WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+        }));
     }
 
     @Test
