@@ -216,7 +216,7 @@ class ComposerTurnsTest {
             vocabulary(scenario.feedbackTool(), known);
         }
         var instructions = new TreeMap<String, String>();
-        for (String prompt : PROMPTS) instructions.put(prompt, ComposerTurns.prompt(prompt));
+        for (String prompt : PROMPTS) instructions.put(prompt, ComposerPrompts.prompt(prompt));
         instructions.put("ReviewOnWork.WRITE_CONTRACT", ReviewOnWork.WRITE_CONTRACT);
         instructions.put("ReviewOnWork.TOOL_DESCRIPTION", ReviewOnWork.TOOL_DESCRIPTION);
         instructions.put("PrivateFeedback.TOOL_DESCRIPTION", PrivateFeedback.TOOL_DESCRIPTION);

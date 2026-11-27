@@ -41,6 +41,9 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
     private ReviewCompositionBasisRepository basisRepository;
 
     @Autowired
+    private WorkPlaceHandoffRepository handoffs;
+
+    @Autowired
     private JdbcTemplate runtimeJdbc;
 
     @PersistenceContext
@@ -70,6 +73,50 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
         assertThat(basisRepository.findByWorkspaceIdAndJobId(workspace.getId(), expired.getId()))
                 .isEmpty();
+    }
+
+    @Test
+    @Transactional
+    void shouldDeleteAWorkPlaceHandoffAfterItsExpiryAndWithItsJob() {
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("handoff-retention"));
+        ReviewJob expired = oldTerminalJob(workspace);
+        ReviewJob live = oldTerminalJob(workspace);
+        ReviewJob deleted = oldTerminalJob(workspace);
+        jobRepository.saveAllAndFlush(List.of(expired, live, deleted));
+        Instant now = Instant.now();
+        UUID expiredId = handoff(expired, now.minusSeconds(1));
+        UUID liveId = handoff(live, now.plus(Duration.ofHours(1)));
+        UUID deletedId = handoff(deleted, now.plus(Duration.ofHours(1)));
+        Objects.requireNonNull(entityManager).flush();
+
+        handoffs.deleteExpired(now, 1000);
+        runtimeJdbc.update("DELETE FROM review_job WHERE id=?", deleted.getId());
+
+        assertThat(runtimeJdbc.queryForList(
+                        "SELECT id FROM work_place_handoff WHERE id IN (?, ?, ?)",
+                        UUID.class,
+                        expiredId,
+                        liveId,
+                        deletedId))
+                .containsExactly(liveId);
+    }
+
+    private UUID handoff(ReviewJob job, Instant expiresAt) {
+        UUID id = UUID.randomUUID();
+        handoffs.save(WorkPlaceHandoffRow.builder()
+                .id(id)
+                .workspaceId(job.getWorkspaceId())
+                .reviewId(job.getReviewId())
+                .jobId(job.getId())
+                .itemId(7L)
+                .itemVersion("2222222222222222222222222222222222222222")
+                .producer(WorkPlaceHandoffRow.Producer.LEGACY)
+                .payload(objectMapper.createObjectNode().put("version", 1))
+                .payloadDigest("d".repeat(64))
+                .expiresAt(expiresAt)
+                .createdAt(Instant.now())
+                .build());
+        return id;
     }
 
     @Test

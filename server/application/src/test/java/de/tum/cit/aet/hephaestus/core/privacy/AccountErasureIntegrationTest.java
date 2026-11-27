@@ -1119,6 +1119,18 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             """, derived.jobId(), derived.workspaceId(), "a".repeat(64), "b".repeat(64), UUID.randomUUID());
     }
 
+    private void keepWorkPlaceHandoff(DerivedConversation derived) {
+        jdbc.update("""
+            INSERT INTO work_place_handoff(id,workspace_id,review_id,job_id,item_id,producer,payload,payload_digest,
+                expires_at,created_at)
+            SELECT ?,j.workspace_id,j.review_id,j.id,r.item_id,'LEGACY',
+                '{"files":{"record":"WORK-PLACE-HANDOFF-CANARY"}}'::jsonb,?,
+                CURRENT_TIMESTAMP + INTERVAL '1 hour',CURRENT_TIMESTAMP
+            FROM review_job j JOIN review r ON (r.id,r.workspace_id)=(j.review_id,j.workspace_id)
+            WHERE j.id=? AND j.workspace_id=?
+            """, UUID.randomUUID(), "c".repeat(64), derived.jobId(), derived.workspaceId());
+    }
+
     private ExternalInspectionFixture externalInspectionFixture(@Nullable String reviewedWorkUrl) {
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
@@ -1303,7 +1315,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             otherFolders.add(captureMountedEvidence(
                     worker, workerReceipts, workerCaptures, recorder, otherDerived.getLast(), other));
         }
-        Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(this::keepCompositionInputs);
+        Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(derived -> {
+            keepCompositionInputs(derived);
+            keepWorkPlaceHandoff(derived);
+        });
         for (var derived : targetDerived) {
             var result = practiceResultRepository
                     .findById(derived.practiceResultIds().getFirst())
@@ -1947,6 +1962,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .createdAt(Instant.now())
                     .build());
             keepCompositionInputs(derived);
+            keepWorkPlaceHandoff(derived);
             // A removed folder must not hide the job that copied this person's data.
             jdbc.update(
                     """
@@ -1965,6 +1981,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var unrelatedWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("secondary-keep"));
         var unrelated = seedDerivedConversation(unrelatedWorkspace, 2000L, other);
         keepCompositionInputs(unrelated);
+        keepWorkPlaceHandoff(unrelated);
         var preview = personData.preview(
                 administratorId,
                 null,
@@ -1997,10 +2014,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
         assertThat(counts.get("person_evidence_copy")).isEqualTo(2L);
         assertThat(counts.get("review_composition_basis")).isEqualTo(2L);
+        assertThat(counts.get("work_place_handoff")).isEqualTo(2L);
         assertThat(counts.get("result")).isEqualTo(2L);
         assertThat(counts.get("feedback")).isEqualTo(2L);
         assertThat(export.path("stores").path("review_composition_basis").toString())
                 .doesNotContain("ORIGINAL-BASIS-CANARY");
+        assertThat(export.path("stores").path("work_place_handoff")).hasSize(2);
+        assertThat(export.path("stores").path("work_place_handoff").toString())
+                .doesNotContain("WORK-PLACE-HANDOFF-CANARY");
         assertThat(export.path("stores").path("review_job"))
                 .extracting(row -> row.path("id").asString())
                 .containsExactlyInAnyOrderElementsOf(
@@ -2034,6 +2055,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                             "SELECT count(*) FROM review_composition_basis WHERE job_id=?",
                             Integer.class,
                             derived.jobId()))
+                    .isZero();
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM work_place_handoff WHERE job_id=?", Integer.class, derived.jobId()))
                     .isZero();
             assertThat(practiceResultRepository.findById(
                             derived.practiceResultIds().getFirst()))
@@ -2085,6 +2109,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         "SELECT count(*) FROM review_composition_basis WHERE job_id=?",
                         Integer.class,
                         unrelated.jobId()))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM work_place_handoff WHERE job_id=?", Integer.class, unrelated.jobId()))
                 .isEqualTo(1);
         assertThat(conversationEntryRepository
                         .findById(unrelated.toolResultId())

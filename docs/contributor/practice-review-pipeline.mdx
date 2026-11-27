@@ -776,6 +776,40 @@ The server prepares the final public package before the private session starts.
 A private setup failure or deadline does not erase that prepared review.
 The destinations remain independently eligible.
 
+### Work-place handoff (shadow)
+
+[ADR 0121](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) moves the copy on the work to a composer on the work place, which reads no private data.
+The first step runs beside `review_compose` and writes nothing on the work.
+
+The seal of an eligible review writes one `work_place_handoff` row in its own transaction.
+A review is eligible when it is an item review of a pull or merge request, not a trial and not a backfill.
+Its item must take a copy on the work, and at least one public result must be Not met.
+The row's key is the workspace and the review, so a repeated seal writes nothing.
+An issue gets no handoff in 1.0. A Slack thread and an Outline document get no copy on the work.
+
+The handoff is a scoped copy that `WorkPlaceScope` derives from the inputs that `review_compose` would compose from.
+It holds the review's public results and the texts that their citations name.
+It also holds the work's own captured record, the catalog entries of their practices and the copy forms of the work.
+It never holds the private brief, the developer's problem history, a private composition file, or anything that only a private or withheld candidate reached.
+A practice whose only result is private is "not reached" for the public writer.
+
+A digest covers every byte. A later feedback-mode change leaves the digest as it is, because the composer checks the mode when it writes.
+The copy expires two hours after the seal, at the copy deadline of [ADR 0122](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md), or earlier with its inputs.
+
+The row names the producer of the review's copy on the work: `LEGACY` for `review_compose`, or `COMPOSER`.
+Every row is `LEGACY` until the cutover, and a row never changes.
+
+`WorkPlaceComposer` renders the review on the work from a handoff and the public history of Hephaestus's own copies.
+The legacy composition renders the same turn through `OnWorkTurn`.
+The work-place composer's only tool is `check_package`.
+The check applies `ReviewOnWork.read` and the feedback text policy. Only the handoff's own quotes supply a link.
+No production code calls the composer yet.
+
+`WorkPlaceShadowComparisonTest` compares it with `review_compose` on the composition eval cases, the replay cases and the golden scenarios.
+`WorkPlaceComposerBoundaryArchTest` fails when the composer side depends, even transitively, on a private source or a write path.
+It also fails when any class other than the scope builds a handoff.
+The cutover gate is in ADR 0121 § Update — 2026-11-26.
+
 ### Checked publication per destination
 
 Each session is one conversation with the attempt's frozen model through the proxy, with the attempt's AI choice, budget and usage rules.

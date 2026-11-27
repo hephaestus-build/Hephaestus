@@ -3,10 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -31,8 +35,8 @@ import org.jspecify.annotations.Nullable;
  * may quote code; Slack syntax is refused in them too. Delivery still sanitizes each copy for its provider
  * ({@code ScmFeedbackFormatter}); this policy refuses the text before anything is prepared.
  */
-final class FeedbackTextPolicy {
-    enum Rule {
+public final class FeedbackTextPolicy {
+    public enum Rule {
         HIDDEN_CHARACTER,
         MENTION,
         HTML,
@@ -41,7 +45,7 @@ final class FeedbackTextPolicy {
     }
 
     /** The rule that a text broke, and the field of the piece that holds it, such as {@code notes[1]}. */
-    record Refusal(Rule rule, String field) {}
+    public record Refusal(Rule rule, String field) {}
 
     private static final Parser MARKDOWN = Parser.builder().build();
 
@@ -55,16 +59,34 @@ final class FeedbackTextPolicy {
     private static final Pattern BARE_LINK =
             Pattern.compile("(?i)(?<![\\p{L}\\p{N}])(?:https?://|ftp://|www\\.)[^\\s<>\"'`\\\\]+");
 
-    private final List<AdmittedResultSnapshot> admitted;
+    private final Supplier<Stream<String>> quotes;
     private @Nullable Set<String> supplied;
 
+    /** The policy of a composition from every admitted result: their cited quotes supply its links. */
     FeedbackTextPolicy(List<AdmittedResultSnapshot> admitted) {
-        this.admitted = admitted;
+        this(() -> admitted.stream()
+                .flatMap(row -> Stream.concat(
+                        row.candidate().evidence().citations().stream(),
+                        row.problems().stream().flatMap(problem -> problem.candidate().citations().stream())))
+                .map(EvidenceCitation::quote));
+    }
+
+    private FeedbackTextPolicy(Supplier<Stream<String>> quotes) {
+        this.quotes = quotes;
+    }
+
+    /**
+     * The policy of a writer that may read only these quotes, such as the work-place composer: a link that no other
+     * quote supplies stays refused, also when another result of the review quoted it.
+     */
+    public static FeedbackTextPolicy suppliedBy(Collection<String> quotes) {
+        var copy = List.copyOf(quotes);
+        return new FeedbackTextPolicy(copy::stream);
     }
 
     /** The first model-written text of the piece that breaks a rule, or null when the piece may be prepared. */
     @Nullable
-    Refusal refusal(ComposedFeedback piece) {
+    public Refusal refusal(ComposedFeedback piece) {
         var texts = new LinkedHashMap<String, String>();
         String summary = piece.summary();
         if (summary != null) texts.put("summary", summary);
@@ -76,7 +98,13 @@ final class FeedbackTextPolicy {
             texts.put("page.body", page.body());
             texts.put("page.nextStep", page.nextStep());
         }
-        for (var text : texts.entrySet()) {
+        return refusal(texts);
+    }
+
+    /** The first model-written text, by its field such as {@code notes[1]}, that breaks a rule; null when none does. */
+    @Nullable
+    public Refusal refusal(Map<String, String> textsByField) {
+        for (var text : textsByField.entrySet()) {
             var rule = broken(text.getValue());
             if (rule != null) return new Refusal(rule, text.getKey());
         }
@@ -99,15 +127,12 @@ final class FeedbackTextPolicy {
         return null;
     }
 
-    /** The links in the verified quotes that the admitted results and their problems cite. */
+    /** The links in the verified quotes that the policy's results and their problems cite. */
     private Set<String> supplied() {
         var known = supplied;
         if (known == null) {
-            known = admitted.stream()
-                    .flatMap(row -> Stream.concat(
-                            row.candidate().evidence().citations().stream(),
-                            row.problems().stream().flatMap(problem -> problem.candidate().citations().stream())))
-                    .flatMap(citation -> Reading.of(citation.quote()).links.stream())
+            known = quotes.get()
+                    .flatMap(quote -> Reading.of(quote).links.stream())
                     .collect(Collectors.toUnmodifiableSet());
             supplied = known;
         }
