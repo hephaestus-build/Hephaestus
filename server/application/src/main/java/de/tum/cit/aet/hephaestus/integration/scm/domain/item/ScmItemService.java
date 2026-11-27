@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.SnapshotMemo;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -77,6 +78,12 @@ public class ScmItemService implements ItemSource {
     private final ScmRepositoryAccess repositories;
     private final RepositoryRepository repositoryRows;
     private final ScmWorkLookup workLookup;
+    /**
+     * The pinned snapshot of an issue, a pull request or a review, once per read-only snapshot: a fingerprint read pins
+     * the work, and its capture checks the pin again. In one snapshot both read the same rows.
+     */
+    private final SnapshotMemo<ItemRef, ItemSnapshot> observed = new SnapshotMemo<>(ItemSnapshot.class);
+
     private final IssueEvidenceVersion issueVersions;
     private final ScmGitTree tree;
     private final ScmFileVersions fileVersions;
@@ -142,21 +149,27 @@ public class ScmItemService implements ItemSource {
     }
 
     private ItemSnapshot pinItem(ItemRef item, @Nullable ItemVersion requested) {
-        items.require(item);
-        if (item.kind().equals(ScmItemEvents.FILE) ? item.path() == null : item.sourceId() == null) throw invisible();
         ItemSnapshot snapshot;
-        if (item.kind().equals(ScmItemEvents.REPOSITORY)) snapshot = repository(item, requested);
-        else if (item.kind().equals(ScmItemEvents.FILE)) snapshot = file(item, requested);
-        else {
-            var observed = observe(item, true);
-            snapshot = new ItemSnapshot(
-                    item,
-                    Objects.requireNonNull(observed.version()),
-                    observed.integration(),
-                    observed.state(),
-                    observed.roles(),
-                    observed.label());
-        }
+        if (item.kind().equals(ScmItemEvents.REPOSITORY) || item.kind().equals(ScmItemEvents.FILE)) {
+            items.require(item);
+            if (item.kind().equals(ScmItemEvents.FILE) ? item.path() == null : item.sourceId() == null)
+                throw invisible();
+            snapshot =
+                    item.kind().equals(ScmItemEvents.REPOSITORY) ? repository(item, requested) : file(item, requested);
+        } else
+            // The work as stored now does not depend on the requested version, which is compared below on every call.
+            snapshot = observed.get(item, () -> {
+                items.require(item);
+                if (item.sourceId() == null) throw invisible();
+                var current = observe(item, true);
+                return new ItemSnapshot(
+                        item,
+                        Objects.requireNonNull(current.version()),
+                        current.integration(),
+                        current.state(),
+                        current.roles(),
+                        current.label());
+            });
         if (requested != null) {
             var actual = snapshot.version();
             boolean omitsRedundantBase = requested.baseVersion() == null
