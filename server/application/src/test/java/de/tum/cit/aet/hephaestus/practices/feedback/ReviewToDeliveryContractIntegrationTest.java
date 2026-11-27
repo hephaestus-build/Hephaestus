@@ -983,11 +983,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     Map.entry("UPDATE account SET feedback_delivery_enabled=false WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET status='UNCLAIMED' WHERE id=?", "AUTHOR_INACTIVE"),
                     Map.entry("UPDATE account SET status='BLOCKED' WHERE id=?", "OWNER_REFUSED"),
-                    Map.entry("UPDATE account SET status='DELETING' WHERE id=?", "OWNER_REFUSED"),
                     Map.entry(
                             "UPDATE membership SET hidden=true WHERE workspace_id=" + review.workspaceId()
                                     + " AND account_id=?",
-                            "AUTHOR_NOT_MEMBER"));
+                            "AUTHOR_NOT_MEMBER"),
+                    // Last: an account that is being deleted never becomes active again.
+                    Map.entry("UPDATE account SET status='DELETING' WHERE id=?", "OWNER_REFUSED"));
             for (var refused : cases) {
                 jdbc.update(refused.getKey(), account);
                 assertThat(admitSealed(review, "a".repeat(64)))
@@ -995,7 +996,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         .isEqualTo(new MentorReviewIntake.Outcome.Refused(
                                 MentorReviewIntake.Refusal.valueOf(refused.getValue())));
                 assertThat(mentorEvents(review)).as(refused.getKey()).isEmpty();
-                mayHaveMentor(review);
+                if (!refused.getKey().contains("DELETING")) mayHaveMentor(review);
             }
         }
     }
