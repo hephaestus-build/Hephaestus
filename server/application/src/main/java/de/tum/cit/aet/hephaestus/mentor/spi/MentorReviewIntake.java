@@ -24,9 +24,9 @@ public interface MentorReviewIntake {
     }
 
     enum Refusal {
-        /** A processing restriction, an erasure, or an account that is no longer active refused the write. */
+        /** The write fence refused: a processing restriction, an erasure, or an account that is blocked or deleting. */
         OWNER_REFUSED,
-        /** The account has not signed in, or is blocked. */
+        /** The account has not signed in yet. */
         AUTHOR_INACTIVE,
         /** The account is no current, visible member of the workspace. */
         AUTHOR_NOT_MEMBER,

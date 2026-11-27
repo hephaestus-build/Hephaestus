@@ -37,10 +37,12 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
     public Outcome admit(SealedReview sealed) {
         long account = sealed.accountId();
         if (!fence.holdForAccountWrite(account)) return new Outcome.Refused(Refusal.OWNER_REFUSED);
-        // The fence share-locks the account row, so these values hold until the seal commits.
-        var view = accounts.find(account).orElse(null);
-        if (view == null || view.status() != Account.Status.ACTIVE) return new Outcome.Refused(Refusal.AUTHOR_INACTIVE);
-        if (!view.feedbackDeliveryEnabled() || view.aiChoice() == null || view.aiChoice() == AiChoice.NO_AI)
+        // The fence share-locks the account row, so the committed values hold until the seal commits. A cached account
+        // that the seal loaded earlier could predate a withdrawn choice, so this reads the row itself.
+        var consent = accounts.committedConsent(account).orElse(null);
+        if (consent == null || consent.status() != Account.Status.ACTIVE)
+            return new Outcome.Refused(Refusal.AUTHOR_INACTIVE);
+        if (!consent.feedbackDeliveryEnabled() || consent.aiChoice() == null || consent.aiChoice() == AiChoice.NO_AI)
             return new Outcome.Refused(Refusal.AUTHOR_NOT_CONSENTING);
         if (!memberships.holdActiveVisibleMember(sealed.workspaceId(), account))
             return new Outcome.Refused(Refusal.AUTHOR_NOT_MEMBER);

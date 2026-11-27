@@ -12,12 +12,22 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 public interface AccountDirectory {
+    /** It may return this transaction's cached account; after a lock or fence, read consent fresh. */
     Optional<AccountView> find(long accountId);
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
 
     /** The active instance admins, who can receive a person's support share. */
     List<AccountView> activeInstanceAdmins();
+
+    /**
+     * The account's status and its own choices as they are committed, read past any account that the caller's
+     * transaction loaded earlier. Use it under a lock that holds the row, so the values hold until that transaction
+     * ends.
+     */
+    Optional<Consent> committedConsent(long accountId);
+
+    record Consent(Account.Status status, @Nullable AiChoice aiChoice, boolean feedbackDeliveryEnabled) {}
 
     /** Locks an account eligible for retention in the caller's transaction. */
     boolean holdForRetention(long accountId);

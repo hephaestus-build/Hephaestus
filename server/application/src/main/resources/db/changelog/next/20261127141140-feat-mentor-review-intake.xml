@@ -34,12 +34,12 @@ ALTER TABLE public.mentor_event ADD CONSTRAINT ck_mentor_event_disposition
     CHECK (disposition IN ('PENDING', 'OPENED', 'REVISED', 'FENCED', 'RECORDED'));
         ]]></sql>
         <rollback>
-            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_disposition</sql>
-            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT sfk_mentor_event_review</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT uk_mentor_event_review</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind_shape</sql>
             <sql>DELETE FROM public.mentor_event WHERE kind = 'REVIEW_SEALED'</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind, ADD CONSTRAINT ck_mentor_event_kind CHECK (kind IN ('MESSAGE', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'CONTROL_STOP'))</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_disposition, ADD CONSTRAINT ck_mentor_event_disposition CHECK (disposition IN ('OPENED', 'REVISED', 'FENCED', 'RECORDED'))</sql>
             <sql>ALTER TABLE public.mentor_event DROP COLUMN admission_digest, DROP COLUMN job_id, DROP COLUMN review_id, DROP COLUMN workspace_id, ALTER COLUMN source_ref SET NOT NULL, ALTER COLUMN source_id SET NOT NULL, ALTER COLUMN native_event_id SET NOT NULL, ALTER COLUMN binding_id SET NOT NULL</sql>
         </rollback>
     </changeSet>

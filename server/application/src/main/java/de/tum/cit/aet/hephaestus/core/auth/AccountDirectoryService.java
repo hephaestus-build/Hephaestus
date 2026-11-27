@@ -44,6 +44,13 @@ public class AccountDirectoryService implements AccountDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Consent> committedConsent(long accountId) {
+        return accounts.findCommittedConsent(accountId)
+                .map(row -> new Consent(row.getStatus(), row.getAiChoice(), row.getFeedbackDeliveryEnabled()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, AccountView> findAll(Collection<Long> accountIds) {
         return accounts.findAllById(accountIds).stream()
                 .map(AccountDirectoryService::view)

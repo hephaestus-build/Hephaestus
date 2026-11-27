@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
@@ -398,6 +399,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorReviewIntake mentorIntake;
+
+    @Autowired
+    private WorkspaceLifecycleService lifecycle;
 
     @Autowired
     private AccountDirectory accounts;
@@ -1007,6 +1011,40 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepOneAuthorsReviewSealedEventsOfTwoWorkspacesApartThroughAPurge() {
+        try (var first = claimedReview(FeedbackMode.AUTOMATIC);
+                var second = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(first);
+            long author = first.developerId();
+            jdbc.update(
+                    "INSERT INTO membership (workspace_id, account_id, role, role_source) VALUES (?, ?, 'MEMBER', 'PERSON')",
+                    second.workspaceId(),
+                    author);
+            assertThat(admitSealed(first, "a".repeat(64))).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+            assertThat(Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(
+                            new MentorReviewIntake.SealedReview(
+                                    second.workspaceId(),
+                                    second.reviewId(),
+                                    second.identity().jobId(),
+                                    author,
+                                    "b".repeat(64),
+                                    Instant.now())))))
+                    .isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+
+            transactions.executeWithoutResult(status -> lifecycle.purgeAgain(second.workspaceId()));
+
+            assertThat(mentorEvents(first)).as("the other workspace's event").hasSize(1);
+            assertThat(Objects.requireNonNull(transactions.execute(status -> {
+                        owners.ofJob(author);
+                        return jdbc.queryForObject(
+                                "SELECT count(*) FROM mentor_event WHERE workspace_id=?", Integer.class, second.workspaceId());
+                    })))
+                    .as("the purged workspace's event")
+                    .isZero();
+        }
+    }
+
+    @Test
     void shouldWriteNoReviewSealedEventForAnAuthorWhoMayHaveNoMentor() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             mayHaveMentor(review);
@@ -1020,6 +1058,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     Map.entry("UPDATE account SET status='BLOCKED' WHERE id=?", "OWNER_REFUSED"),
                     Map.entry(
                             "UPDATE membership SET hidden=true WHERE workspace_id=" + review.workspaceId()
+                                    + " AND account_id=?",
+                            "AUTHOR_NOT_MEMBER"),
+                    Map.entry(
+                            "UPDATE membership SET left_at=now() WHERE workspace_id=" + review.workspaceId()
                                     + " AND account_id=?",
                             "AUTHOR_NOT_MEMBER"),
                     // Last: an account that is being deleted never becomes active again.
