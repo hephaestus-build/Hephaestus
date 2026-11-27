@@ -511,7 +511,7 @@ public class SlackMessageService implements AutoCloseable {
         } catch (OutboundEgressSuppressedException e) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
         } catch (SlackApiException e) {
-            long retryAfterMs = SlackBackoff.retryAfterMillis(e);
+            long retryAfterMs = SlackBackoff.retryAfterMillis(e.getResponse());
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
                 if (admitAtSend != null) rateLimitTracker.recordPostThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
@@ -651,7 +651,7 @@ public class SlackMessageService implements AutoCloseable {
             }
             return new Matches(List.of(), true);
         } catch (SlackApiException e) {
-            long retryAfterMs = SlackBackoff.retryAfterMillis(e);
+            long retryAfterMs = SlackBackoff.retryAfterMillis(e.getResponse());
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED)
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
@@ -1044,7 +1044,7 @@ public class SlackMessageService implements AutoCloseable {
             try {
                 return call.call();
             } catch (SlackApiException e) {
-                long retryAfterMs = SlackBackoff.retryAfterMillis(e);
+                long retryAfterMs = SlackBackoff.retryAfterMillis(e.getResponse());
                 if (retryAfterMs == SlackSendException.NOT_RATE_LIMITED || !budget.awaitRetry(retryAfterMs)) {
                     throw e;
                 }
