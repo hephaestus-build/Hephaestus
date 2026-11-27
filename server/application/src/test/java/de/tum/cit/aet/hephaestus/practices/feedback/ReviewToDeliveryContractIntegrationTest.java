@@ -66,8 +66,10 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
@@ -218,6 +220,7 @@ import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
@@ -395,6 +398,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorReviewIntake mentorIntake;
+
+    @Autowired
+    private AccountDirectory accounts;
 
     @Autowired
     private OwnerScope owners;
@@ -968,6 +974,35 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             throw new IllegalStateException(e);
         } catch (BrokenBarrierException | TimeoutException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void shouldRefuseWhenTheAuthorWithdrawsAiConsentBeforeTheWriteFence() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            long account = review.developerId();
+            var preferenceUpdate = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+            preferenceUpdate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+            var outcome = transactions.execute(status -> {
+                assertThat(accounts.find(account).orElseThrow().aiChoice()).isEqualTo(AiChoice.CLOUD);
+                preferenceUpdate.executeWithoutResult(inner -> {
+                    assertThat(jdbc.update("UPDATE account SET ai_choice='NO_AI' WHERE id=?", account))
+                            .isEqualTo(1);
+                });
+                return mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                        review.workspaceId(),
+                        review.reviewId(),
+                        review.identity().jobId(),
+                        account,
+                        "a".repeat(64),
+                        Instant.now()));
+            });
+
+            assertThat(outcome)
+                    .isEqualTo(new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.AUTHOR_NOT_CONSENTING));
+            assertThat(mentorEvents(review)).isEmpty();
         }
     }
 
