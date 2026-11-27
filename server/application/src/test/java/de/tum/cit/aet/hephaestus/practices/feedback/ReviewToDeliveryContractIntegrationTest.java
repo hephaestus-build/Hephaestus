@@ -1245,7 +1245,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             later.setWorkspaceId(review.workspaceId());
 
             // The gate is closed now, so only the pin can make the later job MENTOR.
-            assertThat(transactions.execute(status -> producerSelection.choose(later, snapshot, "b".repeat(64))))
+            FeedbackProducerSelection.Choice inherited =
+                    transactions.execute(status -> producerSelection.choose(later, snapshot, "b".repeat(64)));
+            assertThat(inherited)
                     .isEqualTo(new FeedbackProducerSelection.Choice(
                             FeedbackProducer.MENTOR, FeedbackProducerReason.INHERITED));
             transactions.executeWithoutResult(status -> {

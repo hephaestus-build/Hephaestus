@@ -255,9 +255,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET admission_attempt=0, admission_digest=?, feedback_producer='MENTOR' WHERE id=?",
                 "a".repeat(64),
                 job.getId());
-        assertThat(transactions.execute(status ->
-                        reviewRuns.requeue(job.getId(), started.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null)))
-                .isTrue();
+        Boolean requeued = transactions.execute(status ->
+                reviewRuns.requeue(job.getId(), started.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null));
+        assertThat(requeued).isTrue();
 
         assertThat(claimLeased(jobs.findById(job.getId()).orElseThrow()))
                 .as("the claim ends the job instead of starting it")
