@@ -49,7 +49,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import okhttp3.FormBody;
-import okhttp3.Response;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -512,7 +511,7 @@ public class SlackMessageService implements AutoCloseable {
         } catch (OutboundEgressSuppressedException e) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
         } catch (SlackApiException e) {
-            long retryAfterMs = apiRetryAfterMillis(e);
+            long retryAfterMs = SlackBackoff.retryAfterMillis(e);
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
                 if (admitAtSend != null) rateLimitTracker.recordPostThrottle(workspaceId, retryAfterMs);
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
@@ -652,20 +651,13 @@ public class SlackMessageService implements AutoCloseable {
             }
             return new Matches(List.of(), true);
         } catch (SlackApiException e) {
-            long retryAfterMs = apiRetryAfterMillis(e);
+            long retryAfterMs = SlackBackoff.retryAfterMillis(e);
             if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED)
                 throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         } catch (IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }
-    }
-
-    private static long apiRetryAfterMillis(SlackApiException failure) {
-        Response response = failure.getResponse();
-        return response == null
-                ? SlackSendException.NOT_RATE_LIMITED
-                : SlackBackoff.retryAfterMillis(response.code(), response.header("Retry-After"));
     }
 
     /**
@@ -1052,10 +1044,7 @@ public class SlackMessageService implements AutoCloseable {
             try {
                 return call.call();
             } catch (SlackApiException e) {
-                Response response = e.getResponse();
-                long retryAfterMs = response == null
-                        ? SlackSendException.NOT_RATE_LIMITED
-                        : SlackBackoff.retryAfterMillis(response.code(), response.header("Retry-After"));
+                long retryAfterMs = SlackBackoff.retryAfterMillis(e);
                 if (retryAfterMs == SlackSendException.NOT_RATE_LIMITED || !budget.awaitRetry(retryAfterMs)) {
                     throw e;
                 }

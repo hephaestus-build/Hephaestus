@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
+import com.slack.api.methods.SlackApiException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
@@ -141,6 +142,13 @@ final class SlackBackoff {
      * header defaults to 1s. A huge one, also digits beyond a {@code long}, saturates at {@link Long#MAX_VALUE} rather
      * than wrapping to a negative wait or falling back to the default.
      */
+    static long retryAfterMillis(SlackApiException failure) {
+        var response = failure.getResponse();
+        return response == null
+                ? SlackSendException.NOT_RATE_LIMITED
+                : retryAfterMillis(response.code(), response.header("Retry-After"));
+    }
+
     static long retryAfterMillis(int status, @Nullable String header) {
         if (status != 429) {
             return SlackSendException.NOT_RATE_LIMITED;
