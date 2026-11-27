@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorRequest;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSource;
 import de.tum.cit.aet.hephaestus.practices.advice.AdviceState;
 import de.tum.cit.aet.hephaestus.practices.feedback.thread.FeedbackThreadResolutionState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
@@ -46,6 +48,18 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
                         Set.of(Account.Status.DELETED)),
                 new Contract<>(IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of()),
+                new Contract<>(
+                        MentorSource.State.class, Set.of(MentorSource.State.LIVE), Set.of(MentorSource.State.DELETED)),
+                new Contract<>(
+                        MentorRequest.State.class,
+                        Set.of(MentorRequest.State.OPEN),
+                        Set.of(
+                                MentorRequest.State.ANSWERED,
+                                MentorRequest.State.CONTINUED,
+                                MentorRequest.State.FAILED,
+                                MentorRequest.State.STOPPED,
+                                MentorRequest.State.SUPERSEDED,
+                                MentorRequest.State.EXPIRED)),
                 new Contract<>(
                         ReviewItemState.class,
                         Set.of(ReviewItemState.LISTED, ReviewItemState.WITHHELD),

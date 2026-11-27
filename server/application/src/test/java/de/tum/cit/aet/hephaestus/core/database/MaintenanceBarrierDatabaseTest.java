@@ -23,10 +23,16 @@ class MaintenanceBarrierDatabaseTest {
 
     /** Tables that match the convention without a new lease of their own, and why. */
     static final Map<String, String> NOT_LEASED = Map.of(
-            "composer_transcript_part", "lease_epoch names the epoch of the run that wrote it",
-            "conversation", "scope_epoch counts history removals; agent_run leases conversation work",
-            "llm_usage_event", "lease_epoch names the epoch of the run whose model call it counts",
-            "review_job", "scan_call_lease serializes the model calls of a running review, which finishes");
+            "composer_transcript_part",
+            "lease_epoch names the epoch of the run that wrote it",
+            "conversation",
+            "scope_epoch counts history removals; agent_run leases conversation work",
+            "llm_usage_event",
+            "lease_epoch names the epoch of the run whose model call it counts",
+            "mentor_request",
+            "its _epoch columns are authority and reader epochs, not a lease; R2's mentor_attempt holds the lease",
+            "review_job",
+            "scan_call_lease serializes the model calls of a running review, which finishes");
 
     static final String CONVENTION =
             "(a.attname ~ '(lease|heartbeat)' OR a.attname ~ '_epoch$' OR a.attname = 'next_attempt_at')";

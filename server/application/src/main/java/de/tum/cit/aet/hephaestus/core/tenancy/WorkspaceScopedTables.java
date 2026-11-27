@@ -70,6 +70,10 @@ public class WorkspaceScopedTables {
             "account_export",
             // Account-owned personal goal. Its access boundary is the PostgreSQL owner policy.
             "personal_goal",
+            // The personal mentor's intake rows: account-owned under row-level security.
+            "mentor_event",
+            "mentor_request",
+            "mentor_source",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
             // Restricted recovery facts outlive the workspace or account they identify.

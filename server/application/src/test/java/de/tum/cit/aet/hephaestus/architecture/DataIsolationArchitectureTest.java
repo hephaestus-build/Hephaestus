@@ -162,6 +162,9 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
             "ProvenanceSigningKey", // Instance keys that sign the provenance records of generated text
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
+            "MentorSource", // The personal mentor's intake rows: account-owned under row-level security
+            "MentorEvent",
+            "MentorRequest",
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "ProviderEventStep", // Owned by its provider event and deleted with it
