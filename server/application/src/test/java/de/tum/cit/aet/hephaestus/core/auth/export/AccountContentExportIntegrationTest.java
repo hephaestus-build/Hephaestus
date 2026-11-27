@@ -101,7 +101,8 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 .withErasableSources(
                         conversations.messages(account),
                         feedbackExport.received(account),
-                        feedbackExport.responses(account));
+                        feedbackExport.responses(account),
+                        null);
 
         assertThat(bundle.conversationMessages())
                 .extracting(AccountConversationExport.Message::author, AccountConversationExport.Message::text)

@@ -147,7 +147,8 @@ public class ExportBundleAssembler {
                         .toList(),
                 List.of(),
                 List.of(),
-                List.of());
+                List.of(),
+                null);
     }
 
     private static GitProviderRegistry.IdentityKey key(Identity identity) {

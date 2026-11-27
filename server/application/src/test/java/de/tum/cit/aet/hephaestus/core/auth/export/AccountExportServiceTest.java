@@ -139,7 +139,7 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 
-        assertThat(bundle.schemaVersion()).isEqualTo("2.2");
+        assertThat(bundle.schemaVersion()).isEqualTo("2.3");
         // The worker reads them under the owner's export fence (ExportGenerationWorker).
         assertThat(bundle.conversationMessages()).isEmpty();
         assertThat(bundle.feedbackReceived()).isEmpty();

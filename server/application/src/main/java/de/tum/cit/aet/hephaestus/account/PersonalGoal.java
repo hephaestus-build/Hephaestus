@@ -29,4 +29,20 @@ class PersonalGoal {
     private @Nullable String words;
 
     private long revision;
+
+    PersonalGoal(long accountId) {
+        this.accountId = accountId;
+    }
+
+    void save(String newWords) {
+        if (words == null) goalId = UUID.randomUUID();
+        words = newWords;
+        revision++;
+    }
+
+    void forget() {
+        words = null;
+        // Keep the exact deletion receipt and fence a replay of an earlier save.
+        revision++;
+    }
 }

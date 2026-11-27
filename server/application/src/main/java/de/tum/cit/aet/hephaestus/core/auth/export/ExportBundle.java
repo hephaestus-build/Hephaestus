@@ -32,15 +32,17 @@ public record ExportBundle(
         List<Passkey> passkeys,
         List<AccountConversationExport.Message> conversationMessages,
         List<AccountFeedbackExport.Received> feedbackReceived,
-        List<AccountFeedbackExport.Response> feedbackResponses) {
+        List<AccountFeedbackExport.Response> feedbackResponses,
+        @Nullable String personalGoal) {
     /** Current export schema version: the major part changes on a breaking shape change, the minor on a new field. */
-    public static final String SCHEMA_VERSION = "2.2";
+    public static final String SCHEMA_VERSION = "2.3";
 
     /** The sources that another person's erasure can remove, which the worker reads under the owner's export fence. */
     public ExportBundle withErasableSources(
             List<AccountConversationExport.Message> messages,
             List<AccountFeedbackExport.Received> received,
-            List<AccountFeedbackExport.Response> responses) {
+            List<AccountFeedbackExport.Response> responses,
+            @Nullable String goal) {
         return new ExportBundle(
                 schemaVersion,
                 generatedAt,
@@ -55,7 +57,8 @@ public record ExportBundle(
                 passkeys,
                 messages,
                 received,
-                responses);
+                responses,
+                goal);
     }
 
     public record Passkey(

@@ -255,6 +255,7 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                 assembler,
                 conversations,
                 feedback,
+                ignored -> null,
                 objectMapper,
                 new AccountExportWriter(repository, accountRepository, clock),
                 new PrivacyJobMetrics(registry),
@@ -284,7 +285,8 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of());
+                List.of(),
+                null);
     }
 
     private long seedExport(long accountId) {

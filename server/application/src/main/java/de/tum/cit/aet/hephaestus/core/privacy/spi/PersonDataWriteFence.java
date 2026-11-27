@@ -17,6 +17,10 @@ public interface PersonDataWriteFence {
     @CheckReturnValue
     boolean holdForAccountWrite(long accountId);
 
+    /** Admits an active account's own record, including when it has no linked provider. */
+    @CheckReturnValue
+    boolean holdForAccountRecordWrite(long accountId);
+
     /** Finish admitted writers before checking the preview and installing permanent controls. */
     void holdForErasure(List<PersonIdentity> identities);
 }
