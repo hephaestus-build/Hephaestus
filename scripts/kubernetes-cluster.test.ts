@@ -37,6 +37,10 @@ import {
 	outcomeChecks,
 	turnOutcome,
 	turnState,
+	anchorChecks,
+	fencedChecks,
+	removedTurn,
+	seenResult,
 	useKubectl,
 	verify,
 } from "./kubernetes-cluster.ts";
@@ -1278,4 +1282,57 @@ await test("verify queries the release that it is given, and the dev cluster's r
 			fake.restore();
 		}
 	}
+});
+
+await test("the removal drill reads the fake's two counts and refuses anything else", () => {
+	assert.deepEqual(seenResult('{"requests":7,"containing":2}'), { requests: 7, containing: 2 });
+	for (const text of [
+		'{"requests":7}',
+		'{"requests":1,"containing":2}',
+		'{"requests":"7","containing":0}',
+		'{"requests":1.5,"containing":0}',
+	]) {
+		assert.throws(() => seenResult(text), /not two counts/u, text);
+	}
+	assert.deepEqual(removedTurn('{"status":"STOPPED","entries":3,"answers":0}'), {
+		status: "STOPPED",
+		entries: 3,
+		answers: 0,
+	});
+	assert.throws(() => removedTurn('{"status":"STOPPED","entries":3}'), /no status or entry counts/u);
+});
+
+await test("a removal fenced its reply only when the turn stopped at once and stored nothing after it", () => {
+	const atRemoval = { status: "STOPPED", entries: 3, answers: 0 };
+	const failures = (removed: Partial<typeof atRemoval>, later: Partial<typeof atRemoval>) =>
+		fencedChecks({ ...atRemoval, ...removed }, { ...atRemoval, ...later }).flatMap((check) =>
+			check.failure === undefined ? [] : [check.failure],
+		);
+	assert.deepEqual(failures({}, {}), []);
+	assert.deepEqual(failures({ status: "RUNNING" }, {}), ["the turn was RUNNING"]);
+	assert.deepEqual(failures({}, { status: "DONE", entries: 4, answers: 1 }), [
+		"it is DONE",
+		"it stored 1",
+		"it stored 1 more entries",
+	]);
+});
+
+await test("a removed anchor passes only when a reply sent its text and no later request did", () => {
+	const counts = {
+		beforeReply: { requests: 4, containing: 1 },
+		afterReply: { requests: 6, containing: 3 },
+		beforeNext: { requests: 6, containing: 3 },
+		afterNext: { requests: 8, containing: 3 },
+	};
+	const failures = (changed: Partial<typeof counts>) =>
+		anchorChecks({ ...counts, ...changed }).flatMap((check) =>
+			check.failure === undefined ? [] : [check.failure],
+		);
+	assert.deepEqual(failures({}), []);
+	// The check must be able to see the text, or its absence proves nothing.
+	assert.deepEqual(failures({ afterReply: { requests: 6, containing: 1 } }), [
+		"no request of the reply held it",
+	]);
+	assert.deepEqual(failures({ afterNext: { requests: 6, containing: 3 } }), ["it made no model request"]);
+	assert.deepEqual(failures({ afterNext: { requests: 8, containing: 4 } }), ["1 requests held it"]);
 });

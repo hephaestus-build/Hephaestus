@@ -1486,6 +1486,8 @@ A commit from before an image was renamed or added published nothing under that 
   The sandbox driver keeps the run lease and uses the gateway of the replacement server.
   The turn must end DONE on its first attempt in the same sandbox.
   The fake model provider of the [capacity benchmark](./capacity-benchmark.mdx) scripts the turn.
+  Then `kubernetes-cluster.ts turn-removal` deletes a question while its turn runs and checks that the turn stopped and stored nothing more.
+  It also checks that the next model request holds none of a deleted thread anchor's text.
   Then the drill proves the Slack path of a turn.
   It uses a Slack Web API fake in the same Pod network (`scripts/slack-fake.ts`).
   The server installs the app through its own OAuth callback against the fake.

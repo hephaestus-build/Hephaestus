@@ -9,6 +9,7 @@ import {
 	replaySample,
 	ROLL_CALL_LIMIT,
 	rollStep,
+	seenCounts,
 	sensitivityGrid,
 } from "./lib/capacity-replay.ts";
 
@@ -123,4 +124,11 @@ await test("the turn-roll script runs bash after each result until its release, 
 		})),
 	];
 	assert.ok("text" in rollStep([...limit, situation], false));
+});
+
+await test("the roll fake counts the kept requests that contain a text, and needs a text", () => {
+	const bodies = ['{"messages":["Pin removal-drill-1"]}', '{"messages":["Other"]}', "removal-drill-1 again"];
+	assert.deepEqual(seenCounts(bodies, "removal-drill-1"), { requests: 3, containing: 2 });
+	assert.deepEqual(seenCounts([], "removal-drill-1"), { requests: 0, containing: 0 });
+	assert.throws(() => seenCounts(bodies, ""), /needs a text/u);
 });

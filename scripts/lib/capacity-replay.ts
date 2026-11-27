@@ -148,6 +148,20 @@ export const ROLL_CALL_LIMIT = 28;
 /** The output that the turn-roll command of call `ordinal` prints. */
 export const rollOutput = (ordinal: number) => `rolled-${ordinal}`;
 
+/** The completion bodies that roll mode keeps for `/seen`: enough for the drills' few turns. */
+export const SEEN_LIMIT = 500;
+
+/** How many kept completion requests there are, and how many of them contain `text`. */
+export function seenCounts(
+	bodies: readonly string[],
+	text: string,
+): { requests: number; containing: number } {
+	if (text === "") {
+		throw new Error("/seen needs a text");
+	}
+	return { requests: bodies.length, containing: bodies.filter((raw) => raw.includes(text)).length };
+}
+
 function messageText(content: unknown): string {
 	if (typeof content === "string") {
 		return content;

@@ -10,6 +10,8 @@ import {
 	parseReplay,
 	claimReplayTool,
 	rollStep,
+	SEEN_LIMIT,
+	seenCounts,
 	selectReplayCall,
 	sensitivityGrid,
 	type ReplaySample,
@@ -48,6 +50,9 @@ if (values.grid === true) {
 	const callOrdinals = new Map<string, number>();
 	// The turn-roll drill releases its turn once both Deployments rolled.
 	let released = false;
+	// The turn-removal drill asks whether text it removed still reached the model. Only roll mode keeps the
+	// bodies, which hold the drill's synthetic questions, and only `/seen` reads them, as two counts.
+	const received: string[] = [];
 	const server = createServer((request, response) => {
 		void handle();
 		async function handle() {
@@ -76,6 +81,11 @@ if (values.grid === true) {
 			} else if (toolMode === "roll" && request.method === "POST" && request.url === "/release") {
 				released = true;
 				response.writeHead(204).end();
+			} else if (toolMode === "roll" && request.method === "GET" && request.url?.startsWith("/seen?")) {
+				const text = new URL(request.url, "http://provider").searchParams.get("text") ?? "";
+				response.writeHead(200, { "content-type": "application/json" }).end(
+					JSON.stringify(seenCounts(received, text)),
+				);
 			} else if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
 				response.writeHead(404).end();
 			} else {
@@ -101,6 +111,12 @@ if (values.grid === true) {
 			const raw = Buffer.concat(chunks).toString("utf8");
 			const body = asRecord(parseJson(raw), "request");
 			asArray(body.messages, "messages");
+			if (toolMode === "roll") {
+				received.push(raw);
+				if (received.length > SEEN_LIMIT) {
+					received.shift();
+				}
+			}
 			const { sample, logicalKey, ordinal, marker, requestKey } = selectReplayCall(
 				raw,
 				replay.samples,
