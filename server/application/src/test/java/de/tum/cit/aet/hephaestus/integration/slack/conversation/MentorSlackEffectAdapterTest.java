@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
@@ -228,6 +229,11 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
                         null));
 
         verify(runtime).settleAction(id, new EffectOutcome.Expired());
+    }
+
+    @Test
+    void shouldDeclineAllClaimsWithoutTheMentorRuntimeProof() {
+        assertThat(adapter().variants()).isSameAs(ActionVariants.none());
     }
 
     @Test

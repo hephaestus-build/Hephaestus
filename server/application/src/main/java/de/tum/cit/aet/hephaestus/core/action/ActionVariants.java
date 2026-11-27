@@ -30,6 +30,7 @@ import tools.jackson.databind.JsonNode;
  * the adapter decodes have one home.
  */
 public final class ActionVariants {
+    private static final ActionVariants NONE = new ActionVariants("$ ? (1 == 0)");
     private static final Pattern NAME = Pattern.compile("[A-Za-z][A-Za-z0-9]*");
     private static final Pattern CONSTANT = Pattern.compile("[A-Z][A-Z0-9_]*");
 
@@ -46,7 +47,7 @@ public final class ActionVariants {
 
     /** This build can carry the kind but lacks the runtime needed to claim or settle any variant. */
     public static ActionVariants none() {
-        return new ActionVariants("$ ? (1 == 0)");
+        return NONE;
     }
 
     /**
