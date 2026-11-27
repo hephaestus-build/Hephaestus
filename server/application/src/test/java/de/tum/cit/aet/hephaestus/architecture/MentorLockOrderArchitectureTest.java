@@ -8,6 +8,9 @@ import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempts;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptCredential;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptLease;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,20 +61,26 @@ class MentorLockOrderArchitectureTest extends HephaestusArchitectureTest {
     @Test
     void shouldLockTheRequestBeforeTheAttemptInEveryMethodThatLocksBoth() {
         var both = new ArrayList<String>();
-        classes.stream().flatMap(type -> type.getMethods().stream()).forEach(method -> {
-            OptionalInt request = firstLock(method, REQUEST);
-            OptionalInt attempt = firstLock(method, ATTEMPT);
-            if (request.isEmpty() || attempt.isEmpty()) return;
-            both.add(method.getFullName());
-            assertThat(request.getAsInt())
-                    .as("%s locks the attempt before the request", method.getFullName())
-                    .isLessThan(attempt.getAsInt());
-        });
-        // The rule is not vacuous: the claim locks both.
+        classes.stream()
+                .flatMap(type -> type.getMethods().stream())
+                .forEach(method -> {
+                    OptionalInt request = firstLock(method, REQUEST);
+                    OptionalInt attempt = firstLock(method, ATTEMPT);
+                    if (request.isEmpty() || attempt.isEmpty()) return;
+                    both.add(method.getFullName());
+                    assertThat(request.getAsInt())
+                            .as("%s locks the attempt before the request", method.getFullName())
+                            .isLessThan(attempt.getAsInt());
+                });
+        // The rule is not vacuous: the claim, the renew and the dispatch fence lock both.
+        var attempts = classes.get(MentorAttempts.class);
         assertThat(both)
-                .contains(classes.get(MentorAttempts.class)
-                        .getMethod("claim", long.class, WorkClass.class, int.class, Duration.class)
-                        .getFullName());
+                .contains(
+                        attempts.getMethod("claim", long.class, WorkClass.class, int.class, Duration.class)
+                                .getFullName(),
+                        attempts.getMethod("renew", AttemptLease.class, Duration.class)
+                                .getFullName(),
+                        attempts.getMethod("current", AttemptCredential.class).getFullName());
     }
 
     @Test

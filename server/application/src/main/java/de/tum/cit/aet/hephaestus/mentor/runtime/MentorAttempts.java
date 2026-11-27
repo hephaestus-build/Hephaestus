@@ -4,17 +4,28 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository.LiveRequest;
+import de.tum.cit.aet.hephaestus.mentor.spi.Audience;
+import de.tum.cit.aet.hephaestus.mentor.spi.AuthorityScope;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorAuthorization;
+import de.tum.cit.aet.hephaestus.mentor.spi.ProviderObservation;
+import de.tum.cit.aet.hephaestus.mentor.spi.ScopeStamp;
+import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Leases the mentor's attempts. Every method binds one account and takes the account's request before its attempt, in
- * separate statements. Nothing here calls a model or a provider.
+ * Leases the mentor's attempts and proves a lease before each model call. Every method binds one account and takes the
+ * account's request before its attempt, in separate statements. Nothing here calls a model or a provider.
  *
  * <p>The limits that matter hold across replicas: a claim holds the account's owner row while it counts the account's
  * running leases. One lease is always left for a question, because background work holds at most one.
@@ -33,6 +44,7 @@ public class MentorAttempts {
     private final MentorAttemptRepository attempts;
     private final PersonDataWriteFence fence;
     private final OwnerScope owners;
+    private final ObjectProvider<MentorAuthorization> authorization;
 
     /**
      * Leases up to {@code limit} due attempts of the class for one account. A claim never waits: a held owner row, request
@@ -76,6 +88,87 @@ public class MentorAttempts {
         // After the request locks above, so the claim keeps the request before the attempt.
         var _ = attempts.endStaleOrSkip(account);
         return leases;
+    }
+
+    /** Extends a lease that still runs while its request is live at its version; false when the holder lost it. */
+    @Transactional
+    public boolean renew(AttemptLease lease, Duration duration) {
+        if (!fence.holdForAccountWrite(lease.accountId())) return false;
+        owners.ofJob(lease.accountId());
+        if (attempts.shareLiveRequest(lease.accountId(), lease.requestId(), lease.requestVersion())
+                .isEmpty()) return false;
+        return attempts.renew(
+                        lease.accountId(),
+                        lease.attemptId(),
+                        lease.leaseEpoch(),
+                        lease.leaseToken(),
+                        seconds(duration))
+                == 1;
+    }
+
+    /**
+     * The dispatch fence: whether the credential may still make a model call, in the caller's transaction. Before
+     * evidence is read and inside each grant, it holds the request and then the attempt against a Stop, an edit, a
+     * reclaim and the commit, and rechecks the request's stored authority under its guards. A Slack attempt also needs
+     * an observation bound at this lease epoch that is still fresh. Database only.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean current(AttemptCredential credential) {
+        long account = credential.accountId();
+        owners.ofJob(account);
+        var attempt = attempts.attemptOf(account, credential.attemptId());
+        if (attempt.isEmpty()) return false;
+        var request = attempts.shareLiveRequest(
+                account, attempt.get().getRequest(), attempt.get().getVersion());
+        if (request.isEmpty()) return false;
+        var observed = attempts.shareHeldAttempt(
+                account,
+                credential.attemptId(),
+                credential.leaseEpoch(),
+                credential.leaseToken(),
+                credential.modelId(),
+                credential.connectionId(),
+                credential.payer().name(),
+                credential.payerWorkspaceId(),
+                seconds(ProviderObservation.FRESH_FOR));
+        if (observed.isEmpty()) return false;
+        var audience = audience(request.get());
+        if (audience.transport() == Transport.SLACK && !observed.get()) return false;
+        @Nullable MentorAuthorization port = authorization.getIfAvailable();
+        return port != null && port.isCurrent(stamp(account, request.get()), audience);
+    }
+
+    static Audience audience(LiveRequest request) {
+        return new Audience(
+                Transport.valueOf(request.getAudienceTransport()),
+                request.getAudienceConnectionId(),
+                request.getAudienceContainerId(),
+                request.getAudienceThreadRoot());
+    }
+
+    /** The stamp that intake stored with the request, rebuilt for its live recheck. */
+    static ScopeStamp stamp(long account, LiveRequest request) {
+        AuthorityScope authority = switch (request.getScopeAuthority()) {
+            case "PERSONAL" -> new AuthorityScope.Personal();
+            case "WORKSPACE" ->
+                new AuthorityScope.Workspace(
+                        Objects.requireNonNull(request.getScopeWorkspaceId()),
+                        Objects.requireNonNull(request.getScopeWorkspaceGeneration()));
+            case "SLACK" ->
+                new AuthorityScope.Slack(
+                        Objects.requireNonNull(request.getScopeWorkspaceId()),
+                        Objects.requireNonNull(request.getScopeWorkspaceGeneration()),
+                        Objects.requireNonNull(request.getScopeBindingId()),
+                        Objects.requireNonNull(request.getScopeBindingGeneration()),
+                        Objects.requireNonNull(request.getScopeNativeActorId()));
+            default -> throw new IllegalStateException("Unknown authority " + request.getScopeAuthority());
+        };
+        return new ScopeStamp(
+                account,
+                request.getScopeAccountGeneration(),
+                request.getScopeReaderEpoch(),
+                request.getScopeConsentEpoch(),
+                authority);
     }
 
     private static double seconds(Duration duration) {

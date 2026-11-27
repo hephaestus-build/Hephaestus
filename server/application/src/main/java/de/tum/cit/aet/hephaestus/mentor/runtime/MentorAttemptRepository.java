@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -111,6 +112,69 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
             nativeQuery = true)
     int markRunning(@Param("account") long account, @Param("request") UUID request);
 
+    /** The request an attempt answers. It locks nothing: the request is locked next, then the attempt. */
+    @Query(
+            value = "SELECT request_id AS request, request_version AS version FROM mentor_attempt"
+                    + " WHERE account_id = :account AND id = :attempt",
+            nativeQuery = true)
+    Optional<AttemptOf> attemptOf(@Param("account") long account, @Param("attempt") UUID attempt);
+
+    /** The live request at this version with its stored scope, held against a Stop, an edit or a settle. */
+    @Query(value = """
+            SELECT audience_transport AS "audienceTransport", audience_connection_id AS "audienceConnectionId",
+                audience_container_id AS "audienceContainerId", audience_thread_root AS "audienceThreadRoot",
+                scope_account_generation AS "scopeAccountGeneration", scope_reader_epoch AS "scopeReaderEpoch",
+                scope_consent_epoch AS "scopeConsentEpoch", scope_authority AS "scopeAuthority",
+                scope_workspace_id AS "scopeWorkspaceId", scope_workspace_generation AS "scopeWorkspaceGeneration",
+                scope_binding_id AS "scopeBindingId", scope_binding_generation AS "scopeBindingGeneration",
+                scope_native_actor_id AS "scopeNativeActorId"
+            FROM mentor_request
+            WHERE account_id = :account AND id = :request AND version = :version AND state IN ('OPEN', 'RUNNING')
+                AND deadline > clock_timestamp()
+            FOR SHARE
+            """, nativeQuery = true)
+    Optional<LiveRequest> shareLiveRequest(
+            @Param("account") long account, @Param("request") UUID request, @Param("version") int version);
+
+    /**
+     * The attempt when the credential still holds it on its frozen route: whether its observation was bound at this
+     * epoch and is still fresh. Held against a reclaim, a renew and the commit.
+     */
+    @Query(value = """
+            SELECT COALESCE(observed_epoch = lease_epoch
+                    AND observed_at > clock_timestamp() - make_interval(secs => :fresh), false)
+            FROM mentor_attempt
+            WHERE account_id = :account AND id = :attempt AND lease_epoch = :epoch AND lease_token = :token
+                AND state = 'LEASED' AND leased_until > clock_timestamp() AND deadline > clock_timestamp()
+                AND route_model_id = :model AND route_connection_id = :connection AND route_payer = :payer
+                AND route_workspace_id IS NOT DISTINCT FROM CAST(:workspace AS bigint)
+            FOR SHARE
+            """, nativeQuery = true)
+    Optional<Boolean> shareHeldAttempt(
+            @Param("account") long account,
+            @Param("attempt") UUID attempt,
+            @Param("epoch") long epoch,
+            @Param("token") UUID token,
+            @Param("model") long model,
+            @Param("connection") long connection,
+            @Param("payer") String payer,
+            @Param("workspace") @Nullable Long workspace,
+            @Param("fresh") double freshSeconds);
+
+    /** Extends a running lease, never past the work deadline. */
+    @Modifying
+    @Query(value = """
+            UPDATE mentor_attempt SET leased_until = LEAST(clock_timestamp() + make_interval(secs => :lease), deadline)
+            WHERE account_id = :account AND id = :attempt AND lease_epoch = :epoch AND lease_token = :token
+                AND state = 'LEASED' AND leased_until > clock_timestamp() AND deadline > clock_timestamp()
+            """, nativeQuery = true)
+    int renew(
+            @Param("account") long account,
+            @Param("attempt") UUID attempt,
+            @Param("epoch") long epoch,
+            @Param("token") UUID token,
+            @Param("lease") double leaseSeconds);
+
     interface LiveLeases {
         long getTotal();
 
@@ -129,5 +193,46 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
         long getEpoch();
 
         Instant getLeasedUntil();
+    }
+
+    interface AttemptOf {
+        UUID getRequest();
+
+        int getVersion();
+    }
+
+    interface LiveRequest {
+        String getAudienceTransport();
+
+        @Nullable
+        Long getAudienceConnectionId();
+
+        String getAudienceContainerId();
+
+        @Nullable
+        String getAudienceThreadRoot();
+
+        long getScopeAccountGeneration();
+
+        long getScopeReaderEpoch();
+
+        long getScopeConsentEpoch();
+
+        String getScopeAuthority();
+
+        @Nullable
+        Long getScopeWorkspaceId();
+
+        @Nullable
+        Long getScopeWorkspaceGeneration();
+
+        @Nullable
+        Long getScopeBindingId();
+
+        @Nullable
+        Long getScopeBindingGeneration();
+
+        @Nullable
+        String getScopeNativeActorId();
     }
 }

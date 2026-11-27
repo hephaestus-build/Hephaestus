@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptLease;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempts;
@@ -166,8 +167,9 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         .map(call -> call.getDescription()))
                 .as("Lease the mentor's attempts through MentorAttempts")
                 .isEmpty();
-        fenced(classes.get(MentorAttempts.class)
-                .getMethod("claim", long.class, WorkClass.class, int.class, Duration.class));
+        var attempts = classes.get(MentorAttempts.class);
+        fenced(attempts.getMethod("claim", long.class, WorkClass.class, int.class, Duration.class));
+        fenced(attempts.getMethod("renew", AttemptLease.class, Duration.class));
         fenced(classes.get(MentorIntake.class).getMethod("admit", IngressEnvelope.class, Producer.class));
         fenced(classes.get(MentorReviewSealedIntake.class).getMethod("admit", MentorReviewIntake.SealedReview.class));
     }

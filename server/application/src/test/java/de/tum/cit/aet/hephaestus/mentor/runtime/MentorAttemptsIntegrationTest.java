@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptCredential.PayerKind;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import de.tum.cit.aet.hephaestus.mentor.spi.Admission;
 import de.tum.cit.aet.hephaestus.mentor.spi.Audience;
@@ -41,6 +42,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,9 +53,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** The attempt claims of R2-DESIGN.md (T11, T13b, Own): claims, reclaims and the account's lease limits. */
+/** The attempt leases of R2-DESIGN.md (T11, T13b, Own, Fence, Renew): claims, reclaims, renewals and the dispatch fence. */
 class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private static final Duration LEASE = Duration.ofMinutes(2);
+    private static final long MODEL = 7;
+    private static final long CONNECTION = 9;
 
     @Autowired
     private MentorSourceRepository rows;
@@ -85,6 +89,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private MentorIntake intake;
     private MentorAttempts attempts;
     private long account;
+    /** What the authorization port answers for a stored stamp; false is a revoke. */
+    private volatile boolean authorized = true;
 
     @BeforeEach
     void setUp() {
@@ -101,13 +107,11 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                     new AuthorityScope.Slack(
                             where.workspaceId(), 11, where.connectionId(), 13, actor.nativeActorId())));
         });
-        intake = new MentorIntake(
-                rows,
-                fence,
-                owners,
-                new StaticListableBeanFactory(Map.of("authorization", authorization))
-                        .getBeanProvider(MentorAuthorization.class));
-        attempts = new MentorAttempts(attemptRows, fence, owners);
+        when(authorization.isCurrent(any(), any())).thenAnswer(call -> authorized);
+        var provider = new StaticListableBeanFactory(Map.of("authorization", authorization))
+                .getBeanProvider(MentorAuthorization.class);
+        intake = new MentorIntake(rows, fence, owners, provider);
+        attempts = new MentorAttempts(attemptRows, fence, owners, provider);
     }
 
     /** T11: after a crash that followed intake, the queued attempt is leased once, however many replicas try. */
@@ -131,21 +135,24 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(requestState(request)).isEqualTo("RUNNING");
     }
 
-    /** T13b: a lapsed lease is taken again under a new epoch and token, so its old holder's claim no longer matches. */
+    /** T13b: a lapsed lease is taken again under a new epoch and token, and its old holder can neither renew nor call. */
     @Test
     void shouldFailTheOldHolderWhenAReclaimTakesALapsedLease() {
         UUID request = ask(message());
         AttemptLease first = claimOne(WorkClass.INTERACTIVE);
+        prepare(first);
         lapse(first);
 
         AttemptLease second = claimOne(WorkClass.INTERACTIVE);
         assertThat(second.attemptId()).isEqualTo(first.attemptId());
         assertThat(second.leaseEpoch()).isEqualTo(2);
         assertThat(second.leaseToken()).isNotEqualTo(first.leaseToken());
-        assertThat(attempt(request))
-                .containsEntry("claims", 2)
-                .containsEntry("lease_epoch", 2L)
-                .containsEntry("lease_token", second.leaseToken());
+        observe(second);
+
+        assertThat(attempts.renew(first, LEASE)).isFalse();
+        assertThat(current(credential(first))).isFalse();
+        assertThat(current(credential(second))).isTrue();
+        assertThat(attempt(request)).containsEntry("claims", 2);
     }
 
     @Test
@@ -241,6 +248,99 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo((long) MentorAttempts.OWNER_LEASES);
     }
 
+    /** Fence: the credential must match the held claim and its frozen route, and the request's authority still holds. */
+    @Test
+    void shouldAdmitADispatchOnlyForTheHeldClaimOnItsFrozenRoute() {
+        ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(current(held)).isTrue();
+
+        List<Function<AttemptCredential, AttemptCredential>> wrong = List.of(
+                c -> new AttemptCredential(linkedAccount(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
+                        CONNECTION, c.payer(), c.payerWorkspaceId()),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch() + 1, c.leaseToken(), MODEL,
+                        CONNECTION, c.payer(), c.payerWorkspaceId()),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), UUID.randomUUID(), MODEL,
+                        CONNECTION, c.payer(), c.payerWorkspaceId()),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL + 1,
+                        CONNECTION, c.payer(), c.payerWorkspaceId()),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
+                        CONNECTION + 1, c.payer(), c.payerWorkspaceId()),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
+                        CONNECTION, PayerKind.PERSONAL_PURSE, null),
+                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
+                        CONNECTION, c.payer(), workspace + 1));
+        for (var change : wrong) assertThat(current(change.apply(held))).isFalse();
+    }
+
+    @Test
+    void shouldRefuseADispatchWhenTheLeaseTheRequestOrTheObservationNoLongerHolds() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        AttemptCredential held = credential(lease);
+
+        assertThat(current(held)).as("no observation bound").isFalse();
+        observe(lease);
+        assertThat(current(held)).isTrue();
+        authorized = false;
+        assertThat(current(held)).as("revoked").isFalse();
+        authorized = true;
+        owner.update("UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '2 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("stale observation").isFalse();
+        owner.update("UPDATE mentor_attempt SET observed_epoch = observed_epoch - 1, observed_at = clock_timestamp()"
+                + " WHERE id = ?", lease.attemptId());
+        assertThat(current(held)).as("observation of another epoch").isFalse();
+        observe(lease);
+        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("past the work deadline").isFalse();
+        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).isTrue();
+
+        admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
+        assertThat(current(held)).as("the version moved").isFalse();
+        assertThat(attempts.renew(lease, LEASE)).as("the version moved").isFalse();
+    }
+
+    @Test
+    void shouldRefuseADispatchAndARenewWhenTheOwnerStopsTheRequest() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+
+        admit(IngressKind.CONTROL_STOP, "e8", message, "1700000000.000100");
+        assertThat(current(credential(lease))).isFalse();
+        assertThat(attempts.renew(lease, LEASE)).isFalse();
+    }
+
+    /** Renew: a lease never runs past the attempt's work deadline, and a lapsed lease cannot be renewed. */
+    @Test
+    void shouldCapARenewAtTheWorkDeadlineAndRefuseItAfterTheLeaseLapsed() {
+        UUID request = ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 seconds' WHERE id = ?",
+                lease.attemptId());
+
+        assertThat(attempts.renew(lease, Duration.ofMinutes(10))).isTrue();
+        assertThat(owner.queryForObject(
+                        "SELECT leased_until <= deadline FROM mentor_attempt WHERE id = ?",
+                        Boolean.class,
+                        lease.attemptId()))
+                .isTrue();
+        lapse(lease);
+        assertThat(attempts.renew(lease, LEASE)).isFalse();
+        assertThat(requestState(request)).isEqualTo("RUNNING");
+    }
+
     private UUID ask(String message) {
         var admission = admit(IngressKind.MESSAGE, "e" + message, message, "1700000000.000100");
         return Objects.requireNonNull(((Admission.Admitted) admission).request())
@@ -274,10 +374,43 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         return leases.getFirst();
     }
 
+    /** What prepare (R2a4) freezes: the payer, model and connection of the route. */
+    private void prepare(AttemptLease lease) {
+        owner.update("""
+                UPDATE mentor_attempt SET route_payer = 'WORKSPACE', route_workspace_id = ?, route_model_id = ?,
+                    route_connection_id = ? WHERE id = ?
+                """, workspace, MODEL, CONNECTION, lease.attemptId());
+    }
+
+    /** What bind (R2a4) stores: an observation taken for this lease epoch, now. */
+    private void observe(AttemptLease lease) {
+        owner.update("""
+                UPDATE mentor_attempt SET observed_epoch = ?, observed_at = clock_timestamp(), observed_reader_epoch = 5,
+                    observed_readers = ARRAY['U' || account_id] WHERE id = ?
+                """, lease.leaseEpoch(), lease.attemptId());
+    }
+
     private void lapse(AttemptLease lease) {
         owner.update(
                 "UPDATE mentor_attempt SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?",
                 lease.attemptId());
+    }
+
+    private AttemptCredential credential(AttemptLease lease) {
+        return new AttemptCredential(
+                lease.accountId(),
+                lease.attemptId(),
+                lease.leaseEpoch(),
+                lease.leaseToken(),
+                MODEL,
+                CONNECTION,
+                PayerKind.WORKSPACE,
+                workspace);
+    }
+
+    private boolean current(AttemptCredential credential) {
+        return Objects.requireNonNull(
+                new TransactionTemplate(transactions).execute(status -> attempts.current(credential)));
     }
 
     private Map<String, @Nullable Object> attempt(UUID request) {
