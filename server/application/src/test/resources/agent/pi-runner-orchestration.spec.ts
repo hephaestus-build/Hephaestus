@@ -336,9 +336,8 @@ if (scenario !== undefined && scenario !== "") {
 			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts",
 			import.meta.url,
 		);
-		const programs = await import(
-			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts"
-		);
+		const programs =
+			await import("../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts");
 		mock.module(file.href, {
 			exports: {
 				...programs,
@@ -2479,7 +2478,10 @@ export default definePracticeScript({
 						for (const slug of ["test-practice", "second-practice"]) {
 							writeFileSync(nodePath.join(cwd, PRACTICES_DIR, `${slug}.ts`), quietProgram);
 						}
-						writeFileSync(nodePath.join(cwd, "catalog/practices/third-practice.md"), "Third criterion.");
+						writeFileSync(
+							nodePath.join(cwd, "catalog/practices/third-practice.md"),
+							"Third criterion.",
+						);
 					}
 					const verification = stage.startsWith("verification-");
 					if (stage === "tree-citation" || verification) {
@@ -2587,7 +2589,9 @@ export default definePracticeScript({
 					) {
 						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "practice-program-stall") {
-						index = ["test-practice", "second-practice", "third-practice"].map((slug) => practice(slug));
+						index = ["test-practice", "second-practice", "third-practice"].map((slug) =>
+							practice(slug),
+						);
 					} else if (stage === "stall") {
 						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "comment-undecided") {
@@ -2662,7 +2666,8 @@ export default definePracticeScript({
 							import.meta.filename,
 						],
 						{
-							timeout: stage === "practice-program-stall" ? 25_000 : verification ? 10_000 : undefined,
+							timeout:
+								stage === "practice-program-stall" ? 25_000 : verification ? 10_000 : undefined,
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,
@@ -3341,21 +3346,32 @@ export default definePracticeScript({
 							break;
 						}
 						case "practice-program-stall": {
-							assert.deepEqual(events.filter((event) => event.startsWith("program:")), [
-								"program:started", "program:abort", "program:closed",
-								"program:started", "program:abort", "program:closed",
-							]);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("program:")),
+								[
+									"program:started",
+									"program:abort",
+									"program:closed",
+									"program:started",
+									"program:abort",
+									"program:closed",
+								],
+							);
 							assert.equal(child.status, 78, child.stderr);
 							assert.equal(
-								child.stderr.match(/turn\.stopped .*stopped_by=stall step=practice_program program_step=run_child/gu)?.length,
+								child.stderr.match(
+									/turn\.stopped .*stopped_by=stall step=practice_program program_step=run_child/gu,
+								)?.length,
 								2,
 							);
 							assert.equal(
-								child.stderr.match(/turn\.finished .*stopped_by=stall program_step=run_child/gu)?.length,
+								child.stderr.match(/turn\.finished .*stopped_by=stall program_step=run_child/gu)
+									?.length,
 								2,
 							);
 							assert.equal(
-								child.stderr.match(/practice\.program_step .*program_step=drain_requests/gu)?.length,
+								child.stderr.match(/practice\.program_step .*program_step=drain_requests/gu)
+									?.length,
 								2,
 							);
 							assert.deepEqual(
