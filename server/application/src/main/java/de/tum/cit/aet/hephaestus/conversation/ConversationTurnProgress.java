@@ -52,23 +52,26 @@ public class ConversationTurnProgress {
             int suffix,
             @Nullable String text) {}
 
-    private record Attempt(long workspaceId, UUID turnId, int attempt) {}
+    private record Attempt(long workspaceId, long accountId, UUID turnId, int attempt) {}
 
-    private record Snapshot(long sequence, String text) {}
+    private record Snapshot(long scopeEpoch, long sequence, String text) {}
 
     private static final class Assembly {
+        private final long scopeEpoch;
         private final long sequence;
         private final int count;
         private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         private int next;
 
-        private Assembly(long sequence, int count) {
+        private Assembly(long scopeEpoch, long sequence, int count) {
+            this.scopeEpoch = scopeEpoch;
             this.sequence = sequence;
             this.count = count;
         }
     }
 
     private final ObjectMapper mapper;
+    private final ConversationRepository conversations;
 
     private final Cache<Attempt, Snapshot> snapshots = Caffeine.newBuilder()
             // Longer than any attempt runs; a turn that ends removes its snapshot before (changed).
@@ -83,8 +86,9 @@ public class ConversationTurnProgress {
             .maximumSize(64)
             .build();
 
-    public ConversationTurnProgress(ObjectMapper mapper) {
+    public ConversationTurnProgress(ObjectMapper mapper, ConversationRepository conversations) {
         this.mapper = mapper;
+        this.conversations = conversations;
     }
 
     /** The newest partial answer of the turn's running attempt, or {@code null} when this process has none. */
@@ -92,16 +96,21 @@ public class ConversationTurnProgress {
         if (turn.getStatus() != ConversationTurn.Status.RUNNING) {
             return null;
         }
-        return snapshot(turn.getWorkspaceId(), turn.getId(), turn.getAttempt());
+        return snapshotForSettlement(turn);
     }
 
     /**
      * The newest partial answer of the attempt that this process heard, running or stopped, or {@code null}: what
      * readers may have seen when the attempt ends.
      */
-    public @Nullable JsonNode snapshot(long workspaceId, UUID turnId, int attempt) {
-        Snapshot snapshot = snapshots.getIfPresent(new Attempt(workspaceId, turnId, attempt));
+    public @Nullable JsonNode snapshotForSettlement(ConversationTurn turn) {
+        Attempt key = new Attempt(turn.getWorkspaceId(), turn.getAccountId(), turn.getId(), turn.getAttempt());
+        Snapshot snapshot = snapshots.getIfPresent(key);
         if (snapshot == null) {
+            return null;
+        }
+        if (conversations.readScopeEpoch(key.workspaceId(), key.accountId()).orElse(-1L) != snapshot.scopeEpoch()) {
+            snapshots.asMap().remove(key, snapshot);
             return null;
         }
         // Parsed when read, so a process that only listens keeps text and parses nothing.
@@ -130,12 +139,13 @@ public class ConversationTurnProgress {
                 || frame.index() >= frame.count()) {
             return Optional.empty();
         }
-        Attempt attempt = new Attempt(frame.workspaceId(), frame.turnId(), frame.attempt());
+        Attempt attempt = new Attempt(frame.workspaceId(), frame.accountId(), frame.turnId(), frame.attempt());
         if (frame.index() == 0) {
-            assemblies.put(attempt, new Assembly(frame.sequence(), frame.count()));
+            assemblies.put(attempt, new Assembly(frame.scopeEpoch(), frame.sequence(), frame.count()));
         }
         Assembly assembly = assemblies.getIfPresent(attempt);
         if (assembly == null
+                || assembly.scopeEpoch != frame.scopeEpoch()
                 || assembly.sequence != frame.sequence()
                 || assembly.count != frame.count()
                 || assembly.next != frame.index()) {
@@ -158,7 +168,7 @@ public class ConversationTurnProgress {
             return Optional.empty();
         }
         assemblies.invalidate(attempt);
-        return apply(attempt, assembly.bytes.toByteArray())
+        return apply(attempt, frame.scopeEpoch(), assembly.bytes.toByteArray())
                 ? Optional.of(new ConversationLedgerEvents.TurnChanged(
                         frame.workspaceId(),
                         frame.conversationId(),
@@ -170,7 +180,7 @@ public class ConversationTurnProgress {
                 : Optional.empty();
     }
 
-    private boolean apply(Attempt attempt, byte[] json) {
+    private boolean apply(Attempt attempt, long scopeEpoch, byte[] json) {
         try {
             Update update = mapper.readValue(json, Update.class);
             Snapshot prior = snapshots.getIfPresent(attempt);
@@ -188,6 +198,7 @@ public class ConversationTurnProgress {
                 text = change;
             } else {
                 if (prior == null
+                        || prior.scopeEpoch() != scopeEpoch
                         || prior.sequence() != update.baseSequence()
                         || (long) update.prefix() + update.suffix()
                                 > prior.text().length()) {
@@ -200,7 +211,7 @@ public class ConversationTurnProgress {
             if (text.length() > MAX_SNAPSHOT_CHARS) {
                 return false;
             }
-            snapshots.put(attempt, new Snapshot(update.sequence(), text));
+            snapshots.put(attempt, new Snapshot(scopeEpoch, update.sequence(), text));
             return true;
         } catch (JacksonException | IllegalArgumentException malformed) {
             // A malformed update costs only progress, which the next whole snapshot replaces.
@@ -221,8 +232,20 @@ public class ConversationTurnProgress {
         assemblies.asMap().keySet().removeIf(key -> key.turnId().equals(change.turnId()));
     }
 
-    /** Frames were missed: a change waits for the next whole snapshot; the kept snapshots stay until then. */
+    void scopeChanged(ConversationLedgerEvents.ScopeChanged change) {
+        snapshots
+                .asMap()
+                .keySet()
+                .removeIf(key -> key.workspaceId() == change.workspaceId() && key.accountId() == change.accountId());
+        assemblies
+                .asMap()
+                .keySet()
+                .removeIf(key -> key.workspaceId() == change.workspaceId() && key.accountId() == change.accountId());
+    }
+
+    /** Frames were missed, including possible removals. Wait for the next whole snapshot. */
     void resync() {
+        snapshots.invalidateAll();
         assemblies.invalidateAll();
     }
 
@@ -254,6 +277,7 @@ public class ConversationTurnProgress {
             UUID turnId,
             ConversationTurn.Surface surface,
             int attempt,
+            long scopeEpoch,
             Update update) {
         byte[] json = mapper.writeValueAsBytes(update);
         if (json.length > MAX_UPDATE_BYTES) {
@@ -271,6 +295,7 @@ public class ConversationTurnProgress {
                     turnId,
                     surface,
                     attempt,
+                    scopeEpoch,
                     update.sequence(),
                     index,
                     count,

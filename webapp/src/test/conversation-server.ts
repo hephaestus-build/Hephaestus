@@ -40,6 +40,7 @@ export class ConversationFake {
 	readonly deletes: string[] = [];
 	/** The read marker the server keeps for the developer, on every device. */
 	lastReadAt: string | undefined;
+	scopeEpoch = 0;
 	readonly pageSize: number;
 	readonly workspaceSlug: string;
 	private ids = 0;
@@ -123,6 +124,7 @@ export class ConversationFake {
 		return {
 			id: MAIN_CONVERSATION_ID,
 			latestSeq: this.scope(undefined).at(-1)?.seq ?? 0,
+			scopeEpoch: this.scopeEpoch,
 			activeTurns: this.turns.filter(({ status }) => status === "QUEUED" || status === "RUNNING"),
 			threads: this.scope(undefined).flatMap(({ thread }) => (thread ? [thread] : [])),
 			...this.lastAnswerAt(),
@@ -205,12 +207,22 @@ export class ConversationFake {
 			),
 			http.delete<{ entryId: string }>(`${base}/entries/:entryId`, ({ params }) => {
 				const entry = this.entries.find(({ id }) => id === params.entryId);
-				if (entry) {
+				if (entry && !entry.deleted) {
 					this.deletes.push(entry.id);
 					entry.deleted = true;
 					entry.text = "";
+					this.scopeEpoch += 1;
+					for (const turn of this.turns) {
+						if (turn.status === "RUNNING") {
+							turn.status = "STOPPED";
+							delete turn.partial;
+						}
+					}
 				}
-				return HttpResponse.json({ lastReadAt: this.lastReadAt });
+				return new HttpResponse(null, {
+					status: 204,
+					headers: { "X-Conversation-Scope-Epoch": String(this.scopeEpoch) },
+				});
 			}),
 		];
 	}

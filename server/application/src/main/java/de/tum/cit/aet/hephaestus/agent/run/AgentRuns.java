@@ -705,6 +705,18 @@ public class AgentRuns {
                 && runs.findCurrent(run.id(), run.workspaceId(), epoch).isPresent();
     }
 
+    /** Admits a handoff before its deadline and holds its run for settlement. The caller already locked the turn. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockConversationHandoff(AgentRunFence fence) {
+        var held = runs.lockConversationHandoff(fence.runId(), fence.workspaceId(), fence.epoch());
+        if (held.isEmpty()) return false;
+        var run = held.orElseThrow();
+        Instant now = runs.databaseClock();
+        Instant workNow = Objects.requireNonNullElse(timing.replayNow(), now);
+        Instant deadline = run.getDeadline();
+        return run.getLeasedUntil().isAfter(now) && (deadline == null || deadline.isAfter(workNow));
+    }
+
     /** Deletes an ended run that no domain row points to any more, as after {@link #continueAfter}. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void retire(AgentRunRef ended) {

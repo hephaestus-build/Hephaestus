@@ -187,8 +187,7 @@ class CascadeTableTest extends BaseUnitTest {
                             ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenItsRetentionEnds",
                             LEDGER
                                     + "shouldEraseWhatAnEndingTurnStoresWhenTheDeveloperDeletesTheQuotedMessageMeanwhile",
-                            ENTRIES
-                                    + "shouldEraseTheSearchResultThatARunningTurnStoresWhenTheDeveloperDeletedTheQuotedMessageFirst"),
+                            ENTRIES + "shouldRefuseToStoreASearchResultWhenTheDeveloperDeletedTheQuotedMessageFirst"),
                     ""),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
@@ -221,8 +220,7 @@ class CascadeTableTest extends BaseUnitTest {
                             CONTROLLER + "shouldEraseTheMessageAndStopItsTurnWhenTheDeveloperDeletesTheirQuestion",
                             TURNS
                                     + "shouldStoreNothingOfTheTurnWhenTheDeveloperDeletedTheQuestionWhileHephaestusAnswered"),
-                    "Retention reaches no question whose turn still runs: its cutoff lies at least a day back, and a"
-                            + " turn ends within its deadline."),
+                    "A running reply that could read the removed message stops even when its own question is recent."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.ANSWERING_TURN,
@@ -251,11 +249,10 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.REMOVAL,
                     CascadeDependent.PARTIAL_ANSWER,
-                    Action.KEEP,
-                    List.of(),
-                    "A removed question stops its turn, and a stopped turn's partial answer is not served. Gap, owned"
-                            + " by #5141: a running turn that read another removed entry serves its partial answer until"
-                            + " it ends."),
+                    Action.EVICT,
+                    List.of(
+                            "agent.conversation.host.TurnSandboxRunKindIntegrationTest#shouldFenceBothReplicasWhenConversationHistoryIsRemoved"),
+                    "An epoch check also rejects old partials while a replica has yet to hear the removal."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.PARTIAL_ANSWER,
@@ -344,10 +341,10 @@ class CascadeTableTest extends BaseUnitTest {
             new Cell(
                     CascadeCause.REMOVAL,
                     CascadeDependent.SANDBOX,
-                    Action.KEEP,
-                    List.of(),
-                    "Gap, owned by #5141: a removal does not reach a running sandbox. The sandbox reaper deletes an idle"
-                            + " sandbox, and the next sandbox starts from PostgreSQL."),
+                    Action.REVOKE,
+                    List.of(
+                            "agent.conversation.host.TurnSandboxRunKindIntegrationTest#shouldFenceBothReplicasWhenConversationHistoryIsRemoved"),
+                    ""),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.SANDBOX,
@@ -465,6 +462,7 @@ class CascadeTableTest extends BaseUnitTest {
      * keyed by the row's name, with the dependent kinds each holds.
      */
     static final Map<String, Set<CascadeDependent>> OUTSIDE_ROWS = Map.ofEntries(
+            Map.entry("PostgreSQL personal goal", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),

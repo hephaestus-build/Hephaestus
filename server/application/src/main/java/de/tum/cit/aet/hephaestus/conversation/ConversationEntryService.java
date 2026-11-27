@@ -217,11 +217,7 @@ public class ConversationEntryService {
                     PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
             return;
         }
-        UUID turnId = entry.getTurnId();
-        if (turnId != null) {
-            turns.lockById(turnId).ifPresent(this::stop);
-        }
-        redaction.redact(List.of(entryId));
+        if (!redaction.removeHistory(workspaceId, entry.getAccountId(), List.of(entryId))) return;
         journal.record(PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
         // An erasure recovery manifest lists this delete after its recovery point, so a rolled-back delete logs
         // nothing.

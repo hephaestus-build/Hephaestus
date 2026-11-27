@@ -53,6 +53,8 @@ public class ConversationLedgerNotifications implements DisposableBean {
 
         default void contextChanged(ConversationLedgerEvents.ContextChanged change) {}
 
+        default void scopeChanged(ConversationLedgerEvents.ScopeChanged change) {}
+
         /** Changes made while the connection was down were missed: read the current state again. */
         default void resync() {}
     }
@@ -140,7 +142,7 @@ public class ConversationLedgerNotifications implements DisposableBean {
         }
     }
 
-    private void dispatch(String payload) {
+    void dispatch(String payload) {
         ConversationLedgerEvents.LedgerChanged change;
         try {
             change = mapper.readValue(payload, ConversationLedgerEvents.LedgerChanged.class);
@@ -153,11 +155,24 @@ public class ConversationLedgerNotifications implements DisposableBean {
         }
         if (change instanceof ConversationLedgerEvents.ProgressChanged frame) {
             // A completed partial answer reaches listeners as the change of its running turn.
-            progress.accept(frame).ifPresent(this::deliverTurnChanged);
+            if (frame.turnId() != null
+                    && frame.conversationId() != null
+                    && turns.admitsFrame(
+                            frame.workspaceId(),
+                            frame.accountId(),
+                            frame.conversationId(),
+                            frame.turnId(),
+                            frame.attempt(),
+                            frame.scopeEpoch())) {
+                progress.accept(frame).ifPresent(this::deliverTurnChanged);
+            }
             return;
         }
         if (change instanceof ConversationLedgerEvents.TurnChanged turn) {
             progress.changed(turn);
+        }
+        if (change instanceof ConversationLedgerEvents.ScopeChanged scope) {
+            progress.scopeChanged(scope);
         }
         for (Listener listener : listeners) {
             switch (change) {
@@ -165,6 +180,7 @@ public class ConversationLedgerNotifications implements DisposableBean {
                 case ConversationLedgerEvents.EntryChanged entry -> deliver(() -> listener.entryChanged(entry));
                 case ConversationLedgerEvents.ReadChanged read -> deliver(() -> listener.readChanged(read));
                 case ConversationLedgerEvents.ContextChanged context -> deliver(() -> listener.contextChanged(context));
+                case ConversationLedgerEvents.ScopeChanged scope -> deliver(() -> listener.scopeChanged(scope));
                 case ConversationLedgerEvents.ProgressChanged ignored -> {}
             }
         }

@@ -6,6 +6,8 @@
 
 **Supersedes:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)
 
+**Amended by:** [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md#update--2026-11-27-a-personal-goal-belongs-to-the-account) for account-owned goals.
+
 **Builds on:**
 
 - [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (threads, inbox items and turns)

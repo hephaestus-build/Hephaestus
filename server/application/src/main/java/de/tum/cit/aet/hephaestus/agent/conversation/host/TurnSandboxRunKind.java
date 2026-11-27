@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
@@ -43,6 +44,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     private final AgentRuns runs;
     private final ConversationTurns turns;
     private final ConversationTurnContexts contexts;
+    private final ConversationSituation situations;
     private final ConversationTurnAccess rows;
     private final ConversationTurnService turnService;
     private final ConversationTurnCompletion completion;
@@ -55,6 +57,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             AgentRuns runs,
             ConversationTurns turns,
             ConversationTurnContexts contexts,
+            ConversationSituation situations,
             ConversationTurnAccess rows,
             ConversationTurnService turnService,
             ConversationTurnCompletion completion,
@@ -65,6 +68,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
         this.runs = runs;
         this.turns = turns;
         this.contexts = contexts;
+        this.situations = situations;
         this.rows = rows;
         this.turnService = turnService;
         this.completion = completion;
@@ -123,7 +127,11 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     /** The turn's system prompt, path, situation and model, as {@code GET …/context} answers it. */
     @Override
     public JsonNode context(SandboxRun run) {
-        return turns.read(run, turn -> mapper.valueToTree(contexts.context(turn)));
+        var prepared = turns.read(
+                run,
+                contexts::context,
+                (turn, context) -> situations.recordInputs(turn.workspaceId(), turn.turnId(), context.quotedEntries()));
+        return mapper.valueToTree(prepared.context());
     }
 
     /**
@@ -140,13 +148,18 @@ public class TurnSandboxRunKind implements SandboxRunKind {
                 .filter(turn -> turn.getAttempt() == claim.epoch());
         if (held.isEmpty()) return false;
         ConversationTurn turn = held.get();
-        if (turn.getStatus() == ConversationTurn.Status.QUEUED) return false;
-        if (turn.getStatus() == ConversationTurn.Status.DONE || turn.getStatus() == ConversationTurn.Status.FAILED)
-            return runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
-        if (!runs.isCurrent(claim.run(), claim.epoch()))
-            return turn.getStatus() == ConversationTurn.Status.STOPPED
-                    && runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
-        if (outcome == Outcome.HANDED_ON) {
+        var turnStatus = turn.getStatus();
+        if (turnStatus == ConversationTurn.Status.QUEUED) return false;
+        if (turnStatus == ConversationTurn.Status.DONE || turnStatus == ConversationTurn.Status.FAILED)
+            return runs.end(claim, TurnRunsAdapter.endReason(turnStatus)) != AgentRuns.EndOutcome.STALE;
+        boolean handingOn = outcome == Outcome.HANDED_ON;
+        boolean current = (handingOn && turnStatus == ConversationTurn.Status.RUNNING)
+                ? runs.lockConversationHandoff(claim)
+                : runs.isCurrent(claim.run(), claim.epoch());
+        if (!current)
+            return turnStatus == ConversationTurn.Status.STOPPED
+                    && runs.end(claim, TurnRunsAdapter.endReason(turnStatus)) != AgentRuns.EndOutcome.STALE;
+        if (handingOn) {
             ConversationTurnService.LostAttempt taken = turnService.takeBack(turn, true);
             completion.billLostAttempt(taken);
             return turn.getStatus() == ConversationTurn.Status.QUEUED

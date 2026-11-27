@@ -82,7 +82,30 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
     /** A transaction-scoped advisory lock on {@code key}; reads no rows. */
     @WorkspaceAgnostic("Takes an advisory lock and reads no table")
     @Query(value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))) locked", nativeQuery = true)
-    int lockMainCreation(@Param("key") String key);
+    int lockScope(@Param("key") String key);
+
+    @Query("SELECT c.id FROM Conversation c WHERE c.workspaceId = :workspaceId AND c.accountId = :accountId")
+    List<UUID> findTreeIds(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
+    /** Reads from the database even if the caller already loaded the main conversation. */
+    @Query("""
+            SELECT c.scopeEpoch FROM Conversation c
+            WHERE c.workspaceId = :workspaceId AND c.accountId = :accountId AND c.parentConversationId IS NULL
+            """)
+    Optional<Long> readScopeEpoch(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
+    @Modifying
+    @Query("""
+            UPDATE Conversation c SET c.scopeEpoch = c.scopeEpoch + 1
+            WHERE c.workspaceId = :workspaceId AND c.accountId = :accountId AND c.parentConversationId IS NULL
+            """)
+    int advanceScopeEpoch(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
+    @WorkspaceAgnostic("Takes an advisory lock and reads no table")
+    @Query(
+            value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock_shared(hashtextextended(:key, 0))) locked",
+            nativeQuery = true)
+    int shareHistory(@Param("key") String key);
 
     @Modifying(flushAutomatically = true)
     @Query("""

@@ -368,18 +368,59 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             """)
     List<EntryPlace> findUnredactedPlaces(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * A turn can copy any message it could read. Until those dependencies are known, a removal withholds all earlier
+     * model output from replay. Developer messages and digest stimuli are source entries. Old admissions start at zero.
+     */
+    String MODEL_HISTORY = """
+            (e.kind IN ('USER', 'DIGEST')
+             OR COALESCE(CAST(t.admission ->> 'historyEpoch' AS bigint), 0) = scope.scope_epoch)
+            """;
+
+    String MODEL_HISTORY_JOINS = """
+            JOIN conversation scope ON scope.workspace_id = e.workspace_id AND scope.account_id = e.account_id
+                                   AND scope.parent_conversation_id IS NULL
+            LEFT JOIN conversation_turn t ON t.workspace_id = e.workspace_id AND t.id = e.turn_id
+            """;
+
     @Query(value = """
-            SELECT id AS "id", conversation_id AS "conversationId", seq AS "seq", kind AS "kind",
-                   turn_id AS "turnId",
-                   CASE WHEN kind <> 'DIGEST' THEN payload ->> 'id' END AS "piId",
-                   CASE WHEN kind = 'SUMMARY' THEN payload ->> 'firstKeptEntryId' END AS "firstKept",
-                   (redacted_at IS NOT NULL AND kind NOT IN ('ANSWER', 'TOOL_RESULT')) AS "omitted"
-            FROM conversation_entry
-            WHERE workspace_id = :workspaceId AND conversation_id = :conversationId
-            ORDER BY seq
+            SELECT e.id AS "id", e.conversation_id AS "conversationId", e.seq AS "seq", e.kind AS "kind",
+                   e.turn_id AS "turnId",
+                   CASE WHEN e.kind <> 'DIGEST' THEN e.payload ->> 'id' END AS "piId",
+                   CASE WHEN e.kind = 'SUMMARY' THEN e.payload ->> 'firstKeptEntryId' END AS "firstKept",
+                   ((e.redacted_at IS NOT NULL AND e.kind NOT IN ('ANSWER', 'TOOL_RESULT'))
+                    OR NOT
+            """ + MODEL_HISTORY + """
+                   ) AS "omitted"
+            FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
+            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId
+            ORDER BY e.seq
             """, nativeQuery = true)
     List<Head> findHeadsByWorkspaceIdAndConversationId(
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
+
+    interface ModelAnchor {
+        UUID getId();
+
+        Instant getCreatedAt();
+
+        long getSeq();
+
+        @Nullable
+        String getText();
+    }
+
+    @Query(value = """
+            SELECT e.id AS "id", e.created_at AS "createdAt", e.seq AS "seq",
+                   CASE WHEN e.redacted_at IS NULL AND
+            """ + MODEL_HISTORY + """
+                   THEN e.text END AS "text"
+            FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
+            WHERE e.workspace_id = :workspaceId AND e.id IN (:ids)
+            """, nativeQuery = true)
+    List<ModelAnchor> findModelAnchors(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
     /** A search hit: the message and an excerpt of its text around the query's words. */
     interface SearchHit {
@@ -410,11 +451,13 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                          'StartSel="",StopSel="",MaxFragments=1,MaxWords=50,MinWords=20')
                    END AS "excerpt"
             FROM conversation_entry e
+            """ + MODEL_HISTORY_JOINS + """
             WHERE e.workspace_id = :workspaceId AND e.conversation_id IN (:conversationIds)
               AND e.search_text <> ''
               AND (
             """ + SHOWN + """
-              ) AND e.redacted_at IS NULL
+              ) AND e.redacted_at IS NULL AND
+            """ + MODEL_HISTORY + """
               AND (CAST(:query AS text) IS NULL
                    OR to_tsvector('simple', e.search_text) @@ websearch_to_tsquery('simple', CAST(:query AS text)))
               AND (CAST(:before AS timestamptz) IS NULL OR e.created_at < CAST(:before AS timestamptz))
@@ -571,6 +614,14 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             """, nativeQuery = true)
     Optional<UUID> lockUnredactedQuestion(
             @Param("workspaceId") long workspaceId, @Param("entryId") UUID entryId, @Param("turnId") UUID turnId);
+
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM conversation_entry
+             WHERE workspace_id = :workspaceId AND account_id = :accountId
+               AND id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL)
+            """, nativeQuery = true)
+    boolean hasHistoryToRemove(
+            @Param("workspaceId") long workspaceId, @Param("accountId") long accountId, @Param("ids") UUID[] ids);
 
     /** Locks the main conversation row of each tree that holds one of these entries, in id order. */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")

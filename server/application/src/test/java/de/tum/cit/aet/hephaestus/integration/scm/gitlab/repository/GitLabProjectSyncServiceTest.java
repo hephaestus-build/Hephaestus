@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,9 +16,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.Credential;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -25,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
@@ -34,7 +40,9 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -53,8 +61,10 @@ import org.springframework.graphql.client.GraphQlTransportException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 @Tag("unit")
@@ -78,6 +88,9 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
 
     @Mock
     private SourceProviderNamespaces providerNamespaces;
+
+    @Mock
+    private RepositoryObservationStore observations;
 
     private final GitLabProperties gitLabProperties = new GitLabProperties(
             "https://gitlab.com",
@@ -103,7 +116,11 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 .when(responseHandler.handle(any(), anyString(), any()))
                 .thenReturn(new HandleResult(HandleResult.Action.CONTINUE, null));
 
-        service = new GitLabProjectSyncService(
+        service = newService(WebClient::builder);
+    }
+
+    private GitLabProjectSyncService newService(GitLabWebClients clients) {
+        return new GitLabProjectSyncService(
                 graphQlClientProvider,
                 responseHandler,
                 projectProcessor,
@@ -111,7 +128,69 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 gitLabProperties,
                 providerNamespaces,
                 new GitLabExceptionClassifier(new SimpleMeterRegistry()),
-                projectAdmission);
+                projectAdmission,
+                clients,
+                observations);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "OK, Public project, false",
+        "NOT_FOUND, 404 Project Not Found, true",
+        "NOT_FOUND, Gateway route missing, false",
+        "FORBIDDEN, API access required, false",
+        "UNAUTHORIZED, Access denied, false"
+    })
+    void shouldOnlyAcceptAProjectSpecificPublicMiss(HttpStatus status, String message, boolean missing) {
+        assertThat(publicProjectResponse(status, message).isPublicProjectMissing(42L))
+                .isEqualTo(missing);
+    }
+
+    @Test
+    void shouldLeavePublicProjectRateLimitingOnTheRetryPath() {
+        assertThatThrownBy(() -> publicProjectResponse(HttpStatus.TOO_MANY_REQUESTS, "Try later")
+                        .isPublicProjectMissing(42L))
+                .isInstanceOf(WebClientResponseException.TooManyRequests.class);
+    }
+
+    private GitLabProjectSyncService publicProjectResponse(HttpStatus status, String message) {
+        return newService(() -> WebClient.builder().exchangeFunction(request -> {
+            assertThat(request.url()).hasToString(gitLabProperties.defaultServerUrl() + "/api/v4/projects/42");
+            assertThat(request.headers().getFirst(HttpHeaders.AUTHORIZATION)).isNull();
+            assertThat(request.headers().getFirst("PRIVATE-TOKEN")).isNull();
+            return Mono.just(ClientResponse.create(status)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body("{\"message\":\"" + message + "\"}")
+                    .build());
+        }));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecheckPublicLossWithTheCurrentMonitorAndCredential(boolean rotated) {
+        var read = new GitLabProjectAdmission.ProjectRead(originalConnection, 11L, 42L, 7L);
+        var credential = new Credential(originalConnection.connectionId(), 1L, 1L);
+        var current = rotated ? new Credential(originalConnection.connectionId(), 2L, 1L) : credential;
+        var before = new ReadersRead(1L, 7L, 42L, TEST_PROVIDER_ID, 1L, Instant.EPOCH, credential);
+        var after = new ReadersRead(1L, 7L, 42L, TEST_PROVIDER_ID, 2L, Instant.EPOCH, current);
+        when(providerNamespaces.isMirrorProvider(
+                        TEST_PROVIDER_ID, IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl()))
+                .thenReturn(true);
+        when(observations.isPublic(11L)).thenReturn(true);
+        when(observations.databaseTime()).thenReturn(Instant.EPOCH);
+        when(projectAdmission.beginRepositoryReads(originalConnection))
+                .thenReturn(new RepositoryReads(1L, TEST_PROVIDER_ID, Instant.EPOCH, Map.of(42L, after), current));
+        doAnswer(invocation -> {
+                    invocation.<Runnable>getArgument(1).run();
+                    return true;
+                })
+                .when(projectAdmission)
+                .runWrite(eq(read), any());
+
+        publicProjectResponse(HttpStatus.NOT_FOUND, "404 Project Not Found").recheckPublicAccess(read, before);
+
+        if (rotated) verify(observations, never()).restrictPublicAccess(anyLong(), anyLong(), any());
+        else verify(observations).restrictPublicAccess(TEST_PROVIDER_ID, 11L, Instant.EPOCH);
     }
 
     @ParameterizedTest

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.turn;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -22,6 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
  * stopped. Rates are JSON strings, so a per-1M rate never passes through a binary64. {@link #read} never throws: billing
  * runs inside the per-turn transaction, and a throw would leave the attempt unbilled.
  */
+@JsonIgnoreProperties({"historyEpoch", "situationEntryIds"})
 public record ConversationTurnAdmission(
         String model,
         LlmPriceSnapshot price,

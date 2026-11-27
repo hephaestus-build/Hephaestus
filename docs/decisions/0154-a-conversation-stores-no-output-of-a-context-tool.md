@@ -4,6 +4,8 @@
 **Date:** 2026-11-25
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0163](0163-the-mentor-builds-a-context-packet-from-current-source-refs.md) (exact coverage and freshness for mentor place summaries)
+
 **Builds on:** [ADR 0128](0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md) (refer, never copy), [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) (the ledger is Hephaestus's memory), [ADR 0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) (1.0 is a stopped cutover)
 
 ## Context

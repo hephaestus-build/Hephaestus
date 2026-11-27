@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -186,6 +187,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -297,6 +299,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ObjectMapper mapper;
+
+    @Autowired
+    ApplicationContext context;
 
     @Autowired
     ReviewStart starts;
@@ -763,7 +768,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(lateRow.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.findById(newerResult).orElseThrow().getEndedAt()).isNull();
 
-        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece)
+        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece, context)
                 .orElseThrow();
         assertThat(delivery.claim(item.workspaceId(), oldPiece, oldOwner)).isNotNull();
         assertThat(delivery.fence(
@@ -790,7 +795,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 publication.issue(
                         item.workspaceId(), item.itemId(), newer.review().getId(), List.of(developer)));
         assertThat(feedbackRows.findById(newerPiece).orElseThrow().getState()).isEqualTo(FeedbackState.READY);
-        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece)
+        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece, context)
                 .orElseThrow();
         var summary = FeedbackIds.copy(newerPiece, FeedbackCopyKind.SUMMARY, 0);
         assertThat(delivery.claim(item.workspaceId(), newerPiece, newerOwner)).isNotNull();
@@ -2344,6 +2349,47 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(decided.getState()).isEqualTo(ItemEventState.WITHHELD);
         assertThat(decided.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
         assertThat(itemReviews(prepared)).isEmpty();
+        assertThat(incompletePublications(occasion)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReconcileACommittedReviewAfterWithdrawalUnlessExpiryWon(boolean expireFirst) {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var occasion = waitingOccasion(prepared);
+        var recorded = service.request(eventRequest(prepared, occasion, Set.of()));
+        // An earlier release recorded the review and stopped before settling its occasion.
+        jdbc.update(
+                "UPDATE item_event SET state='WAITING', reason='BUDGET_EXHAUSTED' WHERE workspace_id=? AND id=?",
+                item.workspaceId(),
+                occasion.getId());
+        long repositoryId = Objects.requireNonNull(
+                itemRows.findByIdAndWorkspaceId(Objects.requireNonNull(item.parentId()), item.workspaceId())
+                        .orElseThrow()
+                        .getSourceId());
+        transactions.executeWithoutResult(ignored -> publisher.publishEvent(
+                new RepositoryWithdrawnFromWorkspaceEvent(item.workspaceId(), List.of(repositoryId))));
+        assertThat(itemRows.findByIdAndWorkspaceId(item.itemId(), item.workspaceId())
+                        .orElseThrow()
+                        .getRemovedAt())
+                .isNotNull();
+
+        var afterDeadline =
+                occasion.getOccurredAt().plus(ledger.pendingLapseAfter()).plusSeconds(1);
+        if (expireFirst) reaper.advance(afterDeadline);
+        offerAgain(prepared, occasion);
+        var settled = events.findById(occasion.getId()).orElseThrow();
+        assertThat(settled.getState()).isEqualTo(expireFirst ? ItemEventState.EXPIRED : ItemEventState.STARTED);
+        assertThat(settled.getReason()).isEqualTo(expireFirst ? ReviewRequestReason.PENDING_DEADLINE_EXCEEDED : null);
+        assertThat(settled.getRetryAt()).isNull();
+
+        reaper.advance(afterDeadline);
+        offerAgain(prepared, occasion);
+        var repeated = events.findById(occasion.getId()).orElseThrow();
+        assertThat(repeated.getState()).isEqualTo(settled.getState());
+        assertThat(repeated.getDecidedAt()).isEqualTo(settled.getDecidedAt());
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
         assertThat(incompletePublications(occasion)).isEmpty();
     }
 
@@ -5173,6 +5219,56 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     .isEqualTo(ItemEventState.STARTED);
             assertThat(itemReviews(prepared)).hasSize(1);
             assertThat(incompletePublications(occasion)).isEmpty();
+        }
+
+        @Test
+        void shouldReconcileTheOlderReviewedOccasionWhenItsParentRepositoryLeavesTheIndex() {
+            var prepared = prepare(
+                    IdentityProviderType.GITHUB,
+                    false,
+                    Map.of(),
+                    false,
+                    List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+            var item = prepared.item();
+            publish(prepared);
+            var older = event(prepared);
+            var recorded = service.request(eventRequest(prepared, older, Set.of()));
+            var newer = Objects.requireNonNull(transactions.execute(ignored -> itemEvents.record(new ItemEventInput(
+                    item.workspaceId(),
+                    item.itemId(),
+                    ScmItemEvents.PULL_REQUEST_SYNCHRONIZED,
+                    prepared.version().value(),
+                    null,
+                    older.getOccurredAt().plusSeconds(1),
+                    FoundBy.WEBHOOK,
+                    null,
+                    null,
+                    source.retain(item, prepared.version(), FoundBy.WEBHOOK)))));
+            assertThat(events.findById(newer).orElseThrow().getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
+            // Restore the unsettled occasion and close its window with a distinct event for the same version.
+            jdbc.update(
+                    "UPDATE item_event SET state='WAITING', reason='QUIET_WINDOW',"
+                            + " decided_at=now()-interval '3 minutes' WHERE workspace_id=? AND id IN (?,?)",
+                    item.workspaceId(),
+                    older.getId(),
+                    newer);
+            assertThat(writer.remove(item.workspaceId(), Objects.requireNonNull(item.parentId()), clock.instant()))
+                    .isTrue();
+            assertThat(itemRows.findByIdAndWorkspaceId(item.itemId(), item.workspaceId())
+                            .orElseThrow()
+                            .getRemovedAt())
+                    .isNull();
+
+            offerAgain(prepared, older);
+
+            var reconciled = events.findById(older.getId()).orElseThrow();
+            var withheld = events.findById(newer).orElseThrow();
+            assertThat(reconciled.getState()).isEqualTo(ItemEventState.STARTED);
+            assertThat(reconciled.getReason()).isNull();
+            assertThat(withheld.getState()).isEqualTo(ItemEventState.WITHHELD);
+            assertThat(withheld.getReason()).isEqualTo(ReviewRequestReason.ITEM_NOT_VISIBLE);
+            assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
+            assertThat(incompletePublications(older)).isEmpty();
         }
 
         @Test

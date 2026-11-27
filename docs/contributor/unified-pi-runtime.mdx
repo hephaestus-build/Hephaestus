@@ -696,6 +696,26 @@ The conversation has an unread answer when `lastAnswerAt` is later than `lastRea
 An earlier time changes nothing, so each device of the developer can send its own time.
 When the marker moves, the developer's other open streams get a `read` event with the new `lastReadAt` (`ConversationRead`).
 
+A message deletion or retention removal advances the main conversation's scope epoch in the transaction that removes the entries.
+A thread can search the whole tree, so the transaction cancels the tree's running attempts and revokes its sandbox credentials.
+The sandbox reaper deletes the revoked copies.
+
+The gateway checks the lease before it publishes a partial frame.
+Each replica checks the frame's epoch against the database before it accepts the frame.
+The DELETE response carries the current epoch, so the deleting tab drops older partials at once.
+The client also drops older partials when a live event or snapshot carries a later epoch.
+
+A live send shares the owner's history lock from its epoch check through one transport handoff.
+The removal transaction takes the exclusive form of that lock before it advances the epoch.
+A removal therefore commits before the check or after the writer releases the lock.
+
+The SSE writer holds the lock for one event or reconnect snapshot.
+It stops the connection if the socket write takes more than one second.
+The client reconnects to get a new snapshot.
+
+The model proxy hands one buffered request to the connected channel under the lock.
+The lock ends when the handoff returns, without waiting for the response.
+
 One `LISTEN` connection serves each server replica.
 `ConversationLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).
 A stream whose queue of 256 events overflows gets a new snapshot.

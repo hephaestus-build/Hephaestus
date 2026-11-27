@@ -3,22 +3,27 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.extractEntityId;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission.ProjectRead;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,10 +34,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import tools.jackson.databind.JsonNode;
 
 /**
- * Service for syncing a single GitLab project via GraphQL API.
+ * Reads and syncs a single GitLab project.
  * <p>
  * Fetches project metadata using the {@code GetProject} query, which also
  * includes the parent group. Both the project and its group are persisted
@@ -56,6 +65,8 @@ public class GitLabProjectSyncService {
     private final GitLabProperties gitLabProperties;
     private final SourceProviderNamespaces providerNamespaces;
     private final GitLabProjectAdmission admission;
+    private final WebClient publicClient;
+    private final RepositoryObservationStore observations;
 
     public GitLabProjectSyncService(
             GitLabGraphQlClientProvider graphQlClientProvider,
@@ -65,7 +76,9 @@ public class GitLabProjectSyncService {
             GitLabProperties gitLabProperties,
             SourceProviderNamespaces providerNamespaces,
             GitLabExceptionClassifier exceptionClassifier,
-            GitLabProjectAdmission admission) {
+            GitLabProjectAdmission admission,
+            GitLabWebClients webClients,
+            RepositoryObservationStore observations) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.exceptionClassifier = exceptionClassifier;
@@ -74,6 +87,8 @@ public class GitLabProjectSyncService {
         this.groupProcessor = groupProcessor;
         this.gitLabProperties = gitLabProperties;
         this.providerNamespaces = providerNamespaces;
+        this.publicClient = webClients.builder().build();
+        this.observations = observations;
     }
 
     /**
@@ -184,6 +199,57 @@ public class GitLabProjectSyncService {
         return response.field("projects.nodes").toEntityList(GitLabProjectResponse.class).stream()
                 .filter(project -> globalId.equals(project.id()))
                 .findFirst();
+    }
+
+    /** Checks whether the configured instance reports a project-specific miss without a workspace credential. */
+    public boolean isPublicProjectMissing(long nativeId) {
+        String origin = ScmOrigin.of(gitLabProperties.defaultServerUrl()).orElseThrow();
+        try {
+            publicClient
+                    .get()
+                    .uri(origin + "/api/v4/projects/{id}", nativeId)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(gitLabProperties.graphqlTimeout());
+            return false;
+        } catch (WebClientResponseException.NotFound e) {
+            MediaType type = e.getHeaders().getContentType();
+            if (type == null || !MediaType.APPLICATION_JSON.isCompatibleWith(type)) return false;
+            JsonNode error = e.getResponseBodyAs(JsonNode.class);
+            return error != null
+                    && error.path("message").isString()
+                    && "404 Project Not Found".equals(error.path("message").asString());
+        } catch (WebClientResponseException.Unauthorized | WebClientResponseException.Forbidden e) {
+            return false;
+        }
+    }
+
+    /** Rechecks an unavailable monitor during scheduled sync, independent of webhook delivery order. */
+    public void recheckPublicAccess(ProjectRead read, ReadersRead metadata) {
+        if (metadata.credential() == null
+                || !Objects.equals(metadata.syncTargetId(), read.monitorId())
+                || !providerNamespaces.isMirrorProvider(
+                        read.connection().providerId(),
+                        IdentityProviderType.GITLAB,
+                        ScmOrigin.of(gitLabProperties.defaultServerUrl()).orElseThrow())
+                || !observations.isPublic(read.repositoryId())) return;
+        Instant checkedAt = observations.databaseTime();
+        try {
+            if (!isPublicProjectMissing(read.nativeId())) return;
+        } catch (RuntimeException e) {
+            log.info(
+                    "Public project check unavailable during scheduled sync: projectId={}, error={}",
+                    read.nativeId(),
+                    e.getClass().getSimpleName());
+            return;
+        }
+        admission.runWrite(read, () -> {
+            var current = admission.beginRepositoryReads(read.connection()).forRepository(read.nativeId());
+            if (Objects.equals(metadata.credential(), current.credential())
+                    && Objects.equals(metadata.syncTargetId(), current.syncTargetId())) {
+                observations.restrictPublicAccess(read.connection().providerId(), read.repositoryId(), checkedAt);
+            }
+        });
     }
 
     /** Stores {@code project} and its group as GitLab reported them, in the caller's transaction when there is one. */

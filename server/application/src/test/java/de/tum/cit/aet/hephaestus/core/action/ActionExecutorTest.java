@@ -25,6 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import org.awaitility.Awaitility;
@@ -41,7 +42,7 @@ class ActionExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldEndUncertainWhenTheAdapterThrowsAfterTheFence() {
-        when(store.beginWrite(eq(claim(false)), any(), any())).thenReturn(true);
+        when(store.beginWrite(eq(claim(false)), any(), any(), any())).thenReturn(true);
 
         ActionResult result = executor(attempt -> {
                     attempt.fence().beginWrite();
@@ -51,6 +52,21 @@ class ActionExecutorTest extends BaseUnitTest {
 
         assertThat(result).isEqualTo(new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
         verify(store).settle(eq(ID), eq(7L), eq(result), any());
+    }
+
+    @Test
+    void shouldPassAdditionalProofToTheStoreAndLeaveTheAttemptUnfencedOnRefusal() {
+        BooleanSupplier proof = () -> false;
+        when(store.beginWrite(eq(claim(false)), any(), any(), eq(proof))).thenReturn(false);
+
+        ActionResult result = executor(attempt -> {
+                    assertThat(attempt.fence().beginWrite(proof)).isFalse();
+                    throw new IllegalStateException("failed without writing");
+                })
+                .run(claim(false));
+
+        assertThat(result).isEqualTo(new ActionResult.Retry(ActionExecutor.backoff(1)));
+        verify(store).beginWrite(eq(claim(false)), any(), any(), eq(proof));
     }
 
     @Test

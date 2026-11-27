@@ -188,7 +188,7 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
-    void shouldStartAtTheNextKeptEntryWhenTheDeveloperDeletesTheQuestionASummaryKeepsFirst() {
+    void shouldFallBackToSourceMessagesWhenRemovalInvalidatesTheSummary() {
         run(ask(main, "Old question"), ConversationTurn.Status.DONE, "Old answer");
         ConversationTurnService.Submission kept = ask(main, "Kept question");
         ConversationTurn turn = run(kept, ConversationTurn.Status.DONE, "Kept answer");
@@ -201,11 +201,7 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
 
         entries.deleteMessage(workspace.getId(), keptQuestion.getId());
 
-        List<ObjectNode> path = mainPath();
-        assertThat(texts(path)).containsExactly("Kept answer", "summary:Old talk");
-        // Pi keeps the entries before a compaction only from the one it names.
-        assertThat(path.get(1).path("firstKeptEntryId").asString())
-                .isEqualTo(path.getFirst().path("id").asString());
+        assertThat(texts(mainPath())).singleElement().asString().endsWith(" Old question");
     }
 
     @Test
@@ -352,8 +348,7 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
                         workspace.getId(), turn.getId(), ConversationEntry.Kind.TOOL_RESULT)
                 .getFirst();
 
-        redaction.redact(List.of(toolResult.getId()));
-        entries.deleteMessage(workspace.getId(), submission.question().getId());
+        redaction.redact(List.of(toolResult.getId(), submission.question().getId()));
 
         List<ObjectNode> path = mainPath();
         assertThat(path).hasSize(2);

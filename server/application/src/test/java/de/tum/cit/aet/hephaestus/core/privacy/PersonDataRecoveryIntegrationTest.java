@@ -100,7 +100,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldKeepProcessingStoppedWhenAnEmptyManifestDoesNotDeclareNoLaterErasures() throws Exception {
         assertBlocked(
                 manifest(
-                        "{\"version\":4,\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
+                        "{\"version\":5,\"recordDeletions\":[],\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
     }
 
     @Test
@@ -122,7 +122,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @ValueSource(strings = {"true", ""})
     void shouldRefuseToRecoverBesideBackgroundWork(String backgroundWork, CapturedOutput output) throws Exception {
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z",
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z",
                  "noLaterErasures":true,"people":[]}
                 """);
         var processing = new AtomicBoolean();
@@ -146,7 +146,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldStartProcessingWhenTheOperatorDeclaresNoLaterErasures() throws Exception {
         Path manifest = manifest(
-                "{\"version\":4,\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
+                "{\"version\":5,\"recordDeletions\":[],\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing)) {
             context.refresh();
@@ -210,11 +210,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var journal = new DatabasePrivacyJournal(jdbc, mapper, Optional.of(resolver), shipping);
         var recoveryService = advisedService(beans.getBean(PersonDataRegistry.class), List.of(), journal, shipping);
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(accountId, List.of(), false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -267,11 +268,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         }));
         assertThat(accounts.findById(personId).orElseThrow().getStatus()).isEqualTo(Account.Status.ACTIVE);
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(recovery),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -322,7 +324,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 state,
                 request.getId());
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -341,7 +343,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepProcessingStoppedWhenReapplicationCannotComplete() throws Exception {
         assertBlocked(manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
                  "people":[{"accountId":1,"identities":[]}]}
                 """));
     }
@@ -349,7 +351,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectDisplayNamesAndHideManifestContentFromStartupFailures() throws Exception {
         assertBlocked(manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
                  "people":[{"identities":[{"providerType":"GITHUB","serverUrl":"https://github.com",
                  "subject":"private-display-name-canary"}]}]}
                 """));
@@ -378,11 +380,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             }
         }
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(null, identities, false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -446,7 +449,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var advisedService = advisedService(
                 new PersonDataRegistry(List.of(new RecoveryStores(List.of(failing)))), List.of(), (kind, refs) -> {});
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -548,7 +551,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         beans.getBean(PersonDataRequestRepository.class),
                         beans.getBean(RestoredWorkspacePurges.class),
                         beans.getBean(RestoredDisconnects.class),
-                        beans.getBean(RestoredMessageDeletions.class),
+                        new RestoredOwnerContent(
+                                jdbc, beans.getBean(RestoredMessageDeletions.class), (owner, ids) -> {}),
                         beans.getBean(RestoredCollectionErasures.class),
                         beans.getBean(RestoredSlackMessageChanges.class),
                         beans.getBean(RestoredSlackChannelErasures.class),

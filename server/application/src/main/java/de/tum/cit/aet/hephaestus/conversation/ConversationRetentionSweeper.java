@@ -416,7 +416,7 @@ public class ConversationRetentionSweeper {
                 return false;
             }
             ownerScope.ofJob(owner.accountId());
-            redaction.redact(ids);
+            redaction.removeHistory(owner.workspaceId(), owner.accountId(), ids);
             return true;
         }));
     }

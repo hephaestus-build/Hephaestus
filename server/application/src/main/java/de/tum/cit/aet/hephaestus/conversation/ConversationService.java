@@ -41,7 +41,7 @@ public class ConversationService {
     public Conversation findOrCreateMain(long workspaceId, long accountId) {
         holdWrite(writeFence, accountId);
         // Serializes the first write of an account: two first writes would both find no main.
-        conversations.lockMainCreation("conversation-main:" + workspaceId + ":" + accountId);
+        conversations.lockScope("conversation-main:" + workspaceId + ":" + accountId);
         return conversations
                 .findMain(workspaceId, accountId)
                 .orElseGet(() -> conversations.save(Conversation.main(workspaceId, accountId, clock.instant())));

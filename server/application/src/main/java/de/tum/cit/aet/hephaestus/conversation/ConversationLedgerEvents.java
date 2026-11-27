@@ -40,6 +40,7 @@ public final class ConversationLedgerEvents {
         @JsonSubTypes.Type(value = ReadChanged.class, name = "read"),
         @JsonSubTypes.Type(value = ContextChanged.class, name = "context"),
         @JsonSubTypes.Type(value = ProgressChanged.class, name = "progress"),
+        @JsonSubTypes.Type(value = ScopeChanged.class, name = "scope"),
     })
     public sealed interface LedgerChanged {
         long workspaceId();
@@ -51,6 +52,9 @@ public final class ConversationLedgerEvents {
      * of the workspace, so no running turn reads a copy that is no longer allowed.
      */
     public record ContextChanged(long workspaceId) implements LedgerChanged {}
+
+    /** Removal changes the scope of the owner's entire conversation tree. */
+    public record ScopeChanged(long workspaceId, long accountId) implements LedgerChanged {}
 
     /** Entries of one conversation were appended, or their text, vote or redaction changed. */
     public record EntryChanged(long workspaceId, UUID conversationId, long accountId, List<UUID> entryIds)
@@ -99,6 +103,7 @@ public final class ConversationLedgerEvents {
             UUID turnId,
             ConversationTurn.Surface surface,
             int attempt,
+            long scopeEpoch,
             long sequence,
             int index,
             int count,

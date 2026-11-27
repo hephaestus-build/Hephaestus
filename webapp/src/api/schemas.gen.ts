@@ -2272,6 +2272,12 @@ export const ConversationSchema = {
 			format: "int64",
 			description: "Sequence number of the newest top-level message shown; 0 when there is none",
 		},
+		scopeEpoch: {
+			type: "integer",
+			format: "int64",
+			description:
+				"The conversation tree generation. A removal advances it and invalidates older partial answers.",
+		},
 		threads: {
 			type: "array",
 			description: "The newest threads, latest activity first",
@@ -2598,6 +2604,12 @@ export const ConversationTurnSchema = {
 		requestId: {
 			type: "string",
 			description: "The submission or schedule key; the stimulus entry carries the same value",
+		},
+		scopeEpoch: {
+			type: "integer",
+			format: "int64",
+			description:
+				"The conversation tree generation. A removal advances it and invalidates older partial answers.",
 		},
 		status: {
 			$ref: "#/components/schemas/ConversationTurnStatus",

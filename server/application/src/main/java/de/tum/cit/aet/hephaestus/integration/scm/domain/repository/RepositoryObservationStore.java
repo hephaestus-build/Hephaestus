@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -76,6 +77,12 @@ public class RepositoryObservationStore implements Observations {
         this.mapper = mapper;
     }
 
+    @Transactional(readOnly = true)
+    public boolean isPublic(long repositoryId) {
+        Repository repository = Objects.requireNonNull(entityManager).find(Repository.class, repositoryId);
+        return repository != null && repository.isPublicOnProvider();
+    }
+
     public static Map<String, @Nullable Object> path(String fullName, String name, String url) {
         var patch = new HashMap<String, @Nullable Object>();
         patch.put("name_with_owner", fullName);
@@ -130,6 +137,12 @@ public class RepositoryObservationStore implements Observations {
     @Transactional
     public Result observe(ReadersRead read, Observation observation) {
         return apply(read, observation);
+    }
+
+    /** Narrows a known mirror after a public check that the caller verified under the connection lifecycle lock. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restrictPublicAccess(long providerId, long repositoryId, Instant checkedAt) {
+        queries.restrictPublicAccess(providerId, repositoryId, checkedAt);
     }
 
     private Result apply(ReadersRead read, Observation observation) {

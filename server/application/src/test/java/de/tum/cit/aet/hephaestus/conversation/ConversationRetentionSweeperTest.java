@@ -676,7 +676,7 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                 });
         lenient()
                 .doAnswer(call -> {
-                    Collection<UUID> ids = call.getArgument(0);
+                    Collection<UUID> ids = call.getArgument(2);
                     List<DueEntry> batch = due.stream()
                             .filter(entry -> ids.contains(entry.getId()))
                             .toList();
@@ -690,9 +690,9 @@ class ConversationRetentionSweeperTest extends BaseUnitTest {
                     batch.forEach(entry -> erased.merge(entry.getAccountId(), 1, Integer::sum));
                     now = now.plus(perRedaction);
                     due.removeAll(batch);
-                    return null;
+                    return true;
                 })
                 .when(redaction)
-                .redact(any());
+                .removeHistory(anyLong(), anyLong(), any());
     }
 }

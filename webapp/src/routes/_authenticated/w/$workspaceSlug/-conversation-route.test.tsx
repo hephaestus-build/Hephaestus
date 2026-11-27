@@ -4,7 +4,7 @@ import { http, HttpResponse, type PathParams } from "msw";
 import { beforeAll, afterEach, assert, expect, it, vi } from "vitest";
 
 import type { ConversationTurnRequest } from "@/api/types.gen";
-import { conversationEntriesOptions } from "@/hooks/conversation-cache";
+import { conversationEntriesOptions, conversationOptions } from "@/hooks/conversation-cache";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -690,6 +690,60 @@ it("deletes the developer's own message once they confirm", async () => {
 	await screen.findByText("This message was deleted.");
 	expect(fake.deletes).toStrictEqual([question.id]);
 	expect(screen.queryByText("Something I should not have pasted")).toBeNull();
+});
+
+it("clears a revoked partial on DELETE while an older read is still in flight", async () => {
+	const fake = new ConversationFake();
+	const turn = fake.addTurn({
+		status: "RUNNING",
+		scopeEpoch: 0,
+		partial: { activity: "WRITING", stage: "Writing", text: "Private words in the partial" },
+	});
+	fake.add({ kind: "USER", text: "Remove my question", turnId: turn.id });
+	serve(fake);
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
+	await screen.findByText("Private words in the partial", {}, ROUTE_RENDER_WAIT);
+
+	const stale = structuredClone(fake.conversation());
+	const oldStarted = deferred();
+	const releaseOld = deferred();
+	const releaseNew = deferred();
+	server.use(
+		http.get(
+			"*/workspaces/acme/conversation",
+			async () => {
+				oldStarted.resolve();
+				await releaseOld.promise;
+				return HttpResponse.json(stale);
+			},
+			{ once: true },
+		),
+		http.get("*/workspaces/acme/conversation", async () => {
+			await releaseNew.promise;
+			return HttpResponse.json(fake.conversation());
+		}),
+	);
+	const options = conversationOptions("acme");
+	const oldRead = queryClient.query({ ...options, staleTime: 0 });
+	await oldStarted.promise;
+	try {
+		await userEvent.click(screen.getByRole("button", { name: /^Delete message/u }));
+		const dialog = await screen.findByRole("alertdialog", { name: "Delete this message?" });
+		await userEvent.click(within(dialog).getByRole("button", { name: "Delete message" }));
+		await screen.findByText("This message was deleted.");
+		expect(screen.queryByText("Private words in the partial")).toBeNull();
+		expect(queryClient.getQueryData(options.queryKey)).toMatchObject({ scopeEpoch: 1 });
+
+		await act(async () => {
+			releaseOld.resolve();
+			await oldRead;
+		});
+		expect(queryClient.getQueryData(options.queryKey)).toMatchObject({ scopeEpoch: 1 });
+		expect(screen.queryByText("Private words in the partial")).toBeNull();
+	} finally {
+		releaseOld.resolve();
+		releaseNew.resolve();
+	}
 });
 
 it("opens the thread named in the address and answers in it", async () => {

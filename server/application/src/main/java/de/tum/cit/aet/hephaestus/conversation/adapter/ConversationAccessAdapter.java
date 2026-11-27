@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.conversation.adapter;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +16,18 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class ConversationAccessAdapter implements ConversationAccess {
     private final ConversationRepository conversations;
+    private final ConversationScopeFence scope;
     private final ConversationEntryRepository entries;
+
+    @Override
+    public void shareHistory(long workspaceId, long accountId) {
+        scope.share(workspaceId, accountId);
+    }
+
+    @Override
+    public List<UUID> treeIds(long workspaceId, long accountId) {
+        return conversations.findTreeIds(workspaceId, accountId);
+    }
 
     @Override
     public long accountId(long workspaceId, UUID conversationId) {

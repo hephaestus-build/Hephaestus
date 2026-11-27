@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal.Fact;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,8 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
                         null),
                 NOW);
         when(entries.findByIdAndWorkspaceId(message.getId(), 7L)).thenReturn(Optional.of(message));
+        when(redaction.removeHistory(7L, message.getAccountId(), List.of(message.getId())))
+                .thenReturn(true);
 
         service(journal).deleteMessage(7L, message.getId());
 

@@ -15,6 +15,7 @@ import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Counts JDBC preparations, including SQL that does not pass through Hibernate. A measurement counts only the data
@@ -86,7 +87,11 @@ public class SqlStatementCounter implements BeanPostProcessor {
      * returned on its connection just before, and whether its transaction was read-only. Otherwise no owner and not
      * read-only.
      */
-    public record Prepared(String sql, @Nullable Long owner, boolean readOnly) {}
+    public record Prepared(
+            String sql,
+            @Nullable Long owner,
+            boolean readOnly,
+            @Nullable String transaction) {}
 
     private record Worker(Thread thread, Counter counter) {}
 
@@ -104,14 +109,18 @@ public class SqlStatementCounter implements BeanPostProcessor {
 
         void add(String sql, Connection connection) throws SQLException {
             if (!owners) {
-                prepared.add(new Prepared(sql, null, false));
+                prepared.add(new Prepared(sql, null, false, null));
                 return;
             }
             try (Statement probe = connection.createStatement();
                     ResultSet row = probe.executeQuery(OWNER)) {
                 row.next();
                 long owner = row.getLong(1);
-                prepared.add(new Prepared(sql, row.wasNull() ? null : owner, row.getBoolean(2)));
+                prepared.add(new Prepared(
+                        sql,
+                        row.wasNull() ? null : owner,
+                        row.getBoolean(2),
+                        TransactionSynchronizationManager.getCurrentTransactionName()));
             }
         }
     }

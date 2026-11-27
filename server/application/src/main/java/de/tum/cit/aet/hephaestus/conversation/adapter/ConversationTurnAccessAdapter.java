@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation.adapter;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence.Scope;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -45,6 +46,12 @@ class ConversationTurnAccessAdapter implements ConversationTurnAccess {
                         ConversationTurn.Status.valueOf(held.getStatus()),
                         held.getStartedAt(),
                         held.getDeadline()));
+    }
+
+    @Override
+    public Optional<Scope> runningScope(long workspaceId, UUID turnId, int epoch, UUID runId) {
+        return turns.findRunningAttempt(workspaceId, turnId, epoch, runId)
+                .map(attempt -> new Scope(workspaceId, attempt.getAccountId(), attempt.getScopeEpoch()));
     }
 
     @Override

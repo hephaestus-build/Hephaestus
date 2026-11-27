@@ -242,6 +242,15 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             nativeQuery = true)
     List<SandboxRow> findConversationCopies(@Param("workspaceId") long workspaceId);
 
+    /** Retires warm and active sandbox copies of the owner's conversation tree. */
+    @Modifying
+    @Query(value = """
+            UPDATE agent_sandbox s SET state = 'DELETING'
+             WHERE s.workspace_id = :workspaceId AND s.kind = 'CONVERSATION' AND s.state IN ('REQUESTED', 'READY')
+               AND s.subject_key = ANY(CAST(:subjects AS text[]))
+            """, nativeQuery = true)
+    int revokeConversationTree(@Param("workspaceId") long workspaceId, @Param("subjects") String[] subjects);
+
     /** Revokes conversation credentials in the transaction that changes access. The reaper deletes claims. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """

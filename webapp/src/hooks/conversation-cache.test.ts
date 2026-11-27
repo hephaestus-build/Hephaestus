@@ -32,6 +32,7 @@ import {
 	conversationThreadOptions,
 	type ConversationThreadPage,
 	inOrder,
+	observeScopeEpoch,
 	patchShownEntry,
 } from "./conversation-cache";
 
@@ -614,5 +615,43 @@ describe("a read in flight", () => {
 		await refetch.landed();
 
 		await vi.waitFor(() => expect(threadSeqs()).toStrictEqual([1, 2]));
+	});
+});
+
+describe("conversation removal", () => {
+	it("evicts partials and rejects an old turn and reconnect snapshot after the scope advances", async () => {
+		const stale = turn("RUNNING", {
+			attempt: 1,
+			scopeEpoch: 0,
+			partial: { activity: "THINKING", stage: "Thinking", text: "Removed words" },
+		});
+		const snapshot: Conversation = {
+			id: MAIN,
+			latestSeq: 3,
+			scopeEpoch: 0,
+			activeTurns: [stale],
+			threads: [],
+		};
+		await applySnapshot(queryClient, SLUG, snapshot);
+
+		observeScopeEpoch(queryClient, SLUG, 1);
+		expect(
+			queryClient.getQueryData<Conversation>(conversationKey)?.activeTurns[0]?.partial,
+		).toBeUndefined();
+
+		await applySnapshot(queryClient, SLUG, { ...snapshot, scopeEpoch: 1, activeTurns: [] });
+		applyTurn(queryClient, SLUG, stale);
+		await applySnapshot(queryClient, SLUG, snapshot);
+
+		expect(queryClient.getQueryData<Conversation>(conversationKey)).toMatchObject({
+			scopeEpoch: 1,
+			activeTurns: [],
+		});
+
+		// The epoch also fences an older response when a stream started before the first read landed.
+		queryClient.removeQueries({ queryKey: conversationKey });
+		observeScopeEpoch(queryClient, SLUG, 1);
+		await applySnapshot(queryClient, SLUG, snapshot);
+		expect(queryClient.getQueryData<Conversation>(conversationKey)?.activeTurns).toStrictEqual([]);
 	});
 });

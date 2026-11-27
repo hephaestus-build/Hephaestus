@@ -33,7 +33,9 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
@@ -65,16 +67,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -94,7 +101,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import reactor.core.publisher.Sinks;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -104,6 +113,8 @@ import tools.jackson.databind.ObjectMapper;
  * application of its own, wired from the test context's beans.
  */
 class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    private static final String FIRST_QUESTION = "How should I pin the image?";
 
     @Autowired
     private ApplicationContext beans;
@@ -140,6 +151,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
     private Workspace workspace;
     private Conversation conversation;
     private ConversationTurn turn;
+    private volatile ExchangeFilterFunction modelExchange = (request, next) -> next.exchange(request);
 
     @BeforeEach
     void startTheGateway() throws Exception {
@@ -149,14 +161,16 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 "ask-gateway-" + suffix, "Hephaestus Gateway", "ask-gateway-org", AccountType.ORG, developerUser);
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
-        turn = ConversationTurnStarts.askAndStart(
-                beans, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
-
         sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
-        sandbox = sandboxes.ensure(
-                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
+        startTurn(conversation, FIRST_QUESTION);
         gateway = newGateway();
         gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
+    }
+
+    private void startTurn(Conversation target, String question) {
+        turn = ConversationTurnStarts.askAndStart(beans, metrics, workspace.getId(), target.getId(), question);
+        sandbox = sandboxes.ensure(
+                workspace.getId(), TurnRunsAdapter.subject(target.getId()), AgentSandboxKind.CONVERSATION);
     }
 
     private ConfigurableApplicationContext newGateway() throws Exception {
@@ -173,6 +187,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 agentRuns,
                 served,
                 contexts,
+                beans.getBean(ConversationSituation.class),
                 beans.getBean(ConversationTurnAccess.class),
                 beans.getBean(ConversationTurnService.class),
                 completion,
@@ -194,7 +209,9 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
-            factory.registerSingleton("llmProxyController", SandboxModelProxy.controller(beans));
+            factory.registerSingleton(
+                    "llmProxyController",
+                    SandboxModelProxy.controller(beans, (request, next) -> modelExchange.filter(request, next)));
             factory.registerSingleton("attemptTokenVerifier", verifier);
 
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
@@ -301,6 +318,158 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             if (driver.isAlive()) driver.destroyForcibly();
             reader.shutdownNow();
             output.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRefuseAPreparedPromptWhenRemovalOvertakesItsTransport(boolean usageFallback) throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            if (usageFallback) {
+                upstream.enqueue(new MockResponse.Builder()
+                        .code(400)
+                        .addHeader("Content-Type", "application/json")
+                        .body("{\"error\":\"stream_options is unsupported\"}")
+                        .build());
+            }
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"choices\":[]}")
+                    .build());
+            admitModel(upstream.url("/v1").toString());
+
+            var prepared = new CountDownLatch(1);
+            var resume = Sinks.<Boolean>one();
+            var number = new AtomicInteger();
+            int expectedSent = usageFallback ? 1 : 0;
+            modelExchange = (request, next) -> {
+                if (number.getAndIncrement() != expectedSent) return next.exchange(request);
+                prepared.countDown();
+                var exchange = resume.asMono().flatMap(ignored -> next.exchange(request));
+                // On the reused connection, the close can reach the exchange before the body error.
+                return usageFallback ? exchange.onErrorMap(ignored -> new IOException("Connection closed")) : exchange;
+            };
+            var request = HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
+                    .header("Authorization", "Bearer " + credential())
+                    .header("Content-Type", "application/json")
+                    .header(
+                            SandboxRunArgumentResolver.RUN_HEADER,
+                            turn.getRunId().toString())
+                    .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(turn.getAttempt()))
+                    .POST(HttpRequest.BodyPublishers.ofString("""
+                            {"model":"restart-model","stream":true,"messages":[{"role":"user","content":"Private question"}]}
+                            """))
+                    .build();
+            var call = http.sendAsync(request, HttpResponse.BodyHandlers.discarding());
+            try {
+                assertThat(prepared.await(15, TimeUnit.SECONDS)).isTrue();
+                if (usageFallback) {
+                    var first = Objects.requireNonNull(upstream.takeRequest(2, TimeUnit.SECONDS));
+                    assertThat(Objects.requireNonNull(first.getBody()).utf8()).contains("stream_options");
+                }
+                var question =
+                        beans.getBean(ConversationEntryRepository.class).findStimulus(workspace.getId(), turn.getId());
+                beans.getBean(ConversationEntryService.class).deleteMessage(workspace.getId(), question.getId());
+            } finally {
+                resume.tryEmitValue(true);
+            }
+
+            assertThat(call.get(10, TimeUnit.SECONDS).statusCode()).isEqualTo(409);
+            assertThat(upstream.getRequestCount()).isEqualTo(expectedSent);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepRemovedAnchorTextOutOfTheNextModelRequest(boolean inThread) throws Exception {
+        var entries = beans.getBean(ConversationEntryRepository.class);
+        long workspaceId = workspace.getId();
+        var source = entries.findStimulus(workspaceId, turn.getId());
+        var ended = http.send(
+                turnRequest("end")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                contract("end.request.json").replace("Pin it by digest.", FIRST_QUESTION)))
+                        .build(),
+                HttpResponse.BodyHandlers.discarding());
+        assertThat(ended.statusCode()).isEqualTo(204);
+        var copy = entries.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, turn.getId(), ConversationEntry.Kind.ANSWER)
+                .getLast();
+        assertThat(copy.getText()).isEqualTo(FIRST_QUESTION);
+        var thread = conversations.openThread(workspaceId, copy.getId());
+        conversations.openThread(workspaceId, source.getId());
+
+        startTurn(conversation, "What threads are open?");
+        var before = http.send(turnRequest("context").GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(before.statusCode()).isEqualTo(200);
+        var mapper = beans.getBean(ObjectMapper.class);
+        assertThat(mapper.readTree(before.body()).path("situation").asString()).contains(FIRST_QUESTION);
+        var admission = Objects.requireNonNull(beans.getBean(ConversationTurnRepository.class)
+                .findByIdAndWorkspaceId(turn.getId(), workspaceId)
+                .orElseThrow()
+                .getAdmission());
+        assertThat(admission.path("situationEntryIds"))
+                .extracting(entry -> entry.asString())
+                .containsExactlyInAnyOrder(
+                        source.getId().toString(), copy.getId().toString());
+
+        beans.getBean(ConversationEntryService.class).deleteMessage(workspaceId, source.getId());
+        assertThat(entries.findByIdAndWorkspaceId(copy.getId(), workspaceId)
+                        .orElseThrow()
+                        .isRedacted())
+                .isFalse();
+        startTurn(inThread ? thread : conversation, "What should I check next?");
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("""
+                            data: {"id":"answer","object":"chat.completion.chunk","created":1,"model":"restart-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Check the image manifest."},"finish_reason":"stop"}]}
+
+                            data: [DONE]
+
+                            """)
+                    .build());
+            admitModel(upstream.url("/v1").toString());
+
+            var search = http.send(
+                    turnRequest("search")
+                            .POST(HttpRequest.BodyPublishers.ofString("{\"query\":\"pin\"}"))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(search.statusCode()).isEqualTo(200);
+            assertThat(search.body())
+                    .doesNotContain(FIRST_QUESTION, copy.getId().toString());
+
+            runTurnWithProvider();
+            var request = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(Objects.requireNonNull(request.getBody()).utf8())
+                    .contains("What should I check next?")
+                    .doesNotContain(FIRST_QUESTION)
+                    .contains(inThread ? "(deleted since)" : "- On a deleted message:");
+        }
+    }
+
+    private void runTurnWithProvider() throws Exception {
+        var mapper = beans.getBean(ObjectMapper.class);
+        var driver = new ProcessBuilder("node", "src/test/resources/agent/turn-gateway.ts")
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
+        try (var input = driver.outputWriter(StandardCharsets.UTF_8)) {
+            input.write(mapper.writeValueAsString(Map.of(
+                    "url", "http://localhost:" + gatewayPort,
+                    "runId", turn.getRunId(),
+                    "epoch", turn.getAttempt(),
+                    "token", credential())));
+            input.newLine();
+            input.flush();
+            assertThat(driver.waitFor(1, TimeUnit.MINUTES)).isTrue();
+            assertThat(driver.exitValue()).isZero();
+        } finally {
+            if (driver.isAlive()) driver.destroyForcibly();
         }
     }
 

@@ -123,13 +123,15 @@ public class ConversationTurnContexts {
             String systemPrompt,
             String documents) {}
 
+    record PreparedContext(Context context, List<UUID> quotedEntries) {}
+
     /**
      * The turn's context: its path, situation, model and documents. Each part reads in a short transaction of its own.
      * Inside one read-write transaction, Hibernate checks every entity the build has loaded before each query, which
      * made a build of minutes, and its locks blocked the run's lease (docs/contributor/agent-runs.mdx § Locks and slow
      * work). So a caller in a transaction is refused.
      */
-    public Context context(TurnAttempt turn) {
+    PreparedContext context(TurnAttempt turn) {
         requireNoTransaction();
         ZoneId zone = zone(turn);
         ConversationContextPathBuilder.TurnContext path = paths.forTurn(turn.workspaceId(), turn.turnId(), zone);
@@ -139,10 +141,11 @@ public class ConversationTurnContexts {
                         new IllegalStateException("Conversation turn " + turn.turnId() + " has no admitted model"));
         Map<String, byte[]> built = build(turn, path.questionEntryId(), zone);
         String loadable = folder.situation(turn);
-        String situation = situations.render(turn, zone) + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
+        var rendered = situations.render(turn, zone);
+        String situation = rendered.text() + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
                 + ConversationTurnEvidence.receipt(mapper, built);
         var effort = admitted.reasoningEffort();
-        return new Context(
+        var context = new Context(
                 path.sessionId(),
                 path.entries(),
                 path.prompt(),
@@ -158,6 +161,7 @@ public class ConversationTurnContexts {
                 Base64.getEncoder()
                         .encodeToString(folder.documentsArchive(
                                 turn, prettyDocuments(built), ContextTimes.local(clock.instant(), zone))));
+        return new PreparedContext(context, rendered.quotedEntries());
     }
 
     private Map<String, byte[]> prettyDocuments(Map<String, byte[]> documents) {

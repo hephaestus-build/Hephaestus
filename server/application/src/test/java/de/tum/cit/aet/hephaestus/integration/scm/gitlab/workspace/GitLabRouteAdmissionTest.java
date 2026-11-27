@@ -25,10 +25,13 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.Credential;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -64,6 +67,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -89,6 +94,7 @@ class GitLabRouteAdmissionTest {
     private final WorkspaceScopeFilter scopeFilter = mock(WorkspaceScopeFilter.class);
     private final GitLabRepositoryMonitors repositoryMonitors = mock(GitLabRepositoryMonitors.class);
     private final GitLabProjectSyncService projectSync = mock(GitLabProjectSyncService.class);
+    private final RepositoryObservationStore observations = mock(RepositoryObservationStore.class);
     private final GitLabTeamSyncService teamSync = mock(GitLabTeamSyncService.class);
     private final GitLabUserService userService = mock(GitLabUserService.class);
     private final SyncTargetProvider syncTargets = mock(SyncTargetProvider.class);
@@ -126,7 +132,8 @@ class GitLabRouteAdmissionTest {
                 syncTargets,
                 properties,
                 transactionManager,
-                projectAdmission);
+                projectAdmission,
+                observations);
         admission = new GitLabRouteAdmission(
                 connectionCommands,
                 identityProviders,
@@ -321,6 +328,47 @@ class GitLabRouteAdmissionTest {
             verify(projectSync, never()).persistProject(any(), any());
         }
 
+        @ParameterizedTest
+        @ValueSource(strings = {"missing", "public", "retry", "rotated"})
+        void shouldUseTheIndependentPublicResultForSharedAccess(String result) {
+            String path = GROUP + "/a";
+            var project = repository(PROJECT_A, path);
+            var own = monitor(55L, path);
+            own.setNativeId(PROJECT_A);
+            var credential = new Credential(CONNECTION_ID, 1, 1);
+            var before =
+                    new ReadersRead(WORKSPACE_ID, own.getId(), PROJECT_A, PROVIDER_ID, 1, Instant.EPOCH, credential);
+            var afterCredential = result.equals("rotated") ? new Credential(CONNECTION_ID, 2, 1) : credential;
+            var after = new ReadersRead(
+                    WORKSPACE_ID, own.getId(), PROJECT_A, PROVIDER_ID, 1, Instant.EPOCH, afterCredential);
+            when(projectAdmission.beginRepositoryReads(any()))
+                    .thenReturn(
+                            new RepositoryReads(
+                                    WORKSPACE_ID, PROVIDER_ID, Instant.EPOCH, Map.of(PROJECT_A, before), credential),
+                            new RepositoryReads(
+                                    WORKSPACE_ID,
+                                    PROVIDER_ID,
+                                    Instant.EPOCH,
+                                    Map.of(PROJECT_A, after),
+                                    afterCredential));
+            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
+                    .thenReturn(Optional.of(project));
+            when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
+                    .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
+            when(observations.databaseTime()).thenReturn(Instant.EPOCH);
+            when(projectSync.isPublicProjectMissing(PROJECT_A)).thenAnswer(invocation -> {
+                if (result.equals("retry")) throw new IllegalStateException("Public project check unavailable");
+                return !result.equals("public");
+            });
+
+            String body = projectEvent("project_destroy", PROJECT_A, path);
+            assertProjectNotAdmitted(body);
+            verify(syncTargets).recordRepositoryLoss(before);
+            verify(syncTargets, never()).removeSyncTarget(anyLong());
+            verify(observations, times(result.equals("missing") ? 1 : 0))
+                    .restrictPublicAccess(PROVIDER_ID, PROJECT_A, Instant.EPOCH);
+        }
+
         @Test
         void shouldRetireEveryMonitorOfAProjectMovedOutOfTheGroup() {
             RepositoryToMonitor first = monitor(60L);
@@ -349,6 +397,7 @@ class GitLabRouteAdmissionTest {
             assertProjectNotAdmitted(projectEvent("project_destroy", PROJECT_A, GROUP + "/a"));
             assertProjectNotAdmitted(projectEvent("project_destroy", PROJECT_A, GROUP + "/a"));
             verify(syncTargets, times(2)).removeSyncTarget(56L);
+            verify(projectSync, never()).isPublicProjectMissing(anyLong());
             verify(projectSync, never()).persistProject(any(), any());
             verify(repositoryRepository, never()).delete(any());
         }

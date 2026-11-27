@@ -77,7 +77,7 @@ class SlackJoinAdapterTest extends BaseUnitTest {
                 1L,
                 started,
                 null,
-                () -> fence,
+                proof -> fence && proof.getAsBoolean(),
                 null);
     }
 

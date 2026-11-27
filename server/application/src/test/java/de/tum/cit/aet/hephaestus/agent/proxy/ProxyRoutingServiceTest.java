@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
@@ -67,6 +68,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final ProxyRoutingService routing = new ProxyRoutingService(
             jobs,
             turns,
+            mock(ConversationScopeFence.class),
             mapper,
             reviews,
             runs,

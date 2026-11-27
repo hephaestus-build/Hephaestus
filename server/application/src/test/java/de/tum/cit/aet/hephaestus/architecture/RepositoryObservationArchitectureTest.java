@@ -56,7 +56,8 @@ class RepositoryObservationArchitectureTest extends HephaestusArchitectureTest {
             for (var call : type.getMethodCallsFromSelf()) {
                 var target = call.getTargetOwner();
                 String method = call.getName();
-                if ((target.getName().equals(QUERIES) && method.equals("applyObservation"))
+                if ((target.getName().equals(QUERIES)
+                                && (method.equals("applyObservation") || method.equals("restrictPublicAccess")))
                         || OLD_WRITES.contains(method)
                         || (target.isEquivalentTo(ResourceReaders.class) && PROOF_MUTATIONS.contains(method))
                         || (target.isEquivalentTo(Repository.class)

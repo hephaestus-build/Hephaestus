@@ -41,6 +41,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     .map(JavaFieldAccess::getOrigin)
                     .collect(Collectors.toUnmodifiableSet());
     private static final String EXPORT_TABLE = "account_export";
+    private static final String PERSONAL_GOAL_TABLE = "personal_goal";
     private static final Set<String> NON_WRITING_REPOSITORY_METHODS = Set.of(
             "findByIdAndAccountId", "findStatus", "tryLockGeneration", "existsByAccountIdAndStatusIn", "lockSources");
 
@@ -59,12 +60,26 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .toList();
         assertThat(tables)
                 .as("Enroll each @PersonOwned store in this rule when it enters the person data inventory")
-                .containsExactly(EXPORT_TABLE);
+                .containsExactlyInAnyOrder(EXPORT_TABLE, PERSONAL_GOAL_TABLE);
         assertThat(classes.stream()
                         .filter(type -> type.isAnnotatedWith(PersonDataStores.class))
                         .flatMap(type -> Arrays.stream(
                                 type.getAnnotationOfType(PersonDataStores.class).value())))
-                .contains(EXPORT_TABLE);
+                .contains(EXPORT_TABLE)
+                .doesNotContain(PERSONAL_GOAL_TABLE);
+    }
+
+    @Test
+    void shouldKeepPersonalGoalStorageInertUntilItsWritesHaveAdmission() {
+        assertThat(classes.stream()
+                        .filter(type -> type.isAssignableTo(Repository.class))
+                        .filter(type -> type.getDirectDependenciesFromSelf().stream()
+                                .anyMatch(dependency -> dependency
+                                        .getTargetClass()
+                                        .getName()
+                                        .equals("de.tum.cit.aet.hephaestus.account.PersonalGoal"))))
+                .as("Personal goal writes require an owner and lifecycle admission rule")
+                .isEmpty();
     }
 
     @Test
