@@ -551,7 +551,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         beans.getBean(PersonDataRequestRepository.class),
                         beans.getBean(RestoredWorkspacePurges.class),
                         beans.getBean(RestoredDisconnects.class),
-                        new RestoredOwnerContent(jdbc, beans.getBean(RestoredMessageDeletions.class), (owner, ids) -> {}),
+                        new RestoredOwnerContent(
+                                jdbc, beans.getBean(RestoredMessageDeletions.class), (owner, ids) -> {}),
                         beans.getBean(RestoredCollectionErasures.class),
                         beans.getBean(RestoredSlackMessageChanges.class),
                         beans.getBean(RestoredSlackChannelErasures.class),
