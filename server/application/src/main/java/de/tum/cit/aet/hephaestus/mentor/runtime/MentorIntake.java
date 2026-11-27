@@ -207,7 +207,8 @@ public class MentorIntake implements MentorIngress {
                 yield new RequestRef(id, Objects.requireNonNull(request).version());
             }
             case RECORDED -> null;
-            case PENDING -> throw new IllegalStateException("Only a sealed review's event waits, and intake writes none");
+            case PENDING ->
+                throw new IllegalStateException("Only a sealed review's event waits, and intake writes none");
         };
     }
 
