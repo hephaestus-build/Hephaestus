@@ -204,6 +204,7 @@ PersonDataProviderDTO.id  # identifier
 PersonDataRequestDTO.completed
 PersonDataRequestDTO.counts  # rows of one named person, for their data request
 PersonDataScopeDTO.accountId  # identifier
+PersonalGoalDTO.revision  # revision of the signed-in owner's goal
 PracticeDTO.position
 PracticeDraftDTO.versionNumber
 PracticeFileProblemDTO.column

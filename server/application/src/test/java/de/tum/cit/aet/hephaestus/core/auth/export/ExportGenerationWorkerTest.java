@@ -57,6 +57,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 assembler,
                 accountId -> List.of(),
                 mock(AccountFeedbackExport.class),
+                ignored -> null,
                 objectMapper,
                 new AccountExportWriter(repository, accounts, clock),
                 metrics,
@@ -97,7 +98,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of());
+                List.of(),
+                null);
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
         when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1, 2, 3});
 
@@ -170,7 +172,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                 .thenReturn(Optional.of(export))
                 .thenReturn(Optional.of(rolledBack));
         when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
-        when(bundle.withErasableSources(List.of(), List.of(), List.of())).thenReturn(bundle);
+        when(bundle.withErasableSources(List.of(), List.of(), List.of(), null)).thenReturn(bundle);
         when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
         when(repository.save(export)).thenThrow(new IllegalStateException("save failed"));
 

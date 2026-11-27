@@ -1,5 +1,7 @@
 # Every @WorkspaceAgnostic bypass, one per line, sorted: a type by its name, a method by its full name (WorkspaceAgnosticRatchetTest).
 de.tum.cit.aet.hephaestus.account.AccountPreferencesService
+de.tum.cit.aet.hephaestus.account.PersonalGoalController
+de.tum.cit.aet.hephaestus.account.PersonalGoalRepository
 de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.backfillCommitActors(java.lang.Long, java.util.List)
 de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.findWorkspaceIdsByRepositoryIds(java.util.Collection)
 de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.isReplyOnlyReview(long)

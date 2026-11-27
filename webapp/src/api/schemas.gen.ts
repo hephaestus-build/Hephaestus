@@ -8221,6 +8221,21 @@ export const PersonDataScopeSchema = {
 	required: ["identities"],
 } as const;
 
+export const PersonalGoalSchema = {
+	type: "object",
+	description: "The goal in the signed-in account's own words, with the revision of the goal slot.",
+	properties: {
+		revision: {
+			type: "integer",
+			format: "int64",
+		},
+		words: {
+			type: "string",
+		},
+	},
+	required: ["revision"],
+} as const;
+
 export const PracticeSchema = {
 	type: "object",
 	properties: {
@@ -15559,6 +15574,23 @@ export const SaveLlmCallPoolRequestSchema = {
 		},
 	},
 	required: ["displayName", "slug"],
+} as const;
+
+export const SavePersonalGoalSchema = {
+	type: "object",
+	properties: {
+		revision: {
+			type: "integer",
+			format: "int64",
+			minimum: 0,
+		},
+		words: {
+			type: "string",
+			maxLength: 500,
+			minLength: 0,
+		},
+	},
+	required: ["revision", "words"],
 } as const;
 
 export const ScanAvailabilitySchema = {

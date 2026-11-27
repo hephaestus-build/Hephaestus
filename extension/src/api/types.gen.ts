@@ -4342,6 +4342,14 @@ export type PersonDataScope = {
 	identities: Array<Identity>;
 };
 
+/**
+ * The goal in the signed-in account's own words, with the revision of the goal slot.
+ */
+export type PersonalGoal = {
+	revision: number;
+	words?: string;
+};
+
 export type Practice = {
 	catalogOrigin: CatalogOrigin;
 	createdAt: string;
@@ -6795,6 +6803,11 @@ export type SaveLlmCallPoolRequest = {
 	 * A bucket of input and output tokens together
 	 */
 	tokensPerMinute?: number;
+};
+
+export type SavePersonalGoal = {
+	revision: number;
+	words: string;
 };
 
 export type ScanAvailability = {
@@ -14268,6 +14281,100 @@ export type RemovePasskeyResponses = {
 	 */
 	200: unknown;
 };
+
+export type ForgetPersonalGoalData = {
+	body?: never;
+	path?: never;
+	query: {
+		revision: number;
+	};
+	url: "/user/personal-goal";
+};
+
+export type ForgetPersonalGoalErrors = {
+	/**
+	 * The caller has not signed in recently (problem type step-up-required)
+	 */
+	403: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ForgetPersonalGoalError = ForgetPersonalGoalErrors[keyof ForgetPersonalGoalErrors];
+
+export type ForgetPersonalGoalResponses = {
+	/**
+	 * Goal forgotten
+	 */
+	200: PersonalGoal;
+};
+
+export type ForgetPersonalGoalResponse =
+	ForgetPersonalGoalResponses[keyof ForgetPersonalGoalResponses];
+
+export type GetPersonalGoalData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/user/personal-goal";
+};
+
+export type GetPersonalGoalErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPersonalGoalError = GetPersonalGoalErrors[keyof GetPersonalGoalErrors];
+
+export type GetPersonalGoalResponses = {
+	/**
+	 * OK
+	 */
+	200: PersonalGoal;
+};
+
+export type GetPersonalGoalResponse = GetPersonalGoalResponses[keyof GetPersonalGoalResponses];
+
+export type SavePersonalGoalData = {
+	body: SavePersonalGoal;
+	path?: never;
+	query?: never;
+	url: "/user/personal-goal";
+};
+
+export type SavePersonalGoalErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type SavePersonalGoalError = SavePersonalGoalErrors[keyof SavePersonalGoalErrors];
+
+export type SavePersonalGoalResponses = {
+	/**
+	 * OK
+	 */
+	200: PersonalGoal;
+};
+
+export type SavePersonalGoalResponse = SavePersonalGoalResponses[keyof SavePersonalGoalResponses];
 
 export type GetPublicActivityChoiceData = {
 	body?: never;

@@ -681,6 +681,7 @@ class AccountExportMessageErasureIntegrationTest extends BaseIntegrationTest {
                 assembler,
                 messages,
                 feedback,
+                ignored -> null,
                 objectMapper,
                 writer,
                 new PrivacyJobMetrics(new SimpleMeterRegistry()),

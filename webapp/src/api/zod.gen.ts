@@ -2413,6 +2413,14 @@ export const zPersonDataRequest = z.object({
 	state: zPersonDataRequestState,
 });
 
+/**
+ * The goal in the signed-in account's own words, with the revision of the goal slot.
+ */
+export const zPersonalGoal = z.object({
+	revision: z.int(),
+	words: z.string().optional(),
+});
+
 export const zPracticeDefinitionField = z.enum([
 	"NAME",
 	"REVIEW_ON",
@@ -4422,6 +4430,11 @@ export const zSaveLlmCallPoolRequest = z.object({
 		.regex(/[a-z0-9]+(-[a-z0-9]+)*/),
 	tokensPerCall: z.int().optional(),
 	tokensPerMinute: z.int().optional(),
+});
+
+export const zSavePersonalGoal = z.object({
+	revision: z.int(),
+	words: z.string().min(0).max(500),
 });
 
 export const zScanAvailability = z.object({

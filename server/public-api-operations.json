@@ -48,6 +48,10 @@
 		"access": "internal"
 	},
 	{
+		"operation": "DELETE /user/personal-goal",
+		"access": "internal"
+	},
+	{
 		"operation": "DELETE /user/sessions",
 		"access": "internal"
 	},
@@ -458,6 +462,10 @@
 	},
 	{
 		"operation": "GET /user/passkeys",
+		"access": "internal"
+	},
+	{
+		"operation": "GET /user/personal-goal",
 		"access": "internal"
 	},
 	{
@@ -1672,6 +1680,10 @@
 	},
 	{
 		"operation": "PUT /user/notification-preferences",
+		"access": "internal"
+	},
+	{
+		"operation": "PUT /user/personal-goal",
 		"access": "internal"
 	},
 	{
