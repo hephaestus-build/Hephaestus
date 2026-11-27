@@ -97,7 +97,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                     3,
                     5,
                     7,
-                    new AuthorityScope.Slack(where.workspaceId(), 11, where.connectionId(), 13, actor.nativeActorId())));
+                    new AuthorityScope.Slack(
+                            where.workspaceId(), 11, where.connectionId(), 13, actor.nativeActorId())));
         });
         intake = new MentorIntake(
                 rows,
@@ -192,7 +193,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
     private UUID ask(String message) {
         var admission = admit(IngressKind.MESSAGE, "e" + message, message, "1700000000.000100");
-        return Objects.requireNonNull(((Admission.Admitted) admission).request()).requestId();
+        return Objects.requireNonNull(((Admission.Admitted) admission).request())
+                .requestId();
     }
 
     private Admission admit(IngressKind kind, String event, String message, String revision) {
