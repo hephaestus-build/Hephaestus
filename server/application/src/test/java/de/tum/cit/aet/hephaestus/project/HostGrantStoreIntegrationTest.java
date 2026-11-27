@@ -154,6 +154,25 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseAnApprovedPairingWhenItsApproverLeavesATeamAndKeepAPendingOne() {
+        UUID approved = approvedPairing(student);
+        UUID classmatesPairing = approvedPairing(classmate);
+        UUID pending = pendingPairing();
+
+        jdbc.update(
+                "DELETE FROM project_team_member WHERE team_id = ? AND workspace_id = ? AND account_id = ?",
+                team,
+                id(course),
+                student);
+
+        assertThat(pairingExists(approved)).isFalse();
+        assertThat(pairingExists(classmatesPairing)).isTrue();
+        assertThat(pairingExists(pending))
+                .as("a pending request names no account")
+                .isTrue();
+    }
+
+    @Test
     void shouldDeleteTheGrantsAndPairingsOfAnErasedAccountAndNoOthers() {
         grant(course, team, student);
         approvedPairing(student);

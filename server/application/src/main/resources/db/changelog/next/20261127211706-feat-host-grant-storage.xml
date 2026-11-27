@@ -47,4 +47,22 @@ DROP TABLE public.host_grant;
 DROP TABLE public.host_pairing;
         </rollback>
     </changeSet>
+    <changeSet id="1795814226610-2" author="hephaestus">
+        <comment>A pairing request names its approving account, not the team that it approved, so the end of any team membership of that account refuses its approved requests (ADR 0166 rule 6). Leaving a team, leaving the workspace, erasure and workspace purge all delete team memberships. A request of another team is refused too, and the host pairs again.</comment>
+        <createProcedure>
+CREATE FUNCTION public.refuse_host_pairings_of_former_member() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM public.host_pairing p WHERE p.approved_account_id = OLD.account_id;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER project_team_member_end_host_pairings AFTER DELETE ON public.project_team_member
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_host_pairings_of_former_member();
+        </sql>
+        <rollback>
+DROP TRIGGER project_team_member_end_host_pairings ON public.project_team_member;
+DROP FUNCTION public.refuse_host_pairings_of_former_member();
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
