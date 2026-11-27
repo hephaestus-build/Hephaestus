@@ -61,9 +61,15 @@ An unavailable reply target gives a fixed unavailable result.
 An unavailable commitment gives no text or presence hint.
 
 For a personal item in a Slack DM, check the grant, source custody, model and payer, and destination before adding it.
+Exclude a failing item before provider use.
 Record its grant generation with its basis edge and carry it into any derived history and summary.
-Build the default DM packet independently.
-A fallback uses an answer prepared only from that packet.
+Repeat all four checks at result commit, render and send.
+If any check fails after model use, discard the private-derived draft in full.
+This also applies when the provider loses approval for personal-purpose input.
+Build the default DM packet and its answer independently.
+Use that answer or a fixed app pointer only when the original route and readback permit it.
+A possible earlier write stays Unconfirmed until readback resolves it.
+After a restore, invalidate DM grants before opening access.
 
 ### Compaction and recall
 
