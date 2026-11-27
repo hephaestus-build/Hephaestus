@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 /**
  * One canonical provider message, owned by the account of its verified author. Its producer is pinned at first insert, so edits and deletes follow
  * it across cutover and rollback. A delete leaves the row as a tombstone, so a create that arrives late opens nothing.
- * Only the intake writes it.
+ * {@link MentorIntake} writes it.
  */
 @Entity
 @PersonOwned

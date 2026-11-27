@@ -16,6 +16,10 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorIntake;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.IngressEnvelope;
+import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import jakarta.persistence.Table;
 import jakarta.persistence.criteria.CriteriaDelete;
 import jakarta.persistence.criteria.CriteriaUpdate;
@@ -103,18 +107,40 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .anyMatch(call -> call.getName().equals("admitWrite"));
     }
 
-    /** The workspace erasure deletes the mentor's rows; the intake writer that admits rows comes next. */
+    /**
+     * Only the intake writes the mentor's rows, after the account's write fence: the repository holds their DML, and
+     * only the intake calls its writes. A workspace erasure uses the owner function.
+     */
     @Test
-    void shouldLeaveMentorRowsUnwrittenUntilTheirGuardedWriterExists() throws IOException {
+    void shouldKeepMentorWritesBehindTheFencedIntake() throws IOException {
+        var repository =
+                Path.of("src/main/java", MentorSourceRepository.class.getName().replace('.', '/') + ".java");
         try (var files = Files.walk(PRODUCTION_SOURCES)) {
             for (Path file :
                     files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                assertThat(SourceSql.statements(Files.readString(file)).stream()
-                                .filter(sql -> MENTOR_DML.matcher(sql).find()))
+                var dml = SourceSql.statements(Files.readString(file)).stream()
+                        .filter(sql -> MENTOR_DML.matcher(sql).find())
+                        .toList();
+                assertThat(file.equals(repository) || dml.isEmpty())
                         .as("Direct mentor DML in %s", file)
-                        .isEmpty();
+                        .isTrue();
             }
         }
+        var readsAndErasure = Set.of("owner", "lockSource", "lockRequest", "eraseWorkspace");
+        assertThat(classes.stream()
+                        .flatMap(type -> type.getMethodCallsFromSelf().stream())
+                        .filter(call -> call.getTargetOwner().isAssignableTo(MentorSourceRepository.class))
+                        .filter(call -> !readsAndErasure.contains(call.getName()))
+                        .filter(call -> !call.getOriginOwner().isEquivalentTo(MentorIntake.class))
+                        .map(call -> call.getDescription()))
+                .as("Write the mentor's rows through MentorIntake")
+                .isEmpty();
+        JavaMethod admit = classes.get(MentorIntake.class).getMethod("admit", IngressEnvelope.class, Producer.class);
+        assertThat(admit.getMethodCallsFromSelf())
+                .anyMatch(call -> call.getTargetOwner().isAssignableTo(PersonDataWriteFence.class)
+                        && call.getName().equals("holdForAccountWrite"))
+                .anyMatch(call -> call.getTargetOwner().isAssignableTo(OwnerScope.class)
+                        && call.getName().equals("ofJob"));
     }
 
     @Test
