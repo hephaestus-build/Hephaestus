@@ -246,8 +246,7 @@ public class ProviderEventReceiver {
                 else {
                     long id = candidate.connectionId();
                     handled += handoff.store(
-                            new VerifiedWebhookHandoff.LockedBinding(
-                                    id, connection.getInstanceKey(), configured),
+                            new VerifiedWebhookHandoff.LockedBinding(id, connection.getInstanceKey(), configured),
                             arrival);
                 }
             }
