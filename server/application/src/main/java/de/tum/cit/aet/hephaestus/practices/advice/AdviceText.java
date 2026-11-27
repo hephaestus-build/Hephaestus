@@ -28,9 +28,11 @@ final class AdviceText {
 
     /**
      * A work noun right after "before" or "after", with only spaces between them, is a moment, not work: "add two tests
-     * before review". Any other character between them, such as a full stop or a line break, keeps the noun.
+     * before review". Any other character between them, such as a full stop or a line break, keeps the noun. So does a
+     * letter, a digit or a mark written against "before" or "after".
      */
-    private static final Pattern MOMENT = Pattern.compile("(?<![\\p{L}\\p{N}_])(?:before|after) +" + WORK_NOUN + "\\b");
+    private static final Pattern MOMENT =
+            Pattern.compile("\\b(?<![\\p{L}\\p{N}_])(?:before|after) +" + WORK_NOUN + "\\b");
 
     /**
      * A numeral written against the first word of a work noun, such as "3PRs" or "3pull-requests", is a number and a

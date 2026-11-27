@@ -84,6 +84,8 @@ class AdviceTextTest extends BaseUnitTest {
                     You opened 3PRs without tests. | refuse
                     You opened 3pull-requests without tests. | refuse
                     You opened 3 \u00e9before PRs. | refuse
+                    You opened 3 e\u0301before PRs. | refuse
+                    You opened 3 \u0130before PRs. | refuse
                     More than once you merged a pull request without review. | refuse
                     Your thirtieth pull request had no tests. | refuse
                     Add two tests before review. | admit
