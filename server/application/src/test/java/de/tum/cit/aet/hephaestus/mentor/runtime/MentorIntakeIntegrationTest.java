@@ -577,8 +577,10 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
             statement.execute("SELECT pg_advisory_lock(54330001)");
             var holder = new AtomicInteger();
             var delete = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
-                holder.set(Objects.requireNonNull(
-                        jdbcClient.sql("SELECT pg_backend_pid()").query(Integer.class).single()));
+                holder.set(Objects.requireNonNull(jdbcClient
+                        .sql("SELECT pg_backend_pid()")
+                        .query(Integer.class)
+                        .single()));
                 jdbcClient
                         .sql("SELECT set_config('mentor.probe', 'on', true)")
                         .query(String.class)
@@ -603,7 +605,9 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 Awaitility.await()
                         .atMost(Duration.ofSeconds(20))
                         .until(() -> create.isDone() || waitingOn(holder.get()) > 0);
-                assertThat(create.isDone()).as("the create waits behind the delete").isFalse();
+                assertThat(create.isDone())
+                        .as("the create waits behind the delete")
+                        .isFalse();
                 statement.execute("SELECT pg_advisory_unlock(54330001)");
 
                 assertThat(delete.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e3", null));
