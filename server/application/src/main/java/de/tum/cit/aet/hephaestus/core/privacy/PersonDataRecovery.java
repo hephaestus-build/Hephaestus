@@ -5,8 +5,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredRecordDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
@@ -63,8 +61,7 @@ final class PersonDataRecovery implements SmartLifecycle {
     private final PersonDataRequestRepository requests;
     private final RestoredWorkspacePurges purges;
     private final RestoredDisconnects disconnects;
-    private final RestoredMessageDeletions messages;
-    private final RestoredRecordDeletions records;
+    private final RestoredOwnerContent content;
     private final RestoredCollectionErasures collections;
     private final RestoredSlackMessageChanges slackMessages;
     private final RestoredSlackChannelErasures slackChannels;
@@ -79,8 +76,7 @@ final class PersonDataRecovery implements SmartLifecycle {
             PersonDataRequestRepository requests,
             RestoredWorkspacePurges purges,
             RestoredDisconnects disconnects,
-            RestoredMessageDeletions messages,
-            RestoredRecordDeletions records,
+            RestoredOwnerContent content,
             RestoredCollectionErasures collections,
             RestoredSlackMessageChanges slackMessages,
             RestoredSlackChannelErasures slackChannels,
@@ -92,8 +88,7 @@ final class PersonDataRecovery implements SmartLifecycle {
         this.requests = requests;
         this.purges = purges;
         this.disconnects = disconnects;
-        this.messages = messages;
-        this.records = records;
+        this.content = content;
         this.collections = collections;
         this.slackMessages = slackMessages;
         this.slackChannels = slackChannels;
@@ -241,9 +236,7 @@ final class PersonDataRecovery implements SmartLifecycle {
             for (WorkspacePurge purge : manifest.workspacePurges()) purges.purgeAgain(purge.workspaceId());
             for (CollectionErasure collection : manifest.collectionErasures())
                 collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
-            for (MessageDeletion message : manifest.messageDeletions())
-                messages.deleteAgain(message.workspaceId(), message.entryId());
-            records.deleteAgain(recordDeletions);
+            content.deleteAgain(manifest.messageDeletions(), recordDeletions);
             for (SlackChannelErasure channel : manifest.slackChannelErasures()) {
                 Instant erasedAt = Objects.requireNonNullElse(channel.erasedAt(), manifest.restorePoint());
                 slackChannels.eraseAgain(

@@ -852,8 +852,10 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                             beans.getBean(PersonDataRequestRepository.class),
                             beans.getBean(RestoredWorkspacePurges.class),
                             beans.getBean(RestoredDisconnects.class),
-                            beans.getBean(RestoredMessageDeletions.class),
-                            new PersonalGoalRecoveryAdapter(jdbc, beans.getBean(OwnerScope.class), transactions),
+                            new RestoredOwnerContent(
+                                    jdbc,
+                                    beans.getBean(RestoredMessageDeletions.class),
+                                    new PersonalGoalRecoveryAdapter(jdbc, beans.getBean(OwnerScope.class), transactions)),
                             beans.getBean(RestoredCollectionErasures.class),
                             beans.getBean(RestoredSlackMessageChanges.class),
                             beans.getBean(RestoredSlackChannelErasures.class),
