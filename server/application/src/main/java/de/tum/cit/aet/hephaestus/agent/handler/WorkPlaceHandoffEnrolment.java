@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -174,7 +175,7 @@ public class WorkPlaceHandoffEnrolment {
             decision =
                     handoff == null || handoffs.insertOnce(handoff) == 1 ? built.decision() : Decision.ALREADY_WRITTEN;
         }
-        TransactionCallbacks.afterCommit(decisions.get(decision)::increment);
+        TransactionCallbacks.afterCommit(Objects.requireNonNull(decisions.get(decision))::increment);
     }
 
     /** Reads the sealed rows, then decodes and scopes them in memory. It writes nothing. */
