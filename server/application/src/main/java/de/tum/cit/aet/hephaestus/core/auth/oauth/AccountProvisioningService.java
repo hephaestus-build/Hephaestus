@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,11 +88,10 @@ public class AccountProvisioningService {
     public ProvisionResult resolveOrProvision(
             String registrationId, String subject, OAuth2User principal, AuthIntentCookie.@Nullable Intent intent) {
         LoginProvider provider = requireLoginProvider(registrationId);
-        // A registration cached before another server replaced this row could be another type's. This release
-        // signs in through no OIDC row, so it never keys a subject into an issuer's namespace.
-        if (provider.getType() == LoginProvider.ProviderType.OIDC) {
-            throw new OAuth2AuthenticationException("provider_unavailable");
-        }
+        boolean oidc = provider.getType() == LoginProvider.ProviderType.OIDC;
+        // Before any write: the token's issuer keys the identity's namespace, and a registration cached before
+        // another server replaced this row could be another type's.
+        if (oidc) requireIssuerOf(provider, principal);
         long providerId =
                 gitProviderRegistry.resolveProviderId(provider.getType().name(), provider.getBaseUrl());
         AuthIntentCookie.Intent.Mode mode = (intent != null) ? intent.mode() : AuthIntentCookie.Intent.Mode.LOGIN;
@@ -103,7 +103,10 @@ public class AccountProvisioningService {
         if (provider.getType().isLinkOnly() && mode != AuthIntentCookie.Intent.Mode.LINK) {
             throw new LinkOnlyProviderLoginException(registrationId);
         }
-        String teamId = teamIdOf(principal);
+        // An OIDC subject is unique within its issuer, so a tenant claim such as Entra's tid never splits it.
+        String teamId = oidc ? null : teamIdOf(principal);
+        // A username can change and is not unique (OpenID Connect Core § 5.7), so it grants no bootstrap admin.
+        String bootstrapLogin = oidc ? null : loginOf(principal);
         // Both link-only providers are multi-tenant: a Slack U… / Outline user UUID is only unique
         // within
         // its team, so a null teamId would alias identities across tenants — fail closed.
@@ -157,7 +160,7 @@ public class AccountProvisioningService {
             boolean linkedAuthority = absorbed || (mode == AuthIntentCookie.Intent.Mode.LINK && reactivated);
             if (linkedAuthority) publishIdentityLinked(accountId);
             return new ProvisionResult(
-                    promoteIfBootstrapAdmin(account, registrationId, subject, loginOf(principal)), linkedAuthority);
+                    promoteIfBootstrapAdmin(account, registrationId, subject, bootstrapLogin), linkedAuthority);
         }
 
         if (mode == AuthIntentCookie.Intent.Mode.LINK) {
@@ -206,8 +209,7 @@ public class AccountProvisioningService {
                 created.getId(),
                 registrationId,
                 created.getPrimaryEmailVerifiedAt() != null);
-        String login = loginOf(principal);
-        Account result = promoteIfBootstrapAdmin(created, registrationId, subject, login);
+        Account result = promoteIfBootstrapAdmin(created, registrationId, subject, bootstrapLogin);
         if (result.getAppRole() != Account.AppRole.APP_ADMIN && adminBootstrapPolicy.isConfigured()) {
             // Cold-start aid: a new account on an allowlist-configured instance that did NOT
             // match.
@@ -221,6 +223,17 @@ public class AccountProvisioningService {
                     subject);
         }
         return new ProvisionResult(result, false);
+    }
+
+    /**
+     * The token's issuer must be the row's. The registration that validated the token can be up to a minute old on
+     * this replica, while the row, which keys the identity, is read now.
+     */
+    private static void requireIssuerOf(LoginProvider provider, OAuth2User principal) {
+        var issuer = principal instanceof OidcUser oidc ? oidc.getIssuer() : null;
+        if (issuer == null || !issuer.toString().replaceAll("/+$", "").equals(provider.getBaseUrl())) {
+            throw new OAuth2AuthenticationException("invalid_issuer");
+        }
     }
 
     private void publishIdentityLinked(long accountId) {

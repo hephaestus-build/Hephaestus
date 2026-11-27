@@ -31,7 +31,9 @@ sequenceDiagram
 
 Identity linking uses the same OAuth exchange but binds its sealed intent to the already
 signed-in account. It cannot create an authenticated link from an anonymous request. Slack and
-Outline support linking only, not sign-in.
+Outline support linking only, not sign-in. A generic OpenID Connect provider signs in: its ID token is
+validated against the issuer's discovered key set, and its identity is keyed on the full issuer and the
+subject ([ADR 0088, update of 2026-11-27](decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md#update--2026-11-27-rule-1-an-openid-connect-provider-signs-in)).
 
 Each [`identity`](./auth-glossary.md) row keys an account to one provider user by
 `(provider_id, provider_user_key, team_key)`. Roster sync creates an unclaimed account for each new

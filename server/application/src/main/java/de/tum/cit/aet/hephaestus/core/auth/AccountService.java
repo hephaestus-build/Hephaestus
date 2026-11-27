@@ -130,11 +130,7 @@ public class AccountService {
                         "We could not find that connected account. It may"
                                 + " have been deleted. Reload the page to see"
                                 + " what is current."));
-        // This release signs in through GitHub and GitLab only. An OIDC identity that a later release linked
-        // is a way in there, so this release neither drops it nor drops the last way in that it serves.
-        boolean guarded = isSignInIdentity(target)
-                || providers.providerTypeName(target.getProviderId()).equals("OIDC");
-        if (guarded
+        if (isSignInIdentity(target)
                 && active.stream()
                         .filter(identity -> !identity.getId().equals(identityId))
                         .noneMatch(this::isSignInIdentity)) {
@@ -159,7 +155,7 @@ public class AccountService {
 
     private boolean isSignInIdentity(Identity identity) {
         String type = providers.providerTypeName(identity.getProviderId());
-        return type.equals("GITHUB") || type.equals("GITLAB");
+        return type.equals("GITHUB") || type.equals("GITLAB") || type.equals("OIDC");
     }
 
     public Page<Account> adminList(int page, int size) {

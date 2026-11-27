@@ -55,6 +55,10 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long resolveProviderId(String providerTypeName, String baseUrl) {
         IdentityProviderType type = IdentityProviderType.valueOf(providerTypeName);
+        if (type == IdentityProviderType.OIDC) {
+            // The full issuer is the namespace: two realms on one host are two issuers.
+            return providers.findId(type, baseUrl).orElseGet(() -> namespaces.registerIdentityProvider(type, baseUrl));
+        }
         String origin = ScmOrigin.of(baseUrl)
                 .orElseThrow(() -> new IllegalStateException("login provider baseUrl has no origin: " + baseUrl));
         return providers
@@ -67,6 +71,7 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Transactional(readOnly = true)
     public Optional<Long> findProviderId(String providerTypeName, String baseUrl) {
         var type = IdentityProviderType.valueOf(providerTypeName);
+        if (type == IdentityProviderType.OIDC) return providers.findId(type, baseUrl);
         return ScmOrigin.of(baseUrl)
                 .flatMap(origin -> providers.findByOrigin(type, origin))
                 .map(IdentityProviderLookup.Provider::id);

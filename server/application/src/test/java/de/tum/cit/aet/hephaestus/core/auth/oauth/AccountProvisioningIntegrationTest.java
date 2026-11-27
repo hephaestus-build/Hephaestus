@@ -321,9 +321,12 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(Account.Status.BLOCKED);
     }
 
-    /** A registration cached before another server made the row OIDC could still complete a callback here. */
+    /**
+     * A registration cached before another server made the row OIDC can complete a callback with another type's
+     * user. It is no ID token of the row's issuer, so it keys no subject into the issuer's namespace.
+     */
     @Test
-    void shouldRefuseASignInThroughAnOidcRowThatALaterReleaseWrote() {
+    void shouldRefuseACallbackOnAnOidcRowWhoseUserIsNoIdTokenOfItsIssuer() {
         seedProvider("school-stale", LoginProvider.ProviderType.OIDC);
 
         assertThatThrownBy(() -> service.resolveOrProvision(
@@ -334,7 +337,7 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                 .isInstanceOfSatisfying(
                         OAuth2AuthenticationException.class,
                         exception ->
-                                assertThat(exception.getError().getErrorCode()).isEqualTo("provider_unavailable"));
+                                assertThat(exception.getError().getErrorCode()).isEqualTo("invalid_issuer"));
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM identity_provider WHERE type='OIDC' AND server_url=?",
                         Long.class,

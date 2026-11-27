@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
@@ -14,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthFailureHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthSuccessHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.OutlineAuthInfoUserService;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderClientRegistrationRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -23,6 +26,7 @@ import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Objects;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -46,6 +50,8 @@ import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResp
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
 import org.springframework.security.oauth2.client.http.OAuth2ErrorResponseErrorHandler;
+import org.springframework.security.oauth2.client.oidc.authentication.OidcIdTokenDecoderFactory;
+import org.springframework.security.oauth2.client.oidc.authentication.OidcIdTokenValidator;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -54,10 +60,15 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
@@ -186,6 +197,49 @@ public class AuthSecurityConfig {
     private ClientHttpRequestFactory guardedRequestFactory() {
         return new ReactorClientHttpRequestFactory(
                 WebClientConnectors.httpClient(scmEndpoints.resolverGroup()).followRedirect(false));
+    }
+
+    /**
+     * Validates an OIDC provider's ID token: signature by the issuer's discovered key set, fetched through the guard;
+     * then {@code iss}, {@code aud}, {@code azp}, {@code exp} and {@code iat}. Spring checks the nonce against the
+     * sealed authorization request. Only asymmetric algorithms, never {@code none} or a shared secret. Slack keeps
+     * Spring's factory. {@code oauth2Login} picks up this one bean of the generic type.
+     */
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
+        var spring = new OidcIdTokenDecoderFactory();
+        RestTemplate keySets =
+                restTemplates.requestFactory(this::guardedRequestFactory).build();
+        // One decoder per registration keeps the decoder's key set cache across sign-ins.
+        Cache<String, JwtDecoder> decoders =
+                Caffeine.newBuilder().maximumSize(64).build();
+        return registration -> {
+            if (!LoginProviderClientRegistrationRepository.isOidcProvider(registration)) {
+                return spring.createDecoder(registration);
+            }
+            var details = registration.getProviderDetails();
+            String jwkSetUri = Objects.requireNonNull(details.getJwkSetUri(), "An OIDC provider has a key set");
+            String key = String.join(
+                    " ",
+                    registration.getRegistrationId(),
+                    registration.getClientId(),
+                    Objects.toString(details.getIssuerUri(), ""),
+                    jwkSetUri);
+            return decoders.get(key, ignored -> {
+                NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                        .jwsAlgorithms(algorithms -> {
+                            algorithms.add(SignatureAlgorithm.RS256);
+                            algorithms.add(SignatureAlgorithm.ES256);
+                            algorithms.add(SignatureAlgorithm.PS256);
+                        })
+                        .restOperations(keySets)
+                        .build();
+                decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                        new JwtTimestampValidator(), new OidcIdTokenValidator(registration)));
+                decoder.setClaimSetConverter(OidcIdTokenDecoderFactory.createDefaultClaimTypeConverter());
+                return decoder;
+            });
+        };
     }
 
     /** The code exchange sends the client secret, so it checks the address that it connects to as well. */

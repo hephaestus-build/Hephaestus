@@ -140,3 +140,21 @@ The signed-in web app and the API run only on the instance host, and a workspace
 A workspace host, where an instance turns it on, serves only the signed-out public page of the workspace.
 Rule 10 now reads: a workspace address is `/w/<slug>` on the instance host.
 The reason is in ADR 0155: a signed-in app on each workspace host made every workspace switch load a new page.
+
+## Update — 2026-11-27: rule 1, an OpenID Connect provider signs in
+
+Rule 1 now reads: GitHub, GitLab and a generic OpenID Connect (OIDC) provider can sign in.
+Slack and Outline only link to a signed-in account.
+
+The reason: a university or a company signs its people in through its own identity provider.
+A person without a GitHub or GitLab account had no way in ([#5409](https://github.com/hephaestus-build/Hephaestus/issues/5409)).
+Rule 2 is unchanged. The provider is upstream: Hephaestus reads its discovery document and validates its ID token, and it runs no identity server.
+
+- **Key.** An OIDC identity is `(provider_id, sub, '')`. The provider row is the exact issuer, path included. Thus, two realms on one host are two namespaces (OpenID Connect Core § 5.7). A tenant claim never splits it. Rule 4 holds: email and `email_verified` are contact data.
+- **Token.** Hephaestus validates the ID token against the issuer's discovered key set (RS256, ES256 or PS256). It checks `iss`, `aud`, `azp`, `exp`, `iat` and the nonce. The code exchange uses PKCE S256 (rule 8). No userinfo call is made. The account takes its claims from the ID token.
+- **Untrusted issuer.** The issuer passes the SCM endpoint policy. The discovery document, the token endpoint and the key set are read only through the egress guard, with no redirect.
+- **One issuer per provider.** An admin cannot change the issuer of a saved provider. A sign-in whose token names another issuer than the provider row is refused.
+- **No authority from a username.** The admin bootstrap list matches an OIDC identity by `registration:subject` only, because `preferred_username` can change.
+- **Rolling.** The release before the one that writes OIDC rows reads them and does not sign in through them.
+
+Enforced by: `OidcSignInIntegrationTest`, `LoginProviderServiceTest#shouldRefuseToChangeTheIssuerOfAnOidcProvider` and `AccountErasureIntegrationTest#shouldExportAndEraseAnOidcAccountWithoutTouchingTheSameSubjectAtAnotherIssuerOnTheHost`.

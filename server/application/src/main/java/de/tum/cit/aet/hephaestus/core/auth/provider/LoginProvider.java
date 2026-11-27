@@ -12,6 +12,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -51,12 +54,13 @@ public class LoginProvider {
             return this == SLACK || this == OUTLINE;
         }
 
-        /**
-         * Whether this release signs in through the type. OIDC is not link-only, but this release only reads
-         * an OIDC row that a later release wrote, so it cannot keep an instance open.
-         */
+        /** Whether a person can sign in through the type, so that a provider of it keeps an instance open. */
         public boolean signsIn() {
-            return this == GITHUB || this == GITLAB;
+            return this == GITHUB || this == GITLAB || this == OIDC;
+        }
+
+        public static Set<ProviderType> signingIn() {
+            return Arrays.stream(values()).filter(ProviderType::signsIn).collect(Collectors.toUnmodifiableSet());
         }
     }
 
