@@ -30,10 +30,14 @@ final class AdviceText {
      * A work noun right after "before" or "after", with only spaces between them, is a moment, not work: "add two tests
      * before review". Any other character between them, such as a full stop or a line break, keeps the noun.
      */
-    private static final Pattern MOMENT = Pattern.compile("\\b(?:before|after) +" + WORK_NOUN + "\\b");
+    private static final Pattern MOMENT = Pattern.compile("(?<![\\p{L}\\p{N}_])(?:before|after) +" + WORK_NOUN + "\\b");
 
-    /** A numeral written against a work noun, such as "3PRs", is a number and a work noun. */
-    private static final Pattern NUMERAL_ON_WORK = Pattern.compile("(\\p{N})(?=" + WORK_NOUN + "\\b)");
+    /**
+     * A numeral written against the first word of a work noun, such as "3PRs" or "3pull-requests", is a number and a
+     * work noun.
+     */
+    private static final Pattern NUMERAL_ON_WORK =
+            Pattern.compile("(\\p{N})(?=(?:pull|merge|prs?|mrs?|issues?|reviews?)\\b)");
 
     private static final Pattern NUMERAL = Pattern.compile("\\p{N}+\\p{L}*");
     private static final Set<String> NUMBER_WORDS = Set.of(

@@ -82,6 +82,8 @@ class AdviceTextTest extends BaseUnitTest {
                     You had never added tests before. Pull requests without tests: 3. | refuse
                     Nothing changed after. Merge requests with no description: 4. | refuse
                     You opened 3PRs without tests. | refuse
+                    You opened 3pull-requests without tests. | refuse
+                    You opened 3 \u00e9before PRs. | refuse
                     More than once you merged a pull request without review. | refuse
                     Your thirtieth pull request had no tests. | refuse
                     Add two tests before review. | admit
