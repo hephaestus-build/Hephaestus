@@ -25,7 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -136,15 +138,19 @@ class PersonDataRollingReleaseIntegrationTest extends BaseIntegrationTest {
     void shouldLeaveARequestWhoseReceiptsNameAStoreOfANewerRelease() {
         UUID id = admit(older);
         // A newer replica erased its live store, and the pass ended before the request completed.
-        jdbc.update(
-                "UPDATE person_data_request SET completed_json=? WHERE id=?",
-                "{\"avatar_step\":{\"count\":1,\"erasedAt\":\"2026-11-27T00:00:00Z\",\"administratorAccountId\":"
-                        + adminId + "}}",
-                id);
+        jdbc.update("UPDATE \"user\" SET avatar_url=NULL WHERE id=?", target.getId());
+        String receipts = mapper.writeValueAsString(
+                Map.of("avatar_step", new PersonDataStoreReceipt(1, Instant.parse("2026-11-27T00:00:00Z"), adminId)));
+        jdbc.update("UPDATE person_data_request SET completed_json=? WHERE id=?", receipts, id);
 
         older.run(id);
 
         assertWaiting(id);
+        assertThat(profileName()).isEqualTo("Target profile");
+        assertThat(PersonDataStoreReceipt.read(
+                        mapper, requests.findById(id).orElseThrow().getCompletedJson()))
+                .as("the older pass wrote no receipt")
+                .isEqualTo(PersonDataStoreReceipt.read(mapper, receipts));
         newer.run(id);
         assertThat(requests.findById(id).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(profileName()).isNull();

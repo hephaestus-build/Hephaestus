@@ -480,10 +480,10 @@ public class PersonDataService {
     }
 
     /**
-     * Whether a selection or a receipt names a store that this replica's inventory does not know. Then the request is
-     * left as it is, for a replica of the release that added the store: the pass changes nothing, so the next scheduled
-     * pass on a newer replica takes it. Outside a rollout this never happens, and the alert on the counter fires when it
-     * keeps happening.
+     * Whether a selection or a receipt names a store that this replica's inventory does not know. Then the pass stops
+     * without a failure and leaves the request for a replica of the release that added the store; the receipts of the
+     * stores it already erased stay, so the next scheduled pass on a newer replica continues from them. Outside a
+     * rollout this never happens, and the alert on the counter fires when it keeps happening.
      */
     private boolean deferredToNewerRelease(UUID id, Set<String> inventory, Set<String> selected, Set<String> receipts) {
         var unknown = new TreeSet<String>();

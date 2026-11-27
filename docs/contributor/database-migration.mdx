@@ -337,16 +337,24 @@ An erasure pass compares the stores that a request froze and erased with the rep
 A release from #5382 on handles a new store in both directions of a roll:
 
 - A replica can meet a store or a receipt that it does not know.
-  It then leaves the request for a replica of the newer release.
-  The pass changes nothing, and the request does not fail.
+  It then stops the pass and leaves the request for a replica of the newer release.
+  The request does not fail, and each store that the pass already erased keeps its receipt.
 - A replica that has a live store that an older request lacks erases that store with an empty selection.
   A live store (`selectionMustStayUnchanged()` is false) erases its current matches, so this loses nothing.
 
-So, once the preceding release includes #5382, a release can register a new live store.
-Its writers come one release later: an older replica can complete an erasure without the new store.
-A store whose selection must stay unchanged cannot be added in a rolling release.
-A newer replica fails an older request that lacks the frozen keys of that store.
-Make such a store live, or ship it in a release that stops every role.
+Add a new store in this order:
+
+1. Ship its table in one release, with no store and no writer.
+2. Register the store as a live store in a later release whose preceding release includes #5382.
+3. Add its writers one release after the registration.
+   An older replica can complete an erasure without the new store.
+   So nothing may write the table before every replica knows the store.
+
+A new store must be live.
+A store whose selection must stay unchanged needs the frozen keys of each request.
+A request that froze before the store existed lacks them, so a replica fails it.
+The request stays in the database, so a release that stops every role fails it too.
+Do not remove a store from the inventory either: a request that names it then waits for a replica that knows it.
 
 The changelog compatibility guard checks each changelog that the latest release tag does not have.
 That tag is the latest published release merged into the head, a release candidate such as `v1.0.0-rc.1` included, but not a tag on the head itself.
