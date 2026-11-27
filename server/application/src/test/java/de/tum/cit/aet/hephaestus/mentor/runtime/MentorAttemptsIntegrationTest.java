@@ -390,7 +390,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 owners,
                 new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class),
                 store());
-        assertThat(new TransactionTemplate(transactions).execute(status -> unwired.current(held)))
+        assertThat(current(unwired, held))
                 .as("no authorization port")
                 .isFalse();
 
@@ -422,7 +422,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 new StaticListableBeanFactory(Map.of("authorization", authorization))
                         .getBeanProvider(MentorAuthorization.class),
                 new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorSourceEvidence.class));
-        assertThat(new TransactionTemplate(transactions).execute(status -> storeless.current(held)))
+        assertThat(current(storeless, held))
                 .as("no store port")
                 .isFalse();
 
@@ -597,8 +597,13 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     }
 
     private boolean current(AttemptCredential credential) {
+        return current(attempts, credential);
+    }
+
+    /** The dispatch fence of one wiring, in its own transaction as a grant runs it. */
+    private boolean current(MentorAttempts wiring, AttemptCredential credential) {
         return Objects.requireNonNull(
-                new TransactionTemplate(transactions).execute(status -> attempts.current(credential)));
+                new TransactionTemplate(transactions).execute(status -> wiring.current(credential)));
     }
 
     private Map<String, @Nullable Object> attempt(UUID request) {
