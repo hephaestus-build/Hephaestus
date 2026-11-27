@@ -14,13 +14,13 @@ public enum FeedbackProducerReason {
     NO_LINKED_AUTHOR,
     /** The author practices name more than one person. */
     SEVERAL_AUTHORS,
-    /** The author's account has not signed in, is blocked, or is being erased. */
+    /** The author's account has not signed in yet. A blocked or deleting author records {@link #OWNER_REFUSED}. */
     AUTHOR_INACTIVE,
     /** The author is no current, visible member of the workspace. */
     AUTHOR_NOT_MEMBER,
     /** The author has practice feedback delivery off, or made no AI choice, or chose No AI. */
     AUTHOR_NOT_CONSENTING,
-    /** A processing restriction or an erasure of the author refused the mailbox row. */
+    /** The write fence refused the mailbox row: a processing restriction, or a blocked or deleting author. */
     OWNER_REFUSED,
     /** The review already has a mailbox row for another owner or another admission. */
     EVENT_MISMATCH,
