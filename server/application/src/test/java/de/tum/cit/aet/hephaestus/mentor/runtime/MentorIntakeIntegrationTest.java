@@ -308,7 +308,8 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
             throws Exception {
         String message = message();
         var refused = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
-        assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR))).isEqualTo(admitted("e1", null));
+        assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR)))
+                .isEqualTo(admitted("e1", null));
         IngressKind first = deleteFirst ? IngressKind.MESSAGE_DELETED : IngressKind.MESSAGE;
         IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
         var admitted = new CountDownLatch(1);

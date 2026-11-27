@@ -112,7 +112,8 @@ public class MentorIntake implements MentorIngress {
             return new Admission.Admitted(eventId, null);
         }
         Source source = Source.of(locked.get());
-        @Nullable Request request = rows.lockRequest(source.id(), owner).map(Request::of).orElse(null);
+        @Nullable
+        Request request = rows.lockRequest(source.id(), owner).map(Request::of).orElse(null);
         @Nullable UUID requestId = request == null ? null : request.id();
         Change change = owner == author
                 ? decide(envelope, source, request, owner)
