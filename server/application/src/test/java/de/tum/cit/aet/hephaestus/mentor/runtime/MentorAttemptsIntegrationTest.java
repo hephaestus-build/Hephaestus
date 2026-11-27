@@ -357,6 +357,27 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 minutes' WHERE id = ?",
                 lease.attemptId());
         assertThat(current(held)).isTrue();
+        owner.update(
+                "UPDATE mentor_request SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+                lease.requestId());
+        assertThat(current(held)).as("past the request deadline").isFalse();
+        owner.update(
+                "UPDATE mentor_request SET deadline = clock_timestamp() + interval '1 hour' WHERE id = ?",
+                lease.requestId());
+        lapse(lease);
+        assertThat(current(held)).as("the lease lapsed").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET leased_until = clock_timestamp() + interval '2 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).isTrue();
+        var unwired = new MentorAttempts(
+                attemptRows,
+                fence,
+                owners,
+                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class));
+        assertThat(new TransactionTemplate(transactions).execute(status -> unwired.current(held)))
+                .as("no authorization port")
+                .isFalse();
 
         admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
         assertThat(current(held)).as("the version moved").isFalse();
