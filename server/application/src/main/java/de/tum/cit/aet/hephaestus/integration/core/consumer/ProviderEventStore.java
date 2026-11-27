@@ -14,7 +14,6 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -94,7 +93,7 @@ public class ProviderEventStore {
     public int store(List<Arrival> arrivals) {
         int stored = 0;
         for (Arrival arrival : arrivals) {
-            stored += events.store(row(arrival));
+            stored += events.store(row(arrival, mapper));
         }
         if (stored > 0) {
             notifications.queuedAfterCommit();
@@ -102,28 +101,7 @@ public class ProviderEventStore {
         return stored;
     }
 
-    /** A delivery the caller already handles inside its receive transaction. The legacy queue never claims it. */
-    public record Handled(long id, Instant receivedAt) {}
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<Handled> storeHandled(long workspaceId, Arrival arrival) {
-        if (!Long.valueOf(workspaceId).equals(arrival.workspaceId()))
-            throw new IllegalArgumentException("Arrival must match the verified workspace");
-        return events.storeHandled(row(arrival)).map(receipt -> new Handled(receipt.getId(), receipt.getReceivedAt()));
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    public boolean hasDelivery(long workspaceId, String provider, String deliveryKey) {
-        return events.existsByWorkspaceIdAndProviderAndDeliveryKey(workspaceId, provider, deliveryKey);
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    @WorkspaceAgnostic("Sets a bound of the current transaction; it reads no table")
-    public void boundLocks(Duration timeout) {
-        events.boundLocks(timeout.toMillis() + "ms");
-    }
-
-    private ProviderEventRepository.NewEvent row(Arrival arrival) {
+    static ProviderEventRepository.NewEvent row(Arrival arrival, ObjectMapper mapper) {
         return new ProviderEventRepository.NewEvent(
                 arrival.workspaceId(),
                 arrival.provider(),
