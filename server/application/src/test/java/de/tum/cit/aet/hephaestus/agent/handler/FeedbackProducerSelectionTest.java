@@ -61,7 +61,8 @@ class FeedbackProducerSelectionTest {
         closed.setMentorWorkspaceIds(Set.of(job.getWorkspaceId()));
         assigned(assignment(AUTHOR, AboutRole.AUTHOR));
 
-        var choice = new FeedbackProducerSelection(closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
+        var choice = new FeedbackProducerSelection(
+                        closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
                 .choose(job, review(PULL_REQUEST, ReviewOrigin.REQUEST), "d");
 
         assertThat(choice).isEqualTo(choice(FeedbackProducer.LEGACY, FeedbackProducerReason.GATE_CLOSED));
@@ -142,7 +143,8 @@ class FeedbackProducerSelectionTest {
     }
 
     private FeedbackProducerSelection.Choice choose(ReviewSnapshot review) {
-        return new FeedbackProducerSelection(properties, pins, assignments, intake, mock(ApplicationEventPublisher.class))
+        return new FeedbackProducerSelection(
+                        properties, pins, assignments, intake, mock(ApplicationEventPublisher.class))
                 .choose(job, review, "d");
     }
 
