@@ -86,6 +86,34 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldQueueOneMentorEffectByItsStableKey() {
+        String key = "request:" + UUID.randomUUID() + ":terminal";
+        String effectId = UUID.randomUUID().toString();
+        var request = new ActionRequest(
+                ActionKind.MENTOR_EFFECT,
+                workspace(),
+                key,
+                key,
+                JsonNodeFactory.instance.objectNode().put("effectId", effectId),
+                null,
+                3,
+                null,
+                null);
+
+        UUID id = actions.enqueue(request);
+        assertThat(actions.enqueue(request)).isEqualTo(id);
+        var withoutMentorProof = new ActionAdmission(context.getBean(ObjectMapper.class)
+                .writeValueAsString(Map.of(
+                        ActionKind.MENTOR_EFFECT.name(), ActionVariants.none().path())));
+        assertThat(store.claim(id, LEASE, withoutMentorProof)).isEmpty();
+        var claim = claimOwn(List.of(id)).getFirst();
+        assertThat(claim.kind()).isEqualTo(ActionKind.MENTOR_EFFECT);
+        assertThat(context.getBean(ObjectMapper.class).readTree(claim.payload()))
+                .isEqualTo(request.payload());
+        store.settle(id, claim.epoch(), new ActionResult.Done("1712345678.000001"), ActionStoreIntegrationTest::ignore);
+    }
+
+    @Test
     void shouldRunALaneOneActionAtATimeInEnqueueOrder() {
         String lane = "test-lane:" + UUID.randomUUID();
         UUID create = actions.enqueue(request(lane, lane + ":create", null, 3));

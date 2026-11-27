@@ -585,6 +585,27 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPreserveRetryAfterWhenBoundReadbackIsThrottledPastItsBudget() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.enqueue(new MockResponse.Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "121")
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                    .build());
+            api.start();
+            var config = SlackMessageService.nativeConfig(
+                    new SlackProperties(api.url("/").toString()));
+            try (var local = serviceWithLocalSlack(config)) {
+                assertThatThrownBy(() -> bind(local, null).readPost("opaque", 1))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                error -> assertThat(error.retryAfterMillis()).isEqualTo(121_000L));
+            }
+        }
+    }
+
+    @Test
     void shouldNotTreatAMatchingMarkerWithoutATimestampAsAbsent() throws Exception {
         try (MockWebServer api = new MockWebServer()) {
             api.setDispatcher(new Dispatcher() {
@@ -619,6 +640,27 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 assertThat(bind(local, null).readPost("opaque", 1))
                         .isEqualTo(new SlackMessageService.Matches(List.of(), true));
             }
+        }
+    }
+
+    /** Review probe premise (passes): an unreachable Slack fails the post without asking for admission. */
+    @Test
+    void probeAPostThatCannotConnectNeverAsksForAdmission() throws Exception {
+        MockWebServer api = new MockWebServer();
+        api.start();
+        var config = localConfig(api, 1000);
+        api.close();
+        var asked = new AtomicInteger();
+        try (var local = serviceWithLocalSlack(config)) {
+            var route = bind(local, null);
+            assertThatThrownBy(() -> route.post(List.of(), "fixed notice", "opaque", () -> {
+                        asked.incrementAndGet();
+                        return true;
+                    }))
+                    .isInstanceOfSatisfying(
+                            SlackSendException.class,
+                            error -> assertThat(error.slackError()).isEqualTo("transport_failure"));
+            assertThat(asked).hasValue(0);
         }
     }
 
