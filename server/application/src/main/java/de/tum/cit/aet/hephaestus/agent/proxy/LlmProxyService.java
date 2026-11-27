@@ -991,7 +991,8 @@ class LlmProxyService {
                     if (reviewProtocol != null
                             && bounds != null
                             && upstream.statusCode().is2xxSuccessful()
-                            && upstream.headers().contentType()
+                            && upstream.headers()
+                                    .contentType()
                                     .filter(MediaType.TEXT_EVENT_STREAM::isCompatibleWith)
                                     .isPresent()) {
                         return endingBeforeFirstContent(responseParts, reviewProtocol, bounds.idle());

@@ -863,7 +863,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             return null;
                         })
                         .when(callLedger)
-                        .complete(any(), eq(CALL), any(), eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
+                        .complete(
+                                any(),
+                                eq(CALL),
+                                any(),
+                                eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
                 call.start(streamingRouting());
                 provider.emitNext(sse(": scheduled\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
                 call.relayed();
@@ -879,7 +883,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 assertThat(call.response.getStatus()).isEqualTo(200);
                 assertThat(call.response.getContentAsString()).containsOnlyOnce("upstream_stalled:");
                 verify(callLedger)
-                        .complete(any(), eq(CALL), any(), eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
+                        .complete(
+                                any(),
+                                eq(CALL),
+                                any(),
+                                eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
                 assertThat(provider.currentSubscriberCount()).isZero();
             }
         }
