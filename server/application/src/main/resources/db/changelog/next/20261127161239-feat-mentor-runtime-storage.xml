@@ -126,4 +126,38 @@ GRANT EXECUTE ON FUNCTION public.mentor_erase_workspace(bigint) TO hephaestus_ap
             <sql>DROP TABLE public.mentor_source</sql>
         </rollback>
     </changeSet>
+    <changeSet id="1795748613337-2" author="hephaestus">
+        <comment>A sealed review's mailbox event names its review, job and admission instead of a provider source (ADR 0160). Each kind keeps to its own columns, a review has one event, and the review's deletion removes it.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.mentor_event
+    ALTER COLUMN binding_id DROP NOT NULL,
+    ALTER COLUMN native_event_id DROP NOT NULL,
+    ALTER COLUMN source_id DROP NOT NULL,
+    ALTER COLUMN source_ref DROP NOT NULL,
+    ADD COLUMN workspace_id BIGINT,
+    ADD COLUMN review_id UUID,
+    ADD COLUMN job_id UUID,
+    ADD COLUMN admission_digest VARCHAR(64);
+-- Each kind keeps to its own columns: a provider event names its source, a sealed review names its review.
+ALTER TABLE public.mentor_event ADD CONSTRAINT ck_mentor_event_kind_shape CHECK (
+    (kind = 'REVIEW_SEALED'
+        AND workspace_id IS NOT NULL AND review_id IS NOT NULL AND job_id IS NOT NULL AND admission_digest IS NOT NULL
+        AND binding_id IS NULL AND native_event_id IS NULL AND source_id IS NULL AND source_ref IS NULL
+        AND request_id IS NULL)
+    OR (kind <> 'REVIEW_SEALED'
+        AND binding_id IS NOT NULL AND native_event_id IS NOT NULL AND source_id IS NOT NULL AND source_ref IS NOT NULL
+        AND workspace_id IS NULL AND review_id IS NULL AND job_id IS NULL AND admission_digest IS NULL));
+ALTER TABLE public.mentor_event ADD CONSTRAINT uk_mentor_event_review UNIQUE (review_id, workspace_id);
+-- A foreign key ignores row-level security, so the review's purge or retention removes its event for every owner.
+ALTER TABLE public.mentor_event ADD CONSTRAINT sfk_mentor_event_review FOREIGN KEY (review_id, workspace_id)
+    REFERENCES public.review (id, workspace_id) ON DELETE CASCADE;
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT sfk_mentor_event_review</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT uk_mentor_event_review</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind_shape</sql>
+            <sql>DELETE FROM public.mentor_event WHERE kind = 'REVIEW_SEALED'</sql>
+            <sql>ALTER TABLE public.mentor_event DROP COLUMN admission_digest, DROP COLUMN job_id, DROP COLUMN review_id, DROP COLUMN workspace_id, ALTER COLUMN source_ref SET NOT NULL, ALTER COLUMN source_id SET NOT NULL, ALTER COLUMN native_event_id SET NOT NULL, ALTER COLUMN binding_id SET NOT NULL</sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

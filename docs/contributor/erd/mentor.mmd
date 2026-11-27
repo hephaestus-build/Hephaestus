@@ -12,16 +12,20 @@ erDiagram
     MentorEvent {
         UUID id PK
         BIGINT account_id FK "NOT NULL"
-        BIGINT binding_id UK "NOT NULL"
-        VARCHAR(255) native_event_id UK "NOT NULL"
+        BIGINT binding_id UK
+        VARCHAR(255) native_event_id UK
         VARCHAR(32) kind "NOT NULL"
-        UUID source_id FK "NOT NULL"
+        UUID source_id FK
         UUID request_id FK
         VARCHAR(16) disposition "NOT NULL"
         VARCHAR(32) reason
-        VARCHAR(64) source_ref "NOT NULL"
+        VARCHAR(64) source_ref
         TIMESTAMPTZ occurred_at "NOT NULL"
         TIMESTAMPTZ received_at "NOT NULL"
+        BIGINT workspace_id FK,UK
+        UUID review_id FK,UK
+        UUID job_id
+        VARCHAR(64) admission_digest
     }
 
     MentorRequest {
@@ -59,8 +63,11 @@ erDiagram
         VARCHAR(16) state "NOT NULL"
     }
 
+    Review["Review · Practices"]
+
     %% Relationships
     %% One-to-One relationships
+    Review ||--|| MentorEvent : has
     MentorSource ||--|| MentorRequest : references
 
     %% One-to-Many relationships
@@ -73,3 +80,4 @@ erDiagram
     classDef metadataEntity stroke-width:1px
     classDef referenceEntity stroke-dasharray:5 5
 
+    class Review referenceEntity

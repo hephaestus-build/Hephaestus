@@ -8,9 +8,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
@@ -71,6 +68,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
@@ -110,6 +108,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -898,18 +898,16 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .as("another admission of the review")
                     .isEqualTo(new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.EVENT_MISMATCH));
 
-            assertThat(mentorEvents(review))
-                    .singleElement()
-                    .satisfies(event -> {
-                        assertThat(event.get("id")).isEqualTo(((MentorReviewIntake.Outcome.Admitted) admitted).eventId());
-                        assertThat(event.get("kind")).isEqualTo("REVIEW_SEALED");
-                        assertThat(event.get("disposition")).isEqualTo("PENDING");
-                        assertThat(event.get("account_id")).isEqualTo(review.developerId());
-                        assertThat(event.get("job_id")).isEqualTo(review.identity().jobId());
-                        assertThat(event.get("admission_digest")).isEqualTo(digest);
-                        assertThat(event.get("source_id")).isNull();
-                        assertThat(event.get("binding_id")).isNull();
-                    });
+            assertThat(mentorEvents(review)).singleElement().satisfies(event -> {
+                assertThat(event.get("id")).isEqualTo(((MentorReviewIntake.Outcome.Admitted) admitted).eventId());
+                assertThat(event.get("kind")).isEqualTo("REVIEW_SEALED");
+                assertThat(event.get("disposition")).isEqualTo("PENDING");
+                assertThat(event.get("account_id")).isEqualTo(review.developerId());
+                assertThat(event.get("job_id")).isEqualTo(review.identity().jobId());
+                assertThat(event.get("admission_digest")).isEqualTo(digest);
+                assertThat(event.get("source_id")).isNull();
+                assertThat(event.get("binding_id")).isNull();
+            });
             // A Slack disconnect erases only the provider events of the workspace.
             transactions.executeWithoutResult(status -> workspaceErasure.eraseWorkspace(review.workspaceId()));
             assertThat(mentorEvents(review)).hasSize(1);
@@ -956,13 +954,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     private MentorReviewIntake.Outcome admitSealed(ClaimedReview review, String digest) {
-        return Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
-                review.workspaceId(),
-                review.reviewId(),
-                review.identity().jobId(),
-                review.developerId(),
-                digest,
-                Instant.now()))));
+        return Objects.requireNonNull(
+                transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                        review.workspaceId(),
+                        review.reviewId(),
+                        review.identity().jobId(),
+                        review.developerId(),
+                        digest,
+                        Instant.now()))));
     }
 
     /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */

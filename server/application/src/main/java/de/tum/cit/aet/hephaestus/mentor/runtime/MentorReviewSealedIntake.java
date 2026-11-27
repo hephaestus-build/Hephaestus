@@ -40,8 +40,7 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
         if (!fence.holdForAccountWrite(account)) return new Outcome.Refused(Refusal.OWNER_REFUSED);
         // The fence share-locks the account row, so these values hold until the seal commits.
         var view = accounts.find(account).orElse(null);
-        if (view == null || view.status() != Account.Status.ACTIVE)
-            return new Outcome.Refused(Refusal.AUTHOR_INACTIVE);
+        if (view == null || view.status() != Account.Status.ACTIVE) return new Outcome.Refused(Refusal.AUTHOR_INACTIVE);
         if (!view.feedbackDeliveryEnabled() || view.aiChoice() == null || view.aiChoice() == AiChoice.NO_AI)
             return new Outcome.Refused(Refusal.AUTHOR_NOT_CONSENTING);
         if (!memberships.holdActiveVisibleMember(sealed.workspaceId(), account))
@@ -61,17 +60,14 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
         // The review has an event. Only the same owner, job and admission is this seal again; row-level security hides
         // another owner's event, so that is a mismatch too.
         return events.findReviewSealed(
-                        sealed.workspaceId(),
-                        sealed.reviewId(),
-                        account,
-                        sealed.jobId(),
-                        sealed.admissionDigest())
+                        sealed.workspaceId(), sealed.reviewId(), account, sealed.jobId(), sealed.admissionDigest())
                 .<Outcome>map(existing -> new Outcome.Admitted(UUID.fromString(existing)))
                 .orElse(new Outcome.Refused(Refusal.EVENT_MISMATCH));
     }
 
     /** The review names its event, so every seal of it names the same row. */
     static UUID id(long workspaceId, UUID reviewId) {
-        return UUID.nameUUIDFromBytes(("review-sealed:" + workspaceId + ":" + reviewId).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(
+                ("review-sealed:" + workspaceId + ":" + reviewId).getBytes(StandardCharsets.UTF_8));
     }
 }
