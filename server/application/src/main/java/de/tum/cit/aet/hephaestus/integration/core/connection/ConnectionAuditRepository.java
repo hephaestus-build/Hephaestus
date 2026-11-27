@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -12,6 +14,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ConnectionAuditRepository extends JpaRepository<ConnectionAudit, Long> {
     List<ConnectionAudit> findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(long workspaceId, long connectionId);
+
+    @Query("""
+            SELECT MAX(a.occurredAt) FROM ConnectionAudit a
+            WHERE a.workspaceId = :workspaceId AND a.connection.id = :connectionId AND a.toState = 'ACTIVE'
+              AND (a.fromState IS NULL OR a.fromState <> a.toState)
+            """)
+    Optional<Instant> latestActivation(
+            @Param("workspaceId") long workspaceId, @Param("connectionId") long connectionId);
 
     /** The caller holds the connection lifecycle lock, so a replay is skipped before erasure or state writes. */
     @Query("SELECT COUNT(a) > 0 FROM ConnectionAudit a WHERE a.connection.id = :connectionId "

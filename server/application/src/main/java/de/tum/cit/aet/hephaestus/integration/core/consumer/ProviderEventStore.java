@@ -93,19 +93,44 @@ public class ProviderEventStore {
     public int store(List<Arrival> arrivals) {
         int stored = 0;
         for (Arrival arrival : arrivals) {
-            stored += events.store(new ProviderEventRepository.NewEvent(
-                    arrival.workspaceId(),
-                    arrival.provider(),
-                    arrival.subject(),
-                    scopeKey(arrival.workspaceId(), arrival.subject()),
-                    arrival.deliveryKey(),
-                    mapper.writeValueAsString(arrival.headers()),
-                    arrival.payload()));
+            stored += events.store(row(arrival));
         }
         if (stored > 0) {
             notifications.queuedAfterCommit();
         }
         return stored;
+    }
+
+    /** A delivery the caller already handles inside its receive transaction. The legacy queue never claims it. */
+    public record Handled(long id, Instant receivedAt) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Handled> storeHandled(long workspaceId, Arrival arrival) {
+        if (!Long.valueOf(workspaceId).equals(arrival.workspaceId()))
+            throw new IllegalArgumentException("Arrival must match the verified workspace");
+        return events.storeHandled(row(arrival)).map(receipt -> new Handled(receipt.getId(), receipt.getReceivedAt()));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean hasDelivery(long workspaceId, String provider, String deliveryKey) {
+        return events.existsByWorkspaceIdAndProviderAndDeliveryKey(workspaceId, provider, deliveryKey);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    @WorkspaceAgnostic("Sets a bound of the current transaction; it reads no table")
+    public void boundLocks(Duration timeout) {
+        events.boundLocks(timeout.toMillis() + "ms");
+    }
+
+    private ProviderEventRepository.NewEvent row(Arrival arrival) {
+        return new ProviderEventRepository.NewEvent(
+                arrival.workspaceId(),
+                arrival.provider(),
+                arrival.subject(),
+                scopeKey(arrival.workspaceId(), arrival.subject()),
+                arrival.deliveryKey(),
+                mapper.writeValueAsString(arrival.headers()),
+                arrival.payload());
     }
 
     /** Bounds each later statement of the caller's transaction, so a blocked database fails it instead of holding it. */
