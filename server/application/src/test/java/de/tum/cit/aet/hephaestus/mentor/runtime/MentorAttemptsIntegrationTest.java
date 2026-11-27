@@ -259,20 +259,69 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(current(held)).isTrue();
 
         List<Function<AttemptCredential, AttemptCredential>> wrong = List.of(
-                c -> new AttemptCredential(linkedAccount(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
-                        CONNECTION, c.payer(), c.payerWorkspaceId()),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch() + 1, c.leaseToken(), MODEL,
-                        CONNECTION, c.payer(), c.payerWorkspaceId()),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), UUID.randomUUID(), MODEL,
-                        CONNECTION, c.payer(), c.payerWorkspaceId()),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL + 1,
-                        CONNECTION, c.payer(), c.payerWorkspaceId()),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
-                        CONNECTION + 1, c.payer(), c.payerWorkspaceId()),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
-                        CONNECTION, PayerKind.PERSONAL_PURSE, null),
-                c -> new AttemptCredential(c.accountId(), c.attemptId(), c.leaseEpoch(), c.leaseToken(), MODEL,
-                        CONNECTION, c.payer(), workspace + 1));
+                c -> new AttemptCredential(
+                        linkedAccount(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch() + 1,
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        UUID.randomUUID(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL + 1,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION + 1,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        PayerKind.PERSONAL_PURSE,
+                        null),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        workspace + 1));
         for (var change : wrong) assertThat(current(change.apply(held))).isFalse();
     }
 
@@ -290,17 +339,22 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         authorized = false;
         assertThat(current(held)).as("revoked").isFalse();
         authorized = true;
-        owner.update("UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '2 minutes' WHERE id = ?",
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '2 minutes' WHERE id = ?",
                 lease.attemptId());
         assertThat(current(held)).as("stale observation").isFalse();
-        owner.update("UPDATE mentor_attempt SET observed_epoch = observed_epoch - 1, observed_at = clock_timestamp()"
-                + " WHERE id = ?", lease.attemptId());
+        owner.update(
+                "UPDATE mentor_attempt SET observed_epoch = observed_epoch - 1, observed_at = clock_timestamp()"
+                        + " WHERE id = ?",
+                lease.attemptId());
         assertThat(current(held)).as("observation of another epoch").isFalse();
         observe(lease);
-        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
                 lease.attemptId());
         assertThat(current(held)).as("past the work deadline").isFalse();
-        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 minutes' WHERE id = ?",
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 minutes' WHERE id = ?",
                 lease.attemptId());
         assertThat(current(held)).isTrue();
 
@@ -327,7 +381,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     void shouldCapARenewAtTheWorkDeadlineAndRefuseItAfterTheLeaseLapsed() {
         UUID request = ask(message());
         AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
-        owner.update("UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 seconds' WHERE id = ?",
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 seconds' WHERE id = ?",
                 lease.attemptId());
 
         assertThat(attempts.renew(lease, Duration.ofMinutes(10))).isTrue();

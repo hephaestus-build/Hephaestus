@@ -98,11 +98,7 @@ public class MentorAttempts {
         if (attempts.shareLiveRequest(lease.accountId(), lease.requestId(), lease.requestVersion())
                 .isEmpty()) return false;
         return attempts.renew(
-                        lease.accountId(),
-                        lease.attemptId(),
-                        lease.leaseEpoch(),
-                        lease.leaseToken(),
-                        seconds(duration))
+                        lease.accountId(), lease.attemptId(), lease.leaseEpoch(), lease.leaseToken(), seconds(duration))
                 == 1;
     }
 
