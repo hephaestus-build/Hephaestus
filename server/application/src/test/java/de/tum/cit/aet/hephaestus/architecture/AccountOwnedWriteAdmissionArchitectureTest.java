@@ -7,20 +7,20 @@ import com.tngtech.archunit.core.domain.JavaCodeUnit;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.domain.JavaFieldAccess;
 import com.tngtech.archunit.core.domain.JavaMethod;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
-import de.tum.cit.aet.hephaestus.mentor.runtime.MentorReviewSealedIntake;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorIntake;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorReviewSealedIntake;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository;
 import de.tum.cit.aet.hephaestus.mentor.spi.IngressEnvelope;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
 import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import jakarta.persistence.Table;
 import jakarta.persistence.criteria.CriteriaDelete;
@@ -63,7 +63,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                     + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:event|request|source)\"?(?![\\w$])",
             Pattern.CASE_INSENSITIVE);
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
-    private static final String MENTOR_EVENT_REPOSITORY = "de.tum.cit.aet.hephaestus.mentor.runtime.MentorEventRepository";
+    private static final String MENTOR_EVENT_REPOSITORY =
+            "de.tum.cit.aet.hephaestus.mentor.runtime.MentorEventRepository";
     private static final String ERASURE_REPOSITORY = "de.tum.cit.aet.hephaestus.core.auth.AccountErasureRepository";
 
     @Test
