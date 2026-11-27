@@ -42,6 +42,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -83,6 +87,39 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private SqlReadMeasurement reads;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
+    @Test
+    void shouldResolveAnEquivalentProviderCommittedBetweenReadsAtReadCommitted() {
+        String host = UUID.randomUUID() + ".example.com";
+        var canonical = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host));
+        var alias = new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host + ":443/");
+        var writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var reader = new TransactionTemplate(transactions);
+        reader.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+
+        var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override
+            public <T> List<T> query(String sql, RowMapper<T> rowMapper) {
+                List<T> rows = super.query(sql, rowMapper);
+                if (sql.contains("FROM identity_provider ORDER BY") && alias.getId() == null) {
+                    writer.executeWithoutResult(status -> providers.saveAndFlush(alias));
+                }
+                return rows;
+            }
+        };
+        var beans = new StaticListableBeanFactory();
+        var resolverAtReadCommitted = new ExactPersonIdentityResolver(
+                orderedJdbc, beans.getBeanProvider(PersonSourceIdentityContributor.class), List.of());
+        var scope = Objects.requireNonNull(
+                reader.execute(status -> resolverAtReadCommitted.resolve(null, List.of(identity(canonical, "42", null)))));
+
+        assertThat(scope.identities())
+                .containsExactlyInAnyOrder(identity(canonical, "42", null), identity(alias, "42", null));
+    }
 
     @Test
     void shouldResolveDeclaredSourceBucketsWithoutKnowingTheContributorsItemKinds() {
