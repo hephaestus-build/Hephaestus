@@ -862,6 +862,68 @@ class LlmProxyServiceTest extends BaseUnitTest {
             return DefaultDataBufferFactory.sharedInstance.wrap(text.getBytes(StandardCharsets.UTF_8));
         }
 
+        @Test
+        void aReviewStreamWithOnlyNonContentFramesEndsAndRecordsAnOutage() throws Exception {
+            Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
+            try (VirtualCall call = new VirtualCall(streaming(provider.asFlux()), IDLE_ONLY)) {
+                doAnswer(invocation -> {
+                            assertThat(call.response.getContentAsString()).doesNotContain("upstream_stalled:");
+                            return null;
+                        })
+                        .when(callLedger)
+                        .complete(
+                                any(),
+                                eq(CALL),
+                                any(),
+                                eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
+                call.start(streamingRouting());
+                provider.emitNext(sse(": scheduled\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
+                call.relayed();
+                call.time.advanceTimeBy(CONVERSATION_IDLE.minusMillis(100));
+                provider.emitNext(
+                        sse("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n"),
+                        Sinks.EmitFailureHandler.FAIL_FAST);
+                call.relayed();
+                call.time.advanceTimeBy(Duration.ofMillis(100));
+
+                call.finished();
+
+                assertThat(call.response.getStatus()).isEqualTo(200);
+                assertThat(call.response.getContentAsString()).containsOnlyOnce("upstream_stalled:");
+                verify(callLedger)
+                        .complete(
+                                any(),
+                                eq(CALL),
+                                any(),
+                                eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
+                assertThat(provider.currentSubscriberCount()).isZero();
+            }
+        }
+
+        @Test
+        void aReviewStreamsPastTheFirstContentBoundAfterACarriageReturnEvent() throws Exception {
+            Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
+            try (VirtualCall call = new VirtualCall(streaming(provider.asFlux()), IDLE_ONLY)) {
+                call.start(streamingRouting());
+                provider.emitNext(
+                        sse("data: {\"choices\":[{\"delta\":{\"content\":\"first answer\"}}]}\r\r"),
+                        Sinks.EmitFailureHandler.FAIL_FAST);
+                call.relayed();
+                call.time.advanceTimeBy(CONVERSATION_IDLE.minusMillis(100));
+                provider.emitNext(sse(": keep alive\r\r"), Sinks.EmitFailureHandler.FAIL_FAST);
+                call.relayed();
+                call.time.advanceTimeBy(Duration.ofMillis(100));
+                provider.emitNext(sse("data: [DONE]\r\r"), Sinks.EmitFailureHandler.FAIL_FAST);
+                provider.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
+
+                call.finished();
+
+                assertThat(call.response.getContentAsString())
+                        .contains("first answer", "[DONE]")
+                        .doesNotContain("upstream_stalled");
+            }
+        }
+
         /** A servlet response that releases {@code flushed} each time the proxy flushes what it relayed. */
         private static MockHttpServletResponse flushCounting(Semaphore flushed) {
             return new MockHttpServletResponse() {
@@ -923,7 +985,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(last.path("error").path("code").asString()).isEqualTo("upstream_stalled");
             // The review runner's model client retries an error that says it timed out.
             assertThat(last.path("error").path("message").asString())
-                    .contains("timed out: it sent nothing for 0 seconds");
+                    .contains("timed out: it sent no model content for 0 seconds");
             assertThat(streamingMeterRegistry
                             .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
                             .count())

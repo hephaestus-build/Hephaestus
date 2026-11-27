@@ -44,6 +44,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -570,6 +571,7 @@ class LlmProxyService {
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
+                    attempt.sourceType() == UsageSourceType.REVIEW_JOB && reviewStream ? protocol : null,
                     poolPermit.revoked(),
                     transports,
                     routing.conversationTurn()
@@ -743,11 +745,17 @@ class LlmProxyService {
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
             else row.answeredWithError();
             StreamOutcome ended = upstream.streamOutcome();
+            boolean capacityLeaseEnded = poolPermit.isRevoked();
+            boolean unansweredReviewStall = exchange.reviewProtocol() != null
+                    && ended == StreamOutcome.UPSTREAM_IDLE
+                    && upstream.status() >= 200
+                    && upstream.status() < 300
+                    && !tap.hasContent();
             if (ended != null
                     && upstream.status() >= 200
                     && upstream.status() < 300
-                    && tap.unanswered()
-                    && !poolPermit.isRevoked()) {
+                    && (tap.unanswered() || unansweredReviewStall)
+                    && !capacityLeaseEnded) {
                 // The provider ended the stream or went silent; otherwise the caller ended it.
                 boolean providerEnded = ended == StreamOutcome.COMPLETED
                         || ended == StreamOutcome.UPSTREAM_IDLE
@@ -775,7 +783,7 @@ class LlmProxyService {
                 }
             }
             // Report revocation in the stream; buffered responses still settle health and usage below.
-            if (poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
+            if (capacityLeaseEnded && ended != null && response != null) {
                 call.failed(new ModelCallFailure(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
@@ -786,20 +794,33 @@ class LlmProxyService {
                 ProxyStallErrors.judge(upstream, permit);
             }
             Bounds bounds = exchange.bounds();
-            if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE) {
+            String stall = null;
+            if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE && !capacityLeaseEnded) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
-                String stall = STREAM_STALLED.formatted(bounds.idle().toSeconds());
+                if (unansweredReviewStall) {
+                    call.failed(new ModelCallFailure(UPSTREAM_STALLED, null));
+                }
+                stall = unansweredReviewStall
+                        ? "the model provider's stream timed out: it sent no model content for %d seconds"
+                                .formatted(bounds.idle().toSeconds())
+                        : STREAM_STALLED.formatted(bounds.idle().toSeconds());
                 if (!routing.conversationTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                if (response != null) errors.writeStallFrame(response, protocol, stall);
             } else if (ended == StreamOutcome.TIMED_OUT
                     && attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                     && response != null) {
                 errors.writeDraftDeadlineFrame(response, protocol);
             }
-            if (ended != null)
-                return settleStream(
+            if (ended != null) {
+                ResponseEntity<?> settled = settleStream(
                         routing, attempt, row, span, upstream.status(), ended, tap, call, poolPermit, protocol);
+                if (stall != null && response != null) {
+                    // The runner may return immediately on a stall. Its retry decision reads the durable cause.
+                    if (unansweredReviewStall) row.end();
+                    errors.writeStallFrame(response, protocol, stall);
+                }
+                return settled;
+            }
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new ModelCallFailure(UPSTREAM_STATUS, upstream.status()));
@@ -903,6 +924,7 @@ class LlmProxyService {
      *
      * @param bounds the silence the call is cut after; {@code null} for the client's own read bound, whose timeout is a
      *     plain upstream failure
+     * @param reviewProtocol the protocol of a review stream that must start supplying model content within the idle interval
      * @param cancelled completes when the attempt's end cancels the call
      * @param served takes the head of a served response, on the transport's event loop
      */
@@ -910,6 +932,7 @@ class LlmProxyService {
             URI uri,
             HttpHeaders headers,
             @Nullable Bounds bounds,
+            @Nullable LlmApiProtocol reviewProtocol,
             Mono<Void> cancelled,
             ProxyTransportClosure transports,
             @Nullable Consumer<Runnable> admitSend,
@@ -990,7 +1013,19 @@ class LlmProxyService {
                     // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the
                     // exchange's
                     // limit bounds every call.
-                    return ProxyStreamingUtils.parts(upstream, null, body);
+                    var responseParts = ProxyStreamingUtils.parts(upstream, null, body);
+                    LlmApiProtocol reviewProtocol = exchange.reviewProtocol();
+                    if (reviewProtocol != null
+                            && bounds != null
+                            && upstream.statusCode().is2xxSuccessful()
+                            && upstream.headers()
+                                    .contentType()
+                                    .filter(MediaType.TEXT_EVENT_STREAM::isCompatibleWith)
+                                    .isPresent()) {
+                        return ProxyStreamUsageTap.endingBeforeFirstContent(
+                                responseParts, objectMapper, reviewProtocol, bounds.idle());
+                    }
+                    return responseParts;
                 })
                 // Before the response, a cancel drops the exchange; after it, the body stops and the stream ends.
                 .takeUntilOther(stop.then(Mono.defer(() -> {

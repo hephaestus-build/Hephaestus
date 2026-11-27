@@ -4,7 +4,7 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
-**Amended by:** [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md) for shared Slack channels.
+**Amended by:** [ADR 0160](0160-a-sealed-review-hands-off-to-the-mentor.md) for the cutover steps. [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md) for shared Slack channels.
 
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) decisions 2, 11 and 12. [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work and its update of 2026-11-09 on the review run kinds.
 
