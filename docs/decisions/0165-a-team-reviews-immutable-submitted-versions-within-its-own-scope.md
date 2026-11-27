@@ -151,8 +151,8 @@ Decisions 1 to 10 and 13 stay.
 ### The team place
 
 - Each team project has one mentoring place in the app, with threads for its reviews and topics.
-- The `conversation` module owns the threads and messages, beside the personal conversation. `TeamThreadSequence` is its interface for the order of entries in a thread.
-- The project module owns membership and team decisions. The mentor module stores no part of the team place.
+- The team threads, messages and their SPI live in the `conversation` module, beside the personal conversation. `TeamThreadSequence` is part of that SPI.
+- `project` keeps membership and `team_decision`. The mentor writes through the port of the `conversation` module.
 - A member asks under their own identity. The question enters the mentor's intake with the team as owner and the member as requester.
 - An answer cites an observation with its anchor and proposes an option. After a new review, it revisits a recorded decision.
 - The mentor can propose a decision. Only a member records one, by an explicit act (decision 8).
@@ -164,8 +164,9 @@ These rows now apply in the table of decision 13:
 
 | Context | Module | Owns | Never owns |
 | --- | --- | --- | --- |
-| Conversation | `conversation` | the team place threads and messages | evidence, observations, membership, composition |
-| Mentor | `mentor` | composition over sealed observations under the permitted scope, or silence | evidence, observations, membership, the team place storage |
+| Conversation | `conversation` | the team threads, messages and their SPI, beside the personal conversation | evidence, observations, membership, team decisions, composition |
+| Project | `project` | teams, membership, `team_decision`, the receiving-team authority | capture, observations, team threads and messages |
+| Mentor | `mentor` | composition over sealed observations under the permitted scope, or silence. It writes through the port of the `conversation` module | evidence, observations, membership, team threads and messages |
 
 ### Withdrawal and erasure
 
