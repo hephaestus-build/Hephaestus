@@ -1,10 +1,12 @@
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, screen } from "storybook/test";
 
 import { RemovableToken } from "@/components/common/RemovableToken";
+import { Button } from "@/components/ui/button";
 import { expectSettledVisible } from "@/stories/overlay";
 
-import { ConversationComposer } from "./ConversationComposer";
+import { ConversationComposer, type ConversationComposerProps } from "./ConversationComposer";
 
 const meta = {
 	component: ConversationComposer,
@@ -177,34 +179,70 @@ export const TeamAudience: Story = {
 	},
 };
 
-/**
- * Each audience has its own composer and its own draft. Text written to the team stays in the team's draft, the
- * private draft stays empty, and switching back restores each one in its own place. Nothing is sent.
- */
-export const DraftsStayWithTheirAudience: Story = {
-	render: (args) => (
-		<div className="flex flex-col gap-4">
+/** Moves one composer between audiences, as a route does when the person switches from a team to "Ask privately". */
+function SwitchingComposer(args: ConversationComposerProps) {
+	const [team, setTeam] = useState(true);
+	return (
+		<div className="flex flex-col gap-2">
+			<Button variant="outline" size="sm" className="w-fit" onClick={() => setTeam(!team)}>
+				{team ? "Ask privately" : "Back to the team"}
+			</Button>
 			<ConversationComposer
 				{...args}
-				label="Message Team Wayfinding"
-				audience={{ kind: "TEAM", teamName: "Wayfinding" }}
-				draftKey="story:team:wayfinding:thread:1"
-			/>
-			<ConversationComposer
-				{...args}
-				label="Ask privately"
-				audience={{ kind: "PRIVATE" }}
-				draftKey="story:main"
+				label={team ? "Message Team Wayfinding" : "Ask privately"}
+				audience={team ? { kind: "TEAM", teamName: "Wayfinding" } : { kind: "PRIVATE" }}
+				draftKey={team ? "story:team:wayfinding:review:1" : "story:main"}
 			/>
 		</div>
-	),
+	);
+}
+
+/**
+ * A draft never moves to another audience (review of #5472). Text written to the team stays in the team's draft: the
+ * private field opens empty, and switching back restores the team's text in its own place. Enter in the private field
+ * sends only what was written there.
+ */
+export const DraftsStayWithTheirAudience: Story = {
+	render: (args) => <SwitchingComposer {...args} />,
 	play: async ({ args, canvas, userEvent }) => {
-		const team = canvas.getByRole("textbox", { name: "Message Team Wayfinding" });
+		await userEvent.type(
+			canvas.getByRole("textbox", { name: "Message Team Wayfinding" }),
+			"Which need first?",
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Ask privately" }));
 		const own = canvas.getByRole("textbox", { name: "Ask privately" });
-		await userEvent.type(team, "Which need first?");
-		await userEvent.type(own, "Am I reading this observation right?");
-		await expect(team).toHaveValue("Which need first?");
-		await expect(own).toHaveValue("Am I reading this observation right?");
+		await expect(own).toHaveValue("");
+		await userEvent.type(own, "{Enter}");
 		await expect(args.onSend).not.toHaveBeenCalled();
+		await userEvent.type(own, "Am I reading this right?");
+		await userEvent.click(canvas.getByRole("button", { name: "Back to the team" }));
+		await expect(canvas.getByRole("textbox", { name: "Message Team Wayfinding" })).toHaveValue(
+			"Which need first?",
+		);
+		await expect(args.onSend).not.toHaveBeenCalled();
+	},
+};
+
+/** A long team name shortens inside the composer; the label never runs past its edge. */
+export const LongTeamName: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" } },
+	args: {
+		label: "Message the team",
+		audience: {
+			kind: "TEAM",
+			teamName: "Wayfinding for returning part-time students between both campuses",
+		},
+	},
+	play: async ({ canvas }) => {
+		// The outer group is the field's edge; the add-on row inside it is a group too.
+		const [field] = canvas.getAllByRole("group");
+		if (field === undefined) {
+			throw new Error("The composer has no field group.");
+		}
+		// The name's own box, which `truncate` clips: it is the parent of the name.
+		const shown = canvas.getByText(/Wayfinding for returning/u).parentElement ?? field;
+		await expect(shown.getBoundingClientRect().right).toBeLessThanOrEqual(
+			field.getBoundingClientRect().right,
+		);
 	},
 };

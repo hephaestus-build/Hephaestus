@@ -24,9 +24,13 @@ export type ComposerAudience = { kind: "PRIVATE" } | { kind: "TEAM"; teamName: s
 
 function AudienceLabel({ audience, id }: { audience: ComposerAudience; id: string }) {
 	const Icon = audience.kind === "PRIVATE" ? LockIcon : UsersIcon;
+	// The icon keeps its size while a long team name shortens.
 	return (
-		<span id={id} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-			<Icon aria-hidden className="size-3.5" />
+		<span
+			id={id}
+			className="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-muted-foreground"
+		>
+			<Icon aria-hidden className="size-3.5 shrink-0" />
 			{audience.kind === "PRIVATE" ? (
 				"Only you"
 			) : (
@@ -74,7 +78,16 @@ const TOUCH = "(pointer: coarse)";
  * controls; where they do not fit side by side, as a long page name with Stop in a phone's panel,
  * the controls wrap below the context, and the context's name shortens before it leaves the row.
  */
-export function ConversationComposer({
+export function ConversationComposer(props: ConversationComposerProps) {
+	const { draftKey, audience } = props;
+	const audienceKey =
+		audience?.kind === "TEAM" ? `TEAM:${audience.teamName}` : (audience?.kind ?? "");
+	// One instance per place and audience: the text is read from the draft only when the field mounts, so a composer
+	// that moved to another place or audience would otherwise carry the old text, and Enter would send it there.
+	return <ComposerForm key={`${draftKey ?? ""}\u0000${audienceKey}`} {...props} />;
+}
+
+function ComposerForm({
 	label,
 	placeholder,
 	onSend,
