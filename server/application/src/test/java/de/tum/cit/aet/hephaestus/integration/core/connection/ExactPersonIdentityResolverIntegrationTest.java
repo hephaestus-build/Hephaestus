@@ -37,6 +37,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +92,42 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactions;
+
+    /**
+     * A supplied provider that commits after the provider rows were read is checked by its own row, so an identity that
+     * breaks its rules is refused for that reason, as a lookup of the row refused it before.
+     */
+    @Test
+    void shouldCheckAProviderCommittedAfterTheProviderRowsByItsOwnRow() {
+        // Far above the identity sequence, so no provider that a later test creates can take this id.
+        long late = ThreadLocalRandom.current().nextLong(1L << 60, Long.MAX_VALUE);
+        var writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var reader = new TransactionTemplate(transactions);
+        reader.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        var inserted = new AtomicBoolean();
+        var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override
+            public <T extends @Nullable Object> List<T> query(String sql, RowMapper<T> rowMapper) {
+                List<T> rows = super.query(sql, rowMapper);
+                if (sql.contains("FROM identity_provider ORDER BY") && inserted.compareAndSet(false, true))
+                    writer.executeWithoutResult(status -> jdbc.update(
+                            "INSERT INTO identity_provider(id,type,server_url) VALUES (?, 'GITHUB', ?)",
+                            late,
+                            "https://" + UUID.randomUUID() + ".example.com"));
+                return rows;
+            }
+        };
+        var resolverAtReadCommitted = new ExactPersonIdentityResolver(
+                orderedJdbc,
+                new StaticListableBeanFactory().getBeanProvider(PersonSourceIdentityContributor.class),
+                List.of());
+
+        assertThatThrownBy(() -> reader.executeWithoutResult(
+                        status -> resolverAtReadCommitted.accountFor(new PersonIdentity(late, "42", "team"))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Only Slack and Outline identities accept a native workspace id");
+    }
 
     @Test
     void shouldResolveAnEquivalentProviderCommittedBetweenReadsAtReadCommitted() {

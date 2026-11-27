@@ -198,13 +198,14 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
 
     /**
      * Validates {@code identity} against provider rows that the read already holds. A row is only ever added, and its type
-     * and origin never change, so this answers as a lookup of the identity's own row would.
+     * and origin never change, so this answers as a lookup of the identity's own row would. A row those rows lack may
+     * have committed since they were read, so it is looked up on its own, as every check did before.
      */
     private String validateProvider(PersonIdentity identity, List<Provider> providers) {
         var provider = providers.stream()
                 .filter(candidate -> candidate.id() == identity.providerId())
                 .findFirst()
-                .orElseThrow(() -> invalid("The provider instance id does not exist"));
+                .orElseGet(() -> providerRow(identity.providerId()));
         String type = provider.type();
         if (type.equals("SLACK")) {
             if (!provider.serverUrl().equals("https://slack.com"))
@@ -216,6 +217,18 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             throw invalid("Only Slack and Outline identities accept a native workspace id");
         }
         return type;
+    }
+
+    private Provider providerRow(long providerId) {
+        List<Provider> rows = jdbc.query(
+                "SELECT id,type,server_url FROM identity_provider WHERE id = ?",
+                (rs, row) -> new Provider(
+                        rs.getLong(1),
+                        Objects.requireNonNull(rs.getString(2)),
+                        Objects.requireNonNull(rs.getString(3))),
+                providerId);
+        if (rows.size() != 1) throw invalid("The provider instance id does not exist");
+        return rows.getFirst();
     }
 
     private static ResponseStatusException invalid(String reason) {
