@@ -54,4 +54,11 @@
             <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT sfk_basis_edge_source</sql>
         </rollback>
     </changeSet>
+    <changeSet id="1795704115872-8" author="hephaestus">
+        <comment>A source kind is one of the kinds the server writes.</comment>
+        <sql>ALTER TABLE public.basis_edge ADD CONSTRAINT ck_basis_edge_source_kind CHECK (source_kind IN ('ENTRY'))</sql>
+        <rollback>
+            <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT ck_basis_edge_source_kind</sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
