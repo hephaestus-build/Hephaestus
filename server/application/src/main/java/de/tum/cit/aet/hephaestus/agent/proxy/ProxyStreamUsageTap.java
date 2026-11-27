@@ -124,7 +124,7 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     public void accept(byte[] chunk) {
         int lineStart = 0;
         for (int i = 0; i < chunk.length; i++) {
-            if (chunk[i] != '\n') {
+            if (chunk[i] != '\n' && chunk[i] != '\r') {
                 continue;
             }
             if (abandoningLine) {

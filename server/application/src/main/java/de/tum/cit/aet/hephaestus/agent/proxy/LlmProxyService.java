@@ -12,7 +12,10 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Body;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Part;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamIdleException;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -44,6 +47,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -570,6 +574,7 @@ class LlmProxyService {
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
+                    attempt.sourceType() == UsageSourceType.REVIEW_JOB && reviewStream ? protocol : null,
                     poolPermit.revoked(),
                     transports,
                     headers -> callPermits.learning().served(poolPermit, headers, instanceCredential));
@@ -733,11 +738,17 @@ class LlmProxyService {
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
             else row.answeredWithError();
             StreamOutcome ended = upstream.streamOutcome();
+            boolean capacityLeaseEnded = poolPermit.isRevoked();
+            boolean unansweredReviewStall = exchange.reviewProtocol() != null
+                    && ended == StreamOutcome.UPSTREAM_IDLE
+                    && upstream.status() >= 200
+                    && upstream.status() < 300
+                    && !tap.hasContent();
             if (ended != null
                     && upstream.status() >= 200
                     && upstream.status() < 300
-                    && tap.unanswered()
-                    && !poolPermit.isRevoked()) {
+                    && (tap.unanswered() || unansweredReviewStall)
+                    && !capacityLeaseEnded) {
                 // The provider ended the stream or went silent; otherwise the caller ended it.
                 boolean providerEnded = ended == StreamOutcome.COMPLETED
                         || ended == StreamOutcome.UPSTREAM_IDLE
@@ -765,7 +776,7 @@ class LlmProxyService {
                 }
             }
             // Report revocation in the stream; buffered responses still settle health and usage below.
-            if (poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
+            if (capacityLeaseEnded && ended != null && response != null) {
                 call.failed(new ModelCallFailure(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
@@ -776,9 +787,15 @@ class LlmProxyService {
                 ProxyStallErrors.judge(upstream, permit);
             }
             Bounds bounds = exchange.bounds();
-            if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE) {
+            if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE && !capacityLeaseEnded) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
-                String stall = STREAM_STALLED.formatted(bounds.idle().toSeconds());
+                if (unansweredReviewStall) {
+                    call.failed(new ModelCallFailure(UPSTREAM_STALLED, null));
+                }
+                String stall = unansweredReviewStall
+                        ? "the model provider's stream timed out: it sent no model content for %d seconds"
+                                .formatted(bounds.idle().toSeconds())
+                        : STREAM_STALLED.formatted(bounds.idle().toSeconds());
                 if (!routing.conversationTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 if (response != null) errors.writeStallFrame(response, protocol, stall);
@@ -893,6 +910,7 @@ class LlmProxyService {
      *
      * @param bounds the silence the call is cut after; {@code null} for the client's own read bound, whose timeout is a
      *     plain upstream failure
+     * @param reviewProtocol the protocol of a review stream that must start supplying model content within the idle interval
      * @param cancelled completes when the attempt's end cancels the call
      * @param served takes the head of a served response, on the transport's event loop
      */
@@ -900,6 +918,7 @@ class LlmProxyService {
             URI uri,
             HttpHeaders headers,
             @Nullable Bounds bounds,
+            @Nullable LlmApiProtocol reviewProtocol,
             Mono<Void> cancelled,
             ProxyTransportClosure transports,
             Consumer<HttpHeaders> served) {}
@@ -960,7 +979,17 @@ class LlmProxyService {
                     // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the
                     // exchange's
                     // limit bounds every call.
-                    return ProxyStreamingUtils.parts(upstream, null, body);
+                    var responseParts = ProxyStreamingUtils.parts(upstream, null, body);
+                    LlmApiProtocol reviewProtocol = exchange.reviewProtocol();
+                    if (reviewProtocol != null
+                            && bounds != null
+                            && upstream.statusCode().is2xxSuccessful()
+                            && upstream.headers().contentType()
+                                    .filter(MediaType.TEXT_EVENT_STREAM::isCompatibleWith)
+                                    .isPresent()) {
+                        return endingBeforeFirstContent(responseParts, reviewProtocol, bounds.idle());
+                    }
+                    return responseParts;
                 })
                 // Before the response, a cancel drops the exchange; after it, the body stops and the stream ends.
                 .takeUntilOther(stop.then(Mono.defer(() -> {
@@ -981,6 +1010,28 @@ class LlmProxyService {
         } finally {
             transport.finish(completed);
         }
+    }
+
+    /** A review's first answer has one deadline. Comments and progress frames do not extend it. */
+    private Flux<Part> endingBeforeFirstContent(Flux<Part> source, LlmApiProtocol protocol, Duration limit) {
+        return Flux.defer(() -> {
+            var clock = Schedulers.parallel();
+            long startedAt = clock.now(TimeUnit.NANOSECONDS);
+            var firstContent = new ProxyStreamUsageTap(objectMapper, protocol);
+            Mono<Long> rest = Mono.defer(() -> Mono.delay(
+                    Duration.ofNanos(Math.max(0L, limit.toNanos() - (clock.now(TimeUnit.NANOSECONDS) - startedAt))),
+                    clock));
+            // Observe the upstream chunks before they can wait behind a servlet write. The relay owns usage accounting.
+            return source.doOnNext(part -> {
+                        if (!firstContent.hasContent() && part instanceof Body chunk) {
+                            firstContent.accept(chunk.bytes());
+                        }
+                    })
+                    .timeout(
+                            rest,
+                            part -> firstContent.hasContent() ? Mono.never() : rest,
+                            Flux.error(UpstreamIdleException::new));
+        });
     }
 
     /**
