@@ -127,7 +127,9 @@ Decisions 1 to 10 and 13 stay.
 **Decision 11: each team seal chooses once.** A sealed review of a team item chooses `TEAM` or `OBSERVATIONS` at seal, and the server stores the reason. Nothing chooses again. `WORK_PLACE` does not apply, because a team item has no work place at a provider.
 
 - `TEAM` applies to a requested review in an enabled workspace, when the conditions for a model run hold. These include the workspace's model assignment and payer, and the AI choice rule below.
-- Otherwise the seal records `OBSERVATIONS`. It starts no composer and writes no mailbox event. The team reads the observations and the reason.
+- Otherwise the seal records `OBSERVATIONS`. It starts no composer and writes no mailbox event.
+- The team then reads the observations and one fixed notice. No team view shows the reason.
+- The reason stays on the record (`team_feedback.stop_reason`) and in metrics. A workspace admin sees counts only.
 - Under both values, the observations stay available as evidence. A person reads them in the anchored view and in a host.
 - An answer that cites an observation also lists it under **What Hephaestus used**.
 - `TEAM` is a new producer value beside those of ADR 0160 decision 1. A review of a person's work keeps the values of that decision.
@@ -137,7 +139,9 @@ Decisions 1 to 10 and 13 stay.
 - A `TEAM` seal writes one `REVIEW_SEALED` event under the team's key. Retries, delivery keys and readback follow ADR 0160 and [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md).
 - Practice Review still owns applicability, coverage, observations and the seal. The composer creates no evidence and changes no result.
 - The composer reads the item's sealed rows, its earlier review, the team place and the team's current decisions and guidance. It never reads a personal record.
-- It reads an earlier review only if that review sealed after the latest current member joined. It reads team place discussion only from after that time.
+- Every post to the team place draws only on discussion and earlier reviews from after the latest current member joined. This includes each answer to a member's question.
+- An earlier review counts only if it sealed after that time.
+- Excluded history never appears through an answer, a citation, a rollup, a search or a notification.
 - Current decisions and guidance have their own reader rule. Every current member reads them, whatever their join date.
 - It writes team guidance and the team place only. It writes no work comment, contact or Slack message.
 - Team guidance takes the `TEAM` audience that ADR 0160 reserves. Only current members of that team read it (ADR 0162 decision 4).
@@ -147,14 +151,21 @@ Decisions 1 to 10 and 13 stay.
 ### The team place
 
 - Each team project has one mentoring place in the app, with threads for its reviews and topics.
-- The mentor module owns the threads and messages. The project module owns membership and team decisions.
-- This adds the threads and messages to what the mentor module owns in decision 13.
+- The `conversation` module owns the threads and messages, beside the personal conversation. `TeamThreadSequence` is its interface for the order of entries in a thread.
+- The project module owns membership and team decisions. The mentor module stores no part of the team place.
 - A member asks under their own identity. The question enters the mentor's intake with the team as owner and the member as requester.
 - An answer cites an observation with its anchor and proposes an option. After a new review, it revisits a recorded decision.
 - The mentor can propose a decision. Only a member records one, by an explicit act (decision 8).
 - The place gives no grade or score and assigns no person. It never claims that the group agreed because one person acted.
 - A person can bring authorized team evidence into their personal conversation by reference. The server checks access at each load.
 - Nothing personal moves into the team place.
+
+These rows now apply in the table of decision 13:
+
+| Context | Module | Owns | Never owns |
+| --- | --- | --- | --- |
+| Conversation | `conversation` | the team place threads and messages | evidence, observations, membership, composition |
+| Mentor | `mentor` | composition over sealed observations under the permitted scope, or silence | evidence, observations, membership, the team place storage |
 
 ### Withdrawal and erasure
 
@@ -191,6 +202,7 @@ Not enforced yet. Before the team mentor is enabled, tests must add these checks
 - After a member leaves, their next personal load returns no team evidence.
 - A retried seal gives one team revision.
 - Withdrawal hides the guidance and replies that cite the version.
-- A review that runs although a member refuses AI records `OBSERVATIONS` with its reason.
+- A review that runs although a member refuses AI records `OBSERVATIONS` and the reason. No team view shows that reason.
 - No team step writes to Slack.
-- After a member joins, a team composer request holds no discussion and no earlier review from before that time.
+- After a member joins, no team request holds discussion or an earlier review from before that time. This includes the request for an answer.
+- After a member joins, no answer, citation, rollup, search or notification shows that excluded history.
