@@ -6,6 +6,15 @@
 ALTER TABLE public.review ADD COLUMN feedback_producer VARCHAR(16) DEFAULT 'LEGACY';
 ALTER TABLE public.review_job ADD COLUMN feedback_producer VARCHAR(16) DEFAULT 'LEGACY' NOT NULL;
 ALTER TABLE public.review_job ADD COLUMN feedback_producer_reason VARCHAR(32);
+-- Each producer column accepts exactly its enum.
+ALTER TABLE public.review ADD CONSTRAINT ck_review_feedback_producer
+    CHECK (feedback_producer IS NULL OR feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'));
+ALTER TABLE public.review_job ADD CONSTRAINT ck_review_job_feedback_producer
+    CHECK (feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'));
+ALTER TABLE public.review_job ADD CONSTRAINT ck_review_job_feedback_producer_reason
+    CHECK (feedback_producer_reason IS NULL OR feedback_producer_reason IN ('INHERITED', 'GATE_CLOSED',
+        'NOT_SELECTED', 'UNSUPPORTED_ROUTE', 'NO_LINKED_AUTHOR', 'SEVERAL_AUTHORS', 'AUTHOR_INACTIVE',
+        'AUTHOR_NOT_MEMBER', 'AUTHOR_NOT_CONSENTING', 'OWNER_REFUSED', 'EVENT_MISMATCH', 'OWNER_BOUND'));
         ]]></sql>
         <rollback>
             <sql>ALTER TABLE public.review_job DROP COLUMN feedback_producer_reason, DROP COLUMN feedback_producer</sql>
