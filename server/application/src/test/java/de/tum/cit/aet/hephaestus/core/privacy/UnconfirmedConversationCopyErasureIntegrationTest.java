@@ -226,11 +226,31 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
         assertThat(stopped.request().getFailureCode()).isEqualTo("EXTERNAL_COPIES_REQUIRE_REMOVAL");
         assertThat(stopped.externalDeliveries())
                 .extracting(ExternalDelivery::locator)
-                .containsExactly("slack:" + TEAM + "/" + CHANNEL + "/" + replyTs);
+                .containsExactly("slack:" + TEAM + "/" + CHANNEL + "/" + replyTs + "?question=" + asked.question());
         personData.requestErasure(request, administrator, true);
         personData.run(request);
 
         assertComplete(request);
+    }
+
+    /**
+     * The developer linked another Slack account after the reply, which rebinds the conversation to a new DM. The locator
+     * names the DM of now and the question that the reply carries as metadata, so the runbook can find the reply in the
+     * earlier DM.
+     */
+    @Test
+    void shouldNameTheQuestionOfAPostedReplyAfterTheDeveloperLinksAnotherSlackAccount() {
+        Asked asked = ask(main, ConversationTurn.Surface.SLACK);
+        UUID feedback = claimed(asked.turn());
+        end(asked.turn(), ConversationTurn.Status.DONE, showing(feedback));
+        String replyTs = nextSlackTs();
+        slackMessages.link(workspace.getId(), answers(asked.turn()).getFirst(), replyTs);
+        completion.recordDelivery(workspace.getId(), asked.turn().getId(), Set.of(), Set.of(feedback));
+        conversations.bindSlackIdentity(workspace.getId(), main.getId(), TEAM, "U0RELINKED", "D0RELINKED");
+
+        assertThat(personData.preview(administrator, developer, List.of()).externalDeliveries())
+                .extracting(ExternalDelivery::locator)
+                .containsExactly("slack:" + TEAM + "/D0RELINKED/" + replyTs + "?question=" + asked.question());
     }
 
     /** A lost attempt posted nothing; the retry's reply holds only the retry's own claims. */

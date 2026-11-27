@@ -90,17 +90,21 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
    Read `slack_ts` of the turn's `ANSWER` entries.
 8. For a Slack copy, read `slack_team_id` and `slack_channel_id` of the main conversation.
    For a thread, follow `conversation.parent_conversation_id` to the main conversation.
-9. If a Slack copy has no `slack_ts`, Slack did not confirm the post.
-   If Slack has the reply, it is the first bot message after the question's `slack_ts`.
+9. Identify a Slack reply only by its metadata.
+   Hephaestus tags each reply with the event type `heph_entry` and the question's entry ID in `entry_id`.
+   Read the messages with the Slack [conversations.history](https://docs.slack.dev/reference/methods/conversations.history/) or [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API, with `include_all_metadata=true`.
+   A reply that Slack did not confirm follows the question's `slack_ts`.
    It is in the question's thread, or at the top level of the DM.
-   Its metadata names the question's entry ID.
-   Find it with the Slack [conversations.history](https://docs.slack.dev/reference/methods/conversations.history/) or [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
+   Never delete a message whose `entry_id` names another entry.
    Never delete the question itself.
 10. The preview gives each Slack copy as a locator:
-    - `slack:<team>/<channel>/<ts>` names the reply.
-    - `slack:<team>/<channel>?after=<question ts>&thread=<thread ts>&question=<entry id>` means that Slack did not confirm the post. Find the reply as in step 9.
+    - `slack:<team>/<channel>/<ts>?question=<entry id>` names the reply.
+    - `slack:<team>/<channel>?after=<question ts>&thread=<thread ts>&question=<entry id>` means that Slack did not confirm the post.
     - `slack:conversation/<id>` means that a Slack disconnect cleared the DM of the conversation. Record that you cannot find the reply.
-11. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
+11. The channel of a locator is the DM that the conversation uses now.
+    If the person linked another Slack account after the reply, the reply is in an earlier DM of the bot.
+    If the named DM has no message with that `entry_id`, search each DM of the bot ([users.conversations](https://docs.slack.dev/reference/methods/users.conversations/) with `types=im`).
+12. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
 
 ## Delete each copy
 

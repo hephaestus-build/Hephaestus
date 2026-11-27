@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Names the Slack reply that may hold a claimed copy's words. The rule reads only rows that a redaction keeps: the turn,
- * its conversation's Slack DM, and the {@code slack_ts} of the reply and the question. The post's outbox row is gone once
- * the question is redacted, while the reply stays in Slack.
+ * its conversation's Slack DM, the {@code slack_ts} of the reply and the question, and the question's entry id, which the
+ * reply carries as metadata. The post's outbox row is gone once the question is redacted, while the reply stays in Slack.
  */
 @Component
 @ConditionalOnServerRole
@@ -61,6 +61,9 @@ class ConversationSlackReplyLocators implements PersonConversationReplies {
         String channel = main.getSlackChannelId();
         if (channel == null) return Optional.of("slack:conversation/" + main.getId());
         String dm = "slack:" + main.getSlackTeamId() + "/" + channel;
+        // The reply carries the question's entry id as Slack metadata. It is the one match that holds after the person
+        // links another Slack account, which rebinds the conversation to a new DM: the channel names the DM of now.
+        ConversationEntry question = entries.findStimulus(workspaceId, turn.getId());
         var reply = entries
                 .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                         workspaceId, turn.getId(), ConversationEntry.Kind.ANSWER)
@@ -68,10 +71,10 @@ class ConversationSlackReplyLocators implements PersonConversationReplies {
                 .map(ConversationEntry::getSlackTs)
                 .filter(Objects::nonNull)
                 .findFirst();
-        if (reply.isPresent()) return Optional.of(dm + "/" + reply.get());
-        // Slack did not confirm the post. If Slack has the reply, it is Hephaestus's first message after the question,
-        // in the question's thread or at the DM's top level, and it carries the question's entry id as metadata.
-        ConversationEntry question = entries.findStimulus(workspaceId, turn.getId());
+        if (reply.isPresent()) return Optional.of(dm + "/" + reply.get() + "?question=" + question.getId());
+        // Slack did not confirm the post. If Slack has the reply, it follows the question, in the question's thread or
+        // at
+        // the DM's top level.
         UUID parent = conversation.getParentEntryId();
         String thread = parent == null
                 ? null

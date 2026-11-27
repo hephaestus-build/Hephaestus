@@ -550,7 +550,8 @@ A conversation copy that a receipt settled unconfirmed is the one exception. Its
 Hephaestus, which the same erasure redacts, or in a Slack reply. The preview lists that reply as an
 external copy with a `slack:` locator, so the erasure needs a confirmed removal. A claim that no
 receipt settled still fails closed. `ConversationSlackReplyLocators` names the reply from the turn,
-the conversation's Slack DM and the stored `slack_ts`, never from the outbox row.
+the conversation's Slack DM, the stored `slack_ts` and the question's entry ID, which the reply carries
+as Slack metadata. It never reads the outbox row.
 
 `PersonProcessingSuppression.isReviewJobSuppressed` reads the exact frozen job keys in a fresh
 transaction while an erasure is active or resumable. A leased-session check of the job capability
