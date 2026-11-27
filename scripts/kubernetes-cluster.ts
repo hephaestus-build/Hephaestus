@@ -57,7 +57,7 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
 import { submitTurn } from "./lib/capacity-chat.ts";
-import { rollOutput } from "./lib/capacity-replay.ts";
+import { ROLL_ECHO, rollOutput } from "./lib/capacity-replay.ts";
 import {
 	bindReplayModel,
 	releaseSilentMode,
@@ -2679,7 +2679,7 @@ export function anchorChecks(counts: AnchorCounts): RollCheck[] {
 	const { beforeReply, afterReply, beforeNext, afterNext } = counts;
 	return [
 		{
-			claim: "while the anchor exists, a reply in its thread sends the anchor's text to the model",
+			claim: "while its source exists, a reply in a thread on the question or its quoting answer sends the text to the model",
 			failure:
 				afterReply.containing > beforeReply.containing
 					? undefined
@@ -2690,7 +2690,7 @@ export function anchorChecks(counts: AnchorCounts): RollCheck[] {
 			failure: afterNext.requests > beforeNext.requests ? undefined : "it made no model request",
 		},
 		{
-			claim: "no model request after the removal holds the removed anchor's text",
+			claim: "no model request after the removal holds the removed question's text",
 			failure:
 				afterNext.containing === beforeNext.containing
 					? undefined
@@ -2756,6 +2756,26 @@ async function answered(turnId: string): Promise<void> {
 		],
 		"turn removal",
 	);
+}
+
+/** The id of the turn's answer, which must quote `marker`. */
+async function quotingAnswer(turnId: string, marker: string): Promise<string> {
+	const id = (
+		await psql(
+			`SELECT e.id FROM conversation_entry e WHERE e.turn_id = '${turnId}' AND e.kind = 'ANSWER' AND e.text LIKE '%${marker}%' ORDER BY e.seq DESC LIMIT 1`,
+		)
+	).trim();
+	if (!UUID.test(id)) {
+		throw new Error(`turn removal: turn ${turnId} has no answer that quotes ${marker}`);
+	}
+	return id;
+}
+
+async function redacted(entryId: string): Promise<boolean> {
+	const value = await psql(
+		`SELECT (redacted_at IS NOT NULL)::text FROM conversation_entry WHERE id = '${entryId}'`,
+	);
+	return value.trim() === "true";
 }
 
 /** The fake's counts of `marker`, a drill-made text of letters, digits and hyphens. */
@@ -2838,16 +2858,28 @@ export async function turnRemoval(
 		await sleep(75_000);
 		report(fencedChecks(atRemoval, await removedTurnState(held.id)), "turn removal");
 
-		// A removed anchor's text: the reply in its thread reads it, and the next request must not.
+		// A removed question's text, quoted by an answer that anchors its own thread (#5279). A reply in each thread
+		// reads the text while its source exists; after the source's removal no model request may hold it.
 		const marker = `removal-drill-${randomUUID().slice(0, 8)}`;
-		const anchor = await ask(conversation, token, `Pin the image by ${marker}.`);
+		const anchor = await ask(conversation, token, `${ROLL_ECHO}Pin the image by ${marker}.`);
 		await answered(anchor.id);
+		const quoting = await quotingAnswer(anchor.id, marker);
 		const beforeReply = await seenByFake(marker);
-		const reply = await ask(conversation, token, "What should I check next?", anchor.questionId);
-		await answered(reply.id);
+		const onQuestion = await ask(conversation, token, "What should I check next?", anchor.questionId);
+		await answered(onQuestion.id);
+		const onAnswer = await ask(conversation, token, "Which tag was it?", quoting);
+		await answered(onAnswer.id);
 		const afterReply = await seenByFake(marker);
 		await deleteEntry(conversation, token, anchor.questionId);
 		const beforeNext = await seenByFake(marker);
+		// Erasing the quoting answer with its source also leaves its thread without a parent to reply to.
+		if (await redacted(quoting)) {
+			process.stdout.write("turn removal: the quoting answer was erased with its question, so its thread takes no reply\n");
+		} else {
+			process.stdout.write("turn removal: the quoting answer stays; a reply in its thread must not carry the quote\n");
+			const inThread = await ask(conversation, token, "What should I check next?", quoting);
+			await answered(inThread.id);
+		}
 		const next = await ask(conversation, token, "What threads are open?");
 		await answered(next.id);
 		const afterNext = await seenByFake(marker);

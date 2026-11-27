@@ -148,6 +148,9 @@ export const ROLL_CALL_LIMIT = 28;
 /** The output that the turn-roll command of call `ordinal` prints. */
 export const rollOutput = (ordinal: number) => `rolled-${ordinal}`;
 
+/** A released question that starts with this gets the rest of its text back as the answer. */
+export const ROLL_ECHO = "Echo: ";
+
 /** The completion bodies that roll mode keeps for `/seen`: enough for the drills' few turns. */
 export const SEEN_LIMIT = 500;
 
@@ -192,6 +195,12 @@ export function rollStep(
 	if (!released && results.length < ROLL_CALL_LIMIT) {
 		// Below the 60 s that one command may run (`MAX_COMMAND_MS` in `heph-tools.ts`).
 		return { command: `sleep 30; echo ${rollOutput(results.length + 1)}` };
+	}
+	// The turn-removal drill needs an answer that quotes its question, as a model's answer can.
+	const asked = question === -1 ? "" : messageText(rows[question]?.content);
+	const echo = asked.indexOf(ROLL_ECHO);
+	if (echo !== -1) {
+		return { text: asked.slice(echo + ROLL_ECHO.length) };
 	}
 	const outputs = results.flatMap((row) => messageText(row.content).match(/rolled-\d+/gu) ?? []);
 	return { text: `The commands printed: ${outputs.join(" ")}.` };

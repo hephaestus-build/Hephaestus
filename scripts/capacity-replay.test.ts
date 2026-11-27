@@ -8,6 +8,7 @@ import {
 	parseReplay,
 	replaySample,
 	ROLL_CALL_LIMIT,
+	ROLL_ECHO,
 	rollStep,
 	seenCounts,
 	sensitivityGrid,
@@ -135,4 +136,12 @@ await test("the roll fake counts the kept requests that contain a text, and need
 	assert.deepEqual(seenCounts(bodies, "removal-drill-1"), { requests: 3, containing: 2 });
 	assert.deepEqual(seenCounts([], "removal-drill-1"), { requests: 0, containing: 0 });
 	assert.throws(() => seenCounts(bodies, ""), /needs a text/u);
+});
+
+await test("the released roll fake answers an echo question with its text, as an answer can quote a question", () => {
+	const situation = { role: "user", content: [{ type: "text", text: "<situation>\nNow: Mon." }] };
+	const asked = [{ role: "user", content: `${ROLL_ECHO}Pin the image by removal-drill-1.` }, situation];
+	assert.deepEqual(rollStep(asked, true), { text: "Pin the image by removal-drill-1." });
+	// Before its release the fake still runs the command, whatever the question.
+	assert.deepEqual(rollStep(asked, false), { command: "sleep 30; echo rolled-1" });
 });

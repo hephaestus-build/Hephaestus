@@ -1486,14 +1486,15 @@ A commit from before an image was renamed or added published nothing under that 
   The sandbox driver keeps the run lease and uses the gateway of the replacement server.
   The turn must end DONE on its first attempt in the same sandbox.
   The fake model provider of the [capacity benchmark](./capacity-benchmark.mdx) scripts the turn.
-  Then `kubernetes-cluster.ts turn-removal` deletes a question while its turn runs and checks that the turn stopped and stored nothing more.
-  It also checks that the next model request holds none of a deleted thread anchor's text.
   Then the drill proves the Slack path of a turn.
   It uses a Slack Web API fake in the same Pod network (`scripts/slack-fake.ts`).
   The server installs the app through its own OAuth callback against the fake.
   A signed Events API message from the member's linked Slack identity must reach a turn in the same sandbox.
   The turn must end DONE, and the fake must receive the answer as `chat.postMessage` in the member's DM.
   This drill is the CI proof of a conversation answer in the app and in Slack. [End-to-end testing](./e2e-testing.mdx#conversation-turns) lists the stand-ins.
+  After it, the same job runs `kubernetes-cluster.ts turn-removal` on the same release.
+  It deletes a question while its turn runs and checks that the turn stopped and stored nothing more.
+  It also checks that no later model request holds the deleted question's text, which an answer had quoted.
   It adds no job. A pull request does not run the drills job. `ci:full` or a dispatch does.
   arm64 runs only the lowest minor, the minor of the arm64 host.
   A push to `main` that a merge group tested runs no leg, because its commit is the group's commit.
