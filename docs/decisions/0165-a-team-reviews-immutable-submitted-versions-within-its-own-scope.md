@@ -129,7 +129,7 @@ Decisions 1 to 10 and 13 stay.
 - `TEAM` applies to a requested review in an enabled workspace, when the conditions for a model run hold. These include the workspace's model assignment and payer, and the AI choice rule below.
 - Otherwise the seal records `OBSERVATIONS`. It starts no composer and writes no mailbox event. The team reads the observations and the reason.
 - Under both values, the observations stay available as evidence. A person reads them in the anchored view and in a host.
-- They also appear under **What Hephaestus used**.
+- An answer that cites an observation also lists it under **What Hephaestus used**.
 - `TEAM` is a new producer value beside those of ADR 0160 decision 1. A review of a person's work keeps the values of that decision.
 
 **Decision 12: one composition pipeline words team guidance.** The mentor's review handler of ADR 0160 alone orders and words guidance over sealed observations. Its scope is typed: an account, or a team project in a workspace. There is no second composer, and no host owns a review, a chat or state.
@@ -146,6 +146,7 @@ Decisions 1 to 10 and 13 stay.
 
 - Each team project has one mentoring place in the app, with threads for its reviews and topics.
 - The mentor module owns the threads and messages. The project module owns membership and team decisions.
+- This adds the threads and messages to what the mentor module owns in decision 13.
 - A member asks under their own identity. The question enters the mentor's intake with the team as owner and the member as requester.
 - An answer cites an observation with its anchor and proposes an option. After a new review, it revisits a recorded decision.
 - The mentor can propose a decision. Only a member records one, by an explicit act (decision 8).
@@ -156,7 +157,9 @@ Decisions 1 to 10 and 13 stay.
 ### Withdrawal and erasure
 
 - Withdrawal of a version also hides the guidance and replies that cite it, and marks them stale. No later composition reads them.
-- Erasure of a member removes their messages. It also redacts replies and guidance that quote them. A decision that they recorded stays without their name.
+- Erasure of a member removes their messages and the versions that they captured. It also redacts replies and guidance that quote them.
+- A decision that an erased member recorded stays without their name.
+- A member who leaves a team loses access at once. Their messages stay under their name until an erasure removes them.
 - Each new store ships in three releases: tables and deleters, then erasure registration, then the first writer.
 
 ### Open until the maintainer and the course owner decide
@@ -186,5 +189,5 @@ Not enforced yet. Before the team mentor is enabled, tests must add these checks
 - After a member leaves, their next personal load returns no team evidence.
 - A retried seal gives one team revision.
 - Withdrawal hides the guidance and replies that cite the version.
-- A member's refusal makes the next seal record `OBSERVATIONS` with its reason.
+- A review that runs although a member refuses AI records `OBSERVATIONS` with its reason.
 - No team step writes to Slack.

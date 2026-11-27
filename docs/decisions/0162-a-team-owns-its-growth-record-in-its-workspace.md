@@ -54,7 +54,7 @@ Revisit the conversation view if teams repeatedly need past decisions that the p
 ## Update — 2026-11-27: the team mentor starts in January 2027
 
 The maintainer decided that January 2027 delivers a Team Mentor.
-This update replaces decision 7.
+This update replaces decision 7. It also changes one sentence of decision 3, about the commitment store.
 [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) states how a review of a team item hands off to the mentor.
 
 **Decision 7 now reads:** the team record, the TEAM producer, TEAM guidance and team decisions are enabled from January 2027 for flagged workspaces.
@@ -65,5 +65,5 @@ This update replaces decision 7.
 - The team mentor writes to no Slack channel in January. Starting project updates stays outside 1.0.
 - ADR 0165 is the decision for submitted work without a connected repository.
 
-A team decision is the record of ADR 0165 decision 8, one for each problem.
-It is not a commitment, so the commitment store of decision 3 holds no team decision.
+**The sentence of decision 3 now reads:** team follow-ups use the same commitment store, ordered per team.
+A team decision is not a commitment. It is the record of ADR 0165 decision 8, one for each problem.
