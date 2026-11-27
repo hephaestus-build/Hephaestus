@@ -60,7 +60,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
             Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTOR_DML = Pattern.compile(
             "\\b(?:insert into|update|merge into|delete from|truncate(?: table)?) (?:only )?"
-                    + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:event|owner|request|source)\"?(?![\\w$])",
+                    + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:attempt|event|owner|request|source)\"?(?![\\w$])",
             Pattern.CASE_INSENSITIVE);
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
     private static final String MENTOR_EVENT_REPOSITORY =
@@ -78,6 +78,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .containsExactlyInAnyOrder(
                         EXPORT_TABLE,
                         PERSONAL_GOAL_TABLE,
+                        "mentor_attempt",
                         "mentor_event",
                         "mentor_owner",
                         "mentor_request",

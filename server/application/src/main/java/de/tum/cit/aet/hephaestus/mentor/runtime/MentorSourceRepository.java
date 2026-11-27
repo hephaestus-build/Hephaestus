@@ -139,6 +139,24 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             """, nativeQuery = true)
     int fenceDelivery(@Param("id") UUID id, @Param("account") long account, @Param("fence") String fence);
 
+    /**
+     * Queues a question's attempt for the request's current version, due now. Its work budget is capped by the
+     * request's deadline. A new row only: the version is raised under the request lock that the caller holds.
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO mentor_attempt(id, account_id, request_id, request_version, work_class, state, claims,
+                lease_epoch, due_at, deadline, created_at)
+            SELECT :id, r.account_id, r.id, r.version, 'INTERACTIVE', 'QUEUED', 0, 0, clock_timestamp(),
+                LEAST(r.deadline, clock_timestamp() + make_interval(secs => :budget)), clock_timestamp()
+            FROM mentor_request r WHERE r.id = :request AND r.account_id = :account
+            """, nativeQuery = true)
+    int queueAttempt(
+            @Param("id") UUID id,
+            @Param("account") long account,
+            @Param("request") UUID request,
+            @Param("budget") double budgetSeconds);
+
     @Modifying
     @Query(
             value = "UPDATE mentor_source SET state = 'DELETED' WHERE id = :id AND account_id = :account",

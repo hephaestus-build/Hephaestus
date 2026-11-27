@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.submission.TeamVersionState;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorRequest;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSource;
 import de.tum.cit.aet.hephaestus.practices.advice.AdviceState;
@@ -50,6 +51,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
                         Set.of(Account.Status.DELETED)),
                 new Contract<>(IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of()),
+                new Contract<>(
+                        MentorAttempt.State.class,
+                        Set.of(MentorAttempt.State.QUEUED),
+                        Set.of(MentorAttempt.State.ENDED)),
                 new Contract<>(
                         MentorSource.State.class, Set.of(MentorSource.State.LIVE), Set.of(MentorSource.State.DELETED)),
                 new Contract<>(

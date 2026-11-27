@@ -397,6 +397,35 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 .containsEntry("delivery_fence", "SOURCE_DELETED");
     }
 
+    /** Intake queues one question attempt for each version that authority admits, due now, within the deadline. */
+    @Test
+    void shouldQueueOneAttemptForEachAdmittedVersionOfAQuestion() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        assertThat(owner.queryForMap("SELECT * FROM mentor_attempt WHERE request_id = ?", request))
+                .containsEntry("request_version", 1)
+                .containsEntry("state", "QUEUED")
+                .containsEntry("work_class", "INTERACTIVE")
+                .containsEntry("claims", 0)
+                .containsEntry("lease_epoch", 0L);
+        assertThat(owner.queryForObject("""
+                        SELECT a.deadline <= r.deadline AND a.deadline <= a.created_at + interval '10 minutes'
+                            AND a.due_at <= clock_timestamp()
+                        FROM mentor_attempt a JOIN mentor_request r ON r.id = a.request_id WHERE a.request_id = ?
+                        """, Boolean.class, request))
+                .isTrue();
+
+        admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED);
+        deny = true;
+        admit(IngressKind.MESSAGE_EDITED, "e3", message, "1700000009.000300");
+
+        assertThat(owner.queryForList(
+                        "SELECT request_version FROM mentor_attempt WHERE request_id = ? ORDER BY request_version",
+                        Integer.class,
+                        request))
+                .containsExactly(1, 2);
+    }
+
     /** S6: the owner row has no workspace, so a purge leaves it, and the account's next question opens normally. */
     @Test
     void shouldKeepTheOwnerRowAndOpenTheNextQuestionAfterAWorkspacePurge() {
@@ -410,6 +439,8 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                         .single());
 
         assertThat(owner.queryForList("SELECT id FROM mentor_request WHERE id = ?", UUID.class, request))
+                .isEmpty();
+        assertThat(owner.queryForList("SELECT id FROM mentor_attempt WHERE request_id = ?", UUID.class, request))
                 .isEmpty();
         assertThat(owner.queryForList("SELECT account_id FROM mentor_owner WHERE account_id = ?", Long.class, account))
                 .containsExactly(account);

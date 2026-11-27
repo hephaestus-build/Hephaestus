@@ -53,6 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MentorIntake implements MentorIngress {
     static final Duration ANSWER_DEADLINE = Duration.ofHours(1);
+    private static final double BUDGET_SECONDS = MentorAttempt.INTERACTIVE_BUDGET.toSeconds();
 
     private final MentorSourceRepository rows;
     private final PersonDataWriteFence fence;
@@ -213,10 +214,13 @@ public class MentorIntake implements MentorIngress {
                 var _ = rows.openRequest(
                         opened(id, account, source.id(), envelope, Objects.requireNonNull(change.stamp())));
                 var _ = rows.linkRequest(eventId, account, id);
+                var _ = rows.queueAttempt(UUID.randomUUID(), account, id, BUDGET_SECONDS);
                 yield new RequestRef(id, 1);
             }
             case REVISED -> {
                 var _ = rows.revise(id, account, envelope.message().revision(), envelope.sourceRef());
+                // The older version's attempt is fenced at its next check; this one answers the edit.
+                var _ = rows.queueAttempt(UUID.randomUUID(), account, id, BUDGET_SECONDS);
                 // The request is locked, so its next version is the locked one plus one.
                 yield new RequestRef(id, Objects.requireNonNull(request).version() + 1);
             }

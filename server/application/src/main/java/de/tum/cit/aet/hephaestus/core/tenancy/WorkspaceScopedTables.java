@@ -73,6 +73,7 @@ public class WorkspaceScopedTables {
             // Account-owned personal goal. Its access boundary is the PostgreSQL owner policy.
             "personal_goal",
             // The personal mentor's intake rows: account-owned under row-level security.
+            "mentor_attempt",
             "mentor_event",
             "mentor_owner",
             "mentor_request",
