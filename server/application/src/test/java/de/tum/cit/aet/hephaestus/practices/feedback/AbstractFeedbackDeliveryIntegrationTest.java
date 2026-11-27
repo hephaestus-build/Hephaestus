@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionStore;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
@@ -285,7 +286,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
     /** Claims the feedback's due send, as a process that then stops at any point would. */
     protected ActionAttempt claimSend(UUID id) {
-        return ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + id).orElseThrow();
+        return ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + id, context.getBean(ActionStore.class)).orElseThrow();
     }
 
     /** The claimed send of a feedback, claimed on first use. */

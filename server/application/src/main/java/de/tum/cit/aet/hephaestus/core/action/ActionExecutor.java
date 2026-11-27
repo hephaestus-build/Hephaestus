@@ -326,11 +326,12 @@ public class ActionExecutor implements SmartLifecycle {
                 claim.epoch(),
                 claim.writeStarted(),
                 claim.readbackRef(),
-                () -> {
+                additionalProof -> {
                     boolean begun = store.beginWrite(
                             claim,
                             WRITE_MARGIN,
-                            () -> claim.writeStarted() || adapter.sourceIsCurrent(claim.workspaceId(), payload));
+                            () -> claim.writeStarted() || adapter.sourceIsCurrent(claim.workspaceId(), payload),
+                            additionalProof);
                     if (begun) fenced.set(true);
                     return begun;
                 },

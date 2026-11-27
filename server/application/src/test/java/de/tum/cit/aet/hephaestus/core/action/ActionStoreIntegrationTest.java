@@ -199,7 +199,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var claim = claimOwn(List.of(id)).getFirst();
 
         try (var _ = RunningMigration.start(dataSource)) {
-            assertThat(store.beginWrite(claim, MARGIN, () -> true)).isTrue();
+            assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
             assertThat(store.settle(
                             id, claim.epoch(), new ActionResult.Done("in-flight"), ActionStoreIntegrationTest::ignore))
                     .isPresent();
@@ -212,6 +212,66 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var claim = claimOwn(List.of(id)).getFirst();
 
         assertThat(store.beginWrite(claim, MARGIN, () -> {
+                    jdbc.update("UPDATE agent_action SET leased_until = clock_timestamp() WHERE id = ?", id);
+                    return true;
+                }, () -> true))
+                .isFalse();
+        assertThat(row(id)).containsEntry("write_started_at", null);
+    }
+
+    @Test
+    void shouldCheckAdditionalProofUnderTheActionLockBeforeWritingTheMarker() {
+        String key = "proof:" + UUID.randomUUID();
+        UUID id = actions.enqueue(request(key, key, null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+        var checks = new ArrayList<String>();
+
+        assertThat(store.beginWrite(claim, MARGIN, () -> checks.add("source"), () -> {
+                    checks.add("proof");
+                    assertThat(row(id)).containsEntry("write_started_at", null);
+                    assertThatThrownBy(() -> {
+                                try (var connection = dataSource.getConnection();
+                                        var statement = connection.prepareStatement(
+                                                "SELECT id FROM agent_action WHERE id = ? FOR UPDATE NOWAIT")) {
+                                    statement.setObject(1, id);
+                                    statement.executeQuery();
+                                }
+                            })
+                            .isInstanceOfSatisfying(
+                                    SQLException.class, error -> assertThat(error.getSQLState()).isEqualTo("55P03"));
+                    return false;
+                }))
+                .isFalse();
+        assertThat(checks).containsExactly("source", "proof");
+        assertThat(row(id)).containsEntry("write_started_at", null);
+
+        assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
+        Object admittedAt = row(id).get("write_started_at");
+        assertThat(admittedAt).isNotNull();
+        assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> false)).isFalse();
+        assertThat(row(id)).containsEntry("write_started_at", admittedAt);
+    }
+
+    @Test
+    void shouldSkipAdditionalProofWhenTheSourceWasWithdrawn() {
+        String key = "proof:" + UUID.randomUUID();
+        UUID id = actions.enqueue(request(key, key, null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+
+        assertThatThrownBy(() -> store.beginWrite(claim, MARGIN, () -> false, () -> {
+                    throw new AssertionError("Additional proof ran after source withdrawal");
+                }))
+                .isInstanceOf(ActionStore.SourceWithdrawn.class);
+        assertThat(row(id)).containsEntry("write_started_at", null);
+    }
+
+    @Test
+    void shouldRefuseWriteWhenTheLeaseLosesItsMarginDuringAdditionalProof() {
+        String key = "proof:" + UUID.randomUUID();
+        UUID id = actions.enqueue(request(key, key, null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+
+        assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> {
                     jdbc.update("UPDATE agent_action SET leased_until = clock_timestamp() WHERE id = ?", id);
                     return true;
                 }))
@@ -228,10 +288,13 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var current = claimOwn(List.of(id)).getFirst();
 
         assertThat(current.epoch()).isEqualTo(stale.epoch() + 1);
-        assertThat(store.beginWrite(stale, MARGIN, () -> true)).isFalse();
+        assertThat(store.beginWrite(stale, MARGIN, () -> true, () -> {
+                    throw new AssertionError("Additional proof ran for the stale lease");
+                }))
+                .isFalse();
         assertThat(store.settle(id, stale.epoch(), new ActionResult.Done("stale"), ActionStoreIntegrationTest::ignore))
                 .isEmpty();
-        assertThat(store.beginWrite(current, MARGIN, () -> true)).isTrue();
+        assertThat(store.beginWrite(current, MARGIN, () -> true, () -> true)).isTrue();
         assertThat(store.settle(
                         id, current.epoch(), new ActionResult.Done("current"), ActionStoreIntegrationTest::ignore))
                 .as("the settled action names itself, so its events can")
@@ -251,7 +314,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldNeverTakeAnEmailAgainAfterItsWriteStarted() {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
         var claim = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(claim, MARGIN, () -> true)).isTrue();
+        assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
         expireLease(id);
 
         assertThat(claimOwn(List.of(id))).isEmpty();
@@ -353,7 +416,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldRetryOnlyUntilTheLastAttemptAndClearTheFenceOfAProvenRetry() {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 2));
         var first = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(first, MARGIN, () -> true)).isTrue();
+        assertThat(store.beginWrite(first, MARGIN, () -> true, () -> true)).isTrue();
 
         store.settle(id, first.epoch(), new ActionResult.Retry(Duration.ZERO), ActionStoreIntegrationTest::ignore);
         assertThat(row(id)).containsEntry("state", "ADMITTED").containsEntry("write_started_at", null);
@@ -617,7 +680,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheFenceAndTakeTheActionAgainToReadBack() {
         UUID id = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
         var first = claimOwn(List.of(id)).getFirst();
-        assertThat(store.beginWrite(first, MARGIN, () -> true)).isTrue();
+        assertThat(store.beginWrite(first, MARGIN, () -> true, () -> true)).isTrue();
 
         store.settle(id, first.epoch(), new ActionResult.Reread(Duration.ZERO), ActionStoreIntegrationTest::ignore);
 
@@ -638,7 +701,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var ended = new ArrayList<ActionEnded>();
         for (var claim : claims) {
             if (claim.id().equals(done)) store.settle(done, claim.epoch(), new ActionResult.Done("ref"), ended::add);
-            else assertThat(store.beginWrite(claim, MARGIN, () -> true)).isTrue();
+            else assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
         }
         expireLease(lost);
 
@@ -788,7 +851,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                         LEASE)
                 .orElseThrow();
         if (writeStarted)
-            assertThat(store.beginWrite(claim, MARGIN, () -> true)).isTrue();
+            assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
         expireLease(claim.id());
         return claim.id();
     }

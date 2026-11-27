@@ -79,7 +79,7 @@ class EmailSmtpIntegrationTest {
                                 1,
                                 false,
                                 null,
-                                () -> true,
+                                proof -> proof.getAsBoolean(),
                                 null));
                         assertThat(result).isInstanceOf(ActionResult.Done.class);
 
