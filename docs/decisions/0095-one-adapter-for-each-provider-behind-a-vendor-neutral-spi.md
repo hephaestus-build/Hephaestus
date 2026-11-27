@@ -10,6 +10,8 @@
 
 **Relates to:** [ADR 0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md), [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md)
 
+**Amended by:** [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md)
+
 ## Context
 
 Hephaestus connects to GitHub, GitLab, Slack and Outline. Before ADR 0015, each provider had its own route, handler registry and credential columns, and other modules imported provider classes.
@@ -124,3 +126,10 @@ Rule 6 required a lifecycle listener for every kind.
 No code dispatched its install, uninstall, scope and rename hooks, so each listener was an empty marker, and the provider adapters own these events.
 The listener SPI and the approval writer SPI are removed.
 Boot now requires a credential provider for every kind and the beans of each declared capability.
+
+## Update — 2026-11-27: capture packages for submitted work
+
+Decision 1 has two more kinds of package under `integration/`: `submission`, and one package for each tool that captures submitted work.
+They have no provider connection, so decision 6 does not apply to them.
+The import guard of decision 4 names them.
+The reason is in [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) decision 13: a team submits work that no provider connection mirrors.
