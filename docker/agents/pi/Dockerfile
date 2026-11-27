@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.22.2
+ARG NODE_VERSION=24.22.3
 FROM ghcr.io/pnpm/pnpm:12.18.0@sha256:41c39d1c734b0a810669c07587888aa7dbe9ef9b4c8e98b346b3654f7b269b6d AS dependencies
 ARG NODE_VERSION
 WORKDIR /opt/pi-sdk
@@ -33,7 +33,7 @@ COPY practice-scripts/kits/ /opt/practice-scripts/kits/
 RUN pnpm exec node /opt/practice-scripts/build.ts /opt/pi-sdk/node_modules/typescript/bin/tsc
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
-FROM node:${NODE_VERSION}-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS os-packages
+FROM node:${NODE_VERSION}-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4 AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
     apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
