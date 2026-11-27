@@ -554,12 +554,13 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * The delete's source statement takes its snapshot, a second create then commits, and only after that does the
-     * delete lock the source row. A test-only restrictive policy holds the delete inside that one statement. Intake reads
-     * the request after the lock, so the delete stops the request that the create opened (SONNET-V5433-delta2).
+     * SONNET-V5433-delta2's race: a delete takes its source snapshot, and a second create tries to commit before the
+     * delete locks the source row. A test-only restrictive policy holds the delete inside that one statement. The owner
+     * row rules the race out: the delete holds it already, so the create waits behind the delete, then finds the
+     * tombstone, and no request is left open.
      */
     @Test
-    void shouldStopTheRequestWhenADeleteLocksTheSourceAfterASecondCreateCommitted() throws Exception {
+    void shouldHoldASecondCreateBehindADeleteThatHoldsTheOwnerRow() throws Exception {
         String message = message();
         var refused = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
         assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR)))
@@ -574,7 +575,10 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         try (var gate = DriverManager.getConnection(root.jdbcUrl(), root.username(), root.password());
                 var statement = gate.createStatement()) {
             statement.execute("SELECT pg_advisory_lock(54330001)");
+            var holder = new AtomicInteger();
             var delete = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+                holder.set(Objects.requireNonNull(
+                        jdbcClient.sql("SELECT pg_backend_pid()").query(Integer.class).single()));
                 jdbcClient
                         .sql("SELECT set_config('mentor.probe', 'on', true)")
                         .query(String.class)
@@ -595,13 +599,18 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                         .asString()
                         .contains("FOR UPDATE OF s NOWAIT");
 
-                UUID request =
-                        opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).requestId();
+                var create = CompletableFuture.supplyAsync(() -> admit(IngressKind.MESSAGE, "e2", message, FIRST));
+                Awaitility.await()
+                        .atMost(Duration.ofSeconds(20))
+                        .until(() -> create.isDone() || waitingOn(holder.get()) > 0);
+                assertThat(create.isDone()).as("the create waits behind the delete").isFalse();
                 statement.execute("SELECT pg_advisory_unlock(54330001)");
 
-                assertThat(delete.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e3", new RequestRef(request, 1)));
+                assertThat(delete.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e3", null));
+                assertThat(create.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e2", null));
+                assertThat(event("e2")).containsEntry("reason", "SOURCE_DELETED");
                 assertThat(source(message)).containsEntry("state", "DELETED");
-                assertThat(column(request, "state")).isEqualTo("STOPPED");
+                assertThat(requests(message)).isEmpty();
             } finally {
                 statement.execute("SELECT pg_advisory_unlock_all()");
             }
