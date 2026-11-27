@@ -2759,7 +2759,7 @@ async function answered(turnId: string): Promise<void> {
 }
 
 /** The fake's counts of `marker`, a drill-made text of letters, digits and hyphens. */
-async function seen(marker: string): Promise<Seen> {
+async function seenByFake(marker: string): Promise<Seen> {
 	return seenResult(
 		await kubectl([
 			"-n",
@@ -2787,19 +2787,17 @@ export async function turnRemoval(
 ): Promise<void> {
 	await withTurnDrill("turn-removal", work, podCidr, extra, profiles, async ({ base, token }) => {
 		const conversation = `${base}/workspaces/${ROLL_WORKSPACE}/conversation`;
-		const ready = Number(
-			(
-				await kubectl([
-					"-n",
-					NAMESPACE,
-					"get",
-					"deployment",
-					`${RELEASE}-server`,
-					"-o",
-					"jsonpath={.status.readyReplicas}",
-				])
-			).trim() || "0",
-		);
+		const readyReplicas = await kubectl([
+			"-n",
+			NAMESPACE,
+			"get",
+			"deployment",
+			`${RELEASE}-server`,
+			"-o",
+			"jsonpath={.status.readyReplicas}",
+		]);
+		// A Deployment with no ready replica omits the field, so the read is empty.
+		const ready = readyReplicas.trim() === "" ? 0 : Number(readyReplicas.trim());
 		report(
 			[
 				{
@@ -2844,15 +2842,15 @@ export async function turnRemoval(
 		const marker = `removal-drill-${randomUUID().slice(0, 8)}`;
 		const anchor = await ask(conversation, token, `Pin the image by ${marker}.`);
 		await answered(anchor.id);
-		const beforeReply = await seen(marker);
+		const beforeReply = await seenByFake(marker);
 		const reply = await ask(conversation, token, "What should I check next?", anchor.questionId);
 		await answered(reply.id);
-		const afterReply = await seen(marker);
+		const afterReply = await seenByFake(marker);
 		await deleteEntry(conversation, token, anchor.questionId);
-		const beforeNext = await seen(marker);
+		const beforeNext = await seenByFake(marker);
 		const next = await ask(conversation, token, "What threads are open?");
 		await answered(next.id);
-		const afterNext = await seen(marker);
+		const afterNext = await seenByFake(marker);
 		report(anchorChecks({ beforeReply, afterReply, beforeNext, afterNext }), "turn removal");
 	});
 }

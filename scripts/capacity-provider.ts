@@ -84,7 +84,7 @@ if (values.grid === true) {
 			} else if (
 				toolMode === "roll" &&
 				request.method === "GET" &&
-				request.url?.startsWith("/seen?")
+				request.url?.startsWith("/seen?") === true
 			) {
 				const text = new URL(request.url, "http://provider").searchParams.get("text") ?? "";
 				response
