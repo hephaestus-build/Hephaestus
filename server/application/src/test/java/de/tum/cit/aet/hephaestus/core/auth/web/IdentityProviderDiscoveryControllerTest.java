@@ -47,7 +47,7 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
 
     @Test
     @DisplayName(
-            "an OIDC provider is its issuer with the path and no trailing slash, as its linked identities report it")
+            "an OIDC provider is its exact issuer, path and trailing slash included, as its linked identities report it")
     void oidcProviderIsItsIssuer() {
         ClientRegistration reg = ClientRegistration.withRegistrationId("school")
                 .clientId("client")

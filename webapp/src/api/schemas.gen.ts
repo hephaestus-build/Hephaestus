@@ -5304,7 +5304,7 @@ export const IdentityProviderTypeSchema = {
 export const IdentityProviderViewSchema = {
 	type: "object",
 	description:
-		"One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is\n the OAuth instance origin (scheme + host[:port]) of the authorization endpoint, so the\n workspace-creation wizard can match a target instance to its login.\n\n <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> It is only meaningful for GitLab rows,\n where the OAuth origin and the API origin coincide (e.g. <code>https://gitlab.example.com</code>). For a\n GitHub row it is <code>https://github.com</code> (the OAuth host), NOT <code>https://api.github.com</code>; the\n sole consumer (the workspace wizard) matches GitLab self-hosted origins and never relies on the GitHub\n value, so the discrepancy is harmless. Do not treat this as an SCM API base URL.",
+		"One row per sign-in option. <code>providerType</code> drives the SPA's icon choice. <code>baseUrl</code> is the OAuth\n instance origin (scheme + host[:port]) of the authorization endpoint, so the workspace-creation wizard can match a\n target instance to its login. For an OpenID Connect provider it is the exact issuer, path included, so Connected\n accounts can match it to a linked identity's provider.\n\n <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> For GitLab rows the OAuth origin and the API origin\n coincide (e.g. <code>https://gitlab.example.com</code>). For a GitHub row it is <code>https://github.com</code> (the OAuth\n host), NOT <code>https://api.github.com</code>; the workspace wizard matches GitLab self-hosted origins only and never\n relies on the GitHub value. Do not treat this as an SCM API base URL.",
 	properties: {
 		baseUrl: {
 			type: "string",
@@ -5923,7 +5923,8 @@ export const LineageKindSchema = {
 
 export const LinkedProviderSchema = {
 	type: "object",
-	description: "A provider instance the current user is linked to: its type + server-url origin.",
+	description:
+		"A provider instance the current user is linked to: its type and server-url origin, or an OIDC provider's issuer.",
 	properties: {
 		serverUrl: {
 			type: "string",

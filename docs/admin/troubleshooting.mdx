@@ -131,14 +131,14 @@ After 10 minutes, it stops and restarts.
 
 ## The login page has no sign-in button
 
-**Cause:** No complete GitHub or GitLab login provider is configured.
+**Cause:** No complete GitHub, GitLab or OpenID Connect login provider is configured, or Hephaestus cannot read the discovery document of the OpenID Connect provider.
 
 **Fix:**
 
 1. On a new instance, configure the OAuth App, as [Configure a login provider](./first-steps#1-configure-a-login-provider) describes.
 2. To change an existing provider, open **Instance administration → Login providers**.
 
-**Check:** The login page offers **Continue with GitHub** or the button of your GitLab provider.
+**Check:** The login page offers **Continue with GitHub**, or the button of your GitLab or OpenID Connect provider.
 
 ## Sign-in succeeds, but the account has no instance-admin navigation
 

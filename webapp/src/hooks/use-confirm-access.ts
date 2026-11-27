@@ -15,8 +15,8 @@ export function useConfirmAccess(enabled: boolean, returnTo?: string) {
 		],
 	});
 
-	// Both origins are canonical on the server, so a registration on another origin of the same
-	// provider type — which would sign into a different account — never matches.
+	// Both origins, or both OIDC issuers, are canonical on the server, so a registration on another
+	// instance of the same provider type — which would sign into a different account — never matches.
 	const linked = currentUser.data?.linkedProviders ?? [];
 
 	return {

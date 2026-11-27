@@ -51,15 +51,15 @@ public class IdentityProviderDiscoveryController {
     }
 
     /**
-     * One row per sign-in option. {@code providerType} drives the SPA's icon choice; {@code baseUrl} is
-     * the OAuth instance origin (scheme + host[:port]) of the authorization endpoint, so the
-     * workspace-creation wizard can match a target instance to its login.
+     * One row per sign-in option. {@code providerType} drives the SPA's icon choice. {@code baseUrl} is the OAuth
+     * instance origin (scheme + host[:port]) of the authorization endpoint, so the workspace-creation wizard can match a
+     * target instance to its login. For an OpenID Connect provider it is the exact issuer, path included, so Connected
+     * accounts can match it to a linked identity's provider.
      *
-     * <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> It is only meaningful for GitLab rows,
-     * where the OAuth origin and the API origin coincide (e.g. {@code https://gitlab.example.com}). For a
-     * GitHub row it is {@code https://github.com} (the OAuth host), NOT {@code https://api.github.com}; the
-     * sole consumer (the workspace wizard) matches GitLab self-hosted origins and never relies on the GitHub
-     * value, so the discrepancy is harmless. Do not treat this as an SCM API base URL.
+     * <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> For GitLab rows the OAuth origin and the API origin
+     * coincide (e.g. {@code https://gitlab.example.com}). For a GitHub row it is {@code https://github.com} (the OAuth
+     * host), NOT {@code https://api.github.com}; the workspace wizard matches GitLab self-hosted origins only and never
+     * relies on the GitHub value. Do not treat this as an SCM API base URL.
      */
     public record IdentityProviderViewDTO(
             String registrationId, String displayName, String providerType, String baseUrl) {}

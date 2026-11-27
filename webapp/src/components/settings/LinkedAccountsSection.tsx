@@ -74,7 +74,7 @@ export interface LinkedAccountsSectionProps {
 	providers: IdentityProviderView[];
 	/**
 	 * The deployments the signed-in account is linked to, as the current user reports them: each
-	 * provider type with the canonical origin its identity came from.
+	 * provider type with the canonical origin its identity came from, or an OIDC provider's issuer.
 	 */
 	linkedProviders: readonly { type: string; serverUrl?: string }[];
 	/**
@@ -173,11 +173,12 @@ export function LinkedAccountsSection({
 			return true;
 		}
 		if (PER_INSTANCE_PROVIDER_TYPES.has(type)) {
-			const origin = provider.baseUrl;
+			// An origin, or an OIDC provider's exact issuer, on both sides.
+			const instance = provider.baseUrl;
 			return !(
-				hasText(origin) &&
+				hasText(instance) &&
 				linkedProviders.some(
-					(linked) => linked.type.toUpperCase() === type && linked.serverUrl === origin,
+					(linked) => linked.type.toUpperCase() === type && linked.serverUrl === instance,
 				)
 			);
 		}
@@ -223,8 +224,13 @@ export function LinkedAccountsSection({
 				<ItemGroup>
 					{identities.map((identity) => {
 						const Icon = getProviderIcon(identity.providerType);
+						// An OIDC subject is an opaque key, never a name: the server names the identity by its provider.
 						const name =
-							firstNonBlank(identity.displayName, identity.username, identity.subject) ?? "Account";
+							firstNonBlank(
+								identity.displayName,
+								identity.username,
+								identity.providerType.toUpperCase() === "OIDC" ? undefined : identity.subject,
+							) ?? getProviderLabel(identity.providerType, "Account");
 						const lastLogin = asDate(identity.lastLoginAt);
 
 						return (

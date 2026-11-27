@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
@@ -40,6 +42,7 @@ public class AccountService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final GitProviderRegistry providers;
+    private final LoginProviderRepository loginProviders;
 
     private final PrivacyJournal journal;
 
@@ -51,8 +54,10 @@ public class AccountService {
             ApplicationEventPublisher eventPublisher,
             Clock clock,
             GitProviderRegistry providers,
-            PrivacyJournal journal) {
+            PrivacyJournal journal,
+            LoginProviderRepository loginProviders) {
         this.journal = journal;
+        this.loginProviders = loginProviders;
         this.accountRepository = accountRepository;
         this.identityRepository = identityRepository;
         this.sessionRevocation = sessionRevocation;
@@ -66,6 +71,21 @@ public class AccountService {
         return accountRepository
                 .findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The account was not found."));
+    }
+
+    /**
+     * The name of an OIDC identity: its login provider's display name. No provider mirror names it, and its subject is
+     * an opaque key that never names a person. Null for another type, or when the provider was removed.
+     */
+    @Transactional(readOnly = true)
+    public @Nullable String oidcProviderName(Identity identity) {
+        if (!"OIDC".equals(providers.providerTypeName(identity.getProviderId()))) return null;
+        String issuer = providers.providerServerUrl(identity.getProviderId());
+        if (issuer == null) return null;
+        return loginProviders
+                .findByTypeAndBaseUrl(LoginProvider.ProviderType.OIDC, issuer)
+                .map(LoginProvider::getDisplayName)
+                .orElse(null);
     }
 
     public List<Identity> activeIdentities(Long accountId) {

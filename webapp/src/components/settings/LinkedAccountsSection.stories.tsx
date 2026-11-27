@@ -261,7 +261,8 @@ const schoolLogin: IdentityView = {
 	id: 5,
 	providerType: "OIDC",
 	subject: "3f6c2a1e-9b1d-4f0e-a2c4-5d6e7f8a9b0c",
-	displayName: "Ada Lovelace",
+	// The server names an OIDC identity by its login provider: no mirror names it, and its subject is an opaque key.
+	displayName: "School Login",
 };
 // Two realms on one host are two issuers, so the server sends each issuer with its path.
 const schoolLoginProvider: IdentityProviderView = {
@@ -290,9 +291,22 @@ export const SingleSignOnBesideGitHub: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Disconnect The Octocat" })).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Disconnect Ada Lovelace" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Disconnect School Login" })).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Connect Staff Login" })).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Connect School Login" })).toBeNull();
+	},
+};
+
+/** An OIDC identity whose provider was removed still never shows its subject: the row names the provider type. */
+export const SingleSignOnWithoutItsProvider: Story = {
+	args: {
+		identities: [github, { id: 5, providerType: "OIDC", subject: schoolLogin.subject }],
+		providers: [githubProvider],
+		linkedProviders: [githubLinked, schoolLoginLinked],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText(schoolLogin.subject)).toBeNull();
+		await expect(canvas.getByRole("button", { name: "Disconnect Single sign-on" })).toBeVisible();
 	},
 };
 
@@ -305,7 +319,7 @@ export const OnlySingleSignOn: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/only sign-in method/iu)).toBeVisible();
-		await expect(canvas.queryByRole("button", { name: "Disconnect Ada Lovelace" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "Disconnect School Login" })).toBeNull();
 	},
 };
 

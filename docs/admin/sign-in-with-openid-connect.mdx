@@ -15,7 +15,7 @@ Hephaestus is not an identity server here. It sends people to the provider, then
 - An installed instance that serves its host over HTTPS ([Install on Kubernetes](./kubernetes)).
 - Every server of the instance runs the release that adds OIDC sign-in. See [Upgrade](#upgrade).
 - The issuer of the provider, such as `https://login.example.org/realms/example`. Hephaestus reads `<issuer>/.well-known/openid-configuration`, and the document must name the same issuer.
-- The issuer, its token endpoint and its key set on a public HTTPS address. A provider on a private network needs the Git provider list, `hephaestus.scm.egress.private-hosts`, as [Admit a Git provider on a private network](./private-network#admit-a-git-provider-on-a-private-network) describes.
+- The issuer, its authorization endpoint, its token endpoint and its key set on a public HTTPS address. A provider on a private network needs the Git provider list, `hephaestus.scm.egress.private-hosts`, as [Admit a Git provider on a private network](./private-network#admit-a-git-provider-on-a-private-network) describes.
 - The instance admin role, and a recent sign-in.
 
 ## Register the client at the provider
@@ -33,8 +33,10 @@ Ask the provider's administrator for a client with these values:
 | Signature | RS256, ES256 or PS256 |
 
 - `<registration-id>` is the ID that you give the provider in Hephaestus, such as `tum`. You cannot change it later.
-- Hephaestus reads the claims from the ID token only. It calls no userinfo endpoint. A provider that sends `name` or `email` only from userinfo gives an account with the name `user-<sub>` and no email.
-- Ask whether `sub` stays the same for a person. Hephaestus keys each person on the issuer and `sub`. A provider that changes `sub`, or gives each client its own `sub`, gives the person a new account.
+- Hephaestus reads the claims from the ID token only. It calls no userinfo endpoint.
+  - The account's name comes from `name`, then `preferred_username`. Without either claim, the name is `user-<sub>`.
+  - Without `email` in the ID token, the account has no email address.
+- Ask whether `sub` stays the same for a person. Hephaestus keys each person on the issuer and `sub`. If `sub` changes, the person gets a new account. A provider that gives each client its own `sub` keeps it stable for this client, but a new client ID changes every `sub`.
 - Receive the client secret through a secret channel, never in a chat.
 
 ## Add the login provider
