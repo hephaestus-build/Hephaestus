@@ -21,9 +21,15 @@ ALTER TABLE public.mentor_request
         CONSTRAINT ck_mentor_request_delivery_fence CHECK (delivery_fence IN ('STOPPED', 'SOURCE_DELETED', 'SOURCE_EDITED')),
     ADD COLUMN end_reason VARCHAR(32) CONSTRAINT ck_mentor_request_end_reason CHECK (end_reason IN ('STOPPED', 'SOURCE_DELETED')),
     ADD COLUMN settled_at TIMESTAMP(6) WITH TIME ZONE;
+
+-- A Stop is now handled: a Stop by someone else than the owner records NOT_OWNER, and nothing records STOP_NOT_HANDLED.
+ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_reason,
+    ADD CONSTRAINT ck_mentor_event_reason CHECK (reason IN ('UNAUTHORIZED', 'AUTHOR_MISMATCH', 'ALREADY_OPENED',
+        'NO_REQUEST', 'STALE_REVISION', 'SOURCE_DELETED', 'REQUEST_SETTLED', 'NOT_OWNER'));
         ]]></sql>
         <rollback>
             <sql>ALTER TABLE public.mentor_request DROP COLUMN settled_at, DROP COLUMN end_reason, DROP COLUMN delivery_fence, DROP COLUMN delivery_generation, DROP COLUMN admitted_source_ref, DROP COLUMN admitted_revision</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_reason, ADD CONSTRAINT ck_mentor_event_reason CHECK (reason IN ('UNAUTHORIZED', 'AUTHOR_MISMATCH', 'ALREADY_OPENED', 'NO_REQUEST', 'STALE_REVISION', 'SOURCE_DELETED', 'REQUEST_SETTLED', 'STOP_NOT_HANDLED'))</sql>
             <sql>DROP TABLE public.mentor_owner</sql>
         </rollback>
     </changeSet>
