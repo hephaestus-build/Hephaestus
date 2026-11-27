@@ -145,7 +145,7 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
 
         memberships.createMembership(course, student, WorkspaceRole.MEMBER);
 
-        assertThat(isMember(course, team, student)).as("staff add the person again").isFalse();
+        assertThat(isMember(course, team, student)).as("a return is a new act").isFalse();
         assertThat(rows(course, student)).isZero();
     }
 
@@ -189,6 +189,58 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldDeleteTheTeamsOfAnErasedAccountsPersonalSpaceWithTheSpace() {
+        Long space = jdbc.queryForObject(
+                "INSERT INTO workspace (slug, display_name, account_login, account_type, status, kind,"
+                        + " personal_account_id) VALUES ('me--aaaaaaaaaaaaaaaa', 'Personal space',"
+                        + " 'me--aaaaaaaaaaaaaaaa', 'USER', 'ACTIVE', 'PERSONAL', ?) RETURNING id",
+                Long.class,
+                student);
+        Workspace personal =
+                workspaces.findById(Objects.requireNonNull(space)).orElseThrow();
+        join(personal, student, WorkspaceRole.MEMBER);
+        team(personal, student);
+        UUID shared = team(course, student, classmate);
+
+        personData.eraseForAccount(student);
+
+        assertThat(count("SELECT count(*) FROM workspace WHERE id = ?", space)).isZero();
+        assertThat(count("SELECT count(*) FROM project_team WHERE workspace_id = ?", space))
+                .isZero();
+        assertThat(isMember(course, shared, classmate)).isTrue();
+    }
+
+    @Test
+    void shouldGiveAClaimingAccountTheTeamsOfAMembershipThatTheClaimMakesCurrentAgain() {
+        long unclaimed = account(Account.Status.UNCLAIMED);
+        var identity = identity(unclaimed);
+        join(course, unclaimed, WorkspaceRole.MEMBER);
+        UUID absorbed = team(course, unclaimed);
+        UUID own = team(course, student);
+        memberships.leave(id(course), student);
+
+        people.absorbUnclaimed(verifiedClaim(student, unclaimed, identity));
+
+        assertThat(isMember(course, absorbed, student)).isTrue();
+        assertThat(isMember(course, own, student)).as("ended with the membership").isFalse();
+    }
+
+    @Test
+    void shouldKeepAClaimingAccountsTeamsWhenTheAbsorbedMembershipHadEnded() {
+        long unclaimed = account(Account.Status.UNCLAIMED);
+        var identity = identity(unclaimed);
+        join(course, unclaimed, WorkspaceRole.MEMBER);
+        UUID absorbed = team(course, unclaimed);
+        UUID own = team(course, student);
+        memberships.leave(id(course), unclaimed);
+
+        people.absorbUnclaimed(verifiedClaim(student, unclaimed, identity));
+
+        assertThat(isMember(course, own, student)).isTrue();
+        assertThat(isMember(course, absorbed, student)).isFalse();
+    }
+
+    @Test
     void shouldMoveAnAbsorbedAccountsTeamsToTheAccountThatClaimsIt() {
         long unclaimed = account(Account.Status.UNCLAIMED);
         var identity = identity(unclaimed);
@@ -222,6 +274,15 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         add(course, team, student);
         memberships.leave(id(course), student);
         assertThatThrownBy(() -> add(course, team, student)).isInstanceOf(DataIntegrityViolationException.class);
+
+        add(course, team, classmate);
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE project_team_member SET account_id = ? WHERE workspace_id = ? AND team_id = ?",
+                        student,
+                        id(course),
+                        team))
+                .as("a row moved onto an ended membership")
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -241,6 +302,21 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(insert::join)
                 .isInstanceOf(CompletionException.class)
                 .hasCauseInstanceOf(DataIntegrityViolationException.class);
+        assertThat(rows(course, student)).isZero();
+    }
+
+    @Test
+    void shouldDeleteARowThatIsInsertedWhileItsMembershipEnds() throws Exception {
+        UUID team = team(course);
+        var joining = HeldTransaction.holdIn(transactions, jdbc, () -> add(course, team, student));
+
+        var leave = CompletableFuture.runAsync(() -> jdbc.update(
+                "UPDATE membership SET left_at = now() WHERE workspace_id = ? AND account_id = ?",
+                id(course),
+                student));
+        joining.commitAfter(leave);
+        leave.join();
+
         assertThat(rows(course, student)).isZero();
     }
 

@@ -55,7 +55,7 @@
         </createIndex>
     </changeSet>
     <changeSet id="1795788609699-3" author="hephaestus">
-        <comment>A team membership holds only while the workspace membership does. Ending the workspace membership ends it, and no row is accepted for an ended one. The share lock makes an insert wait for an end that runs beside it.</comment>
+        <comment>A team membership holds only while the workspace membership does. Ending the workspace membership ends it, and no row is accepted for an ended one. The share lock makes a write wait for an end that runs beside it. The update guard only validates, so it runs after the row write.</comment>
         <createProcedure>
 CREATE FUNCTION public.refuse_ended_project_team_member() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -77,13 +77,16 @@ BEGIN
 END $$
         </createProcedure>
         <sql>
-CREATE TRIGGER project_team_member_current BEFORE INSERT OR UPDATE ON public.project_team_member
+CREATE TRIGGER project_team_member_current BEFORE INSERT ON public.project_team_member
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_ended_project_team_member();
+CREATE TRIGGER project_team_member_still_current AFTER UPDATE OF account_id, workspace_id ON public.project_team_member
     FOR EACH ROW EXECUTE FUNCTION public.refuse_ended_project_team_member();
 CREATE TRIGGER membership_end_project_teams AFTER UPDATE OF left_at ON public.membership
     FOR EACH ROW WHEN (NEW.left_at IS NOT NULL) EXECUTE FUNCTION public.end_project_team_memberships();
         </sql>
         <rollback>
 DROP TRIGGER membership_end_project_teams ON public.membership;
+DROP TRIGGER project_team_member_still_current ON public.project_team_member;
 DROP TRIGGER project_team_member_current ON public.project_team_member;
 DROP FUNCTION public.end_project_team_memberships();
 DROP FUNCTION public.refuse_ended_project_team_member();
