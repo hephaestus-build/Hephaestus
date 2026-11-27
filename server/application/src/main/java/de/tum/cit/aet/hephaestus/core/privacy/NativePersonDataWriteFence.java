@@ -46,6 +46,16 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean holdForAccountWrite(long accountId) {
+        return holdForAccountWrite(accountId, true);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdForAccountRecordWrite(long accountId) {
+        return holdForAccountWrite(accountId, false);
+    }
+
+    private boolean holdForAccountWrite(long accountId, boolean requiresIdentity) {
         var identities = jdbc.query(
                 "SELECT i.provider_id,i.provider_user_key,NULLIF(i.team_key,'') FROM identity i JOIN"
                         + " account a ON a.id=i.account_id WHERE i.account_id=? AND a.status IN"
@@ -53,11 +63,12 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
                 (rs, row) ->
                         new PersonIdentity(rs.getLong(1), Objects.requireNonNull(rs.getString(2)), rs.getString(3)),
                 accountId);
-        if (identities.isEmpty() || !holdIdentities(identities)) return false;
+        if ((requiresIdentity && identities.isEmpty()) || !holdIdentities(identities)) return false;
         return jdbc
                 .query(
-                        "SELECT status IN ('ACTIVE','UNCLAIMED') FROM account WHERE id=? FOR SHARE",
+                        "SELECT status = 'ACTIVE' OR (? AND status = 'UNCLAIMED') FROM account WHERE id=? FOR SHARE",
                         (rs, row) -> rs.getBoolean(1),
+                        requiresIdentity,
                         accountId)
                 .stream()
                 .anyMatch(Boolean::booleanValue);

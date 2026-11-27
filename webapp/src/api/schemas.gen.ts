@@ -2289,6 +2289,62 @@ export const ConversationSchema = {
 	required: ["activeTurns", "latestSeq", "threads"],
 } as const;
 
+export const ConversationAnswerUseSchema = {
+	type: "object",
+	description: "What Hephaestus opened for one answer, and what it could not open",
+	properties: {
+		askedFromPage: {
+			type: "boolean",
+			description: "Whether the person asked from a page of the app, which the answer also read",
+		},
+		cited: {
+			type: "boolean",
+			description: "Whether a message of the answer links an observation, a problem or feedback",
+		},
+		couldNotCheck: {
+			type: "array",
+			description: "What the turn tried to open and could not, or has no stored result for",
+			items: {
+				$ref: "#/components/schemas/ConversationUsedSource",
+			},
+		},
+		read: {
+			type: "array",
+			description: "What the turn opened, in the order of its first use",
+			items: {
+				$ref: "#/components/schemas/ConversationUsedSource",
+			},
+		},
+		recorded: {
+			type: "boolean",
+			description:
+				"False when the turn stored no record of what it did. The app then says that Hephaestus did not record what the answer used.",
+		},
+	},
+	required: ["askedFromPage", "cited", "couldNotCheck", "read", "recorded"],
+} as const;
+
+export const ConversationContextDocumentSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"USER",
+		"WORKSPACE",
+		"RECENT_AUTHORED_WORK",
+		"ACTIVITY",
+		"MERGE_READINESS",
+		"REVIEW_ATTEMPTS",
+		"RESULTS_HISTORY",
+		"DELIVERED_FEEDBACK",
+		"PREPARED_CONVERSATION_FEEDBACK",
+		"PRACTICE_PROFILE",
+		"PRACTICE_CATALOG",
+		"SLACK_CONVERSATIONS",
+		"OUTLINE_DOCS",
+		"WEEKLY_DIGEST",
+	],
+} as const;
+
 export const ConversationEntrySchema = {
 	type: "object",
 	description: "One message of a Hephaestus conversation",
@@ -2376,6 +2432,11 @@ export const ConversationEntrySchema = {
 		turnStatus: {
 			$ref: "#/components/schemas/ConversationTurnStatus",
 			description: "The status of the turn this question asked; only on the developer's messages",
+		},
+		used: {
+			$ref: "#/components/schemas/ConversationAnswerUse",
+			description:
+				"What Hephaestus opened for this answer and what it could not open; only on the last message of an answer. Its links are what it cited.",
 		},
 		vote: {
 			$ref: "#/components/schemas/ConversationEntryVote",
@@ -2746,6 +2807,33 @@ export const ConversationTurnWaitingForSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
 	examples: ["CAPACITY"],
+} as const;
+
+export const ConversationUsedSourceSchema = {
+	type: "object",
+	description: "Sources of one kind that Hephaestus opened for an answer, or could not open",
+	properties: {
+		count: {
+			type: "integer",
+			format: "int32",
+			description: "How many distinct repositories, files, commands or searches; 1 for a document",
+		},
+		document: {
+			$ref: "#/components/schemas/ConversationContextDocument",
+			description:
+				"Which context document; only for CONTEXT_DOCUMENT, absent for one with no known name",
+		},
+		kind: {
+			$ref: "#/components/schemas/ConversationUsedSourceKind",
+		},
+	},
+	required: ["count", "kind"],
+} as const;
+
+export const ConversationUsedSourceKindSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["CONTEXT_DOCUMENT", "REPOSITORY", "FILES", "COMMAND", "CONVERSATION_SEARCH"],
 } as const;
 
 export const ConversationVoteRequestSchema = {
@@ -8219,6 +8307,21 @@ export const PersonDataScopeSchema = {
 		},
 	},
 	required: ["identities"],
+} as const;
+
+export const PersonalGoalSchema = {
+	type: "object",
+	description: "The goal in the signed-in account's own words, with the revision of the goal slot.",
+	properties: {
+		revision: {
+			type: "integer",
+			format: "int64",
+		},
+		words: {
+			type: "string",
+		},
+	},
+	required: ["revision"],
 } as const;
 
 export const PracticeSchema = {
@@ -15559,6 +15662,23 @@ export const SaveLlmCallPoolRequestSchema = {
 		},
 	},
 	required: ["displayName", "slug"],
+} as const;
+
+export const SavePersonalGoalSchema = {
+	type: "object",
+	properties: {
+		revision: {
+			type: "integer",
+			format: "int64",
+			minimum: 0,
+		},
+		words: {
+			type: "string",
+			maxLength: 500,
+			minLength: 0,
+		},
+	},
+	required: ["revision", "words"],
 } as const;
 
 export const ScanAvailabilitySchema = {

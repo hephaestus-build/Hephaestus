@@ -34,6 +34,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** The weekly digest that Hephaestus reads compares standings. */
@@ -48,7 +49,7 @@ public class PracticeGroupStandingService {
     private final PracticeTrendService practiceTrendService;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = PageReadSnapshot.TIMEOUT_SECONDS)
     public List<PracticeGroupStandingDTO> getGroupStandings(Long workspaceId, List<PracticeGroup> groups) {
         return summarize(groups, practiceStandingService.getStandingSnapshot(workspaceId));
     }

@@ -82,6 +82,18 @@ sequenceDiagram
    The script refuses to start while a queued pull request changes the version.
    Without `--hold`, it makes one attempt, and also approves the head and its waiting runs.
 
+   In a release lane with a shared `queue-frozen` marker, use the release lock for an RC.
+   Run the script with `--release-lock <absolute-path-to-queue-frozen>`.
+   If it starts waiting checks, run the same command again when the exact head is green.
+   It saves the queue and armed auto-merges in the marker and jumps the exact head to position 1.
+   Run `--lift-release-lock <same-path>` as soon as Release / Publish creates the draft at the Version PR's merge commit.
+   It verifies the source with the release planner, removes the marker, and restores eligible saved entries.
+
+   An eligible pull request is open, approved, based on main, and still on its saved head.
+   The tool reports skipped entries and keeps a lifted receipt.
+   If recovery stops, repeat the command that started recovery.
+   If the Version PR fails to merge, use `--abort-release-lock <same-path>` after it leaves the queue and its auto-merge is off.
+
    A merge group that changes the version also checks its version commit (`plan-release.ts --consumed`).
    If a changeset that merged ahead of the Version PR stays unconsumed there, the group fails and names it.
    The Version PR then leaves the queue, maintenance versions it again, and it is queued again.

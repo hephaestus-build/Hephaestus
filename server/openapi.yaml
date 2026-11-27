@@ -5740,6 +5740,99 @@ paths:
       summary: Remove a passkey
       tags:
       - Passkeys
+  /user/personal-goal:
+    delete:
+      operationId: forgetPersonalGoal
+      parameters:
+      - in: query
+        name: revision
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: Goal forgotten
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller has not signed in recently (problem type step-up-required)
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Forget your personal goal
+      tags:
+      - Account
+    get:
+      operationId: getPersonalGoal
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Read your personal goal
+      tags:
+      - Account
+    put:
+      operationId: savePersonalGoal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePersonalGoal"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Save or edit your personal goal
+      tags:
+      - Account
   /user/public-activity:
     get:
       operationId: getPublicActivityChoice
@@ -8211,8 +8304,9 @@ paths:
       - Conversation
   /workspaces/{workspaceSlug}/conversation/entries/{entryId}:
     delete:
-      description: Erases its text and every summary that read it. A question Hephaestus
-        has not answered yet is not answered.
+      description: "Erases its text, every summary that read it, and every later entry\
+        \ that Hephaestus derived from it. A question Hephaestus has not answered\
+        \ yet is not answered."
       operationId: deleteConversationEntry
       parameters:
       - description: Workspace slug
@@ -19197,6 +19291,58 @@ components:
       - activeTurns
       - latestSeq
       - threads
+    ConversationAnswerUse:
+      type: object
+      description: "What Hephaestus opened for one answer, and what it could not open"
+      properties:
+        askedFromPage:
+          type: boolean
+          description: "Whether the person asked from a page of the app, which the\
+            \ answer also read"
+        cited:
+          type: boolean
+          description: "Whether a message of the answer links an observation, a problem\
+            \ or feedback"
+        couldNotCheck:
+          type: array
+          description: "What the turn tried to open and could not, or has no stored\
+            \ result for"
+          items:
+            $ref: "#/components/schemas/ConversationUsedSource"
+        read:
+          type: array
+          description: "What the turn opened, in the order of its first use"
+          items:
+            $ref: "#/components/schemas/ConversationUsedSource"
+        recorded:
+          type: boolean
+          description: False when the turn stored no record of what it did. The app
+            then says that Hephaestus did not record what the answer used.
+      required:
+      - askedFromPage
+      - cited
+      - couldNotCheck
+      - read
+      - recorded
+    ConversationContextDocument:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - USER
+      - WORKSPACE
+      - RECENT_AUTHORED_WORK
+      - ACTIVITY
+      - MERGE_READINESS
+      - REVIEW_ATTEMPTS
+      - RESULTS_HISTORY
+      - DELIVERED_FEEDBACK
+      - PREPARED_CONVERSATION_FEEDBACK
+      - PRACTICE_PROFILE
+      - PRACTICE_CATALOG
+      - SLACK_CONVERSATIONS
+      - OUTLINE_DOCS
+      - WEEKLY_DIGEST
     ConversationEntry:
       type: object
       description: One message of a Hephaestus conversation
@@ -19273,6 +19419,10 @@ components:
           $ref: "#/components/schemas/ConversationTurnStatus"
           description: The status of the turn this question asked; only on the developer's
             messages
+        used:
+          $ref: "#/components/schemas/ConversationAnswerUse"
+          description: What Hephaestus opened for this answer and what it could not
+            open; only on the last message of an answer. Its links are what it cited.
         vote:
           $ref: "#/components/schemas/ConversationEntryVote"
           description: The developer's vote; only on Hephaestus's messages
@@ -19622,6 +19772,35 @@ components:
         \ not name."
       examples:
       - CAPACITY
+    ConversationUsedSource:
+      type: object
+      description: "Sources of one kind that Hephaestus opened for an answer, or could\
+        \ not open"
+      properties:
+        count:
+          type: integer
+          format: int32
+          description: "How many distinct repositories, files, commands or searches;\
+            \ 1 for a document"
+        document:
+          $ref: "#/components/schemas/ConversationContextDocument"
+          description: "Which context document; only for CONTEXT_DOCUMENT, absent\
+            \ for one with no known name"
+        kind:
+          $ref: "#/components/schemas/ConversationUsedSourceKind"
+      required:
+      - count
+      - kind
+    ConversationUsedSourceKind:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - CONTEXT_DOCUMENT
+      - REPOSITORY
+      - FILES
+      - COMMAND
+      - CONVERSATION_SEARCH
     ConversationVoteRequest:
       type: object
       description: The developer's vote on one of Hephaestus's messages
@@ -24248,6 +24427,18 @@ components:
             $ref: "#/components/schemas/Identity"
       required:
       - identities
+    PersonalGoal:
+      type: object
+      description: "The goal in the signed-in account's own words, with the revision\
+        \ of the goal slot."
+      properties:
+        revision:
+          type: integer
+          format: int64
+        words:
+          type: string
+      required:
+      - revision
     Practice:
       type: object
       properties:
@@ -30065,6 +30256,20 @@ components:
       required:
       - displayName
       - slug
+    SavePersonalGoal:
+      type: object
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+        words:
+          type: string
+          maxLength: 500
+          minLength: 0
+      required:
+      - revision
+      - words
     ScanAvailability:
       type: object
       properties:

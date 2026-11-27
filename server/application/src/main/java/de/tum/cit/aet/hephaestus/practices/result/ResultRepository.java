@@ -88,6 +88,21 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
     @Query("SELECT r FROM Result r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<Result> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
+    /** Locks the results in id order, the order every advice redaction and advice write takes them in. */
+    @Query(
+            value = "SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.id=ANY(CAST(:ids AS uuid[]))"
+                    + " ORDER BY r.id FOR UPDATE",
+            nativeQuery = true)
+    List<UUID> lockInIdOrder(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
+    /** The results among {@code ids} that no feedback cites, read after the caller locked them. */
+    @Query(
+            value = "SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.id=ANY(CAST(:ids AS uuid[]))"
+                    + " AND NOT EXISTS(SELECT 1 FROM feedback_basis b WHERE b.workspace_id=r.workspace_id"
+                    + " AND b.result_id=r.id) ORDER BY r.id",
+            nativeQuery = true)
+    List<UUID> withoutFeedbackBasis(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
     @Query("""
         SELECT r FROM Result r
         WHERE r.workspaceId = :workspaceId AND r.practiceId = :practiceId

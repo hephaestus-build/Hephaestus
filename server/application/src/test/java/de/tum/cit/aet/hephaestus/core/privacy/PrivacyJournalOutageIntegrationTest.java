@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.exception.JournalPendingException;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
@@ -40,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -57,6 +59,9 @@ class PrivacyJournalOutageIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private PrivacyJournalShipping shipping;
+
+    @Autowired
+    private OwnerScope owners;
 
     @Autowired
     private IdentityRestrictionService restrictions;
@@ -127,6 +132,55 @@ class PrivacyJournalOutageIntegrationTest extends AbstractWorkspaceIntegrationTe
                 WHERE kind = 'ENTRY_DELETED' AND refs->>'entryId' = ?
                 """, Boolean.class, entry.getId().toString()))
                 .containsExactly(true);
+    }
+
+    @Test
+    void shouldConfirmTheSameGoalDeletionAfterABucketOutage() {
+        long account =
+                Objects.requireNonNull(persistAccount("Goal journal requester").getId());
+        String token = "mock-jwt-member-" + account;
+        String path = "/user/personal-goal";
+        client.put()
+                .uri(path)
+                .headers(headers -> headers.setBearerAuth(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"revision":0,"words":"Private goal for the journal retry"}
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        when(bucket.store(any(), any())).thenReturn(false);
+        expectJournalPending(deleteGoal(path, token));
+        client.get()
+                .uri(path)
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.words")
+                .doesNotExist();
+
+        when(bucket.store(any(), any())).thenReturn(true);
+        deleteGoal(path, token).expectStatus().isOk();
+        transactions.executeWithoutResult(status -> {
+            owners.ofJob(account);
+            assertThat(jdbc.queryForList("""
+                SELECT j.shipped_at IS NOT NULL AND j.refs = jsonb_build_object('recordId', g.goal_id)
+                FROM privacy_journal j
+                JOIN personal_goal g ON g.goal_id = j.entry_id
+                WHERE j.kind = 'RECORD_DELETED' AND g.account_id = ?
+                """, Boolean.class, account)).containsExactly(true);
+        });
+    }
+
+    private WebTestClient.ResponseSpec deleteGoal(String path, String token) {
+        return client.delete()
+                .uri(path + "?revision=1")
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange();
     }
 
     private WebTestClient.ResponseSpec deleteEntry(String slug, UUID entryId, long account) {

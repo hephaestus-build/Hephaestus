@@ -54,7 +54,13 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
 
         // The Slack notices, joins and consent announcements of the workspace.
         verify(actions)
-                .eraseKinds(42L, List.of(ActionKind.SLACK_NOTICE, ActionKind.SLACK_JOIN, ActionKind.SLACK_CONSENT));
+                .eraseKinds(
+                        42L,
+                        List.of(
+                                ActionKind.SLACK_NOTICE,
+                                ActionKind.SLACK_JOIN,
+                                ActionKind.SLACK_CONSENT,
+                                ActionKind.MENTOR_EFFECT));
         // Derived CONVERSATION feedback first (before slack_thread, the artifact it points at).
         verify(conversationFeedbackErasure).eraseAllConversationForWorkspace(42L);
         // Ingested content.

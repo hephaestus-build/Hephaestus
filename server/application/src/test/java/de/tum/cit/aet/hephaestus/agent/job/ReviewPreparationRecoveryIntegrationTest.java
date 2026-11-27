@@ -397,7 +397,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 telemetry,
                 files,
-                context.getBean(AgentRunAuthority.class));
+                context.getBean(AgentRunAuthority.class),
+                mock(ReviewPoolAdmission.class));
         var reviewRuns = context.getBean(ReviewRunKind.class);
         var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
         var meters = new SimpleMeterRegistry();

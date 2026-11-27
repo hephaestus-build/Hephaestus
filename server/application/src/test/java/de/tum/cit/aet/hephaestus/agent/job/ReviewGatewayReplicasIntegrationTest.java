@@ -534,7 +534,8 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 telemetry,
                 files,
-                beans.getBean(AgentRunAuthority.class));
+                beans.getBean(AgentRunAuthority.class),
+                mock(ReviewPoolAdmission.class));
         var terminal = SandboxReviewClaims.terminal(beans);
         var results = new ReviewAttemptResults(
                 jobs,

@@ -29,6 +29,9 @@ import tools.jackson.databind.node.ObjectNode;
  * Entries are grouped by turn, so a follow-up asked while a turn ran follows that turn's answer, and an entry written
  * outside a turn never splits a tool call from its result. {@code docs/contributor/unified-pi-runtime.mdx} § The path
  * has the order, the range and the markers.
+ *
+ * <p>The path leaves out every entry whose sources are unknown ({@link ConversationEntryRepository#UNPROVEN}), and it
+ * binds each entry that it releases, with the question, to the basis of the turn's attempt ({@link ConversationBasis}).
  */
 @Component
 @RequiredArgsConstructor
@@ -44,6 +47,7 @@ public class ConversationContextPathBuilder {
     private final ConversationRepository conversations;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
+    private final ConversationBasis basis;
 
     /**
      * What a host needs to run a turn: the path through everything before the turn, and the turn's question
@@ -70,7 +74,11 @@ public class ConversationContextPathBuilder {
         }
     }
 
-    /** Reads under a shared lock of the main conversation row, so no redaction of the tree runs meanwhile. */
+    /**
+     * Reads under a shared lock of the main conversation row, so no redaction of the tree runs meanwhile, and binds what
+     * it releases to the basis of the turn's attempt before it commits. A turn that has not started has no attempt, so
+     * nothing reads its path but a check.
+     */
     @Transactional
     public TurnContext forTurn(long workspaceId, UUID turnId, ZoneId zone) {
         ConversationTurn turn = turns.findByIdAndWorkspaceId(turnId, workspaceId)
@@ -89,11 +97,14 @@ public class ConversationContextPathBuilder {
         if (question.isRedacted()) {
             throw new IllegalStateException("The question of conversation turn " + turnId + " was deleted");
         }
-        return new TurnContext(
-                conversation.getId(),
-                render(workspaceId, fromNewestSummary(before), zone),
-                question.getId(),
-                userText(question, zone));
+        List<UUID> released = new ArrayList<>();
+        List<ObjectNode> path = render(workspaceId, fromNewestSummary(before), zone, released);
+        released.add(question.getId());
+        UUID attemptBasis = turn.getBasisId();
+        if (attemptBasis != null) {
+            basis.bind(workspaceId, attemptBasis, released);
+        }
+        return new TurnContext(conversation.getId(), path, question.getId(), userText(question, zone));
     }
 
     /** Which of the conversation's own entries a summary that keeps {@code firstKeptEntryId} replaces. */
@@ -219,7 +230,8 @@ public class ConversationContextPathBuilder {
         return -1;
     }
 
-    private List<ObjectNode> render(long workspaceId, Selection selection, ZoneId zone) {
+    /** @param released collects the id of each entry that the path renders */
+    private List<ObjectNode> render(long workspaceId, Selection selection, ZoneId zone, List<UUID> released) {
         List<Head> selected = selection.heads();
         if (selected.isEmpty()) {
             return List.of();
@@ -270,6 +282,7 @@ public class ConversationContextPathBuilder {
             }
             rendered.put("parentId", parentId);
             path.add(rendered);
+            released.add(entry.getId());
             parentId = rendered.path("id").asString();
         }
         return path;

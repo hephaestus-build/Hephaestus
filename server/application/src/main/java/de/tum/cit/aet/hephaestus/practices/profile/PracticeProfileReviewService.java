@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
@@ -36,6 +37,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -64,6 +66,7 @@ public class PracticeProfileReviewService {
      * review of the work in the database, so a narrowed list still says which review is a work's
      * latest without reading the reader's whole history.
      */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = PageReadSnapshot.TIMEOUT_SECONDS)
     public Page<ProfileReviewDTO> list(WorkspaceContext ws, OwnReviewFilter filter, Pageable page) {
         var itemKinds = filter.itemKinds();
         var itemId = filter.itemId();

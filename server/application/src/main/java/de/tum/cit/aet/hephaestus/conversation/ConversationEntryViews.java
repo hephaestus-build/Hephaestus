@@ -99,6 +99,7 @@ class ConversationEntryViews {
                         .filter(turn -> turn.getWorkspaceId() == workspaceId)
                         .collect(Collectors.toMap(ConversationTurn::getId, Function.identity()));
         Map<UUID, WeeklyDigestDTO> digests = digests(conversation, rows);
+        Map<UUID, ConversationAnswerUseDTO> uses = uses(conversation, rows);
         Map<String, LaneAction> replies = actions.byKeys(
                 workspaceId,
                 rows.stream()
@@ -118,7 +119,8 @@ class ConversationEntryViews {
                             ? questionTurnById.get(turnId)
                             : null,
                     digests.get(row.getId()),
-                    slackDelivery(row, replies)));
+                    slackDelivery(row, replies),
+                    uses.get(row.getId())));
         }
         return mapped;
     }
@@ -221,7 +223,8 @@ class ConversationEntryViews {
             List<ConversationLinkDTO> links,
             @Nullable ConversationTurn questionTurn,
             @Nullable WeeklyDigestDTO digest,
-            ConversationEntry.@Nullable SlackDelivery slackDelivery) {
+            ConversationEntry.@Nullable SlackDelivery slackDelivery,
+            @Nullable ConversationAnswerUseDTO used) {
         return new ConversationEntryDTO(
                 entry.getId(),
                 entry.getConversationId(),
@@ -247,7 +250,75 @@ class ConversationEntryViews {
                 entry.getVote(),
                 links,
                 thread,
-                digest);
+                digest,
+                used);
+    }
+
+    /**
+     * What Hephaestus used for each answer among {@code rows}, by the id of the answer's last shown message over its whole
+     * turn, so a page that holds only an earlier message of the answer gets none (ADR 0157 decision 8). A turn whose
+     * messages hold no stored entry recorded nothing.
+     */
+    private Map<UUID, ConversationAnswerUseDTO> uses(Conversation conversation, List<ConversationEntry> rows) {
+        long workspaceId = conversation.getWorkspaceId();
+        Set<UUID> rowIds = new HashSet<>();
+        Set<UUID> turnIds = new HashSet<>();
+        for (ConversationEntry row : rows) {
+            if (row.getTurnId() == null || row.getKind() != ConversationEntry.Kind.ANSWER || row.isRedacted()) continue;
+            rowIds.add(row.getId());
+            turnIds.add(row.getTurnId());
+        }
+        if (turnIds.isEmpty()) return Map.of();
+        // The same rule as the timeline: a message shows when it has words or a link whose call succeeded. The answer's
+        // last shown message gets the receipt, and the answer cites when any of its shown messages links.
+        Set<ConversationPiEntries.ShownCall> shownCalls = entries.shownLinkCalls(workspaceId, turnIds);
+        Map<UUID, UUID> anchors = new HashMap<>();
+        Map<UUID, Boolean> recorded = new HashMap<>();
+        Set<UUID> citing = new HashSet<>();
+        for (ConversationEntry row : entries.findByWorkspaceIdAndConversationIdAndTurnIdInAndKindOrderBySeqAsc(
+                workspaceId, conversation.getId(), turnIds, ConversationEntry.Kind.ANSWER)) {
+            UUID turnId = row.getTurnId();
+            if (turnId == null || row.isRedacted()) continue;
+            recorded.merge(turnId, row.getPayload() != null, Boolean::logicalOr);
+            boolean linked = links(row).stream().anyMatch(link -> shownCalls.contains(link.in(turnId)));
+            if (linked) citing.add(turnId);
+            if (!row.getText().isEmpty() || linked) anchors.put(turnId, row.getId());
+        }
+        anchors.values().retainAll(rowIds);
+        if (anchors.isEmpty()) return Map.of();
+        // The page holds only shown messages, so an assistant entry that holds only calls is read on its own.
+        Map<UUID, List<ConversationAnswerUses.ToolUse>> calls = new HashMap<>();
+        for (var call : entries.findOpeningCalls(workspaceId, conversation.getId(), anchors.keySet())) {
+            calls.computeIfAbsent(call.getTurnId(), turn -> new ArrayList<>())
+                    .add(new ConversationAnswerUses.ToolUse(call.getCallId(), call.getTool(), call.getPath()));
+        }
+        Map<UUID, List<ConversationAnswerUses.Outcome>> outcomes = new HashMap<>();
+        if (!calls.isEmpty()) {
+            for (var outcome : entries.findToolOutcomes(workspaceId, conversation.getId(), calls.keySet())) {
+                outcomes.computeIfAbsent(outcome.getTurnId(), turn -> new ArrayList<>())
+                        .add(new ConversationAnswerUses.Outcome(
+                                outcome.getCallId(), outcome.getTool(), outcome.getError()));
+            }
+        }
+        Set<UUID> fromPage = turns.findAllById(anchors.keySet()).stream()
+                .filter(turn -> turn.getWorkspaceId() == workspaceId)
+                .filter(turn -> hasText(turn.getPageContext()))
+                .map(ConversationTurn::getId)
+                .collect(Collectors.toSet());
+        Map<UUID, ConversationAnswerUseDTO> uses = new HashMap<>();
+        anchors.forEach((turnId, anchor) -> uses.put(
+                anchor,
+                ConversationAnswerUses.of(
+                        recorded.getOrDefault(turnId, false),
+                        calls.getOrDefault(turnId, List.of()),
+                        outcomes.getOrDefault(turnId, List.of()),
+                        citing.contains(turnId),
+                        fromPage.contains(turnId))));
+        return uses;
+    }
+
+    private static boolean hasText(@Nullable String text) {
+        return text != null && !text.isBlank();
     }
 
     /** How a Slack question's reply stands: its outbox action, including its terminal outcome. */

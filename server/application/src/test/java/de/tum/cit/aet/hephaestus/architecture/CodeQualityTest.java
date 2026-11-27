@@ -448,6 +448,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "SlackJoinAdapter", // Settles joins on the server even when the Slack client is disabled.
                     "SlackConsentAdapter", // Settles consent on the server even when the Slack client is disabled.
                     "SlackNoticeAdapter", // Account-link blocks exist only while the Slack integration is enabled.
+                    "MentorSlackEffectAdapter", // Slack transport and links are optional. A build without the
+                    // runtime proof must leave these actions for a replica that can settle them.
                     "SlackPostAdapter", // Breaks the executor -> its adapters -> this adapter -> projector ->
                     // executor cycle; the projector exists only with Slack (@ConditionalOnProperty)
                     "HistoricalBackfillScheduler", // Optional GitLab backfill service gated by @ConditionalOnProperty

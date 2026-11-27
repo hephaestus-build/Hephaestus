@@ -42,7 +42,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         @Nullable
         String getFirstKept();
 
-        /** Redacted without a Pi skeleton ({@link ConversationRedaction}). */
+        /** Redacted without a Pi skeleton ({@link ConversationRedaction}), or {@link #UNPROVEN}. */
         Boolean getOmitted();
     }
 
@@ -88,6 +88,13 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                  WHERE block.value ->> 'type' = 'toolCall'
                    AND block.value ->> 'name' IN ('link_result', 'link_problem', 'show_feedback')))))
             """;
+
+    /**
+     * An entry, as a predicate on {@code e}, that a turn's attempt wrote before attempts recorded their basis
+     * ({@link ConversationBasis}). Its sources are unknown, so a removal cannot find it. It stays the owner's app history:
+     * the app shows it and the owner's export holds it. Hephaestus's context, its search and its compaction never read it.
+     */
+    String UNPROVEN = "(e.kind IN ('ANSWER', 'TOOL_RESULT', 'SUMMARY', 'SYSTEM') AND e.basis_id IS NULL)";
 
     /** A thread on a message: how many messages the app shows in it, and the newest one. */
     interface ThreadSummary {
@@ -203,6 +210,76 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             """ + SUCCEEDED_LINK_RESULT, nativeQuery = true)
     List<ShownLinkCall> findShownLinkCalls(
             @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * Whether each call of a tool that opens a source ended in an error, for these turns: the turn, the tool call id, the
+     * tool and the error flag. Reads only these fields of the tool results, never their content.
+     */
+    @Query(value = """
+            SELECT r.turn_id AS "turnId", r.payload -> 'message' ->> 'toolCallId' AS "callId",
+                   r.payload -> 'message' ->> 'toolName' AS "tool",
+                   COALESCE(r.payload -> 'message' ->> 'isError', 'false') = 'true' AS "error"
+            FROM conversation_entry r
+            WHERE r.workspace_id = :workspaceId AND r.conversation_id = :conversationId AND r.turn_id IN (:turnIds)
+              AND r.kind = 'TOOL_RESULT'
+              AND r.payload -> 'message' ->> 'toolName' IN ('read', 'bash', 'load_context', 'search_conversation')
+            """, nativeQuery = true)
+    List<ToolOutcome> findToolOutcomes(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * The calls of the tools that open a source, in these turns, in call order: the turn, the call id, the tool and the
+     * {@code path} argument. It reads the assistant entries, which the page of messages leaves out when they hold only
+     * calls, and no tool result.
+     */
+    @Query(value = """
+            SELECT e.turn_id AS "turnId", c.block ->> 'id' AS "callId", c.block ->> 'name' AS "tool",
+                   c.block -> 'arguments' ->> 'path' AS "path"
+            FROM conversation_entry e
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
+                     THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS c(block, position)
+            WHERE e.workspace_id = :workspaceId AND e.conversation_id = :conversationId AND e.turn_id IN (:turnIds)
+              AND e.kind = 'ANSWER' AND e.redacted_at IS NULL AND c.block ->> 'type' = 'toolCall'
+              AND c.block ->> 'name' IN ('read', 'bash', 'load_context', 'search_conversation')
+            ORDER BY e.turn_id, e.seq, c.position
+            """, nativeQuery = true)
+    List<ToolCallRow> findOpeningCalls(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("turnIds") Collection<UUID> turnIds);
+
+    /**
+     * The answer messages of these turns in one conversation, oldest first: What Hephaestus used goes under the last one
+     * that the app shows, which can lie on another page than the one being read.
+     */
+    List<ConversationEntry> findByWorkspaceIdAndConversationIdAndTurnIdInAndKindOrderBySeqAsc(
+            Long workspaceId, UUID conversationId, Collection<UUID> turnIds, ConversationEntry.Kind kind);
+
+    /** One row of {@link #findOpeningCalls}. */
+    interface ToolCallRow {
+        UUID getTurnId();
+
+        String getCallId();
+
+        String getTool();
+
+        @Nullable
+        String getPath();
+    }
+
+    /** One row of {@link #findToolOutcomes}. */
+    interface ToolOutcome {
+        UUID getTurnId();
+
+        String getCallId();
+
+        String getTool();
+
+        boolean getError();
+    }
 
     /** One row of {@link #findShownLinkCalls}. */
     interface ShownLinkCall {
@@ -340,7 +417,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE conversation_entry
-               SET text = :text, search_text = :text, edited_at = clock_timestamp(),
+               SET text = :text, search_text = :text, edited_at = clock_timestamp(), revision = revision + 1,
                    payload = jsonb_set(payload, '{message,content}', to_jsonb(CAST(:text AS text)))
              WHERE id = :id AND workspace_id = :workspaceId AND kind = 'USER' AND surface = 'SLACK'
                AND redacted_at IS NULL
@@ -389,6 +466,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                    CASE WHEN e.kind <> 'DIGEST' THEN e.payload ->> 'id' END AS "piId",
                    CASE WHEN e.kind = 'SUMMARY' THEN e.payload ->> 'firstKeptEntryId' END AS "firstKept",
                    ((e.redacted_at IS NOT NULL AND e.kind NOT IN ('ANSWER', 'TOOL_RESULT'))
+                    OR
+            """ + UNPROVEN + """
                     OR NOT
             """ + MODEL_HISTORY + """
                    ) AS "omitted"
@@ -413,7 +492,9 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     @Query(value = """
             SELECT e.id AS "id", e.created_at AS "createdAt", e.seq AS "seq",
-                   CASE WHEN e.redacted_at IS NULL AND
+                   CASE WHEN e.redacted_at IS NULL AND NOT
+            """ + UNPROVEN + """
+                    AND
             """ + MODEL_HISTORY + """
                    THEN e.text END AS "text"
             FROM conversation_entry e
@@ -440,10 +521,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     /**
      * Full-text search over the words the app shows ({@link ConversationEntry#getSearchText}), through the full-text index
      * {@code ix_conversation_entry_text_search}, in the messages of some conversations: the
-     * developer's, Hephaestus's and weekly digests, never tool results, summaries or redacted entries. Without a query, the
-     * newest come first.
+     * developer's, Hephaestus's and weekly digests, never tool results, summaries, redacted entries or Hephaestus's
+     * messages of unknown basis ({@link #UNPROVEN}). Without a query, the newest come first.
      */
-    @Query(value = """
+    @Query(
+            value = """
             SELECT e.id AS "id", e.conversation_id AS "conversationId", e.created_at AS "createdAt",
                    e.surface AS "surface", e.kind AS "kind",
                    CASE WHEN CAST(:query AS text) IS NULL THEN left(e.search_text, 300)
@@ -456,7 +538,9 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
               AND e.search_text <> ''
               AND (
             """ + SHOWN + """
-              ) AND e.redacted_at IS NULL AND
+              ) AND e.redacted_at IS NULL AND NOT
+            """ + UNPROVEN + """
+              AND
             """ + MODEL_HISTORY + """
               AND (CAST(:query AS text) IS NULL
                    OR to_tsvector('simple', e.search_text) @@ websearch_to_tsquery('simple', CAST(:query AS text)))
@@ -467,7 +551,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                                        websearch_to_tsquery('simple', CAST(:query AS text))) END DESC,
                      e.created_at DESC, e.id
             LIMIT :limit
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<SearchHit> searchByWorkspaceId(
             @Param("workspaceId") Long workspaceId,
             @Param("conversationIds") Collection<UUID> conversationIds,
@@ -638,11 +723,14 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     /**
      * Redacts these entries and their copies as {@link ConversationRedaction} describes; without {@code withTargets}, only
-     * the copies.
+     * the copies. With {@code withDerivedAnswers}, it also redacts every entry derived from one it redacts: the entries
+     * whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far as they reach. The
+     * walk passes through entries that an earlier redaction erased, because what derived from them before that
+     * redaction still holds their words. Only entries that still hold words change.
      */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """
-            WITH target AS (
+            WITH RECURSIVE target AS (
                 SELECT id, conversation_id, seq, kind, turn_id FROM conversation_entry
                 WHERE id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL
             ), derived AS (
@@ -686,9 +774,20 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                       SELECT t.id FROM conversation t
                       WHERE t.id IN (SELECT conversation_id FROM changed)
                          OR t.parent_conversation_id IN (SELECT conversation_id FROM changed))
+            ), dependent (id, workspace_id) AS (
+                SELECT e.id, e.workspace_id FROM conversation_entry e
+                WHERE :withDerivedAnswers
+                  AND e.id IN (SELECT id FROM changed UNION SELECT id FROM covering)
+                UNION
+                SELECT d.id, d.workspace_id
+                FROM dependent x
+                JOIN basis_edge b ON b.source_id = x.id AND b.workspace_id = x.workspace_id AND b.source_kind = 'ENTRY'
+                JOIN conversation_entry d ON d.basis_id = b.basis_id AND d.workspace_id = b.workspace_id
             ), targets AS (
                 SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
                 UNION SELECT id FROM covering
+                UNION SELECT d.id FROM dependent d JOIN conversation_entry e ON e.id = d.id
+                      WHERE e.redacted_at IS NULL AND (:withTargets OR d.id NOT IN (SELECT id FROM target))
             ), updated AS (
             UPDATE conversation_entry e
                SET redacted_at = clock_timestamp(), text = '', search_text = '',

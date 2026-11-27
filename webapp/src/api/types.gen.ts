@@ -1113,6 +1113,37 @@ export type Conversation = {
 };
 
 /**
+ * What Hephaestus opened for one answer, and what it could not open
+ */
+export type ConversationAnswerUse = {
+	/**
+	 * Whether the person asked from a page of the app, which the answer also read
+	 */
+	askedFromPage: boolean;
+	/**
+	 * Whether a message of the answer links an observation, a problem or feedback
+	 */
+	cited: boolean;
+	/**
+	 * What the turn tried to open and could not, or has no stored result for
+	 */
+	couldNotCheck: Array<ConversationUsedSource>;
+	/**
+	 * What the turn opened, in the order of its first use
+	 */
+	read: Array<ConversationUsedSource>;
+	/**
+	 * False when the turn stored no record of what it did. The app then says that Hephaestus did not record what the answer used.
+	 */
+	recorded: boolean;
+};
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ConversationContextDocument = string;
+
+/**
  * One message of a Hephaestus conversation
  */
 export type ConversationEntry = {
@@ -1176,6 +1207,10 @@ export type ConversationEntry = {
 	 * The status of the turn this question asked; only on the developer's messages
 	 */
 	turnStatus?: ConversationTurnStatus;
+	/**
+	 * What Hephaestus opened for this answer and what it could not open; only on the last message of an answer. Its links are what it cited.
+	 */
+	used?: ConversationAnswerUse;
 	/**
 	 * The developer's vote; only on Hephaestus's messages
 	 */
@@ -1426,6 +1461,26 @@ export type ConversationTurnSurface = string;
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export type ConversationTurnWaitingFor = string;
+
+/**
+ * Sources of one kind that Hephaestus opened for an answer, or could not open
+ */
+export type ConversationUsedSource = {
+	/**
+	 * How many distinct repositories, files, commands or searches; 1 for a document
+	 */
+	count: number;
+	/**
+	 * Which context document; only for CONTEXT_DOCUMENT, absent for one with no known name
+	 */
+	document?: ConversationContextDocument;
+	kind: ConversationUsedSourceKind;
+};
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ConversationUsedSourceKind = string;
 
 /**
  * The developer's vote on one of Hephaestus's messages
@@ -4342,6 +4397,14 @@ export type PersonDataScope = {
 	identities: Array<Identity>;
 };
 
+/**
+ * The goal in the signed-in account's own words, with the revision of the goal slot.
+ */
+export type PersonalGoal = {
+	revision: number;
+	words?: string;
+};
+
 export type Practice = {
 	catalogOrigin: CatalogOrigin;
 	createdAt: Date;
@@ -6795,6 +6858,11 @@ export type SaveLlmCallPoolRequest = {
 	 * A bucket of input and output tokens together
 	 */
 	tokensPerMinute?: number;
+};
+
+export type SavePersonalGoal = {
+	revision: number;
+	words: string;
 };
 
 export type ScanAvailability = {
@@ -14268,6 +14336,100 @@ export type RemovePasskeyResponses = {
 	 */
 	200: unknown;
 };
+
+export type ForgetPersonalGoalData = {
+	body?: never;
+	path?: never;
+	query: {
+		revision: number;
+	};
+	url: "/user/personal-goal";
+};
+
+export type ForgetPersonalGoalErrors = {
+	/**
+	 * The caller has not signed in recently (problem type step-up-required)
+	 */
+	403: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ForgetPersonalGoalError = ForgetPersonalGoalErrors[keyof ForgetPersonalGoalErrors];
+
+export type ForgetPersonalGoalResponses = {
+	/**
+	 * Goal forgotten
+	 */
+	200: PersonalGoal;
+};
+
+export type ForgetPersonalGoalResponse =
+	ForgetPersonalGoalResponses[keyof ForgetPersonalGoalResponses];
+
+export type GetPersonalGoalData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/user/personal-goal";
+};
+
+export type GetPersonalGoalErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPersonalGoalError = GetPersonalGoalErrors[keyof GetPersonalGoalErrors];
+
+export type GetPersonalGoalResponses = {
+	/**
+	 * OK
+	 */
+	200: PersonalGoal;
+};
+
+export type GetPersonalGoalResponse = GetPersonalGoalResponses[keyof GetPersonalGoalResponses];
+
+export type SavePersonalGoalData = {
+	body: SavePersonalGoal;
+	path?: never;
+	query?: never;
+	url: "/user/personal-goal";
+};
+
+export type SavePersonalGoalErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type SavePersonalGoalError = SavePersonalGoalErrors[keyof SavePersonalGoalErrors];
+
+export type SavePersonalGoalResponses = {
+	/**
+	 * OK
+	 */
+	200: PersonalGoal;
+};
+
+export type SavePersonalGoalResponse = SavePersonalGoalResponses[keyof SavePersonalGoalResponses];
 
 export type GetPublicActivityChoiceData = {
 	body?: never;

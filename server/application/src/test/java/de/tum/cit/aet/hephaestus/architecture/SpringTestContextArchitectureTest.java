@@ -51,6 +51,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("AgentRuntimeOffIntegrationTest", "agent-off-e2e"),
             assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
+            assignment("account.PersonalGoalIntegrationTest", "personal-goal-export-race"),
             assignment("core.privacy.PersonOutlineCopiesIntegrationTest", "outline-enabled"),
             assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
             assignment("core.privacy.PrivacyJournalReplyIntegrationTest", "privacy-journal-bucket"),
@@ -174,6 +175,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "erasure-recovery",
                     "real recovery profile, manifest binding and lifecycle ordering before scheduler and consumer startup"),
+            Map.entry(
+                    "personal-goal-export-race",
+                    "real account HTTP and export worker with a pause after assembling the export"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),

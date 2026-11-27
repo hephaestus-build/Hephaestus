@@ -1335,7 +1335,7 @@ export const DeleteMessage: Story = {
 		const dialog = await screen.findByRole("alertdialog", { name: "Delete this message?" });
 		await expectSettledVisible(dialog);
 		await expect(dialog).toHaveAccessibleDescription(
-			"Hephaestus forgets it. If it has not answered yet, it does not answer. The replies in its thread stay. It and Hephaestus's answer stay in Slack. You cannot undo this.",
+			"Hephaestus forgets it and erases its own later answers that used it. If it has not answered yet, it does not answer. Your replies in its thread stay. It and Hephaestus's answer stay in Slack. You cannot undo this.",
 		);
 		await userEvent.click(within(dialog).getByRole("button", { name: "Delete message" }));
 		await expect(args.actions?.onDelete).toHaveBeenCalledWith(SLACK_QUESTION);

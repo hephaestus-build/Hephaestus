@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import jakarta.persistence.LockModeType;
@@ -221,6 +222,20 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
     /** The assignments of a review bound to one job, for a retained job that recorded none of its own. */
     List<ReviewItem> findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(
             long workspaceId, UUID reviewId, UUID jobId);
+
+    @WorkspaceAgnostic("Model pools span workspaces; the counts are keyed by the scheduler's globally unique job IDs")
+    @Query("""
+        SELECT m.jobId AS jobId, count(DISTINCT m.practiceId) AS count
+        FROM ReviewItem m WHERE m.jobId IN :jobIds AND m.state <> 'LISTED'
+        GROUP BY m.jobId
+        """)
+    List<EndedPracticeCount> countEndedPracticesByJob(List<UUID> jobIds);
+
+    interface EndedPracticeCount {
+        UUID getJobId();
+
+        long getCount();
+    }
 
     List<ReviewItem> findByWorkspaceIdAndResultIdOrderByReviewIdAscPracticeIdAscItemIdAsc(
             long workspaceId, UUID resultId);

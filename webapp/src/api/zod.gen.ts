@@ -580,6 +580,11 @@ export const zContributor = z.object({
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
  */
+export const zConversationContextDocument = z.string();
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
 export const zConversationEntryKind = z.string();
 
 /**
@@ -684,6 +689,34 @@ export const zConversationTurnSurface = z.string();
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export const zConversationTurnWaitingFor = z.string();
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zConversationUsedSourceKind = z.string();
+
+/**
+ * Sources of one kind that Hephaestus opened for an answer, or could not open
+ */
+export const zConversationUsedSource = z.object({
+	count: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	document: zConversationContextDocument.optional(),
+	kind: zConversationUsedSourceKind,
+});
+
+/**
+ * What Hephaestus opened for one answer, and what it could not open
+ */
+export const zConversationAnswerUse = z.object({
+	askedFromPage: z.boolean(),
+	cited: z.boolean(),
+	couldNotCheck: z.array(zConversationUsedSource),
+	read: z.array(zConversationUsedSource),
+	recorded: z.boolean(),
+});
 
 /**
  * The developer's vote on one of Hephaestus's messages
@@ -2411,6 +2444,14 @@ export const zPersonDataRequest = z.object({
 	id: z.uuid(),
 	scope: zPersonDataScope.optional(),
 	state: zPersonDataRequestState,
+});
+
+/**
+ * The goal in the signed-in account's own words, with the revision of the goal slot.
+ */
+export const zPersonalGoal = z.object({
+	revision: z.int(),
+	words: z.string().optional(),
 });
 
 export const zPracticeDefinitionField = z.enum([
@@ -4424,6 +4465,11 @@ export const zSaveLlmCallPoolRequest = z.object({
 	tokensPerMinute: z.int().optional(),
 });
 
+export const zSavePersonalGoal = z.object({
+	revision: z.int(),
+	words: z.string().min(0).max(500),
+});
+
 export const zScanAvailability = z.object({
 	expired: z.boolean(),
 	expiredProofPairs: z
@@ -6431,6 +6477,7 @@ export const zConversationEntry = z.object({
 	turnError: z.string().optional(),
 	turnId: z.uuid().optional(),
 	turnStatus: zConversationTurnStatus.optional(),
+	used: zConversationAnswerUse.optional(),
 	vote: zConversationEntryVote.optional(),
 });
 

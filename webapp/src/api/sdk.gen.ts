@@ -131,6 +131,7 @@ export { exportScanSarif } from "./sdk/exportScanSarif.gen.js";
 export { fileAllSavedProductFeedback } from "./sdk/fileAllSavedProductFeedback.gen.js";
 export { fileSavedProductFeedback } from "./sdk/fileSavedProductFeedback.gen.js";
 export { followProviderRole } from "./sdk/followProviderRole.gen.js";
+export { forgetPersonalGoal } from "./sdk/forgetPersonalGoal.gen.js";
 export { getAccountAiChoice } from "./sdk/getAccountAiChoice.gen.js";
 export { getActivityFacets } from "./sdk/getActivityFacets.gen.js";
 export { getActivityPeople } from "./sdk/getActivityPeople.gen.js";
@@ -184,6 +185,7 @@ export { getPasskeyRegistrationOptions } from "./sdk/getPasskeyRegistrationOptio
 export { getPasskeyStatus } from "./sdk/getPasskeyStatus.gen.js";
 export { getPasskeyVerificationOptions } from "./sdk/getPasskeyVerificationOptions.gen.js";
 export { getPerPersonResults } from "./sdk/getPerPersonResults.gen.js";
+export { getPersonalGoal } from "./sdk/getPersonalGoal.gen.js";
 export { getPractice } from "./sdk/getPractice.gen.js";
 export { getPracticeDefinitionOptions } from "./sdk/getPracticeDefinitionOptions.gen.js";
 export { getPracticeGroup } from "./sdk/getPracticeGroup.gen.js";
@@ -337,6 +339,7 @@ export { retryProductFeedbackFiling } from "./sdk/retryProductFeedbackFiling.gen
 export { revokeMcpClientGrant } from "./sdk/revokeMcpClientGrant.gen.js";
 export { revokeOtherSessions } from "./sdk/revokeOtherSessions.gen.js";
 export { revokeSession } from "./sdk/revokeSession.gen.js";
+export { savePersonalGoal } from "./sdk/savePersonalGoal.gen.js";
 export { savePracticeDraft } from "./sdk/savePracticeDraft.gen.js";
 export { setCatalogGroupStatus } from "./sdk/setCatalogGroupStatus.gen.js";
 export { setCatalogPracticeStatus } from "./sdk/setCatalogPracticeStatus.gen.js";

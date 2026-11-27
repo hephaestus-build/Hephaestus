@@ -374,6 +374,7 @@ export async function runScope(
 		if (pastSafety()) {
 			return;
 		}
+		trace.step = "prompt_prepare";
 		const prepared = await prepareTurnText(session, text);
 		if (pastSafety()) {
 			return;
@@ -383,6 +384,7 @@ export async function runScope(
 			diagnose("practice.oversized", { ...placeOf(label), practice: practiceAt(slug) });
 			return;
 		}
+		trace.step = "prompt";
 		await session.prompt(prepared, {
 			preflightResult: (disposition) => {
 				if (disposition === "started") {
@@ -461,6 +463,7 @@ export async function runScope(
 			throw new UnratedError(noResultReason(slug, signal), "the scope ended before the review");
 		}
 		const sources = sourcesForPractice(slug, evidenceSources);
+		trace.step = "lead_resolution";
 		const leads = await resolveLeads(options.leads ?? [], sources, signal);
 		signal.throwIfAborted();
 		const fullInput = `${reviewInputRoot}/${slug}.json`;
@@ -488,6 +491,7 @@ export async function runScope(
 			if (path === undefined) {
 				throw new UnratedError("unavailable", "the scan has no assigned file");
 			}
+			trace.step = "scan_read";
 			const file = await reader.answer({ op: "read", path }, signal);
 			if (file.status !== "FOUND" || file.truncated) {
 				throw new UnratedError(
@@ -534,6 +538,7 @@ export async function runScope(
 		trace.askedToRecord = false;
 		let opened: Awaited<ReturnType<typeof openSession>>;
 		try {
+			trace.step = "session_open";
 			opened = await openSession(
 				isScan ? ["read", ...RESULT_TOOL_NAMES] : [...PRACTICE_TOOLS, ...RESULT_TOOL_NAMES],
 				reader === undefined ? resultTools : [...resultTools, governedScanRead(reader)],
@@ -604,6 +609,7 @@ export async function runScope(
 			});
 		} finally {
 			signal.removeEventListener("abort", stop);
+			trace.step = "session_close";
 			const closed = await closeSession(opened).then(
 				() => null,
 				(error: unknown) => (error instanceof Error ? error : new Error(String(error))),
@@ -641,6 +647,7 @@ export async function runScope(
 	}
 	async function measureProgram(slug: string, practiceHeading: string): Promise<void> {
 		const program = programOf(slug);
+		trace.step = "input_read";
 		const read = await inputReader.read(slug).catch((error: unknown) => ({
 			error: `the host could not read them: ${errorText(error)}`,
 		}));
@@ -676,6 +683,7 @@ export async function runScope(
 			Math.max(0, measureEnd - Date.now()),
 		);
 		const sources = sourcesForPractice(slug, evidenceSources);
+		trace.step = "practice_program";
 		const outcome = await runPracticeProgram(
 			program,
 			{
@@ -747,6 +755,7 @@ export async function runScope(
 	}
 	async function runProgram(slug: string, practiceHeading: string): Promise<void> {
 		await measureProgram(slug, practiceHeading);
+		trace.step = "stage_result";
 		await stageEnded(slug);
 	}
 	try {

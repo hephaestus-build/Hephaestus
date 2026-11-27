@@ -272,7 +272,9 @@ public class ConversationTurnService {
      * next turn does not shorten the conversation again. An attempt whose question was erased while it ran stores
      * nothing: Hephaestus does not answer words that the developer took back or that a Slack removal erased. An attempt that
      * ends after the developer's erasure was requested stores nothing either, because the erasure would not find it.
-     * The turn's run ends with it, so a repeated end finds the run ended and stores nothing twice.
+     * An attempt that read words erased since ({@link ConversationBasis#lostSource}) keeps only its entries' skeletons
+     * and fails, as one that an erasure overtook does. The turn's run ends with it, so a repeated end finds the run ended
+     * and stores nothing twice.
      */
     @Transactional
     public EndedTurn end(long workspaceId, UUID turnId, int epoch, UUID runId, Ending ending) {
@@ -300,18 +302,19 @@ public class ConversationTurnService {
         Set<UUID> feedbackCalled = ConversationPiEntries.feedbackCalled(appended, ending.lastPartial());
         boolean contextErased =
                 hasAppendedContext && redaction.personErasedSince(Objects.requireNonNull(turn.getStartedAt()));
-        append(
-                turn,
-                turn.getSurface() == ConversationTurn.Surface.SYSTEM && outcome != ConversationTurn.Status.DONE
-                        ? List.of()
-                        : stored,
-                contextErased);
+        boolean contextLost = append(
+                        turn,
+                        turn.getSurface() == ConversationTurn.Surface.SYSTEM && outcome != ConversationTurn.Status.DONE
+                                ? List.of()
+                                : stored,
+                        contextErased)
+                || contextErased;
         Instant endedAt = clock.instant();
         turn.end(
-                contextErased ? ConversationTurn.Status.FAILED : outcome,
-                contextErased ? LEASE_EXPIRED : ending.error(),
+                contextLost ? ConversationTurn.Status.FAILED : outcome,
+                contextLost ? LEASE_EXPIRED : ending.error(),
                 endedAt);
-        if (contextErased) turn.recordFailure(ConversationTurn.CONTEXT_CHANGED_CAUSE, null, null);
+        if (contextLost) turn.recordFailure(ConversationTurn.CONTEXT_CHANGED_CAUSE, null, null);
         turns.flush();
         runs.ended(workspaceId, runId, epoch, turn.getStatus());
         changed(turn, true);
@@ -540,22 +543,24 @@ public class ConversationTurnService {
     }
 
     /**
-     * Stores the attempt's entries under the lock of its tree, then erases the copies that read data erased while it
-     * ran ({@link ConversationRedaction#eraseStaleCopies}).
+     * Stores the attempt's entries under the lock of its tree, each with the attempt's basis, then erases the copies that
+     * read data erased while it ran ({@link ConversationRedaction#eraseStaleCopies}). An attempt that started before
+     * attempts recorded their basis stores entries without one ({@link ConversationEntryRepository#UNPROVEN}).
      *
      * @param personErased whether an erasure ran since the attempt started, read under the copy fence
+     * @return whether a source of the attempt's basis was erased after the attempt read it
      */
-    private void append(ConversationTurn turn, List<JsonNode> appended, boolean personErased) {
+    private boolean append(ConversationTurn turn, List<JsonNode> appended, boolean personErased) {
         if (appended.isEmpty()) {
-            return;
+            return false;
         }
-        Instant attemptStart = Objects.requireNonNull(turn.getStartedAt(), "A held turn has started");
         Conversation conversation = entryService.lockWithTree(turn.getWorkspaceId(), turn.getConversationId());
         // A redaction locks this tree first, so the question cannot be erased after this read.
         ConversationEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         if (question.isRedacted()) {
-            return;
+            return false;
         }
+        UUID attemptBasis = turn.getBasisId();
         List<ConversationEntry> inserted = new ArrayList<>(appended.size());
         Set<ConversationPiEntries.ShownCall> succeeded =
                 ConversationPiEntries.succeededLinkCalls(turn.getId(), appended);
@@ -575,11 +580,13 @@ public class ConversationTurnService {
                             piEntry,
                             turn.getId(),
                             null,
-                            null));
+                            null,
+                            attemptBasis));
             inserted.add(entry);
         }
         entryService.appended(conversation, inserted);
-        redaction.eraseStaleCopies(inserted, attemptStart, personErased);
+        // Under the tree's lock, a redaction commits before this check, or after these rows and finds them.
+        return redaction.eraseStaleCopies(turn, inserted, personErased);
     }
 
     /**

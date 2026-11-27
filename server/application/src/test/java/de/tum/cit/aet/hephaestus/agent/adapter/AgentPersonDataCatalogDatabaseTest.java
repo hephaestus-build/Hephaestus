@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import java.util.ArrayList;
@@ -71,7 +72,8 @@ class AgentPersonDataCatalogDatabaseTest {
                 mapper,
                 mock(FeedbackCopyCleanupCustody.class),
                 mock(PersonIdentityResolver.class),
-                mock(ScanReportService.class));
+                mock(ScanReportService.class),
+                mock(AdviceRedaction.class));
         var stores = new ArrayList<PersonDataContributor>(runtime.contributors());
         stores.addAll(products.contributors());
         var frozen = stores.stream()

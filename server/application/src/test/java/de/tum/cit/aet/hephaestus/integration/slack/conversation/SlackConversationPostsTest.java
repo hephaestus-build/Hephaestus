@@ -80,6 +80,7 @@ class SlackConversationPostsTest extends BaseUnitTest {
                 null,
                 List.of(links),
                 null,
+                null,
                 null);
     }
 

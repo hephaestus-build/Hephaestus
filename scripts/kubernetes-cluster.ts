@@ -16,6 +16,8 @@
  *   turn-roll  a TURN run in its conversation sandbox through a server rollout, with the capacity
  *            bench's fake model provider, then a Slack message that gets its answer, with a Slack Web API
  *            fake. --pod-cidr opens both fakes to the release
+ *   turn-removal  with the same fakes: deleting a question fences the reply that runs on it, and the
+ *            next model request holds none of a removed thread anchor's text
  *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
@@ -55,7 +57,7 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
 import { submitTurn } from "./lib/capacity-chat.ts";
-import { rollOutput } from "./lib/capacity-replay.ts";
+import { ROLL_ECHO, rollOutput } from "./lib/capacity-replay.ts";
 import {
 	bindReplayModel,
 	releaseSilentMode,
@@ -2021,12 +2023,12 @@ export function outcomeChecks(outcome: TurnOutcome): RollCheck[] {
 	];
 }
 
-function report(checks: readonly RollCheck[]): void {
+function report(checks: readonly RollCheck[], drill = "turn roll"): void {
 	for (const { claim, failure } of checks) {
 		if (failure !== undefined) {
-			throw new Error(`turn roll: ${claim}: no, ${failure}`);
+			throw new Error(`${drill}: ${claim}: no, ${failure}`);
 		}
-		process.stdout.write(`turn roll: ${claim}\n`);
+		process.stdout.write(`${drill}: ${claim}\n`);
 	}
 }
 
@@ -2036,6 +2038,7 @@ async function until<T>(
 	minutes: number,
 	read: () => Promise<T>,
 	done: (value: T) => boolean,
+	drill = "turn roll",
 ): Promise<T> {
 	const deadline = Date.now() + minutes * 60_000;
 	for (;;) {
@@ -2044,7 +2047,7 @@ async function until<T>(
 			return value;
 		}
 		if (Date.now() > deadline) {
-			throw new Error(`turn roll: ${what} in ${minutes} minutes; last ${JSON.stringify(value)}`);
+			throw new Error(`${drill}: ${what} in ${minutes} minutes; last ${JSON.stringify(value)}`);
 		}
 		await sleep(5000);
 	}
@@ -2297,23 +2300,32 @@ async function rollRestart(
 	]);
 }
 
+/** What both turn drills start from: the sign-in server's API, the synthetic admin's token and the Slack secret. */
+interface TurnDrill {
+	base: string;
+	token: string;
+	slackSigningSecret: string;
+}
+
 /**
- * A conversation sandbox's TURN run keeps its bash command and run fence while the server rolls.
- * The fake model repeats a 30 s command until the drill releases it, then answers with each output.
+ * Installs the release with the fake model provider in roll mode and the Slack fake, starts the sign-in server,
+ * signs in the synthetic admin and binds the fake model to its workspace, then runs `body` on that release.
  */
-export async function turnRoll(
+async function withTurnDrill(
+	name: string,
 	work: string,
 	podCidr: string,
 	extra: readonly string[],
 	profiles: readonly string[],
+	body: (drill: TurnDrill) => Promise<void>,
 ): Promise<void> {
-	const replay = path.join(work, "turn-roll-replay.json");
-	const manifest = path.join(work, "turn-roll-provider.json");
+	const replay = path.join(work, `${name}-replay.json`);
+	const manifest = path.join(work, `${name}-provider.json`);
 	await writeFile(
 		replay,
 		JSON.stringify({
 			provenance: "assumed",
-			source: "turn-roll drill: a fast fake, so the commands set the turn's length",
+			source: `${name} drill: a fast fake, so the commands set the turn's length`,
 			samples: [{ ttftMs: 100, durationMs: 500, inputTokens: 100, outputTokens: 20, status: 200 }],
 		}),
 	);
@@ -2335,12 +2347,13 @@ export async function turnRoll(
 	// A provider of an earlier drill holds its release.
 	await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=true"]);
 	await kubectl(["apply", "-f", manifest]);
-	const signIn = `${RELEASE}-turn-roll-sign-in`;
+	const signIn = `${RELEASE}-${name}-sign-in`;
 	let forward: { port: number; stop: () => void } | undefined;
 	try {
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/replay", "--timeout=5m"]);
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/slack", "--timeout=5m"]);
-		// New for this run and kept in the release's Secret, which the Pods of the install read.
+		// New for this run and kept in the release's Secret, which the Pods of the install read. Both turn drills
+		// write them under one field manager, so the second drill on a release replaces the first's secrets.
 		const slackSecrets = {
 			HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET: randomBytes(32).toString("hex"),
 			HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET: randomBytes(32).toString("hex"),
@@ -2360,7 +2373,7 @@ export async function turnRoll(
 			work,
 			[
 				...extra,
-				...(await layer(work, "turn-roll", {
+				...(await layer(work, name, {
 					config: {
 						llmPrivateHosts: [host],
 						llmPrivateHostsAllowHttp: true,
@@ -2402,7 +2415,7 @@ export async function turnRoll(
 				["logs", signIn, "--tail=200"],
 			]) {
 				const shown = await kubectl(["-n", NAMESPACE, ...args]).catch(String);
-				process.stdout.write(`turn-roll: kubectl ${args.join(" ")}\n${shown}\n`);
+				process.stdout.write(`${name}: kubectl ${args.join(" ")}\n${shown}\n`);
 			}
 			throw error;
 		}
@@ -2419,82 +2432,367 @@ export async function turnRoll(
 			// The longest turn: ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS.
 			900,
 		);
-		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/conversation`, token, {
-			requestId: randomUUID(),
-			text: "Run the turn-roll command.",
+		await body({
+			base,
+			token,
+			slackSigningSecret: slackSecrets.HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET,
 		});
-		if ("status" in submitted || !UUID.test(submitted.id)) {
-			throw new Error(`turn roll: the question was refused: ${JSON.stringify(submitted)}`);
-		}
-		process.stdout.write(`turn roll: asked turn ${submitted.id}\n`);
-		const state = async () =>
-			turnState(
+	} finally {
+		forward?.stop();
+		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=false"]);
+		// Without its provider, a turn that a failed drill left fails at its next model call.
+		await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=false"]);
+	}
+}
+
+/** The drill turn's run fence and physical conversation sandbox, from the database. */
+async function drillTurnState(turnId: string): Promise<TurnState> {
+	return turnState(
+		await psql(
+			`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'runId', t.run_id, 'epoch', r.lease_epoch, 'sandboxId', s.id, 'claim', s.claim_name) FROM conversation_turn t JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id LEFT JOIN agent_sandbox s ON s.workspace_id = t.workspace_id AND s.subject_key = 'conversation:' || t.conversation_id AND s.kind = 'CONVERSATION' AND s.state = 'READY' WHERE t.id = '${turnId}'`,
+		),
+	);
+}
+
+/** Whether the conversation sandbox runs the fake's 30 s command. */
+async function bashRunning(claim: string): Promise<boolean> {
+	const observed = await kubectl([
+		"-n",
+		SANDBOXES,
+		"exec",
+		`pod/${claim}`,
+		"--",
+		"node",
+		"-e",
+		String.raw`const fs=require('node:fs');const running=fs.readdirSync('/proc').filter((p)=>/^\d+$/.test(p)).some((p)=>{try{const [name,seconds]=fs.readFileSync('/proc/'+p+'/cmdline','utf8').split('\0');return /(?:^|\/)sleep$/.test(name)&&seconds==='30';}catch{return false;}});process.stdout.write(running?'running':'waiting');`,
+	]);
+	return observed.trim() === "running";
+}
+
+/** From now on the fake answers each model call instead of asking for another command. */
+async function releaseRollProvider(): Promise<void> {
+	await kubectl([
+		"-n",
+		ROLL_PROVIDER,
+		"exec",
+		"deployment/replay",
+		"--",
+		"node",
+		"-e",
+		"fetch('http://127.0.0.1:8080/release',{method:'POST'}).then((r)=>process.exit(r.status===204?0:1))",
+	]);
+}
+
+/**
+ * A conversation sandbox's TURN run keeps its bash command and run fence while the server rolls.
+ * The fake model repeats a 30 s command until the drill releases it, then answers with each output.
+ */
+export async function turnRoll(
+	work: string,
+	podCidr: string,
+	extra: readonly string[],
+	profiles: readonly string[],
+): Promise<void> {
+	await withTurnDrill(
+		"turn-roll",
+		work,
+		podCidr,
+		extra,
+		profiles,
+		async ({ base, token, slackSigningSecret }) => {
+			const submitted = await submitTurn(
+				`${base}/workspaces/${ROLL_WORKSPACE}/conversation`,
+				token,
+				{
+					requestId: randomUUID(),
+					text: "Run the turn-roll command.",
+				},
+			);
+			if ("status" in submitted || !UUID.test(submitted.id)) {
+				throw new Error(`turn roll: the question was refused: ${JSON.stringify(submitted)}`);
+			}
+			process.stdout.write(`turn roll: asked turn ${submitted.id}\n`);
+			const state = async () => drillTurnState(submitted.id);
+			const running = await until(
+				"the turn did not start in its conversation sandbox",
+				5,
+				state,
+				(observed) =>
+					observed.status !== "QUEUED" &&
+					(observed.status !== "RUNNING" || observed.sandboxId !== null),
+			);
+			const { sandboxId, claim } = running;
+			if (
+				running.status !== "RUNNING" ||
+				sandboxId === null ||
+				claim === null ||
+				running.epoch < 1
+			) {
+				throw new Error(
+					`turn roll: the turn ended ${running.status} before it held its conversation sandbox`,
+				);
+			}
+			const recorded = {
+				attempt: running.attempt,
+				runId: running.runId,
+				epoch: running.epoch,
+				sandboxId,
+				claim,
+			};
+			await until(
+				"the conversation sandbox did not start its bash command",
+				5,
+				async () => bashRunning(claim),
+				(observed) => observed,
+			);
+			const claimUid = await sandboxClaimIdentity(claim, sandboxId);
+			report([
+				{
+					claim: `the physical conversation sandbox claim ${claim} exists`,
+					failure: claimUid === null ? "it does not" : undefined,
+				},
+			]);
+			process.stdout.write(
+				`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
+			);
+
+			// This roll carries the Slack fake's address to the release's own server, as the sign-in Pod has it from its start.
+			await rollRestart(`${RELEASE}-server`, { [SLACK_API_BASE_ENV]: SLACK_API_BASE });
+			report([
+				...heldChecks("after the server roll", recorded, await state()),
+				{
+					claim: `after the server roll, the physical claim and Pod ${claim} are unchanged`,
+					failure:
+						(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+							? undefined
+							: "the claim is gone or was replaced",
+				},
+			]);
+
+			// The fake answers at the next model call, after the command that runs now.
+			await releaseRollProvider();
+			await until(
+				"the turn did not end",
+				5,
+				state,
+				(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
+			);
+			const outcome = turnOutcome(
 				await psql(
-					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'runId', t.run_id, 'epoch', r.lease_epoch, 'sandboxId', s.id, 'claim', s.claim_name) FROM conversation_turn t JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id LEFT JOIN agent_sandbox s ON s.workspace_id = t.workspace_id AND s.subject_key = 'conversation:' || t.conversation_id AND s.kind = 'CONVERSATION' AND s.state = 'READY' WHERE t.id = '${submitted.id}'`,
+					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM conversation_turn t WHERE t.id = '${submitted.id}'`,
 				),
 			);
-		const running = await until(
-			"the turn did not start in its conversation sandbox",
-			5,
-			state,
-			(observed) =>
-				observed.status !== "QUEUED" &&
-				(observed.status !== "RUNNING" || observed.sandboxId !== null),
-		);
-		const { sandboxId, claim } = running;
-		if (running.status !== "RUNNING" || sandboxId === null || claim === null || running.epoch < 1) {
-			throw new Error(
-				`turn roll: the turn ended ${running.status} before it held its conversation sandbox`,
-			);
-		}
-		const recorded = {
-			attempt: running.attempt,
-			runId: running.runId,
-			epoch: running.epoch,
-			sandboxId,
-			claim,
-		};
-		await until(
-			"the conversation sandbox did not start its bash command",
-			5,
-			async () =>
-				kubectl([
-					"-n",
-					SANDBOXES,
-					"exec",
-					`pod/${claim}`,
-					"--",
-					"node",
-					"-e",
-					String.raw`const fs=require('node:fs');const running=fs.readdirSync('/proc').filter((p)=>/^\d+$/.test(p)).some((p)=>{try{const [name,seconds]=fs.readFileSync('/proc/'+p+'/cmdline','utf8').split('\0');return /(?:^|\/)sleep$/.test(name)&&seconds==='30';}catch{return false;}});process.stdout.write(running?'running':'waiting');`,
-				]),
-			(observed) => observed.trim() === "running",
-		);
-		const claimUid = await sandboxClaimIdentity(claim, sandboxId);
-		report([
-			{
-				claim: `the physical conversation sandbox claim ${claim} exists`,
-				failure: claimUid === null ? "it does not" : undefined,
-			},
-		]);
-		process.stdout.write(
-			`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
-		);
+			report(outcomeChecks(outcome));
+			// The conversation sandbox stays warm for the next TURN; its idle rule, not turn completion, reaps it.
+			const ended = await state();
+			report([
+				{
+					claim: "the completed turn kept its conversation sandbox",
+					failure:
+						ended.sandboxId === sandboxId && ended.claim === claim
+							? undefined
+							: "the sandbox row is gone or was replaced",
+				},
+				{
+					claim: "the completed turn kept its physical claim",
+					failure:
+						(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+							? undefined
+							: "the claim is gone or was replaced",
+				},
+			]);
+			await slackTurn(base, token, slackSigningSecret);
+		},
+	);
+}
 
-		// This roll carries the Slack fake's address to the release's own server, as the sign-in Pod has it from its start.
-		await rollRestart(`${RELEASE}-server`, { [SLACK_API_BASE_ENV]: SLACK_API_BASE });
-		report([
-			...heldChecks("after the server roll", recorded, await state()),
-			{
-				claim: `after the server roll, the physical claim and Pod ${claim} are unchanged`,
-				failure:
-					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
-						? undefined
-						: "the claim is gone or was replaced",
-			},
-		]);
+/** How many completion requests the fake kept, and how many of them contained a text. */
+export interface Seen {
+	requests: number;
+	containing: number;
+}
 
-		// The fake answers at the next model call, after the command that runs now.
+export function seenResult(text: string): Seen {
+	const { requests, containing } = asRecord(parseJson(text), "seen counts");
+	if (
+		typeof requests !== "number" ||
+		!Number.isInteger(requests) ||
+		typeof containing !== "number" ||
+		!Number.isInteger(containing) ||
+		containing < 0 ||
+		containing > requests
+	) {
+		throw new TypeError(`the fake's seen counts are not two counts: ${text}`);
+	}
+	return { requests, containing };
+}
+
+/** A removed turn's state: its status, and its stored entries and answers. */
+export interface RemovedTurn {
+	status: string;
+	entries: number;
+	answers: number;
+}
+
+export function removedTurn(text: string): RemovedTurn {
+	const { status, entries, answers } = asRecord(parseJson(text), "removed turn");
+	if (typeof status !== "string" || typeof entries !== "number" || typeof answers !== "number") {
+		throw new TypeError(`the removed turn has no status or entry counts: ${text}`);
+	}
+	return { status, entries, answers };
+}
+
+/** The checks that a removal fenced the reply it overtook: stopped at once, and nothing stored after it. */
+export function fencedChecks(atRemoval: RemovedTurn, later: RemovedTurn): RollCheck[] {
+	return [
+		{
+			claim: "deleting the running turn's question stopped the turn in the same request",
+			failure: atRemoval.status === "STOPPED" ? undefined : `the turn was ${atRemoval.status}`,
+		},
+		{
+			claim: "the stopped turn stays STOPPED after the fake model would have answered",
+			failure: later.status === "STOPPED" ? undefined : `it is ${later.status}`,
+		},
+		{
+			claim: "the stopped turn stored no answer",
+			failure: later.answers === 0 ? undefined : `it stored ${later.answers}`,
+		},
+		{
+			claim: "the stopped turn stored nothing after the removal",
+			failure:
+				later.entries === atRemoval.entries
+					? undefined
+					: `it stored ${later.entries - atRemoval.entries} more entries`,
+		},
+	];
+}
+
+/** The fake's counts of the removed question's text around each step. */
+export interface AnchorCounts {
+	beforeReply: Seen;
+	afterQuestionReply: Seen;
+	afterAnswerReply: Seen;
+	beforeNext: Seen;
+	afterNext: Seen;
+}
+
+/**
+ * The checks that the text reached the model through each thread while its source existed, and no request after
+ * the source's removal: each positive control must see the text, or the text's later absence proves nothing.
+ */
+export function anchorChecks(counts: AnchorCounts): RollCheck[] {
+	const { beforeReply, afterQuestionReply, afterAnswerReply, beforeNext, afterNext } = counts;
+	return [
+		{
+			claim: "while the question exists, a reply in its thread sends its text to the model",
+			failure:
+				afterQuestionReply.containing > beforeReply.containing
+					? undefined
+					: "no request of the reply held it",
+		},
+		{
+			claim:
+				"while the question exists, a reply in the thread on its quoting answer sends the quote to the model",
+			failure:
+				afterAnswerReply.containing > afterQuestionReply.containing
+					? undefined
+					: "no request of the reply held it",
+		},
+		{
+			claim: "the turns after the removal called the model",
+			failure: afterNext.requests > beforeNext.requests ? undefined : "they made no model request",
+		},
+		{
+			claim: "no model request after the removal holds the removed question's text",
+			failure:
+				afterNext.containing === beforeNext.containing
+					? undefined
+					: `${afterNext.containing - beforeNext.containing} requests held it`,
+		},
+	];
+}
+
+/** Asks a question, in the thread on `parentEntryId` when one is given, and refuses a refusal. */
+async function ask(
+	conversation: string,
+	token: string,
+	text: string,
+	parentEntryId?: string,
+): Promise<{ id: string; questionId: string }> {
+	const submitted = await submitTurn(conversation, token, {
+		requestId: randomUUID(),
+		text,
+		...(parentEntryId === undefined ? {} : { parentEntryId }),
+	});
+	if ("status" in submitted || !UUID.test(submitted.id) || !UUID.test(submitted.questionId)) {
+		throw new Error(`turn removal: the question was refused: ${JSON.stringify(submitted)}`);
+	}
+	process.stdout.write(`turn removal: asked turn ${submitted.id}\n`);
+	return submitted;
+}
+
+/** Deletes the developer's own message, as the app's delete does. */
+async function deleteEntry(conversation: string, token: string, entryId: string): Promise<void> {
+	const response = await fetch(`${conversation}/entries/${entryId}`, {
+		method: "DELETE",
+		headers: { authorization: `Bearer ${token}` },
+	});
+	await response.arrayBuffer();
+	if (!response.ok) {
+		throw new Error(`turn removal: deleting message ${entryId} answered ${response.status}`);
+	}
+}
+
+async function removedTurnState(turnId: string): Promise<RemovedTurn> {
+	return removedTurn(
+		await psql(
+			`SELECT json_build_object('status', t.status, 'entries', (SELECT count(*) FROM conversation_entry e WHERE e.turn_id = t.id), 'answers', (SELECT count(*) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER')) FROM conversation_turn t WHERE t.id = '${turnId}'`,
+		),
+	);
+}
+
+/** Waits for a turn to end, and checks that it ended DONE. */
+async function answered(turnId: string): Promise<void> {
+	const ended = await until(
+		`turn ${turnId} did not end`,
+		10,
+		async () => removedTurnState(turnId),
+		(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
+		"turn removal",
+	);
+	report(
+		[
+			{
+				claim: `turn ${turnId} ended DONE`,
+				failure: ended.status === "DONE" ? undefined : `it ended ${ended.status}`,
+			},
+		],
+		"turn removal",
+	);
+}
+
+/** The id of the turn's answer, which must quote `marker`. */
+async function quotingAnswer(turnId: string, marker: string): Promise<string> {
+	const row = await psql(
+		`SELECT e.id FROM conversation_entry e WHERE e.turn_id = '${turnId}' AND e.kind = 'ANSWER' AND e.text LIKE '%${marker}%' ORDER BY e.seq DESC LIMIT 1`,
+	);
+	const id = row.trim();
+	if (!UUID.test(id)) {
+		throw new Error(`turn removal: turn ${turnId} has no answer that quotes ${marker}`);
+	}
+	return id;
+}
+
+async function redacted(entryId: string): Promise<boolean> {
+	const value = await psql(
+		`SELECT (redacted_at IS NOT NULL)::text FROM conversation_entry WHERE id = '${entryId}'`,
+	);
+	return value.trim() === "true";
+}
+
+/** The fake's counts of `marker`, a drill-made text of letters, digits and hyphens. */
+async function seenByFake(marker: string): Promise<Seen> {
+	return seenResult(
 		await kubectl([
 			"-n",
 			ROLL_PROVIDER,
@@ -2503,45 +2801,115 @@ export async function turnRoll(
 			"--",
 			"node",
 			"-e",
-			"fetch('http://127.0.0.1:8080/release',{method:'POST'}).then((r)=>process.exit(r.status===204?0:1))",
+			`fetch('http://127.0.0.1:8080/seen?text=${encodeURIComponent(marker)}').then((r)=>r.text()).then((t)=>process.stdout.write(t))`,
+		]),
+	);
+}
+
+/**
+ * A developer's removal fences the reply that is running on it and keeps the removed text out of later model
+ * requests (#5271, #5279). Two server replicas serve the turns, and the sign-in server takes the drill's
+ * deletes, so each removal reaches the turn through another server process.
+ */
+export async function turnRemoval(
+	work: string,
+	podCidr: string,
+	extra: readonly string[],
+	profiles: readonly string[],
+): Promise<void> {
+	await withTurnDrill("turn-removal", work, podCidr, extra, profiles, async ({ base, token }) => {
+		const conversation = `${base}/workspaces/${ROLL_WORKSPACE}/conversation`;
+		const readyReplicas = await kubectl([
+			"-n",
+			NAMESPACE,
+			"get",
+			"deployment",
+			`${RELEASE}-server`,
+			"-o",
+			"jsonpath={.status.readyReplicas}",
 		]);
-		await until(
-			"the turn did not end",
+		// A Deployment with no ready replica omits the field, so the read is empty.
+		const ready = readyReplicas.trim() === "" ? 0 : Number(readyReplicas.trim());
+		report(
+			[
+				{
+					claim:
+						"two server replicas serve the turns, and the sign-in server takes the drill's requests",
+					failure: ready >= 2 ? undefined : `${ready} server replicas are ready`,
+				},
+			],
+			"turn removal",
+		);
+
+		// A removal overtakes a running reply: the fake keeps the turn in its 30 s command until the release.
+		const held = await ask(conversation, token, "Run the turn-roll command.");
+		const running = await until(
+			"the turn did not start in its conversation sandbox",
 			5,
-			state,
-			(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
+			async () => drillTurnState(held.id),
+			(observed) =>
+				observed.status !== "QUEUED" &&
+				(observed.status !== "RUNNING" || observed.sandboxId !== null),
+			"turn removal",
 		);
-		const outcome = turnOutcome(
-			await psql(
-				`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM conversation_turn t WHERE t.id = '${submitted.id}'`,
-			),
+		const { claim } = running;
+		if (running.status !== "RUNNING" || claim === null) {
+			throw new Error(`turn removal: the turn ended ${running.status} before it held its sandbox`);
+		}
+		await until(
+			"the conversation sandbox did not start its bash command",
+			5,
+			async () => bashRunning(claim),
+			(observed) => observed,
+			"turn removal",
 		);
-		report(outcomeChecks(outcome));
-		// The conversation sandbox stays warm for the next TURN; its idle rule, not turn completion, reaps it.
-		const ended = await state();
-		report([
-			{
-				claim: "the completed turn kept its conversation sandbox",
-				failure:
-					ended.sandboxId === sandboxId && ended.claim === claim
-						? undefined
-						: "the sandbox row is gone or was replaced",
-			},
-			{
-				claim: "the completed turn kept its physical claim",
-				failure:
-					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
-						? undefined
-						: "the claim is gone or was replaced",
-			},
-		]);
-		await slackTurn(base, token, slackSecrets.HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET);
-	} finally {
-		forward?.stop();
-		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=false"]);
-		// Without its provider, a turn that a failed drill left fails at its next model call.
-		await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=false"]);
-	}
+		await deleteEntry(conversation, token, held.questionId);
+		const atRemoval = await removedTurnState(held.id);
+		await releaseRollProvider();
+		// A reply that outlived the removal would answer at its next model call, after the 30 s command.
+		await sleep(75_000);
+		report(fencedChecks(atRemoval, await removedTurnState(held.id)), "turn removal");
+
+		// A removed question's text, quoted by an answer that anchors its own thread (#5279). A reply in each thread
+		// reads the text while its source exists; after the source's removal no model request may hold it.
+		const marker = `removal-drill-${randomUUID().slice(0, 8)}`;
+		const anchor = await ask(conversation, token, `${ROLL_ECHO}Pin the image by ${marker}.`);
+		await answered(anchor.id);
+		const quoting = await quotingAnswer(anchor.id, marker);
+		const beforeReply = await seenByFake(marker);
+		const onQuestion = await ask(
+			conversation,
+			token,
+			"What should I check next?",
+			anchor.questionId,
+		);
+		await answered(onQuestion.id);
+		const afterQuestionReply = await seenByFake(marker);
+		const onAnswer = await ask(conversation, token, "Which tag was it?", quoting);
+		await answered(onAnswer.id);
+		const afterAnswerReply = await seenByFake(marker);
+		await deleteEntry(conversation, token, anchor.questionId);
+		const beforeNext = await seenByFake(marker);
+		// Erasing the quoting answer with its source also leaves its thread without a parent to reply to.
+		if (await redacted(quoting)) {
+			process.stdout.write(
+				"turn removal: the quoting answer was erased with its question, so its thread takes no reply\n",
+			);
+		} else {
+			process.stdout.write(
+				"turn removal: the quoting answer stays; a reply in its thread must not carry the quote\n",
+			);
+			const inThread = await ask(conversation, token, "What should I check next?", quoting);
+			await answered(inThread.id);
+		}
+		const next = await ask(conversation, token, "What threads are open?");
+		await answered(next.id);
+		const afterNext = await seenByFake(marker);
+		report(
+			anchorChecks({ beforeReply, afterQuestionReply, afterAnswerReply, beforeNext, afterNext }),
+			"turn removal",
+		);
+	});
 }
 
 /** The release and host of the release smoke. The release name is the one the platform files name. */
@@ -3903,14 +4271,15 @@ if (import.meta.main) {
 			await backupDrill(work, cidr);
 			break;
 		}
-		case "turn-roll": {
+		case "turn-roll":
+		case "turn-removal": {
 			const cidr = values["pod-cidr"];
 			if (cidr === undefined) {
 				throw new Error(
-					"turn-roll needs --pod-cidr <the cluster's Pod CIDR>, for the fake model provider's egress rule",
+					`${command} needs --pod-cidr <the cluster's Pod CIDR>, for the fake model provider's egress rule`,
 				);
 			}
-			await turnRoll(
+			await (command === "turn-roll" ? turnRoll : turnRemoval)(
 				work,
 				cidr,
 				values.set.flatMap((setting) => ["--set", setting]),
@@ -3950,7 +4319,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|gvisor|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|turn-removal|render|gvisor|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}
