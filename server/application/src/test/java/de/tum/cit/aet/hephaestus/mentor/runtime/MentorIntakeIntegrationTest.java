@@ -49,6 +49,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -347,6 +348,73 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
 
         assertThat(opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).version())
                 .isEqualTo(1);
+    }
+
+    /** A tombstone alone refuses a late create: the source never had a request to answer it as a duplicate. */
+    @Test
+    void shouldOpenNoRequestWhenALateCreateArrivesForADeletedSourceThatNeverHadARequest() {
+        String message = message();
+        var first = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
+        assertThat(inTransaction(() -> unauthorized.admit(first, Producer.MENTOR))).isEqualTo(admitted("e1", null));
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+
+        assertThat(admit(IngressKind.MESSAGE, "e3", message, FIRST)).isEqualTo(admitted("e3", null));
+        assertThat(event("e3")).containsEntry("reason", "SOURCE_DELETED");
+        assertThat(requests(message)).isEmpty();
+    }
+
+    /** A held source fails a new question's receive at once: never Duplicate, never UNAUTHORIZED. */
+    @Test
+    void shouldFailTheReceiveWhenANewEventMeetsAHeldSource() throws Exception {
+        String message = message();
+        RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var replica = CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            owners.ofJob(account);
+            jdbcClient.sql("SELECT id FROM mentor_source WHERE native_message_id = ? FOR UPDATE")
+                    .param(message)
+                    .query(UUID.class)
+                    .single();
+            held.countDown();
+            await(release);
+        }));
+        held.await();
+
+        assertThatThrownBy(() -> admit(IngressKind.MESSAGE, "e2", message, FIRST))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        assertThat(owner.queryForList(
+                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'", UUID.class, binding))
+                .isEmpty();
+        release.countDown();
+        replica.join();
+        assertThat(requests(message)).containsExactly(request.requestId());
+    }
+
+    /**
+     * Two new event ids can both find no request when the second statement's snapshot predates the first commit. The
+     * interleaving falls inside one statement, so this drives its outcome: the second request raises on the per-source
+     * key and fails the receive, and its retry records the event with exactly one request.
+     */
+    @Test
+    void shouldKeepOneRequestWhenASecondRequestIsOpenedForTheSameSource() {
+        String message = message();
+        RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
+        UUID source = Objects.requireNonNull(owner.queryForObject(
+                "SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message));
+        Instant now = Instant.now();
+        var second = new MentorSourceRepository.OpenedRequest(
+                UUID.randomUUID(), account, source, "SLACK", binding, "D" + binding, null, 3, 5, 7, "PERSONAL", null,
+                null, null, null, null, now, now.plus(MentorIntake.ANSWER_DEADLINE));
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    rows.openRequest(second);
+                }))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(admit(IngressKind.MESSAGE, "e2", message, FIRST)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "ALREADY_OPENED");
+        assertThat(requests(message)).containsExactly(request.requestId());
     }
 
     @Test
