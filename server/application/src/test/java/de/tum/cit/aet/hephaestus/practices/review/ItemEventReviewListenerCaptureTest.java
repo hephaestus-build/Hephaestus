@@ -69,6 +69,7 @@ class ItemEventReviewListenerCaptureTest {
             items,
             workspaces,
             reviews,
+            mock(ReviewRepository.class),
             mock(ResultCurrentness.class),
             itemOptions,
             Clock.fixed(NOW, ZoneOffset.UTC),
