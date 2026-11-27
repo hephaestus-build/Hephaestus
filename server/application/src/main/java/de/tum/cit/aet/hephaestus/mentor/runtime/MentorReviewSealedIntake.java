@@ -39,7 +39,8 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
     public Outcome admit(SealedReview sealed) {
         long account = sealed.accountId();
         // The seal holds the copy fence shared, so an erasure that starts now waits for this event's commit.
-        if (!copies.heldForCapture()) throw new IllegalStateException("A sealed review's event needs the seal's copy fence");
+        if (!copies.heldForCapture())
+            throw new IllegalStateException("A sealed review's event needs the seal's copy fence");
         if (!fence.holdForAccountWrite(account)) return new Outcome.Refused(Refusal.OWNER_REFUSED);
         // The fence share-locks the account row, so the committed values hold until the seal commits. A cached account
         // that the seal loaded earlier could predate a withdrawn choice, so this reads the row itself.

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -16,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;

@@ -9,11 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.atomic.AtomicReference;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
-import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
-import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerSelection;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -36,6 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerProperties;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerSelection;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -47,6 +43,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionAttemptEnded;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionInputsRelease;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
+import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewComposeRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
@@ -83,6 +80,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -147,6 +145,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackReadbackObservedEvent;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -214,6 +213,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -1055,11 +1055,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     author,
                     "b".repeat(64),
                     Instant.now());
-            MentorReviewIntake.Outcome admittedInSecond =
-                    Objects.requireNonNull(transactions.execute(status -> {
-                        copyFence.holdForCapture();
-                        return mentorIntake.admit(inSecond);
-                    }));
+            MentorReviewIntake.Outcome admittedInSecond = Objects.requireNonNull(transactions.execute(status -> {
+                copyFence.holdForCapture();
+                return mentorIntake.admit(inSecond);
+            }));
             assertThat(admittedInSecond).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
 
             transactions.executeWithoutResult(status -> lifecycle.purgeAgain(second.workspaceId()));
@@ -1078,13 +1077,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAReviewSealedEventOutsideTheSealsCopyFence() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             mayHaveMentor(review);
-            assertThatThrownBy(() -> transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
-                            review.workspaceId(),
-                            review.reviewId(),
-                            review.identity().jobId(),
-                            review.developerId(),
-                            "a".repeat(64),
-                            Instant.now()))))
+            assertThatThrownBy(() ->
+                            transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                                    review.workspaceId(),
+                                    review.reviewId(),
+                                    review.identity().jobId(),
+                                    review.developerId(),
+                                    "a".repeat(64),
+                                    Instant.now()))))
                     .isInstanceOf(IllegalStateException.class);
             assertThat(mentorEvents(review)).isEmpty();
         }
@@ -1203,10 +1203,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.identity().jobId()))
                     .isOne();
             var answer = new AtomicReference<AdmissionResponseDTO>();
-            withMentorSelected(review, () -> answer.set(admission.admit(
-                    review.identity(),
-                    new SealResultsRequestDTO(3, review.reviewId(), review.identity().jobId(), 0),
-                    () -> {})));
+            withMentorSelected(
+                    review,
+                    () -> answer.set(admission.admit(
+                            review.identity(),
+                            new SealResultsRequestDTO(
+                                    3, review.reviewId(), review.identity().jobId(), 0),
+                            () -> {})));
 
             assertThat(producer(review).getFirst()).isEqualTo("MENTOR");
             assertThat(answer.get().practicePageSupport()).isNull();
@@ -1321,14 +1324,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     private MentorReviewIntake.Outcome admitSealed(ClaimedReview review, String digest) {
-        return Objects.requireNonNull(
-                transactions.execute(status -> sealHeld(new MentorReviewIntake.SealedReview(
-                        review.workspaceId(),
-                        review.reviewId(),
-                        review.identity().jobId(),
-                        review.developerId(),
-                        digest,
-                        Instant.now()))));
+        return Objects.requireNonNull(transactions.execute(status -> sealHeld(new MentorReviewIntake.SealedReview(
+                review.workspaceId(),
+                review.reviewId(),
+                review.identity().jobId(),
+                review.developerId(),
+                digest,
+                Instant.now()))));
     }
 
     /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */

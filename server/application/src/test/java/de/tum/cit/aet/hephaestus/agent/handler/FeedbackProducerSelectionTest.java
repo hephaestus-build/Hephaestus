@@ -61,7 +61,8 @@ class FeedbackProducerSelectionTest {
         var teamItem = new ItemRef(1, 2, new ItemKind("submission.figma_frame"), 20L, null, null);
         assigned(assignment(AUTHOR, AboutRole.AUTHOR));
 
-        var choice = new FeedbackProducerSelection(closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
+        var choice = new FeedbackProducerSelection(
+                        closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
                 .choose(job, review(teamItem, ReviewOrigin.REQUEST), "d");
 
         assertThat(choice).isEqualTo(choice(FeedbackProducer.OBSERVATIONS, FeedbackProducerReason.TEAM_MENTORING_OFF));

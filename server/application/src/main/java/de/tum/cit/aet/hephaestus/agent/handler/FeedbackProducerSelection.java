@@ -1,12 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import java.util.Set;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -15,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;

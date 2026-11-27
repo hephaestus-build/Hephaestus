@@ -298,7 +298,8 @@ public class EvidenceFileReads {
             if (Files.isRegularFile(rendered, LinkOption.NOFOLLOW_LINKS))
                 files.put(INDEX_MARKDOWN_PATH, Files.readAllBytes(rendered));
             for (String prefix : history
-                    ? List.of(SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)
+                    ? List.of(
+                            SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)
                     : List.of(SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX)) {
                 Path directory = root.resolve(prefix);
                 if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) continue;

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -18,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
