@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.teamwork;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,7 +52,8 @@ final class HttpTeamReviewDriver implements TeamReviewDriver {
     }
 
     @Override
-    public UUID submit(UUID member, UUID setup, Captures.Capture capture, String snapshot, UUID requestKey) {
+    public UUID submit(
+            UUID member, UUID setup, Captures.Capture capture, String snapshot, URI liveLink, UUID requestKey) {
         throw unwritten();
     }
 
@@ -86,12 +88,27 @@ final class HttpTeamReviewDriver implements TeamReviewDriver {
     }
 
     @Override
-    public int statusForAnOutsider(UUID review) {
+    public UUID outsider() {
         throw unwritten();
     }
 
     @Override
-    public int statusFor(UUID member, UUID review) {
+    public int statusFor(UUID person, UUID review) {
+        throw unwritten();
+    }
+
+    @Override
+    public String capturedSnapshot(UUID member, UUID version) {
+        throw unwritten();
+    }
+
+    @Override
+    public void withdraw(UUID member, UUID version) {
+        throw unwritten();
+    }
+
+    @Override
+    public Served served(UUID person, UUID version) {
         throw unwritten();
     }
 
