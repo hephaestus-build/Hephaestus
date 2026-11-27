@@ -252,7 +252,8 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 mapper,
                 mock(ReviewJobTelemetry.class, Answers.RETURNS_DEEP_STUBS),
                 files,
-                mock(AgentRunAuthority.class));
+                mock(AgentRunAuthority.class),
+                mock(ReviewPoolAdmission.class));
     }
 
     private ReviewAttemptPreparation.PreparedSandbox prepare(JobEvidenceFiles files) {

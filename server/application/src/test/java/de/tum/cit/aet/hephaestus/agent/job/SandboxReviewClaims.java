@@ -5,10 +5,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.context.ApplicationContext;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -35,9 +38,17 @@ public final class SandboxReviewClaims {
                 budgets,
                 null,
                 context.getBean(ReviewJobTelemetry.class),
-                calls,
+                poolAdmission(context, calls),
                 context.getBean(AgentRuns.class),
                 context.getBean(ReviewRunKind.class));
+    }
+
+    static ReviewPoolAdmission poolAdmission(ApplicationContext context, LlmCallPools calls) {
+        return new ReviewPoolAdmission(
+                context.getBean(ReviewJobRepository.class),
+                calls,
+                context.getBean(ReviewAssignmentProgress.class),
+                new SimpleMeterRegistry());
     }
 
     public static ReviewJobTerminal terminal(ApplicationContext context) {

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
@@ -21,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -36,7 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
+public class ReviewAssignmentStoreService implements ReviewAssignmentStore, ReviewAssignmentProgress {
     private final ReviewRepository reviews;
     private final ReviewItemRepository items;
     private final ReviewStagedPayloadRepository payloads;
@@ -96,6 +98,15 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 .filter(member -> member.getState() != ReviewItemState.LISTED)
                 .map(ReviewItem::getPracticeId)
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, Integer> endedPracticeCounts(List<UUID> jobIds) {
+        if (jobIds.isEmpty()) return Map.of();
+        return items.countEndedPracticesByJob(jobIds).stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        ReviewItemRepository.EndedPracticeCount::getJobId, row -> Math.toIntExact(row.getCount())));
     }
 
     @Override
