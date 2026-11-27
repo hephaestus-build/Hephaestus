@@ -140,6 +140,22 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseAProviderEventThatClaimsToBeASealedReviewBeforeAnyWrite() {
+        String message = message();
+
+        assertThatThrownBy(() -> admit(IngressKind.REVIEW_SEALED, "e1", message, FIRST))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM mentor_source WHERE native_message_id = ?", Integer.class, message))
+                .isZero();
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e1'",
+                        Integer.class,
+                        binding))
+                .isZero();
+    }
+
+    @Test
     void shouldAnswerDuplicateAndWriteNothingWhenTheSameProviderEventArrivesTwice() {
         String message = message();
         var first = admit(IngressKind.MESSAGE, "e1", message, FIRST);

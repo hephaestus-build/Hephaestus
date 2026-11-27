@@ -79,6 +79,10 @@ public class MentorIntake implements MentorIngress {
         if (envelope.eventKey().bindingId() != envelope.binding().connectionId()) {
             throw new IllegalArgumentException("The event key names another binding than the envelope.");
         }
+        // Only a seal writes a sealed review's event (MentorReviewSealedIntake). A provider envelope never carries one.
+        if (envelope.kind() == IngressKind.REVIEW_SEALED) {
+            throw new IllegalArgumentException("A provider event cannot be a sealed review.");
+        }
         UUID eventId = eventId(envelope.eventKey());
         Long author = envelope.actor().linkedAccountId();
         // An unlinked actor, a bot and the app itself have no account: the provider event row keeps the disposition.
@@ -165,6 +169,7 @@ public class MentorIntake implements MentorIngress {
                 yield new Change(Disposition.FENCED, null, request.id(), null);
             }
             case CONTROL_STOP -> Change.recorded(Reason.STOP_NOT_HANDLED, request == null ? null : request.id());
+            case REVIEW_SEALED -> throw new IllegalStateException("admit refuses a sealed review before any write");
         };
     }
 
@@ -202,6 +207,7 @@ public class MentorIntake implements MentorIngress {
                 yield new RequestRef(id, Objects.requireNonNull(request).version());
             }
             case RECORDED -> null;
+            case PENDING -> throw new IllegalStateException("Only a sealed review's event waits, and intake writes none");
         };
     }
 

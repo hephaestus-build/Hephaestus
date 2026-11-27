@@ -143,7 +143,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .isEmpty();
         assertThat(classes.stream()
                         .flatMap(type -> type.getMethodCallsFromSelf().stream())
-                        .filter(call -> call.getTargetOwner().getName().equals(MENTOR_EVENT_REPOSITORY))
+                        .filter(call -> call.getTargetOwner().isAssignableTo(MENTOR_EVENT_REPOSITORY))
                         .filter(call -> !call.getOriginOwner().isEquivalentTo(MentorReviewSealedIntake.class))
                         .map(call -> call.getDescription()))
                 .as("Write a sealed review's event through MentorReviewSealedIntake")
