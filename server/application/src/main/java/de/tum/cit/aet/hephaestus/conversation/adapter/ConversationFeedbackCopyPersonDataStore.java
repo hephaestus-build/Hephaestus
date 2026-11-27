@@ -16,7 +16,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Redacts Hephaestus's messages in another person's conversation that delivered feedback about this person, exactly as
- * the feedback ledger references them. The conversation and Hephaestus's other messages stay.
+ * the feedback ledger references them, with the answers that derive from them. The {@code feedback_copy} step redacts
+ * the answers of a turn that claimed the feedback, when no receipt bound one (#5150). The conversation stays.
  */
 final class ConversationFeedbackCopyPersonDataStore extends ConversationEntryPersonDataStore {
     private final NamedParameterJdbcTemplate jdbc;
@@ -72,7 +73,7 @@ final class ConversationFeedbackCopyPersonDataStore extends ConversationEntryPer
 
     @Override
     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
-        redaction.redact(selection.rows().stream()
+        redaction.redactPersonCopies(selection.rows().stream()
                 .map(row -> UUID.fromString(Objects.requireNonNull(row.columns().get("id"))))
                 .toList());
         return selection.rows().size();

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyReadback;
 import java.util.List;
@@ -43,6 +44,7 @@ class ExternalFeedbackPersonDataStoreTest {
                 .thenReturn(List.of(row));
         var store = new ExternalFeedbackPersonDataStore(
                 mock(FeedbackCopyCleanupCustody.class),
+                mock(PersonFeedbackAnswerRedaction.class),
                 jdbc,
                 mapper,
                 "copies",
