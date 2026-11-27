@@ -787,26 +787,33 @@ class LlmProxyService {
                 ProxyStallErrors.judge(upstream, permit);
             }
             Bounds bounds = exchange.bounds();
+            String stall = null;
             if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE && !capacityLeaseEnded) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
                 if (unansweredReviewStall) {
                     call.failed(new ModelCallFailure(UPSTREAM_STALLED, null));
                 }
-                String stall = unansweredReviewStall
+                stall = unansweredReviewStall
                         ? "the model provider's stream timed out: it sent no model content for %d seconds"
                                 .formatted(bounds.idle().toSeconds())
                         : STREAM_STALLED.formatted(bounds.idle().toSeconds());
                 if (!routing.conversationTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                if (response != null) errors.writeStallFrame(response, protocol, stall);
             } else if (ended == StreamOutcome.TIMED_OUT
                     && attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                     && response != null) {
                 errors.writeDraftDeadlineFrame(response, protocol);
             }
-            if (ended != null)
-                return settleStream(
+            if (ended != null) {
+                ResponseEntity<?> settled = settleStream(
                         routing, attempt, row, span, upstream.status(), ended, tap, call, poolPermit, protocol);
+                if (stall != null && response != null) {
+                    // The runner may return immediately on a stall. Its retry decision reads the durable cause.
+                    if (unansweredReviewStall) row.end();
+                    errors.writeStallFrame(response, protocol, stall);
+                }
+                return settled;
+            }
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new ModelCallFailure(UPSTREAM_STATUS, upstream.status()));

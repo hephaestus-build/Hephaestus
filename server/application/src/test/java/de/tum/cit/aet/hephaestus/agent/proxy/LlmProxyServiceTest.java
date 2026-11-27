@@ -858,6 +858,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
         void aReviewStreamWithOnlyNonContentFramesEndsAndRecordsAnOutage() throws Exception {
             Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
             try (VirtualCall call = new VirtualCall(streaming(provider.asFlux()), IDLE_ONLY)) {
+                doAnswer(invocation -> {
+                            assertThat(call.response.getContentAsString()).doesNotContain("upstream_stalled:");
+                            return null;
+                        })
+                        .when(callLedger)
+                        .complete(any(), eq(CALL), any(), eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
                 call.start(streamingRouting());
                 provider.emitNext(sse(": scheduled\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
                 call.relayed();
