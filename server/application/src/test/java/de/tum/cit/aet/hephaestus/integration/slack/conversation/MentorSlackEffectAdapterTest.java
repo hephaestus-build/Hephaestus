@@ -280,8 +280,7 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
         when(bound.post(anyList(), anyString(), eq(MARKER), any()))
                 .thenThrow(new SlackSendException(7L, "D1", "transport_failure"));
 
-        assertThat(adapter.execute(attempt(false)))
-                .isInstanceOfAny(ActionResult.Defer.class, ActionResult.Retry.class);
+        assertThat(adapter.execute(attempt(false))).isInstanceOfAny(ActionResult.Defer.class, ActionResult.Retry.class);
     }
 
     private MentorSlackEffectAdapter ready() {
