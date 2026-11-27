@@ -184,7 +184,8 @@ public class ReviewPoolAdmission implements RunAdmission {
     }
 
     private static long openWidth(long practices, Map<UUID, Integer> ended) {
-        return Math.max(0, practices - ended.values().stream().mapToLong(Integer::longValue).sum());
+        long endedCount = ended.values().stream().mapToLong(Integer::longValue).sum();
+        return Math.max(0, practices - endedCount);
     }
 
     /**

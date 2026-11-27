@@ -313,9 +313,7 @@ public class ReviewAttemptPreparation {
 
     private int sessionLimit(ReviewJob job) {
         Long pool = job.getCallPoolId();
-        return pool == null
-                ? Math.max(1, job.getInput().assignments().size())
-                : poolAdmission.sessionLimit(pool, job);
+        return pool == null ? Math.max(1, job.getInput().assignments().size()) : poolAdmission.sessionLimit(pool, job);
     }
 
     /** The adapter's stable execution plan. Credentials and request trace context are supplied separately. */
