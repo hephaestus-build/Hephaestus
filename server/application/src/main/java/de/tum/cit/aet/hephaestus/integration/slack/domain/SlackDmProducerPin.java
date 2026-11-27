@@ -68,6 +68,9 @@ public class SlackDmProducerPin {
             @Nullable String author,
             @Nullable Long accountId,
             Producer producer) {
+        if ((author == null) != (accountId == null)) {
+            throw new IllegalArgumentException("A pin stores its author and linked account together");
+        }
         this.workspaceId = workspaceId;
         this.connectionId = connectionId;
         this.teamId = teamId;

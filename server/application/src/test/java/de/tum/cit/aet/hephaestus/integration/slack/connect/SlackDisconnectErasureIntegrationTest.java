@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport.BoundConversation;
+import de.tum.cit.aet.hephaestus.integration.slack.adapter.IntegrationSlackPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPin;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
@@ -38,6 +40,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -109,6 +112,9 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private SlackDmProducerPinRepository pins;
+
+    @Autowired
+    private IntegrationSlackPersonDataCatalog personData;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -192,6 +198,21 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
                         Long.class,
                         workspaceId))
                 .isZero();
+    }
+
+    @Test
+    void shouldEraseThePinUsingItsFrozenLinkedAccount() {
+        long id = Objects.requireNonNull(connection.getId());
+        pins.save(new SlackDmProducerPin(workspaceId, id, TEAM, "DERASE", TS, null, "UERASE", memberId, Producer.MENTOR));
+        var contributor = personData.contributors().stream()
+                .filter(store -> store.store().equals("slack_dm_producer_pin"))
+                .findFirst().orElseThrow();
+        var subject = new PersonScope(memberId, List.of(), List.of());
+        var selection = contributor.select(subject);
+
+        assertThat(selection.rows()).hasSize(1);
+        assertThat(contributor.erase(selection, subject)).isOne();
+        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(workspaceId, id, "DERASE", TS)).isEmpty();
     }
 
     @Test
