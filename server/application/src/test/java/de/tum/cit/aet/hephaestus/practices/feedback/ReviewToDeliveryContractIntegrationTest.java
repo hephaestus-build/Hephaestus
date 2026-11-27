@@ -144,8 +144,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -737,8 +737,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
             // The seal's listener runs in the caller's transaction: it commits, with no handoff.
             transactions.executeWithoutResult(status -> {
-                events.publishEvent(
-                        new ReviewSealed(review.reviewId(), review.workspaceId(), review.identity().jobId()));
+                events.publishEvent(new ReviewSealed(
+                        review.reviewId(),
+                        review.workspaceId(),
+                        review.identity().jobId()));
                 assertThat(status.isRollbackOnly()).isFalse();
             });
 
@@ -762,7 +764,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     review.reviewId());
             double writtenBefore = handoffs("written", "none");
             double alreadyBefore = handoffs("skipped", "already_written");
-            var sealed = new ReviewSealed(review.reviewId(), review.workspaceId(), review.identity().jobId());
+            var sealed = new ReviewSealed(
+                    review.reviewId(), review.workspaceId(), review.identity().jobId());
             var firstWrote = new CountDownLatch(1);
             try (var executor = Executors.newFixedThreadPool(2)) {
                 var first = CompletableFuture.runAsync(

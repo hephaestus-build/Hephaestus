@@ -171,9 +171,8 @@ public class WorkPlaceHandoffEnrolment {
                 built = Built.skipped(Decision.UNREADABLE);
             }
             var handoff = built.handoff();
-            decision = handoff == null || handoffs.insertOnce(handoff) == 1
-                    ? built.decision()
-                    : Decision.ALREADY_WRITTEN;
+            decision =
+                    handoff == null || handoffs.insertOnce(handoff) == 1 ? built.decision() : Decision.ALREADY_WRITTEN;
         }
         TransactionCallbacks.afterCommit(decisions.get(decision)::increment);
     }
