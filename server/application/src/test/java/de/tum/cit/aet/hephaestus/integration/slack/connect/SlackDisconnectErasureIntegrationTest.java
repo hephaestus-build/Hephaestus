@@ -24,7 +24,9 @@ import de.tum.cit.aet.hephaestus.integration.slack.adapter.IntegrationSlackPerso
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPin;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
 import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -40,6 +42,8 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -112,6 +116,9 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private SlackDmProducerPinRepository pins;
+
+    @Autowired
+    private SlackRetentionSweeper retention;
 
     @Autowired
     private IntegrationSlackPersonDataCatalog personData;
@@ -216,6 +223,27 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(contributor.erase(selection, subject)).isOne();
         assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(workspaceId, id, "DERASE", TS))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldExpireThePinWhenTheWorkspaceHasNoIngestedSlackMessages() {
+        long connectionId = Objects.requireNonNull(connection.getId());
+        Instant now = Instant.now();
+        String aged = SlackTs.ofInstant(now.minus(Duration.ofDays(SlackRetentionSweeper.MAX_RETENTION_DAYS + 1L)));
+        String fresh = SlackTs.ofInstant(now);
+        pins.save(new SlackDmProducerPin(
+                workspaceId, connectionId, TEAM, "DERASE", aged, null, "UERASE", memberId, Producer.MENTOR));
+        pins.save(new SlackDmProducerPin(
+                workspaceId, connectionId, TEAM, "DERASE", fresh, null, "UERASE", memberId, Producer.MENTOR));
+
+        retention.sweepNow();
+
+        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(
+                        workspaceId, connectionId, "DERASE", aged))
+                .isEmpty();
+        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(
+                        workspaceId, connectionId, "DERASE", fresh))
+                .isPresent();
     }
 
     @Test
