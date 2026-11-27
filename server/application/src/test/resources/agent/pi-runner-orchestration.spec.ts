@@ -332,7 +332,7 @@ if (scenario !== undefined && scenario !== "") {
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
 	// Drive the same watchdog as the session-stall scenario, at the child program boundary.
-	if (scenario === "practice-program-stall") {
+	if (scenario?.startsWith("practice-program-")) {
 		const file = new URL(
 			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts",
 			import.meta.url,
@@ -2258,6 +2258,7 @@ if (scenario !== undefined && scenario !== "") {
 		"cut-off",
 		"stall",
 		"practice-program-stall",
+		"practice-program-alone-stall",
 		"settle-safety",
 		"request-caps",
 		"provider-error",
@@ -2477,7 +2478,7 @@ if (scenario !== undefined && scenario !== "") {
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						writeFileSync(nodePath.join(cwd, PRACTICES_DIR, "test-practice.ts"), LEADS_PROGRAM);
 					}
-					if (stage === "practice-program-stall") {
+					if (stage.startsWith("practice-program-")) {
 						writeFileSync(nodePath.join(cwd, "package.json"), '{"type":"module"}\n');
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						const quietProgram = `import { definePracticeScript } from "@hephaestus/practice-scripts";
@@ -2598,6 +2599,8 @@ export default definePracticeScript({
 						stage === "draft-commit"
 					) {
 						index = [practice("test-practice"), practice("second-practice")];
+					} else if (stage === "practice-program-alone-stall") {
+						index = [practice("test-practice")];
 					} else if (stage === "practice-program-stall") {
 						index = ["test-practice", "second-practice", "third-practice"].map((slug) =>
 							practice(slug),
@@ -2667,7 +2670,7 @@ export default definePracticeScript({
 						}),
 					);
 					const budgetMs = stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000";
-					const fixtureTimeout = stage === "practice-program-stall" ? 25_000 : undefined;
+					const fixtureTimeout = stage.startsWith("practice-program-") ? 25_000 : undefined;
 					const verificationTimeout = verification ? 10_000 : undefined;
 					// The fixture's runner clock excludes the native SDK's startup time.
 					const child = spawnSync(
@@ -3354,6 +3357,12 @@ export default definePracticeScript({
 							assert.match(child.stderr, /review\.unreachable unanswered_calls=\d+/u);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "failed (unavailable)" });
+							break;
+						}
+						case "practice-program-alone-stall": {
+							// No model was called and nothing was staged. The server requeues exit 76 and ends the
+							// job failed, with no retry, on exit 1 (docs/contributor/agent-runs.mdx, The runner's exit).
+							assert.equal(child.status, 76, child.stderr);
 							break;
 						}
 						case "practice-program-stall": {
