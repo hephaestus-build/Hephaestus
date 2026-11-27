@@ -70,7 +70,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
         when(discovery.discover("https://login.example.org/realms/school"))
                 .thenReturn(new OidcDiscovery.Result(
                         new OidcDiscovery.Endpoints(
-                                "https://login.example.org/realms/school/",
+                                "https://login.example.org/realms/school",
                                 "https://login.example.org/realms/school/auth",
                                 "https://login.example.org/realms/school/token",
                                 "https://login.example.org/realms/school/certs"),
@@ -82,12 +82,34 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
 
         assertNotNull(registration);
         var details = registration.getProviderDetails();
-        assertThat(details.getIssuerUri()).isEqualTo("https://login.example.org/realms/school/");
+        assertThat(details.getIssuerUri()).isEqualTo("https://login.example.org/realms/school");
         assertThat(details.getJwkSetUri()).isEqualTo("https://login.example.org/realms/school/certs");
         assertThat(details.getUserInfoEndpoint().getUri()).isNullOrEmpty();
         assertThat(details.getUserInfoEndpoint().getUserNameAttributeName()).isEqualTo("sub");
         assertThat(LoginProviderClientRegistrationRepository.isOidcProvider(registration))
                 .isTrue();
+    }
+
+    /** Another server can replace a row under the same registration id; the old registration must not survive it. */
+    @Test
+    void shouldRebuildTheRegistrationWhenTheRowUnderItsIdWasReplaced() {
+        LoginProviderRepository repo = mock(LoginProviderRepository.class);
+        LoginProvider gitlab =
+                provider("school", LoginProvider.ProviderType.GITLAB, "https://gitlab.lrz.de", "read_user");
+        gitlab.setId(1L);
+        LoginProvider oidc = provider(
+                "school", LoginProvider.ProviderType.OIDC, "https://login.example.org/realms/school", "openid");
+        oidc.setId(2L);
+        when(repo.findByRegistrationId("school"))
+                .thenReturn(Optional.of(gitlab))
+                .thenReturn(Optional.of(oidc));
+        OidcDiscovery discovery = mock(OidcDiscovery.class);
+        when(discovery.discover(any())).thenReturn(new OidcDiscovery.Result(null, "unreachable"));
+        var registrations = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, discovery);
+
+        assertThat(registrations.findByRegistrationId("school")).isNotNull();
+        assertThat(registrations.findByRegistrationId("school")).isNull();
     }
 
     @Test

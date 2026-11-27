@@ -231,7 +231,7 @@ public class AccountProvisioningService {
      */
     private static void requireIssuerOf(LoginProvider provider, OAuth2User principal) {
         var issuer = principal instanceof OidcUser oidc ? oidc.getIssuer() : null;
-        if (issuer == null || !issuer.toString().replaceAll("/+$", "").equals(provider.getBaseUrl())) {
+        if (issuer == null || !issuer.toString().equals(provider.getBaseUrl())) {
             throw new OAuth2AuthenticationException("invalid_issuer");
         }
     }

@@ -3005,7 +3005,8 @@ export const CreateLoginProviderRequestSchema = {
 	properties: {
 		baseUrl: {
 			type: "string",
-			description: "Instance base URL (GitLab only; GitHub is always github.com)",
+			description:
+				"Instance base URL of a self-hosted GitLab or Outline, or the exact issuer of an OpenID Connect provider. GitHub and Slack have a fixed host.",
 			example: "https://gitlab.example.com",
 		},
 		clientId: {
@@ -18084,6 +18085,7 @@ export const UpdateLoginProviderRequestSchema = {
 	properties: {
 		baseUrl: {
 			type: "string",
+			description: "Omit to keep it. The issuer of an OpenID Connect provider cannot change.",
 		},
 		clientId: {
 			type: "string",

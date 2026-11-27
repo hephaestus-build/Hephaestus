@@ -246,6 +246,22 @@ class OidcSignInIntegrationTest extends RealAuthIntegrationTest {
                 .hasMessageContaining("another issuer");
     }
 
+    @Test
+    void shouldRefuseAnIssuerSpellingThatTheDiscoveryDocumentDoesNotName() {
+        String registration = "slash-" + UUID.randomUUID().toString().substring(0, 8);
+        // Issuers compare as exact strings, so a trailing slash makes another issuer.
+        var draft = new LoginProviderService.Draft(
+                registration,
+                LoginProvider.ProviderType.OIDC,
+                "School Login",
+                IDP.issuer(registration) + "/",
+                CLIENT_ID,
+                CLIENT_SECRET,
+                null);
+
+        assertThatThrownBy(() -> loginProviders.create(draft)).hasMessageContaining("another issuer");
+    }
+
     /** Creates an OIDC provider for its own realm of the test issuer through the admin service, which reads discovery. */
     private String provider(String name) {
         return provider(name + "-" + UUID.randomUUID().toString().substring(0, 8), name);

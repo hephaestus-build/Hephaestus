@@ -111,10 +111,12 @@ public class LoginProvider {
     /**
      * Normalize on write (trim + strip trailing slashes) so the {@code (type, base_url)} uniqueness
      * is meaningful — {@code https://gitlab.lrz.de} and {@code https://gitlab.lrz.de/} are the same
-     * instance.
+     * instance. An OIDC issuer compares as an exact string (OpenID Connect Core § 3.1.3.7), so it
+     * keeps its spelling; set the type first.
      */
     public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl.trim().replaceAll("/+$", "");
+        this.baseUrl =
+                type == ProviderType.OIDC ? baseUrl.trim() : baseUrl.trim().replaceAll("/+$", "");
     }
 
     public String clientSecret(SystemSecrets secrets) {

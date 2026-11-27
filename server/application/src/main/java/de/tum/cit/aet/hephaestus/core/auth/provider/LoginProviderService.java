@@ -404,7 +404,7 @@ public class LoginProviderService implements SystemSecretOwner {
             return GITHUB_COM;
         }
         if (type == LoginProvider.ProviderType.OIDC) {
-            String issuer = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
+            String issuer = baseUrl == null ? "" : baseUrl.trim();
             try {
                 oidcDiscovery.validateIssuer(issuer);
             } catch (InvalidInputException e) {

@@ -347,7 +347,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     void shouldRefuseAnOidcProviderWhoseDiscoveryDocumentCannotBeUsed() {
         doReturn(new OidcDiscovery.Result(null, "The discovery document names another issuer."))
                 .when(oidcDiscovery)
-                .refresh("https://login.example.org/realms/school");
+                .refresh("https://login.example.org/realms/school/");
 
         assertThatThrownBy(() -> adminService().create(oidcDraft("https://login.example.org/realms/school/", null)))
                 .isInstanceOfSatisfying(
@@ -355,6 +355,19 @@ class LoginProviderServiceTest extends BaseUnitTest {
                         refused -> assertThat(refused.getReason())
                                 .isEqualTo("The discovery document names another issuer."));
         verify(repository, never()).saveAndFlush(any());
+    }
+
+    /** An issuer that cannot be read when a person clicks starts no flow, so Spring never answers with a 500. */
+    @Test
+    void shouldStartNoSignInThroughAnOidcProviderWhoseIssuerCannotBeReadNow() {
+        LoginProvider oidc = new LoginProvider();
+        oidc.setRegistrationId("school");
+        oidc.setType(LoginProvider.ProviderType.OIDC);
+        oidc.setEnabled(true);
+        when(repository.findByRegistrationId("school")).thenReturn(Optional.of(oidc));
+        when(registrationCache.findByRegistrationId("school")).thenReturn(null);
+
+        assertThat(adminService().findEnabled("school")).isEmpty();
     }
 
     @Test

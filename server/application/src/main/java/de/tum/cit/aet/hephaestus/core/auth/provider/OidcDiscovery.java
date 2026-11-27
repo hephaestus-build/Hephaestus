@@ -81,15 +81,16 @@ public class OidcDiscovery {
             String origin = ScmOrigin.of(issuer).orElseThrow();
             String body = egress.clientFor(origin)
                     .get()
-                    .uri(URI.create(issuer + "/.well-known/openid-configuration"))
+                    // Discovery § 4: the path is appended to the issuer without its trailing slash.
+                    .uri(URI.create(issuer.replaceAll("/+$", "") + "/.well-known/openid-configuration"))
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(DEADLINE)
                     .block();
             JsonNode document = objectMapper.readTree(body == null ? "" : body);
             String named = text(document, "issuer");
-            // The configured issuer has no trailing slash; the document's spelling may have one (Discovery § 4.3).
-            if (named == null || !(named.equals(issuer) || named.equals(issuer + "/"))) {
+            // Discovery § 4.3: the document names exactly the issuer that was used to read it.
+            if (named == null || !named.equals(issuer)) {
                 return unavailable(issuer, "The discovery document names another issuer.");
             }
             return new Result(

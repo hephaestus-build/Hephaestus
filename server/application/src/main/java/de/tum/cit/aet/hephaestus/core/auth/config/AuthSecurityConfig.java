@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Objects;
 import javax.crypto.SecretKey;
@@ -208,8 +209,16 @@ public class AuthSecurityConfig {
     @Bean
     public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
         var spring = new OidcIdTokenDecoderFactory();
-        RestTemplate keySets =
-                restTemplates.requestFactory(this::guardedRequestFactory).build();
+        // A slow issuer holds one callback, so each read of its key set waits 5 s, not the shared 30 s.
+        RestTemplate keySets = restTemplates
+                .requestFactory(() -> {
+                    var factory = new ReactorClientHttpRequestFactory(
+                            WebClientConnectors.httpClient(scmEndpoints.resolverGroup())
+                                    .followRedirect(false));
+                    factory.setReadTimeout(Duration.ofSeconds(5));
+                    return factory;
+                })
+                .build();
         // One decoder per registration keeps the decoder's key set cache across sign-ins.
         Cache<String, JwtDecoder> decoders =
                 Caffeine.newBuilder().maximumSize(64).build();

@@ -14,7 +14,7 @@ class ProviderNamespaceTest extends BaseUnitTest {
         "OIDC, https://kc.example.org/realms/school, https://KC.example.org/realms/school, false",
         "OIDC, https://kc.example.org/realms/school, https://kc.example.org/realms/other, false",
         "OIDC, https://kc.example.org/realms/school, https://kc.example.org, false",
-        "OIDC, https://kc.example.org, https://kc.example.org/, true",
+        "OIDC, https://kc.example.org, https://kc.example.org/, false",
         "GITLAB, https://gitlab.example.org, https://GitLab.example.org/, true",
         "OUTLINE, https://wiki.example.org, https://wiki.example.org:443, true",
         "GITLAB, https://gitlab.example.org, https://gitlab.example.com, false",

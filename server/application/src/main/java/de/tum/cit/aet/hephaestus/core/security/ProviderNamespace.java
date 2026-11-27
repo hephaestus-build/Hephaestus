@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
  * The key by which two {@code identity_provider} rows of one type are one subject namespace. For a Git provider, Slack
  * or Outline it is the {@link ScmOrigin}, so two spellings of one instance match. An OIDC subject is unique only
  * within its issuer, and issuers compare as exact strings (OpenID Connect Core § 5.7, Discovery § 4.3), as the
- * identity key does: the key is the stored issuer without a trailing slash.
+ * identity key does: the key is the stored issuer.
  */
 public final class ProviderNamespace {
 
@@ -17,7 +17,7 @@ public final class ProviderNamespace {
     public static Optional<String> of(String providerType, @Nullable String serverUrl) {
         Optional<String> origin = ScmOrigin.of(serverUrl);
         if (!"OIDC".equals(providerType) || serverUrl == null) return origin;
-        return origin.map(ignored -> serverUrl.trim().replaceAll("/+$", ""));
+        return origin.map(ignored -> serverUrl.trim());
     }
 
     /** Whether two rows of {@code providerType} are one namespace. A row without a valid key matches none. */

@@ -24,8 +24,9 @@ import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
  * apps. Replaces Boot's auto-configured {@code InMemoryClientRegistrationRepository} (which backs off
  * once this bean is present) and serves the sign-in picker via {@link IdentityProviderCatalog}.
  *
- * <p>A small {@code expireAfterWrite} cache absorbs read load; an admin edit/disable calls
- * {@link #evict(String)} for immediate effect.
+ * <p>Each lookup reads the row. A cached registration is reused only while it was built from that same row
+ * version, so a row that another server replaced or edited never authenticates through its old registration.
+ * The cache saves rebuilding (secret decryption, OIDC discovery), not the row read.
  */
 public class LoginProviderClientRegistrationRepository
         implements ClientRegistrationRepository, Iterable<ClientRegistration>, IdentityProviderCatalog {
@@ -46,7 +47,9 @@ public class LoginProviderClientRegistrationRepository
                 registration.getProviderDetails().getConfigurationMetadata().get(OIDC_PROVIDER));
     }
 
-    private final Cache<String, ClientRegistration> cache = Caffeine.newBuilder()
+    private record Built(String version, ClientRegistration registration) {}
+
+    private final Cache<String, Built> cache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(60))
             .maximumSize(256)
             .build();
@@ -68,20 +71,29 @@ public class LoginProviderClientRegistrationRepository
 
     @Override
     public @Nullable ClientRegistration findByRegistrationId(String registrationId) {
-        ClientRegistration cached = cache.getIfPresent(registrationId);
-        if (cached != null) {
-            return cached;
-        }
         return loginProviderRepository
                 .findByRegistrationId(registrationId)
                 .filter(LoginProvider::isEnabled)
                 .filter(this::isApproved)
-                .flatMap(this::toRegistration)
-                .map(reg -> {
-                    cache.put(registrationId, reg);
-                    return reg;
-                })
+                .flatMap(this::registrationOf)
                 .orElse(null);
+    }
+
+    private Optional<ClientRegistration> registrationOf(LoginProvider provider) {
+        String version = String.join(
+                "|",
+                String.valueOf(provider.getId()),
+                provider.getType().name(),
+                provider.getBaseUrl(),
+                provider.getClientId(),
+                provider.getScopes(),
+                provider.getDisplayName(),
+                String.valueOf(provider.getUpdatedAt()));
+        Built built = cache.getIfPresent(provider.getRegistrationId());
+        if (built != null && built.version().equals(version)) return Optional.of(built.registration());
+        Optional<ClientRegistration> registration = toRegistration(provider);
+        registration.ifPresent(value -> cache.put(provider.getRegistrationId(), new Built(version, value)));
+        return registration;
     }
 
     /** Drop a cached registration after an admin edit/disable so the change takes effect at once. */
@@ -99,9 +111,7 @@ public class LoginProviderClientRegistrationRepository
         // A registration the cache holds is reused, so the public sign-in page reads no issuer itself.
         return loginProviderRepository.findByEnabledTrueOrderByDisplayNameAsc().stream()
                 .filter(this::isApproved)
-                .flatMap(provider -> Optional.ofNullable(cache.getIfPresent(provider.getRegistrationId()))
-                        .or(() -> toRegistration(provider))
-                        .stream())
+                .flatMap(provider -> registrationOf(provider).stream())
                 .toList();
     }
 
@@ -162,7 +172,8 @@ public class LoginProviderClientRegistrationRepository
                 // Without openid Spring takes the plain OAuth2 path and validates no ID token; a row that an
                 // earlier release edited can lack it.
                 if (!List.of(provider.getScopes().trim().split("\\s+")).contains("openid")) return Optional.empty();
-                OidcDiscovery.Endpoints endpoints = discovery.discover(base).endpoints();
+                OidcDiscovery.Endpoints endpoints =
+                        discovery.discover(provider.getBaseUrl()).endpoints();
                 if (endpoints == null) return Optional.empty();
                 builder.authorizationUri(endpoints.authorizationUri())
                         .tokenUri(endpoints.tokenUri())

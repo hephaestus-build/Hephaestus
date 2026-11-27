@@ -32,6 +32,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -342,6 +344,27 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                         "SELECT count(*) FROM identity_provider WHERE type='OIDC' AND server_url=?",
                         Long.class,
                         "https://school-stale.example"))
+                .isZero();
+    }
+
+    @Test
+    void shouldRefuseAnIdTokenOfAnotherIssuerOnAnOidcRow() {
+        seedProvider("school-other", LoginProvider.ProviderType.OIDC);
+        var token = new OidcIdToken(
+                "id-token",
+                Instant.now(),
+                Instant.now().plusSeconds(300),
+                Map.of("iss", "https://elsewhere.example/realms/school", "sub", "other-issuer"));
+        var principal = new DefaultOidcUser(List.of(new SimpleGrantedAuthority("ROLE_USER")), token, "sub");
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "school-other", "other-issuer", principal, AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOfSatisfying(
+                        OAuth2AuthenticationException.class,
+                        exception ->
+                                assertThat(exception.getError().getErrorCode()).isEqualTo("invalid_issuer"));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM identity WHERE provider_user_key='other-issuer'", Long.class))
                 .isZero();
     }
 
