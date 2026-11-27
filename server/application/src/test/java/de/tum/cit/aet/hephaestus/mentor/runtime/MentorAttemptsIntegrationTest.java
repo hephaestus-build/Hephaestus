@@ -33,6 +33,8 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.mentor.spi.VerifiedActor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -51,8 +53,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -402,7 +404,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
      * Slack store's tombstone is read before each dispatch, and an unwired store port refuses too.
      */
     @Test
-    void shouldRefuseADispatchWhenTheSlackStoreShowsTheQuestionDeleted() {
+    void shouldRefuseADispatchWhenTheSlackStoreShowsTheQuestionDeleted() throws SQLException {
         String message = message();
         ask(message);
         AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
@@ -545,28 +547,26 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 """, lease.leaseEpoch(), lease.attemptId());
     }
 
-    /** What the Slack store writes for a delete that its own ingest admitted; the workspace row is not needed. */
-    private void tombstoneInSlackStore(String message) {
-        Integer inserted = owner.execute((ConnectionCallback<Integer>) connection -> {
-            try (var role = connection.createStatement();
-                    var insert = connection.prepareStatement("""
+    /**
+     * What the Slack store writes for a delete that its own ingest admitted. The superuser seeds it with foreign keys
+     * off, so the test needs no workspace row.
+     */
+    private void tombstoneInSlackStore(String message) throws SQLException {
+        var administrator = PostgreSQLTestContainer.administrator();
+        try (var session = DriverManager.getConnection(
+                administrator.jdbcUrl(), administrator.username(), administrator.password())) {
+            session.setAutoCommit(false);
+            var seed = new JdbcTemplate(new SingleConnectionDataSource(session, true));
+            seed.execute("SET LOCAL session_replication_role = replica");
+            seed.execute("SET LOCAL search_path TO " + owner.queryForObject("SELECT current_schema()", String.class));
+            assertThat(seed.update("""
                             INSERT INTO slack_message (workspace_id, slack_team_id, slack_channel_id, slack_ts, text,
                                 deleted_at, ingested_at)
                             VALUES (?, ?, ?, ?, NULL, clock_timestamp(), clock_timestamp())
-                            """)) {
-                role.execute("SET session_replication_role = 'replica'");
-                try {
-                    insert.setLong(1, workspace);
-                    insert.setString(2, "T" + binding);
-                    insert.setString(3, "D" + binding);
-                    insert.setString(4, message);
-                    return insert.executeUpdate();
-                } finally {
-                    role.execute("SET session_replication_role = 'origin'");
-                }
-            }
-        });
-        assertThat(inserted).isEqualTo(1);
+                            """, workspace, "T" + binding, "D" + binding, message))
+                    .isEqualTo(1);
+            session.commit();
+        }
     }
 
     private void lapse(AttemptLease lease) {
