@@ -38,7 +38,8 @@ public class ReviewProgressService {
         // Waiting with practices ended and some left: an attempt moved the review on, and the next one has not
         // started. A first start ended nothing, and a review with every practice ended is admitting its results.
         boolean continuing = status == ReviewStatus.QUEUED && ended > 0 && ended < total;
-        var stage = ReviewStage.of(status, continuing, counts.getUnsettled(), counts.getChecked());
+        var stage = ReviewStage.of(
+                status, ended, continuing, counts.getUnsettled(), counts.getChecked(), counts.getWithheld());
         return new ReviewProgressDTO(ended, total, continuing, stage);
     }
 }

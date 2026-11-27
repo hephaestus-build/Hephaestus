@@ -54,12 +54,14 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
           COUNT(*) FILTER(WHERE p.listed>0 OR p.bound>0) AS practices,
           COUNT(*) FILTER(WHERE p.listed=0 AND p.bound>0) AS ended,
           COALESCE(SUM(p.unsettled),0) AS unsettled,
-          COALESCE(SUM(p.checked),0) AS checked
+          COALESCE(SUM(p.checked),0) AS checked,
+          COALESCE(SUM(p.withheld),0) AS withheld
         FROM review q LEFT JOIN (
           SELECT m.review_id,COUNT(*) FILTER(WHERE m.state='LISTED') AS listed,
             COUNT(*) FILTER(WHERE m.job_id IS NOT NULL) AS bound,
             COUNT(*) FILTER(WHERE m.state IN ('LISTED','STAGED')) AS unsettled,
-            COUNT(*) FILTER(WHERE m.state IN ('JUDGED','REUSED','TRIED')) AS checked
+            COUNT(*) FILTER(WHERE m.state IN ('JUDGED','REUSED','TRIED')) AS checked,
+            COUNT(*) FILTER(WHERE m.state='WITHHELD') AS withheld
           FROM review_item m WHERE m.workspace_id=:ws AND m.review_id IN (:ids)
           GROUP BY m.review_id,m.practice_id) p ON p.review_id=q.id
         WHERE q.workspace_id=:ws AND q.id IN (:ids) AND q.kind='ITEM'
@@ -77,6 +79,8 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         long getUnsettled();
 
         long getChecked();
+
+        long getWithheld();
     }
 
     interface ReviewPracticeCounts extends PracticeCounts {

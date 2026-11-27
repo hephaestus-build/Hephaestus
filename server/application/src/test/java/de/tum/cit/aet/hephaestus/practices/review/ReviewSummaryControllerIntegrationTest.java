@@ -532,6 +532,24 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldReportAnEndedReviewThatLeftAPracticeUncheckedAsPartlyChecked() {
+        var result = data.result(
+                scenario,
+                ResultOutcome.MET,
+                Instant.parse("2026-10-20T00:00:00Z"),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.READINESS_REFUSED);
+        data.withheldAtCreation(scenario, result);
+
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("PARTLY_CHECKED");
+    }
+
+    @Test
     void shouldReportObservationsAsReadyOnlyOnceTheyAreSealed() {
         // Every practice ended, but the attempt keeps what it staged private until the seal.
         var staged = data.continuingReview(scenario, scenarioAccountId, 2, 2);
@@ -543,7 +561,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.progress.stage")
-                .isEqualTo("QUEUED");
+                .isEqualTo("CHECKING");
         get("/practices/reviews/" + sealed.getReviewId())
                 .expectStatus()
                 .isOk()
