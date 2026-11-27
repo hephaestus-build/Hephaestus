@@ -1,10 +1,12 @@
 import { hoursBefore, minutesBefore } from "@/stories/story-clock";
 
 import type {
+	TeamChoicePoint,
 	TeamCitation,
 	TeamMemberMessageData,
 	TeamMemberRef,
 	TeamMentorMessageData,
+	TeamRevisit,
 } from "./team-place-entries";
 
 /** Synthetic people and work only. */
@@ -74,6 +76,26 @@ export const ANSWER: TeamMentorMessageData = {
 		"One option: start with the need in **Students × Define**, because three of your interview notes name it.",
 	].join("\n"),
 	citations: CITATIONS,
+	revisits: [],
 	answerUse: { observations: 2, decisions: 1, messages: 3 },
 	createdAt: minutesBefore(110),
+};
+
+export const CHOICE_POINT: TeamChoicePoint = {
+	problemId: "p1000000-0000-4000-8000-000000000001",
+	options: [
+		{ id: "o1", text: "Verify the current step-free route to the return point." },
+		{ id: "o2", text: "Compare another return point that has a documented route." },
+	],
+	draftNote:
+		"We will check the step-free route to the return point, because the map currently assumes it exists. Next review: look for a route observation or an explicit unknown.",
+	citations: CITATIONS.slice(0, 1),
+};
+
+export const REVISIT: TeamRevisit = {
+	decisionId: "p1000000-0000-4000-8000-000000000001",
+	decisionRecordId: "d1000000-0000-4000-8000-000000000002",
+	finding: "CHANGE_SHOWN",
+	statement: "The route is now documented. The step-free entrance is still unverified.",
+	citations: CITATIONS.slice(1),
 };
