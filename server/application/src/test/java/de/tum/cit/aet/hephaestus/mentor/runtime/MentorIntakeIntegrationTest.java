@@ -468,8 +468,10 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         var commit = new CountDownLatch(1);
         var holder = new AtomicInteger();
         var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
-            holder.set(Objects.requireNonNull(
-                    jdbcClient.sql("SELECT pg_backend_pid()").query(Integer.class).single()));
+            holder.set(Objects.requireNonNull(jdbcClient
+                    .sql("SELECT pg_backend_pid()")
+                    .query(Integer.class)
+                    .single()));
             Admission result = intake.admit(envelope(first, "e1", message, FIRST, actor()), Producer.MENTOR);
             admitted.countDown();
             await(commit);
@@ -593,7 +595,8 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                         .asString()
                         .contains("FOR UPDATE OF s NOWAIT");
 
-                UUID request = opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).requestId();
+                UUID request =
+                        opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).requestId();
                 statement.execute("SELECT pg_advisory_unlock(54330001)");
 
                 assertThat(delete.get(30, TimeUnit.SECONDS)).isEqualTo(admitted("e3", new RequestRef(request, 1)));
