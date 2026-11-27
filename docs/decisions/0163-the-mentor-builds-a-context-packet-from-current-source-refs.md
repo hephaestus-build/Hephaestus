@@ -106,6 +106,8 @@ An answer with no recorded basis uses the legacy evidence rules in ADR 0157.
 
 ## Confirmation
 
+Not enforced. The implementation and release gate add these checks.
+
 The C2 implementation tests prove that an edit, deletion or access revocation makes a covered summary stale.
 The next build must rebuild it with current coverage.
 Recall tests reject stale revisions and epochs and exclude matches in another Slack place.
