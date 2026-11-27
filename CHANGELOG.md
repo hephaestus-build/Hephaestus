@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-rc.22
+
+### Minor Changes
+
+- Erasure recovery clears forgotten goals and withdraws the related ready exports before the server opens access.
+
+  **Operators:** Convert retained erasure recovery manifests to version 5 before using them with the upgraded server.
+
+### Patch Changes
+
+- Release model capacity sooner when a provider keeps a practice review stream open without sending an answer. The review records a provider outage and can retry without spending a review attempt.
+- Prepare owner-only storage for personal goals.
+- Deleting a conversation message or reaching its retention limit stops replies that could still use it and clears their partial answers.
+- After you remove a conversation message, Hephaestus stops using that text in later replies, including text from thread previews.
+
 ## 1.0.0-rc.21
 
 ### Patch Changes
