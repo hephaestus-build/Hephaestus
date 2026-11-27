@@ -1,0 +1,7 @@
+{
+  "format": "synthetic-model",
+  "classes": [
+    { "id": "c-order", "name": "Order", "members": ["- total: Money", "- lines: int"] }
+  ],
+  "relationships": []
+}
