@@ -6,6 +6,9 @@ public enum FeedbackProducer {
     LEGACY,
     /** The mentor decides the work comment, the advice and any contact. */
     MENTOR,
-    /** Only the work comment: the author is unlinked or did not consent to the mentor. Never advice. */
+    /**
+     * Only the work comment, never advice or contact. The seal records why, for example an unlinked or
+     * non-consenting author, or an owner binding that an erasure or a write fence refused.
+     */
     WORK_PLACE
 }
