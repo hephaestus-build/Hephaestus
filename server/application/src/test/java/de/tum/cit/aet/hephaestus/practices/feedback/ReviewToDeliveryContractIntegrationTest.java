@@ -206,11 +206,13 @@ import org.springframework.boot.test.context.ConfigDataApplicationContextInitial
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
@@ -788,6 +790,80 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(handoffRows(review)).isOne();
             assertThat(handoffs("written", "none")).isEqualTo(writtenBefore + 1);
             assertThat(handoffs("skipped", "already_written")).isEqualTo(alreadyBefore + 1);
+        }
+    }
+
+    /** Review probe for #5400: a database failure of the handoff write rolls the real seal back. */
+    @Test
+    void probe5400ADatabaseFailureOfTheHandoffRollsTheSealBack() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            // The derived id is already taken by a row of another review: the insert fails in the database.
+            UUID id = UUID.nameUUIDFromBytes(("work-place-handoff:" + review.workspaceId() + ":" + review.reviewId())
+                    .getBytes(StandardCharsets.UTF_8));
+            jdbc.update(
+                    "INSERT INTO work_place_handoff (id, workspace_id, review_id, job_id, item_id, producer, payload,"
+                            + " payload_digest, expires_at, created_at) VALUES (?, ?, ?, ?, 7, 'LEGACY',"
+                            + " CAST('{}' AS JSONB), ?, now(), now())",
+                    id,
+                    review.workspaceId(),
+                    UUID.randomUUID(),
+                    review.identity().jobId(),
+                    "d".repeat(64));
+            double failedBefore = handoffs("failed", "unreadable");
+            double writtenBefore = handoffs("written", "none");
+
+            assertThatThrownBy(() -> admission.admit(
+                            review.identity(),
+                            new SealResultsRequestDTO(
+                                    3, review.reviewId(), review.identity().jobId(), 0),
+                            () -> {}))
+                    .isInstanceOf(DataAccessException.class);
+
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(jdbc.queryForObject(
+                            "SELECT admission_digest IS NULL FROM review_job WHERE workspace_id=? AND id=?",
+                            Boolean.class,
+                            review.workspaceId(),
+                            review.identity().jobId()))
+                    .isTrue();
+            assertThat(handoffRows(review)).isZero();
+            assertThat(handoffs("failed", "unreadable")).isEqualTo(failedBefore);
+            assertThat(handoffs("written", "none")).isEqualTo(writtenBefore);
+            jdbc.update("DELETE FROM work_place_handoff WHERE workspace_id=? AND id=?", review.workspaceId(), id);
+        }
+    }
+
+    /** Review probe for #5400: a transactional collaborator that throws is rethrown, not reported as committed. */
+    @Test
+    void probe5400ARollbackOnlySealIsRethrown() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+            jdbc.update(
+                    "DELETE FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(jdbc.update(
+                            "UPDATE review_item SET staged_payload=jsonb_set(staged_payload, '{candidate}',"
+                                    + " '\"broken\"') WHERE workspace_id=? AND review_id=?",
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isOne();
+            double failedBefore = handoffs("failed", "unreadable");
+
+            assertThatThrownBy(() -> transactions.executeWithoutResult(status -> events.publishEvent(new ReviewSealed(
+                            review.reviewId(),
+                            review.workspaceId(),
+                            review.identity().jobId()))))
+                    .isNotInstanceOf(UnexpectedRollbackException.class);
+
+            assertThat(handoffRows(review)).isZero();
+            assertThat(handoffs("failed", "unreadable")).isEqualTo(failedBefore);
         }
     }
 
