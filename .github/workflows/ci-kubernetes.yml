@@ -177,6 +177,10 @@ jobs:
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
+          # A deleted question fences its running reply, and a removed thread anchor reaches no later model request.
+          # shellcheck disable=SC2086
+          node scripts/kubernetes-cluster.ts turn-removal --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
+            --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # Nightly and relevant pull requests opt in; merge groups keep the destructive drill off their path.
       - name: Back up, then restore to a point in time
