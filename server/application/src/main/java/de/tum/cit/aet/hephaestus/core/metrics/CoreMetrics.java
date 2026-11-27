@@ -34,6 +34,9 @@ public final class CoreMetrics {
     public static final String MCP_AUTH_REFUSALS = "mcp.auth.refusals";
     public static final String MCP_TOOL_CALLS = "mcp.tool.calls";
     public static final String PERSON_DATA_ERASURE_FAILURES = "person.data.erasure.failures";
+    /** An erasure pass that left its request to a replica of a newer release (#5382). */
+    public static final String PERSON_DATA_ERASURE_DEFERRALS = "person.data.erasure.deferrals";
+
     public static final String PRIVACY_JOURNAL_BUCKET_VERIFIED = "privacy.journal.bucket.verified";
     public static final String PRIVACY_JOURNAL_SHIPPING_LAG = "privacy.journal.shipping.lag";
     public static final String PRIVACY_JOB_AFFECTED = "privacy.job.affected";

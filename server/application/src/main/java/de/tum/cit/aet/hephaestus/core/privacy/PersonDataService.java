@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,7 @@ public class PersonDataService {
     @PostConstruct
     void registerFailureCounter() {
         meters.counter(CoreMetrics.PERSON_DATA_ERASURE_FAILURES);
+        meters.counter(CoreMetrics.PERSON_DATA_ERASURE_DEFERRALS);
     }
 
     public record Snapshot(
@@ -188,7 +190,8 @@ public class PersonDataService {
         return refs;
     }
 
-    private record FrozenErasure(Map<String, PersonDataSelection> selections, PersonScope scope) {}
+    private record FrozenErasure(
+            Map<String, PersonDataSelection> selections, PersonScope scope, Set<String> receipts) {}
 
     private record ErasureAdmission(String state, @Nullable String scopeJson) {}
 
@@ -303,13 +306,21 @@ public class PersonDataService {
                 requireJournalProof(id, recovery);
                 var admitted = tx.execute(status -> {
                     PersonDataRequest r = lockAdmittedErasure(id);
-                    return r == null ? null : new FrozenErasure(selections(r), scope(r));
+                    return r == null
+                            ? null
+                            : new FrozenErasure(
+                                    selections(r),
+                                    scope(r),
+                                    Set.copyOf(completed(r).keySet()));
                 });
                 if (admitted == null) return;
                 Map<String, PersonDataSelection> frozen = admitted.selections();
                 Set<String> inventory = registry.stores().stream()
                         .map(PersonDataContributor::store)
                         .collect(Collectors.toUnmodifiableSet());
+                // A replica of a newer release froze or erased a store that this replica does not know. Leave the
+                // request to that release instead of failing it, so a rolling release never stops an erasure (#5382).
+                if (deferredToNewerRelease(id, inventory, frozen.keySet(), admitted.receipts())) return;
                 if (frozen.isEmpty() || !frozen.keySet().equals(inventory))
                     throw new IllegalStateException("Erasure contributor inventory changed");
                 for (var store : registry.stores()) {
@@ -322,8 +333,8 @@ public class PersonDataService {
                         PersonDataRequest r = lockAdmittedErasure(id);
                         if (r == null) return false;
                         var completed = completed(r);
-                        if (!inventory.containsAll(completed.keySet()))
-                            throw new IllegalStateException("Erasure contributor inventory changed");
+                        // A newer replica erased a store of its own while this pass ran; leave the rest to it.
+                        if (deferredToNewerRelease(id, inventory, Set.of(), completed.keySet())) return false;
                         if (!completed.containsKey(store.store()) || !store.selectionMustStayUnchanged()) {
                             long count = ScopedValue.where(PrivacyJournalShipping.ERASURE_REQUEST, id)
                                     .call(() ->
@@ -350,7 +361,10 @@ public class PersonDataService {
                 tx.executeWithoutResult(status -> {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return;
-                    if (!completed(r).keySet().equals(inventory))
+                    var receipts = completed(r).keySet();
+                    // Only a replica that knows every store with a receipt may complete the request.
+                    if (deferredToNewerRelease(id, inventory, Set.of(), receipts)) return;
+                    if (!receipts.equals(inventory))
                         throw new IllegalStateException("Erasure store receipts are incomplete");
                     hold.release(id);
                     r.complete(Instant.now());
@@ -452,13 +466,37 @@ public class PersonDataService {
         Map<String, PersonDataSelection> selected = mapper.readValue(
                 Objects.requireNonNull(r.getSelectionsJson()),
                 new TypeReference<Map<String, PersonDataSelection>>() {});
-        // A request frozen before the journal was added has no recovery facts to export or erase.
+        // A request frozen before a store was registered has no keys for it (#5382). The journal then has no recovery
+        // facts, and a live store erases its current matches without keys, so both take an empty selection. A store
+        // whose selection must stay unchanged still fails the inventory check: its frozen keys are missing.
         String journalStore = CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL;
-        if (!selected.containsKey(journalStore)
-                && registry.stores().stream().anyMatch(s -> s.store().equals(journalStore))) {
-            selected.put(journalStore, new PersonDataSelection(List.of()));
+        for (var store : registry.stores()) {
+            if (!selected.containsKey(store.store())
+                    && (store.store().equals(journalStore) || !store.selectionMustStayUnchanged())) {
+                selected.put(store.store(), new PersonDataSelection(List.of()));
+            }
         }
         return selected;
+    }
+
+    /**
+     * Whether a selection or a receipt names a store that this replica's inventory does not know. Then the request is
+     * left as it is, for a replica of the release that added the store: the pass changes nothing, so the next scheduled
+     * pass on a newer replica takes it. Outside a rollout this never happens, and the alert on the counter fires when it
+     * keeps happening.
+     */
+    private boolean deferredToNewerRelease(UUID id, Set<String> inventory, Set<String> selected, Set<String> receipts) {
+        var unknown = new TreeSet<String>();
+        for (String store : selected) if (!inventory.contains(store)) unknown.add(store);
+        for (String store : receipts) if (!inventory.contains(store)) unknown.add(store);
+        if (unknown.isEmpty()) return false;
+        meters.counter(CoreMetrics.PERSON_DATA_ERASURE_DEFERRALS).increment();
+        log.atWarn()
+                .addKeyValue("event.name", "person_data.erasure.deferred")
+                .addKeyValue("person_data.request.id", id)
+                .addKeyValue("person_data.stores", String.join(",", unknown))
+                .log("Person data erasure left for a replica of a newer release that knows its stores");
+        return true;
     }
 
     private @Nullable PersonDataRequest lockAdmittedErasure(UUID id) {
