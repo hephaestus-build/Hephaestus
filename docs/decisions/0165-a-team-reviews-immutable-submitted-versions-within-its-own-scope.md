@@ -4,11 +4,11 @@
 **Date:** 2026-11-27
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md)
+**Amends:** [ADR 0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md), [ADR 0160](0160-a-sealed-review-hands-off-to-the-mentor.md)
 
 **Builds on:** [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md), [ADR 0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md), [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md)
 
-**Relates to:** [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md), [ADR 0160](0160-a-sealed-review-hands-off-to-the-mentor.md), [ADR 0163](0163-the-mentor-builds-a-context-packet-from-current-source-refs.md), [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md)
+**Relates to:** [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md), [ADR 0163](0163-the-mentor-builds-a-context-packet-from-current-source-refs.md), [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md)
 
 ## Context
 
@@ -114,3 +114,77 @@ Or teams need evidence that a text citation cannot carry.
   A state names which version of a changing resource is meant.
   This ADR stores the version, and the server derives the selector.
   Thus no reader must recover the state from the source.
+
+## Update — 2026-11-27: the team experience is a Team Mentor
+
+The maintainer decided that January 2027 delivers a Team Mentor.
+A team does not only read observations: the mentor of [ADR 0160](0160-a-sealed-review-hands-off-to-the-mentor.md) words guidance over them, under the team scope of [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md).
+This update replaces decisions 11 and 12, and the second, fourth and fifth points under What this does not decide.
+Decisions 1 to 10 and 13 stay.
+
+### Replaced decisions
+
+**Decision 11: each team seal chooses once.** A sealed review of a team item chooses `TEAM` or `OBSERVATIONS` at seal, and the server stores the reason. Nothing chooses again. `WORK_PLACE` does not apply, because a team item has no work place at a provider.
+
+- `TEAM` applies to a requested review in an enabled workspace, when the conditions for a model run hold. These include the workspace's model assignment and payer, and the AI choice rule below.
+- Otherwise the seal records `OBSERVATIONS`. It starts no composer and writes no mailbox event. The team reads the observations and the reason.
+- Under both values, the observations stay available as evidence. A person reads them in the anchored view and in a host.
+- They also appear under **What Hephaestus used**.
+- `TEAM` is a new producer value beside those of ADR 0160 decision 1. A review of a person's work keeps the values of that decision.
+
+**Decision 12: one composition pipeline words team guidance.** The mentor's review handler of ADR 0160 alone orders and words guidance over sealed observations. Its scope is typed: an account, or a team project in a workspace. There is no second composer, and no host owns a review, a chat or state.
+
+- A `TEAM` seal writes one `REVIEW_SEALED` event under the team's key. Retries, delivery keys and readback follow ADR 0160 and [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md).
+- Practice Review still owns applicability, coverage, observations and the seal. The composer creates no evidence and changes no result.
+- The composer reads the item's sealed rows, its earlier review, the team's decisions and the team place. It never reads a personal record.
+- It writes team guidance and the team place only. It writes no work comment, contact or Slack message.
+- Team guidance takes the `TEAM` audience that ADR 0160 reserves. Only current members of that team read it (ADR 0162 decision 4).
+- Each read, send and model load checks current team membership. A non-member gets the same refusal as for a missing record.
+- The reader sees what Hephaestus used ([ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md) decision 8).
+
+### The team place
+
+- Each team project has one mentoring place in the app, with threads for its reviews and topics.
+- The mentor module owns the threads and messages. The project module owns membership and team decisions.
+- A member asks under their own identity. The question enters the mentor's intake with the team as owner and the member as requester.
+- An answer cites an observation with its anchor and proposes an option. After a new review, it revisits a recorded decision.
+- The mentor can propose a decision. Only a member records one, by an explicit act (decision 8).
+- The place gives no grade or score and assigns no person. It never claims that the group agreed because one person acted.
+- A person can bring authorized team evidence into their personal conversation by reference. The server checks access at each load.
+- Nothing personal moves into the team place.
+
+### Withdrawal and erasure
+
+- Withdrawal of a version also hides the guidance and replies that cite it, and marks them stale. No later composition reads them.
+- Erasure of a member removes their messages. It also redacts replies and guidance that quote them. A decision that they recorded stays without their name.
+- Each new store ships in three releases: tables and deleters, then erasure registration, then the first writer.
+
+### Open until the maintainer and the course owner decide
+
+The stricter rule applies until each is decided.
+
+- **Staff.** A workspace admin sees that a team exists, its members and its counts, but no message, guidance or version.
+- **New members.** They see the team place from the time they join, with the current decisions and guidance.
+- **AI choice.** `TEAM` needs an explicit AI choice that admits the model from each current member. One refusal or missing answer gives `OBSERVATIONS`.
+- **Review under a refusal.** It is open whether Practice Review can process a team item when a member refuses AI. This needs a decision before the first writer.
+- **Erasure against team custody.** The erasure rule above applies.
+- **Retention.** It is the shortest option.
+
+### Consequences of this update
+
+- Good: personal and team mentoring share one pipeline, one retry contract and one provenance rule.
+- Bad: January depends on the mentor runtime, its erasure gates and the release sequence.
+- Bad: under the stricter AI rule, one member's refusal leaves the whole team without the mentor.
+- This replaces the earlier consequence about a team that reads observations until a composition exists.
+
+### Confirmation of this update
+
+Not enforced yet. Before the team mentor is enabled, tests must add these checks:
+
+- A non-member gets the same refusal for the team place, a thread, an observation and a host.
+- A canary personal goal and message reach neither the team place nor a team composer request.
+- After a member leaves, their next personal load returns no team evidence.
+- A retried seal gives one team revision.
+- Withdrawal hides the guidance and replies that cite the version.
+- A member's refusal makes the next seal record `OBSERVATIONS` with its reason.
+- No team step writes to Slack.

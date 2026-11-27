@@ -50,3 +50,20 @@ Revisit the conversation view if teams repeatedly need past decisions that the p
 ## Sources
 
 - [Järvelä et al., socially shared regulation of learning](https://doi.org/10.1007/s11412-016-9238-2) motivates making team planning, monitoring and adaptation visible.
+
+## Update — 2026-11-27: the team mentor starts in January 2027
+
+The maintainer decided that January 2027 delivers a Team Mentor.
+This update replaces decision 7.
+[ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) states how a review of a team item hands off to the mentor.
+
+**Decision 7 now reads:** the team record, the TEAM producer, TEAM guidance and team decisions are enabled from January 2027 for flagged workspaces.
+
+- They ship dark in the 1.0 release candidates. Stable 1.0 does not depend on them.
+- Team goals and team commitments stay later work.
+- The channel rules of decision 6 are unchanged. Shared channels stay disabled until the audience proof passes.
+- The team mentor writes to no Slack channel in January. Starting project updates stays outside 1.0.
+- ADR 0165 is the decision for submitted work without a connected repository.
+
+A team decision is the record of ADR 0165 decision 8, one for each problem.
+It is not a commitment, so the commitment store of decision 3 holds no team decision.
