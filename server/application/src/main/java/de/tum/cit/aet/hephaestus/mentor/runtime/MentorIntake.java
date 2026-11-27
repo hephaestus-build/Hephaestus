@@ -200,7 +200,9 @@ public class MentorIntake implements MentorIngress {
         } else if (envelope.kind() == IngressKind.MESSAGE_EDITED
                 && newer(envelope.message().revision(), source.revision())) {
             var _ = rows.raiseRevision(source.id(), account, envelope.message().revision());
-            if (change.reason() == Reason.UNAUTHORIZED && request != null && !request.state().settled()) {
+            if (change.reason() == Reason.UNAUTHORIZED
+                    && request != null
+                    && !request.state().settled()) {
                 var _ = rows.fenceDelivery(request.id(), account, DeliveryFence.SOURCE_EDITED.name());
             }
         }
