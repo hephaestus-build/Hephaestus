@@ -48,6 +48,9 @@ public enum ActionKind {
     /** A durable Slack DM notice, identified in Slack metadata and retried only after proven absence. */
     SLACK_NOTICE(false, false),
 
+    /** One immutable, authorized Mentor effect on Slack. A possible write is reconciled in its original location. */
+    MENTOR_EFFECT(false, false),
+
     /** Joins a registered public Slack channel; membership provides readback after an unknown outcome. */
     SLACK_JOIN(false, false),
 

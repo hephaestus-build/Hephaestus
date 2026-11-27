@@ -59,10 +59,15 @@ class ActionStore {
 
         /** The action as its adapter learns it, when it ended. */
         Optional<ActionEnded> ended() {
+            return ended(null);
+        }
+
+        Optional<ActionEnded> ended(@Nullable String decisionCode) {
             ActionStopReason stop = reason;
             return stop == null
                     ? Optional.empty()
-                    : Optional.of(new ActionEnded(id, workspaceId, kind, idempotencyKey, state, stop, readbackRef));
+                    : Optional.of(new ActionEnded(
+                            id, workspaceId, kind, idempotencyKey, state, stop, readbackRef, decisionCode));
         }
     }
 
@@ -227,7 +232,10 @@ class ActionStore {
             case ActionResult.Abandoned abandoned -> Optional.empty();
         };
         Optional<Settled> settled = row.map(ActionStore::settled);
-        settled.flatMap(Settled::ended).ifPresent(onEnd);
+        String decisionCode = result instanceof ActionResult.Cancelled cancelled && cancelled.decision() != null
+                ? cancelled.decision().name()
+                : null;
+        settled.flatMap(ended -> ended.ended(decisionCode)).ifPresent(onEnd);
         if (evaluation != null && settled.isPresent()) {
             Settled outcome = settled.get();
             if (outcome.state() == ActionState.CANCELLED && outcome.reason() != null)
