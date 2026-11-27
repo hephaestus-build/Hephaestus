@@ -298,15 +298,19 @@ public class SlackMessageService implements AutoCloseable {
             return readMatches(
                     message -> {
                         Message.Metadata metadata = message.getMetadata();
-                        if (metadata == null || metadata.getEventType() == null
+                        if (metadata == null
+                                || metadata.getEventType() == null
                                 || metadata.getEventType().isBlank()) {
                             // Slack can identify a bot post by bot_id alone. Missing author or metadata
                             // may hide the write whose receipt we lost.
                             String author = message.getUser();
                             String ts = message.getTs();
-                            boolean possibleAuthor = author == null || author.isBlank() || bot.userId().equals(author);
+                            boolean possibleAuthor = author == null
+                                    || author.isBlank()
+                                    || bot.userId().equals(author);
                             return possibleAuthor
-                                            && (SlackTs.toEpochMicros(ts) == null || SlackTs.compare(ts, target.sourceTs()) > 0)
+                                            && (SlackTs.toEpochMicros(ts) == null
+                                                    || SlackTs.compare(ts, target.sourceTs()) > 0)
                                     ? Candidate.INCOMPLETE
                                     : Candidate.IGNORE;
                         }

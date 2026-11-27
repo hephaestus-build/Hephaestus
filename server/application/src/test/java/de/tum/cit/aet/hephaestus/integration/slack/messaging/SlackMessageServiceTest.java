@@ -613,7 +613,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
                     {"ok":true,"has_more":false,"messages":[{"bot_id":"B1","ts":"110.000001"}]}
                     """));
             api.start();
-            var config = SlackMessageService.nativeConfig(new SlackProperties(api.url("/").toString()));
+            var config = SlackMessageService.nativeConfig(
+                    new SlackProperties(api.url("/").toString()));
             try (var local = serviceWithLocalSlack(config)) {
                 assertThat(bind(local, null).readPost("opaque", 1))
                         .isEqualTo(new SlackMessageService.Matches(List.of(), true));
