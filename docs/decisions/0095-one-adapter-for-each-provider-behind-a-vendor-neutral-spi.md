@@ -10,6 +10,8 @@
 
 **Relates to:** [ADR 0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md), [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md)
 
+**Amended by:** [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) (proposed: capture packages beside the list in decision 1)
+
 ## Context
 
 Hephaestus connects to GitHub, GitLab, Slack and Outline. Before ADR 0015, each provider had its own route, handler registry and credential columns, and other modules imported provider classes.
