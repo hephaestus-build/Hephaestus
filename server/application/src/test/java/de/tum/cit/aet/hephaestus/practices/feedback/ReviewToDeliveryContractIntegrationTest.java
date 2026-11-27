@@ -965,7 +965,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */
-    private List<Map<String, Object>> mentorEvents(ClaimedReview review) {
+    private List<Map<String, @Nullable Object>> mentorEvents(ClaimedReview review) {
         return Objects.requireNonNull(transactions.execute(status -> {
             owners.ofJob(review.developerId());
             return jdbc.queryForList(
