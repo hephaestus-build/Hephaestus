@@ -134,6 +134,46 @@ erDiagram
         VARCHAR(16) edited_in "NOT NULL"
     }
 
+    PracticeAdvice {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT person_account_id FK,UK "NOT NULL"
+        BIGINT practice_id FK,UK "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(24) retire_reason
+        TIMESTAMPTZ retired_at
+        TIMESTAMPTZ dismissed_at
+        ARRAY dismissed_items
+        BIGINT version "NOT NULL"
+        INTEGER latest_revision
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    PracticeAdviceRevision {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT person_account_id FK,UK "NOT NULL"
+        UUID advice_id FK,UK "NOT NULL"
+        INTEGER number UK "NOT NULL"
+        TEXT text
+        UUID review_id "NOT NULL"
+        INTEGER cited_count "NOT NULL"
+        INTEGER source_count "NOT NULL"
+        TIMESTAMPTZ written_at "NOT NULL"
+        TIMESTAMPTZ stale_at
+    }
+
+    PracticeAdviceSource {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        BIGINT person_account_id FK "NOT NULL"
+        UUID revision_id FK,UK "NOT NULL"
+        UUID result_id FK,UK "NOT NULL"
+        UUID problem_id FK,UK
+        BOOLEAN cited "NOT NULL"
+        INTEGER ordinal "NOT NULL"
+    }
+
     PracticeGroup {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -435,6 +475,13 @@ erDiagram
     FeedbackCopy ||--o{ FeedbackThreadResolution : has
     Workspace ||--o{ Practice : has
     PracticeGroup ||--o{ Practice : has
+    Account ||--o{ PracticeAdvice : has
+    Practice ||--o{ PracticeAdvice : has
+    Workspace ||--o{ PracticeAdvice : has
+    PracticeAdvice ||--o{ PracticeAdviceRevision : has
+    Problem ||--o{ PracticeAdviceSource : has
+    Result ||--o{ PracticeAdviceSource : has
+    PracticeAdviceRevision ||--o{ PracticeAdviceSource : has
     Workspace ||--o{ PracticeGroup : has
     Account ||--o{ PracticeVersion : has
     Practice ||--o{ PracticeVersion : has
