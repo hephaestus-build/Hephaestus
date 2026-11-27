@@ -95,6 +95,13 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
             nativeQuery = true)
     List<UUID> lockInIdOrder(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
 
+    /** Shares the key lock of each result in id order, so a deletion of one waits for the advice write that cites it. */
+    @Query(
+            value = "SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.id=ANY(CAST(:ids AS uuid[]))"
+                    + " ORDER BY r.id FOR KEY SHARE",
+            nativeQuery = true)
+    List<UUID> shareKeysInIdOrder(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
     /** The results among {@code ids} that no feedback cites, read after the caller locked them. */
     @Query(
             value = "SELECT r.id FROM result r WHERE r.workspace_id=:workspaceId AND r.id=ANY(CAST(:ids AS uuid[]))"

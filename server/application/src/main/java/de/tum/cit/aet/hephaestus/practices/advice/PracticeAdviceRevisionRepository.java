@@ -27,4 +27,23 @@ public interface PracticeAdviceRevisionRepository extends JpaRepository<Practice
                     + " WHERE workspace_id=:workspaceId AND id=ANY(CAST(:ids AS uuid[]))",
             nativeQuery = true)
     int redact(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
+    /** A new revision, written in the transaction that holds its entry's lock. */
+    @Modifying
+    @Query(
+            value =
+                    "INSERT INTO practice_advice_revision (id, workspace_id, person_account_id, advice_id, number, text,"
+                            + " review_id, cited_count, source_count, written_at) VALUES (:id, :workspaceId, :accountId,"
+                            + " :adviceId, :number, :text, :reviewId, :citedCount, :sourceCount, clock_timestamp())",
+            nativeQuery = true)
+    int insertWritten(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("accountId") long accountId,
+            @Param("adviceId") UUID adviceId,
+            @Param("number") int number,
+            @Param("text") String text,
+            @Param("reviewId") UUID reviewId,
+            @Param("citedCount") int citedCount,
+            @Param("sourceCount") int sourceCount);
 }

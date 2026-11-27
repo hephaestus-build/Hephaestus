@@ -151,6 +151,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
             // Repository native SQL methods require individual @Param annotations and cannot use
             // parameter objects. These are atomic upsert operations that map directly to DB columns.
             Set<String> nativeSqlRepositoryMethods = Set.of(
+                    "PracticeAdviceRevisionRepository.insertWritten",
+                    "PracticeAdviceSourceRepository.insertSource",
                     "AgentActionRepository.insertAdmitted",
                     "AgentActionRepository.insertExecuting",
                     "ActivityEventRepository.insertIfAbsent",
