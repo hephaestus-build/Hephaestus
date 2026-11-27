@@ -254,25 +254,20 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
     /** Review probe: a read that Slack refused proves nothing, so it must not end the once-only notice. */
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void probeAFailedReadbackIsReadAgainWithinTheDeadline(boolean writeStarted) {
+    void shouldRetryFailedReadbackAndPreserveAnyWriteMarker(boolean writeStarted) {
         var adapter = ready();
         when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
-        // What the gateway throws for a 429 beyond its budget, an HTTP 5xx or a timeout.
         when(bound.readPost(MARKER, 3)).thenThrow(new SlackSendException(7L, "D1", "transport_failure"));
 
-        // A possible earlier write keeps its marker (Reread). A fresh attempt wrote nothing.
+        Duration delay = Duration.ofSeconds(2);
         assertThat(adapter.execute(attempt(writeStarted)))
-                .isInstanceOfAny(
-                        writeStarted
-                                ? new Class<?>[] {ActionResult.Reread.class}
-                                : new Class<?>[] {
-                                    ActionResult.Defer.class, ActionResult.Retry.class, ActionResult.Reread.class
-                                });
+                .isEqualTo(writeStarted ? new ActionResult.Reread(delay) : new ActionResult.Retry(delay));
+        verify(bound, never()).post(anyList(), anyString(), anyString(), any());
     }
 
     /** Review probe: a post that failed before its send boundary wrote nothing and was refused by nobody. */
     @Test
-    void probeAConnectionFailureBeforeAdmissionIsNotAPermanentRefusal() {
+    void shouldRetryWhenSlackConnectionFailsBeforeAdmission() {
         var adapter = ready();
         when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
         readyToPost();
@@ -280,7 +275,20 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
         when(bound.post(anyList(), anyString(), eq(MARKER), any()))
                 .thenThrow(new SlackSendException(7L, "D1", "transport_failure"));
 
-        assertThat(adapter.execute(attempt(false))).isInstanceOfAny(ActionResult.Defer.class, ActionResult.Retry.class);
+        assertThat(adapter.execute(attempt(false))).isEqualTo(new ActionResult.Retry(Duration.ofSeconds(2)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {12_345, 120_000})
+    void shouldRespectTheReadbackRateLimitWithinTheOriginalDeadline(long retryAfterMillis) {
+        var adapter = ready();
+        when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
+        when(bound.readPost(MARKER, 3)).thenThrow(new SlackSendException(7L, "D1", "ratelimited", retryAfterMillis));
+
+        assertThat(adapter.execute(attempt(true))).isEqualTo(retryAfterMillis == 12_345
+                ? new ActionResult.Reread(Duration.ofSeconds(13))
+                : new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
+        verify(bound, never()).post(anyList(), anyString(), anyString(), any());
     }
 
     private MentorSlackEffectAdapter ready() {

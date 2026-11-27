@@ -150,7 +150,10 @@ class MentorSlackEffectAdapter implements ActionAdapter {
             if (found.ts().size() == 1) return new ActionResult.Done(found.ts().getFirst());
             if (!found.ts().isEmpty()) return unconfirmed();
         } catch (SlackSendException unavailable) {
-            return unconfirmed();
+            Duration delay = retryDelay(unavailable);
+            if ((!unavailable.isRateLimited() && !unavailable.isOutcomeUnknown()) || !canWait(intent.deadline(), delay))
+                return unconfirmed();
+            return attempt.writeStarted() ? new ActionResult.Reread(delay) : new ActionResult.Retry(delay);
         }
         if (attempt.writeStarted()) {
             return canWait(intent.deadline(), RETRY_DELAY)
@@ -223,9 +226,7 @@ class MentorSlackEffectAdapter implements ActionAdapter {
                 return new ActionResult.Cancelled(ActionStopReason.SILENCED);
             }
             if (failure.isRateLimited()) {
-                Duration after = Duration.ofMillis(failure.retryAfterMillis())
-                        .plusMillis(999)
-                        .truncatedTo(ChronoUnit.SECONDS);
+                Duration after = retryDelay(failure);
                 if (!canWait(allowed.intent().deadline(), after)) {
                     return new ActionResult.Cancelled(ActionStopReason.EXPIRED);
                 }
@@ -233,10 +234,18 @@ class MentorSlackEffectAdapter implements ActionAdapter {
                         ? new ActionResult.Retry(after)
                         : new ActionResult.Defer(after);
             }
-            return failure.isOutcomeUnknown() && status.get() == WireDecision.ADMITTED
-                    ? new ActionResult.Reread(RETRY_DELAY)
-                    : new ActionResult.Failed(ActionStopReason.REJECTED);
+            if (!failure.isOutcomeUnknown()) return new ActionResult.Failed(ActionStopReason.REJECTED);
+            boolean canRetry = canWait(allowed.intent().deadline(), RETRY_DELAY);
+            if (status.get() == WireDecision.ADMITTED)
+                return canRetry ? new ActionResult.Reread(RETRY_DELAY) : unconfirmed();
+            return canRetry ? new ActionResult.Retry(RETRY_DELAY) : new ActionResult.Cancelled(ActionStopReason.EXPIRED);
         }
+    }
+
+    private static Duration retryDelay(SlackSendException failure) {
+        return failure.isRateLimited()
+                ? Duration.ofMillis(failure.retryAfterMillis()).plusMillis(999).truncatedTo(ChronoUnit.SECONDS)
+                : RETRY_DELAY;
     }
 
     private boolean canWait(Instant deadline, Duration delay) {

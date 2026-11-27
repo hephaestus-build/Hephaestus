@@ -585,6 +585,19 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPreserveRetryAfterWhenBoundReadbackIsThrottledPastItsBudget() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.enqueue(new MockResponse.Builder().code(429).addHeader("Retry-After", "121").build());
+            api.start();
+            try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
+                assertThatThrownBy(() -> bind(local, null).readPost("opaque", 1))
+                        .isInstanceOfSatisfying(SlackSendException.class,
+                                error -> assertThat(error.retryAfterMillis()).isEqualTo(121_000L));
+            }
+        }
+    }
+
+    @Test
     void shouldNotTreatAMatchingMarkerWithoutATimestampAsAbsent() throws Exception {
         try (MockWebServer api = new MockWebServer()) {
             api.setDispatcher(new Dispatcher() {
