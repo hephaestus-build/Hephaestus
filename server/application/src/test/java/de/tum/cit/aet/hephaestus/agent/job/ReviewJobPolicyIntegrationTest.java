@@ -1114,10 +1114,15 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var pass = admission.pass(reviews);
 
         assertThat(pass.admits(due(wide))).isTrue();
-        assertThat(pass.admits(due(narrow))).as("the oldest gets the pool's place in this pass").isFalse();
+        assertThat(pass.admits(due(narrow)))
+                .as("the oldest gets the pool's place in this pass")
+                .isFalse();
         assertThat(claimLeased(wide, pool.claims())).isPresent();
         var admitted = jobs.findById(wide.getId()).orElseThrow();
-        assertThat(admitted.getConfigSnapshot().path(ReviewPoolAdmission.SESSION_LIMIT).asInt()).isEqualTo(3);
+        assertThat(admitted.getConfigSnapshot()
+                        .path(ReviewPoolAdmission.SESSION_LIMIT)
+                        .asInt())
+                .isEqualTo(3);
         assertThat(admission.pass(reviews).admits(due(narrow))).isFalse();
 
         // This changes the room after the wide review's claim, before it prepares.
@@ -1129,7 +1134,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
             jdbc.update("UPDATE review_job SET status='COMPLETED', completed_at=now() WHERE id=?", running.getId());
         });
         jdbc.update("UPDATE review_job SET started_at=clock_timestamp()-interval '2 minutes' WHERE id=?", wide.getId());
-        assertThat(admission.sessionLimit(pool.poolId(), admitted)).as("preparation keeps its reservation").isEqualTo(3);
+        assertThat(admission.sessionLimit(pool.poolId(), admitted))
+                .as("preparation keeps its reservation")
+                .isEqualTo(3);
         assertThat(admission.pass(reviews).admits(due(narrow))).isTrue();
         assertThat(claimLeased(narrow, pool.claims())).isPresent();
     }
@@ -1257,6 +1264,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLetNoNarrowerReviewPassAWideReviewThatThePoolHolds() {
         var pool = poolScenario();
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
         var wide = queued(pool.selected());
         withPractices(wide, 8);
         var narrow = queued(pool.selected());
@@ -1282,12 +1290,16 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         });
         assertThat(admission.pass(reviews).admits(due(wide))).isTrue();
         var claimed = claimLeased(wide, pool.claims()).orElseThrow().job();
-        assertThat(claimed.getConfigSnapshot().path(ReviewPoolAdmission.SESSION_LIMIT).asInt()).isEqualTo(6);
+        assertThat(claimed.getConfigSnapshot()
+                        .path(ReviewPoolAdmission.SESSION_LIMIT)
+                        .asInt())
+                .isEqualTo(6);
     }
 
     @Test
     void shouldLeaveRoomForOtherMeasurementsWhenPreparingALegacyClaim() {
         var pool = poolScenario();
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
         var queued = queued(pool.selected());
         var started = Instant.now().minus(Duration.ofMinutes(2));
         var legacy = runningMeasurement(pool, queued, started, 8);
@@ -1295,7 +1307,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var admitted = jobs.findById(legacy.getId()).orElseThrow();
         var admission = SandboxReviewClaims.poolAdmission(context, pool.pools());
 
-        assertThat(admitted.getConfigSnapshot().has(ReviewPoolAdmission.SESSION_LIMIT)).isFalse();
+        assertThat(admitted.getConfigSnapshot().has(ReviewPoolAdmission.SESSION_LIMIT))
+                .isFalse();
         assertThat(admission.sessionLimit(pool.poolId(), admitted)).isEqualTo(4);
     }
 

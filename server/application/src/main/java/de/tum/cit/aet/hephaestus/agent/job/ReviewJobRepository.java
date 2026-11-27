@@ -179,7 +179,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
         FROM llm_call_pool p
         LEFT JOIN LATERAL (
           SELECT j.id, j.started_at,
-        """ + PRACTICES + " AS practices, CAST(j.config_snapshot->>'" + ReviewPoolAdmission.SESSION_LIMIT + """
+        """ + PRACTICES + " AS practices, CAST(j.config_snapshot->>'" + ReviewPoolAdmission.SESSION_LIMIT
+                    + """
         ' AS integer) AS "sessionLimit"
           FROM review_job j
           JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id

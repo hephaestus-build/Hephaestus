@@ -259,7 +259,10 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 files,
                 mock(AgentRunAuthority.class),
                 new ReviewPoolAdmission(
-                        jobs, mock(LlmCallPools.class), mock(ReviewAssignmentProgress.class), new SimpleMeterRegistry()));
+                        jobs,
+                        mock(LlmCallPools.class),
+                        mock(ReviewAssignmentProgress.class),
+                        new SimpleMeterRegistry()));
     }
 
     private ReviewAttemptPreparation.PreparedSandbox prepare(JobEvidenceFiles files) {

@@ -192,7 +192,10 @@ public class ReviewPoolAdmission implements RunAdmission {
     }
 
     private static List<UUID> runningIds(List<ReviewJobRepository.PoolLoad> load) {
-        return load.stream().map(ReviewJobRepository.PoolLoad::getJobId).filter(Objects::nonNull).toList();
+        return load.stream()
+                .map(ReviewJobRepository.PoolLoad::getJobId)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private static long reserved(
