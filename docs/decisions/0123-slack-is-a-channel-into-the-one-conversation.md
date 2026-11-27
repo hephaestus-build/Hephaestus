@@ -1,6 +1,6 @@
 # ADR 0123: Slack is a channel into the one conversation
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0161](0161-a-verified-slack-dm-can-use-personal-context-with-a-grant.md)
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
