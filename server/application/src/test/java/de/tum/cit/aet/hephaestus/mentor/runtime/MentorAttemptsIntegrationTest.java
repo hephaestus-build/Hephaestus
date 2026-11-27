@@ -149,7 +149,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(second.leaseToken()).isNotEqualTo(first.leaseToken());
         observe(second);
 
-        assertThat(attempts.renew(first, LEASE)).isFalse();
+        assertThat(renew(first, LEASE)).isFalse();
         assertThat(current(credential(first))).isFalse();
         assertThat(current(credential(second))).isTrue();
         assertThat(attempt(request)).containsEntry("claims", 2);
@@ -360,7 +360,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
         admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
         assertThat(current(held)).as("the version moved").isFalse();
-        assertThat(attempts.renew(lease, LEASE)).as("the version moved").isFalse();
+        assertThat(renew(lease, LEASE)).as("the version moved").isFalse();
     }
 
     @Test
@@ -373,7 +373,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
         admit(IngressKind.CONTROL_STOP, "e8", message, "1700000000.000100");
         assertThat(current(credential(lease))).isFalse();
-        assertThat(attempts.renew(lease, LEASE)).isFalse();
+        assertThat(renew(lease, LEASE)).isFalse();
     }
 
     /** Renew: a lease never runs past the attempt's work deadline, and a lapsed lease cannot be renewed. */
@@ -385,14 +385,14 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 seconds' WHERE id = ?",
                 lease.attemptId());
 
-        assertThat(attempts.renew(lease, Duration.ofMinutes(10))).isTrue();
+        assertThat(renew(lease, Duration.ofMinutes(10))).isTrue();
         assertThat(owner.queryForObject(
                         "SELECT leased_until <= deadline FROM mentor_attempt WHERE id = ?",
                         Boolean.class,
                         lease.attemptId()))
                 .isTrue();
         lapse(lease);
-        assertThat(attempts.renew(lease, LEASE)).isFalse();
+        assertThat(renew(lease, LEASE)).isFalse();
         assertThat(requestState(request)).isEqualTo("RUNNING");
     }
 
@@ -461,6 +461,11 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 CONNECTION,
                 PayerKind.WORKSPACE,
                 workspace);
+    }
+
+    private boolean renew(AttemptLease lease, Duration duration) {
+        return Objects.requireNonNull(
+                new TransactionTemplate(transactions).execute(status -> attempts.renew(lease, duration)));
     }
 
     private boolean current(AttemptCredential credential) {
