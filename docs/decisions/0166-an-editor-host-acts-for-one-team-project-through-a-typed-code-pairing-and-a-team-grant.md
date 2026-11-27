@@ -29,7 +29,7 @@ Each host must not get its own sign-in.
 ## Considered options
 
 1. **A new kind of installed-client session (ADR 0048).** It would reuse the revocation of account sessions, but it would act as the account in every workspace. A team-scoped credential would then depend on a route check, not on its own store. Rejected.
-2. **The device authorization grant (RFC 8628) through Spring Authorization Server.** It is a standard, but ADR 0088 rule 2 keeps Hephaestus free of an authorization server, and it adds stores that no other client needs. We take its typed-code design, not the server.
+2. **The device authorization grant (RFC 8628) as a second flow of an authorization server.** It is a standard. But the authorization server of ADR 0110 serves MCP clients with a redirect and a workspace grant only, and ADR 0088 rule 2 keeps a general one out. The device grant would add a token family that no other client needs. We take its typed-code design, not the server.
 3. **A token that the member copies into the plugin.** It skips the browser sign-in, it can be long-lived, and it is copied by hand. Rejected, as in ADR 0048 option 3.
 4. **A typed-code pairing that issues a team grant in its own store (chosen).**
 
@@ -49,9 +49,10 @@ Each host must not get its own sign-in.
    - Approval is a cookie request with the CSRF token. A code is approved at most once.
 4. **Grant.**
    - The host redeems the approved request once, with its code verifier. The pairing request ends there.
-   - The grant binds one account, one workspace and one team project. It allows two capabilities: submit, and read the team's own reviews.
+   - In the same transaction that issues the grant, the server checks again that the account is active and a current member of the team and of the workspace.
+   - The grant binds one account, one workspace and one team project. It allows submit, read the team's own reviews, and end itself.
    - The grant lives 60 minutes. It has no refresh. The host keeps it in memory only: never in plugin storage, the file, a widget or a model.
-5. **Every call rechecks the team.** Each host API request checks that the grant is active and that the account is a current member of the team and of the workspace. A failed check answers like an unknown team: 404.
+5. **Every call rechecks the account and the team.** Each host API request checks that the grant is active, that the account is active, and that it is a current member of the team and of the workspace. A failed membership check answers like an unknown team: 404. An ended grant or an account that is not active answers 401.
 6. **Revocation.** A grant ends when:
    - the member revokes it in Settings, which lists the active grants;
    - the member signs out everywhere;
@@ -59,9 +60,13 @@ Each host must not get its own sign-in.
    - the account is erased, or it leaves the team or the workspace;
    - the host disconnects it.
 
+   The same events, except a disconnect, refuse a pairing request of that account that is `PENDING` or `APPROVED`. A grant can thus never be issued after the event.
    The grant store has no link to account sessions, so each of these events is wired to the grant store and tested on its own.
-7. **Cross-origin rule.** The host API is one path prefix, `/api/host/v1/`. Its CORS rule allows any origin, also `null`, without credentials. It accepts only `Authorization: Bearer`. A request that carries the session cookie is refused. The origin proves nothing.
-8. **Limits.** Pairing creation, code entry and grant redemption are rate-limited. Code entry has an attempt limit for each pairing request and for each account.
+7. **Cross-origin rule.** The host API is one path prefix, `/api/host/v1/`. Pairing creation and redemption are under it too, and need no credential.
+   - Its CORS rule allows any origin, also `null`, without credentials.
+   - It accepts a credential only as `Authorization: Bearer`. A request that carries the session cookie is refused.
+   - The origin proves nothing. The approval page `/pair` is part of the web app and uses the account session.
+8. **Limits.** Pairing creation, code entry and grant redemption are rate-limited. Code entry also has an attempt limit for each account. The approval page receives only the typed code, so a wrong code matches no pairing request and counts against the account.
 9. **Person data.** The pairing and grant store holds person data. It follows the rolling release rule: table and deleters in one release, erasure registration in the next, the first writer after that.
 10. **ADR 0048 is amended only for installed clients without a redirect.** Such a client pairs by typed code and gets a team grant under this decision. Installed clients with a redirect keep ADR 0048 unchanged.
 
@@ -71,8 +76,10 @@ Each host must not get its own sign-in.
 | --- | --- | --- |
 | `PENDING` | the member types the right code and approves one team | `APPROVED` |
 | `PENDING` | the member refuses | `REFUSED` |
-| `PENDING` | the code is typed wrong too often | `REFUSED` |
+| `PENDING` | the host tries to redeem | unchanged; the answer says that approval is pending |
 | `PENDING` or `APPROVED` | 5 minutes pass | `EXPIRED` |
+| `PENDING` or `APPROVED` | a revocation event of rule 6 for the account | `REFUSED`; nothing is issued |
+| `APPROVED` | at redemption, the account is not active or not a current member of the team | `REFUSED`; nothing is issued |
 | `APPROVED` | the host redeems with the right verifier | `REDEEMED`, and one grant is issued |
 | `APPROVED` | the host presents a wrong verifier | `REFUSED`; nothing is issued |
 | `REDEEMED`, `REFUSED` or `EXPIRED` | any further approval or redemption | unchanged; refused |
@@ -82,7 +89,7 @@ Each host must not get its own sign-in.
 | Threat | Control |
 | --- | --- |
 | An attacker sends a victim their own pairing request (RFC 8628 § 5.4) | The code is typed, never prefilled. The page shows the host kind and the time. The request lives 5 minutes. The grant reaches one team project only |
-| Code guessing | 8 characters, an attempt limit for each request and each account, and a rate limit |
+| Code guessing | 8 characters, an attempt limit for each account, and a rate limit |
 | A host iframe has origin `null` | A separate CORS rule for the host API: any origin, no credentials, bearer only, and the session cookie is refused |
 | Token theft | Memory only, 60 minutes, one team project, membership rechecked at every call |
 | One credential used as the other | Separate stores and separate checks, with a refusal test in each direction |
@@ -102,7 +109,7 @@ The implementation pull requests add these tests. Until then, review against thi
 - A pairing state table test: one test for each row of the table above.
 - A grant authority test: an outsider, a removed member, an expired grant and a revoked grant read nothing, and a grant for team project A reads nothing of team project B.
 - A credential separation test: the host API refuses an account session as a cookie and as a bearer, and a route outside the host API refuses a team grant.
-- A revocation test for each event in rule 6.
+- A revocation test for each event in rule 6, both for an issued grant and for a pairing request that is approved but not yet redeemed.
 - The erasure inventory test covers the pairing and grant store.
 
 ## Revisit trigger
