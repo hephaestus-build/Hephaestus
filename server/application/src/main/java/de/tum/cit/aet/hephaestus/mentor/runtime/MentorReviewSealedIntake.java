@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.CommittedConsentQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class MentorReviewSealedIntake implements MentorReviewIntake {
     private final PersonDataWriteFence fence;
+    private final PersonDataCopyFence copies;
     private final CommittedConsentQuery consents;
     private final AccountMembershipQuery memberships;
     private final OwnerScope owners;
@@ -36,6 +38,8 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
     @Override
     public Outcome admit(SealedReview sealed) {
         long account = sealed.accountId();
+        // The seal holds the copy fence shared, so an erasure that starts now waits for this event's commit.
+        if (!copies.heldForCapture()) throw new IllegalStateException("A sealed review's event needs the seal's copy fence");
         if (!fence.holdForAccountWrite(account)) return new Outcome.Refused(Refusal.OWNER_REFUSED);
         // The fence share-locks the account row, so the committed values hold until the seal commits. A cached account
         // that the seal loaded earlier could predate a withdrawn choice, so this reads the row itself.

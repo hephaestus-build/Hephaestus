@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -210,6 +211,14 @@ public class ReviewJobClaimService {
             jobRepository.save(job);
             jobTelemetry.claimRefused("person_data_erased");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
+        }
+
+        // A seal that chose another producer than LEGACY handed its review off and composes nothing. A lost lease that
+        // queued it again ends it here, before any model, budget or composition check.
+        if (ResultAdmissionService.isAdmitted(job) && job.getFeedbackProducer() != FeedbackProducer.LEGACY) {
+            job.completeHandedOff(Instant.now());
+            jobRepository.save(job);
+            return new TerminalClaim(job, ReviewJobStatus.COMPLETED);
         }
 
         // Queued again after its results were admitted: a new attempt would capture the work

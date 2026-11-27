@@ -118,6 +118,15 @@ class FeedbackProducerSelectionTest {
     }
 
     @Test
+    void shouldTreatAPracticeWithNoRoleAsARouteWithACutover() {
+        // A result with no role has no private destination on LEGACY either: the page and the conversation need a role.
+        assigned(assignment(null, null));
+        assertThat(choose(review(PULL_REQUEST, ReviewOrigin.REQUEST)))
+                .isEqualTo(choice(FeedbackProducer.WORK_PLACE, FeedbackProducerReason.NO_LINKED_AUTHOR));
+        verify(intake, never()).admit(any());
+    }
+
+    @Test
     void shouldGoToTheMentorForTheOneLinkedAuthorThatTheIntakeAdmits() {
         assigned(assignment(AUTHOR, AboutRole.AUTHOR), assignment(null, null));
 

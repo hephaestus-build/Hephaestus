@@ -83,7 +83,7 @@ Attempts that lose their holder before they return a result have their own `agen
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
-`agent_job_work_place_handoff_total` counts each seal of an item review. A trial is not counted. A second seal of the same review counts as `already_written`:
+`agent_job_work_place_handoff_total` counts each seal of an item review. A trial is not counted. A second seal of a review whose copy was written counts as `already_written`:
 
 | `outcome` | `reason` | Meaning |
 | --- | --- | --- |

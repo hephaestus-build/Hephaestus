@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -132,9 +133,13 @@ public class ReviewRunKind implements AgentRunHandler {
     public static final String ATTEMPT_OF_RUN =
             "(CASE WHEN r.state = 'QUEUED' THEN r.lease_epoch ELSE r.lease_epoch - 1 END)";
 
-    /** Whether an admitted attempt goes on to the run that composes its feedback: a trial never composes (ADR 0118). */
+    /**
+     * Whether an admitted attempt goes on to the run that composes its feedback. A trial never composes (ADR 0118), and
+     * neither does a seal that chose another producer than LEGACY (ADR 0160): its producer acts on the sealed review.
+     */
     public boolean composes(ReviewJob job) {
-        return assignments.review(job).origin() != ReviewOrigin.TRIAL;
+        return job.getFeedbackProducer() == FeedbackProducer.LEGACY
+                && assignments.review(job).origin() != ReviewOrigin.TRIAL;
     }
 
     /** The subject of a review's runs: one review runs one attempt at a time. */
@@ -277,6 +282,8 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
+        if (job.getFeedbackProducer() != FeedbackProducer.LEGACY)
+            throw new IllegalStateException("A review whose producer is not LEGACY never composes");
         if (runs.end(fence, AgentRunStopReason.HANDED_OFF) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing =

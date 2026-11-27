@@ -284,6 +284,18 @@ public class ReviewJob {
         executionStartedAt = null;
     }
 
+    /**
+     * An admitted attempt whose producer composes nothing, claimed again after it lost its lease: its seal already handed
+     * the review off, so the job completes, and settlement runs as after a composition.
+     */
+    public void completeHandedOff(Instant at) {
+        move(ReviewJobStatus.RUNNING);
+        startedAt = at;
+        move(ReviewJobStatus.COMPLETED);
+        completedAt = at;
+        processingStatus = ProcessingStatus.PENDING;
+    }
+
     /** The attempt ended without running: the caller records why, as a message or an output. */
     public void fail(Instant at) {
         move(ReviewJobStatus.FAILED);

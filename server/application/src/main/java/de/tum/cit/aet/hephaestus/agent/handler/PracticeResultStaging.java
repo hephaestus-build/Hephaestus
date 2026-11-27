@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
@@ -208,6 +209,7 @@ public class PracticeResultStaging {
             bases.deleteForJob(job.getWorkspaceId(), job.getId());
             return;
         }
+        if (job.getFeedbackProducer() != FeedbackProducer.LEGACY) dropHistory(basis);
         StagedEvidence.merge(
                 mapper,
                 basis,
@@ -229,9 +231,23 @@ public class PracticeResultStaging {
         }
         var copy = receipts.completeReceipt(identity).orElse(null);
         if (copy == null || !receipts.holdVouchingReceipt(identity, copy)) return;
-        var original = reads.originalCompositionInputs(identity).orElse(null);
+        var original = (job.getFeedbackProducer() == FeedbackProducer.LEGACY
+                        ? reads.originalCompositionInputs(identity)
+                        : reads.publicCompositionInputs(identity))
+                .orElse(null);
         if (original == null) return;
         storeCompositionInputs(job, copy, expiresAt, original);
+    }
+
+    /**
+     * A producer other than LEGACY composes nothing from the staged history of earlier results, so the seal keeps none
+     * of it. The entries go by name, before the merge decodes the rest.
+     */
+    private static void dropHistory(ReviewCompositionBasis basis) {
+        if (!(basis.getPayload().path("files") instanceof ObjectNode files)) return;
+        files.remove(files.propertyNames().stream()
+                .filter(path -> path.startsWith(SandboxLayout.HISTORY_PREFIX))
+                .toList());
     }
 
     private void storeCompositionInputs(ReviewJob job, UUID copy, Instant expiresAt, Map<String, byte[]> original) {

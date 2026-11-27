@@ -855,9 +855,23 @@ Two settings select the mentor, and both are off by default:
 - `hephaestus.practice-review.feedback-producer.allow-mentor-before-advice-erasure` opens the gate. It is for a synthetic proof environment only.
 - `hephaestus.practice-review.feedback-producer.mentor-workspace-ids` lists the workspaces.
 
-The gate stays closed in production until a release opens it.
-That release must come after the release that registers the advice stores in the erasure inventory.
-Every seal, claim and repair replica must also run a release that knows the producer.
+The gate stays closed in production until a release opens it. That release needs all of these:
+
+- It comes after the release that registers the advice stores in the erasure inventory.
+- Every seal, claim and repair replica runs a release that knows the producer.
+- Both consumers run: the mentor's review handler and the work-place task.
+- The ADR 0121 step-3 proof passed.
+- The hand-off, reclaim and repair guards below shipped.
+
+Without those guards, a seal that chose `MENTOR` or `WORK_PLACE` would still start the legacy composition.
+
+### A seal that chose another producer composes nothing
+
+A trial composes nothing, and neither does a seal whose producer is not `LEGACY`.
+Such a job ends on the terminal path that a trial takes, and settlement runs as usual.
+A claim of such a job after a lost lease completes it before any model, budget or composition check.
+A repair resumes only a `LEGACY` composition, and a composition package for another producer is refused.
+The seal keeps no staged history of earlier results for such a job, and its answer carries no private read.
 
 ### Checked publication per destination
 

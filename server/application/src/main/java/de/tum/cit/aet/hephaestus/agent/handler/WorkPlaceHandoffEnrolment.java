@@ -60,8 +60,9 @@ import tools.jackson.databind.ObjectMapper;
  * handoff is the same whatever they hold. An issue has no work place in 1.0, and a chat thread or a document gets no
  * copy on the work.
  *
- * <p>Only the database can fail the seal here (#5306). A retained input that does not decode, or a reference that is
- * missing, records a failed handoff and the seal commits without one.
+ * <p>A database failure undoes the seal, and so does a failure after which a transactional collaborator marked the seal
+ * for rollback (#5306). Any other failure, such as a retained input that does not decode or a missing reference, records
+ * a failed handoff, and the seal commits without one.
  */
 @Component
 @ConditionalOnServerRole

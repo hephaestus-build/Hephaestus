@@ -64,6 +64,15 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean heldForCapture() {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=2165 AND objid=1
+                  AND objsubid=2 AND pid=pg_backend_pid() AND granted)
+                """, Boolean.class));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
         waitUnbounded("SELECT pg_advisory_xact_lock(2165,1)");
     }

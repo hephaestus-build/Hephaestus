@@ -518,7 +518,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query(value = """
         SELECT j.id, j.run_id AS "runId", r.lease_epoch AS epoch FROM review_job j JOIN agent_run r ON r.id=j.run_id
         WHERE j.workspace_id=:workspaceId AND j.review_id=:reviewId AND j.status='COMPLETED' AND j.admission_digest IS NOT NULL
-          AND r.attempt<=:maxRetries
+          AND j.feedback_producer='LEGACY' AND r.attempt<=:maxRetries
           AND EXISTS(SELECT 1 FROM review_composition_basis b WHERE b.workspace_id=j.workspace_id AND b.job_id=j.id
             AND b.expires_at>clock_timestamp())
           AND EXISTS(SELECT 1 FROM feedback f WHERE f.workspace_id=j.workspace_id AND f.review_id=j.review_id

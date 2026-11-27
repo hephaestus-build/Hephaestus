@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
@@ -355,7 +356,10 @@ public class ResultAdmissionService {
             }
         FeedbackCompositionService.Read privateRead = null;
         var progress = PrivateFeedbackProgress.NONE;
-        if (assignments.review(job).kind() == ReviewKind.ITEM && !admitted.isEmpty()) {
+        // Only a LEGACY composition reads the developer's private history: another producer composes nothing here.
+        if (job.getFeedbackProducer() == FeedbackProducer.LEGACY
+                && assignments.review(job).kind() == ReviewKind.ITEM
+                && !admitted.isEmpty()) {
             progress = composition.privateProgress(job, admitted);
             var identity = new AdmissionIdentity(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
             privateRead = receipts.indexLateRead(
@@ -403,6 +407,10 @@ public class ResultAdmissionService {
      */
     private @Nullable PreparedPackage applyPackage(
             AdmissionIdentity identity, FeedbackPackage request, boolean publish) {
+        // Refused before any private read: a seal that chose another producer than LEGACY composes nothing.
+        if (jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                .filter(job -> job.getFeedbackProducer() != FeedbackProducer.LEGACY)
+                .isPresent()) throw new AdmissionConflictException();
         if (publish) {
             Assert.state(
                     !TransactionSynchronizationManager.isActualTransactionActive(),
