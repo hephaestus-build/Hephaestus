@@ -494,27 +494,19 @@ public class ScmItemService implements ItemSource {
                 throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
             if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
                     || pinned.item().kind().equals(ScmItemEvents.FILE))
-                return requests.stream()
-                        .map(request -> captureTree(pinned, request))
-                        .toList();
+                return CaptureContribution.composeEach(requests, request -> captureTree(pinned, request));
             var work = occasion != null
                     ? new ScmWorkLookup.Work(occasion.work(), occasion.review())
                     : workLookup.current(pinned.item());
-            List<CaptureContribution> composed = new ArrayList<>();
-            try {
-                for (var request : requests)
-                    composed.add(workCapture.capture(
+            return CaptureContribution.composeEach(
+                    requests,
+                    request -> workCapture.capture(
                             pinned,
                             request,
                             work.work(),
                             work.review(),
                             occasion != null ? occasion.evidence() : null,
                             preparation));
-            } catch (RuntimeException failure) {
-                CaptureContribution.release(composed, failure);
-                throw failure;
-            }
-            return List.copyOf(composed);
         });
     }
 
