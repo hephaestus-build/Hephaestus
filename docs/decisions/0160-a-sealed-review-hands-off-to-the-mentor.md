@@ -4,7 +4,7 @@
 **Date:** 2026-11-27
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) (the compose stage, which this ADR replaces), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the cutover steps)
+**Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) (the compose stage, decisions 11 to 14 and 16), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the cutover steps)
 
 **Builds on:** [ADR 0158](0158-the-mentor-orders-commitments-per-person-and-answers-per-request.md) (the mentor runtime), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery identity and readback)
 
@@ -43,9 +43,9 @@ Option 3.
 1. **The seal hands off. It never composes.**
    - In the seal transaction, the server stores one producer on the review job: `MENTOR`, `WORK_PLACE` or `LEGACY`.
    - `MENTOR` applies when the workspace setting is MENTOR and the reviewed person is a linked, active, consenting account.
-   - `WORK_PLACE` applies when the setting is MENTOR and the author is unlinked or not consenting. It also applies when an erasure or a write fence refuses the owner's mailbox insert. The reason is recorded.
+   - `WORK_PLACE` applies in every other case when the setting is MENTOR: an unlinked, inactive or non-consenting author. It also applies when an erasure or a write fence refuses the owner's mailbox insert. The reason is recorded.
    - `LEGACY` keeps `REVIEW_COMPOSE` during the transition only.
-   - The choice is made once and never read again. A flag change affects only later seals. A server without the column takes `LEGACY`.
+   - The choice is made once and never made again. A flag change affects only later seals. A server without the column takes `LEGACY`.
 2. **A mentor review is a typed mailbox event.**
    - With `MENTOR`, the seal writes one `REVIEW_SEALED` reference for the reviewed account, with IDs only. It does not continue to `REVIEW_COMPOSE`.
    - The mentor's intake refuses a review whose producer is not `MENTOR`.
@@ -55,7 +55,7 @@ Option 3.
      - The delivery keeps its key and readback (ADR 0151).
      - The server, not the model, owns the audience and the approval policy.
      - A handoff that expires before the task starts records silence for this outcome.
-   - **Advice on the Practice Profile.** See § Advice on the Practice Profile.
+   - **Advice on the Practice profile.** See § Advice on the Practice profile.
    - **Contact or silence.** The contact policy decides after authorization, and the default is silence. There are no more per-review conversation notes.
 4. **`WORK_PLACE` reviews get only the fix on the work.** They have no advice, no contact and no account-owned rows. So `REVIEW_COMPOSE` can be removed without losing work comments for unlinked authors.
 5. **What is retired, kept and reused.**
@@ -75,7 +75,7 @@ Option 3.
    4. Make `MENTOR` the default once the 1.0 gate passes the review journey.
    5. Contract after the drain horizon: remove the `REVIEW_COMPOSE` start and the private sessions.
 
-### Advice on the Practice Profile
+### Advice on the Practice profile
 
 The record is **advice**: lasting feedback for one developer about one practice.
 Practice guidance keeps its meaning: the practice's own text, such as Why it matters.
@@ -115,7 +115,7 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
    - An erasure of the developer deletes their advice.
    - Advice revisions expire at the retention cutoff, by their own age. Advice never keeps an observation alive.
 6. **Only the owner reads advice.**
-   - The developer reads their advice on their own Practice Profile. The endpoint takes no person parameter.
+   - The developer reads their advice on their own Practice profile. The endpoint takes no person parameter.
    - No admin view, View as user or other member gets advice or a sign that advice exists.
    - The work-place composer, shared work and Slack DM prompts never receive advice.
    - Another person's data export never contains the developer's advice.
@@ -127,7 +127,7 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
 
 ### What this changes in other ADRs
 
-- ADR 0086: the compose stage is replaced by decisions 1 to 4. Staging, sealing and the recorded stop reasons stay.
+- ADR 0086: decisions 1 to 4 replace its compose stage. That is decisions 11 to 14, and the private destinations of decision 16. Staging, sealing and the recorded stop reasons stay.
 - ADR 0121: the cutover's producer is `MENTOR` or `WORK_PLACE`, not `COMPOSER`. The work-place composer, its scope and its boundary stay.
 - ADR 0061 is already superseded by ADR 0086.
 
