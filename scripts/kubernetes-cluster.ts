@@ -2679,7 +2679,8 @@ export function anchorChecks(counts: AnchorCounts): RollCheck[] {
 	const { beforeReply, afterReply, beforeNext, afterNext } = counts;
 	return [
 		{
-			claim: "while its source exists, a reply in a thread on the question or its quoting answer sends the text to the model",
+			claim:
+				"while its source exists, a reply in a thread on the question or its quoting answer sends the text to the model",
 			failure:
 				afterReply.containing > beforeReply.containing
 					? undefined
@@ -2760,11 +2761,10 @@ async function answered(turnId: string): Promise<void> {
 
 /** The id of the turn's answer, which must quote `marker`. */
 async function quotingAnswer(turnId: string, marker: string): Promise<string> {
-	const id = (
-		await psql(
-			`SELECT e.id FROM conversation_entry e WHERE e.turn_id = '${turnId}' AND e.kind = 'ANSWER' AND e.text LIKE '%${marker}%' ORDER BY e.seq DESC LIMIT 1`,
-		)
-	).trim();
+	const row = await psql(
+		`SELECT e.id FROM conversation_entry e WHERE e.turn_id = '${turnId}' AND e.kind = 'ANSWER' AND e.text LIKE '%${marker}%' ORDER BY e.seq DESC LIMIT 1`,
+	);
+	const id = row.trim();
 	if (!UUID.test(id)) {
 		throw new Error(`turn removal: turn ${turnId} has no answer that quotes ${marker}`);
 	}
@@ -2865,7 +2865,12 @@ export async function turnRemoval(
 		await answered(anchor.id);
 		const quoting = await quotingAnswer(anchor.id, marker);
 		const beforeReply = await seenByFake(marker);
-		const onQuestion = await ask(conversation, token, "What should I check next?", anchor.questionId);
+		const onQuestion = await ask(
+			conversation,
+			token,
+			"What should I check next?",
+			anchor.questionId,
+		);
 		await answered(onQuestion.id);
 		const onAnswer = await ask(conversation, token, "Which tag was it?", quoting);
 		await answered(onAnswer.id);
@@ -2874,9 +2879,13 @@ export async function turnRemoval(
 		const beforeNext = await seenByFake(marker);
 		// Erasing the quoting answer with its source also leaves its thread without a parent to reply to.
 		if (await redacted(quoting)) {
-			process.stdout.write("turn removal: the quoting answer was erased with its question, so its thread takes no reply\n");
+			process.stdout.write(
+				"turn removal: the quoting answer was erased with its question, so its thread takes no reply\n",
+			);
 		} else {
-			process.stdout.write("turn removal: the quoting answer stays; a reply in its thread must not carry the quote\n");
+			process.stdout.write(
+				"turn removal: the quoting answer stays; a reply in its thread must not carry the quote\n",
+			);
 			const inThread = await ask(conversation, token, "What should I check next?", quoting);
 			await answered(inThread.id);
 		}

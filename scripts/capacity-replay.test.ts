@@ -140,7 +140,10 @@ await test("the roll fake counts the kept requests that contain a text, and need
 
 await test("the released roll fake answers an echo question with its text, as an answer can quote a question", () => {
 	const situation = { role: "user", content: [{ type: "text", text: "<situation>\nNow: Mon." }] };
-	const asked = [{ role: "user", content: `${ROLL_ECHO}Pin the image by removal-drill-1.` }, situation];
+	const asked = [
+		{ role: "user", content: `${ROLL_ECHO}Pin the image by removal-drill-1.` },
+		situation,
+	];
 	assert.deepEqual(rollStep(asked, true), { text: "Pin the image by removal-drill-1." });
 	// Before its release the fake still runs the command, whatever the question.
 	assert.deepEqual(rollStep(asked, false), { command: "sleep 30; echo rolled-1" });
