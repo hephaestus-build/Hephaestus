@@ -6,6 +6,8 @@
 
 **Amends:** [ADR 0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md), [ADR 0160](0160-a-sealed-review-hands-off-to-the-mentor.md)
 
+**Amended by:** [ADR 0167](0167-a-project-has-one-reviews-workflow.md) (proposed: one Reviews workflow)
+
 **Builds on:** [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md), [ADR 0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md), [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md)
 
 **Relates to:** [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md), [ADR 0163](0163-the-mentor-builds-a-context-packet-from-current-source-refs.md), [ADR 0157](0157-the-mentor-core-keeps-what-the-person-saves-and-each-answer-shows-what-it-used.md)
