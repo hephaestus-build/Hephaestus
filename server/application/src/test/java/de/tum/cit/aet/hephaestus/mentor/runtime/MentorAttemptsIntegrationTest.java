@@ -124,7 +124,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
     /** The Slack store's evidence port as the server wires it, for this test's own fence. */
     private ObjectProvider<MentorSourceEvidence> store() {
-        return new StaticListableBeanFactory(Map.of("evidence", sourceEvidence)).getBeanProvider(MentorSourceEvidence.class);
+        return new StaticListableBeanFactory(Map.of("evidence", sourceEvidence))
+                .getBeanProvider(MentorSourceEvidence.class);
     }
 
     /** T11: after a crash that followed intake, the queued attempt is leased once, however many replicas try. */
@@ -410,7 +411,9 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         prepare(lease);
         observe(lease);
         AttemptCredential held = credential(lease);
-        assertThat(current(held)).as("the store has no row: no tombstone to refuse on").isTrue();
+        assertThat(current(held))
+                .as("the store has no row: no tombstone to refuse on")
+                .isTrue();
 
         var storeless = new MentorAttempts(
                 attemptRows,
@@ -450,8 +453,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                         """, Boolean.class, lease.requestId()))
                 .as("a live DM question at the top level")
                 .isTrue();
-        assertThat(owner.queryForObject(
-                        "SELECT count(*) FROM slack_message WHERE slack_ts = ?", Long.class, message))
+        assertThat(owner.queryForObject("SELECT count(*) FROM slack_message WHERE slack_ts = ?", Long.class, message))
                 .as("no Slack store row for the DM")
                 .isZero();
 

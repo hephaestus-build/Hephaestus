@@ -21,6 +21,7 @@ class SlackMentorSourceEvidence implements MentorSourceEvidence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean deleted(long workspaceId, String containerId, String nativeMessageId) {
-        return messages.shareTombstoned(workspaceId, containerId, nativeMessageId).orElse(false);
+        return messages.shareTombstoned(workspaceId, containerId, nativeMessageId)
+                .orElse(false);
     }
 }
