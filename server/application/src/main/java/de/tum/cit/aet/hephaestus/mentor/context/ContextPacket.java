@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.context;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.ToIntFunction;
@@ -80,20 +81,20 @@ public final class ContextPacket {
         for (Section section : Section.values()) root.putArray(section.name());
         int available = Math.min(inputWindow, MAX_TOKENS);
         var included = new LinkedHashSet<SourceRef>();
-        for (boolean pinned : List.of(true, false)) {
-            for (Section section : Section.values()) {
-                ArrayNode values = root.withArray(section.name());
-                for (Item item : admitted) {
-                    if (item.section() != section || item.pinned() != pinned || included.contains(item.ref())) continue;
-                    append(values, item);
-                    if (tokens.applyAsInt(mapper.writeValueAsString(values)) > section.maxTokens
-                            || tokens.applyAsInt(mapper.writeValueAsString(root)) > available) {
-                        values.remove(values.size() - 1);
-                        if (pinned) return new TooLarge(section);
-                    } else {
-                        included.add(item.ref());
-                    }
-                }
+        var ordered = admitted.stream()
+                .sorted(Comparator.comparing(Item::pinned).reversed().thenComparing(Item::section))
+                .toList();
+        for (Item item : ordered) {
+            if (included.contains(item.ref())) continue;
+            Section section = item.section();
+            ArrayNode values = root.withArray(section.name());
+            append(values, item);
+            if (tokens.applyAsInt(mapper.writeValueAsString(values)) > section.maxTokens
+                    || tokens.applyAsInt(mapper.writeValueAsString(root)) > available) {
+                values.remove(values.size() - 1);
+                if (item.pinned()) return new TooLarge(section);
+            } else {
+                included.add(item.ref());
             }
         }
         return new Ready(mapper.writeValueAsString(root), new ArrayList<>(included));
