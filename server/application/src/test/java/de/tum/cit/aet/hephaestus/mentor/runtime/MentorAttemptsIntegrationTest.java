@@ -117,7 +117,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         List<CompletableFuture<List<AttemptLease>>> replicas = List.of(1, 2).stream()
                 .map(replica -> CompletableFuture.supplyAsync(() -> {
                     await(barrier);
-                    return attempts.claim(account, WorkClass.INTERACTIVE, 1, LEASE);
+                    return claim(WorkClass.INTERACTIVE, 1);
                 }))
                 .toList();
 
@@ -152,7 +152,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         ask(message());
         for (int claim = 1; claim <= MentorAttempt.MAX_CLAIMS; claim++) lapse(claimOne(WorkClass.INTERACTIVE));
 
-        assertThat(attempts.claim(account, WorkClass.INTERACTIVE, 1, LEASE)).isEmpty();
+        assertThat(claim(WorkClass.INTERACTIVE, 1)).isEmpty();
     }
 
     /** Own: an account runs at most two leases, and background work never takes the one a question needs. */
@@ -163,11 +163,11 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
             owner.update("UPDATE mentor_attempt SET work_class = 'BACKGROUND' WHERE request_id = ?", background);
         }
 
-        assertThat(attempts.claim(account, WorkClass.BACKGROUND, 5, LEASE)).hasSize(1);
-        assertThat(attempts.claim(account, WorkClass.INTERACTIVE, 5, LEASE))
+        assertThat(claim(WorkClass.BACKGROUND, 5)).hasSize(1);
+        assertThat(claim(WorkClass.INTERACTIVE, 5))
                 .extracting(AttemptLease::requestId)
                 .containsExactly(requests.get(3));
-        assertThat(attempts.claim(account, WorkClass.BACKGROUND, 5, LEASE)).isEmpty();
+        assertThat(claim(WorkClass.BACKGROUND, 5)).isEmpty();
     }
 
     /** Own: two replicas that claim for one account at once never run more than its two leases. */
@@ -178,12 +178,12 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         List<CompletableFuture<List<AttemptLease>>> replicas = List.of(1, 2).stream()
                 .map(replica -> CompletableFuture.supplyAsync(() -> {
                     await(barrier);
-                    return attempts.claim(account, WorkClass.INTERACTIVE, 2, LEASE);
+                    return claim(WorkClass.INTERACTIVE, 2);
                 }))
                 .toList();
         replicas.forEach(CompletableFuture::join);
 
-        assertThat(attempts.claim(account, WorkClass.INTERACTIVE, 2, LEASE)).isEmpty();
+        assertThat(claim(WorkClass.INTERACTIVE, 2)).isEmpty();
         assertThat(owner.queryForObject(
                         "SELECT count(*) FROM mentor_attempt WHERE account_id = ? AND state = 'LEASED'",
                         Long.class,
@@ -212,8 +212,14 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         return inTransaction(() -> intake.admit(envelope, Producer.MENTOR));
     }
 
+    /** A claim in its own transaction, as each scheduler pass makes it. */
+    private List<AttemptLease> claim(WorkClass workClass, int limit) {
+        return Objects.requireNonNull(new TransactionTemplate(transactions)
+                .execute(status -> attempts.claim(account, workClass, limit, LEASE)));
+    }
+
     private AttemptLease claimOne(WorkClass workClass) {
-        var leases = attempts.claim(account, workClass, 1, LEASE);
+        var leases = claim(workClass, 1);
         assertThat(leases).hasSize(1);
         return leases.getFirst();
     }
