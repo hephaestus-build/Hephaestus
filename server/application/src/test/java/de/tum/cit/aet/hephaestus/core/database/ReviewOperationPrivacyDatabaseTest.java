@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import java.util.List;
@@ -42,7 +43,8 @@ class ReviewOperationPrivacyDatabaseTest {
                 JsonMapper.builder().build(),
                 mock(FeedbackCopyCleanupCustody.class),
                 mock(PersonIdentityResolver.class),
-                mock(ScanReportService.class));
+                mock(ScanReportService.class),
+                mock(AdviceRedaction.class));
         var stores = catalog.contributors().stream()
                 .filter(store ->
                         Set.of("review", "review_batch", "review_schedule").contains(store.store()))

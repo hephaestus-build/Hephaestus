@@ -3,17 +3,27 @@ package de.tum.cit.aet.hephaestus.practices.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +32,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * SQL ties every advice row to one developer and workspace (ADR 0160). A source can only be the developer's own result,
- * and a retired entry carries its reason.
+ * Advice lasts no longer than its evidence (ADR 0160): each path that deletes a result first removes the text of every
+ * advice revision with that result as a source, in the same transaction. SQL ties every advice row to one developer and
+ * workspace.
  */
 class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
     private static final String TEXT = "advice-custody-canary";
@@ -37,14 +48,120 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private TransactionTemplate transactions;
 
+    @Autowired
+    private PracticesPersonDataCatalog practices;
+
+    @Autowired
+    private DerivedResultEraser withdrawal;
+
+    @Autowired
+    private ResultRetentionService retention;
+
+    @Autowired
+    private PracticesWorkspacePurgeAdapter purge;
+
     private Scenario scenario;
     private long ws;
+    private long developer;
 
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
         scenario = data.scenario(DefinitionTestFixtures.definition());
         ws = scenario.workspace().getId();
+        developer = Objects.requireNonNull(scenario.account().getId());
+    }
+
+    @Test
+    void shouldRemoveTheTextOfTheErasedDevelopersAdviceAndKeepAnotherDevelopersAdvice() {
+        Result erased = result(scenario);
+        UUID cited = revision(entry(scenario), 1, List.of(erased.getId()), List.of());
+        Scenario theirs = theirs();
+        UUID kept = revision(entry(theirs), 1, List.of(result(theirs).getId()), List.of());
+
+        eraseInOrder(practices.contributors(), preview(practices.contributors(), scope(developer)), scope(developer));
+
+        assertThat(exists("result", erased.getId())).isFalse();
+        assertStale(cited);
+        assertThat(text(kept)).isEqualTo(TEXT);
+    }
+
+    @Test
+    void shouldRemoveTheTextOfAdviceWrittenAfterTheErasureWasAdmitted() {
+        Result erased = result(scenario);
+        var frozen = preview(practices.contributors(), scope(developer));
+        UUID late = revision(entry(scenario), 1, List.of(erased.getId()), List.of());
+
+        eraseInOrder(practices.contributors(), frozen, scope(developer));
+
+        assertStale(late);
+    }
+
+    @Test
+    void shouldRemoveTheTextOfEveryRevisionWithAWithdrawnResultAsASourceCitedOrNot() {
+        Result withdrawn = result(scenario);
+        Result kept = result(data.onOtherWork(scenario));
+        UUID entry = entry(scenario);
+        UUID cited = revision(entry, 1, List.of(withdrawn.getId()), List.of());
+        UUID seen = revision(entry, 2, List.of(kept.getId()), List.of(withdrawn.getId()));
+        UUID unrelated = revision(entry, 3, List.of(kept.getId()), List.of());
+
+        transactions.executeWithoutResult(status -> withdrawal.erase(ws, List.of(withdrawn.getId())));
+
+        assertThat(exists("result", withdrawn.getId())).isFalse();
+        assertStale(cited);
+        assertStale(seen);
+        assertThat(text(unrelated)).isEqualTo(TEXT);
+    }
+
+    @Test
+    void shouldRemoveTheTextBeforeRetentionDeletesTheResultAndKeepNoResultAlive() {
+        Result expired = result(scenario);
+        UUID revision = revision(entry(scenario), 1, List.of(expired.getId()), List.of());
+
+        retention.purgeWorkspace(ws, Instant.now().plus(Duration.ofDays(1)));
+
+        assertThat(exists("result", expired.getId()))
+                .as("advice keeps no result alive")
+                .isFalse();
+        assertStale(revision);
+        assertThat(count("practice_advice")).as("the entry stays").isOne();
+    }
+
+    @Test
+    void shouldDeleteTheWorkspacesAdviceBeforeItsResultsOnPurge() {
+        UUID entry = entry(scenario);
+        revision(entry, 1, List.of(result(scenario).getId()), List.of());
+
+        var owner = PostgreSQLTestContainer.ownerJdbc();
+        owner.execute("""
+                CREATE FUNCTION test_check_advice_before_result_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM practice_advice_source s JOIN practice_advice_revision r
+                          ON r.workspace_id = s.workspace_id AND r.id = s.revision_id
+                        WHERE s.workspace_id = OLD.workspace_id AND s.result_id = OLD.id AND r.text IS NOT NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Advice still has text when its source result is deleted';
+                    END IF;
+                    RETURN OLD;
+                END;
+                $$;
+                CREATE TRIGGER test_check_advice_before_result_delete BEFORE DELETE ON result
+                    FOR EACH ROW EXECUTE FUNCTION test_check_advice_before_result_delete();
+                """);
+        try {
+            transactions.executeWithoutResult(status -> purge.deleteWorkspaceData(ws));
+        } finally {
+            owner.execute("""
+                    DROP TRIGGER test_check_advice_before_result_delete ON result;
+                    DROP FUNCTION test_check_advice_before_result_delete();
+                    """);
+        }
+
+        assertThat(count("practice_advice")).isZero();
+        assertThat(count("practice_advice_revision")).isZero();
+        assertThat(count("practice_advice_source")).isZero();
     }
 
     @Test
@@ -124,5 +241,57 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
                 .param("ordinal", ordinal)
                 .param("revision", revision)
                 .update();
+    }
+
+    private void assertStale(UUID revision) {
+        assertThat(text(revision)).as("text of %s", revision).isNull();
+        assertThat(jdbc.sql("SELECT stale_at IS NOT NULL FROM practice_advice_revision WHERE id=:id")
+                        .param("id", revision)
+                        .query(Boolean.class)
+                        .single())
+                .as("stale_at of %s", revision)
+                .isTrue();
+    }
+
+    private @Nullable String text(UUID revision) {
+        return jdbc.sql("SELECT text FROM practice_advice_revision WHERE id=:id")
+                .param("id", revision)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+    }
+
+    private Scenario theirs() {
+        return new Scenario(scenario.workspace(), data.member(ws), scenario.practice(), scenario.item());
+    }
+
+    /** Freezes each store's selection, as the request's admission does. */
+    private static Map<String, PersonDataSelection> preview(List<PersonDataContributor> stores, PersonScope scope) {
+        return stores.stream().collect(Collectors.toMap(PersonDataContributor::store, store -> store.select(scope)));
+    }
+
+    /** Erases each store in its order and in its own transaction, as the request's steps do. */
+    private void eraseInOrder(
+            List<PersonDataContributor> stores, Map<String, PersonDataSelection> frozen, PersonScope scope) {
+        stores.stream()
+                .sorted(Comparator.comparingInt(PersonDataContributor::getOrder))
+                .forEach(store -> transactions.executeWithoutResult(
+                        status -> store.erase(Objects.requireNonNull(frozen.get(store.store())), scope)));
+    }
+
+    private static PersonScope scope(long account) {
+        return new PersonScope(account, List.of(), List.of());
+    }
+
+    private boolean exists(String table, UUID id) {
+        return jdbc.sql("SELECT count(*) FROM " + table + " WHERE id = :id")
+                        .param("id", id)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    private long count(String table) {
+        return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single();
     }
 }
