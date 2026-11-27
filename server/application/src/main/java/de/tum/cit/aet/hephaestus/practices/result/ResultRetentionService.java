@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -108,7 +109,7 @@ public class ResultRetentionService {
                 reports.eraseResultReferences(workspaceId, ids);
                 // Advice loses its text only for a result that is deleted here.
                 var deleted = results.withoutFeedbackBasis(workspaceId, ids.toArray(UUID[]::new));
-                advice.beforeResultsDeleted(workspaceId, deleted);
+                advice.beforeResultsDeleted(workspaceId, deleted, AdviceStaleCause.RETENTION);
                 return results.deleteWithoutFeedbackBasis(workspaceId, deleted.toArray(UUID[]::new));
             });
         } while (erased != null && erased == RESULT_BATCH);
