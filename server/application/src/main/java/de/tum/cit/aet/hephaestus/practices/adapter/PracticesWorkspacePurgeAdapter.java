@@ -16,6 +16,10 @@ public class PracticesWorkspacePurgeAdapter implements WorkspacePurgeContributor
     @Override
     public void deleteWorkspaceData(Long ws) {
         custody.requireAcknowledged(ws, rows.workspaceFeedbackIds(ws));
+        // Advice before the results it was written from (ADR 0160), and result locks before revision locks, as every
+        // redaction takes them: lock the results in id order, then delete the advice, then the results.
+        rows.lockWorkspaceResults(ws);
+        rows.deleteWorkspaceAdvice(ws);
         rows.deleteWorkspaceFeedback(ws);
         rows.deleteWorkspaceMembers(ws);
         rows.deleteWorkspaceResults(ws);

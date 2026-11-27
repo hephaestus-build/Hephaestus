@@ -58,6 +58,15 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     @Query(value = "SELECT id FROM feedback WHERE workspace_id=:ws ORDER BY id", nativeQuery = true)
     List<UUID> workspaceFeedbackIds(long ws);
 
+    /** Locks the workspace's results in id order, the order every advice redaction takes them in. */
+    @Query(value = "SELECT id FROM result WHERE workspace_id=:ws ORDER BY id FOR UPDATE", nativeQuery = true)
+    List<UUID> lockWorkspaceResults(long ws);
+
+    /** Deletes the workspace's advice; its revisions and sources go with it (ON DELETE CASCADE). */
+    @Modifying
+    @Query(value = "DELETE FROM practice_advice WHERE workspace_id=:ws", nativeQuery = true)
+    int deleteWorkspaceAdvice(long ws);
+
     @Modifying
     @Query(value = "DELETE FROM feedback WHERE workspace_id=:ws", nativeQuery = true)
     int deleteWorkspaceFeedback(long ws);

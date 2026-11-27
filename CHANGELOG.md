@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0-rc.23
+
+### Minor Changes
+
+- Your personal goal belongs to your account, including before you join a project. You can edit it or forget it. Your account export includes the current goal.
+
+  For erasure recovery, use the version 5 manifest to reapply personal goal deletions after a restore.
+
+- When you delete a message in a conversation with Hephaestus, its later answers that used the message are erased too, also when Hephaestus found the message through a search or through an earlier answer. Hephaestus never brings the deleted words back into a later answer. Answers from before this release stay in your conversation and your data export, but Hephaestus does not read them again, so it may not remember earlier parts of a conversation after the upgrade.
+- Each answer in Ask Hephaestus now has **What Hephaestus used**. Open it to see whether the answer links to observations or feedback, which documents about your work it read, how many repositories, files, commands and searches it used, and what it could not open. Hephaestus builds the list from what the answer's turn recorded. The list names no tool, file path, repository or internal ID, and it says so when an answer recorded nothing.
+
+### Patch Changes
+
+- Each read of practice standings, the practice profile overview and its review list decides a contributor's consent once, instead of once for each record source of their work. A withdrawal takes effect on the next read.
+- A model call whose connection closes before it starts now ends with its own reason and frees its model capacity. Before, such a call reported a provider failure and held a capacity slot until its lease ran out. Deleting a message while Hephaestus was about to answer could show this as a provider failure.
+- Each read of practice standings, the practice profile overview and its review list now sees one moment of the database, and checks a pull request's repository once instead of once for each source. A read that takes longer than 30 seconds now ends with an error instead of returning late.
+- The database gains the tables for lasting advice on a developer's private Practice Profile. Nothing writes or reads advice yet. The next release adds these tables to person-data requests and erasure, before any release writes advice. So an erasure that runs during a rolling upgrade completes on every replica.
+- Advice on a developer's private Practice Profile now lasts no longer than its evidence. An erasure, a source withdrawal and the result retention remove the text of any advice that a deleted practice result is behind, in the transaction that deletes the result. A workspace purge deletes the workspace's advice first. Nothing writes advice yet.
+- Practice pages load faster. Checking a contributor's consent now reads the identity providers once, instead of again for each check.
+- Practice review retries free shared model capacity for practices they already finished, so other reviews can start sooner.
+- Practice review stall logs identify the runner step that was in progress.
+- A pull or merge request review now always keeps its results when its copy for the work place cannot be prepared. Before, a copy whose inputs could not be read undid the whole review, and a second seal of the same review that raced the first could fail. Operators can see each decision in `agent_job_work_place_handoff_total`, and the new `HephaestusWorkPlaceHandoffFailing` alert fires when a copy fails. Feedback on the work still reaches developers as before.
+- When a pull or merge request review completes, Hephaestus now keeps a scoped copy of it for at most two hours. The copy holds the review's public results and the parts of the work they cite. This prepares feedback on the work that never reads private data. Nothing posts from the copy yet, and feedback on the work reaches developers as before. Account erasure deletes the copy with the review's other inputs, and the regular review-data cleanup removes it once it expires.
+
 ## 1.0.0-rc.22
 
 ### Minor Changes

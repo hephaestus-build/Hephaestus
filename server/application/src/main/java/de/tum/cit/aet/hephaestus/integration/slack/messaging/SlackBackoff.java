@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import okhttp3.Response;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +134,12 @@ final class SlackBackoff {
         // Interrupted mid-backoff (e.g. a shutting-down worker thread): stop retrying immediately rather than spinning
         // the rest of the budget in a tight loop.
         return !Thread.currentThread().isInterrupted();
+    }
+
+    static long retryAfterMillis(@Nullable Response response) {
+        return response == null
+                ? SlackSendException.NOT_RATE_LIMITED
+                : retryAfterMillis(response.code(), response.header("Retry-After"));
     }
 
     /**

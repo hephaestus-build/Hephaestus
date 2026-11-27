@@ -158,6 +158,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
         long getPractices();
 
+        UUID[] getJobIds();
+
         @Nullable
         Instant getNewestStart();
 
@@ -172,6 +174,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("A model pool is shared by the workspaces whose models it serves; the load names no workspace")
     @Query(
             value = "SELECT count(*) AS running, COALESCE(sum(" + PRACTICES + "), 0) AS practices," + """
+         COALESCE(array_agg(j.id), CAST(ARRAY[] AS uuid[])) AS "jobIds",
          max(j.started_at) AS "newestStart",
           (SELECT p.learned_limit FROM llm_call_pool p WHERE p.id=:poolId) AS "learnedLimit",
           (SELECT p.max_concurrent_calls FROM llm_call_pool p WHERE p.id=:poolId) AS "maxConcurrentCalls"
@@ -187,6 +190,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * from the job's snapshot. The rest of the snapshot stays in the database.
      */
     interface QueuedModel {
+        UUID getJobId();
+
         UUID getRunId();
 
         @Nullable
@@ -208,6 +213,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     }
 
     String QUEUED_MODEL = "SELECT " + PRACTICES + " AS practices," + """
+               j.id AS "jobId",
                j.run_id AS "runId", (j.config_snapshot->>'schemaVersion')::int AS "schemaVersion",
                j.config_snapshot->'model'->>'connectionScope' AS "connectionScope",
                (j.config_snapshot->'model'->>'connectionId')::bigint AS "connectionId",

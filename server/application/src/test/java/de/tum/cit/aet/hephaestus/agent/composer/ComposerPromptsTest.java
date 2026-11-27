@@ -11,6 +11,6 @@ class ComposerPromptsTest {
 
     @Test
     void sharedStyleIncludesTheWritingGuide() {
-        assertThat(ComposerTurns.sharedStyle()).endsWith(FeedbackWritingGuide.text());
+        assertThat(ComposerPrompts.sharedStyle()).endsWith(FeedbackWritingGuide.text());
     }
 }

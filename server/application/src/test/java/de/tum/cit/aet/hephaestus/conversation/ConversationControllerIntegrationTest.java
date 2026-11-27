@@ -91,6 +91,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     private ConversationTurnRepository turnRepository;
 
     @Autowired
+    private ConversationTimeline timeline;
+
+    @Autowired
     private ConversationSituation situation;
 
     @Autowired
@@ -517,6 +520,196 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .doesNotExist()
                 .jsonPath("$.content[2].text")
                 .isEqualTo("That is all I saw.");
+    }
+
+    @Test
+    void shouldSayWhatTheAnswerOpenedAndCouldNotOpenWithoutAPathOrATool() {
+        submit(main(), "Why did my review say that?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                f.call(
+                                        "call-read",
+                                        "read",
+                                        "path",
+                                        "/workspace/work/inputs/context/results_history.json"),
+                                f.result("call-read", "read", false),
+                                f.call("call-load", "load_context", "path", "repos/github.com/acme/api@main"),
+                                f.result("call-load", "load_context", true),
+                                f.call("call-search", "search_conversation", "query", "verify"),
+                                f.result("call-search", "search_conversation", false),
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "Your last review found no test.")),
+                        null,
+                        null));
+
+        get("/entries")
+                .jsonPath("$.content[0].used")
+                .doesNotExist()
+                .jsonPath("$.content[-1:].text")
+                .isEqualTo(List.of("Your last review found no test."))
+                .jsonPath("$.content[-1:].used.recorded")
+                .isEqualTo(List.of(true))
+                .jsonPath("$.content[-1:].used.read[*].kind")
+                .isEqualTo(List.of("CONTEXT_DOCUMENT", "CONVERSATION_SEARCH"))
+                .jsonPath("$.content[-1:].used.read[0].document")
+                .isEqualTo(List.of("RESULTS_HISTORY"))
+                .jsonPath("$.content[-1:].used.couldNotCheck[0].kind")
+                .isEqualTo(List.of("REPOSITORY"))
+                .jsonPath("$.content[-1:].used.couldNotCheck[0].count")
+                .isEqualTo(List.of(1))
+                .jsonPath("$.content[-1:].used.cited")
+                .isEqualTo(List.of(false))
+                .jsonPath("$.content[-1:].used.askedFromPage")
+                .isEqualTo(List.of(false));
+        get("/entries")
+                .consumeWith(result -> assertThat(
+                                new String(Objects.requireNonNull(result.getResponseBody()), StandardCharsets.UTF_8))
+                        .doesNotContain("acme"));
+    }
+
+    @Test
+    void shouldShowOneDisclosureWhenAnAnswersMessagesSpanPages() {
+        submit(main(), "Which documents did you check?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I will check your observations."),
+                                f.call("read", "read", "path", "inputs/context/results_history.json"),
+                                f.result("read", "read", false),
+                                ConversationLedgerFixtures.answer(
+                                        ConversationLedgerFixtures.piId(), "I checked your observations.")),
+                        null,
+                        null));
+
+        var answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                running.getWorkspaceId(), running.getId(), ConversationEntry.Kind.ANSWER);
+        String cursor = String.valueOf(answers.getLast().getSeq());
+        get("/entries?size=1")
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I checked your observations.")
+                .jsonPath("$.content[0].used.read[0].document")
+                .isEqualTo("RESULTS_HISTORY")
+                .jsonPath("$.content[0].used.cited")
+                .isEqualTo(false)
+                .jsonPath("$.nextCursor")
+                .isEqualTo(cursor);
+
+        get("/entries?size=1&cursor=" + cursor)
+                .jsonPath("$.content[0].text")
+                .isEqualTo("I will check your observations.")
+                .jsonPath("$.content[0].used")
+                .doesNotExist();
+    }
+
+    @Test
+    void shouldKeepTheReceiptWhenTheLastToolCallShowsNothing() {
+        ConversationTurn running = started(submit(main(), "What did my review say?"));
+        F f = new F();
+        UUID feedbackId = UUID.randomUUID();
+        turns.stop(running.getWorkspaceId(), running.getId());
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.STOPPED,
+                        List.of(
+                                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "I checked."),
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
+                                        "refused",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", feedbackId.toString())
+                                                .put("text", "Feedback the tool refused.")),
+                                f.result("refused", "show_feedback", true)),
+                        null,
+                        null));
+
+        var answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                running.getWorkspaceId(), running.getId(), ConversationEntry.Kind.ANSWER);
+        assertThat(answers).hasSize(2);
+        get("/entries")
+                .jsonPath("$.content[*].kind")
+                .isEqualTo(List.of("USER", "ANSWER"))
+                .jsonPath("$.content[1].text")
+                .isEqualTo("I checked.")
+                .jsonPath("$.content[1].used.cited")
+                .isEqualTo(false);
+        get("/entries?size=1&cursor=" + answers.getLast().getSeq())
+                .jsonPath("$.content[0].used.cited")
+                .isEqualTo(false);
+        var live = timeline.liveEntry(
+                running.getWorkspaceId(),
+                accountId(developer),
+                answers.getFirst().getId());
+        assertThat(live).hasValueSatisfying(entry -> assertThat(entry.used()).isNotNull());
+    }
+
+    @Test
+    void shouldMarkAnAnswerCitedOnlyWhenTheTimelineShowsALink() {
+        ConversationTurn running = started(submit(main(), "What did my review say?"));
+        F f = new F();
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
+                                        "link",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", " " + UUID.randomUUID())
+                                                .put("text", "Feedback with a padded ID.")),
+                                f.result("link", "show_feedback", false),
+                                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "I checked.")),
+                        null,
+                        null));
+
+        get("/entries")
+                .jsonPath("$.content[*].kind")
+                .isEqualTo(List.of("USER", "ANSWER"))
+                .jsonPath("$.content[1].used.cited")
+                .isEqualTo(false);
+    }
+
+    /** One opening call and its result, as the host stores them. */
+    private static final class F {
+        ObjectNode call(String callId, String tool, String argument, String value) {
+            return ConversationLedgerFixtures.toolCall(
+                    ConversationLedgerFixtures.piId(),
+                    callId,
+                    tool,
+                    JsonNodeFactory.instance.objectNode().put(argument, value));
+        }
+
+        ObjectNode result(String callId, String tool, boolean error) {
+            return ConversationLedgerFixtures.toolResult(
+                    ConversationLedgerFixtures.piId(), callId, tool, error ? "Not found" : "Done", error);
+        }
     }
 
     @Test

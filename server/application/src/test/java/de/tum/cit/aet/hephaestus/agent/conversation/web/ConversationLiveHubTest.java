@@ -126,6 +126,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
                 null,
                 List.of(),
                 null,
+                null,
                 null);
     }
 

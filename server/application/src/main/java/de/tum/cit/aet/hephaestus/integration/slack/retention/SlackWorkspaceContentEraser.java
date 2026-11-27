@@ -46,7 +46,12 @@ public class SlackWorkspaceContentEraser {
         pins.deleteByWorkspaceId(workspaceId);
         events.deleteHandledByHeader(workspaceId, "slack", ProviderEvent.PRODUCER, Producer.MENTOR.name());
         actions.eraseKinds(
-                workspaceId, List.of(ActionKind.SLACK_NOTICE, ActionKind.SLACK_JOIN, ActionKind.SLACK_CONSENT));
+                workspaceId,
+                List.of(
+                        ActionKind.SLACK_NOTICE,
+                        ActionKind.SLACK_JOIN,
+                        ActionKind.SLACK_CONSENT,
+                        ActionKind.MENTOR_EFFECT));
         conversationFeedbackErasure.eraseAllConversationForWorkspace(workspaceId);
         slackMessageRepository.deleteByWorkspaceId(workspaceId);
         slackThreadRepository.deleteByWorkspaceId(workspaceId);

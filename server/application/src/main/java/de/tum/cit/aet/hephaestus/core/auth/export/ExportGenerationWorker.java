@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter.Generation;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountFeedbackExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPersonalGoalExport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.Objects;
@@ -47,6 +48,7 @@ public class ExportGenerationWorker {
     private final ExportBundleAssembler assembler;
     private final AccountConversationExport conversations;
     private final AccountFeedbackExport feedback;
+    private final AccountPersonalGoalExport goals;
     private final ObjectMapper objectMapper;
     private final AccountExportWriter writer;
     private final PrivacyJobMetrics metrics;
@@ -59,6 +61,7 @@ public class ExportGenerationWorker {
             ExportBundleAssembler assembler,
             AccountConversationExport conversations,
             AccountFeedbackExport feedback,
+            AccountPersonalGoalExport goals,
             ObjectMapper objectMapper,
             AccountExportWriter writer,
             PrivacyJobMetrics metrics,
@@ -69,6 +72,7 @@ public class ExportGenerationWorker {
         this.assembler = assembler;
         this.conversations = conversations;
         this.feedback = feedback;
+        this.goals = goals;
         this.objectMapper = objectMapper;
         this.writer = writer;
         this.metrics = metrics;
@@ -149,7 +153,8 @@ public class ExportGenerationWorker {
                 () -> objectMapper.writeValueAsBytes(bundle.withErasableSources(
                         conversations.messages(accountId),
                         feedback.received(accountId),
-                        feedback.responses(accountId))),
+                        feedback.responses(accountId),
+                        goals.words(accountId))),
                 "account_unavailable");
     }
 

@@ -61,7 +61,7 @@ class CompositionEvalLiveTest {
                     scenario.turn(),
                     scenario.toolParameters(),
                     PrivateFeedback.TOOL_DESCRIPTION,
-                    ComposerTurns.sharedStyle() + "\n\n" + ComposerTurns.prompt("feedback-composer.md"),
+                    ComposerPrompts.sharedStyle() + "\n\n" + ComposerPrompts.prompt("feedback-composer.md"),
                     CompositionEvalCases.basis(scenario, reasoning, maxTokens),
                     FeedbackDestination.valueOf(scenario.destination()),
                     UnaryOperator.identity()));

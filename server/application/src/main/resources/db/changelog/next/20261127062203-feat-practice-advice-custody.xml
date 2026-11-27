@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795742347298-1" author="hephaestus">
+        <comment>One advice entry for each workspace, developer and practice (ADR 0160). Nothing writes it yet.</comment>
+        <createTable tableName="practice_advice">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advicePK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="person_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="practice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retire_reason" type="VARCHAR(24)"/>
+            <column name="retired_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="dismissed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="dismissed_items" type="BIGINT[]"/>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="latest_revision" type="INTEGER"/>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="practice_advice" columnNames="workspace_id, person_account_id, practice_id" constraintName="uk_practice_advice_practice"/>
+        <addUniqueConstraint tableName="practice_advice" columnNames="id, person_account_id, workspace_id" constraintName="uk_practice_advice_owner"/>
+        <addForeignKeyConstraint baseTableName="practice_advice" baseColumnNames="workspace_id" constraintName="sfk_practice_advice_workspace" onDelete="CASCADE" referencedTableName="workspace" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="practice_advice" baseColumnNames="person_account_id" constraintName="sfk_practice_advice_account" onDelete="CASCADE" referencedTableName="account" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="practice_advice" baseColumnNames="practice_id,workspace_id" constraintName="sfk_practice_advice_practice" onDelete="CASCADE" referencedTableName="practice" referencedColumnNames="id,workspace_id"/>
+        <createIndex tableName="practice_advice" indexName="idx_practice_advice_person">
+            <column name="person_account_id"/>
+        </createIndex>
+        <createIndex tableName="practice_advice" indexName="idx_practice_advice_practice">
+            <column name="practice_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795742347298-2" author="hephaestus">
+        <comment>The advice entry's states. A retire reason goes with the retired state, and a dismissal keeps its time and items together.</comment>
+        <sql>
+ALTER TABLE practice_advice ADD CONSTRAINT ck_practice_advice_state CHECK (state IN ('CURRENT', 'RETIRED'));
+ALTER TABLE practice_advice ADD CONSTRAINT ck_practice_advice_retire_reason CHECK (retire_reason IN ('RESOLVED', 'NO_LONGER_APPLIES'));
+ALTER TABLE practice_advice ADD CONSTRAINT ck_practice_advice_retired CHECK (
+    (state = 'RETIRED') = (retire_reason IS NOT NULL) AND (state = 'RETIRED') = (retired_at IS NOT NULL));
+ALTER TABLE practice_advice ADD CONSTRAINT ck_practice_advice_dismissal CHECK ((dismissed_at IS NULL) = (dismissed_items IS NULL));
+ALTER TABLE practice_advice ADD CONSTRAINT ck_practice_advice_version CHECK (version &gt;= 0 AND (latest_revision IS NULL OR latest_revision &gt;= 1));
+        </sql>
+        <rollback>
+ALTER TABLE practice_advice DROP CONSTRAINT ck_practice_advice_version;
+ALTER TABLE practice_advice DROP CONSTRAINT ck_practice_advice_dismissal;
+ALTER TABLE practice_advice DROP CONSTRAINT ck_practice_advice_retired;
+ALTER TABLE practice_advice DROP CONSTRAINT ck_practice_advice_retire_reason;
+ALTER TABLE practice_advice DROP CONSTRAINT ck_practice_advice_state;
+        </rollback>
+    </changeSet>
+    <changeSet id="1795742347298-3" author="hephaestus">
+        <comment>An immutable advice revision. Its text becomes NULL only when the evidence behind it is deleted.</comment>
+        <createTable tableName="practice_advice_revision">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advice_revisionPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="person_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="advice_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="number" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text" type="TEXT"/>
+            <column name="review_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cited_count" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_count" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="written_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stale_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="practice_advice_revision" columnNames="advice_id, number" constraintName="uk_practice_advice_revision_number"/>
+        <addUniqueConstraint tableName="practice_advice_revision" columnNames="id, person_account_id, workspace_id" constraintName="uk_practice_advice_revision_owner"/>
+        <addForeignKeyConstraint baseTableName="practice_advice_revision" baseColumnNames="advice_id,person_account_id,workspace_id" constraintName="sfk_practice_advice_revision_advice" onDelete="CASCADE" referencedTableName="practice_advice" referencedColumnNames="id,person_account_id,workspace_id"/>
+        <createIndex tableName="practice_advice_revision" indexName="idx_practice_advice_revision_advice">
+            <column name="advice_id"/>
+            <column name="person_account_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>
+ALTER TABLE practice_advice_revision ADD CONSTRAINT ck_practice_advice_revision_text CHECK (text IS NOT NULL OR stale_at IS NOT NULL);
+ALTER TABLE practice_advice_revision ADD CONSTRAINT ck_practice_advice_revision_counts CHECK (number &gt;= 1 AND cited_count &gt;= 1 AND source_count &gt;= cited_count);
+        </sql>
+        <rollback>
+            <dropTable tableName="practice_advice_revision"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795742347298-4" author="hephaestus">
+        <comment>The observations behind an advice revision: every one the model saw, and which of them the text cites. They are references, never copies.</comment>
+        <createTable tableName="practice_advice_source">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advice_sourcePK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="person_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="result_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="problem_id" type="UUID"/>
+            <column name="cited" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ordinal" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="practice_advice_source" baseColumnNames="revision_id,person_account_id,workspace_id" constraintName="sfk_practice_advice_source_revision" onDelete="CASCADE" referencedTableName="practice_advice_revision" referencedColumnNames="id,person_account_id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="practice_advice_source" baseColumnNames="result_id,person_account_id,workspace_id" constraintName="sfk_practice_advice_source_result" onDelete="CASCADE" referencedTableName="result" referencedColumnNames="id,person_account_id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="practice_advice_source" baseColumnNames="problem_id,result_id,workspace_id" constraintName="sfk_practice_advice_source_problem" onDelete="CASCADE" referencedTableName="problem" referencedColumnNames="id,result_id,workspace_id"/>
+        <createIndex tableName="practice_advice_source" indexName="idx_practice_advice_source_result">
+            <column name="result_id"/>
+            <column name="person_account_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="practice_advice_source" indexName="idx_practice_advice_source_revision">
+            <column name="revision_id"/>
+            <column name="person_account_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="practice_advice_source" indexName="idx_practice_advice_source_problem">
+            <column name="problem_id"/>
+            <column name="result_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>
+ALTER TABLE practice_advice_source ADD CONSTRAINT uk_practice_advice_source_ref UNIQUE NULLS NOT DISTINCT (revision_id, result_id, problem_id);
+ALTER TABLE practice_advice_source ADD CONSTRAINT ck_practice_advice_source_ordinal CHECK (ordinal &gt;= 0);
+        </sql>
+        <rollback>
+            <dropTable tableName="practice_advice_source"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -78,6 +78,7 @@ ConversationEntryDTO.seq
 ConversationLinkDTO.itemId  # identifier
 ConversationThreadSummaryDTO.latestSeq
 ConversationThreadSummaryDTO.replyCount  # replies
+ConversationUsedSourceDTO.count  # repositories, files, commands or searches of one answer
 ConversationTurnDTO.attempt
 ConversationTurnDTO.maxAttempts
 ConversationTurnDTO.scopeEpoch  # removal generation
@@ -204,6 +205,7 @@ PersonDataProviderDTO.id  # identifier
 PersonDataRequestDTO.completed
 PersonDataRequestDTO.counts  # rows of one named person, for their data request
 PersonDataScopeDTO.accountId  # identifier
+PersonalGoalDTO.revision  # revision of the signed-in owner's goal
 PracticeDTO.position
 PracticeDraftDTO.versionNumber
 PracticeFileProblemDTO.column

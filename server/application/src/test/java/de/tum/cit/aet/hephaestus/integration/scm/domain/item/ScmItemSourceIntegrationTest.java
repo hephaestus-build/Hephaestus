@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 
@@ -78,6 +80,8 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
@@ -111,6 +115,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -123,7 +128,11 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -1210,6 +1219,79 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(repositories.isMonitored(other.getId(), repository.getId())).isTrue();
     }
 
+    /**
+     * A standings read is one snapshot ({@code PageReadSnapshot}). A repository withdrawn while it reads does not refuse
+     * the results it checks after the withdrawal, so the page shows one state, the one at its start, never some results
+     * from before and some from after. The next read sees the withdrawal. A check outside a page read sees it at once
+     * ({@link #shouldRefuseTheNextResultWhenItsRepositoryIsWithdrawnDuringTheRead}).
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldReadOneStateWhenARepositoryIsWithdrawnDuringAStandingsRead(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        var repository = fixture.repository();
+        var holder = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.REPOSITORY, repository.getId(), null, null));
+        var firstWork = progressIssue(fixture, 320, null);
+        var nextWork = progressIssue(fixture, 321, null);
+        var firstItem = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, firstWork.getId(), holder.itemId(), null));
+        var nextItem = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, nextWork.getId(), holder.itemId(), null));
+        var scenario = parentScenario(fixture, firstItem);
+        var onNext = new ReviewIntegrationData.Scenario(
+                scenario.workspace(),
+                scenario.account(),
+                scenario.practice(),
+                itemRows.findByIdAndWorkspaceId(nextItem.itemId(), workspaceId).orElseThrow());
+        var at = Instant.now().minus(1, ChronoUnit.HOURS);
+        retainCompleteCustody(resultData.result(scenario, ResultOutcome.MET, at));
+        retainCompleteCustody(resultData.result(onNext, ResultOutcome.MET, at.plusSeconds(1)));
+        long monitorId = monitors.findByWorkspaceIdAndNameWithOwner(workspaceId, repository.getNameWithOwner())
+                .orElseThrow()
+                .getId();
+        long first = firstWork.getId();
+        long next = nextWork.getId();
+        var withdrawn = new AtomicBoolean();
+        doAnswer(call -> {
+                    var work = call.callRealMethod();
+                    // Whichever work the read checks first, the other is checked after the withdrawal commits.
+                    if (withdrawn.compareAndSet(false, true))
+                        CompletableFuture.runAsync(() -> monitors.deleteById(monitorId))
+                                .join();
+                    return work;
+                })
+                .when(itemAccess)
+                .work(eq(ScmItemEvents.ISSUE), longThat(id -> id == first || id == next));
+        String slug = scenario.practice().getSlug();
+        var developer = Jwt.withTokenValue("one-snapshot")
+                .header("alg", "none")
+                .subject(String.valueOf(scenario.account().getId()))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(developer));
+        try {
+            var during = strengths(standings.getStandings(workspaceId), slug);
+            assertThat(withdrawn).isTrue();
+            var after = strengths(standings.getStandings(workspaceId), slug);
+
+            assertThat(during).as("both works, read as of the read's start").hasSize(2);
+            assertThat(after).as("the next read, after the withdrawal").isEmpty();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static List<PracticeStandingResultDTO> strengths(List<PracticeStandingDTO> standings, String slug) {
+        return standings.stream()
+                .filter(standing -> standing.slug().equals(slug))
+                .findFirst()
+                .map(PracticeStandingDTO::strengths)
+                .orElse(List.of());
+    }
+
     private void retainCompleteCustody(Result result) {
         var complete = mapper.createObjectNode()
                 .set("custody", mapper.valueToTree(new HistoryCustody(true, false, List.of(), List.of(), List.of())))
@@ -1835,12 +1917,20 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     /**
      * Freshness at a practice's start compares what its capture read with what the work holds now. A pull request that
      * did not change since fingerprints the same for every record source, also when the discussion sync finished in
-     * between, and a remark that arrived since changes only its own source.
+     * between and when an event review reads its retained occasion, and a remark that arrived since changes only its
+     * own source.
      */
     @ParameterizedTest
-    @CsvSource({"GITHUB,false", "GITHUB,true", "GITLAB,false", "GITLAB,true"})
+    @CsvSource({
+        "GITHUB,false,false",
+        "GITHUB,true,false",
+        "GITLAB,false,false",
+        "GITLAB,true,false",
+        "GITHUB,false,true",
+        "GITLAB,true,true"
+    })
     void shouldFingerprintAnUnchangedPullRequestAtStartAsItsCaptureDid(
-            IdentityProviderType type, boolean syncFinishedAfterCapture) {
+            IdentityProviderType type, boolean syncFinishedAfterCapture, boolean eventReview) {
         var fixture = fixture(type);
         var issue = new Issue();
         issue.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
@@ -1902,23 +1992,41 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         if (syncFinishedAfterCapture)
             jdbc.update("UPDATE issue SET discussion_read_whole=FALSE WHERE id=?", pull.getId());
         var snapshot = sources.pin(pullRef, null);
+        // An event review captures the occasion that its event retained; a requested review reads the work as stored.
+        UUID occasion = eventReview
+                ? transactions.execute(status -> writer.record(new ItemEventInput(
+                        pullRef.workspaceId(),
+                        pullRef.itemId(),
+                        ScmItemEvents.PULL_REQUEST_SYNCHRONIZED,
+                        snapshot.version().value(),
+                        null,
+                        Instant.parse("2026-10-01T11:30:00Z"),
+                        FoundBy.WEBHOOK,
+                        null,
+                        null,
+                        Objects.requireNonNull(sources.retain(pullRef, snapshot.version(), FoundBy.WEBHOOK)))))
+                : null;
 
         try (var evidence = contexts.prepare(
                 snapshot,
-                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, kinds, "3.0.0", 3, null, kinds))) {
+                new CaptureRequest(
+                        UUID.randomUUID(), UUID.randomUUID(), 0, kinds, "3.0.0", 3, null, kinds, occasion))) {
             var captured = CapturedSourceFingerprints.of(mapper, evidence);
             assertThat(captured).isNotEmpty();
             // The sync then finishes without finding anything new: the work itself did not change.
             if (syncFinishedAfterCapture)
                 jdbc.update("UPDATE issue SET discussion_read_whole=TRUE WHERE id=?", pull.getId());
             var current = fingerprints.fingerprints(
-                    pullRef, captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()), null, mapper);
+                    pullRef,
+                    captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()),
+                    occasion,
+                    mapper);
             assertThat(current.entrySet().stream()
                             .collect(Collectors.toMap(entry -> entry.getKey().value(), Map.Entry::getValue)))
                     .isEqualTo(captured);
             var facts = mapper.createObjectNode();
             facts.set(ReviewCaptureDecision.SOURCE_FINGERPRINTS, mapper.valueToTree(captured));
-            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
+            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), occasion, facts);
             assertThat(unchanged.currentness()).isEqualTo(Currentness.CURRENT);
             assertThat(unchanged.changed()).isEmpty();
 
@@ -1933,7 +2041,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                     pull.getId(),
                     Timestamp.from(Instant.parse("2026-10-01T12:00:00Z")),
                     fixture.author().getId());
-            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
+            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), occasion, facts);
             assertThat(changed.currentness()).isEqualTo(Currentness.STALE);
             assertThat(changed.changed()).containsExactly(GeneralReviewCommentContentSource.KIND.value());
         }
@@ -1945,32 +2053,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
      */
     @Test
     void shouldCheckThePinOnceWhenAPullRequestsRecordSourcesAreRead() {
-        var fixture = fixture(IdentityProviderType.GITHUB);
-        var pull = new PullRequest();
-        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
-        pull.setProvider(fixture.provider());
-        pull.setRepository(fixture.repository());
-        pull.setNumber(41);
-        pull.setTitle("A change read for its sources");
-        pull.setBody("Its record sources are read for freshness.");
-        pull.setState(Issue.State.OPEN);
-        pull.setAuthor(fixture.author());
-        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/41");
-        pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
-        pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
-        pull.setHeadRefOid("e".repeat(40));
-        pull.setBaseRefOid("f".repeat(40));
-        pull.setHeadRefName("topic");
-        pull.setBaseRefName("main");
-        pull = pulls.saveAndFlush(pull);
-        ItemRef holder = writer.upsert(new ItemRegistration(
-                fixture.workspace().getId(),
-                ScmItemEvents.REPOSITORY,
-                fixture.repository().getId(),
-                null,
-                null));
-        ItemRef pullRef = writer.upsert(new ItemRegistration(
-                holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
         Set<SourceKind> all = Set.of(
                 PullRequestContentSource.CORE,
                 PullRequestContentSource.COMMENTS,
@@ -1995,6 +2078,118 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         return sql.stream()
                 .filter(statement -> statement.contains(" from item i1_0 where i1_0.id=? and i1_0.workspace_id=?"))
                 .count();
+    }
+
+    /**
+     * A page read is one read-only snapshot ({@code PageReadSnapshot}), in which every row reads as of one moment. The
+     * record sources of a pull request each authorize its repository, and in one snapshot every answer comes from the
+     * same rows, so the repository is authorized once: five sources load the pull request as often as one does.
+     */
+    @Test
+    void shouldAuthorizeAPullRequestsRepositoryOnceWhenItsRecordSourcesAreReadInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        Set<SourceKind> all = Set.of(
+                PullRequestContentSource.CORE,
+                PullRequestContentSource.COMMENTS,
+                PullRequestContentSource.CHECKS,
+                GeneralReviewCommentContentSource.KIND,
+                ReviewThreadContentSource.KIND);
+        var snapshot = inOneSnapshot();
+
+        var one = reads.measure(() -> Objects.requireNonNull(snapshot.execute(
+                status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper))));
+        var five = reads.measure(() -> Objects.requireNonNull(
+                snapshot.execute(status -> fingerprints.fingerprints(pullRef, all, null, mapper))));
+
+        assertThat(five.value()).containsKey(PullRequestContentSource.CORE);
+        assertThat(pullRequestLookups(five.sql()))
+                .as("pull request lookups of five sources in one snapshot, %s", five.sql())
+                .isPositive()
+                .isEqualTo(pullRequestLookups(one.sql()));
+    }
+
+    /**
+     * A read-only REPEATABLE READ transaction, as a page read runs ({@code PageReadSnapshot}). A page read's service
+     * method starts the request's transaction. measure() reads in a READ COMMITTED transaction of its own, so this one
+     * starts its own too: a transaction that joins another keeps the other's isolation.
+     */
+    private TransactionTemplate inOneSnapshot() {
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return snapshot;
+    }
+
+    /**
+     * In one snapshot, the record sources of a pull request decide each contributor's consent once: every source
+     * names the same author, and each decision would read the same rows. Each source still records its own copy.
+     */
+    @Test
+    void shouldDecideEachContributorOnceWhenItsRecordSourcesAreReadInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        Set<SourceKind> all = Set.of(
+                PullRequestContentSource.CORE,
+                PullRequestContentSource.COMMENTS,
+                PullRequestContentSource.CHECKS,
+                GeneralReviewCommentContentSource.KIND,
+                ReviewThreadContentSource.KIND);
+        var snapshot = inOneSnapshot();
+
+        var one = reads.measure(() -> Objects.requireNonNull(snapshot.execute(
+                status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper))));
+        var five = reads.measure(() -> Objects.requireNonNull(
+                snapshot.execute(status -> fingerprints.fingerprints(pullRef, all, null, mapper))));
+
+        assertThat(five.value()).containsKey(PullRequestContentSource.CORE);
+        assertThat(accountLookups(five.sql()))
+                .as("account lookups of five sources in one snapshot, %s", five.sql())
+                .isPositive()
+                .isEqualTo(accountLookups(one.sql()));
+    }
+
+    /** The account of a provider identity, which every consent decision reads. */
+    private static long accountLookups(List<String> sql) {
+        return sql.stream()
+                .filter(statement -> statement.contains("FROM identity WHERE provider_id=? AND provider_user_key=?"))
+                .count();
+    }
+
+    /** The pull request with its author, repository and provider, which repository authorization reads first. */
+    private static long pullRequestLookups(List<String> sql) {
+        return sql.stream()
+                .filter(statement -> statement.startsWith("select pr1_0.id,a1_0.id,")
+                        && statement.contains("left join repository r1_0")
+                        && statement.contains("pr1_0.id=?"))
+                .count();
+    }
+
+    private ItemRef recordedPullRequest(Fixture fixture) {
+        var pull = new PullRequest();
+        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        pull.setProvider(fixture.provider());
+        pull.setRepository(fixture.repository());
+        pull.setNumber(41);
+        pull.setTitle("A change read for its sources");
+        pull.setBody("Its record sources are read for freshness.");
+        pull.setState(Issue.State.OPEN);
+        pull.setAuthor(fixture.author());
+        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/41");
+        pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setHeadRefOid("e".repeat(40));
+        pull.setBaseRefOid("f".repeat(40));
+        pull.setHeadRefName("topic");
+        pull.setBaseRefName("main");
+        pull = pulls.saveAndFlush(pull);
+        ItemRef holder = writer.upsert(new ItemRegistration(
+                fixture.workspace().getId(),
+                ScmItemEvents.REPOSITORY,
+                fixture.repository().getId(),
+                null,
+                null));
+        return writer.upsert(new ItemRegistration(
+                holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
     }
 
     private Fixture fixture(IdentityProviderType type) {

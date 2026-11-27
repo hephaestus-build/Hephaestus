@@ -83,7 +83,8 @@ class ReviewPreparationFailureTest extends BaseUnitTest {
                 new JsonMapper(),
                 telemetry,
                 files,
-                authority);
+                authority,
+                mock(ReviewPoolAdmission.class));
 
         assertThatThrownBy(() -> preparation.prepare(
                         job.getId(), job, fence, mock(ConfigSnapshot.class), new AtomicReference<>()))
@@ -150,7 +151,8 @@ class ReviewPreparationFailureTest extends BaseUnitTest {
                 mapper,
                 mock(ReviewJobTelemetry.class, Answers.RETURNS_DEEP_STUBS),
                 files,
-                mock(AgentRunAuthority.class));
+                mock(AgentRunAuthority.class),
+                mock(ReviewPoolAdmission.class));
         var snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
                 new FrozenModel(

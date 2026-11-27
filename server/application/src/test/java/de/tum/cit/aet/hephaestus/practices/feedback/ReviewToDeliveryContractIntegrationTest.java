@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionPlans;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.WorkPlaceScope;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
@@ -144,6 +145,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -170,7 +172,9 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -181,6 +185,7 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
@@ -643,6 +648,249 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(recorded())
                     .as("the sealed result counts once its review commits")
                     .isEqualTo(recordedBefore + 1);
+        }
+    }
+
+    @Test
+    void shouldHandTheWorkPlaceOneScopedCopyInTheSealsTransaction() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var seal = new SealResultsRequestDTO(
+                    3, review.reviewId(), review.identity().jobId(), 0);
+            Instant before = Instant.now();
+            double writtenBefore = handoffs("written", "none");
+            admission.admit(review.identity(), seal, () -> {});
+            assertThat(handoffs("written", "none")).isEqualTo(writtenBefore + 1);
+
+            var row = jdbc.queryForMap(
+                    "SELECT id, job_id, item_id, producer, payload::text AS payload, payload_digest"
+                            + " FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            var expiresAt = jdbc.queryForObject(
+                    "SELECT expires_at FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    OffsetDateTime.class,
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(row.get("job_id")).isEqualTo(review.identity().jobId());
+            assertThat(row.get("item_id")).isEqualTo(review.item().itemId());
+            assertThat(row.get("producer")).isEqualTo("LEGACY");
+            assertThat(Objects.requireNonNull(expiresAt).toInstant())
+                    .isBefore(Instant.now().plus(WorkPlaceScope.COPY_DEADLINE).plusSeconds(1))
+                    .isAfter(before.plus(WorkPlaceScope.COPY_DEADLINE).minusSeconds(1));
+            var payload = mapper.readTree((String) row.get("payload"));
+            assertThat(payload.path("results"))
+                    .isNotEmpty()
+                    .allSatisfy(
+                            result -> assertThat(result.path("publicEligible").asBoolean())
+                                    .isTrue());
+            assertThat(WorkPlaceScope.read(payload, (String) Objects.requireNonNull(row.get("payload_digest")))
+                            .results())
+                    .as("the copy matches its digest after PostgreSQL reorders its keys")
+                    .isNotEmpty()
+                    .allSatisfy(
+                            result -> assertThat(result.path("publicEligible").asBoolean())
+                                    .isTrue());
+            assertThat(payload.path("files").propertyNames())
+                    .contains("INDEX.json")
+                    .noneMatch(path -> path.equals("INDEX.md")
+                            || path.startsWith("inputs/history/")
+                            || path.startsWith("composition/"));
+            assertThat(payload.path("files").propertyNames())
+                    .as("the text that the public result cites is in the copy")
+                    .anyMatch(path -> path.startsWith("context/staged/"));
+
+            // A repeated seal answers as the first one did and hands nothing again.
+            admission.admit(review.identity(), seal, () -> {});
+            assertThat(jdbc.queryForList(
+                            "SELECT id, payload_digest FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .singleElement()
+                    .satisfies(again -> {
+                        assertThat(again.get("id")).isEqualTo(row.get("id"));
+                        assertThat(again.get("payload_digest")).isEqualTo(row.get("payload_digest"));
+                    });
+        }
+    }
+
+    @Test
+    void shouldCommitTheSealAndCountAFailureWhenTheHandoffCannotDecodeItsInputs() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+            jdbc.update(
+                    "DELETE FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(jdbc.update(
+                            "UPDATE review_composition_basis SET payload=jsonb_set(payload, '{files,INDEX.json}',"
+                                    + " '\"not base64!\"') WHERE workspace_id=? AND job_id=?",
+                            review.workspaceId(),
+                            review.identity().jobId()))
+                    .isOne();
+            double failedBefore = handoffs("failed", "unreadable");
+
+            // The seal's listener runs in the caller's transaction: it commits, with no handoff.
+            transactions.executeWithoutResult(status -> {
+                events.publishEvent(new ReviewSealed(
+                        review.reviewId(),
+                        review.workspaceId(),
+                        review.identity().jobId()));
+                assertThat(status.isRollbackOnly()).isFalse();
+            });
+
+            assertThat(handoffRows(review)).isZero();
+            assertThat(handoffs("failed", "unreadable")).isEqualTo(failedBefore + 1);
+        }
+    }
+
+    @Test
+    void shouldCommitBothOfTwoRacingSealsAndWriteOneHandoff() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+            jdbc.update(
+                    "DELETE FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            double writtenBefore = handoffs("written", "none");
+            double alreadyBefore = handoffs("skipped", "already_written");
+            var sealed = new ReviewSealed(
+                    review.reviewId(), review.workspaceId(), review.identity().jobId());
+            var firstWrote = new CountDownLatch(1);
+            try (var executor = Executors.newFixedThreadPool(2)) {
+                var first = CompletableFuture.runAsync(
+                        () -> transactions.executeWithoutResult(status -> {
+                            events.publishEvent(sealed);
+                            firstWrote.countDown();
+                            // Holds the review key uncommitted until the second seal waits for it. The condition
+                            // runs on this thread, because only this thread's connection is in the transaction.
+                            await().atMost(Duration.ofSeconds(30))
+                                    .pollInSameThread()
+                                    .until(this::anotherSealWaitsForThisOne);
+                        }),
+                        executor);
+                assertThat(firstWrote.await(30, TimeUnit.SECONDS)).isTrue();
+                var second = CompletableFuture.runAsync(
+                        () -> transactions.executeWithoutResult(status -> events.publishEvent(sealed)), executor);
+                CompletableFuture.allOf(first, second).get(60, TimeUnit.SECONDS);
+            }
+
+            assertThat(handoffRows(review)).isOne();
+            assertThat(handoffs("written", "none")).isEqualTo(writtenBefore + 1);
+            assertThat(handoffs("skipped", "already_written")).isEqualTo(alreadyBefore + 1);
+        }
+    }
+
+    private double handoffs(String outcome, String reason) {
+        return count(AgentMetrics.AGENT_JOB_WORK_PLACE_HANDOFF, "outcome", outcome, "reason", reason);
+    }
+
+    private int handoffRows(ClaimedReview review) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                Integer.class,
+                review.workspaceId(),
+                review.reviewId()));
+    }
+
+    /** Whether another transaction waits for the caller's own, which holds the review key uncommitted. */
+    private boolean anotherSealWaitsForThisOne() {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted"
+                        + " AND transactionid = pg_current_xact_id()::xid)",
+                Boolean.class));
+    }
+
+    @Test
+    void shouldKeepAPrivateSiblingPracticeOutOfTheWorkPlaceCopy() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace().getId(),
+                    "private-sibling",
+                    scenario.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    1,
+                    review.developerId()));
+            admissions.assigned(review.pending(), sibling);
+            // Off: its result stays recorded and may support no feedback on the work.
+            jdbc.update(
+                    "UPDATE practice SET feedback_mode='OFF' WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    sibling.getId());
+            var original = request(review);
+            admission.stage(review.identity(), original);
+            var sent = original.results().getFirst();
+            admission.stage(
+                    review.identity(),
+                    new AdmissionRequestDTO(
+                            3,
+                            review.reviewId(),
+                            review.identity().jobId(),
+                            0,
+                            List.of(new SubmittedResultDTO(
+                                    sibling.getSlug(),
+                                    sent.itemId(),
+                                    sent.itemVersion(),
+                                    sent.candidate(),
+                                    sent.readReceipts())),
+                            List.of()));
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+
+            var payload = mapper.readTree(jdbc.queryForObject(
+                    "SELECT payload::text FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                    String.class,
+                    review.workspaceId(),
+                    review.reviewId()));
+            assertThat(payload.path("results"))
+                    .extracting(result -> result.path("practiceSlug").asString())
+                    .containsExactly(review.practiceSlug());
+            assertThat(payload.path("notReached").toString()).contains(sibling.getSlug());
+            assertThat(payload.path("files").propertyNames())
+                    .noneMatch(path -> path.endsWith("/" + sibling.getSlug() + ".md"));
+            var catalog = mapper.readTree(Base64.getDecoder()
+                    .decode(payload.path("files")
+                            .path("inputs/practices/index.json")
+                            .asString()));
+            assertThat(catalog)
+                    .extracting(practice -> practice.path("slug").asString())
+                    .containsExactly(review.practiceSlug());
+        }
+    }
+
+    @Test
+    void shouldHandTheWorkPlaceNothingWhenNoResultMaySpeakOnTheWork() {
+        try (var review = claimedReview(FeedbackMode.OFF)) {
+            admission.stage(review.identity(), request(review));
+            double nothingBefore = handoffs("skipped", "nothing_public");
+            admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
+            assertThat(resultIds(review)).isNotEmpty();
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            Integer.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isZero();
+            assertThat(handoffs("skipped", "nothing_public")).isEqualTo(nothingBefore + 1);
         }
     }
 

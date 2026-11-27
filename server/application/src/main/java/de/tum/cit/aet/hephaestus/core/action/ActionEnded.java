@@ -15,4 +15,5 @@ public record ActionEnded(
         String idempotencyKey,
         ActionState state,
         ActionStopReason reason,
-        @Nullable String readbackRef) {}
+        @Nullable String readbackRef,
+        @Nullable String decisionCode) {}

@@ -108,6 +108,9 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     private ObjectMapper mapper;
 
     @Autowired
+    private ConversationBasis basis;
+
+    @Autowired
     private OwnerScope ownerScope;
 
     @Autowired
@@ -352,7 +355,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     /** Redaction that counts, after commit, the entries each erasure reported as changed. */
     private ConversationRedaction reportingRedaction() {
         return new ConversationRedaction(
-                copies, entryRepository, historyRemoval, turnRows, digestTurns, turnRuns, reporting(), mapper);
+                copies, entryRepository, historyRemoval, turnRows, digestTurns, turnRuns, reporting(), mapper, basis);
     }
 
     private ApplicationEventPublisher reporting() {
@@ -469,7 +472,15 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         AtomicInteger calls = new AtomicInteger();
         ConversationRedaction dying =
                 new ConversationRedaction(
-                        copies, entryRepository, historyRemoval, turnRows, digestTurns, turnRuns, reporting(), mapper) {
+                        copies,
+                        entryRepository,
+                        historyRemoval,
+                        turnRows,
+                        digestTurns,
+                        turnRuns,
+                        reporting(),
+                        mapper,
+                        basis) {
                     @Override
                     public boolean removeHistory(long workspaceId, long accountId, List<UUID> entryIds) {
                         boolean removed = super.removeHistory(workspaceId, accountId, entryIds);
@@ -581,7 +592,8 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                                             digestTurns,
                                             turnRuns,
                                             reporting(Objects.requireNonNull(reportedBy.get(replica))),
-                                            mapper) {
+                                            mapper,
+                                            basis) {
                                         @Override
                                         public boolean removeHistory(long workspaceId, long accountId, List<UUID> ids) {
                                             firstPage.put(replica, List.copyOf(ids));

@@ -92,6 +92,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "agent_run",
             // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
             "agent_sandbox",
+            // Which conversation entry an attempt read, and its revision: entry ids, no words and no person. A row
+            // goes with the entry it names, so a person's erasure deletes it with their conversations.
+            "basis_edge",
             "commit_pull_request",
             "connection",
             "connection_activity",
@@ -144,6 +147,22 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "workspace_team_label_filter",
             "workspace_team_repository_settings",
             "workspace_team_settings");
+
+    /**
+     * Person tables that the next release registers in the person-data inventory (expand, then contract). A replica of
+     * the previous release then never meets their stores in an erasure that it runs, so no erasure fails during the
+     * rollout. Nothing writes these tables before the registration release, so they are empty and an erasure that skips
+     * them loses nothing. The release that registers a table's store removes its entry.
+     */
+    private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.of(
+            "practice_advice",
+            "Advice entries (ADR 0160). Advice writes come only in a release after the registration",
+            "practice_advice_revision",
+            "Advice revisions (ADR 0160). Advice writes come only in a release after the registration",
+            "practice_advice_source",
+            "Advice sources (ADR 0160). Advice writes come only in a release after the registration",
+            "slack_dm_producer_pin",
+            "Slack DM producer pins stay empty until the erasure inventory registers the store");
 
     /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
     private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(
@@ -213,9 +232,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     .isEmpty();
         }
     }
-
-    // These tables remain empty until the release that registers their account-erasure store.
-    private static final Set<String> REGISTERED_NEXT_RELEASE = Set.of("slack_dm_producer_pin");
 
     /**
      * The namespace of a source, like a repository's {@code owner/name}: the name of the provider account that a
@@ -331,13 +347,14 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(declared).doesNotContain("personal_goal");
         assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
                 .contains("personal_goal.account_id");
-        required.removeAll(REGISTERED_NEXT_RELEASE);
+        required.removeAll(REGISTERED_NEXT_RELEASE.keySet());
+        // By store id or by the table that a store erases: a store can carry another id than its table.
         assertThat(declared)
-                .as("a registered table leaves REGISTERED_NEXT_RELEASE")
-                .doesNotContainAnyElementsOf(REGISTERED_NEXT_RELEASE);
-        assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE, registry.stores()))
-                .as("a table covered by a registered store leaves REGISTERED_NEXT_RELEASE")
-                .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE);
+                .as("a table registered now leaves REGISTERED_NEXT_RELEASE")
+                .doesNotContainAnyElementsOf(REGISTERED_NEXT_RELEASE.keySet());
+        assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE.keySet(), registry.stores()))
+                .as("a table that a registered store erases leaves REGISTERED_NEXT_RELEASE")
+                .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE.keySet());
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);

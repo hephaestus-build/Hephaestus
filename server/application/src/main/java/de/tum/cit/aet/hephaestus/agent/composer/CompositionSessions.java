@@ -102,9 +102,9 @@ public class CompositionSessions {
         this.toolTrace = toolTrace;
         this.plans = plans;
         this.readbackPause = readbackPause;
-        String style = ComposerTurns.sharedStyle();
-        this.reviewSystem = style + "\n\n" + ComposerTurns.prompt("review-composer.md");
-        this.privateSystem = style + "\n\n" + ComposerTurns.prompt("feedback-composer.md");
+        String style = ComposerPrompts.sharedStyle();
+        this.reviewSystem = ComposerPrompts.reviewSystem();
+        this.privateSystem = style + "\n\n" + ComposerPrompts.prompt("feedback-composer.md");
     }
 
     // ------------------------------------------------------------ the wire records

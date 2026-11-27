@@ -71,7 +71,11 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -938,7 +942,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
+                SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
     }
@@ -985,7 +989,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),
-                pools,
+                SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
         return new PoolScenario(pool.getId(), pool.getSlug(), selected, claims, pools);
@@ -1106,12 +1110,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         runningMeasurement(pool, narrow, Instant.now().minus(Duration.ofMinutes(2)), 1);
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
 
-        assertThat(new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
+        assertThat(SandboxReviewClaims.poolAdmission(context, pool.pools())
                         .pass(reviews)
                         .admits(due(wide)))
                 .as("one running session and six more exceed the six calls of measurements")
                 .isFalse();
-        assertThat(new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
+        assertThat(SandboxReviewClaims.poolAdmission(context, pool.pools())
                         .pass(reviews)
                         .admits(due(narrow)))
                 .as("one running session and one more fit")
@@ -1133,6 +1137,79 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE llm_call_pool SET learned_limit=8 WHERE id=?", pool.poolId());
         jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", job.getRunId());
         assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldReserveOnlyTheOpenPracticeOfARetryAndAdmitAnotherReviewBesideIt() {
+        var pool = poolScenario();
+        var retry = queued(pool.selected());
+        var another = queued(pool.selected());
+        var poolAdmission = SandboxReviewClaims.poolAdmission(context, pool.pools());
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=4 WHERE id=?", pool.poolId());
+        long open = withThirtyTwoPractices(retry);
+        var first = claimLeased(retry, pool.claims()).orElseThrow();
+        transactions.executeWithoutResult(status -> {
+            assertThat(jdbc.update(
+                            "UPDATE review_item SET state='WITHHELD', reason='EXECUTION_FAILED'"
+                                    + " WHERE workspace_id=? AND job_id=? AND practice_id<>?",
+                            retry.getWorkspaceId(),
+                            retry.getId(),
+                            open))
+                    .isEqualTo(31);
+            assertThat(reviewRuns.requeue(retry.getId(), first.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
+                    .isTrue();
+        });
+        runningMeasurement(pool, another, Instant.now().minus(Duration.ofMinutes(2)));
+
+        assertThat(poolAdmission.pass(reviews).admits(due(retry))).isTrue();
+        assertThat(claimLeased(retry, pool.claims())).isPresent();
+        var runningRetry = jobs.findById(retry.getId()).orElseThrow();
+        assertThat(poolAdmission.sessionLimit(pool.poolId(), runningRetry)).isEqualTo(1);
+
+        jdbc.update(
+                "UPDATE review_job SET started_at=clock_timestamp()-interval '2 minutes' WHERE id=?", retry.getId());
+        assertThat(poolAdmission.pass(reviews).admits(due(another))).isTrue();
+        assertThat(claimLeased(another, pool.claims())).isPresent();
+    }
+
+    private long withThirtyTwoPractices(ReviewJob job) {
+        var versions = context.getBean(PracticeVersionService.class);
+        var kind = new ItemKind("scm.pull_request");
+        var definition = DefinitionTestFixtures.definition(kind, "Pool fixture", "Pool fixture", null);
+        long item = job.getInput().itemId();
+        var frozen = LongStream.rangeClosed(1, 32)
+                .mapToObj(index -> {
+                    var practice = versions.create(new PracticeVersionService.NewPractice(
+                            job.getWorkspaceId(), "pool-fixture-" + index, kind, definition, null, 0, null));
+                    jdbc.update(
+                            "INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status)"
+                                    + " VALUES (?,?,?,?,'READY')",
+                            job.getReviewId(),
+                            job.getWorkspaceId(),
+                            practice.getId(),
+                            practice.getCurrentVersion().getId());
+                    jdbc.update(
+                            """
+                            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,job_id)
+                            SELECT ?,?,?,?,item_version,? FROM review WHERE workspace_id=? AND id=?
+                            """,
+                            job.getReviewId(),
+                            job.getWorkspaceId(),
+                            practice.getId(),
+                            item,
+                            job.getId(),
+                            job.getWorkspaceId(),
+                            job.getReviewId());
+                    return new ReviewAssignmentId(job.getReviewId(), practice.getId(), item);
+                })
+                .toList();
+        transactions.executeWithoutResult(status -> {
+            var stored = jobs.findById(job.getId()).orElseThrow();
+            stored.setInput(new ReviewJobInput(item, frozen));
+            jobs.saveAndFlush(stored);
+        });
+        return frozen.getLast().practiceId();
     }
 
     @Test
@@ -1172,7 +1249,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         withPractices(wide, 6);
         var narrow = queued(pool.selected());
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
-        var admission = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry());
+        var admission = SandboxReviewClaims.poolAdmission(context, pool.pools());
         var running = runningMeasurement(pool, narrow, Instant.now().minus(Duration.ofMinutes(2)), 1);
 
         var pass = admission.pass(reviews);
@@ -1240,7 +1317,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var second = queued(pool.selected());
         var third = queued(pool.selected());
         var meters = new SimpleMeterRegistry();
-        var admission = new ReviewPoolAdmission(jobs, pool.pools(), meters);
+        var admission =
+                new ReviewPoolAdmission(jobs, pool.pools(), context.getBean(ReviewAssignmentProgress.class), meters);
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
 
         var pass = admission.pass(reviews);
@@ -1276,8 +1354,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE agent_run SET available_at=clock_timestamp() + interval '1 hour' WHERE id=?",
                 budgetHeld.getRunId());
-        var pass = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
-                .pass(EnumSet.of(AgentRunKind.REVIEW));
+        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools()).pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(next)))
                 .as("an idle sandbox of a run that is not due holds no place in the pool")
@@ -1293,8 +1370,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET config_snapshot=jsonb_build_object('schemaVersion', ?) WHERE id=?",
                 ConfigSnapshot.SCHEMA_VERSION,
                 job.getId());
-        var pass = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
-                .pass(EnumSet.of(AgentRunKind.REVIEW));
+        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools()).pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(job))).isTrue();
     }
@@ -1396,7 +1472,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                pools,
+                SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
         assertThat(claimLeased(job, claims)).isEmpty();
@@ -1429,7 +1505,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                pools,
+                SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
         assertThat(claimLeased(job, claims)).hasValueSatisfying(claimed -> {
@@ -1457,7 +1533,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
+                SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
 
@@ -1674,7 +1750,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
+                SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
 
@@ -1707,7 +1783,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmBudgetService.class),
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
+                SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
 

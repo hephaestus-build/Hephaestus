@@ -1,0 +1,7 @@
+{
+  "format": "synthetic-board",
+  "cells": [
+    { "id": "c-use-gains", "row": "Gains", "column": "Use", "notes": ["Refunds arrive within a minute"] },
+    { "id": "c-use-impact", "row": "Wider impact", "column": "Use", "notes": ["Kiosk staff carry the returns"] }
+  ]
+}

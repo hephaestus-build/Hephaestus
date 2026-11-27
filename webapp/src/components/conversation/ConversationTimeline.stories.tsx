@@ -1012,9 +1012,13 @@ export const ComposerGrowth: Story = {
 		await waitFor(async () => {
 			await expect(viewport).toBeVisible();
 		});
-		await userEvent.click(canvas.getByRole("button", { name: "Jump to latest" }));
+		const jump = canvas.getByRole("button", { name: "Jump to latest" });
+		await userEvent.click(jump);
 		await waitFor(async () => {
 			await expect(atEnd(), "distance from the end after Jump to latest").toBeLessThanOrEqual(1);
+			// The view follows a growing composer only once the scroller knows it is at the end, which it
+			// learns after the scroll lands. The jump button reads the same state.
+			await expect(jump).toHaveAttribute("data-active", "false");
 		});
 		await userEvent.type(composer, "One{Shift>}{Enter}{/Shift}Two{Shift>}{Enter}{/Shift}Three");
 		await waitFor(async () => {
@@ -1331,7 +1335,7 @@ export const DeleteMessage: Story = {
 		const dialog = await screen.findByRole("alertdialog", { name: "Delete this message?" });
 		await expectSettledVisible(dialog);
 		await expect(dialog).toHaveAccessibleDescription(
-			"Hephaestus forgets it. If it has not answered yet, it does not answer. The replies in its thread stay. It and Hephaestus's answer stay in Slack. You cannot undo this.",
+			"Hephaestus forgets it and erases its own later answers that used it. If it has not answered yet, it does not answer. Your replies in its thread stay. It and Hephaestus's answer stay in Slack. You cannot undo this.",
 		);
 		await userEvent.click(within(dialog).getByRole("button", { name: "Delete message" }));
 		await expect(args.actions?.onDelete).toHaveBeenCalledWith(SLACK_QUESTION);

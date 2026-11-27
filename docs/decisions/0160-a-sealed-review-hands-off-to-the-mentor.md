@@ -174,3 +174,31 @@ Not enforced. The mentor's units RV1 to RV3 add these checks beside the code, an
 ## Sources
 
 - OpenAI, [Tasks and memory](https://learn.chatgpt.com/docs/dots/tasks-and-memory). A request can start work that finishes later, and the assistant keeps relevant continuity. This gives decision 3's task and the lasting advice.
+
+## Update — 2026-11-27: who counts as consenting for `MENTOR`
+
+Decision 1 gives `MENTOR` to a consenting author. For 1.0 there is no separate mentor consent record. At seal, the author consents when all of these hold:
+
+- the author resolves to a linked, active account
+- practice feedback delivery is on for them
+- their AI choice is not `NO_AI`
+- the person-data write fence admits them, with no processing restriction and no erasure
+
+This is the basis under which `REVIEW_COMPOSE` already writes private practice-page feedback, so private advice does not widen processing.
+Contact keeps its own permission through the contact policy.
+Personal context in Slack keeps its explicit grant (ADR 0161).
+Neither follows from this rule.
+If people need an explicit mentor opt-in, a later update adds it through a consent port.
+
+## Update — 2026-11-27: the AI choice must be explicit
+
+The update above admits an author whose AI choice is empty.
+Practice feedback delivery is on by default, so a person who never chose anything counts as consenting.
+That is not a choice the person made.
+
+For `MENTOR`, the AI choice must now be explicit: it is set, and it is not `NO_AI`.
+An author with no AI choice gets `WORK_PLACE`, the same as an author who chose `NO_AI`.
+The other three conditions stay.
+
+Staging uses the same rule.
+Its synthetic accounts set their AI choice, so the staging proof checks the production rule.

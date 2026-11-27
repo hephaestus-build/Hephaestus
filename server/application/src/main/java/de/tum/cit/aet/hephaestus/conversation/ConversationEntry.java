@@ -17,6 +17,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -33,6 +34,9 @@ import tools.jackson.databind.JsonNode;
  * <p>{@code payload} holds the Pi session entry for every entry that the turn driver appended ({@code ANSWER},
  * {@code TOOL_RESULT}, {@code SYSTEM}, {@code SUMMARY}), and for a {@code USER} entry once the end of its turn stored
  * Pi's entry for it ({@link ConversationTurnService#end}). A {@code DIGEST} payload holds the weekly digest membership.
+ *
+ * <p>An entry that a turn's attempt wrote derives from that attempt's basis ({@link ConversationBasis}). A question and
+ * a digest are what a turn answers, so they have none.
  */
 @Entity
 @Table(
@@ -51,6 +55,7 @@ import tools.jackson.databind.JsonNode;
         indexes = {
             @Index(name = "idx_conversation_entry_turn", columnList = "turn_id"),
             @Index(name = "idx_conversation_entry_workspace_surface", columnList = "workspace_id, surface"),
+            @Index(name = "idx_conversation_entry_basis", columnList = "basis_id"),
         })
 @DynamicUpdate
 @Getter
@@ -165,6 +170,20 @@ public class ConversationEntry implements Persistable<UUID> {
     @Column(name = "redacted_at")
     private Instant redactedAt;
 
+    /**
+     * The basis of the attempt that wrote the entry ({@link ConversationBasis}). {@code null} for a question or a digest,
+     * and for an entry that an attempt wrote before attempts recorded their basis: its sources are unknown, so it is
+     * the owner's app history only ({@link ConversationEntryRepository#UNPROVEN}).
+     */
+    @Nullable
+    @Column(name = "basis_id", updatable = false)
+    private UUID basisId;
+
+    /** Counts the edits of the entry's words, so a basis records which words it read. */
+    @Column(name = "revision", nullable = false)
+    @ColumnDefault("0")
+    private int revision;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -185,6 +204,7 @@ public class ConversationEntry implements Persistable<UUID> {
         this.searchText = draft.searchText();
         this.payload = draft.payload();
         this.slackTs = draft.slackTs();
+        this.basisId = draft.basisId();
         this.createdAt = now;
         this.fresh = true;
     }

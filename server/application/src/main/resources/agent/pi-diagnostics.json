@@ -180,6 +180,18 @@
 		"sessions_left": "count",
 		"skipped": "flag",
 		"status": ["failed", "not-finished", "not-reached", "ok", "withheld"],
+		"step": [
+			"input_read",
+			"lead_resolution",
+			"model_dispatch",
+			"practice_program",
+			"prompt",
+			"prompt_prepare",
+			"scan_read",
+			"session_close",
+			"session_open",
+			"stage_result"
+		],
 		"stop_reason": [
 			"aborted",
 			"deferred",

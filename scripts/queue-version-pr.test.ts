@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
+	acquireReleaseLock,
 	addedChangesets,
 	gateState,
 	isAtFront,
+	liftReleaseLock,
 	onlyVersionField,
 	onlyVersionLine,
 	ownWaitingRuns,
@@ -20,6 +25,95 @@ import {
 	type VersionCommit,
 	type VersionPullRequest,
 } from "./queue-version-pr.ts";
+
+void test("the release marker brackets a green Version jump and the pinned draft", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "release-lock-"));
+	t.after(async () => rm(directory, { recursive: true }));
+	const marker = path.join(directory, "queue-frozen");
+	const fake = fakeQueue();
+	let checks: VersionPullRequest["checks"] = "pending";
+	let merged = false;
+	let draft = false;
+	const logs = t.mock.method(console, "log", () => undefined);
+	const armedEntry = entry(15);
+	const needsReview = entry(16);
+	const armed = new Set([armedEntry, needsReview]);
+	const api = {
+		...fake.api,
+		repository: "example/project",
+		versionPullRequest: async () => ({ ...READY, checks }),
+		versionAt: async () => "1.0.0-rc.12",
+		verifySource: async (tag: string, sha: string) => {
+			assert.equal(tag, "v1.0.0-rc.12");
+			assert.equal(sha, "a".repeat(40));
+			if (!draft) {
+				throw new Error("draft target differs");
+			}
+		},
+		call: async (_command: string, args: string[]) => {
+			if (args[0] === "api") {
+				assert.ok(args.some((arg) => arg.startsWith("query=query")));
+				return [...armed].map((candidate) => JSON.stringify(candidate)).join("\n");
+			}
+			const number = Number(args[2]);
+			const pr = [...QUEUED, READY, armedEntry, needsReview].find(
+				(candidate) => candidate.number === number,
+			);
+			assert.ok(pr);
+			if (args[1] === "merge") {
+				const disabling = args.includes("--disable-auto");
+				await readFile(disabling ? marker : `${marker}.recovery`);
+				if (disabling) {
+					armed.delete(pr);
+				} else {
+					armed.add(pr);
+				}
+				return "";
+			}
+			return JSON.stringify({
+				...pr,
+				state: number === READY.number && merged ? "MERGED" : "OPEN",
+				baseRefName: "main",
+				reviewDecision: number === needsReview.number ? "REVIEW_REQUIRED" : "APPROVED",
+				mergeCommit: { oid: "a".repeat(40) },
+				autoMergeRequest: null,
+			});
+		},
+	};
+	await assert.rejects(acquireReleaseLock(api, marker), /has not passed/u);
+	await assert.rejects(readFile(marker), { code: "ENOENT" });
+	checks = "success";
+	await acquireReleaseLock(api, marker);
+	assert.deepEqual(fake.queue.numbers(), [READY.number]);
+	assert.equal(armed.size, 0);
+	await assert.rejects(liftReleaseLock(api, marker, false), /has not merged/u);
+	merged = true;
+	fake.queue.remove(READY.id);
+	await assert.rejects(liftReleaseLock(api, marker, false), /draft target differs/u);
+	await readFile(marker);
+	assert.deepEqual(fake.queue.numbers(), []);
+	draft = true;
+	await liftReleaseLock(api, marker, false);
+	assert.deepEqual(
+		fake.queue.numbers(),
+		QUEUED.map(({ number }) => number),
+	);
+	assert.deepEqual([...armed], [armedEntry]);
+	await assert.rejects(readFile(marker), { code: "ENOENT" });
+	assert.ok(
+		logs.mock.calls.some(({ arguments: args }) =>
+			String(args[0]).includes(
+				`Skipped armed #16 at ${needsReview.headRefOid}: review decision is REVIEW_REQUIRED`,
+			),
+		),
+	);
+	const receipts = await readdir(directory);
+	assert.equal(receipts.length, 1);
+	const [receipt] = receipts;
+	assert.ok(typeof receipt === "string" && receipt.startsWith("queue-frozen.lifted-"));
+	const contents = await readFile(path.join(directory, receipt), "utf8");
+	assert.ok(contents.includes(needsReview.headRefOid));
+});
 
 void test("only a changeset added after the Version PR's base makes it stale", () => {
 	const diff = [

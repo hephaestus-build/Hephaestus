@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795709850961-1" author="hephaestus">
+        <comment>The seal of a pull or merge request review hands its work place one scoped copy, written once per review (ADR 0121).</comment>
+        <createTable tableName="work_place_handoff">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="work_place_handoffPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="review_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_version" type="VARCHAR(1024)"/>
+            <column name="producer" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_digest" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795709850961-2" author="hephaestus">
+        <comment>One handoff per review: a repeated seal writes nothing.</comment>
+        <addUniqueConstraint columnNames="workspace_id, review_id" constraintName="uk_work_place_handoff_review" tableName="work_place_handoff"/>
+    </changeSet>
+    <changeSet id="1795709850961-3" author="hephaestus">
+        <comment>The handoffs of one work place, the job's cascade and erasure, and the retention sweep by expiry.</comment>
+        <createIndex indexName="ix_work_place_handoff_job" tableName="work_place_handoff">
+            <column name="job_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex indexName="ix_work_place_handoff_item" tableName="work_place_handoff">
+            <column name="workspace_id"/>
+            <column name="item_id"/>
+        </createIndex>
+        <createIndex indexName="ix_work_place_handoff_expiry" tableName="work_place_handoff">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795709850961-4" author="hephaestus">
+        <comment>A handoff goes with its sealing job, also when erasure deletes the job, and only within its job's workspace.</comment>
+        <addForeignKeyConstraint baseTableName="work_place_handoff" baseColumnNames="job_id,workspace_id" constraintName="sfk_work_place_handoff_job" referencedTableName="review_job" referencedColumnNames="id,workspace_id" onDelete="CASCADE" validate="true"/>
+        <addForeignKeyConstraint baseTableName="work_place_handoff" baseColumnNames="workspace_id" constraintName="sfk_work_place_handoff_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
+    </changeSet>
+    <changeSet id="1795709850961-5" author="hephaestus">
+        <comment>The producer of a review's copy on the work: the legacy composition or the work place's composer.</comment>
+        <sql>ALTER TABLE public.work_place_handoff ADD CONSTRAINT ck_work_place_handoff_producer CHECK (producer IN ('LEGACY', 'COMPOSER'))</sql>
+        <rollback>
+            <sql>ALTER TABLE public.work_place_handoff DROP CONSTRAINT ck_work_place_handoff_producer</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795709850961-6" author="hephaestus">
+        <comment>The payload is the one JSON object that the scope builder writes.</comment>
+        <sql>ALTER TABLE public.work_place_handoff ADD CONSTRAINT ck_work_place_handoff_payload_object CHECK (jsonb_typeof(payload) = 'object')</sql>
+        <rollback>
+            <sql>ALTER TABLE public.work_place_handoff DROP CONSTRAINT ck_work_place_handoff_payload_object</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

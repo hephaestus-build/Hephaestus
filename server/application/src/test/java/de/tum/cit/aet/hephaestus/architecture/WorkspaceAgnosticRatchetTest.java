@@ -6,30 +6,46 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 /**
  * Each {@link WorkspaceAgnostic} takes an element out of a tenancy check. On a method it also lets that method's SQL
- * reach every workspace. The exact count below shrinks when a bypass goes. A pull request may raise it only together
- * with the annotations that need it, each with a reason that names the bound that replaces the workspace. Count type
- * and method annotations alike: a type annotation still hides the type from the architecture rules.
+ * reach every workspace. {@code src/test/resources/architecture/workspace-agnostic-bypasses.txt} names every bypass,
+ * one per line: a type by its name, a method by its full name. A pull request adds a line only together with the
+ * annotation that needs it, with a reason that names the bound that replaces the workspace, and removes the line of a
+ * bypass that went. Two pull requests that add different bypasses add different lines, so they merge without a
+ * conflict and the list stays exact. Type and method annotations count alike: a type annotation still hides the type
+ * from the architecture rules.
  */
 class WorkspaceAgnosticRatchetTest extends HephaestusArchitectureTest {
 
-    private static final int BYPASSES = 576;
+    private static final Path LIST = Path.of("src/test/resources/architecture/workspace-agnostic-bypasses.txt");
 
     @Test
-    void shouldKeepTheExactCountOfWorkspaceAgnosticBypasses() {
-        List<String> bypasses = bypasses();
+    void shouldListEveryWorkspaceAgnosticBypass() throws IOException {
+        var actual = new TreeSet<>(bypasses());
+        var listed = new TreeSet<String>();
+        for (String line : Files.readAllLines(LIST))
+            if (!line.isBlank() && !line.startsWith("#")) listed.add(line.strip());
+        var unlisted = new TreeSet<>(actual);
+        unlisted.removeAll(listed);
+        var stale = new TreeSet<>(listed);
+        stale.removeAll(actual);
 
-        assertThat(bypasses.size())
+        assertThat(Map.of("unlisted", unlisted, "stale", stale))
                 .as(
-                        "@WorkspaceAgnostic count. Lower BYPASSES when a bypass goes. Raise it only in the commit that"
-                                + " adds the bypasses, each with its reason. Current bypasses:%n%s",
-                        String.join("\n", bypasses))
-                .isEqualTo(BYPASSES);
+                        "@WorkspaceAgnostic bypasses against %s. Add the line of a new bypass in the commit that adds it,"
+                                + " with its reason, and remove the line of one that went. Current bypasses:%n%s",
+                        LIST.getFileName(), String.join("\n", actual))
+                .isEqualTo(Map.of("unlisted", Set.of(), "stale", Set.of()));
     }
 
     @Test

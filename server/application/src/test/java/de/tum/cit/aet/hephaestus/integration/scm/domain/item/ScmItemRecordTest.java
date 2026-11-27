@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
@@ -147,6 +148,47 @@ class ScmItemRecordTest extends BaseUnitTest {
                 assertThat(text.stagedPath()).isEqualTo("repos/reviewed/src/a.ts");
             });
         }
+    }
+
+    /** A capture of several requests for one file fails as a whole and leaves no tree that an earlier request staged. */
+    @Test
+    void shouldReleaseTheStagedTreeWhenALaterRequestOfTheSameCaptureFails() throws Exception {
+        var pinned = snapshot("scm.file");
+        var holder = new ItemRef(1, 4, ScmItemEvents.REPOSITORY, 3L, null, null);
+        var repository = new Repository();
+        repository.setId(3L);
+        repository.setNameWithOwner("owner/repository");
+        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.example");
+        provider.setId(5L);
+        repository.setProvider(provider);
+        var key = new RepositoryKey(1, 3);
+        var entry = new ScmFileVersions.Entry("src/a.ts", "100644", BLOB);
+        byte[] bytes = "insecure();\n".getBytes(StandardCharsets.UTF_8);
+        var staging = EvidenceSpoolFixtures.directory(
+                        new FabricLayout(root.resolve("fabric").toString()).spool(), 1)
+                .path();
+        Files.createDirectories(staging.resolve("src"));
+        Files.write(staging.resolve("src/a.ts"), bytes);
+        when(items.parent(pinned.item(), ScmItemEvents.REPOSITORY)).thenReturn(holder);
+        when(repositories.findById(3L)).thenReturn(Optional.of(repository));
+        when(access.authorize(1, repository)).thenReturn(pinned.integration());
+        when(access.remote(1, repository))
+                .thenReturn(new ScmRepositoryAccess.Remote(
+                        key, "https://scm.example/owner/repository.git", mock(ScmTokenSource.class)));
+        when(tree.inventory(key, HEAD)).thenReturn(List.of(entry));
+        when(tree.content(key, entry)).thenReturn(bytes);
+        when(tree.snapshot(key, HEAD, Set.of("src/a.ts")))
+                .thenReturn(new GitTreeSnapshots.GitTreeSnapshot(
+                        staging, HEAD, "d".repeat(40), bytes.length, 1, true, Set.of()))
+                .thenThrow(new IllegalStateException("The second snapshot fails"));
+        var request = new CaptureRequest(
+                UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(RepositoryTreeContentSource.KIND), "3.0.0", 3);
+
+        assertThatThrownBy(() ->
+                        service.captureEach(pinned, List.of(request, request), ScmCapturePreparation.fromMirror()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The second snapshot fails");
+        assertThat(staging).doesNotExist();
     }
 
     @ParameterizedTest

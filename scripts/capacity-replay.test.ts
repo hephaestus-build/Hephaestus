@@ -8,7 +8,9 @@ import {
 	parseReplay,
 	replaySample,
 	ROLL_CALL_LIMIT,
+	ROLL_ECHO,
 	rollStep,
+	seenCounts,
 	sensitivityGrid,
 } from "./lib/capacity-replay.ts";
 
@@ -123,4 +125,26 @@ await test("the turn-roll script runs bash after each result until its release, 
 		})),
 	];
 	assert.ok("text" in rollStep([...limit, situation], false));
+});
+
+await test("the roll fake counts the kept requests that contain a text, and needs a text", () => {
+	const bodies = [
+		'{"messages":["Pin removal-drill-1"]}',
+		'{"messages":["Other"]}',
+		"removal-drill-1 again",
+	];
+	assert.deepEqual(seenCounts(bodies, "removal-drill-1"), { requests: 3, containing: 2 });
+	assert.deepEqual(seenCounts([], "removal-drill-1"), { requests: 0, containing: 0 });
+	assert.throws(() => seenCounts(bodies, ""), /needs a text/u);
+});
+
+await test("the released roll fake answers an echo question with its text, as an answer can quote a question", () => {
+	const situation = { role: "user", content: [{ type: "text", text: "<situation>\nNow: Mon." }] };
+	const asked = [
+		{ role: "user", content: `${ROLL_ECHO}Pin the image by removal-drill-1.` },
+		situation,
+	];
+	assert.deepEqual(rollStep(asked, true), { text: "Pin the image by removal-drill-1." });
+	// Before its release the fake still runs the command, whatever the question.
+	assert.deepEqual(rollStep(asked, false), { command: "sleep 30; echo rolled-1" });
 });

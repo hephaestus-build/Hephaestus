@@ -11,7 +11,10 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportWriter;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import jakarta.persistence.Table;
 import jakarta.persistence.criteria.CriteriaDelete;
@@ -70,7 +73,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
     }
 
     @Test
-    void shouldKeepPersonalGoalStorageInertUntilItsWritesHaveAdmission() {
+    void shouldAdmitPersonalGoalWritesUnderTheAccountLifecycleFence() {
+        var repository = classes.get("de.tum.cit.aet.hephaestus.account.PersonalGoalRepository");
         assertThat(classes.stream()
                         .filter(type -> type.isAssignableTo(Repository.class))
                         .filter(type -> type.getDirectDependenciesFromSelf().stream()
@@ -78,8 +82,20 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                                         .getTargetClass()
                                         .getName()
                                         .equals("de.tum.cit.aet.hephaestus.account.PersonalGoal"))))
-                .as("Personal goal writes require an owner and lifecycle admission rule")
-                .isEmpty();
+                .containsExactly(repository);
+
+        var goals = classes.get("de.tum.cit.aet.hephaestus.account.PersonalGoals");
+        var admitWrite = goals.getMethod("admitWrite", PersonAct.class);
+        assertThat(admitWrite.getMethodCallsFromSelf())
+                .anyMatch(call -> call.getTargetOwner().isEquivalentTo(OwnerScope.class)
+                        && call.getName().equals("fromPrincipal"))
+                .anyMatch(call -> call.getTargetOwner().isEquivalentTo(PersonDataWriteFence.class)
+                        && call.getName().equals("holdForAccountRecordWrite"));
+        assertThat(goals.getMethod("save", PersonAct.class, long.class, String.class)
+                        .getMethodCallsFromSelf())
+                .anyMatch(call -> call.getName().equals("admitWrite"));
+        assertThat(goals.getMethod("forget", PersonAct.class, long.class).getMethodCallsFromSelf())
+                .anyMatch(call -> call.getName().equals("admitWrite"));
     }
 
     @Test

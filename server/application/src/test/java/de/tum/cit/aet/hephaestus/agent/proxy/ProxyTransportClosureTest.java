@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
@@ -47,6 +48,28 @@ class ProxyTransportClosureTest {
         assertThat(released).isFalse();
         secondClosed.setSuccess();
         await().atMost(Duration.ofSeconds(2)).untilTrue(released);
+    }
+
+    @Test
+    void shouldReleaseCapacityWhenTheCancelledTransportHasLeftItsEventLoop() {
+        var connection = mock(Connection.class);
+        var channel = mock(Channel.class);
+        // A closed channel that has deregistered: Netty's own promise notifies through the channel's event loop.
+        when(channel.eventLoop()).thenThrow(new IllegalStateException("channel not registered to an event loop"));
+        var closed = new DefaultChannelPromise(channel);
+        closed.setSuccess();
+        when(connection.channel()).thenReturn(channel);
+        when(channel.closeFuture()).thenReturn(closed);
+        var transports = new ProxyTransportClosure();
+        var request = transports.begin();
+        request.connected(connection);
+
+        assertThatCode(() -> request.finish(false)).doesNotThrowAnyException();
+
+        verify(connection).dispose();
+        AtomicBoolean released = new AtomicBoolean();
+        transports.releaseWhenClosed(() -> released.set(true));
+        assertThat(released).isTrue();
     }
 
     @Test

@@ -36,7 +36,11 @@ public sealed interface ActionResult {
     record Failed(ActionStopReason reason) implements ActionResult {}
 
     /** Nothing was written, and nothing should be. */
-    record Cancelled(ActionStopReason reason) implements ActionResult {}
+    record Cancelled(ActionStopReason reason, @Nullable Enum<?> decision) implements ActionResult {
+        public Cancelled(ActionStopReason reason) {
+            this(reason, null);
+        }
+    }
 
     /** The fence refused: another holder or a cancellation owns the action now. The executor writes nothing. */
     record Abandoned() implements ActionResult {}

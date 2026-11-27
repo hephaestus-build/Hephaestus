@@ -343,6 +343,9 @@ import type {
 	FollowProviderRoleData,
 	FollowProviderRoleErrors,
 	FollowProviderRoleResponses,
+	ForgetPersonalGoalData,
+	ForgetPersonalGoalErrors,
+	ForgetPersonalGoalResponses,
 	GetAccountAiChoiceData,
 	GetAccountAiChoiceErrors,
 	GetAccountAiChoiceResponses,
@@ -502,6 +505,9 @@ import type {
 	GetPerPersonResultsData,
 	GetPerPersonResultsErrors,
 	GetPerPersonResultsResponses,
+	GetPersonalGoalData,
+	GetPersonalGoalErrors,
+	GetPersonalGoalResponses,
 	GetPracticeData,
 	GetPracticeDefinitionOptionsData,
 	GetPracticeDefinitionOptionsErrors,
@@ -961,6 +967,9 @@ import type {
 	RevokeSessionData,
 	RevokeSessionErrors,
 	RevokeSessionResponses,
+	SavePersonalGoalData,
+	SavePersonalGoalErrors,
+	SavePersonalGoalResponses,
 	SavePracticeDraftData,
 	SavePracticeDraftErrors,
 	SavePracticeDraftResponses,
@@ -3887,6 +3896,50 @@ export const removePasskey = <ThrowOnError extends boolean = false>(
 	});
 
 /**
+ * Forget your personal goal
+ */
+export const forgetPersonalGoal = <ThrowOnError extends boolean = false>(
+	options: Options<ForgetPersonalGoalData, ThrowOnError>,
+): RequestResult<ForgetPersonalGoalResponses, ForgetPersonalGoalErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ForgetPersonalGoalResponses,
+		ForgetPersonalGoalErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/personal-goal",
+		...options,
+	});
+
+/**
+ * Read your personal goal
+ */
+export const getPersonalGoal = <ThrowOnError extends boolean = false>(
+	options?: Options<GetPersonalGoalData, ThrowOnError>,
+): RequestResult<GetPersonalGoalResponses, GetPersonalGoalErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetPersonalGoalResponses, GetPersonalGoalErrors, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/personal-goal",
+		...options,
+	});
+
+/**
+ * Save or edit your personal goal
+ */
+export const savePersonalGoal = <ThrowOnError extends boolean = false>(
+	options: Options<SavePersonalGoalData, ThrowOnError>,
+): RequestResult<SavePersonalGoalResponses, SavePersonalGoalErrors, ThrowOnError> =>
+	(options.client ?? client).put<SavePersonalGoalResponses, SavePersonalGoalErrors, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/personal-goal",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
  * Get your account-wide public activity choice
  */
 export const getPublicActivityChoice = <ThrowOnError extends boolean = false>(
@@ -4678,7 +4731,7 @@ export const listConversationEntries = <ThrowOnError extends boolean = false>(
 /**
  * Delete a message the developer wrote
  *
- * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
+ * Erases its text, every summary that read it, and every later entry that Hephaestus derived from it. A question Hephaestus has not answered yet is not answered.
  */
 export const deleteConversationEntry = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteConversationEntryData, ThrowOnError>,

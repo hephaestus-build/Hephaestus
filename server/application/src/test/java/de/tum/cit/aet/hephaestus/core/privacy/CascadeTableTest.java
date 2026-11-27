@@ -99,6 +99,7 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String SLACK = "integration.slack.conversation.SlackConversationProjectorIntegrationTest#";
     private static final String SANDBOX_RUNS = "agent.conversation.host.TurnSandboxRunKindIntegrationTest#";
     private static final String DERIVED_RESULTS = "practices.adapter.ProviderDerivedErasureIntegrationTest#";
+    private static final String BASIS = "conversation.ConversationBasisIntegrationTest#";
 
     private static final String DELETE_PROOF =
             ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt";
@@ -275,11 +276,15 @@ class CascadeTableTest extends BaseUnitTest {
                     Action.KEEP,
                     List.of(
                             DELETE_PROOF,
+                            BASIS + "shouldEraseEveryEntryDerivedFromAMessageWhenTheDeveloperDeletesIt",
                             RETENTION
                                     + "shouldEraseACopyingToolResultWithTheSlackRetentionAndKeepTheMessagesAndOtherResults"),
-                    "An answer is Hephaestus's own message: it stays when the developer deletes the question, also where"
-                            + " it repeats it. A tool result that its retention erases leaves the answers that used it to"
-                            + " the conversation retention (personal-data map, conversations)."),
+                    "The developer's delete erases every answer whose attempt read the message, through the context or a"
+                            + " search, and every answer derived from those. An entry whose retention ends leaves the"
+                            + " answers that used it to the"
+                            + " conversation retention (personal-data map, conversations). An answer written before"
+                            + " attempts recorded their basis has unknown sources: it stays app history, and"
+                            + " Hephaestus never reads it again."),
             new Cell(
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
@@ -464,6 +469,8 @@ class CascadeTableTest extends BaseUnitTest {
     static final Map<String, Set<CascadeDependent>> OUTSIDE_ROWS = Map.ofEntries(
             Map.entry("PostgreSQL personal goal", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL practice advice", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry(
@@ -519,7 +526,8 @@ class CascadeTableTest extends BaseUnitTest {
             "PostgreSQL recovery facts",
             "PostgreSQL runtime",
             "PostgreSQL sign-in rate limits",
-            "PostgreSQL transient composition");
+            "PostgreSQL transient composition",
+            "PostgreSQL work-place handoff");
 
     /**
      * The dependent kinds that each store of the person-data map holds. A store that holds none is in
@@ -660,7 +668,8 @@ class CascadeTableTest extends BaseUnitTest {
             "trial",
             "user",
             "workspace",
-            "workspace_onboarding_settings");
+            "workspace_onboarding_settings",
+            "work_place_handoff");
 
     private static final Path MAP = Path.of("../../docs/admin/dsms/personal-data-map.mdx");
     private static final String MAIN_TABLE = "| Store / copy |";

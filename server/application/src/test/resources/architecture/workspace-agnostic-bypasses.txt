@@ -1,0 +1,581 @@
+# Every @WorkspaceAgnostic bypass, one per line, sorted: a type by its name, a method by its full name (WorkspaceAgnosticRatchetTest).
+de.tum.cit.aet.hephaestus.account.AccountPreferencesService
+de.tum.cit.aet.hephaestus.account.PersonalGoalController
+de.tum.cit.aet.hephaestus.account.PersonalGoalRepository
+de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.backfillCommitActors(java.lang.Long, java.util.List)
+de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.findWorkspaceIdsByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.isReplyOnlyReview(long)
+de.tum.cit.aet.hephaestus.activity.ActivityEventRepository.unresolvedCommitAuthors(java.lang.Long)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.correctCommitActors(long, java.util.List)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.findCeiling(long)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.findChunkActors(long, java.lang.String, long, long)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.findChunkParents(long, long, long, int)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.findCorrectedCommitAuthors(long)
+de.tum.cit.aet.hephaestus.activity.ActivityLedgerRepository.insertChunk(long, long, java.lang.String, long, long, java.util.List)
+de.tum.cit.aet.hephaestus.activity.overview.PublicActivityService
+de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.findAllByIdIn(java.util.Collection)
+de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.findRequestedReviewers(java.util.Collection)
+de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.findRequestedTeams(java.util.Collection, java.util.Collection)
+de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.findStandingReviews(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.attempt.AttemptPublicKeyRepository
+de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository
+de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsService
+de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository
+de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository
+de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolService
+de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionProbeService
+de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository
+de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionService
+de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository
+de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository
+de.tum.cit.aet.hephaestus.agent.catalog.LlmModelService
+de.tum.cit.aet.hephaestus.agent.catalog.LlmModelWorkspaceGrantRepository.findByIdModelId(java.lang.Long)
+de.tum.cit.aet.hephaestus.agent.catalog.LlmModelWorkspaceGrantRepository.findByIdModelIdIn(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository.lockAllForKeyRotation()
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionService.resealWithActiveKey(de.tum.cit.aet.hephaestus.core.security.SystemSecrets)
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.findAllEnabledWithEnabledConnection()
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.findAllForCallPools()
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.joinCallPool(java.lang.Long, java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.leaveCallPool(java.lang.Long)
+de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository.existsByInstanceModelId(java.lang.Long)
+de.tum.cit.aet.hephaestus.agent.context.JobEvidenceMaintenanceConfiguration
+de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository.deleteEnded()
+de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnQueueSampler
+de.tum.cit.aet.hephaestus.agent.conversation.web.ConversationLiveHub.heartbeat()
+de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestSchedule
+de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures.fail(de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService$AdmissionIdentity, de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException)
+de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository.deleteUnusable(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService.tick()
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.databaseClock()
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.databaseNow()
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.deleteUnreferencedTerminalRowsOlderThan(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.failCompositionUnconfirmed(java.util.UUID, java.util.UUID, int, java.time.Instant, tools.jackson.databind.JsonNode)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.findQueuedModels(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.findStartingModels()
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.findTerminalForProcessing(int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.handOffToRun(java.util.UUID, java.util.UUID, int, java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.lockById(java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.lockByRun(java.util.UUID, long)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.lockParentByRun(java.util.UUID, long)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.lockParentForQueuedClaim(java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.lockParentOfJob(java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.markExecutionStarted(java.util.UUID, java.util.UUID, int, java.time.Instant)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.poolLoad(long)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.queueOnNextRun(java.util.UUID, java.util.UUID, int, java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.renewScanCallLeases(java.util.Collection, java.util.Collection, long)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.requeueRunning(java.util.UUID, java.util.UUID, int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.stripTerminalPayloads(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionStatus(java.util.UUID, de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus, java.time.Instant, java.lang.String, java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionStatusOwnedBy(java.util.UUID, de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus, java.time.Instant, java.lang.String, java.util.UUID, int)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionToCancelled(java.util.UUID, java.time.Instant, java.lang.String, de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason, java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionToRefused(java.util.UUID, java.util.UUID, int, java.time.Instant, tools.jackson.databind.JsonNode)
+de.tum.cit.aet.hephaestus.agent.job.ReviewJobRetentionService
+de.tum.cit.aet.hephaestus.agent.job.WorkPlaceHandoffRepository.deleteExpired(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.cancelAll(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.claim(java.util.Collection, java.util.Collection, long, long, long, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.countLeased(java.lang.String)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.databaseClock()
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.deleteAllEndedById(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.findDue(java.util.Collection, int, int, long, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.findDueOfSubjects(java.util.Collection, java.util.Collection, java.util.Collection, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.findExpired(java.lang.String, java.util.Collection, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.findOverdueQueued(java.lang.String, java.util.Collection, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.lockKindClaims(java.lang.String)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.notifyQueued(java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.open(de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.settleOpenCallsOfRuns(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.tryLockKindClaims(java.lang.String)
+de.tum.cit.aet.hephaestus.agent.run.AgentRunSampler
+de.tum.cit.aet.hephaestus.agent.run.AgentRuns.cancelAll(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.run.AgentRuns.leasedReviews()
+de.tum.cit.aet.hephaestus.agent.run.AgentRuns.retireAll(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.countLive(java.lang.String)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.findClaimNames(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.findDeleting(int)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.findLiveSubjects(java.util.Collection)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.findReady()
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.limitClaimTransaction(long)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.maintenanceBarrierLifted()
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.retire(long, long, long, int)
+de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxRepository.retireIdleConversation()
+de.tum.cit.aet.hephaestus.agent.scan.ScanDriver.tick()
+de.tum.cit.aet.hephaestus.agent.usage.InstanceCallRecovery
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageAdminService.getReport(java.time.YearMonth)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.applyResolvedPrice(java.util.UUID, java.math.BigDecimal, de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot, de.tum.cit.aet.hephaestus.agent.usage.UnpricedLedgerRow)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.databaseClock()
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.deleteExpired(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findAppliedInstanceModelId(java.util.UUID)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findUnpriced(org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findUnpricedAfter(java.time.Instant, java.util.UUID, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.settleAbandonedInstanceCalls()
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRetentionSweeper
+de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler
+de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateRepository
+de.tum.cit.aet.hephaestus.contributors.ContributorController
+de.tum.cit.aet.hephaestus.contributors.ContributorService
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.countChangedSinceInCoverage(java.util.UUID, long, long, java.time.Instant)
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.findDueForRetention(long, de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind, java.lang.Long, de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository$DuePage, int)
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.findOwnMessages(long)
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.lockTreesOf([Ljava.util.UUID;)
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.redactWithCopies([Ljava.util.UUID;, java.lang.String, boolean, boolean)
+de.tum.cit.aet.hephaestus.conversation.ConversationRepository.findMemberWorkspaceIds(long)
+de.tum.cit.aet.hephaestus.conversation.ConversationRepository.lockScope(java.lang.String)
+de.tum.cit.aet.hephaestus.conversation.ConversationRepository.shareHistory(java.lang.String)
+de.tum.cit.aet.hephaestus.conversation.ConversationRetentionSweeper
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.commitWithoutFlushWait()
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.countByStatusAndSurfaceNot(de.tum.cit.aet.hephaestus.conversation.ConversationTurn$Status, de.tum.cit.aet.hephaestus.conversation.ConversationTurn$Surface)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.countHeld()
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.databaseClock()
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.databaseNow()
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.findClaimable(int)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.findRunAttempt(long, java.util.UUID, int)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.findRunningAttempt(long, java.util.UUID, int, java.util.UUID)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.isHeld(java.util.UUID)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.lockById(java.util.UUID)
+de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.notifyLedger(java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.ActionBacklogSampler
+de.tum.cit.aet.hephaestus.core.action.ActionExecutor
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.backlog(java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.beginWrite(java.util.UUID, long, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.claim(int, long, java.util.Collection, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.claimById(java.util.UUID, long, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.defer(java.util.UUID, long, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.deleteEndedBefore(int, java.util.Collection)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.end(java.util.UUID, long, java.lang.String, java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.endExpired(java.util.UUID, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.endLost(java.util.UUID, java.util.Collection, java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.findIdByIdempotencyKey(java.lang.String)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.findStale(java.util.Collection, java.lang.String, int)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.holds(java.util.UUID, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.insertAdmitted(java.util.UUID, java.lang.Long, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Long, java.lang.String, int, java.time.Instant, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.insertExecuting(java.util.UUID, java.lang.Long, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Long, java.lang.String, int, java.time.Instant, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.maintenanceBarrierLifted()
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.maxLiveAttempts(java.util.Collection)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.reread(java.util.UUID, long, long)
+de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.retry(java.util.UUID, long, long)
+de.tum.cit.aet.hephaestus.core.audit.ConfigAuditEventRepository.countForAdmin(java.lang.Long, de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilter)
+de.tum.cit.aet.hephaestus.core.audit.ConfigAuditEventRepository.deleteOlderThan(int)
+de.tum.cit.aet.hephaestus.core.audit.ConfigAuditEventRepository.findForAdmin(java.lang.Long, de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilter, java.time.Instant, java.lang.Long, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.core.audit.ConfigAuditRetentionJob.sweep()
+de.tum.cit.aet.hephaestus.core.auth.AccountBootstrapService
+de.tum.cit.aet.hephaestus.core.auth.AccountContactQueryService
+de.tum.cit.aet.hephaestus.core.auth.AccountDirectoryService
+de.tum.cit.aet.hephaestus.core.auth.AccountErasureRepository
+de.tum.cit.aet.hephaestus.core.auth.AccountErasureRepository.unlinkConfigAuditEvents(java.lang.Long)
+de.tum.cit.aet.hephaestus.core.auth.AccountHardDeleteSweeper
+de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService
+de.tum.cit.aet.hephaestus.core.auth.AccountPublicActivityService
+de.tum.cit.aet.hephaestus.core.auth.AccountService
+de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService
+de.tum.cit.aet.hephaestus.core.auth.AuthSessionService
+de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService
+de.tum.cit.aet.hephaestus.core.auth.UserViewAccessService
+de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService
+de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository
+de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionCleanupJob
+de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionRepository
+de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService
+de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInHandoffRepository
+de.tum.cit.aet.hephaestus.core.auth.consent.ConsentDecisionRepository
+de.tum.cit.aet.hephaestus.core.auth.consent.ConsentService
+de.tum.cit.aet.hephaestus.core.auth.dev.DevLoginService
+de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository
+de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository
+de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository
+de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository
+de.tum.cit.aet.hephaestus.core.auth.export.AccountExportService
+de.tum.cit.aet.hephaestus.core.auth.export.ExportRetentionSweeper
+de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtCleanupJob
+de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository
+de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyRepository
+de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantCleanupJob
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.deleteEndedBefore(java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.expireStale(java.time.Instant, java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.findActiveBySession(java.util.UUID)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.findSessionId(java.util.UUID)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.findTarget(java.util.UUID)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.lockById(java.util.UUID)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.revokeAllForAccount(java.lang.Long, java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.revokeAllForAccountExceptSession(java.lang.Long, java.util.UUID, java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.revokeBySession(java.util.UUID, java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository.revokeIfOpen(java.util.UUID, java.time.Instant)
+de.tum.cit.aet.hephaestus.core.auth.oauth.AccountProvisioningService
+de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository
+de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService
+de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitBucketSweeper
+de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyChallengeRepository
+de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyCredentialRepository
+de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyRecoveryCodeRepository
+de.tum.cit.aet.hephaestus.core.browserfaults.BrowserFaultsController
+de.tum.cit.aet.hephaestus.core.database.AuthEventPartitionMaintenance
+de.tum.cit.aet.hephaestus.core.database.DatabaseSizeMonitor
+de.tum.cit.aet.hephaestus.core.database.MaintenanceBarrierMonitor
+de.tum.cit.aet.hephaestus.core.database.WalArchiveMonitor
+de.tum.cit.aet.hephaestus.core.database.backup.BackupScheduleMonitor
+de.tum.cit.aet.hephaestus.core.database.publication.EventPublicationStore
+de.tum.cit.aet.hephaestus.core.privacy.IdentityRestrictionRepository
+de.tum.cit.aet.hephaestus.core.privacy.IdentityRestrictionService
+de.tum.cit.aet.hephaestus.core.privacy.PersonDataJobRunner
+de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequestRepository
+de.tum.cit.aet.hephaestus.core.privacy.PersonDataService
+de.tum.cit.aet.hephaestus.core.privacy.PrivacyJournalMaintenance
+de.tum.cit.aet.hephaestus.core.provenance.ProvenanceKeys
+de.tum.cit.aet.hephaestus.core.provenance.ProvenanceKeysController
+de.tum.cit.aet.hephaestus.core.provenance.ProvenanceSigningKeyRepository
+de.tum.cit.aet.hephaestus.core.release.ReleaseCheckService.poll()
+de.tum.cit.aet.hephaestus.core.release.ReleaseHistory.recordStart()
+de.tum.cit.aet.hephaestus.core.release.ReleaseStartRepository
+de.tum.cit.aet.hephaestus.core.security.StoredSystemSecretRepository
+de.tum.cit.aet.hephaestus.core.security.SystemKeyRotation.rotate()
+de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsRepository
+de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService
+de.tum.cit.aet.hephaestus.core.settings.PublicActivityPolicyService
+de.tum.cit.aet.hephaestus.core.settings.PublicUsagePolicyService
+de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsController
+de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService.workspacesHoldingSources(java.lang.String, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository.scrubOlderThan(int)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRetentionJob.sweep()
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries.findActiveInstallationSnapshot(long)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries.findSuspendedGitLabWebhookCandidates()
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionQuery.findActiveOutlineRoutes()
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionQuery.findWorkspaceIdsByKindAndState(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind, de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.existsByKindAndInstanceKeyAndStateNotAndIdNot(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind, java.lang.String, de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.findActiveInstallationSnapshot(java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.findAllByKindAndInstanceKeyAndStateIn(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind, java.lang.String, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.findAllByKindAndStateIn(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.findByStateAndProviderTeardownRequestedAtBeforeOrderByProviderTeardownRequestedAtAsc(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.findByStateAndProviderTeardownRequestedAtNotNull(de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState)
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository.lockCredentialRotationBatch(int, int)
+de.tum.cit.aet.hephaestus.integration.core.connection.CredentialRotationService.rotateBatch()
+de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository
+de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService
+de.tum.cit.aet.hephaestus.integration.core.connection.ProviderTeardown
+de.tum.cit.aet.hephaestus.integration.core.connection.api.ProviderResourceRepairAdminService.listInstance(int, int)
+de.tum.cit.aet.hephaestus.integration.core.connection.api.ProviderResourceRepairAdminService.releaseOrphan(java.util.UUID, de.tum.cit.aet.hephaestus.integration.core.connection.api.ReleaseProviderResourceRepairRequestDTO)
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository.findByRepair_Id(java.util.UUID)
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository.readOwners(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository.readReplacementCandidates(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations.suspendedOutlineHooks()
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher
+de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairRepository
+de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerDeadLetterReplayService.replayInstallation(java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerDeadLetterService.listInstallation(java.lang.String, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventBacklogSampler
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer.deleteEnded()
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer.reap()
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.awaitLease(long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.backlog()
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.boundStatements(java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.claim(long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.claimStep(long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.complete(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.dead(long, int, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.deadLetters(java.lang.Long, long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.deleteEnded(java.time.Instant, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.hasStep(long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.lockLease(long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.lockWorkspace(long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.readLease(long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.reapExpired(int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.release(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.renew(long, int, long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.replay(java.lang.Long, long, long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.retry(long, int, double, boolean)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.store(de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository$NewEvent)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.assertLease(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.boundStatements(java.time.Duration)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.claim(java.time.Duration)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.claimStep(long, int, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.complete(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.dead(long, int, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.deadLetters(java.lang.Long, long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.deleteEnded(java.time.Instant, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.fenceStep(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.hasStep(long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.reapExpired(int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.release(long, int)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.renew(long, int, java.time.Duration)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.replay(java.lang.Long, long, long)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.retry(long, int, java.time.Duration, boolean)
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.store(java.util.List)
+de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository.findWorkspaceIdsHoldingSources(java.lang.String, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository.claimDue(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository.deleteUnreferenced(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository.expire(java.time.Instant, java.time.Instant, de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository.findClosedWindows(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository.forgetExpiredEvidence(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.integration.core.itemevent.PendingItemEventReaper
+de.tum.cit.aet.hephaestus.integration.core.itemevent.QuietWindowCloser
+de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceCleanupJob.cleanupExpired()
+de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceRepository.deleteByIssuedAtBefore(java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceRepository.existsById(java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.completeActiveJob(long, de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus, java.lang.String, java.lang.Integer, java.lang.Integer, java.util.Map, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.findAbandoned(long)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.findAbandonedForConnection(long, long)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.findCancelFlags(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.maintenanceBarrierLifted()
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.markAbandoned(long, java.lang.String, long)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.markCancelRequested(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.markRunning(long)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.notifySyncStatus(java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.pruneOldJobs(long, int)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository.touchHeartbeat(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService.flushBufferedProgress()
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService.refreshLeases()
+de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobZombieSweeper
+de.tum.cit.aet.hephaestus.integration.core.sync.push.SyncEventHub.sendHeartbeats()
+de.tum.cit.aet.hephaestus.integration.outline.client.OutlineRateLimitTracker
+de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository.findPersonSourceIds(long, java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar.healRoutes()
+de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler.catchUp()
+de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler.syncAll()
+de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler.syncAllNow()
+de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository.countCommitsOfPullRequest(java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository.findAwaitingReviewerIds(java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository.findCommitsOfPullRequest(java.lang.Long, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository.findFileChangesOfPullRequest(java.lang.Long, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository.findThreadCommentsUnresolvedFirst(java.lang.Long, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository.backfillUserIdByEmail(java.lang.String, java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository.upsertContributorByNativeUserId(java.lang.Long, java.lang.Long, java.lang.String, java.lang.String, java.lang.String, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.bulkUpdateAuthorIdByEmail(java.lang.String, java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.bulkUpdateAuthorIdFromStoredEmail(java.lang.String, java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.bulkUpdateCommitterIdByEmail(java.lang.String, java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.bulkUpdateCommitterIdFromStoredEmail(java.lang.String, java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.deleteFileChanges(java.lang.Long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.linkCommitToPullRequests(java.lang.Long, java.lang.Long, java.util.List)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.linkPullRequestToCommits(java.lang.Long, java.lang.Integer, java.util.List)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.updateEnrichmentMetadata(java.lang.Long, java.lang.Integer, java.lang.Integer, java.lang.Integer, java.time.Instant, java.time.Instant, java.lang.String, java.lang.String, java.lang.String, java.lang.Boolean, java.lang.Boolean, java.lang.Boolean, java.lang.Integer, java.lang.String, java.lang.Boolean, java.lang.String, java.lang.String, java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository.updateParentMetadataBySha(java.lang.Long, java.lang.String, java.lang.Integer, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityChangeRepository.changeAuthors(long, java.lang.String, long, java.lang.String, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityChangeRepository.changeCommitters(long, java.lang.String, long, java.lang.String, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityChangeRepository.changeContributors(long, java.lang.String, long, java.lang.String, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityChangeRepository.deleteOlderThan(java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityChangeRetentionJob
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionJob
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.countPending()
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.defer(java.util.List, long, long, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.findNoAccountEmails(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.findPendingEmails(long, int, boolean)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.findPendingRepositories()
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.finish(long, java.lang.String, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.lockById(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository.retryLater(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.clearMilestoneReferences(java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.correctDiscriminator(long, int, java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.countIssuesGroupedByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.countPullRequestsGroupedByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.deleteAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.findAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.findByRepositoryIdAndNumber(long, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.findHolding(long, long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.lockByRepositoryIdAndNumber(long, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.moveToRepository(long, long, java.lang.String, int, long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.registeredAsItem(java.lang.String, long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.tombstoneIssuesByRepositoryIdAndNumbers(java.lang.Long, java.util.Collection, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.tombstonePullRequestsByRepositoryIdAndNumbers(java.lang.Long, java.util.Collection, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.countGroupedByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.deleteAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.deleteReconciled(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.findAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.findCanonicalParentCeiling(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.findCanonicalParentChunk(long, long, long, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.moveToCanonicalPullRequest(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository.closingIssues(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository.listReviews(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository.listWork(long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository.owners(java.util.List, boolean)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository.work(java.lang.String, long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceQuery
+de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository.findAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository.lockByRepositoryIdAndNumber(long, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository.deleteByOrganizationId(java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository.deleteByOrganizationIdAndUserIdIn(java.lang.Long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.countStoredByRepositoryId(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.existsUnfinishedDiscussionRead(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.findByRepositoryIdAndNumber(long, int)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository.countGroupedByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository.findAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository.clearDeletedReplies(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository.countGroupedByRepositoryIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository.deleteReconciled(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository.clearDeletedRoots(long, java.util.List)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository.completeNodeId(long, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository.completeRootComment(long, de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository.deleteEmptyReconciled(long, java.util.List)
+de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository.lockByNativeIdAndProviderId(long, long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationQueries.restrictPublicAccess(long, long, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.count()
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.deleteAll()
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.findByNameWithOwner(java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.findGitHubIdsByNameIgnoringCase(java.lang.String)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.isIndexedByAnyWorkspace(long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.updateLastSyncAt(java.lang.Long, java.time.Instant)
+de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository.findByOrgLoginAndPermissions(java.lang.String, java.lang.Long, java.util.List)
+de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository
+de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository.findByTeam_IdAndUser_Id(java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository.findDistinctUserIdsOfTeams(java.lang.String, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitMirrorRetention
+de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackThreadStateRepository.find(long, java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppSubscriptionMonitor.check()
+de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery
+de.tum.cit.aet.hephaestus.integration.scm.github.common.ScopedRateLimitTracker
+de.tum.cit.aet.hephaestus.integration.scm.github.installation.GitHubInstallationRepositoryEnumerationService
+de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAdoptionService
+de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequestRepository
+de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker
+de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService
+de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabSuspendedWebhookCleanup.reconcile()
+de.tum.cit.aet.hephaestus.integration.scm.sync.backfill.HistoricalBackfillScheduler
+de.tum.cit.aet.hephaestus.integration.scm.workspace.ExcludedRepositoryWithdrawalService
+de.tum.cit.aet.hephaestus.integration.scm.workspace.ManualMonitorGrants
+de.tum.cit.aet.hephaestus.integration.scm.workspace.ManualRepositoryMonitorService
+de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmMemberRepository
+de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService
+de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamLabelService
+de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabManualRepositoryMonitor
+de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabRepositorySelectionService
+de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamLabelFilterRepository
+de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamRepositorySettingsRepository
+de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsRepository
+de.tum.cit.aet.hephaestus.integration.slack.adapter.SlackAccountAbsorptionContributor.absorb(long, long)
+de.tum.cit.aet.hephaestus.integration.slack.adapter.SlackAccountAbsorptionContributor.finish(long, long)
+de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository.absorbAuthorAccount(long, long)
+de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository.existsByAuthorAccountId(java.lang.Long)
+de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository.absorbParticipantAccount(long, long)
+de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository.containsAccount(long)
+de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository.findPersonSourceIds(long, java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService
+de.tum.cit.aet.hephaestus.integration.slack.interactivity.SlackRequestClaimRepository
+de.tum.cit.aet.hephaestus.integration.slack.interactivity.SlackRequestReplayGuard.deleteExpiredClaims()
+de.tum.cit.aet.hephaestus.integration.slack.item.SlackThreadEventScheduler.sweep()
+de.tum.cit.aet.hephaestus.integration.slack.item.SlackThreadEventScheduler.sweepNow()
+de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker
+de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService
+de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper
+de.tum.cit.aet.hephaestus.integration.slack.sync.SlackDataSyncScheduler
+de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob
+de.tum.cit.aet.hephaestus.notification.OverduePublicationMeter
+de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeController
+de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionRepository
+de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService
+de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository
+de.tum.cit.aet.hephaestus.practices.PracticeRepository
+de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository
+de.tum.cit.aet.hephaestus.practices.adapter.DeliveredCommentLookupService.findForIssue(long, de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind)
+de.tum.cit.aet.hephaestus.practices.adapter.DeliveredCommentLookupService.findForRepository(long, long, de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.deferConstraints()
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.endOverlappingClaims(long, long, java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.hasAccountResults(long)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.lockAccountResults(long, long)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.lockAccountReviews(long, long)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.reassignMembers(long, long)
+de.tum.cit.aet.hephaestus.practices.adapter.PracticesPrivacyRepository.reassignResults(long, long)
+de.tum.cit.aet.hephaestus.practices.catalog.CatalogEntryRepository
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository.absorbDeveloper(long, long)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository.deferDeveloperConstraints()
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository.validateDeveloperConstraints()
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryFreshness
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackExportRepository.findPostedPieces(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackExportRepository.findReceived(long, java.util.Collection)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackExportRepository.findResponses(long)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackQueryRepository.issueReceipts(long, java.lang.String, java.lang.String, java.util.List)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackQueryRepository.orderedPackageDigest(java.lang.String)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackQueryRepository.repositoryReceipts(long, long, java.lang.String, java.lang.String, java.util.List)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.absorbDeveloper(long, long)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.expiredConversationWorkspaces(java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.oldestWaitingOnWorkSeconds()
+de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.workspacesWithExpiredFeedback(java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.feedback.delivery.ConversationFeedbackTtlSweeper.sweep()
+de.tum.cit.aet.hephaestus.practices.model.ResultSourceKindsChange
+de.tum.cit.aet.hephaestus.practices.research.ResearchDatasetRepository.cutoff()
+de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureRepository.findByIdForUpdate(java.util.UUID)
+de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureRepository.findOpen()
+de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureRepository.unlinkCreator(long)
+de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureService
+de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureSubjectRepository.stateOf(java.util.Collection)
+de.tum.cit.aet.hephaestus.practices.result.PracticeStagingService.discardUnusable(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService.purge()
+de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository.countEndedPracticesByJob(java.util.List)
+de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.activeScans(org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.modelDigest(java.lang.String)
+de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.workspacesWithExpiredProof(java.time.Instant, java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.review.ReviewStagedPayloadRepository.discardUnusable(java.time.Instant, int)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewBatchDriver
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewBatchRepository.findByStatusAndPauseReasonNotOrderByUpdatedAtAscIdAsc(de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus, de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchPauseReason, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewBatchRepository.findByStatusOrderByUpdatedAtAscIdAsc(de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewScheduleBatchOpener.deferAfterFailure(java.util.UUID, java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewScheduleBatchOpener.openDueRun(java.util.UUID, java.time.Instant)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewScheduleRepository.findDue(java.time.Instant, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewScheduler
+de.tum.cit.aet.hephaestus.practices.usage.UsageReleaseJob
+de.tum.cit.aet.hephaestus.practices.usage.UsageReleaseRepository
+de.tum.cit.aet.hephaestus.practices.usage.UsageReleaseRepository.count(java.time.LocalDateTime, java.time.LocalDateTime)
+de.tum.cit.aet.hephaestus.productfeedback.CleanupService
+de.tum.cit.aet.hephaestus.productfeedback.DestinationService
+de.tum.cit.aet.hephaestus.productfeedback.DestinationService.keepPrivateRepositoryOutOfWorkspaces()
+de.tum.cit.aet.hephaestus.productfeedback.DestinationService.refreshSnapshot()
+de.tum.cit.aet.hephaestus.productfeedback.FeedbackService
+de.tum.cit.aet.hephaestus.productfeedback.FilingService
+de.tum.cit.aet.hephaestus.productfeedback.FollowService
+de.tum.cit.aet.hephaestus.productfeedback.MyReportsService
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackCleanupRepository
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackConsentRepository
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackDestinationRepository
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.countDraftedByAccountSince(long, java.time.Instant)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.countPublicFiledByAccountSince(long, java.time.Instant)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.countSavedForAdmins()
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.findAllByAccount(long)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.lockAllByAccount(long)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackFilingRepository.savedForAdmins(int)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.countByAccountIdAndCreatedAtGreaterThanEqual(long, java.time.Instant)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.findForAdmin(java.lang.String, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.lockSubmission(long)
+de.tum.cit.aet.hephaestus.productfeedback.RoutingService
+de.tum.cit.aet.hephaestus.workspace.MembershipRepository.absorbAccount(long, long)
+de.tum.cit.aet.hephaestus.workspace.MembershipRepository.deleteByAccountId(long)
+de.tum.cit.aet.hephaestus.workspace.MembershipRepository.findById_AccountId(java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.MembershipRepository.lockByAccountIds(java.util.Collection)
+de.tum.cit.aet.hephaestus.workspace.RepositoryReadersMeter
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.countByReadersProof()
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.countForRepository(java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.findAllWithWorkspaceByNameIgnoringCase(java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.findByNativeIdOnSourceProvider(java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.findSourceRepositoryIdsForWithdrawal(java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.findWorkspaceIdsByNameWithOwner(java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.monitorHoldsAnotherInstancesId(java.lang.Long, java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.updateHistoricalBackfillSyncError(java.lang.Long, java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository.updateRecentSyncError(java.lang.Long, java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.WorkspaceAdminService
+de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService
+de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository
+de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository.findByIdForUpdate(java.lang.Long)
+de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository.findByWorkspaceSlugForUpdate(java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.WorkspaceService
+de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugHistoryRepository
+de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugReservationRepository
+de.tum.cit.aet.hephaestus.workspace.adapter.RepositoryMonitorQueryAdapter.findByNameIgnoringCase(java.lang.String)
+de.tum.cit.aet.hephaestus.workspace.onboarding.PublicActivityOnboardingService
+de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository
