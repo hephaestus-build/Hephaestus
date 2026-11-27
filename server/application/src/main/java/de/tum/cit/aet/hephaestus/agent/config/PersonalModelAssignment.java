@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -24,7 +25,9 @@ import lombok.ToString;
  * no row leaves that tier unconfigured. {@code UNDECLARED} is never a personal tier.
  */
 @Entity
-@Table(name = "personal_model_assignment")
+@Table(
+        name = "personal_model_assignment",
+        indexes = @Index(name = "idx_personal_model_assignment_model", columnList = "llm_model_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PersonalModelAssignment {

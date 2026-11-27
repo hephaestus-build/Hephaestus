@@ -14,7 +14,12 @@
             </column>
         </createTable>
         <addForeignKeyConstraint baseTableName="personal_model_assignment" baseColumnNames="llm_model_id" constraintName="fk_personal_model_assignment_model" referencedTableName="llm_model" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
-        <sql>ALTER TABLE personal_model_assignment ADD CONSTRAINT ck_personal_model_assignment_tier CHECK (tier IN ('IN_HOUSE', 'CLOUD'))</sql>
+        <createIndex tableName="personal_model_assignment" indexName="idx_personal_model_assignment_model">
+            <column name="llm_model_id"/>
+        </createIndex>
+        <sql>ALTER TABLE personal_model_assignment ADD CONSTRAINT ck_personal_model_assignment_tier CHECK (tier IN ('CLOUD', 'IN_HOUSE', 'UNDECLARED'))</sql>
+        <!-- The list matches the enum; an undeclared tier is never a personal slot. -->
+        <sql>ALTER TABLE personal_model_assignment ADD CONSTRAINT ck_personal_model_assignment_tier_declared CHECK (tier &lt;&gt; 'UNDECLARED')</sql>
         <rollback>
             <dropTable tableName="personal_model_assignment"/>
         </rollback>
@@ -76,9 +81,12 @@ ALTER TABLE llm_usage_event
 -- The personal purse sums one UTC month of personal rows, and an erasure selects them by payer.
 CREATE INDEX idx_llm_usage_personal ON llm_usage_event (occurred_at, payer_account_id)
     WHERE source_type = 'PERSONAL_CONVERSATION';
+-- An account's deletion checks its payer rows through this index.
+CREATE INDEX idx_llm_usage_payer ON llm_usage_event (payer_account_id) WHERE payer_account_id IS NOT NULL;
         ]]></sql>
         <rollback>
             <sql splitStatements="false"><![CDATA[
+DROP INDEX idx_llm_usage_payer;
 DROP INDEX idx_llm_usage_personal;
 DELETE FROM llm_usage_event WHERE source_type = 'PERSONAL_CONVERSATION';
 ALTER TABLE llm_usage_event
