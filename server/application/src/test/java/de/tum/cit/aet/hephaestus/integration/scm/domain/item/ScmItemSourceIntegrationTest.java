@@ -2074,6 +2074,33 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
     }
 
+    /**
+     * In one read-only snapshot, as a page read runs ({@code PageReadSnapshot}), a fingerprint read pins the work once:
+     * the capture's check of the pin reads the same rows, so it reads the item no more. Outside one, the check reads
+     * again, because the work can change between the pin and the capture.
+     */
+    @Test
+    void shouldPinAPullRequestOnceWhenItsRecordSourcesAreReadInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        // measure() reads in a READ COMMITTED transaction of its own; a page read's snapshot starts its own.
+        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        Set<SourceKind> core = Set.of(PullRequestContentSource.CORE);
+
+        var outside = reads.measure(() -> fingerprints.fingerprints(pullRef, core, null, mapper));
+        var inside = reads.measure(() -> Objects.requireNonNull(
+                snapshot.execute(status -> fingerprints.fingerprints(pullRef, core, null, mapper))));
+
+        assertThat(inside.value()).isEqualTo(outside.value());
+        // The pin and the capture's check of it run the same pin, so outside a snapshot they read the item alike.
+        assertThat(itemChecks(outside.sql())).isPositive().isEven();
+        assertThat(itemChecks(inside.sql()))
+                .as("item checks in one snapshot, %s", inside.sql())
+                .isEqualTo(itemChecks(outside.sql()) / 2);
+    }
+
     private static long itemChecks(List<String> sql) {
         return sql.stream()
                 .filter(statement -> statement.contains(" from item i1_0 where i1_0.id=? and i1_0.workspace_id=?"))
