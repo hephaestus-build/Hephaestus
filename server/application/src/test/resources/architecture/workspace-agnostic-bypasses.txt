@@ -69,6 +69,7 @@ de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionStatusOwnedBy(
 de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionToCancelled(java.util.UUID, java.time.Instant, java.lang.String, de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason, java.util.Collection)
 de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.transitionToRefused(java.util.UUID, java.util.UUID, int, java.time.Instant, tools.jackson.databind.JsonNode)
 de.tum.cit.aet.hephaestus.agent.job.ReviewJobRetentionService
+de.tum.cit.aet.hephaestus.agent.job.WorkPlaceHandoffRepository.deleteExpired(java.time.Instant, int)
 de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper
 de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.cancelAll(java.util.Collection)
 de.tum.cit.aet.hephaestus.agent.run.AgentRunRepository.claim(java.util.Collection, java.util.Collection, long, long, long, de.tum.cit.aet.hephaestus.agent.run.AgentRunTiming$Reading)
