@@ -45,6 +45,19 @@ class SnapshotMemoTest extends BaseUnitTest {
         assertThat(computed).hasValue(2);
     }
 
+    /** Synchronization without an actual transaction, as PROPAGATION_SUPPORTS outside one runs. */
+    @Test
+    void shouldComputeEveryTimeWithSynchronizationButNoTransaction() {
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        TransactionSynchronizationManager.setCurrentTransactionIsolationLevel(Connection.TRANSACTION_REPEATABLE_READ);
+
+        memo.get("work", this::compute);
+        memo.get("work", this::compute);
+
+        assertThat(computed).hasValue(2);
+    }
+
     @Test
     void shouldComputeEveryTimeInAReadCommittedTransaction() {
         begin(true, null);

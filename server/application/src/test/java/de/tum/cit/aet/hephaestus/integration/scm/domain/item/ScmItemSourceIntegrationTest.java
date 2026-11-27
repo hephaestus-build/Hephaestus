@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemMergeTimeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateValue;
@@ -1328,6 +1329,34 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 .orElse(List.of());
     }
 
+    /**
+     * Outside a read-only snapshot, a check of an item reads again each time, so a change that commits between two
+     * checks of the same item reaches the later one. Only a page read's snapshot keeps a verdict.
+     */
+    @Test
+    void shouldCheckAnItemAgainWhenItIsCheckedAgainOutsideASnapshot() {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        long workspaceId = fixture.workspace().getId();
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        var issue = progressIssue(fixture, 331, null);
+        var ref = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var readCommitted = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        readCommitted.setReadOnly(true);
+
+        var verdicts = readCommitted.execute(status -> {
+            boolean before = sourceAccess.permits(ref, purpose);
+            CompletableFuture.runAsync(
+                            () -> jdbc.update("UPDATE issue SET deleted_at = now() WHERE id = ?", issue.getId()))
+                    .join();
+            return List.of(before, sourceAccess.permits(ref, purpose));
+        });
+
+        assertThat(verdicts).containsExactly(true, false);
+    }
+
     private void retainCompleteCustody(Result result) {
         var complete = mapper.createObjectNode()
                 .set("custody", mapper.valueToTree(new HistoryCustody(true, false, List.of(), List.of(), List.of())))
@@ -2225,6 +2254,28 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                         && statement.contains("left join repository r1_0")
                         && statement.contains("pr1_0.id=?"))
                 .count();
+    }
+
+    /**
+     * In one read-only snapshot a second pin of the same work compares the version it asks for on every call: a pin
+     * kept from the first call never answers for a version the work does not have.
+     */
+    @Test
+    void shouldRefuseAnotherVersionWhenAPullRequestIsPinnedAgainInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+
+        snapshot.executeWithoutResult(status -> {
+            var current = sources.pin(pullRef, null);
+            assertThat(sources.pin(pullRef, current.version()).version()).isEqualTo(current.version());
+            var other = new ItemVersion("0".repeat(64), current.version().baseVersion());
+            assertThatThrownBy(() -> sources.pin(pullRef, other))
+                    .isInstanceOfSatisfying(
+                            ItemCaptureException.class,
+                            failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.VERSION_UNAVAILABLE));
+        });
     }
 
     private ItemRef recordedPullRequest(Fixture fixture) {
