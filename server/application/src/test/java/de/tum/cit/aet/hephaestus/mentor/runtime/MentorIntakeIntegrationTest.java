@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.mentor.spi.VerifiedActor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -268,16 +270,9 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         }));
         assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
         var loser = CompletableFuture.supplyAsync(() -> admit(second, "e2", message, FIRST));
-        boolean blocked = false;
-        for (int poll = 0; poll < 200 && !blocked && !loser.isDone(); poll++) {
-            blocked = Objects.requireNonNull(owner.queryForObject(
-                            "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'",
-                            Integer.class))
-                    > 0;
-            Thread.sleep(50);
-        }
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> loser.isDone() || waitingTransactions() > 0);
         assertThat(loser.isDone()).isFalse();
-        assertThat(blocked).isTrue();
+        assertThat(waitingTransactions()).isPositive();
         commit.countDown();
         Admission one = winner.get(30, TimeUnit.SECONDS);
         Admission two = loser.get(30, TimeUnit.SECONDS);
@@ -628,6 +623,12 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     private static String message() {
         var random = ThreadLocalRandom.current();
         return random.nextLong(1_000_000_000L, 9_999_999_999L) + "." + random.nextInt(100_000, 999_999);
+    }
+
+    /** Transactions that wait for another one's lock: the loser of a forced-order race. */
+    private int waitingTransactions() {
+        return Objects.requireNonNull(owner.queryForObject(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'", Integer.class));
     }
 
     private static void await(CyclicBarrier barrier) {
