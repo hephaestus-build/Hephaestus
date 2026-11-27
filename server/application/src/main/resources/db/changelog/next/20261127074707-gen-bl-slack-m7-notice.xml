@@ -19,5 +19,12 @@
     <changeSet id="1795765627663-2" author="hephaestus">
     <comment>Validate the outbox constraint after releasing the expand lock.</comment>
     <sql>ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_kind;</sql>
+    <rollback>
+      SET LOCAL lock_timeout = '5s';
+      ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+        ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+          'RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT',
+          'MENTOR_EFFECT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE')) NOT VALID;
+    </rollback>
   </changeSet>
 </databaseChangeLog>
