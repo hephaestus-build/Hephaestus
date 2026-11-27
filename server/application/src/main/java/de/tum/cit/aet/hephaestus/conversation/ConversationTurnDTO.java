@@ -36,6 +36,11 @@ public record ConversationTurnDTO(
                 requiredMode = RequiredMode.REQUIRED)
         int attempt,
 
+        @Schema(
+                description =
+                        "The conversation tree generation. A removal advances it and invalidates older partial answers.")
+        long scopeEpoch,
+
         ConversationTurn.@NonNull Surface surface,
 
         @Schema(

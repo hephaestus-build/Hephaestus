@@ -8,6 +8,7 @@ import {
 	applySnapshot,
 	applyTurn,
 	inOrder,
+	observeScopeEpoch,
 	rereadConversation,
 	rereadInOrder,
 } from "@/hooks/conversation-cache";
@@ -34,12 +35,14 @@ export function useConversationLive(workspaceSlug: string): boolean {
 			const live = parseLiveEvent(event.type, event.data);
 			switch (live?.type) {
 				case "snapshot": {
+					observeScopeEpoch(queryClient, workspaceSlug, live.conversation.scopeEpoch ?? 0);
 					rereadInOrder(queryClient, workspaceSlug, async () =>
 						applySnapshot(queryClient, workspaceSlug, live.conversation),
 					);
 					break;
 				}
 				case "turn": {
+					observeScopeEpoch(queryClient, workspaceSlug, live.turn.scopeEpoch ?? 0);
 					inOrder(queryClient, workspaceSlug, () =>
 						applyTurn(queryClient, workspaceSlug, live.turn),
 					);

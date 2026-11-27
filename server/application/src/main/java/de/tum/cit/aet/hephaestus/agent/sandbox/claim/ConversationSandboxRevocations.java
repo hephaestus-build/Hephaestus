@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationAccess;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -19,14 +21,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class ConversationSandboxRevocations {
     private final AgentSandboxRepository sandboxes;
+    private final ConversationAccess conversations;
     private final TransactionTemplate transactions;
     private final @Nullable AgentSandboxes owners;
 
     public ConversationSandboxRevocations(
             AgentSandboxRepository sandboxes,
+            ConversationAccess conversations,
             PlatformTransactionManager transactions,
             @Nullable AgentSandboxes owners) {
         this.sandboxes = sandboxes;
+        this.conversations = conversations;
         this.transactions = new TransactionTemplate(transactions);
         this.owners = owners;
     }
@@ -55,6 +60,14 @@ public class ConversationSandboxRevocations {
             if (owner == null) throw new IllegalStateException("Conversation sandbox deletion is unavailable");
             for (UUID copy : copies) owner.release(workspace.getKey(), copy);
         }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void historyRemoved(ConversationLedgerEvents.ScopeChanged change) {
+        String[] subjects = conversations.treeIds(change.workspaceId(), change.accountId()).stream()
+                .map(TurnRunsAdapter::subject)
+                .toArray(String[]::new);
+        if (subjects.length != 0) sandboxes.revokeConversationTree(change.workspaceId(), subjects);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)

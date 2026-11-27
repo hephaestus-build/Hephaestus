@@ -37,6 +37,6 @@ public class ConversationLiveController {
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
         long accountId = PersonAct.fromPrincipal().requireSelf();
-        return hub.subscribe(workspace.id(), accountId);
+        return hub.subscribe(workspace.id(), accountId, new ConversationEventEmitter(response));
     }
 }

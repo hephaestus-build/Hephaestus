@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation.spi;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -8,6 +9,12 @@ import tools.jackson.databind.JsonNode;
 
 /** Snapshots of the conversations of the conversation ledger and their entries; no returned value is a managed entity. */
 public interface ConversationAccess {
+
+    /** Serializes a sandbox claim or write with removal from the history it can read. */
+    void shareHistory(long workspaceId, long accountId);
+
+    /** The main conversation and all forks whose history this owner can search. */
+    List<UUID> treeIds(long workspaceId, long accountId);
 
     /** The account whose conversation it is. */
     long accountId(long workspaceId, UUID conversationId);

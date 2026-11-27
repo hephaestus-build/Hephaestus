@@ -572,6 +572,9 @@ class LlmProxyService {
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
                     poolPermit.revoked(),
                     transports,
+                    routing.conversationTurn()
+                            ? handoff -> routingService.sendConversationRequest(routing, handoff)
+                            : null,
                     headers -> callPermits.learning().served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             tap.onFirstContent(waited -> callPermits.learning().firstToken(poolPermit, waited, instanceCredential));
@@ -671,6 +674,13 @@ class LlmProxyService {
                             reviewStream);
                 }
             } catch (Exception e) {
+                if (e instanceof ProxyRoutingService.ModelRequestRefused) {
+                    permit.released();
+                    return refusal(
+                            HttpStatus.CONFLICT,
+                            ProxyRefusal.ATTEMPT_ENDED,
+                            JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                }
                 if (rechecking) {
                     // The retry failed before it left, so the provider's health takes no failure from it.
                     permit.released();
@@ -902,6 +912,7 @@ class LlmProxyService {
             @Nullable Bounds bounds,
             Mono<Void> cancelled,
             ProxyTransportClosure transports,
+            @Nullable Consumer<Runnable> admitSend,
             Consumer<HttpHeaders> served) {}
 
     /**
@@ -950,8 +961,27 @@ class LlmProxyService {
                 : stream -> ProxyStreamingUtils.endingWhenIdle(stream.takeUntilOther(stop), bounds.idle());
         AtomicBoolean answered = new AtomicBoolean();
         AtomicBoolean cancelledFirst = new AtomicBoolean();
-        var parts = request.bodyValue(outgoingBody)
-                .exchangeToFlux(upstream -> {
+        AtomicBoolean sendRefused = new AtomicBoolean();
+        var admit = exchange.admitSend();
+        var sending = admit == null
+                ? request.bodyValue(outgoingBody)
+                : request.contentLength(outgoingBody.length)
+                        .body((output, _) -> output.writeWith(Mono.<DataBuffer>create(sink -> {
+                            // Reactor Netty's single-buffer send hands the whole request to the connected channel
+                            // synchronously on emission. The database check runs off the transport event loop.
+                            Thread.ofVirtual().name("conversation-model-send").start(() -> {
+                                try {
+                                    admit.accept(() ->
+                                            sink.success(output.bufferFactory().wrap(outgoingBody)));
+                                } catch (RuntimeException failure) {
+                                    // A pooled connection can report its close before the request-body error.
+                                    if (failure instanceof ProxyRoutingService.ModelRequestRefused)
+                                        sendRefused.set(true);
+                                    sink.error(failure);
+                                }
+                            });
+                        })));
+        var parts = sending.exchangeToFlux(upstream -> {
                     answered.set(true);
                     tap.answered(upstream.statusCode().is2xxSuccessful());
                     // A stream's end comes minutes later, when these numbers are old.
@@ -972,12 +1002,16 @@ class LlmProxyService {
         try {
             UpstreamResult result =
                     ProxyStreamingUtils.forward(parts, limit, response, capture == null ? tap : both(tap, capture));
+            if (sendRefused.get()) throw new ProxyRoutingService.ModelRequestRefused();
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
             return cancelled.get() && !result.streamed() ? null : result;
-        } catch (IllegalStateException noHead) {
-            if (cancelledFirst.get()) return null;
-            throw noHead;
+        } catch (RuntimeException failure) {
+            if (sendRefused.get() && !(failure instanceof ProxyRoutingService.ModelRequestRefused)) {
+                throw new ProxyRoutingService.ModelRequestRefused(failure);
+            }
+            if (failure instanceof IllegalStateException && cancelledFirst.get()) return null;
+            throw failure;
         } finally {
             transport.finish(completed);
         }

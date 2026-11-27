@@ -7,10 +7,10 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
@@ -41,6 +42,8 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,27 +65,37 @@ class ConversationLiveHubTest extends BaseUnitTest {
     private static final Duration WAIT = Duration.ofSeconds(5);
 
     private final ConversationTimeline timeline = mock(ConversationTimeline.class);
+    private final ConversationScopeFence scopeFence = mock(ConversationScopeFence.class);
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final OwnerScope owners = mock(OwnerScope.class);
     private final AtomicBoolean member = new AtomicBoolean(true);
+    private final AtomicLong epoch = new AtomicLong();
     private final RecordingEmitter emitter = new RecordingEmitter();
     private final ConversationLiveHub hub = new ConversationLiveHub(
             mock(ConversationLedgerNotifications.class),
             timeline,
+            scopeFence,
             memberships,
             owners,
             TransactionOperations.withoutTransaction(),
             new ObjectMapper(),
             new SimpleMeterRegistry(),
-            () -> emitter,
             1);
 
     /** Stubs are set before the hub's reader thread runs: Mockito stubbing is not safe while another thread calls the mock. */
     @BeforeEach
     void stubTimeline() {
+        when(scopeFence.admit(any(), any(), any())).thenAnswer(call -> {
+            ConversationScopeFence.Scope scope = call.getArgument(0);
+            BooleanSupplier current = call.getArgument(1);
+            Runnable handoff = call.getArgument(2);
+            if (epoch.get() != scope.epoch() || !current.getAsBoolean()) return false;
+            handoff.run();
+            return true;
+        });
         when(memberships.isActiveVisibleMember(WORKSPACE, ACCOUNT)).thenAnswer(call -> member.get());
         when(timeline.conversation(anyLong(), anyLong()))
-                .thenReturn(new ConversationDTO(null, 0, List.of(), List.of(), null, null));
+                .thenReturn(new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null));
         when(timeline.liveEntry(anyLong(), anyLong(), any()))
                 .thenAnswer(call -> Optional.of(entry(call.getArgument(2))));
     }
@@ -119,7 +132,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     @Test
     void shouldSendASnapshotInsteadOfTheMissedEventsWhenAStreamFallsBehind() throws InterruptedException {
         emitter.holdSends();
-        hub.subscribe(WORKSPACE, ACCOUNT);
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
         assertThat(emitter.awaitHeld()).isTrue(); // The first snapshot is being written; nothing else goes out.
 
         UUID queued = UUID.randomUUID();
@@ -135,15 +148,37 @@ class ConversationLiveHubTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldDropAQueuedEventWhenRemovalCommitsBeforeTheWriterDrains() throws InterruptedException {
+        when(timeline.scopeEpoch(WORKSPACE, ACCOUNT)).thenAnswer(call -> epoch.get());
+        when(timeline.conversation(WORKSPACE, ACCOUNT))
+                .thenAnswer(call -> new ConversationDTO(null, 0, epoch.get(), List.of(), List.of(), null, null));
+        emitter.holdSends();
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
+        assertThat(emitter.awaitHeld()).isTrue();
+
+        UUID stale = UUID.randomUUID();
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(stale)));
+        verify(timeline, timeout(WAIT.toMillis())).liveEntry(WORKSPACE, ACCOUNT, stale);
+        // The writer has not heard a scope notification.
+        epoch.incrementAndGet();
+        emitter.release();
+
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).hasSize(2));
+        assertThat(emitter.names()).containsExactly("snapshot", "snapshot");
+        assertThat(emitter.frames()).noneMatch(frame -> frame.contains(stale.toString()));
+    }
+
+    @Test
     void shouldSendAnEntryCommittedWhileTheSnapshotIsReadAfterTheSnapshotWhenAStreamOpens() {
         UUID committed = UUID.randomUUID();
         when(timeline.conversation(anyLong(), anyLong())).thenAnswer(call -> {
             hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
                     WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(committed)));
-            return new ConversationDTO(null, 0, List.of(), List.of(), null, null);
+            return new ConversationDTO(null, 0, 0, List.of(), List.of(), null, null);
         });
 
-        hub.subscribe(WORKSPACE, ACCOUNT);
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
 
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "entry"));
         assertThat(emitter.frames()).anyMatch(frame -> frame.contains(committed.toString()));
@@ -151,7 +186,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
     @Test
     void shouldReadNoChangeWhenItsDeveloperHasNoStreamOnThisServer() {
-        hub.subscribe(WORKSPACE, ACCOUNT);
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
 
         hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
@@ -173,12 +208,12 @@ class ConversationLiveHubTest extends BaseUnitTest {
         verify(timeline, never()).liveEntry(anyLong(), eq(COLLEAGUE), any());
         verify(timeline, never()).liveTurn(anyLong(), eq(COLLEAGUE), any());
         verify(owners, never()).ofJob(COLLEAGUE);
-        verify(owners, times(2)).ofJob(ACCOUNT);
+        verify(owners, atLeastOnce()).ofJob(ACCOUNT);
     }
 
     @Test
     void shouldCloseTheStreamWithoutTheChangeWhenTheAccountLeftTheWorkspace() {
-        hub.subscribe(WORKSPACE, ACCOUNT);
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
 
         member.set(false);
@@ -193,7 +228,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
     @Test
     void shouldKeepAQuietStreamOpenWithACommentWhenTheHeartbeatRuns() {
-        hub.subscribe(WORKSPACE, ACCOUNT);
+        hub.subscribe(WORKSPACE, ACCOUNT, emitter);
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
 
         hub.heartbeat();
@@ -213,7 +248,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
             logger.setLevel(Level.DEBUG);
             emitter.failSends(new IOException("private-conversation-canary@example.test"));
 
-            hub.subscribe(WORKSPACE, ACCOUNT);
+            hub.subscribe(WORKSPACE, ACCOUNT, emitter);
 
             await().atMost(WAIT).untilTrue(emitter.completed);
             assertThat(emitter.frames()).isEmpty();
@@ -233,7 +268,10 @@ class ConversationLiveHubTest extends BaseUnitTest {
     @Test
     void shouldEndEveryStreamBeforeTheWebServerDrainsWhenTheContextCloses() {
         boolean ended = WebServerDrainProbe.heldWhenTheWebServerDrains(
-                ConversationLiveHub.class, hub, () -> hub.subscribe(WORKSPACE, ACCOUNT), emitter.completed::get);
+                ConversationLiveHub.class,
+                hub,
+                () -> hub.subscribe(WORKSPACE, ACCOUNT, emitter),
+                emitter.completed::get);
 
         assertThat(ended).isTrue();
     }
@@ -251,7 +289,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
             child.close();
 
-            assertThatCode(() -> hub.subscribe(WORKSPACE, ACCOUNT)).doesNotThrowAnyException();
+            assertThatCode(() -> hub.subscribe(WORKSPACE, ACCOUNT, emitter)).doesNotThrowAnyException();
         }
     }
 
@@ -259,7 +297,7 @@ class ConversationLiveHubTest extends BaseUnitTest {
     void shouldRefuseANewStreamWhenTheServerIsClosing() {
         hub.shutdown();
 
-        assertThatThrownBy(() -> hub.subscribe(WORKSPACE, ACCOUNT))
+        assertThatThrownBy(() -> hub.subscribe(WORKSPACE, ACCOUNT, emitter))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));

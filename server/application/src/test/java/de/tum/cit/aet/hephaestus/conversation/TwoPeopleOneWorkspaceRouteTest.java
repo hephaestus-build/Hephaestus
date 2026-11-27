@@ -146,7 +146,11 @@ class TwoPeopleOneWorkspaceRouteTest extends AbstractWorkspaceIntegrationTest {
                             .is2xxSuccessful()
                             .expectBody(Void.class)
                             .returnResult());
-            var touched = ConversationStatements.of(measured);
+            // Tests dispatch async listeners inline. The slot fanout runs in its own transaction after commit.
+            String fanout = ConversationTurnWaits.class.getName() + ".publishWaits";
+            var touched = ConversationStatements.of(measured).stream()
+                    .filter(statement -> !fanout.equals(statement.transaction()))
+                    .toList();
             assertThat(touched)
                     .as("%s %s reads or writes the conversation", route.method(), route.path())
                     .isNotEmpty()

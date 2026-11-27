@@ -1103,6 +1103,10 @@ export type Conversation = {
 	 */
 	latestSeq: number;
 	/**
+	 * The conversation tree generation. A removal advances it and invalidates older partial answers.
+	 */
+	scopeEpoch?: number;
+	/**
 	 * The newest threads, latest activity first
 	 */
 	threads: Array<ConversationThreadSummary>;
@@ -1329,6 +1333,10 @@ export type ConversationTurn = {
 	 * The submission or schedule key; the stimulus entry carries the same value
 	 */
 	requestId: string;
+	/**
+	 * The conversation tree generation. A removal advances it and invalidates older partial answers.
+	 */
+	scopeEpoch?: number;
 	status: ConversationTurnStatus;
 	surface: ConversationTurnSurface;
 	/**

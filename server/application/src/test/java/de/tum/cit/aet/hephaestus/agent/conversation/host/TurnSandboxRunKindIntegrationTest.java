@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnComplet
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
+import de.tum.cit.aet.hephaestus.agent.conversation.web.ConversationReplicaStreams;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentNextController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
@@ -36,6 +37,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunsFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.RunLockProbe;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
@@ -45,7 +47,13 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationPartialUpdates;
+import de.tum.cit.aet.hephaestus.conversation.ConversationReplica;
+import de.tum.cit.aet.hephaestus.conversation.ConversationRetentionSweeper;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
@@ -62,8 +70,10 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -80,6 +90,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -92,6 +104,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** A conversation sandbox claims only its subject's turn, and the server fences every proposal on that claim. */
 class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -139,7 +152,9 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         workspace = createWorkspace("sandbox-turn-" + suffix, "Turn", "turn-org", AccountType.ORG, developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), accountId(developer));
         sandboxes = SandboxOwnerFixtures.owner(
-                beans, new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())));
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                AgentRunsFixtures.withoutTurnCap(beans));
         held = new ConversationTurns(
                 turnAccess,
                 beans.getBean(ConversationAccess.class),
@@ -163,21 +178,24 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private ConversationTurn ask(String question) {
-        return turns.submit(
-                        workspace.getId(),
-                        conversation.getId(),
-                        new ConversationTurnService.Question(
-                                ConversationTurn.Surface.APP,
-                                question,
-                                UUID.randomUUID().toString(),
-                                null,
-                                null))
-                .turn();
+        return ask(conversation, question).turn();
     }
 
-    private AgentSandboxes.LiveSandbox sandbox() {
-        var sandbox = sandboxes.ensure(
-                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
+    private ConversationTurnService.Submission ask(Conversation in, String question) {
+        return turns.submit(
+                workspace.getId(),
+                in.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        question,
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+    }
+
+    private AgentSandboxes.LiveSandbox sandbox(Conversation in) {
+        var sandbox =
+                sandboxes.ensure(workspace.getId(), TurnRunsAdapter.subject(in.getId()), AgentSandboxKind.CONVERSATION);
         return sandboxes
                 .authenticate(new SandboxJwt(
                         sandbox.id(),
@@ -188,12 +206,24 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .orElseThrow();
     }
 
+    private AgentSandboxes.LiveSandbox sandbox() {
+        return sandbox(conversation);
+    }
+
     private SandboxRun claim() {
-        return claim(() -> {});
+        return claim(conversation, () -> {});
+    }
+
+    private SandboxRun claim(Conversation in) {
+        return claim(in, () -> {});
     }
 
     private SandboxRun claim(Runnable beforeLease) {
-        var sandbox = sandbox();
+        return claim(conversation, beforeLease);
+    }
+
+    private SandboxRun claim(Conversation in, Runnable beforeLease) {
+        var sandbox = sandbox(in);
         var lease = sandboxes
                 .lease(
                         sandbox,
@@ -568,6 +598,169 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isTrue();
         });
         assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldFenceBothReplicasWhenConversationHistoryIsRemoved(boolean retention) throws Exception {
+        String secret = "words held by the sibling search";
+        var entries = beans.getBean(ConversationEntryService.class);
+        long workspaceId = workspace.getId();
+        var parent =
+                entries.append(workspaceId, conversation.getId(), ConversationLedgerFixtures.hephaestus("First fork"));
+        var sibling =
+                entries.append(workspaceId, conversation.getId(), ConversationLedgerFixtures.hephaestus("Second fork"));
+        var source = conversations.openThread(workspaceId, parent.getId());
+        var consumer = conversations.openThread(workspaceId, sibling.getId());
+        var removed = ask(source, secret).question();
+
+        var colleague = persistUser("unrelated-" + UUID.randomUUID());
+        ensureMembership(workspace, colleague, Membership.WorkspaceRole.MEMBER);
+        var other = conversations.findOrCreateMain(workspaceId, accountId(colleague));
+        var otherTurn = ask(other, "Unrelated question").turn();
+        var otherRun = claim(other);
+        var active = ask(consumer, "Search the other fork").turn();
+        var activeRun = claim(consumer);
+        var idleSourceCopy = sandbox(source);
+        var query = new ConversationEntryService.SearchQuery(
+                null, ConversationEntryService.SearchScope.ALL, null, null, 20);
+        var hits = held.read(activeRun, turn -> entries.search(workspaceId, turn.conversationId(), query));
+        assertThat(hits).anyMatch(hit -> hit.entryId().equals(removed.getId()));
+
+        var mapper = beans.getBean(ObjectMapper.class);
+        var update = ConversationPartialUpdates.whole(partialAnswer(mapper, secret));
+        var control = ConversationPartialUpdates.whole(partialAnswer(mapper, "unrelated partial"));
+        var published = beans.getBean(SharedEventRecorder.class);
+        var replicas = List.of(new ConversationReplica(beans), new ConversationReplica(beans));
+        for (var reply : List.of(activeRun, otherRun)) {
+            var id = reply.equals(activeRun) ? active.getId() : otherTurn.getId();
+            turns.updatePartial(
+                    workspaceId,
+                    id,
+                    reply.fence().epoch(),
+                    reply.fence().runId(),
+                    reply.equals(activeRun) ? update : control);
+            var frames = published.of(
+                    ConversationLedgerEvents.ProgressChanged.class,
+                    ConversationLedgerEvents.ProgressChanged::turnId,
+                    id);
+            assertThat(frames).isNotEmpty();
+            replicas.forEach(replica -> frames.forEach(replica::deliver));
+        }
+        var delayed = published.of(
+                ConversationLedgerEvents.ProgressChanged.class,
+                ConversationLedgerEvents.ProgressChanged::turnId,
+                active.getId());
+        for (var replica : replicas) {
+            assertThat(ConversationReplicaStreams.reconnect(beans, replica, workspaceId, developerAccountId))
+                    .contains(secret);
+        }
+
+        ConversationReplicaStreams.removeWhileSending(
+                beans, replicas.getFirst(), workspaceId, developerAccountId, () -> {
+                    if (retention) {
+                        jdbc.update(
+                                "UPDATE conversation_entry SET created_at = '2001-01-01' WHERE id = ?",
+                                removed.getId());
+                        beans.getBean(ConversationRetentionSweeper.class).sweepNow();
+                    } else {
+                        entries.deleteMessage(workspaceId, removed.getId());
+                    }
+                });
+
+        assertThat(sandboxes.hasLive(workspaceId, activeRun.sandbox().subjectKey()))
+                .isFalse();
+        assertThat(sandboxes.hasLive(workspaceId, idleSourceCopy.subjectKey())).isFalse();
+        assertThat(sandboxes.hasLive(workspaceId, otherRun.sandbox().subjectKey()))
+                .isTrue();
+        assertThat(turnAccess.hasLiveLease(
+                        workspaceId,
+                        active.getId(),
+                        activeRun.fence().epoch(),
+                        activeRun.fence().runId()))
+                .isFalse();
+        assertThatThrownBy(() -> kind.context(activeRun)).isInstanceOf(StaleRunException.class);
+        assertThatThrownBy(() -> turns.updatePartial(
+                        workspaceId,
+                        active.getId(),
+                        activeRun.fence().epoch(),
+                        activeRun.fence().runId(),
+                        update))
+                .isInstanceOf(ConversationLeaseLostException.class);
+        assertThat(published.of(
+                        ConversationLedgerEvents.ProgressChanged.class,
+                        ConversationLedgerEvents.ProgressChanged::turnId,
+                        active.getId()))
+                .isEqualTo(delayed);
+
+        for (var replica : replicas) {
+            // Neither replica has heard the removal. Both the replay and the reconnect use the database fence.
+            delayed.forEach(replica::deliver);
+            assertThat(ConversationReplicaStreams.reconnect(beans, replica, workspaceId, developerAccountId))
+                    .contains("\"scopeEpoch\":1")
+                    .doesNotContain(secret, active.getId().toString());
+            assertThat(ConversationReplicaStreams.reconnect(beans, replica, workspaceId, other.getAccountId()))
+                    .contains("unrelated partial");
+        }
+        var ending = new ConversationTurnService.Ending(
+                ConversationTurn.Status.DONE,
+                List.of(ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), secret)),
+                partialAnswer(mapper, secret),
+                null);
+        assertThatThrownBy(() -> turns.end(
+                        workspaceId,
+                        active.getId(),
+                        activeRun.fence().epoch(),
+                        activeRun.fence().runId(),
+                        ending))
+                .isInstanceOf(ConversationLeaseLostException.class);
+        assertThat(beans.getBean(ConversationAccess.class).answered(workspaceId, active.getId()))
+                .isFalse();
+
+        // A current lease cannot make an old-epoch frame current. It must leave the fresh partial intact.
+        var fresh = ask(consumer, "A new reply").turn();
+        var freshRun = claim(consumer);
+        turns.updatePartial(
+                workspaceId,
+                fresh.getId(),
+                freshRun.fence().epoch(),
+                freshRun.fence().runId(),
+                ConversationPartialUpdates.whole(partialAnswer(mapper, "new partial")));
+        var freshFrames = published.of(
+                ConversationLedgerEvents.ProgressChanged.class,
+                ConversationLedgerEvents.ProgressChanged::turnId,
+                fresh.getId());
+        for (var replica : replicas) {
+            freshFrames.forEach(replica::deliver);
+            for (var frame : delayed) {
+                replica.deliver(new ConversationLedgerEvents.ProgressChanged(
+                        frame.workspaceId(),
+                        frame.conversationId(),
+                        frame.accountId(),
+                        fresh.getId(),
+                        frame.surface(),
+                        freshRun.fence().epoch(),
+                        frame.scopeEpoch(),
+                        frame.sequence(),
+                        frame.index(),
+                        frame.count(),
+                        frame.data()));
+            }
+            assertThat(ConversationReplicaStreams.reconnect(beans, replica, workspaceId, developerAccountId))
+                    .contains("new partial")
+                    .doesNotContain(secret);
+        }
+    }
+
+    private static ObjectNode partialAnswer(ObjectMapper mapper, String text) {
+        var answer = mapper.createObjectNode().put("activity", "writing");
+        answer.putArray("messages")
+                .addObject()
+                .putArray("content")
+                .addObject()
+                .put("type", "text")
+                .put("text", text);
+        return answer;
     }
 
     /**

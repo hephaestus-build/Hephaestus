@@ -73,12 +73,14 @@ ConsumerDeadLetterDTO.replayedBy  # the account that replayed it, an identifier
 ContributorDTO.contributions  # contributions of one named project contributor
 ContributorDTO.id  # identifier
 ConversationDTO.latestSeq
+ConversationDTO.scopeEpoch  # removal generation
 ConversationEntryDTO.seq
 ConversationLinkDTO.itemId  # identifier
 ConversationThreadSummaryDTO.latestSeq
 ConversationThreadSummaryDTO.replyCount  # replies
 ConversationTurnDTO.attempt
 ConversationTurnDTO.maxAttempts
+ConversationTurnDTO.scopeEpoch  # removal generation
 Coverage.maxEntries
 Coverage.omittedWithoutCopyAuthority  # feedback entries
 CoverageOmission.count

@@ -572,6 +572,14 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     Optional<UUID> lockUnredactedQuestion(
             @Param("workspaceId") long workspaceId, @Param("entryId") UUID entryId, @Param("turnId") UUID turnId);
 
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM conversation_entry
+             WHERE workspace_id = :workspaceId AND account_id = :accountId
+               AND id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL)
+            """, nativeQuery = true)
+    boolean hasHistoryToRemove(
+            @Param("workspaceId") long workspaceId, @Param("accountId") long accountId, @Param("ids") UUID[] ids);
+
     /** Locks the main conversation row of each tree that holds one of these entries, in id order. */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """

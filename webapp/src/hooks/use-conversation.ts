@@ -11,12 +11,12 @@ import { toast } from "@/lib/toast";
 import { useEffect } from "react";
 import {
 	clearConversationVoteMutation,
-	deleteConversationEntryMutation,
 	markConversationReadMutation,
 	setConversationVoteMutation,
 	submitConversationTurnMutation,
 	updateConversationTurnStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
+import { deleteConversationEntry } from "@/api/sdk.gen";
 import type { ConversationEntry, ConversationTurnRequest } from "@/api/types.gen";
 import type {
 	EarlierMessages,
@@ -37,7 +37,10 @@ import {
 	conversationOptions,
 	conversationEntriesOptions,
 	conversationThreadOptions,
+	observeScopeEpoch,
 	patchShownEntry,
+	rereadConversation,
+	rereadInOrder,
 } from "@/hooks/conversation-cache";
 import { usePageVisible } from "@/hooks/use-page-visible";
 
@@ -269,7 +272,27 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 		onError: reportFailure("We could not stop the answer. Try again."),
 	});
 	const remove = useMutation({
-		...deleteConversationEntryMutation(),
+		mutationFn: async (entry: ConversationEntry) => {
+			const { response } = await deleteConversationEntry({
+				path: { workspaceSlug, entryId: entry.id },
+				throwOnError: true,
+			});
+			const header = response.headers.get("X-Conversation-Scope-Epoch");
+			return header === null ? Number.NaN : Number(header);
+		},
+		onSuccess: (epoch, entry) => {
+			if (Number.isSafeInteger(epoch) && epoch >= 0) {
+				observeScopeEpoch(queryClient, workspaceSlug, epoch);
+			}
+			patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
+				...shown,
+				deleted: true,
+				text: "",
+			}));
+			rereadInOrder(queryClient, workspaceSlug, async () =>
+				rereadConversation(queryClient, workspaceSlug),
+			);
+		},
 		onError: reportFailure("We could not delete your message. Try again."),
 	});
 	const vote = useVote(workspaceSlug);
@@ -302,19 +325,7 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 			stop.mutate({ path: { workspaceSlug, turnId }, body: { status: "STOPPED" } });
 		},
 		onVote: vote,
-		onDelete: (entry) => {
-			remove.mutate(
-				{ path: { workspaceSlug, entryId: entry.id } },
-				{
-					onSuccess: () =>
-						patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({
-							...shown,
-							deleted: true,
-							text: "",
-						})),
-				},
-			);
-		},
+		onDelete: (entry) => remove.mutate(entry),
 	};
 }
 

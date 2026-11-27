@@ -68,6 +68,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationScopeFence;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -199,6 +200,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ConversationTurnAccess turnAccess;
+
+    @Autowired
+    private ConversationScopeFence scopeFence;
 
     @Autowired
     private WorkspaceModelAssignmentRepository modelAssignmentRepository;
@@ -1788,6 +1792,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyRoutingService(
                         jobRepository,
                         turnAccess,
+                        scopeFence,
                         objectMapper,
                         reviewSnapshots,
                         agentRuns,
@@ -1865,6 +1870,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return new ProxyRoutingService(
                         jobRepository,
                         turnAccess,
+                        scopeFence,
                         objectMapper,
                         reviewSnapshots,
                         agentRuns,

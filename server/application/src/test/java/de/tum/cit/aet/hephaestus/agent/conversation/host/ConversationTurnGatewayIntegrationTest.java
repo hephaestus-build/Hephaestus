@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
@@ -65,16 +66,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -94,7 +100,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import reactor.core.publisher.Sinks;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -140,6 +148,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
     private Workspace workspace;
     private Conversation conversation;
     private ConversationTurn turn;
+    private volatile ExchangeFilterFunction modelExchange = (request, next) -> next.exchange(request);
 
     @BeforeEach
     void startTheGateway() throws Exception {
@@ -194,7 +203,9 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
-            factory.registerSingleton("llmProxyController", SandboxModelProxy.controller(beans));
+            factory.registerSingleton(
+                    "llmProxyController",
+                    SandboxModelProxy.controller(beans, (request, next) -> modelExchange.filter(request, next)));
             factory.registerSingleton("attemptTokenVerifier", verifier);
 
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
@@ -301,6 +312,67 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
             if (driver.isAlive()) driver.destroyForcibly();
             reader.shutdownNow();
             output.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRefuseAPreparedPromptWhenRemovalOvertakesItsTransport(boolean usageFallback) throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            if (usageFallback) {
+                upstream.enqueue(new MockResponse.Builder()
+                        .code(400)
+                        .addHeader("Content-Type", "application/json")
+                        .body("{\"error\":\"stream_options is unsupported\"}")
+                        .build());
+            }
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"choices\":[]}")
+                    .build());
+            admitModel(upstream.url("/v1").toString());
+
+            var prepared = new CountDownLatch(1);
+            var resume = Sinks.<Boolean>one();
+            var number = new AtomicInteger();
+            int expectedSent = usageFallback ? 1 : 0;
+            modelExchange = (request, next) -> {
+                if (number.getAndIncrement() != expectedSent) return next.exchange(request);
+                prepared.countDown();
+                var exchange = resume.asMono().flatMap(ignored -> next.exchange(request));
+                // On the reused connection, the close can reach the exchange before the body error.
+                return usageFallback ? exchange.onErrorMap(ignored -> new IOException("Connection closed")) : exchange;
+            };
+            var request = HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/internal/llm/chat/completions"))
+                    .header("Authorization", "Bearer " + credential())
+                    .header("Content-Type", "application/json")
+                    .header(
+                            SandboxRunArgumentResolver.RUN_HEADER,
+                            turn.getRunId().toString())
+                    .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(turn.getAttempt()))
+                    .POST(HttpRequest.BodyPublishers.ofString("""
+                            {"model":"restart-model","stream":true,"messages":[{"role":"user","content":"Private question"}]}
+                            """))
+                    .build();
+            var call = http.sendAsync(request, HttpResponse.BodyHandlers.discarding());
+            try {
+                assertThat(prepared.await(15, TimeUnit.SECONDS)).isTrue();
+                if (usageFallback) {
+                    var first = Objects.requireNonNull(upstream.takeRequest(2, TimeUnit.SECONDS));
+                    assertThat(Objects.requireNonNull(first.getBody()).utf8()).contains("stream_options");
+                }
+                var question =
+                        beans.getBean(ConversationEntryRepository.class).findStimulus(workspace.getId(), turn.getId());
+                beans.getBean(ConversationEntryService.class).deleteMessage(workspace.getId(), question.getId());
+            } finally {
+                resume.tryEmitValue(true);
+            }
+
+            assertThat(call.get(10, TimeUnit.SECONDS).statusCode()).isEqualTo(409);
+            assertThat(upstream.getRequestCount()).isEqualTo(expectedSent);
         }
     }
 

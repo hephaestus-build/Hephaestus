@@ -1717,6 +1717,7 @@ export const zConversationTurn = z.object({
 	partial: zConversationTurnPartial.optional(),
 	phase: zConversationTurnPhase.optional(),
 	requestId: z.string(),
+	scopeEpoch: z.int().optional(),
 	status: zConversationTurnStatus,
 	surface: zConversationTurnSurface,
 	waitingFor: zConversationTurnWaitingFor.optional(),
@@ -1731,6 +1732,7 @@ export const zConversation = z.object({
 	lastAnswerAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	latestSeq: z.int(),
+	scopeEpoch: z.int().optional(),
 	threads: z.array(zConversationThreadSummary),
 });
 
