@@ -153,6 +153,7 @@ erDiagram
         UUID advice_id PK,FK
         UUID review_id PK
         BIGINT workspace_id PK,FK
+        BIGINT person_account_id FK "NOT NULL"
         VARCHAR(16) kind "NOT NULL"
         BYTEA content_digest "NOT NULL"
         BIGINT version "NOT NULL"

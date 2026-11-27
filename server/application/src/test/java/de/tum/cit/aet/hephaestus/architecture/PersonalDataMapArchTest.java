@@ -95,9 +95,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // Which conversation entry an attempt read, and its revision: entry ids, no words and no person. A row
             // goes with the entry it names, so a person's erasure deletes it with their conversations.
             "basis_edge",
-            // One advice decision per review: the entry and review ids, the kind, a SHA-256 digest and the version. No
-            // person or words; it is deleted with its advice entry.
-            "practice_advice_receipt",
             "commit_pull_request",
             "connection",
             "connection_activity",
@@ -169,6 +166,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             Map.entry(
                     "practice_advice_source",
                     "Advice sources (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_receipt",
+                    "One advice decision per review, by the entry's owner key (ADR 0160). Deleted with its entry"),
             Map.entry(
                     "mentor_event",
                     "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),

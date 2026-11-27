@@ -14,11 +14,13 @@ public interface PracticeAdviceReceiptRepository
     Optional<PracticeAdviceReceipt> findByAdviceIdAndWorkspaceIdAndReviewId(
             UUID adviceId, long workspaceId, UUID reviewId);
 
+    /** The receipt takes its owner and workspace from the locked entry, so it can name no other. */
     @Modifying
     @Query(
-            value = "INSERT INTO practice_advice_receipt (advice_id, workspace_id, review_id, kind, content_digest,"
-                    + " version, written_at) VALUES (:adviceId, :workspaceId, :reviewId, :kind, :digest, :version,"
-                    + " clock_timestamp())",
+            value = "INSERT INTO practice_advice_receipt (advice_id, workspace_id, person_account_id, review_id, kind,"
+                    + " content_digest, version, written_at) SELECT a.id, a.workspace_id, a.person_account_id,"
+                    + " :reviewId, :kind, :digest, :version, clock_timestamp() FROM practice_advice a"
+                    + " WHERE a.id = :adviceId AND a.workspace_id = :workspaceId",
             nativeQuery = true)
     int insertReceipt(
             @Param("adviceId") UUID adviceId,

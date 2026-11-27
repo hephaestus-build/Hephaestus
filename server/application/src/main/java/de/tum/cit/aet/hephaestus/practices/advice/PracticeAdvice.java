@@ -28,10 +28,7 @@ import org.jspecify.annotations.Nullable;
                     columnNames = {"workspace_id", "person_account_id", "practice_id"}),
             @UniqueConstraint(
                     name = "uk_practice_advice_owner",
-                    columnNames = {"id", "person_account_id", "workspace_id"}),
-            @UniqueConstraint(
-                    name = "uk_practice_advice_workspace",
-                    columnNames = {"id", "workspace_id"})
+                    columnNames = {"id", "person_account_id", "workspace_id"})
         },
         indexes = {
             @Index(name = "idx_practice_advice_person", columnList = "person_account_id"),

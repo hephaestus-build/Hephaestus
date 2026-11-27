@@ -21,14 +21,18 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The one decision that a review made about an advice entry. A retry of the same decision finds it and writes nothing;
- * another decision from the same review is refused. It holds a digest of the decision, never its words.
+ * another decision from the same review is refused. It holds a digest of the decision, never its words, and is
+ * deleted with its entry.
  */
 @Entity
 @Immutable
 @IdClass(PracticeAdviceReceipt.Key.class)
 @Table(
         name = "practice_advice_receipt",
-        indexes = @Index(name = "idx_practice_advice_receipt_advice", columnList = "advice_id, workspace_id"))
+        indexes =
+                @Index(
+                        name = "idx_practice_advice_receipt_advice",
+                        columnList = "advice_id, person_account_id, workspace_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PracticeAdviceReceipt {
@@ -43,6 +47,10 @@ public class PracticeAdviceReceipt {
     @Id
     @Column(name = "review_id", nullable = false, columnDefinition = "UUID")
     private UUID reviewId;
+
+    /** The entry's owner, so the receipt references the entry by its owner key, as every advice row does. */
+    @Column(name = "person_account_id", nullable = false)
+    private long personAccountId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "kind", nullable = false, length = 16)
