@@ -182,7 +182,11 @@ import {
 	runtimeIdSchema,
 } from "./work/practice-scripts/lib/core/runtime-inputs.ts";
 import { InputReader } from "./work/practice-scripts/lib/core/script-inputs.ts";
-import { RETURN_MS, SCRIPT_HEAP_BYTES } from "./work/practice-scripts/lib/core/script-run.ts";
+import {
+	RETURN_MS,
+	SCRIPT_HEAP_BYTES,
+	type ProgramStep,
+} from "./work/practice-scripts/lib/core/script-run.ts";
 
 /** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
@@ -263,6 +267,9 @@ export interface TurnTrace {
 		| "session_close"
 		| "session_open"
 		| "stage_result";
+	programStep?: ProgramStep;
+	stalledProgramStep?: ProgramStep;
+	abortProgram?: () => void;
 	phase: SessionPhase;
 	modelError: boolean;
 	/** Failed or aborted model calls of this turn, by the adapter's own closed kind; no provider text is kept. */
@@ -1683,13 +1690,18 @@ async function runReview(): Promise<void> {
 	function stopTurn(reason: StopReason): void {
 		const state = sessionState();
 		const turn = state.currentTurn;
+		const programStall = reason === "stall" && turn?.step === "practice_program";
 		diagnose("turn.stopped", {
 			...placeOf(turn?.label ?? "review"),
 			stopped_by: reason,
 			step: reason === "stall" ? turn?.step : undefined,
+			program_step: programStall ? turn.programStep : undefined,
 		});
 		if (turn && turn.stoppedBy === null) {
 			turn.stoppedBy = reason;
+			if (programStall) {
+				turn.abortProgram?.();
+			}
 		}
 		if (state.activeSession) {
 			void abortSession(state.activeSession);
@@ -2316,6 +2328,7 @@ async function runReview(): Promise<void> {
 			input_tokens: trace.inputTokens,
 			input_token_budget: trace.budget.inputTokens,
 			stopped_by: trace.stoppedBy ?? undefined,
+			program_step: trace.stalledProgramStep ?? trace.programStep,
 			tool_calls: Object.values(trace.toolCalls).reduce((sum, count) => sum + count, 0),
 			stored: trace.stored,
 			refused: trace.refused,
@@ -2539,6 +2552,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		const streamUsage = newUsageLedger();
 		let providerFailures = 0;
+		let programStalls = 0;
 		const measurementReply = { asked: false, received: false };
 		const subscribeSession = (trackedSession: AgentSession) => {
 			const scope = sessionState();
@@ -2890,12 +2904,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		// Liveness, not a budget: a turn that shows no sign of life for STALL_MS is aborted.
 		const checkStall = (scope: ReviewSessionState) => {
 			sessionScopes.run(scope, () => {
+				const turn = scope.currentTurn;
 				if (
-					scope.currentTurn?.stoppedBy === null &&
+					turn?.stoppedBy === null &&
 					!scope.modelWait.waitsForModel() &&
 					Date.now() - scope.lastEventAt >= STALL_MS
 				) {
-					providerFailures += 1;
+					if (turn.step === "practice_program" && turn.abortProgram !== undefined) {
+						programStalls += 1;
+					} else {
+						providerFailures += 1;
+					}
 					stopTurn("stall");
 				}
 			});
@@ -3184,8 +3203,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
-			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
-				ended("review.unreachable", { unanswered_calls: providerFailures });
+			if (
+				(programStalls > 0 || providerFailures > 0 || measurementReply.asked) &&
+				!measurementReply.received
+			) {
+				ended("review.unreachable", {
+					unanswered_calls: providerFailures,
+					reason: programStalls > 0 ? "stalled" : undefined,
+				});
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);
 			}

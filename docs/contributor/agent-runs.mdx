@@ -684,7 +684,7 @@ Examples are a cut download, a signal, and a report that does not arrive.
 | 43 | The upload was not acknowledged before its deadline | The run hands on |
 | 44 | The workspace initializer could not prepare the workspace for a cause that every attempt meets | Ends the attempt with what it staged and records the rest as `PREPARATION_FAILED`, with no retry |
 | 75 | The gateway stayed unreachable until the work ended, or repeatedly cut a model response | Requeues the attempt, which spends a retry |
-| 76 | The model provider answered none of its calls | Requeues the attempt |
+| 76 | No model call answered, or a practice program stalled and the attempt had no results or model replies | Requeues the attempt |
 | 77 | The server answered staging or admission with its own error | Ends the attempt with what it staged |
 | 78 | Staged what it could and left a practice without a result | Decides from what is staged |
 | 124, 137 | Stopped at the work deadline, or killed | Ends the attempt by its deadline or as interrupted |
