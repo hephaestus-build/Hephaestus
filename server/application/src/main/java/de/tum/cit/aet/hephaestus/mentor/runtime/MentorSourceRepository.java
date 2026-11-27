@@ -12,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * The SQL of the mentor's rows, which are account-owned under row-level security: each statement names the account or
- * runs as the owner. Only {@link MentorIntake} writes them; the lock is {@code NOWAIT}, so a held row fails the
+ * runs as the owner. Only {@link MentorIntake} writes them; the locks are {@code NOWAIT}, so a held row fails the
  * caller's transaction instead of waiting.
  */
 @WorkspaceAgnostic("The mentor's rows are account-owned; row-level security scopes them to the bound account")
@@ -37,7 +37,7 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
     int insertSource(@Param("s") NewSource s);
 
     @Query(value = """
-            SELECT s.id AS id, s.producer AS producer,
+            SELECT s.id AS id, s.producer AS producer, s.state AS state, s.revision AS revision,
                 (SELECT r.id FROM mentor_request r WHERE r.source_id = s.id AND r.account_id = s.account_id) AS request
             FROM mentor_source s
             WHERE s.account_id = :account AND s.binding_id = :binding AND s.container_id = :container
@@ -49,6 +49,13 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             @Param("binding") long binding,
             @Param("container") String container,
             @Param("message") String message);
+
+    @Query(value = """
+            SELECT r.state AS state, r.version AS version FROM mentor_request r
+            WHERE r.id = :id AND r.account_id = :account
+            FOR UPDATE NOWAIT
+            """, nativeQuery = true)
+    LockedRequest lockRequest(@Param("id") UUID id, @Param("account") long account);
 
     @Modifying
     @Query(value = """
@@ -79,6 +86,30 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
 
     @Modifying
     @Query(
+            value = "UPDATE mentor_request SET version = version + 1 WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int revise(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_request SET state = 'STOPPED' WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int stop(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_source SET state = 'DELETED' WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int markDeleted(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_source SET revision = :revision WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int raiseRevision(@Param("id") UUID id, @Param("account") long account, @Param("revision") String revision);
+
+    @Modifying
+    @Query(
             value = "UPDATE mentor_event SET request_id = :request WHERE id = :id AND account_id = :account",
             nativeQuery = true)
     int linkRequest(@Param("id") UUID id, @Param("account") long account, @Param("request") UUID request);
@@ -88,8 +119,18 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
 
         String getProducer();
 
+        String getState();
+
+        String getRevision();
+
         @Nullable
         UUID getRequest();
+    }
+
+    interface LockedRequest {
+        String getState();
+
+        int getVersion();
     }
 
     record NewSource(
