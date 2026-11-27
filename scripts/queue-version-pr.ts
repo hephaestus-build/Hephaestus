@@ -14,11 +14,16 @@
  *   requests behind it in their old order. A failure, the timeout or an interrupt queues them back.
  * - Without `--hold`, it makes one attempt for a Version PR that is already fresh and green.
  * - `--resume <file>` queues a held list that a killed run left.
+ * - `--release-lock <marker>` takes a green RC Version PR to the front and keeps the lock.
+ * - `--lift-release-lock <marker>` restores the queue after the exact-source draft exists.
+ * - `--abort-release-lock <marker>` restores the queue for an unmerged, unqueued Version PR.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
 import { asArray, asRecord, asString, at, isRecord, parseJson } from "./lib/json.ts";
 import { output, succeeds } from "./lib/process.ts";
@@ -95,7 +100,7 @@ export interface QueueApi {
 	readonly approve: (pullRequest: QueueEntry) => Promise<void>;
 	readonly dequeue: (entry: QueueEntry) => Promise<void>;
 	/** Returns the queue position. A jump also requires the head to be `entry.headRefOid`. */
-	readonly enqueue: (entry: QueueEntry, jump: boolean) => Promise<unknown>;
+	readonly enqueue: (entry: QueueEntry, jump: boolean, matchHead?: boolean) => Promise<unknown>;
 	readonly saveHeld: (entries: readonly QueueEntry[]) => Promise<void>;
 }
 
@@ -581,7 +586,7 @@ async function graphqlRequest(
 }
 
 /** The repository's queue, through the maintainer's `gh` login and the local clone. */
-async function githubQueue(heldFile: string, signal?: AbortSignal): Promise<QueueApi> {
+async function githubQueue(heldFile: string, signal?: AbortSignal) {
 	const call = async (command: string, args: string[]) => output(command, args, { signal });
 	const viewed = await call("gh", [
 		"repo",
@@ -618,6 +623,16 @@ async function githubQueue(heldFile: string, signal?: AbortSignal): Promise<Queu
 		);
 	};
 	return {
+		repository,
+		versionAt,
+		call,
+		verifySource: async (tag: string, sha: string) => {
+			const planner = fileURLToPath(new URL("plan-release.ts", import.meta.url));
+			await output(process.execPath, [planner, "--source", tag, sha, "draft", "published"], {
+				env: { ...process.env, GITHUB_REPOSITORY: repository },
+				signal,
+			});
+		},
 		versionPullRequest: async () => {
 			const listed = await call("gh", [
 				"pr",
@@ -784,18 +799,20 @@ async function githubQueue(heldFile: string, signal?: AbortSignal): Promise<Queu
 				signal,
 			);
 		},
-		enqueue: async (entry, front) => {
-			const response = front
-				? await graphqlRequest(
-						"mutation($id: ID!, $head: GitObjectID!) { enqueuePullRequest(input: { pullRequestId: $id, expectedHeadOid: $head, jump: true }) { mergeQueueEntry { position } } }",
-						{ id: entry.id, head: entry.headRefOid },
-						signal,
-					)
-				: await graphqlRequest(
-						"mutation($id: ID!) { enqueuePullRequest(input: { pullRequestId: $id }) { mergeQueueEntry { position } } }",
-						{ id: entry.id },
-						signal,
-					);
+		enqueue: async (entry: QueueEntry, front: boolean, matchHead = false) => {
+			const exact = front || matchHead;
+			const headVariable = exact ? ", $head: GitObjectID!" : "";
+			const headInput = exact ? ", expectedHeadOid: $head" : "";
+			const jumpInput = front ? ", jump: true" : "";
+			const fields: Record<string, string> = { id: entry.id };
+			if (exact) {
+				fields.head = entry.headRefOid;
+			}
+			const response = await graphqlRequest(
+				`mutation($id: ID!${headVariable}) { enqueuePullRequest(input: { pullRequestId: $id${headInput}${jumpInput} }) { mergeQueueEntry { position } } }`,
+				fields,
+				signal,
+			);
 			return at(
 				response,
 				["data", "enqueuePullRequest", "mergeQueueEntry", "position"],
@@ -809,17 +826,227 @@ async function githubQueue(heldFile: string, signal?: AbortSignal): Promise<Queu
 				`If this run is killed, queue them again with: node scripts/queue-version-pr.ts --resume ${heldFile}`,
 			);
 		},
+	} satisfies QueueApi & {
+		repository: string;
+		versionAt: (ref: string) => Promise<string>;
+		call: (command: string, args: string[]) => Promise<string>;
+		verifySource: (tag: string, sha: string) => Promise<void>;
 	};
 }
 
-/** The command line: `--hold`, `--timeout-minutes <n>`, `--held-file <file>`, `--resume <file>`. */
-export function parseArguments(args: readonly string[]): {
+type ReleaseQueue = QueueApi &
+	Pick<
+		Awaited<ReturnType<typeof githubQueue>>,
+		"repository" | "versionAt" | "call" | "verifySource"
+	>;
+
+async function armedPullRequests(api: ReleaseQueue): Promise<QueueEntry[]> {
+	const [owner = "", name = ""] = api.repository.split("/");
+	const entries = await api.call("gh", [
+		"api",
+		"graphql",
+		"--paginate",
+		"-f",
+		`owner=${owner}`,
+		"-f",
+		`name=${name}`,
+		"-f",
+		'query=query($owner: String!, $name: String!, $endCursor: String) { repository(owner: $owner, name: $name) { pullRequests(baseRefName: "main", states: OPEN, first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { id number headRefOid autoMergeRequest { enabledAt } } } } }',
+		"--jq",
+		".data.repository.pullRequests.nodes[] | select(.autoMergeRequest != null)",
+	]);
+	return parseHeld(`[${entries.trim().split("\n").filter(Boolean).join(",")}]`);
+}
+
+export async function acquireReleaseLock(api: ReleaseQueue, marker: string): Promise<void> {
+	if (await exists(`${marker}.recovery`)) {
+		throw new Error("Finish restoring the previous release queue first");
+	}
+	const verified = new Set<string>();
+	const version = await api.versionPullRequest();
+	const held = await preflight(api, verified);
+	const reason = await blocker(api, version, verified, console.log);
+	if (reason !== undefined) {
+		throw new Error(reason);
+	}
+	const tag = `v${await api.versionAt(version.headRefOid)}`;
+	if (!/^v\d+\.\d+\.\d+-rc\.\d+$/u.test(tag)) {
+		throw new Error("The release lock is for RCs");
+	}
+	const armed = await armedPullRequests(api);
+	if (armed.some((entry) => entry.id === version.id)) {
+		throw new Error("The Version PR must enter through the exact-head jump");
+	}
+	const current = await api.versionPullRequest();
+	if (current.headRefOid !== version.headRefOid || current.checks !== "success") {
+		throw new Error("The green Version PR head moved before the release lock");
+	}
+	await writeFile(
+		marker,
+		JSON.stringify({ repository: api.repository, tag, version, held, armed }),
+		{ flag: "wx", mode: 0o600 },
+	);
+	for (const entry of armed) {
+		await api.call("gh", [
+			"pr",
+			"merge",
+			String(entry.number),
+			"-R",
+			api.repository,
+			"--disable-auto",
+		]);
+	}
+	const heldIds = new Set(held.map((entry) => entry.id));
+	for (const entry of await api.queued()) {
+		if (heldIds.has(entry.id)) {
+			await api.dequeue(entry);
+		}
+	}
+	const remainingQueue = await api.queued();
+	const remainingArms = await armedPullRequests(api);
+	if (remainingQueue.length > 0 || remainingArms.length > 0) {
+		throw new Error("The queue or an auto-merge request changed while taking the release lock");
+	}
+	if (
+		(await blocker(api, version, verified, console.log)) !== undefined ||
+		!(await jump(api, version))
+	) {
+		throw new Error("The Version PR moved while taking the release lock");
+	}
+	console.log(`Queued #${version.number} first. Hold ${marker} until the pinned draft exists.`);
+}
+
+export async function liftReleaseLock(
+	api: ReleaseQueue,
+	marker: string,
+	abort: boolean,
+): Promise<void> {
+	const recovery = `${marker}.recovery`;
+	const lockFile = (await exists(recovery)) ? recovery : marker;
+	const contents = await readFile(lockFile, "utf8");
+	const lock = asRecord(parseJson(contents), "release lock");
+	if (lock.repository !== api.repository) {
+		throw new Error("Release lock belongs to another repository");
+	}
+	const version = asRecord(lock.version, "locked Version PR");
+	const view = async (number: number) =>
+		asRecord(
+			parseJson(
+				await api.call("gh", [
+					"pr",
+					"view",
+					String(number),
+					"-R",
+					api.repository,
+					"--json",
+					"state,headRefOid,baseRefName,mergeCommit,reviewDecision,autoMergeRequest",
+				]),
+			),
+			"pull request",
+		);
+	const merged = await view(Number(version.number));
+	if (abort) {
+		const queued = await api.queued();
+		if (
+			!["OPEN", "CLOSED"].includes(String(merged.state)) ||
+			queued.some((entry) => entry.id === version.id) ||
+			merged.autoMergeRequest !== null
+		) {
+			throw new Error(
+				"Abort requires an unmerged Version PR outside the queue with auto-merge off",
+			);
+		}
+	} else {
+		if (
+			merged.state !== "MERGED" ||
+			merged.headRefOid !== version.headRefOid ||
+			merged.baseRefName !== "main"
+		) {
+			throw new Error("The exact Version PR has not merged into main");
+		}
+		const sha = asString(at(merged, ["mergeCommit", "oid"], "Version merge"), "Version merge SHA");
+		const tag = asString(lock.tag, "locked release tag");
+		await api.verifySource(tag, sha);
+		console.log(`Verified ${tag} at ${sha}.`);
+	}
+	if (lockFile === marker) {
+		if ((await readFile(marker, "utf8")) !== contents) {
+			throw new Error("Release lock changed");
+		}
+		await rename(marker, recovery);
+		console.log(`Lifted ${marker}. Queue recovery is recorded in ${recovery}.`);
+	}
+	const eligible = async (entries: unknown, kind: string) => {
+		const result: QueueEntry[] = [];
+		for (const entry of parseHeld(JSON.stringify(entries))) {
+			const pr = await view(entry.number);
+			if (pr.state !== "OPEN") {
+				console.log(
+					`Skipped ${kind} #${entry.number} at ${entry.headRefOid}: PR is ${String(pr.state)}.`,
+				);
+			} else if (pr.headRefOid !== entry.headRefOid) {
+				console.log(`Skipped ${kind} #${entry.number} at ${entry.headRefOid}: head moved.`);
+			} else if (pr.baseRefName !== "main") {
+				console.log(`Skipped ${kind} #${entry.number} at ${entry.headRefOid}: base moved.`);
+			} else if (pr.reviewDecision === "APPROVED") {
+				result.push(entry);
+			} else {
+				console.log(
+					`Skipped ${kind} #${entry.number} at ${entry.headRefOid}: review decision is ${String(pr.reviewDecision)}.`,
+				);
+			}
+		}
+		return result;
+	};
+	const held = await eligible(lock.held, "queued");
+	const refused = await restore(
+		{ ...api, enqueue: async (entry, front) => api.enqueue(entry, front, true) },
+		held,
+		console.log,
+	);
+	const queued = await api.queued();
+	const armed = await armedPullRequests(api);
+	const restoredIds = new Set([...queued, ...armed].map((entry) => entry.id));
+	for (const entry of await eligible(lock.armed, "armed")) {
+		if (restoredIds.has(entry.id)) {
+			continue;
+		}
+		try {
+			await api.call("gh", [
+				"pr",
+				"merge",
+				String(entry.number),
+				"-R",
+				api.repository,
+				"--auto",
+				"--match-head-commit",
+				entry.headRefOid,
+			]);
+		} catch (error) {
+			refused.push(`armed #${entry.number}: ${message(error)}`);
+		}
+	}
+	if (refused.length > 0) {
+		throw new Error(`could not restore the queue: ${refused.join("; ")}`);
+	}
+	if ((await readFile(recovery, "utf8")) !== contents) {
+		throw new Error("Queue recovery changed");
+	}
+	const receipt = `${marker}.lifted-${randomUUID()}`;
+	await rename(recovery, receipt);
+	console.log(`Saved the lifted queue receipt at ${receipt}.`);
+}
+
+interface QueueArguments {
 	hold: boolean;
 	timeoutMinutes: number;
 	heldFile?: string;
 	resume?: string;
-} {
-	const parsed: { hold: boolean; timeoutMinutes: number; heldFile?: string; resume?: string } = {
+	releaseLock?: { action: "acquire" | "lift" | "abort"; marker: string };
+}
+
+export function parseArguments(args: readonly string[]): QueueArguments {
+	const parsed: QueueArguments = {
 		hold: false,
 		timeoutMinutes: 60,
 	};
@@ -844,6 +1071,20 @@ export function parseArguments(args: readonly string[]): {
 			parsed.heldFile = value;
 		} else if (flag === "--resume") {
 			parsed.resume = value;
+		} else if (
+			flag === "--release-lock" ||
+			flag === "--lift-release-lock" ||
+			flag === "--abort-release-lock"
+		) {
+			if (args.length !== 2 || !path.isAbsolute(value) || path.basename(value) !== "queue-frozen") {
+				throw new Error(`${flag} takes only the absolute path of the queue-frozen marker`);
+			}
+			const actions = {
+				"--release-lock": "acquire",
+				"--lift-release-lock": "lift",
+				"--abort-release-lock": "abort",
+			} as const;
+			parsed.releaseLock = { action: actions[flag], marker: value };
 		} else {
 			throw new Error(`${String(flag)} is not an option of queue-version-pr.ts`);
 		}
@@ -861,6 +1102,15 @@ async function main(
 ) {
 	// Putting the queue back never shares a cancelled signal with the calls it recovers from.
 	const restoring = await githubQueue(heldFile);
+	if (parsed.releaseLock !== undefined) {
+		const { action, marker } = parsed.releaseLock;
+		if (action === "acquire") {
+			await acquireReleaseLock(await githubQueue(heldFile, signal), marker);
+		} else {
+			await liftReleaseLock(restoring, marker, action === "abort");
+		}
+		return;
+	}
 	if (parsed.resume !== undefined) {
 		const refused = await restore(
 			restoring,
@@ -890,7 +1140,7 @@ if (import.meta.main) {
 	// The first signal stops the wait and queues the held pull requests again; a second one kills.
 	for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
 		process.once(name, () => {
-			console.log(`::warning::${name}: queueing the held pull requests again`);
+			console.log(`::warning::${name}: stopping queue changes`);
 			controller.abort();
 		});
 	}
