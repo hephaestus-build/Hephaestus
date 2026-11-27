@@ -203,7 +203,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "Submitted team notes (ADR 0165). Note writes come only in a release after the registration"),
             Map.entry(
                     "slack_dm_producer_pin",
-                    "Slack DM producer pins stay empty until the erasure inventory registers the store"));
+                    "Slack DM producer pins stay empty until the erasure inventory registers the store"),
+            Map.entry(
+                    "mentor_owner",
+                    "Mentor control (ADR 0158). Intake writes come only in a release after the registration"));
 
     /**
      * Personal tables that only the account purge erases, because no erasure inventory names their store yet (ADR 0164).
