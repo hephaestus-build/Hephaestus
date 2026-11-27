@@ -123,13 +123,14 @@ public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityC
                         connectedRepository.computeIfAbsent(entry.getValue(), source -> connected(workspaceId, source)))
                 .map(Map.Entry::getKey)
                 .toArray();
+        // Constrain the union key directly. The joined issue filter alone does not reach every commit role branch.
         jdbc.query(
                 "SELECT DISTINCT i.id,u.provider_id,u.native_id::text FROM (" + ROLES + """
                     ) roles JOIN issue i ON i.id=roles.source_id
                     JOIN repository r ON r.id=i.repository_id
                     JOIN identity_provider p ON p.id=r.provider_id
                     JOIN "user" u ON u.id=roles.user_id
-                    WHERE i.id=ANY(?) AND (
+                    WHERE roles.source_id=ANY(?) AND (
                         i.id=ANY(?)
                         OR EXISTS (SELECT 1 FROM item a WHERE a.workspace_id=?
                             AND a.kind=? AND a.source_id=i.id)) AND i.issue_type=?
