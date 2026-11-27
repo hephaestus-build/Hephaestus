@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider;
@@ -276,7 +277,7 @@ class CommitIdentityCorrectionIntegrationTest extends BaseIntegrationTest {
                         0L,
                         IntegrationKind.GITHUB,
                         new ConnectionConfig.GitHubPatConfig(null, serverUrl, Set.of()),
-                        null)));
+                        new BearerToken("synthetic-correction-test-token", null))));
         CommitIdentityProvider provider = new CommitIdentityProvider() {
             @Override
             public IntegrationKind kind() {
