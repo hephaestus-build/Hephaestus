@@ -183,8 +183,12 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE project_team SET removed_at = now() WHERE id = ?", removedTeam);
 
         assertThat(isStanding(course, open)).isTrue();
-        assertThat(isStanding(otherCourse, open)).as("asked in another workspace").isFalse();
-        assertThat(isStanding(course, elsewhere)).as("a grant of another workspace").isFalse();
+        assertThat(isStanding(otherCourse, open))
+                .as("asked in another workspace")
+                .isFalse();
+        assertThat(isStanding(course, elsewhere))
+                .as("a grant of another workspace")
+                .isFalse();
         assertThat(isStanding(course, revoked)).isFalse();
         assertThat(isStanding(course, expired)).isFalse();
         assertThat(isStanding(course, ofRemovedTeam)).as("a removed team").isFalse();

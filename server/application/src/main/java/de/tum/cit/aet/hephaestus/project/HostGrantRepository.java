@@ -21,7 +21,8 @@ public interface HostGrantRepository extends JpaRepository<HostGrant, UUID> {
         WHERE g.workspaceId = :workspaceId AND g.id = :grantId
           AND g.revokedAt IS NULL AND g.expiresAt > :now AND t.removedAt IS NULL
         """)
-    boolean isStanding(@Param("workspaceId") long workspaceId, @Param("grantId") UUID grantId, @Param("now") Instant now);
+    boolean isStanding(
+            @Param("workspaceId") long workspaceId, @Param("grantId") UUID grantId, @Param("now") Instant now);
 
     @Modifying
     @WorkspaceAgnostic(
