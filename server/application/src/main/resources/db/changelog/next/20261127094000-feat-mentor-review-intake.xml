@@ -25,8 +25,17 @@ ALTER TABLE public.mentor_event ADD CONSTRAINT uk_mentor_event_review UNIQUE (re
 -- A foreign key ignores row-level security, so the review's purge or retention removes its event for every owner.
 ALTER TABLE public.mentor_event ADD CONSTRAINT sfk_mentor_event_review FOREIGN KEY (review_id, workspace_id)
     REFERENCES public.review (id, workspace_id) ON DELETE CASCADE;
+-- The kind and the disposition each accept exactly their enum, now with the sealed review's values.
+ALTER TABLE public.mentor_event DROP CONSTRAINT IF EXISTS ck_mentor_event_kind;
+ALTER TABLE public.mentor_event ADD CONSTRAINT ck_mentor_event_kind
+    CHECK (kind IN ('MESSAGE', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'CONTROL_STOP', 'REVIEW_SEALED'));
+ALTER TABLE public.mentor_event DROP CONSTRAINT IF EXISTS ck_mentor_event_disposition;
+ALTER TABLE public.mentor_event ADD CONSTRAINT ck_mentor_event_disposition
+    CHECK (disposition IN ('PENDING', 'OPENED', 'REVISED', 'FENCED', 'RECORDED'));
         ]]></sql>
         <rollback>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_disposition</sql>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT sfk_mentor_event_review</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT uk_mentor_event_review</sql>
             <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_kind_shape</sql>
