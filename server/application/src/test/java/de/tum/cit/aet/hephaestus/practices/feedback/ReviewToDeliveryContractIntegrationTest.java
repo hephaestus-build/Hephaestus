@@ -772,8 +772,11 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         () -> transactions.executeWithoutResult(status -> {
                             events.publishEvent(sealed);
                             firstWrote.countDown();
-                            // Holds the review key uncommitted while the second seal reaches its insert.
-                            sleep(Duration.ofSeconds(1));
+                            // Holds the review key uncommitted until the second seal waits for it. The condition
+                            // runs on this thread, because only this thread's connection is in the transaction.
+                            await().atMost(Duration.ofSeconds(30))
+                                    .pollInSameThread()
+                                    .until(this::anotherSealWaitsForThisOne);
                         }),
                         executor);
                 assertThat(firstWrote.await(30, TimeUnit.SECONDS)).isTrue();
@@ -800,13 +803,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 review.reviewId()));
     }
 
-    private static void sleep(Duration duration) {
-        try {
-            Thread.sleep(duration);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
+    /** Whether another transaction waits for the caller's own, which holds the review key uncommitted. */
+    private boolean anotherSealWaitsForThisOne() {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted"
+                        + " AND transactionid = pg_current_xact_id()::xid)",
+                Boolean.class));
     }
 
     @Test
