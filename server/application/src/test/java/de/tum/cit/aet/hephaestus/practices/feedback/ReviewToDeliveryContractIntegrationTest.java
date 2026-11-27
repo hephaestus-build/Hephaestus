@@ -1022,28 +1022,21 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     second.workspaceId(),
                     author);
             assertThat(admitSealed(first, "a".repeat(64))).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
-            assertThat(Objects.requireNonNull(
-                            transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
-                                    second.workspaceId(),
-                                    second.reviewId(),
-                                    second.identity().jobId(),
-                                    author,
-                                    "b".repeat(64),
-                                    Instant.now())))))
-                    .isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+            var inSecond = new MentorReviewIntake.SealedReview(
+                    second.workspaceId(), second.reviewId(), second.identity().jobId(), author, "b".repeat(64), Instant.now());
+            MentorReviewIntake.Outcome admittedInSecond =
+                    Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(inSecond)));
+            assertThat(admittedInSecond).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
 
             transactions.executeWithoutResult(status -> lifecycle.purgeAgain(second.workspaceId()));
 
             assertThat(mentorEvents(first)).as("the other workspace's event").hasSize(1);
-            assertThat(Objects.requireNonNull(transactions.execute(status -> {
-                        owners.ofJob(author);
-                        return jdbc.queryForObject(
-                                "SELECT count(*) FROM mentor_event WHERE workspace_id=?",
-                                Integer.class,
-                                second.workspaceId());
-                    })))
-                    .as("the purged workspace's event")
-                    .isZero();
+            Integer purged = transactions.execute(status -> {
+                owners.ofJob(author);
+                return jdbc.queryForObject(
+                        "SELECT count(*) FROM mentor_event WHERE workspace_id=?", Integer.class, second.workspaceId());
+            });
+            assertThat(purged).as("the purged workspace's event").isZero();
         }
     }
 
