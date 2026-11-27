@@ -69,7 +69,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         .filter(type -> type.isAnnotatedWith(PersonDataStores.class))
                         .flatMap(type -> Arrays.stream(
                                 type.getAnnotationOfType(PersonDataStores.class).value())))
-                .contains(EXPORT_TABLE, "mentor_event", "mentor_request", "mentor_source")
+                .contains(EXPORT_TABLE)
                 .doesNotContain(PERSONAL_GOAL_TABLE);
     }
 
@@ -86,7 +86,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .isEmpty();
     }
 
-    /** Person erasure and the workspace erasure delete the mentor's rows; the intake writer that admits rows comes next. */
+    /** The workspace erasure deletes the mentor's rows; the intake writer that admits rows comes next. */
     @Test
     void shouldLeaveMentorRowsUnwrittenUntilTheirGuardedWriterExists() throws IOException {
         try (var files = Files.walk(PRODUCTION_SOURCES)) {

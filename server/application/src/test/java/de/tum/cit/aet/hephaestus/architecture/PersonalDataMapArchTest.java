@@ -160,7 +160,13 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "practice_advice_revision",
             "Advice revisions (ADR 0160). Advice writes come only in a release after the registration",
             "practice_advice_source",
-            "Advice sources (ADR 0160). Advice writes come only in a release after the registration");
+            "Advice sources (ADR 0160). Advice writes come only in a release after the registration",
+            "mentor_event",
+            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
+            "mentor_request",
+            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
+            "mentor_source",
+            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration");
 
     /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
     private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(

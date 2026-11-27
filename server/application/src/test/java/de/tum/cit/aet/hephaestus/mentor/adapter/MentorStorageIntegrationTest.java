@@ -6,11 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -39,9 +36,6 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactions;
-
-    @Autowired
-    private MentorPersonDataCatalog catalog;
 
     @Autowired
     private MentorWorkspaceCleanup cleanup;
@@ -120,46 +114,6 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
                 .isInstanceOf(DataAccessException.class)
                 .rootCause()
                 .hasMessageContaining("violates foreign key constraint");
-    }
-
-    @Test
-    void shouldExportMetadataAndEraseOnlyTheSubjectsMentorRowsWhenTheAccountIsErased() {
-        long subject = account();
-        long other = account();
-        UUID erased = asOwner(subject, () -> seed(subject));
-        UUID kept = asOwner(other, () -> seed(other));
-        var scope = new PersonScope(subject, List.of(), List.of());
-
-        asOwner(subject, () -> {
-            for (PersonDataContributor store : catalog.contributors().stream()
-                    .sorted(Comparator.comparingInt(PersonDataContributor::getOrder))
-                    .toList()) {
-                var selection = store.select(scope);
-                assertThat(store.export(selection, scope))
-                        .as(store.store())
-                        .singleElement()
-                        .satisfies(row ->
-                                assertThat(row.path("account_id").asLong()).isEqualTo(subject))
-                        .satisfies(
-                                row -> assertThat(row.has("scope_reader_epoch")).isFalse());
-                assertThat(store.erase(selection, scope)).as(store.store()).isOne();
-            }
-            return erased;
-        });
-
-        asOwner(subject, () -> {
-            for (String table : TABLES) {
-                assertThat(jdbc.queryForList("SELECT id FROM " + table + " WHERE account_id = ?", UUID.class, subject))
-                        .as(table)
-                        .isEmpty();
-            }
-            return erased;
-        });
-        asOwner(other, () -> {
-            assertThat(jdbc.queryForList("SELECT id FROM mentor_source WHERE id = ?", UUID.class, kept))
-                    .containsExactly(kept);
-            return kept;
-        });
     }
 
     /** A workspace purge and a Slack disconnect or restore, which both run with no owner bound. */
