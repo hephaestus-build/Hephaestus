@@ -201,6 +201,7 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
 
         entries.deleteMessage(workspace.getId(), keptQuestion.getId());
 
+        // The coarse history fence (#5279) withholds every earlier model output after the delete.
         assertThat(texts(mainPath())).singleElement().asString().endsWith(" Old question");
     }
 
@@ -357,14 +358,17 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
         assertThat(text(path.get(1))).isEqualTo(ConversationRedaction.ERASED);
     }
 
+    /** A summary that a turn's attempt wrote, with a basis that read nothing. */
     private static ConversationEntryDraft summary(String text, String firstKeptEntryId, UUID turnId) {
         return new ConversationEntryDraft(
-                ConversationEntry.Kind.SUMMARY,
-                ConversationEntry.Surface.APP,
-                text,
-                ConversationLedgerFixtures.compaction(ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
-                turnId,
-                null,
-                null);
+                        ConversationEntry.Kind.SUMMARY,
+                        ConversationEntry.Surface.APP,
+                        text,
+                        ConversationLedgerFixtures.compaction(
+                                ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
+                        turnId,
+                        null,
+                        null)
+                .withBasis(UUID.randomUUID());
     }
 }

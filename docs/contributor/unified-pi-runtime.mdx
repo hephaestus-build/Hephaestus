@@ -746,12 +746,49 @@ For a thread, that is the newest summary at or before the parent.
 The path leaves out erased entries.
 An erased answer or tool result keeps a Pi skeleton, so no tool call loses its result.
 An erased question keeps its Pi entry id, so a summary that keeps the conversation from that question still finds its start.
+The path also leaves out each entry of unknown basis ([The basis](#the-basis)).
 
 The server renders each question and weekly digest as a Pi user message with a prefix, for example `[Thu 2026-10-08 09:12 Europe/Berlin · Slack]`.
 The time zone is the developer's `account.time_zone`, or UTC.
 A stopped answer ends with `[stopped by the developer]`.
 A failed turn adds `[no answer: the turn failed]` to its question.
 `forTurn` returns the prompt that the loop must pass to `session.prompt()` unchanged.
+
+### The basis
+
+Each start of a turn begins a new basis (`conversation_turn.basis_id`).
+The basis records each conversation entry whose words the server released to the attempt, with the entry's revision (`basis_edge`, ADR 0128).
+The server records the sources before the words leave:
+
+- `forTurn` binds each entry of the path and the question, in the transaction that reads them.
+- `searchForTurn` binds each `search_conversation` hit, in the transaction that finds it.
+
+Both read under a shared lock of the tree's main conversation row, as the erasure does ([Compaction](#compaction)).
+Thus, a removal either comes before the read, or it finds the new rows.
+
+Each entry that the attempt stores carries the attempt's `basis_id`: its answers, tool results, summaries and system entries.
+A question and a weekly digest carry none.
+A row of `basis_edge` holds ids and a revision.
+It holds no words and no readers.
+It goes with the entry that it names.
+
+When the developer deletes a message, `ConversationRedaction.deleteHistory` erases each entry whose basis holds the message.
+It continues through the entries whose basis holds an erased entry, until it reaches no more.
+Thus, an answer that copied the message through the path, through a search, or through an earlier answer loses its words too.
+The person-data erasure of the copying tool results does the same (`redactPersonCopies`).
+Retention does not: an entry whose retention ends leaves the entries derived from it to their own retention.
+A Slack edit keeps the derived entries, and it erases only the copies of the earlier words.
+
+When an attempt ends, it checks whether an entry of its basis was erased since it read it (`ConversationBasis.lostSource`).
+In that case, the attempt stores only skeletons and fails with `context_changed`.
+
+An entry that an attempt stored before attempts recorded their basis has no `basis_id`.
+Its sources are unknown, so a removal cannot find it (`ConversationEntryRepository.UNPROVEN`).
+It stays the owner's app history: the app shows it, and the owner's export holds it.
+The path, the search and compaction never read it.
+
+The documents archive, document fetches, `load_context` and the situation are not in the basis yet.
+Their copies follow the copying tool results ([Personal data](#personal-data)).
 
 ### The situation
 
@@ -899,7 +936,8 @@ An edit replaces the words, and an erasure clears them.
 The personal-data export reads the same column.
 
 It searches the main conversation, this thread, or the whole tree.
-It returns questions, answers, and weekly digests only, never tool results, summaries, or erased entries.
+It returns questions, answers, and weekly digests only, never tool results, summaries, erased entries, or answers of unknown basis.
+Each hit is bound to the basis of the attempt that searched ([The basis](#the-basis)).
 It returns a bounded number of hits ([Limits](#limits)), each with an entry id that Hephaestus can cite.
 
 ## Personal data

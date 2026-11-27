@@ -8211,8 +8211,9 @@ paths:
       - Conversation
   /workspaces/{workspaceSlug}/conversation/entries/{entryId}:
     delete:
-      description: Erases its text and every summary that read it. A question Hephaestus
-        has not answered yet is not answered.
+      description: "Erases its text, every summary that read it, and every later entry\
+        \ that Hephaestus derived from it. A question Hephaestus has not answered\
+        \ yet is not answered."
       operationId: deleteConversationEntry
       parameters:
       - description: Workspace slug

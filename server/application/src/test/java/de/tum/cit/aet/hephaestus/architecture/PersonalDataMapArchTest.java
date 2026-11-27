@@ -92,6 +92,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "agent_run",
             // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
             "agent_sandbox",
+            // Which conversation entry an attempt read, and its revision: entry ids, no words and no person. A row
+            // goes with the entry it names, so a person's erasure deletes it with their conversations.
+            "basis_edge",
             "commit_pull_request",
             "connection",
             "connection_activity",

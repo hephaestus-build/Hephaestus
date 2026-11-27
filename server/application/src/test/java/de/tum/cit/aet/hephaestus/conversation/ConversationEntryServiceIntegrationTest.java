@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import java.sql.Types;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -61,6 +62,9 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Autowired
     private ConversationTurnRepository turnRepository;
+
+    @Autowired
+    private ConversationContextPathBuilder paths;
 
     @Autowired
     private SlackWorkspaceContentEraser slackContent;
@@ -208,8 +212,11 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
     @Test
     void shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt() {
         ConversationTurnService.Submission asked = ask(main, "Rebase secret");
+        ConversationTurn answering = claim(asked);
+        // The host reads the turn's context, which binds the question to the attempt's basis.
+        paths.forTurn(workspace.getId(), answering.getId(), ZoneOffset.UTC);
         ConversationEntry answer = ended(
-                claim(asked),
+                answering,
                 ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Noted the Rebase secret"));
         ConversationEntry covering = entries.append(
                 workspace.getId(),
@@ -227,9 +234,9 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
         });
         assertThat(stored(result).isRedacted()).isTrue();
         assertThat(payload(result).toString()).doesNotContain("Rebase secret");
-        // The answer is Hephaestus's own message, so it stays, also where it repeats the question.
-        assertThat(stored(answer).isRedacted()).isFalse();
-        assertThat(stored(answer).getText()).contains("Rebase secret");
+        // The answer derives from the question that its attempt read.
+        assertThat(stored(answer).isRedacted()).isTrue();
+        assertThat(stored(answer).getText()).isEmpty();
     }
 
     /** A message whose retention ends takes its summary and the search result that quotes it, as a delete does. */
@@ -740,14 +747,17 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 ConversationLedgerFixtures.piId(), summary, ConversationLedgerFixtures.piIdOf(firstKept));
     }
 
+    /** A summary that an attempt wrote, with a basis that read nothing. */
     private static ConversationEntryDraft summary(String text, String firstKeptEntryId) {
         return new ConversationEntryDraft(
-                ConversationEntry.Kind.SUMMARY,
-                ConversationEntry.Surface.APP,
-                text,
-                ConversationLedgerFixtures.compaction(ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
-                null,
-                null,
-                null);
+                        ConversationEntry.Kind.SUMMARY,
+                        ConversationEntry.Surface.APP,
+                        text,
+                        ConversationLedgerFixtures.compaction(
+                                ConversationLedgerFixtures.piId(), text, firstKeptEntryId),
+                        null,
+                        null,
+                        null)
+                .withBasis(UUID.randomUUID());
     }
 }

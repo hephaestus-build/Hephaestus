@@ -152,7 +152,7 @@ test("a developer deletes their own question and Hephaestus never answers it", a
 	await item.getByRole("button", { name: /^Delete message \(/u }).click();
 	const dialog = page.getByRole("alertdialog", { name: "Delete this message?" });
 	await expect(
-		dialog.getByText("Hephaestus forgets it. If it has not answered yet, it does not answer."),
+		dialog.getByText("Hephaestus forgets it and erases its own later answers that used it."),
 	).toBeVisible();
 	await dialog.getByRole("button", { name: "Delete message" }).click();
 

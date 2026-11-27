@@ -57,6 +57,7 @@ public class ConversationEntryService {
     private final Clock clock;
     private final ConversationSlackReplies slackReplies;
     private final PrivacyJournal journal;
+    private final ConversationBasis basis;
 
     public enum SearchScope {
         MAIN,
@@ -203,8 +204,9 @@ public class ConversationEntryService {
     }
 
     /**
-     * Deletes a message the developer wrote: its content and every copy of it ({@link ConversationRedaction}). Its turn
-     * stops if it has not ended: Hephaestus must not answer words the developer took back. Deleting it again changes nothing.
+     * Deletes a message the developer wrote: its content, every copy of it and every entry derived from it
+     * ({@link ConversationRedaction#deleteHistory}). Its turn stops if it has not ended: Hephaestus must not answer words the
+     * developer took back. Deleting it again changes nothing.
      */
     @Transactional
     public void deleteMessage(long workspaceId, UUID entryId) {
@@ -217,7 +219,7 @@ public class ConversationEntryService {
                     PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
             return;
         }
-        if (!redaction.removeHistory(workspaceId, entry.getAccountId(), List.of(entryId))) return;
+        if (!redaction.deleteHistory(workspaceId, entry.getAccountId(), List.of(entryId))) return;
         journal.record(PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
         // An erasure recovery manifest lists this delete after its recovery point, so a rolled-back delete logs
         // nothing.
@@ -263,8 +265,37 @@ public class ConversationEntryService {
                 .max(Instant::compareTo);
     }
 
-    /** Full-text search over a conversation tree ({@link ConversationEntryRepository#searchByWorkspaceId}). */
-    @Transactional(readOnly = true)
+    /**
+     * {@code search_conversation} of a turn's started attempt: {@link #search} in the turn's conversation, with each hit
+     * bound to the attempt's basis before the hits leave ({@link ConversationBasis}). It reads under a shared lock of
+     * the tree's main conversation row, as the turn's context does, so no redaction commits between the read and the
+     * binding. An attempt that started before attempts recorded their basis has none: it searches unbound, and what it
+     * stores has unknown sources ({@link ConversationEntryRepository#UNPROVEN}).
+     */
+    @Transactional
+    public List<SearchHit> searchForTurn(long workspaceId, UUID turnId, SearchQuery search) {
+        ConversationTurn turn = turns.findByIdAndWorkspaceId(turnId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("ConversationTurn", turnId.toString()));
+        UUID attemptBasis = turn.getBasisId();
+        Conversation conversation = conversations
+                .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Conversation", turn.getConversationId().toString()));
+        conversations.shareByIdAndWorkspaceId(conversation.rootId(), workspaceId);
+        List<SearchHit> hits = search(workspaceId, turn.getConversationId(), search);
+        if (attemptBasis != null) {
+            basis.bind(
+                    workspaceId,
+                    attemptBasis,
+                    hits.stream().map(SearchHit::entryId).toList());
+        }
+        return hits;
+    }
+
+    /**
+     * Full-text search over a conversation tree ({@link ConversationEntryRepository#searchByWorkspaceId}). It reads in the
+     * caller's transaction, if there is one: {@link #searchForTurn} holds the tree's lock through it.
+     */
     public List<SearchHit> search(long workspaceId, UUID conversationId, SearchQuery search) {
         Conversation conversation = conversations
                 .findByIdAndWorkspaceId(conversationId, workspaceId)
@@ -366,10 +397,12 @@ public class ConversationEntryService {
                 draft.kind(),
                 draft.surface(),
                 draft.text(),
+                draft.searchText(),
                 covered,
                 draft.turnId(),
                 draft.requestId(),
-                draft.slackTs());
+                draft.slackTs(),
+                draft.basisId());
     }
 
     /**

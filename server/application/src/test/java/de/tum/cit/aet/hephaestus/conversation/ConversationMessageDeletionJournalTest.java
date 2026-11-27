@@ -51,6 +51,9 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
     @Mock
     private ConversationSlackReplies slackReplies;
 
+    @Mock
+    private ConversationBasis basis;
+
     @Test
     void shouldRecordTheDeletedMessageInThePrivacyJournal() {
         var journal = new RecordingPrivacyJournal();
@@ -67,7 +70,7 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
                         null),
                 NOW);
         when(entries.findByIdAndWorkspaceId(message.getId(), 7L)).thenReturn(Optional.of(message));
-        when(redaction.removeHistory(7L, message.getAccountId(), List.of(message.getId())))
+        when(redaction.deleteHistory(7L, message.getAccountId(), List.of(message.getId())))
                 .thenReturn(true);
 
         service(journal).deleteMessage(7L, message.getId());
@@ -89,6 +92,7 @@ class ConversationMessageDeletionJournalTest extends BaseUnitTest {
                 runs,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 slackReplies,
-                journal);
+                journal,
+                basis);
     }
 }
