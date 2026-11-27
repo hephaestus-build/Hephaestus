@@ -85,6 +85,23 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"mentor_request", "mentor_event"})
+    void shouldRejectASourceReferenceToAnotherAccount(String table) {
+        long owner = account();
+        long other = account();
+        UUID ownSource = asOwner(owner, () -> seed(owner));
+        UUID otherSource = asOwner(other, () -> seedSource(other, 1L));
+
+        assertThatThrownBy(() -> asOwner(owner, () -> {
+                    jdbc.update("UPDATE " + table + " SET source_id = ? WHERE source_id = ?", otherSource, ownSource);
+                    return ownSource;
+                }))
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .hasMessageContaining("violates foreign key constraint");
+    }
+
     @Test
     void shouldExportMetadataAndEraseOnlyTheSubjectsMentorRowsWhenTheAccountIsErased() {
         long subject = account();
@@ -162,12 +179,7 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID seed(long account, long workspace) {
-        UUID source = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO mentor_source(id, account_id, binding_id, workspace_id, container_id, native_message_id,
-                    producer, revision, state)
-                VALUES (?, ?, 7, ?, 'D1', ?, 'MENTOR', '1700000000.000100', 'LIVE')
-                """, source, account, workspace, source.toString());
+        UUID source = seedSource(account, workspace);
         jdbc.update("""
                 INSERT INTO mentor_event(id, account_id, binding_id, native_event_id, kind, source_id, disposition,
                     source_ref, occurred_at, received_at)
@@ -179,6 +191,16 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
                     scope_consent_epoch, scope_authority, opened_at, deadline)
                 VALUES (?, ?, ?, 1, 'OPEN', 'SLACK', 7, 'D1', 1, 1, 1, 'PERSONAL', now(), now() + interval '1 hour')
                 """, UUID.randomUUID(), account, source);
+        return source;
+    }
+
+    private UUID seedSource(long account, long workspace) {
+        UUID source = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO mentor_source(id, account_id, binding_id, workspace_id, container_id, native_message_id,
+                    producer, revision, state)
+                VALUES (?, ?, 7, ?, 'D1', ?, 'MENTOR', '1700000000.000100', 'LIVE')
+                """, source, account, workspace, source.toString());
         return source;
     }
 
