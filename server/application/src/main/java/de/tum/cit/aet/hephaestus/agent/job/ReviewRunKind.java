@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewProducerPin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -79,6 +80,7 @@ public class ReviewRunKind implements AgentRunHandler {
     private final ReviewStart reviewStart;
     private final FeedbackRepair repairs;
     private final MeterRegistry meters;
+    private final ReviewProducerPin pins;
 
     ReviewRunKind(
             ReviewJobRepository jobs,
@@ -90,7 +92,8 @@ public class ReviewRunKind implements AgentRunHandler {
             ObjectMapper mapper,
             ReviewStart reviewStart,
             FeedbackRepair repairs,
-            MeterRegistry meters) {
+            MeterRegistry meters,
+            ReviewProducerPin pins) {
         this.jobs = jobs;
         this.runs = runs;
         this.capacity = capacity;
@@ -101,6 +104,7 @@ public class ReviewRunKind implements AgentRunHandler {
         this.reviewStart = reviewStart;
         this.repairs = repairs;
         this.meters = meters;
+        this.pins = pins;
         compositionUnconfirmed(AgentRunStopReason.ATTEMPTS_EXHAUSTED);
         compositionUnconfirmed(AgentRunStopReason.DEADLINE);
     }
@@ -373,6 +377,10 @@ public class ReviewRunKind implements AgentRunHandler {
     public boolean resumeComposition(long workspaceId, UUID reviewId) {
         receipts.holdCopyAdmission();
         if (jobs.lockParentByReview(workspaceId, reviewId).isEmpty()) return false;
+        // A job that sealed before the pin existed is LEGACY, but a later seal can pin another producer on the review:
+        // its composition then never resumes, so the review never gets both kinds of feedback.
+        if (pins.pinned(workspaceId, reviewId).filter(pinned -> pinned != FeedbackProducer.LEGACY).isPresent())
+            return false;
         var resumable = jobs.lockResumableComposition(workspaceId, reviewId, capacity.reviewRetries())
                 .orElse(null);
         if (resumable == null) return false;

@@ -819,7 +819,9 @@ The cutover gate is in ADR 0121 § Update — 2026-11-26.
 
 ### Feedback producer at seal
 
-[ADR 0160](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0160-a-sealed-review-hands-off-to-the-mentor.md) gives each sealed review one producer: `LEGACY`, `MENTOR` or `WORK_PLACE`.
+[ADR 0160](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0160-a-sealed-review-hands-off-to-the-mentor.md) gives each sealed review one producer: `LEGACY`, `MENTOR`, `WORK_PLACE`, `TEAM` or `OBSERVATIONS`.
+A seal can choose `LEGACY`, `MENTOR`, `WORK_PLACE` and `OBSERVATIONS` today. `OBSERVATIONS` is the fail-closed choice for an item kind that `LEGACY` never composes for.
+`TEAM` is reserved for a team-owned item ([ADR 0165](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md)), and no seal chooses it yet.
 The first seal of an item review chooses it and pins it on the review, under the review's write lock.
 Every later seal of the review takes the pin, and the job that seals copies it with its reason.
 A review that a server before the pin wrote takes `LEGACY`, the column default.
@@ -871,7 +873,8 @@ Without those guards, a seal that chose `MENTOR` or `WORK_PLACE` would still sta
 A trial composes nothing, and neither does a seal whose producer is not `LEGACY`.
 Such a job ends on the terminal path that a trial takes, and settlement runs as usual.
 A claim of such a job after a lost lease completes it before any model, budget or composition check.
-A repair resumes only a `LEGACY` composition, and a composition package for another producer is refused.
+A repair resumes only a `LEGACY` composition of a review that no seal pinned to another producer.
+A composition package for another producer is refused.
 The seal keeps no staged history of earlier results for such a job, and its answer carries no private read.
 
 ### Checked publication per destination

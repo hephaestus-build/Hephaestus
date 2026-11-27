@@ -3065,6 +3065,57 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseACompositionPackageForAReviewWhoseSealChoseAnotherProducer() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            var proposal = composition(response, SUMMARY, context);
+            jdbc.update(
+                    "UPDATE review_job SET feedback_producer='MENTOR' WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.identity().jobId());
+
+            assertThatThrownBy(() -> admission.checkPackage(review.identity(), proposal))
+                    .isInstanceOf(AdmissionConflictException.class);
+        }
+    }
+
+    @Test
+    void shouldResumeOnlyTheLegacyCompositionOfAReviewThatNoSealPinnedToAnotherProducer() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            ActionTestSupport.drain(executor, jdbc);
+            transactions.executeWithoutResult(status -> {
+                jdbc.update(
+                        "UPDATE agent_run SET state='QUEUED', leased_until=NULL WHERE id=?",
+                        review.identity().runId());
+                RuntimeJobTestData.updateJobs(
+                        jdbc,
+                        "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                        review.workspaceId(),
+                        review.identity().jobId());
+            });
+            String job = "UPDATE review_job SET feedback_producer=? WHERE workspace_id=? AND id=?";
+            String pin = "UPDATE review SET feedback_producer=? WHERE workspace_id=? AND id=?";
+
+            jdbc.update(job, "MENTOR", review.workspaceId(), review.identity().jobId());
+            assertThat(resume(review)).as("a job that sealed for the mentor").isFalse();
+            jdbc.update(job, "LEGACY", review.workspaceId(), review.identity().jobId());
+            jdbc.update(pin, "MENTOR", review.workspaceId(), review.reviewId());
+            assertThat(resume(review)).as("a LEGACY job of a review that a later seal pinned").isFalse();
+            jdbc.update(pin, "LEGACY", review.workspaceId(), review.reviewId());
+            assertThat(resume(review)).as("the same review, LEGACY throughout").isTrue();
+        }
+    }
+
+    private boolean resume(ClaimedReview review) {
+        return Boolean.TRUE.equals(transactions.execute(
+                status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId())));
+    }
+
+    @Test
     void shouldNotResumePostedFeedbackPastTheExistingRetryAllowance() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admitStaged(review.identity(), request(review));
