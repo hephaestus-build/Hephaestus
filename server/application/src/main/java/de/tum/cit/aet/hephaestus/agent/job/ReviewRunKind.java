@@ -379,8 +379,9 @@ public class ReviewRunKind implements AgentRunHandler {
         if (jobs.lockParentByReview(workspaceId, reviewId).isEmpty()) return false;
         // A job that sealed before the pin existed is LEGACY, but a later seal can pin another producer on the review:
         // its composition then never resumes, so the review never gets both kinds of feedback.
-        if (pins.pinned(workspaceId, reviewId).filter(pinned -> pinned != FeedbackProducer.LEGACY).isPresent())
-            return false;
+        if (pins.pinned(workspaceId, reviewId)
+                .filter(pinned -> pinned != FeedbackProducer.LEGACY)
+                .isPresent()) return false;
         var resumable = jobs.lockResumableComposition(workspaceId, reviewId, capacity.reviewRetries())
                 .orElse(null);
         if (resumable == null) return false;

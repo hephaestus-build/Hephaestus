@@ -3104,15 +3104,17 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(resume(review)).as("a job that sealed for the mentor").isFalse();
             jdbc.update(job, "LEGACY", review.workspaceId(), review.identity().jobId());
             jdbc.update(pin, "MENTOR", review.workspaceId(), review.reviewId());
-            assertThat(resume(review)).as("a LEGACY job of a review that a later seal pinned").isFalse();
+            assertThat(resume(review))
+                    .as("a LEGACY job of a review that a later seal pinned")
+                    .isFalse();
             jdbc.update(pin, "LEGACY", review.workspaceId(), review.reviewId());
             assertThat(resume(review)).as("the same review, LEGACY throughout").isTrue();
         }
     }
 
     private boolean resume(ClaimedReview review) {
-        return Boolean.TRUE.equals(transactions.execute(
-                status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId())));
+        return Boolean.TRUE.equals(
+                transactions.execute(status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId())));
     }
 
     @Test
