@@ -54,6 +54,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -306,6 +307,193 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,
                         error -> assertThat(error.code()).isEqualTo(ItemCaptureCode.CONSENT_WITHHELD));
+    }
+
+    /** The batch's mocks: contributor 11 with account 101, ACTIVE with {@code choice}, and the consent under test. */
+    private record Batch(
+            PersonIdentityResolver identities,
+            AccountDirectory accounts,
+            PersonDataCopyRecorder copies,
+            ScmCaptureConsent consent,
+            ScmCaptureConsent.Contributor contributor) {
+        static Batch of(AiChoice choice) {
+            var identities = mock(PersonIdentityResolver.class);
+            var accounts = mock(AccountDirectory.class);
+            var copies = mock(PersonDataCopyRecorder.class);
+            var identity = new PersonIdentity(1L, "11", null);
+            when(identities.accountFor(identity)).thenReturn(Optional.of(101L));
+            // A row whose identity check fails never reads the account.
+            Mockito.lenient().when(accounts.find(101)).thenReturn(Optional.of(account(choice)));
+            return new Batch(
+                    identities,
+                    accounts,
+                    copies,
+                    new ScmCaptureConsent(identities, accounts, mock(PersonProcessingSuppression.class), copies),
+                    new ScmCaptureConsent.Contributor(identity, copy("https://github.com")));
+        }
+
+        static AccountDirectory.AccountView account(AiChoice choice) {
+            return new AccountDirectory.AccountView(101, Account.Status.ACTIVE, "Author", choice, Instant.now(), true);
+        }
+
+        static PersonCopyIdentity copy(String origin) {
+            return new PersonCopyIdentity("GITHUB", origin, "11", null);
+        }
+
+        void require() {
+            consent.requireContributors(List.of(contributor));
+        }
+
+        /** The sources of one capture of several sources, as {@code ScmItemService#captureEach} runs them. */
+        void inBatch(Runnable sources) {
+            var opened = ScmCaptureConsent.openBatch(true);
+            try {
+                sources.run();
+                ScmCaptureConsent.settleBatch(opened);
+            } finally {
+                ScmCaptureConsent.closeBatch(opened);
+            }
+        }
+
+        void decidedTimes(int times) {
+            verify(identities, times(times)).accountFor(contributor.identity());
+        }
+    }
+
+    private static void assertWithheld(Runnable check) {
+        assertThatThrownBy(check::run)
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CONSENT_WITHHELD));
+    }
+
+    /** Row 1: outside a batch, as in every review capture, each check decides again. */
+    @Test
+    void shouldDecideEachCheckOutsideABatch() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        batch.require();
+        batch.require();
+        batch.decidedTimes(2);
+        verify(batch.copies(), times(2)).recordIdentity(batch.contributor().copy());
+    }
+
+    /** Row 2: in a batch, a permitted contributor is decided by the first source and at settlement only. */
+    @Test
+    void shouldDecideAPermittedContributorOnceAndAtSettlementInABatch() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        batch.inBatch(() -> {
+            batch.require();
+            batch.require();
+            batch.require();
+        });
+        batch.decidedTimes(2);
+        verify(batch.copies(), times(3)).recordIdentity(batch.contributor().copy());
+    }
+
+    /** Row 3: a withheld contributor keeps no verdict: every source that names them decides and fails. */
+    @Test
+    void shouldKeepNoVerdictForAWithheldContributorInABatch() {
+        var batch = Batch.of(AiChoice.NO_AI);
+        batch.inBatch(() -> {
+            assertWithheld(batch::require);
+            assertWithheld(batch::require);
+        });
+        batch.decidedTimes(2);
+        verify(batch.copies(), never()).recordIdentity(any());
+    }
+
+    /** Row 3, conflict: an identity that resolves to two accounts withholds with its cause, each time, as on main. */
+    @Test
+    void shouldWithholdAConflictingIdentityWithItsCauseEachTimeInABatch() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        var conflict = new ResponseStatusException(HttpStatus.CONFLICT);
+        when(batch.identities().accountFor(batch.contributor().identity())).thenThrow(conflict);
+        batch.inBatch(() -> {
+            assertThatThrownBy(batch::require)
+                    .isInstanceOf(ItemCaptureException.class)
+                    .hasCause(conflict);
+            assertThatThrownBy(batch::require)
+                    .isInstanceOf(ItemCaptureException.class)
+                    .hasCause(conflict);
+        });
+        batch.decidedTimes(2);
+    }
+
+    /** Row 4: a contributor whom only a later source names is decided by that source, then at settlement. */
+    @Test
+    void shouldDecideAContributorWhenTheFirstSourceThatNamesThemIsChecked() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        var other = new ScmCaptureConsent.Contributor(
+                new PersonIdentity(1L, "22", null), new PersonCopyIdentity("GITHUB", "https://github.com", "22", null));
+        when(batch.identities().accountFor(other.identity())).thenReturn(Optional.empty());
+        batch.inBatch(() -> {
+            batch.require();
+            batch.consent().requireContributors(List.of(batch.contributor(), other));
+        });
+        batch.decidedTimes(2);
+        verify(batch.identities(), times(2)).accountFor(other.identity());
+        verify(batch.copies(), times(1)).recordIdentity(other.copy());
+    }
+
+    /** Row 5: a check that fails with another error keeps no verdict, so the next source decides again. */
+    @Test
+    void shouldKeepNoVerdictWhenACheckFailsWithAnotherErrorInABatch() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        var unavailable = new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        when(batch.identities().accountFor(batch.contributor().identity()))
+                .thenThrow(unavailable)
+                .thenReturn(Optional.of(101L));
+        batch.inBatch(() -> {
+            assertThatThrownBy(batch::require).isSameAs(unavailable);
+            batch.require();
+        });
+        batch.decidedTimes(3);
+        verify(batch.copies(), times(1)).recordIdentity(batch.contributor().copy());
+    }
+
+    /** Row 6: the verdict holds no copy; each source records the copy of the identity's first occurrence in it. */
+    @Test
+    void shouldRecordEachSourcesOwnCopyOfAKeptContributorInABatch() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        var retained = new ScmCaptureConsent.Contributor(
+                batch.contributor().identity(), Batch.copy("https://github.example.test"));
+        batch.inBatch(() -> {
+            batch.require();
+            batch.consent().requireContributors(List.of(retained));
+        });
+        batch.decidedTimes(2);
+        verify(batch.copies(), times(1)).recordIdentity(batch.contributor().copy());
+        verify(batch.copies(), times(1)).recordIdentity(retained.copy());
+    }
+
+    /** Row 7: a nested batch joins the open one and neither settles nor closes it; the outer batch drops the verdicts. */
+    @Test
+    void shouldJoinANestedBatchAndDecideAgainAfterTheOuterBatchCloses() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        batch.inBatch(() -> {
+            batch.require();
+            var nested = ScmCaptureConsent.openBatch(true);
+            assertThat(nested).isFalse();
+            ScmCaptureConsent.settleBatch(nested);
+            ScmCaptureConsent.closeBatch(nested);
+            batch.require();
+        });
+        batch.decidedTimes(2);
+        batch.require();
+        batch.decidedTimes(3);
+        assertThat(ScmCaptureConsent.openBatch(false)).isFalse();
+    }
+
+    /** Row 8: a withdrawal that commits while a batch runs fails it at settlement, as a later source's check would. */
+    @Test
+    void shouldFailTheBatchWhenConsentIsWithdrawnWhileItRuns() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        assertWithheld(() -> batch.inBatch(() -> {
+            batch.require();
+            when(batch.accounts().find(101)).thenReturn(Optional.of(Batch.account(AiChoice.NO_AI)));
+            batch.require();
+        }));
+        batch.decidedTimes(2);
     }
 
     private User person(IdentityProvider provider, long nativeId) {

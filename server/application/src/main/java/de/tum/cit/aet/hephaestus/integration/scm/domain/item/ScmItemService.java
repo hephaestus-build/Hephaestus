@@ -501,6 +501,7 @@ public class ScmItemService implements ItemSource {
                     ? new ScmWorkLookup.Work(occasion.work(), occasion.review())
                     : workLookup.current(pinned.item());
             List<CaptureContribution> composed = new ArrayList<>();
+            var batch = ScmCaptureConsent.openBatch(requests.size() > 1);
             try {
                 for (var request : requests)
                     composed.add(workCapture.capture(
@@ -510,9 +511,12 @@ public class ScmItemService implements ItemSource {
                             work.review(),
                             occasion != null ? occasion.evidence() : null,
                             preparation));
+                ScmCaptureConsent.settleBatch(batch);
             } catch (RuntimeException failure) {
                 CaptureContribution.release(composed, failure);
                 throw failure;
+            } finally {
+                ScmCaptureConsent.closeBatch(batch);
             }
             return List.copyOf(composed);
         });

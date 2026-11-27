@@ -1945,17 +1945,63 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
      */
     @Test
     void shouldCheckThePinOnceWhenAPullRequestsRecordSourcesAreRead() {
+        var pullRef = pullRequestReadForItsSources(41);
+
+        var one = reads.measure(
+                () -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper));
+        long started = System.nanoTime();
+        var five = reads.measure(() -> fingerprints.fingerprints(pullRef, RECORD_SOURCES, null, mapper));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(one.value()).containsKey(PullRequestContentSource.CORE);
+        assertThat(five.value())
+                .containsEntry(PullRequestContentSource.CORE, one.value().get(PullRequestContentSource.CORE));
+        assertThat(itemChecks(five.sql())).isPositive().isEqualTo(itemChecks(one.sql()));
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    }
+
+    /**
+     * Each record source is still composed alone, but one read of a pull request's record sources decides each
+     * contributor's consent by the first source that names them and once more after the last source: five sources
+     * decide the author twice, where they decided once per source.
+     */
+    @Test
+    void shouldDecideEachContributorOnceWhenAPullRequestsRecordSourcesAreRead() {
+        var pullRef = pullRequestReadForItsSources(42);
+
+        var one = reads.measure(
+                () -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper));
+        long started = System.nanoTime();
+        var five = reads.measure(() -> fingerprints.fingerprints(pullRef, RECORD_SOURCES, null, mapper));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(five.value())
+                .containsEntry(PullRequestContentSource.CORE, one.value().get(PullRequestContentSource.CORE));
+        assertThat(consentChecks(one.sql())).isPositive();
+        assertThat(consentChecks(five.sql())).isEqualTo(2 * consentChecks(one.sql()));
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    }
+
+    private static final Set<SourceKind> RECORD_SOURCES = Set.of(
+            PullRequestContentSource.CORE,
+            PullRequestContentSource.COMMENTS,
+            PullRequestContentSource.CHECKS,
+            GeneralReviewCommentContentSource.KIND,
+            ReviewThreadContentSource.KIND);
+
+    /** A monitored GitHub pull request whose author is its one contributor, registered with its repository. */
+    private ItemRef pullRequestReadForItsSources(int number) {
         var fixture = fixture(IdentityProviderType.GITHUB);
         var pull = new PullRequest();
         pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
         pull.setProvider(fixture.provider());
         pull.setRepository(fixture.repository());
-        pull.setNumber(41);
+        pull.setNumber(number);
         pull.setTitle("A change read for its sources");
         pull.setBody("Its record sources are read for freshness.");
         pull.setState(Issue.State.OPEN);
         pull.setAuthor(fixture.author());
-        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/41");
+        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/" + number);
         pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
         pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
         pull.setHeadRefOid("e".repeat(40));
@@ -1969,26 +2015,15 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 fixture.repository().getId(),
                 null,
                 null));
-        ItemRef pullRef = writer.upsert(new ItemRegistration(
+        return writer.upsert(new ItemRegistration(
                 holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
-        Set<SourceKind> all = Set.of(
-                PullRequestContentSource.CORE,
-                PullRequestContentSource.COMMENTS,
-                PullRequestContentSource.CHECKS,
-                GeneralReviewCommentContentSource.KIND,
-                ReviewThreadContentSource.KIND);
+    }
 
-        var one = reads.measure(
-                () -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper));
-        long started = System.nanoTime();
-        var five = reads.measure(() -> fingerprints.fingerprints(pullRef, all, null, mapper));
-        var elapsed = Duration.ofNanos(System.nanoTime() - started);
-
-        assertThat(one.value()).containsKey(PullRequestContentSource.CORE);
-        assertThat(five.value())
-                .containsEntry(PullRequestContentSource.CORE, one.value().get(PullRequestContentSource.CORE));
-        assertThat(itemChecks(five.sql())).isPositive().isEqualTo(itemChecks(one.sql()));
-        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    private static long consentChecks(List<String> sql) {
+        return sql.stream()
+                .filter(statement ->
+                        statement.replaceAll("\\s+", " ").contains("SELECT DISTINCT account_id FROM identity WHERE"))
+                .count();
     }
 
     private static long itemChecks(List<String> sql) {
