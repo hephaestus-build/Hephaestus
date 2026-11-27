@@ -199,8 +199,7 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
                         + " 'me--aaaaaaaaaaaaaaaa', 'USER', 'ACTIVE', 'PERSONAL', ?) RETURNING id",
                 Long.class,
                 student);
-        Workspace personal =
-                workspaces.findById(Objects.requireNonNull(space)).orElseThrow();
+        Workspace personal = workspaces.findById(Objects.requireNonNull(space)).orElseThrow();
         join(personal, student, WorkspaceRole.MEMBER);
         team(personal, student);
         UUID shared = team(course, student, classmate);
@@ -225,7 +224,9 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         people.absorbUnclaimed(verifiedClaim(student, unclaimed, identity));
 
         assertThat(isMember(course, absorbed, student)).isTrue();
-        assertThat(isMember(course, own, student)).as("ended with the membership").isFalse();
+        assertThat(isMember(course, own, student))
+                .as("ended with the membership")
+                .isFalse();
     }
 
     @Test
