@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.OverviewWindowDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewRefDTO;
+import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
@@ -24,9 +25,8 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
-import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnServerRole

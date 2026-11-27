@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
-import org.jspecify.annotations.Nullable;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -14,27 +13,27 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * snapshot, so a computation that only reads returns the same value each time it runs on the same key in it.
  *
  * <p>Anywhere else it computes every time. In a READ COMMITTED transaction, or with none, a later statement can see a
- * commit that an earlier one did not. In a transaction that writes, a later statement sees its own writes. A
- * transaction that starts inside one (REQUIRES_NEW) reads its own snapshot: Spring suspends the outer transaction's
- * synchronizations, and with them its values.
+ * commit that an earlier one did not. In a transaction that writes, a later statement sees its own writes.
  *
- * <p>Only a value is kept. A computation that throws runs again on the next call, and throws as it did.
+ * <p>The values belong to the transaction: they are registered with it as a synchronization and end with it. A
+ * transaction that starts inside one (REQUIRES_NEW) reads its own snapshot and does not see them, because Spring
+ * suspends the outer transaction's synchronizations. Only a value is kept. A computation that throws runs again on the
+ * next call, and throws as it did.
  */
 public final class SnapshotMemo<K, V> {
-    private final ThreadLocal<@Nullable Values> current = new ThreadLocal<>();
+    private final Class<V> type;
+
+    public SnapshotMemo(Class<V> type) {
+        this.type = type;
+    }
 
     public V get(K key, Supplier<V> compute) {
         if (!inReadOnlySnapshot()) return compute.get();
-        var values = current.get();
-        if (values == null) {
-            values = new Values();
-            TransactionSynchronizationManager.registerSynchronization(values);
-            current.set(values);
-        }
-        var known = values.byKey.get(key);
-        if (known != null) return known;
+        var values = values();
+        var known = values.get(key);
+        if (known != null) return Objects.requireNonNull(type.cast(known));
         var value = Objects.requireNonNull(compute.get());
-        values.byKey.put(key, value);
+        values.put(key, value);
         return value;
     }
 
@@ -47,23 +46,21 @@ public final class SnapshotMemo<K, V> {
                         Connection.TRANSACTION_REPEATABLE_READ);
     }
 
-    /** One transaction's values. It is this thread's current one only while its transaction is. */
-    private final class Values implements TransactionSynchronization {
-        private final Map<K, V> byKey = new HashMap<>();
+    /** This memo's values in the current transaction, registered with it on first use. */
+    private Map<Object, Object> values() {
+        for (var synchronization : TransactionSynchronizationManager.getSynchronizations())
+            if (synchronization instanceof Values values && values.memo == this) return values.byKey;
+        var values = new Values(this);
+        TransactionSynchronizationManager.registerSynchronization(values);
+        return values.byKey;
+    }
 
-        @Override
-        public void suspend() {
-            current.remove();
-        }
+    private static final class Values implements TransactionSynchronization {
+        private final SnapshotMemo<?, ?> memo;
+        private final Map<Object, Object> byKey = new HashMap<>();
 
-        @Override
-        public void resume() {
-            current.set(this);
-        }
-
-        @Override
-        public void afterCompletion(int status) {
-            current.remove();
+        Values(SnapshotMemo<?, ?> memo) {
+            this.memo = memo;
         }
     }
 }

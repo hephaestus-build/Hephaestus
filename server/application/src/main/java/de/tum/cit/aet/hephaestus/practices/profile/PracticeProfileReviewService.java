@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
@@ -36,9 +37,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
-import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnServerRole

@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.longThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 
 import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
@@ -80,6 +80,8 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
@@ -113,6 +115,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -125,17 +128,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
-import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -2094,15 +2094,20 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 PullRequestContentSource.CHECKS,
                 GeneralReviewCommentContentSource.KIND,
                 ReviewThreadContentSource.KIND);
+        // A page read's service method starts the request's transaction. measure() reads in a READ COMMITTED
+        // transaction
+        // of its own, so the snapshot starts its own too: a transaction that joins another keeps the other's isolation.
         var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
         snapshot.setReadOnly(true);
         snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        var one = reads.measure(() -> snapshot.execute(
-                status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper)));
-        var five = reads.measure(() -> snapshot.execute(status -> fingerprints.fingerprints(pullRef, all, null, mapper)));
+        var one = reads.measure(() -> Objects.requireNonNull(snapshot.execute(
+                status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper))));
+        var five = reads.measure(() -> Objects.requireNonNull(
+                snapshot.execute(status -> fingerprints.fingerprints(pullRef, all, null, mapper))));
 
-        assertThat(five.value()).isNotNull().containsKey(PullRequestContentSource.CORE);
+        assertThat(five.value()).containsKey(PullRequestContentSource.CORE);
         assertThat(pullRequestLookups(five.sql()))
                 .as("pull request lookups of five sources in one snapshot, %s", five.sql())
                 .isPositive()

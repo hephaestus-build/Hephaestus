@@ -34,7 +34,7 @@ public class ReviewRepositoryPreparer {
     private final List<ScmTokenSource> tokenSources;
     private final RepositoryRepository repositories;
     /** One authorization per piece of work and connection in a snapshot read: every source of a capture asks again. */
-    private final SnapshotMemo<AccessKey, Access> accesses = new SnapshotMemo<>();
+    private final SnapshotMemo<AccessKey, Access> accesses = new SnapshotMemo<>(Access.class);
 
     /** The reviewed repository of pinned work, authorized for the workspace: what {@link #fetch} syncs. */
     public record Remote(RepositoryKey key, String cloneUrl, ScmTokenSource source, ScmCapturedWork work) {}
