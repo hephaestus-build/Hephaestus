@@ -1165,11 +1165,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var versions = context.getBean(PracticeVersionService.class);
         var kind = new ItemKind("scm.pull_request");
         var definition = DefinitionTestFixtures.definition(kind, "Pool fixture", "Pool fixture", null);
-        long item = Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT item_id FROM review WHERE workspace_id=? AND id=?",
-                Long.class,
-                job.getWorkspaceId(),
-                job.getReviewId()));
+        long item = job.getInput().itemId();
         var frozen = LongStream.rangeClosed(1, 32)
                 .mapToObj(index -> {
                     var practice = versions.create(new PracticeVersionService.NewPractice(
@@ -1182,15 +1178,19 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                             practice.getId(),
                             practice.getCurrentVersion().getId());
                     jdbc.update(
-                            "INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,state,reason,job_id)"
-                                    + " VALUES (?,?,?,?,?,?,?)",
+                            """
+                            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,reason,job_id)
+                            SELECT ?,?,?,?,item_version,?,?,? FROM review WHERE workspace_id=? AND id=?
+                            """,
                             job.getReviewId(),
                             job.getWorkspaceId(),
                             practice.getId(),
                             item,
                             index == 32 ? "LISTED" : "WITHHELD",
                             index == 32 ? null : "EXECUTION_FAILED",
-                            job.getId());
+                            job.getId(),
+                            job.getWorkspaceId(),
+                            job.getReviewId());
                     return new ReviewAssignmentId(job.getReviewId(), practice.getId(), item);
                 })
                 .toList();
