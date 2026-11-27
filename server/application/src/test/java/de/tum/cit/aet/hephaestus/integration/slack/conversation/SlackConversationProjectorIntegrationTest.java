@@ -846,8 +846,8 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete");
-        var claim = ActionTestSupport.claimLane(jdbc, mapper, key(asked), context)
-                .orElseThrow();
+        var claim =
+                ActionTestSupport.claimLane(jdbc, mapper, key(asked), context).orElseThrow();
         assertThat(claim.fence().beginWrite()).isTrue();
         var unknown = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
         var ending =
