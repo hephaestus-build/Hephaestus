@@ -103,7 +103,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         UUID id = actions.enqueue(request);
         assertThat(actions.enqueue(request)).isEqualTo(id);
         var withoutMentorProof = new ActionAdmission(context.getBean(ObjectMapper.class)
-                .writeValueAsString(Map.of(ActionKind.MENTOR_EFFECT.name(), ActionVariants.none().path())));
+                .writeValueAsString(Map.of(
+                        ActionKind.MENTOR_EFFECT.name(), ActionVariants.none().path())));
         assertThat(store.claim(id, LEASE, withoutMentorProof)).isEmpty();
         var claim = claimOwn(List.of(id)).getFirst();
         assertThat(claim.kind()).isEqualTo(ActionKind.MENTOR_EFFECT);
