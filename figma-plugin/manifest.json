@@ -1,0 +1,15 @@
+{
+	"name": "Hephaestus",
+	"id": "hephaestus-development",
+	"api": "1.0.0",
+	"editorType": ["figma", "figjam"],
+	"main": "dist/code.js",
+	"ui": "dist/ui.html",
+	"documentAccess": "dynamic-page",
+	"relaunchButtons": [{ "command": "review", "name": "Review with Hephaestus" }],
+	"networkAccess": {
+		"allowedDomains": ["https://hephaestus.build"],
+		"devAllowedDomains": ["https://staging.hephaestus.build"],
+		"reasoning": "The plugin sends the selection that the member previews to their Hephaestus instance, and reads the team's review of it."
+	}
+}

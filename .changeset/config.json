@@ -7,5 +7,5 @@
 		"version": true,
 		"tag": false
 	},
-	"ignore": ["webapp", "docs", "extension"]
+	"ignore": ["webapp", "docs", "extension", "figma-plugin"]
 }

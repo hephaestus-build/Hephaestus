@@ -139,7 +139,8 @@ export function scopesFor(paths: string[]): Scope[] {
 			} else {
 				scopes.add("server");
 			}
-		} else if (file.startsWith("docker/agents/")) {
+		} else if (file.startsWith("docker/agents/") || file.startsWith("figma-plugin/")) {
+			// The Figma plugin is checked with the tooling: its gates are agent static gates, its tests run in test:tooling.
 			scopes.add("agents");
 		} else if (file.startsWith("deploy/chart/")) {
 			// The chart suites run in test:tooling, which affected:agents runs.

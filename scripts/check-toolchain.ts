@@ -150,6 +150,7 @@ for (const file of [
 	"docs/package.json",
 	"webapp/package.json",
 	"extension/package.json",
+	"figma-plugin/package.json",
 	"scripts/api-generator/package.json",
 	"docker/agents/pi/package.json",
 ]) {
@@ -208,7 +209,14 @@ function expectConfig(name: string, expected: unknown): void {
 		);
 	}
 }
-expectConfig("packages", [".", "webapp", "docs", "extension", "scripts/api-generator"]);
+expectConfig("packages", [
+	".",
+	"webapp",
+	"docs",
+	"extension",
+	"figma-plugin",
+	"scripts/api-generator",
+]);
 expectConfig("nodeLinker", "isolated");
 expectConfig("hoist", false);
 expectConfig("publicHoistPattern", [
