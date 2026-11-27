@@ -214,14 +214,14 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         }
     }
 
+    // These tables remain empty until the release that registers their account-erasure store.
+    private static final Set<String> REGISTERED_NEXT_RELEASE = Set.of("slack_dm_producer_pin");
+
     /**
      * The namespace of a source, like a repository's {@code owner/name}: the name of the provider account that a
      * connection is installed on, and the repository that a workspace monitors. It is a person's login when the account
      * is a personal one. Person export lists it, and it stays while the source exists.
      */
-    // These tables remain empty until the release that registers their account-erasure store.
-    private static final Set<String> REGISTERED_NEXT_RELEASE = Set.of("slack_dm_producer_pin");
-
     private static final Set<String> SOURCE_NAMESPACE =
             Set.of("connection.display_name", "repository_to_monitor.name_with_owner");
 
