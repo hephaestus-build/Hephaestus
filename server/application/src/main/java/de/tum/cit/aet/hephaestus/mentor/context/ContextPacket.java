@@ -35,8 +35,8 @@ public final class ContextPacket {
         SOURCE
     }
 
-    /** A kind, ID and revision from the owning reader, with the owner and original custody. */
-    public record SourceRef(String kind, String id, String revision, long ownerAccountId, String custody) {
+    /** A kind, ID, revision and source scope from the owning reader. */
+    public record SourceRef(String kind, String id, String revision, String scope) {
         @Override
         public String toString() {
             return "ContextPacket.SourceRef";
@@ -107,8 +107,7 @@ public final class ContextPacket {
                 .put("kind", ref.kind())
                 .put("id", ref.id())
                 .put("revision", ref.revision())
-                .put("ownerAccountId", ref.ownerAccountId())
-                .put("custody", ref.custody());
+                .put("scope", ref.scope());
         entry.put("text", item.text());
     }
 }
