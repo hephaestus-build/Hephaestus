@@ -60,6 +60,7 @@ public class ReviewJobClaimService {
     private final @Nullable LlmAdmissionService llmAdmissionService;
     private final ReviewJobTelemetry jobTelemetry;
     private final LlmCallPools callPools;
+    private final ReviewPoolAdmission poolAdmission;
     private final AgentRuns runs;
     private final ReviewRunKind reviewRuns;
 
@@ -74,12 +75,14 @@ public class ReviewJobClaimService {
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
             LlmCallPools callPools,
+            ReviewPoolAdmission poolAdmission,
             AgentRuns runs,
             ReviewRunKind reviewRuns) {
         this.jobRepository = jobRepository;
         this.runs = runs;
         this.reviewRuns = reviewRuns;
         this.callPools = callPools;
+        this.poolAdmission = poolAdmission;
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
         this.assignments = assignments;
@@ -293,8 +296,7 @@ public class ReviewJobClaimService {
             // makes the check exact when two servers dispatched reviews of one pool at once.
             poolId = callPools.poolFor(snapshot.model().connectionRef());
             callPools.lockAdmission(poolId);
-            if (!ReviewPoolAdmission.admits(jobRepository.poolLoad(poolId), callPools, poolId, assigned.size()))
-                return new PoolWait(fence.runId(), poolId);
+            if (!poolAdmission.admits(poolId, job)) return new PoolWait(fence.runId(), poolId);
         }
 
         if (!(ResultAdmissionService.isContinuation(job)

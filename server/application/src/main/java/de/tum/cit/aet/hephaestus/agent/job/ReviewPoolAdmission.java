@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import java.time.Instant;
@@ -26,11 +27,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Whether a model pool takes another measuring review now. A pool with no running measurement always takes one. Past
- * that, it takes the next one only while the practices of its running measurements and of the next one fit the calls
- * that the pool lets measurements hold: each practice is a session with one call in flight, so a review counts as wide
- * as its practices, not as one. It also waits while a measuring call waits longer than the permit aging, and until its
- * newest measurement has run that long. Reviews admitted past a pool's capacity slow down together and all run out of
- * time, while a waiting review keeps its whole budget.
+ * that, it takes the next one only while the open practices of its running measurements and of the next one fit the
+ * calls that the pool lets measurements hold. Each open practice is a session with one call in flight. The pool also
+ * waits while a measuring call waits longer than the permit aging and until its newest measurement has run that long.
  *
  * <p>The dispatch asks this in the claim's order, so the workspace with the fewest leased runs goes first, and a held
  * review gets no sandbox. The claim asks it again under the pool's lock, so two servers never admit past the rule.
@@ -40,12 +39,15 @@ import org.springframework.stereotype.Component;
 public class ReviewPoolAdmission implements RunAdmission {
     private final ReviewJobRepository jobs;
     private final LlmCallPools pools;
+    private final ReviewAssignmentStore assignments;
     private final MeterRegistry meters;
     private final Map<String, AtomicLong> held = new ConcurrentHashMap<>();
 
-    public ReviewPoolAdmission(ReviewJobRepository jobs, LlmCallPools pools, MeterRegistry meters) {
+    public ReviewPoolAdmission(
+            ReviewJobRepository jobs, LlmCallPools pools, ReviewAssignmentStore assignments, MeterRegistry meters) {
         this.jobs = jobs;
         this.pools = pools;
+        this.assignments = assignments;
         this.meters = meters;
     }
 
@@ -82,9 +84,11 @@ public class ReviewPoolAdmission implements RunAdmission {
                     .toList();
             if (unread.isEmpty()) return;
             unread.forEach(run -> poolOfRun.put(run, null));
-            for (var model : jobs.findQueuedModels(unread)) {
+            var queued = jobs.findQueuedModels(unread);
+            var ended = assignments.endedPracticeCounts(queued.stream().map(ReviewJobRepository.QueuedModel::getJobId).toList());
+            for (var model : queued) {
                 poolOfRun.put(model.getRunId(), poolOf(model));
-                practicesOfRun.put(model.getRunId(), model.getPractices());
+                practicesOfRun.put(model.getRunId(), remaining(model.getPractices(), ended.getOrDefault(model.getJobId(), 0)));
             }
         }
 
@@ -134,17 +138,32 @@ public class ReviewPoolAdmission implements RunAdmission {
     }
 
     /** Whether the pool takes another measurement of {@code practices} practices now. */
-    public boolean admits(long poolId, int practices) {
-        return admits(jobs.poolLoad(poolId), pools, poolId, practices);
+    boolean admits(long poolId, ReviewJob job) {
+        int ended = assignments.endedPracticeCounts(List.of(job.getId())).getOrDefault(job.getId(), 0);
+        return admits(poolId, remaining(originalWidth(job), ended));
     }
 
-    /** The rule, which the claim also applies while it holds the pool's lock. */
-    static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPools pools, long poolId, int practices) {
+    /** The same rule serves dispatch and the claim that holds the pool lock. */
+    private boolean admits(long poolId, int practices) {
+        var load = jobs.poolLoad(poolId);
         if (load.getRunning() == 0) return true;
-        if (load.getPractices() + practices > room(load)) return false;
+        if (reserved(load, assignments.endedPracticeCounts(List.of(load.getJobIds()))) + practices > room(load))
+            return false;
         Instant newest = load.getNewestStart();
         return !pools.congested(poolId)
                 && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
+    }
+
+    private static int remaining(int practices, int ended) {
+        return Math.max(0, practices - ended);
+    }
+
+    private static int originalWidth(ReviewJob job) {
+        return Math.max(1, job.getInput().assignments().size());
+    }
+
+    private static long reserved(ReviewJobRepository.PoolLoad load, Map<UUID, Integer> ended) {
+        return Math.max(0, load.getPractices() - ended.values().stream().mapToLong(Integer::longValue).sum());
     }
 
     /**
@@ -162,8 +181,15 @@ public class ReviewPoolAdmission implements RunAdmission {
      * The practice sessions that a running measurement of {@code practices} practices may run at once: the pool's room
      * less the practices of the other running measurements, and at least one, so a review always makes progress.
      */
-    static int sessionLimit(ReviewJobRepository.PoolLoad load, int practices) {
-        long others = Math.max(0, load.getPractices() - practices);
+    int sessionLimit(long poolId, ReviewJob job) {
+        var load = jobs.poolLoad(poolId);
+        var ended = assignments.endedPracticeCounts(List.of(load.getJobIds()));
+        int own = remaining(originalWidth(job), ended.getOrDefault(job.getId(), 0));
+        return sessionLimit(load, reserved(load, ended), own);
+    }
+
+    static int sessionLimit(ReviewJobRepository.PoolLoad load, long reserved, int practices) {
+        long others = Math.max(0, reserved - practices);
         long free = (long) room(load) - others;
         return (int) Math.max(1, Math.min(practices, free));
     }

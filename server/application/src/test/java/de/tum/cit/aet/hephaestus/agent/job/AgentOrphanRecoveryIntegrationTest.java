@@ -1195,6 +1195,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var budgets = mock(LlmBudgetService.class);
         when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        var pools = LlmCallPermitsTestFixtures.idle();
         return new ReviewJobClaimService(
                 jobRepository,
                 policy,
@@ -1205,7 +1206,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 null,
                 context.getBean(ReviewJobTelemetry.class),
-                LlmCallPermitsTestFixtures.idle(),
+                pools,
+                SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
     }
@@ -1234,7 +1236,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         objectMapper,
                         telemetry,
                         context.getBean(JobEvidenceFiles.class),
-                        context.getBean(AgentRunAuthority.class)),
+                        context.getBean(AgentRunAuthority.class),
+                        mock(ReviewPoolAdmission.class)),
                 terminal,
                 reviewRuns,
                 context.getBean(ProviderOutages.class),

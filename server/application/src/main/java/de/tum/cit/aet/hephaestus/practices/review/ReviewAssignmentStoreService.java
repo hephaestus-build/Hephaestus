@@ -21,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -96,6 +97,15 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 .filter(member -> member.getState() != ReviewItemState.LISTED)
                 .map(ReviewItem::getPracticeId)
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, Integer> endedPracticeCounts(List<UUID> jobIds) {
+        if (jobIds.isEmpty()) return Map.of();
+        return items.countEndedPracticesByJob(jobIds).stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        ReviewItemRepository.EndedPracticeCount::getJobId, row -> Math.toIntExact(row.getCount())));
     }
 
     @Override

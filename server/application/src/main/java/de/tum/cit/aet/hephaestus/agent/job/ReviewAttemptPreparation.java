@@ -76,6 +76,7 @@ public class ReviewAttemptPreparation {
     private final ReviewJobTelemetry jobTelemetry;
     private final JobEvidenceFiles evidenceFiles;
     private final AgentRunAuthority authority;
+    private final ReviewPoolAdmission poolAdmission;
 
     public ReviewAttemptPreparation(
             ReviewJobRepository jobRepository,
@@ -88,7 +89,8 @@ public class ReviewAttemptPreparation {
             ObjectMapper objectMapper,
             ReviewJobTelemetry jobTelemetry,
             JobEvidenceFiles evidenceFiles,
-            AgentRunAuthority authority) {
+            AgentRunAuthority authority,
+            ReviewPoolAdmission poolAdmission) {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.admission = admission;
@@ -100,6 +102,7 @@ public class ReviewAttemptPreparation {
         this.jobTelemetry = jobTelemetry;
         this.evidenceFiles = evidenceFiles;
         this.authority = authority;
+        this.poolAdmission = poolAdmission;
     }
 
     /** The attempt's job, while {@code fence} still holds it. */
@@ -315,7 +318,7 @@ public class ReviewAttemptPreparation {
     private int sessionLimit(ReviewJob job) {
         int practices = Math.max(1, job.getInput().assignments().size());
         Long pool = job.getCallPoolId();
-        return pool == null ? practices : ReviewPoolAdmission.sessionLimit(jobRepository.poolLoad(pool), practices);
+        return pool == null ? practices : poolAdmission.sessionLimit(pool, job);
     }
 
     /** The adapter's stable execution plan. Credentials and request trace context are supplied separately. */

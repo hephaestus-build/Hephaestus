@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -13,6 +14,9 @@ public interface ReviewAssignmentStore {
 
     /** The practices of the job whose membership an earlier attempt of the job already ended. */
     Set<Long> endedPractices(long workspaceId, UUID reviewId, UUID jobId);
+
+    /** Counts ended practices for globally unique job IDs supplied by the shared model-pool scheduler. */
+    Map<UUID, Integer> endedPracticeCounts(List<UUID> jobIds);
 
     /** Whether an invocation retains verified practices that still need its seal. */
     boolean hasStaged(long workspaceId, UUID reviewId, UUID jobId);
