@@ -171,8 +171,12 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
         connectionService.disconnect(
                 connection,
                 ConnectionService.TransitionRequest.byAccount(
-                        IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", memberId,
-                        UUID.randomUUID().toString(), null),
+                        IntegrationState.UNINSTALLED,
+                        "DISCONNECT",
+                        "ADMIN",
+                        memberId,
+                        UUID.randomUUID().toString(),
+                        null),
                 slackStrategy);
 
         assertThat(pin.getId()).isNotNull();
@@ -181,10 +185,12 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
                 .extracting(Connection::getState)
                 .isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(
-                workspaceId, connectionId, "DERASE", TS)).isEmpty();
+                        workspaceId, connectionId, "DERASE", TS))
+                .isEmpty();
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM provider_event WHERE workspace_id = ? AND delivery_key = 'mentor-receipt'",
-                        Long.class, workspaceId))
+                        Long.class,
+                        workspaceId))
                 .isZero();
     }
 
