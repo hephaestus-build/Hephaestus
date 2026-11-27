@@ -1135,7 +1135,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldPinTheWorkPlaceWhenTheAuthorMadeNoAiChoice() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             unpinnedAndStaged(review);
-            jdbc.update("UPDATE account SET ai_choice=NULL WHERE id=?", review.developerId());
+            jdbc.update("UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", review.developerId());
             withMentorSelected(review, () -> seal(review));
             assertThat(producer(review)).containsExactly("WORK_PLACE", "AUTHOR_NOT_CONSENTING", "WORK_PLACE");
             assertThat(mentorEvents(review)).isEmpty();
