@@ -4,7 +4,7 @@
 **Date:** 2026-09-26
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
-**Amended by:** [ADR 0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md)
+**Amended by:** [ADR 0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md), [ADR 0166](0166-an-editor-host-acts-for-one-team-project-through-a-typed-code-pairing-and-a-team-grant.md)
 
 ## Context
 
