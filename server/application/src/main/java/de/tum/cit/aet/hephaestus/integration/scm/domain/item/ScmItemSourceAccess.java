@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.SnapshotMemo;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
@@ -53,6 +54,14 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
     private final PersonProcessingSuppression suppression;
     private final PersonIdentityResolver identities;
     private final AccountDirectory accounts;
+    /**
+     * Each item's verdict per audience, once per read-only snapshot. A page read checks the same items in several of
+     * its parts, and in one snapshot each check reads the same rows. Outside one, every check reads again: a monitor
+     * removal or a transfer can commit between two checks.
+     */
+    private final SnapshotMemo<Permit, Boolean> verdicts = new SnapshotMemo<>(Boolean.class);
+
+    private record Permit(ItemRef item, SourceReadAudience audience) {}
 
     @Override
     public Set<ItemKind> kinds() {
@@ -68,14 +77,14 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
     @Transactional(readOnly = true)
     public boolean permits(ItemRef item, SourceUsePurpose purpose) {
         Objects.requireNonNull(purpose);
-        return permitsItem(item, SourceReadAudience.PROCESSING, new Direct());
+        return verdict(item, SourceReadAudience.PROCESSING, new Direct());
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean permits(ItemRef item, SourceUsePurpose purpose, SourceReadAudience audience) {
         Objects.requireNonNull(purpose);
-        return permitsItem(item, Objects.requireNonNull(audience), new Direct());
+        return verdict(item, Objects.requireNonNull(audience), new Direct());
     }
 
     @Override
@@ -92,9 +101,13 @@ public class ScmItemSourceAccess implements ItemSourceAccess {
         Map<ItemRef, BooleanSupplier> checks = new HashMap<>();
         for (var ref : refs) {
             if (ref.workspaceId() != workspaceId) continue;
-            checks.put(ref, () -> permitsItem(ref, audience, facts));
+            checks.put(ref, () -> verdict(ref, audience, facts));
         }
         return checks;
+    }
+
+    private boolean verdict(ItemRef item, SourceReadAudience audience, Facts facts) {
+        return verdicts.get(new Permit(item, audience), () -> permitsItem(item, audience, facts));
     }
 
     // The audience reaches every parent, and changes only whether a contributor's AI choice applies.
