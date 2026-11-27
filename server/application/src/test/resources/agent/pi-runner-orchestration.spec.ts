@@ -330,6 +330,53 @@ if (scenario !== undefined && scenario !== "") {
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
+	// Drive the same watchdog as the session-stall scenario, at the child program boundary.
+	if (scenario === "practice-program-stall") {
+		const file = new URL(
+			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts",
+			import.meta.url,
+		);
+		const programs = await import(
+			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts"
+		);
+		mock.module(file.href, {
+			exports: {
+				...programs,
+				forkedProgram(start: Parameters<typeof programs.forkedProgram>[0]) {
+					const child = programs.forkedProgram(start);
+					let guard: ReturnType<typeof setTimeout> | undefined;
+					child.onClose(() => {
+						clearTimeout(guard);
+						record("program:closed");
+					});
+					return {
+						...child,
+						get connected() {
+							return child.connected;
+						},
+						send(message: unknown) {
+							if (isRecord(message) && message.kind === "abort") record("program:abort");
+							child.send(message);
+						},
+						onMessage(listener: (message: unknown) => void) {
+							child.onMessage((message) => {
+								if (isRecord(message) && message.kind === "meta") {
+									record("program:started");
+									now += 301_000;
+									guard = setTimeout(() => {
+										record("program:no-abort");
+										child.kill();
+									}, 8_000);
+									guard.unref();
+								}
+								listener(message);
+							});
+						},
+					};
+				},
+			},
+		});
+	}
 	await mockChange({ writeChangeView: () => undefined });
 	if (scenario === "verification-git") {
 		const file = new URL("../../../main/resources/agent/pi-pinned-object.ts", import.meta.url);
@@ -2187,6 +2234,7 @@ if (scenario !== undefined && scenario !== "") {
 		"work-budget",
 		"cut-off",
 		"stall",
+		"practice-program-stall",
 		"settle-safety",
 		"request-caps",
 		"provider-error",
@@ -2404,6 +2452,19 @@ if (scenario !== undefined && scenario !== "") {
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						writeFileSync(nodePath.join(cwd, PRACTICES_DIR, "test-practice.ts"), LEADS_PROGRAM);
 					}
+					if (stage === "practice-program-stall") {
+						writeFileSync(nodePath.join(cwd, "package.json"), '{"type":"module"}\n');
+						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
+						const quietProgram = `import { definePracticeScript } from "@hephaestus/practice-scripts";
+export default definePracticeScript({
+	meta: {},
+	async run() { return await new Promise(() => {}); },
+});`;
+						for (const slug of ["test-practice", "second-practice"]) {
+							writeFileSync(nodePath.join(cwd, PRACTICES_DIR, `${slug}.ts`), quietProgram);
+						}
+						writeFileSync(nodePath.join(cwd, "catalog/practices/third-practice.md"), "Third criterion.");
+					}
 					const verification = stage.startsWith("verification-");
 					if (stage === "tree-citation" || verification) {
 						// A real checkout with one commit in its history, so a citation at a commit is read
@@ -2509,6 +2570,8 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "draft-commit"
 					) {
 						index = [practice("test-practice"), practice("second-practice")];
+					} else if (stage === "practice-program-stall") {
+						index = ["test-practice", "second-practice", "third-practice"].map((slug) => practice(slug));
 					} else if (stage === "stall") {
 						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "comment-undecided") {
@@ -2583,7 +2646,7 @@ if (scenario !== undefined && scenario !== "") {
 							import.meta.filename,
 						],
 						{
-							timeout: verification ? 10_000 : undefined,
+							timeout: stage === "practice-program-stall" ? 25_000 : verification ? 10_000 : undefined,
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,
@@ -3255,6 +3318,32 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(child.stderr, /review\.unreachable unanswered_calls=\d+/u);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "failed (unavailable)" });
+							break;
+						}
+						case "practice-program-stall": {
+							assert.deepEqual(events.filter((event) => event.startsWith("program:")), [
+								"program:started", "program:abort", "program:closed",
+								"program:started", "program:abort", "program:closed",
+							]);
+							assert.equal(child.status, 78, child.stderr);
+							assert.equal(
+								child.stderr.match(/turn\.stopped .*stopped_by=stall step=practice_program/gu)?.length,
+								2,
+							);
+							assert.deepEqual(
+								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
+								["third-practice"],
+							);
+							reached({
+								"test-practice": "NOT_REACHED",
+								"second-practice": "NOT_REACHED",
+								"third-practice": "EVALUATED",
+							});
+							ran({
+								"test-practice": "failed (unavailable)",
+								"second-practice": "failed (unavailable)",
+								"third-practice": "ok",
+							});
 							break;
 						}
 						case "stall": {
