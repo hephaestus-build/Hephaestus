@@ -203,16 +203,19 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldEraseThePinUsingItsFrozenLinkedAccount() {
         long id = Objects.requireNonNull(connection.getId());
-        pins.save(new SlackDmProducerPin(workspaceId, id, TEAM, "DERASE", TS, null, "UERASE", memberId, Producer.MENTOR));
+        pins.save(
+                new SlackDmProducerPin(workspaceId, id, TEAM, "DERASE", TS, null, "UERASE", memberId, Producer.MENTOR));
         var contributor = personData.contributors().stream()
                 .filter(store -> store.store().equals("slack_dm_producer_pin"))
-                .findFirst().orElseThrow();
+                .findFirst()
+                .orElseThrow();
         var subject = new PersonScope(memberId, List.of(), List.of());
         var selection = contributor.select(subject);
 
         assertThat(selection.rows()).hasSize(1);
         assertThat(contributor.erase(selection, subject)).isOne();
-        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(workspaceId, id, "DERASE", TS)).isEmpty();
+        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(workspaceId, id, "DERASE", TS))
+                .isEmpty();
     }
 
     @Test
