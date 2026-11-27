@@ -15,16 +15,17 @@ final class AdviceText {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
-     * A count of work: a number, then within two words a plural work noun, with no preposition between. A count of two
-     * or more takes the plural, so "two tests before review" names no count of work, and "two in-flight pull requests"
-     * does.
+     * A count of work: a number, then within two words a work noun, singular or plural. It refuses when in doubt: a
+     * false refusal writes no advice, but a false admission puts a count on the profile that the view must compute. A
+     * preposition between the number and the noun ends the count, so "two tests before review" names no work.
      */
     private static final Pattern COUNT_OF_WORK = Pattern.compile(
-            "\\b(\\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen"
+            "\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen"
                     + "|seventeen|eighteen|nineteen|twenty|dozens?|several|many|multiple|numerous|a few)\\s+"
-                    + "(?:(?!(?:in|on|for|from|this|that|before|after|during|to|per|with)\\s)[\\w-]+\\s+){0,2}"
+                    + "(?:(?!(?:in|on|at|by|for|from|before|after|during|to|into|per|with|without|within|across|over"
+                    + "|under|between)\\s)[\\w-]+\\s+){0,2}"
                     + "(?:of\\s+(?:your|the|these|those)\\s+)?"
-                    + "(pull requests|merge requests|PRs|MRs|issues|reviews)\\b",
+                    + "(pull requests?|merge requests?|PRs?|MRs?|issues?|reviews?)\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private AdviceText() {}
