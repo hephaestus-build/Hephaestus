@@ -2352,13 +2352,14 @@ async function withTurnDrill(
 	try {
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/replay", "--timeout=5m"]);
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/slack", "--timeout=5m"]);
-		// New for this run and kept in the release's Secret, which the Pods of the install read.
+		// New for this run and kept in the release's Secret, which the Pods of the install read. Both turn drills
+		// write them under one field manager, so the second drill on a release replaces the first's secrets.
 		const slackSecrets = {
 			HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET: randomBytes(32).toString("hex"),
 			HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET: randomBytes(32).toString("hex"),
 		};
 		await kubectl(
-			["apply", "--server-side", `--field-manager=hephaestus-${name}`, "-f", "-"],
+			["apply", "--server-side", "--field-manager=hephaestus-turn-roll", "-f", "-"],
 			JSON.stringify({
 				apiVersion: "v1",
 				kind: "Secret",
