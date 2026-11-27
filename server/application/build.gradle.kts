@@ -504,9 +504,17 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
             doFirst { pinnedParks.delete() }
             doLast {
                 if (!pinnedParks.isFile) return@doLast
+                // A virtual thread that resolves a class calls the class loader through a VM
+                // upcall. While another thread loads the same class, it waits pinned for the
+                // loader's lock of that class, for one class load. The JDK causes that wait, so
+                // it is left out. A park in a class initializer, or a wait for one, has a frame
+                // of its own on top and fails.
                 val pinned =
                     jdk.jfr.consumer.RecordingFile.readAllEvents(pinnedParks.toPath()).filter {
-                        it.eventType.name == "jdk.VirtualThreadPinned"
+                        val top = it.stackTrace?.frames?.firstOrNull()?.method
+                        it.eventType.name == "jdk.VirtualThreadPinned" &&
+                            !(top?.type?.name == "jdk.internal.loader.BuiltinClassLoader" &&
+                                top.name == "loadClassOrNull")
                     }
                 if (pinned.isNotEmpty()) {
                     val parks =
