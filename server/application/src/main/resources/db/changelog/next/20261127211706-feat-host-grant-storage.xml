@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795814226610-1" author="hephaestus">
+        <comment>Editor host pairing requests and team grants (ADR 0166). Nothing writes them yet. A pairing request holds no workspace, team or content; once approved, it names only the approving account. A grant exists only while its account is a member of its team: the team membership's end deletes it.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.host_pairing (
+    id UUID NOT NULL CONSTRAINT host_pairingPK PRIMARY KEY,
+    code_hash VARCHAR(64) NOT NULL,
+    code_challenge VARCHAR(128) NOT NULL,
+    host_kind VARCHAR(16) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    approved_account_id BIGINT,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    expires_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    CONSTRAINT uk_host_pairing_code UNIQUE (code_hash),
+    CONSTRAINT ck_host_pairing_host_kind CHECK (host_kind IN ('FIGJAM', 'FIGMA_DESIGN', 'APOLLON')),
+    CONSTRAINT ck_host_pairing_status CHECK (status IN ('PENDING', 'APPROVED')),
+    CONSTRAINT ck_host_pairing_approval CHECK ((status = 'APPROVED') = (approved_account_id IS NOT NULL)),
+    CONSTRAINT sfk_host_pairing_account FOREIGN KEY (approved_account_id)
+        REFERENCES public.account (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_host_pairing_approved_account ON public.host_pairing (approved_account_id);
+CREATE TABLE public.host_grant (
+    id UUID NOT NULL CONSTRAINT host_grantPK PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    team_id UUID NOT NULL,
+    account_id BIGINT NOT NULL,
+    host_kind VARCHAR(16) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    expires_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    revoked_at TIMESTAMP(6) WITH TIME ZONE,
+    CONSTRAINT uk_host_grant_token UNIQUE (token_hash),
+    CONSTRAINT ck_host_grant_host_kind CHECK (host_kind IN ('FIGJAM', 'FIGMA_DESIGN', 'APOLLON')),
+    -- The team key comes first, so the grant's team and workspace are one pair.
+    CONSTRAINT sfk_host_grant_team FOREIGN KEY (team_id, workspace_id)
+        REFERENCES public.project_team (id, workspace_id) ON DELETE CASCADE,
+    CONSTRAINT sfk_host_grant_member FOREIGN KEY (team_id, account_id)
+        REFERENCES public.project_team_member (team_id, account_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_host_grant_account ON public.host_grant (account_id);
+CREATE INDEX idx_host_grant_member ON public.host_grant (team_id, account_id);
+CREATE INDEX idx_host_grant_team ON public.host_grant (team_id, workspace_id);
+]]></sql>
+        <rollback>
+DROP TABLE public.host_grant;
+DROP TABLE public.host_pairing;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
