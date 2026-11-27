@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import jdk.jfr.consumer.RecordedFrame;
 import jdk.jfr.consumer.RecordedStackTrace;
 import jdk.jfr.consumer.RecordingStream;
 import org.jspecify.annotations.Nullable;
@@ -32,7 +33,7 @@ public final class PinnedParks {
                     .withThreshold(Duration.ZERO)
                     .withStackTrace();
             events.onEvent("jdk.VirtualThreadPinned", event -> {
-                if (!onJdkSubPoller(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
+                if (!ownedByJdk(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
             });
             events.startAsync();
             Thread.ofVirtual()
@@ -52,14 +53,27 @@ public final class PinnedParks {
     }
 
     /**
-     * On Linux, JDK 25 runs its socket sub-pollers as virtual threads, and JFR reports their loop as a pinned park. That
-     * loop belongs to the JDK, not to the work under test. Only that loop is left out: work that parks pinned in a
-     * socket read still counts.
+     * A pinned park that the JDK causes, not the work under test. Only two are left out:
+     *
+     * <ul>
+     *   <li>On Linux, JDK 25 runs its socket sub-pollers as virtual threads, and JFR reports their loop as a pinned park.
+     *   <li>The VM registers each new object of a class with a finalizer, Jakarta Mail's {@code Service} among them,
+     *       through an upcall into {@code Finalizer.register}. The registration takes one JDK lock, so a thread that
+     *       registers while another one does waits pinned for a list insert.
+     * </ul>
+     *
+     * Work that parks pinned in a socket read or a class initializer, or waits for another thread's class initializer,
+     * still counts.
      */
-    public static boolean onJdkSubPoller(@Nullable RecordedStackTrace stack) {
-        return stack != null
-                && stack.getFrames().stream()
-                        .anyMatch(frame -> frame.getMethod().getType().getName().equals("sun.nio.ch.Poller")
-                                && frame.getMethod().getName().equals("subPollerLoop"));
+    public static boolean ownedByJdk(@Nullable RecordedStackTrace stack) {
+        if (stack == null) return false;
+        List<RecordedFrame> frames = stack.getFrames();
+        return frames.stream().anyMatch(frame -> is(frame, "sun.nio.ch.Poller", "subPollerLoop"))
+                || (!frames.isEmpty() && is(frames.getFirst(), "java.lang.ref.Finalizer", "<init>"));
+    }
+
+    private static boolean is(RecordedFrame frame, String type, String method) {
+        return frame.getMethod().getType().getName().equals(type)
+                && frame.getMethod().getName().equals(method);
     }
 }

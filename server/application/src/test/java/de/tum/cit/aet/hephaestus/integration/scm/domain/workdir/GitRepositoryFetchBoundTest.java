@@ -83,8 +83,7 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
                     .withThreshold(Duration.ofMillis(20))
                     .withStackTrace();
             events.onEvent("jdk.VirtualThreadPinned", event -> {
-                if (!PinnedParks.onJdkSubPoller(event.getStackTrace()))
-                    pinned.add(String.valueOf(event.getStackTrace()));
+                if (!PinnedParks.ownedByJdk(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
             });
             events.startAsync();
             var git = manager(provider.port(), 1, Duration.ofSeconds(5));
