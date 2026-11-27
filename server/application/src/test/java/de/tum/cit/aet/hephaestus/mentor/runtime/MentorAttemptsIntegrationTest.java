@@ -547,7 +547,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
     /** What the Slack store writes for a delete that its own ingest admitted; the workspace row is not needed. */
     private void tombstoneInSlackStore(String message) {
-        owner.execute((ConnectionCallback<Void>) connection -> {
+        Integer inserted = owner.execute((ConnectionCallback<Integer>) connection -> {
             try (var role = connection.createStatement();
                     var insert = connection.prepareStatement("""
                             INSERT INTO slack_message (workspace_id, slack_team_id, slack_channel_id, slack_ts, text,
@@ -560,13 +560,13 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                     insert.setString(2, "T" + binding);
                     insert.setString(3, "D" + binding);
                     insert.setString(4, message);
-                    insert.executeUpdate();
+                    return insert.executeUpdate();
                 } finally {
                     role.execute("SET session_replication_role = 'origin'");
                 }
             }
-            return null;
         });
+        assertThat(inserted).isEqualTo(1);
     }
 
     private void lapse(AttemptLease lease) {
