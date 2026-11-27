@@ -83,14 +83,16 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
 
 1. **One advice entry for each workspace, developer and practice.**
    - The entry is current or retired, and it has a list of revisions.
-   - A revision is immutable. It holds the text, the review that caused it and the inputs that its writer saw.
+   - A revision is immutable. It holds the text, the review that caused it and its sources.
    - An update adds a revision. It never changes an earlier revision.
    - The mentor's review handler writes advice. It writes only for a review whose producer is MENTOR.
    - One review writes at most one revision to an entry. A retry with the same content returns the first result.
 2. **A revision holds references to evidence, never copies.**
-   - An input names an observation or an earlier advice revision by its id. Inputs are what the model saw.
-   - A citation is an observation input that the text relies on. A revision cites at least one observation.
-   - Every observation input concerns the same developer and workspace. Foreign keys enforce this.
+   - The sources of a revision are the observations that the model saw for it.
+   - They also include every source of each earlier advice revision that the model saw.
+   - So the sources name every observation behind the text, and no revision names another revision.
+   - A citation is a source that the text relies on. A revision cites at least one observation of its practice.
+   - Every source belongs to the same developer and workspace as its entry. Foreign keys enforce this.
    - The citations pass the composition check of `FeedbackGate` for the practice page.
    - That check refuses when feedback is Off, an observation is marked incorrect, or a source changed.
    - Advice needs no admin approval. Approval applies only to feedback on the work.
@@ -105,18 +107,20 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
    - The view names a count, such as "in 3 pull requests", only for two or more items.
    - One review can give advice. It can never give a pattern.
    - The write refuses text that counts work or uses a fixed list of recurrence words, such as "again".
-5. **Erased evidence makes a revision stale and hidden.**
-   - The transaction that deletes an observation first removes the text of each revision that took it as input.
-   - The walk continues through each later revision that took a removed revision as input. This is the A2 rule.
-   - The walk selects by the inputs present at delete time. It also reaches revisions written after the request was admitted.
+5. **Advice lasts no longer than its evidence.**
+   - Each transaction that deletes an observation first removes the text of each revision with that source.
+   - This applies to erasure, source withdrawal and retention.
+   - The update reads the sources present at delete time. It also reaches revisions written after an erasure was admitted.
+   - A write that uses a removed revision or a deleted observation is refused.
    - A stale revision is never shown, exported with text, or given to the model as earlier advice.
-   - The read also hides a revision when one of its citations is gone. Other delete paths cannot show it.
+   - The read also hides a revision when one of its sources is gone.
    - An older revision never replaces a hidden latest revision.
-   - An erasure of the developer deletes their advice.
-   - Advice revisions expire at the retention cutoff, by their own age. Advice never keeps an observation alive.
+   - An erasure of the developer deletes their advice, also advice written after the request was previewed.
+   - Advice never keeps an observation alive.
 6. **Only the owner reads advice.**
    - The developer reads their advice on their own Practice profile. The endpoint takes no person parameter.
-   - No admin view, View as user or other member gets advice or a sign that advice exists.
+   - No admin view, View as user or other member shows advice text.
+   - The admin's person-data page shows only a row count for each advice store.
    - The work-place composer, shared work and Slack DM prompts never receive advice.
    - Another person's data export never contains the developer's advice.
    - The developer's own data delivery contains their advice. Only the developer downloads it.
@@ -149,13 +153,15 @@ Not enforced. The mentor's units RV1 to RV3 add these checks beside the code, an
 - A composition already started before the flip delivers once under its key. The mentor never acts on that review.
 - An update and a retire leave every observation, problem, evidence and feedback row byte-identical.
 - Advice from one review shows no recurrence claim. Two items show a count that the read computes from rows.
-- An erased observation input removes the text of its revision. The same happens to each later revision that took that revision as input.
+- An erased source removes the text of every revision with that source, also through earlier advice that the model saw.
 - A revision written after the erasure was admitted, from evidence that the erasure deletes, is also removed.
-- A delete outside erasure hides the revision through its citation count.
+- A write that uses a revision removed during the model call is refused.
+- Retention removes the text of a revision before it deletes the revision's sources.
 - A write that cites another developer's observation or an erased observation is refused and writes nothing.
 - A write against a newer revision is refused. A retry for the same review writes one revision.
 - After an erased citation, the mentor can still revise or retire the entry.
-- An admin, View as user and another member get no advice. A `TEAM` read returns nothing.
+- The developer's erasure deletes advice written after the preview.
+- An admin, View as user and another member get no advice text. A `TEAM` read returns nothing.
 - Another person's data export contains no advice canary.
 - The work-place composer's provider request contains no advice canary.
 
