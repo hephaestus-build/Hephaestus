@@ -336,6 +336,35 @@ class LoginProviderServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseAnOidcPatchThatOmitsTheIssuer() {
+        var provider = new LoginProvider();
+        provider.setRegistrationId("school");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setBaseUrl("https://login.example.org/realms/school");
+        provider.setDisplayName("School Login");
+        when(repository.findByRegistrationIdForUpdate("school")).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> adminService()
+                        .update("school", new LoginProviderService.Patch("New name", null, null, null, null, null)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRefuseToDeleteAnOidcProviderThatALaterReleaseWrote() {
+        var provider = new LoginProvider();
+        provider.setRegistrationId("school");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setEnabled(true);
+        when(repository.findByRegistrationId("school")).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> adminService().delete("school")).isInstanceOf(ResponseStatusException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
     void createRejectsDuplicateRegistrationId() {
         when(repository.existsByRegistrationId("gitlab-acme")).thenReturn(true);
 

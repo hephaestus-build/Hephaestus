@@ -61,8 +61,8 @@ public class LoginProviderService implements SystemSecretOwner {
 
     // Expand step of a rolling upgrade: this release reads OIDC rows, and only the next one writes them,
     // so a server of the previous release never meets a type that it cannot read.
-    private static final String OIDC_NOT_YET = "This release cannot add an OpenID Connect login provider yet."
-            + " Upgrade to the next release to add one.";
+    private static final String OIDC_NOT_YET = "This release cannot add or change an OpenID Connect login provider."
+            + " Upgrade to the next release to manage one.";
 
     private final LoginProviderRepository repository;
     private final LoginProviderClientRegistrationRepository registrationCache;
@@ -172,6 +172,7 @@ public class LoginProviderService implements SystemSecretOwner {
                 .findByRegistrationIdForUpdate(registrationId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "The login provider was not found: " + registrationId));
+        requireWritable(provider);
         // Field NAMES only — this list goes into the audit trail, so it must stay free of values.
         List<String> changed = new ArrayList<>();
         if (patch.displayName() != null && !patch.displayName().isBlank()) {
@@ -215,6 +216,7 @@ public class LoginProviderService implements SystemSecretOwner {
     @Transactional
     public void delete(String registrationId) {
         LoginProvider provider = loadRequired(registrationId);
+        requireWritable(provider);
         if (provider.isEnabled()) {
             requireNotLastEnabled(registrationId, "delete");
         }
@@ -222,6 +224,13 @@ public class LoginProviderService implements SystemSecretOwner {
         registrationCache.evict(registrationId);
         audit(AuthEvent.EventType.LOGIN_PROVIDER_DELETED, provider, null);
         log.info("auth.login-provider: admin deleted '{}'", registrationId);
+    }
+
+    // A later release owns an OIDC row; this one neither changes nor removes it.
+    private static void requireWritable(LoginProvider provider) {
+        if (provider.getType() == LoginProvider.ProviderType.OIDC) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, OIDC_NOT_YET);
+        }
     }
 
     // Audit changed field names only; provider values can contain credentials.

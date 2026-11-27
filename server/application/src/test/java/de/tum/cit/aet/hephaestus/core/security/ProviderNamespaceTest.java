@@ -10,7 +10,8 @@ class ProviderNamespaceTest extends BaseUnitTest {
 
     @ParameterizedTest
     @CsvSource({
-        "OIDC, https://kc.example.org/realms/school, HTTPS://KC.example.org:443/realms/school/, true",
+        "OIDC, https://kc.example.org/realms/school, https://kc.example.org:443/realms/school, false",
+        "OIDC, https://kc.example.org/realms/school, https://KC.example.org/realms/school, false",
         "OIDC, https://kc.example.org/realms/school, https://kc.example.org/realms/other, false",
         "OIDC, https://kc.example.org/realms/school, https://kc.example.org, false",
         "OIDC, https://kc.example.org, https://kc.example.org/, true",
