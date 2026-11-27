@@ -17,8 +17,9 @@ ALTER TABLE public.mentor_request
     ADD COLUMN admitted_revision VARCHAR(64) NOT NULL,
     ADD COLUMN admitted_source_ref VARCHAR(64) NOT NULL,
     ADD COLUMN delivery_generation BIGINT NOT NULL,
-    ADD COLUMN delivery_fence VARCHAR(16),
-    ADD COLUMN end_reason VARCHAR(32),
+    ADD COLUMN delivery_fence VARCHAR(16)
+        CONSTRAINT ck_mentor_request_delivery_fence CHECK (delivery_fence IN ('STOPPED', 'SOURCE_DELETED', 'SOURCE_EDITED')),
+    ADD COLUMN end_reason VARCHAR(32) CONSTRAINT ck_mentor_request_end_reason CHECK (end_reason IN ('STOPPED', 'SOURCE_DELETED')),
     ADD COLUMN settled_at TIMESTAMP(6) WITH TIME ZONE;
         ]]></sql>
         <rollback>
