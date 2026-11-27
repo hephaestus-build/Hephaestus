@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
+import { setTimeout as startFixtureGuard } from "node:timers";
 import { Worker } from "node:worker_threads";
 
 import { isDiagnosticLine } from "../../../main/resources/agent/pi-diagnostics.ts";
@@ -345,9 +346,11 @@ if (scenario !== undefined && scenario !== "") {
 					let connected = true;
 					let closed: (signal: string | null) => void;
 					let message: (value: unknown) => void;
-					let guard: ReturnType<typeof setTimeout> | undefined;
+					let guard: ReturnType<typeof startFixtureGuard> | undefined;
 					const close = () => {
-						if (!connected) return;
+						if (!connected) {
+							return;
+						}
 						connected = false;
 						clearTimeout(guard);
 						record("program:closed");
@@ -358,7 +361,9 @@ if (scenario !== undefined && scenario !== "") {
 							return connected;
 						},
 						send(value) {
-							if (!isRecord(value)) return;
+							if (!isRecord(value)) {
+								return;
+							}
 							if (value.kind === "job") {
 								now += 301_000;
 								record("program:started");
@@ -366,14 +371,19 @@ if (scenario !== undefined && scenario !== "") {
 									message(JSON.stringify({ kind: "meta", meta: {} }));
 									message(JSON.stringify({ kind: "log", text: "sk-orchestration-secret" }));
 								});
-								guard = setTimeout(() => {
+								// Bound the negative control when the watchdog cannot stop the host.
+								guard = startFixtureGuard(() => {
 									record("program:no-abort");
 									close();
-								}, 8_000);
+								}, 8000);
 								guard.unref();
 							}
-							if (value.kind === "abort") record("program:abort");
-							if (value.kind === "exit") close();
+							if (value.kind === "abort") {
+								record("program:abort");
+							}
+							if (value.kind === "exit") {
+								close();
+							}
 						},
 						onMessage(listener) {
 							message = listener;
@@ -381,8 +391,8 @@ if (scenario !== undefined && scenario !== "") {
 						onClose(listener) {
 							closed = listener;
 						},
-						onOutput() {},
-						onError() {},
+						onOutput: () => undefined,
+						onError: () => undefined,
 						disconnect: close,
 						kill: close,
 					};
@@ -2657,6 +2667,8 @@ export default definePracticeScript({
 						}),
 					);
 					const budgetMs = stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000";
+					const fixtureTimeout = stage === "practice-program-stall" ? 25_000 : undefined;
+					const verificationTimeout = verification ? 10_000 : undefined;
 					// The fixture's runner clock excludes the native SDK's startup time.
 					const child = spawnSync(
 						process.execPath,
@@ -2666,8 +2678,7 @@ export default definePracticeScript({
 							import.meta.filename,
 						],
 						{
-							timeout:
-								stage === "practice-program-stall" ? 25_000 : verification ? 10_000 : undefined,
+							timeout: fixtureTimeout ?? verificationTimeout,
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,

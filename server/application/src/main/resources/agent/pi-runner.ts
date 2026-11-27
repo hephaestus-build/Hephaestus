@@ -1699,7 +1699,9 @@ async function runReview(): Promise<void> {
 		});
 		if (turn && turn.stoppedBy === null) {
 			turn.stoppedBy = reason;
-			if (programStall) turn.abortProgram?.();
+			if (programStall) {
+				turn.abortProgram?.();
+			}
 		}
 		if (state.activeSession) {
 			void abortSession(state.activeSession);

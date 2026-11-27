@@ -470,7 +470,9 @@ export async function runCustomProgram(
 			return;
 		}
 		metaAccepted = true;
-		if (open.size === 0) services.step?.("run_child");
+		if (open.size === 0) {
+			services.step?.("run_child");
+		}
 		child.send({ kind: "meta-accepted" } satisfies HostMessage);
 	};
 

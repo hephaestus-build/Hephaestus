@@ -365,7 +365,7 @@ export async function runScope(
 	}
 	const safety = scheduleDeadline(safetyMs, () => stopTurn("safety"));
 	// Native events may stop a turn while awaited work settles or another session opens.
-	let programStalled = false;
+	const programStop = { stalled: false };
 	const stoppedBy = () => trace.stoppedBy;
 	const pastSafety = () => safety.expired() || Date.now() >= measureEnd;
 	const endedUnrecorded = (slug: string) =>
@@ -686,9 +686,13 @@ export async function runScope(
 		const sources = sourcesForPractice(slug, evidenceSources);
 		trace.step = "practice_program";
 		trace.abortProgram = () => {
-			if (stopped.signal.aborted || measuringEnded.aborted) return;
-			programStalled = true;
-			if (trace.programStep !== undefined) trace.stalledProgramStep = trace.programStep;
+			if (stopped.signal.aborted || measuringEnded.aborted) {
+				return;
+			}
+			programStop.stalled = true;
+			if (trace.programStep !== undefined) {
+				trace.stalledProgramStep = trace.programStep;
+			}
 			stopped.abort(new UnratedError("unavailable", "the practice program stalled"));
 		};
 		const outcome = await runPracticeProgram(
@@ -707,7 +711,9 @@ export async function runScope(
 					reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 				signal: AbortSignal.any([stopped.signal, measuringEnded]),
 				step: (step) => {
-					if (step === trace.programStep) return;
+					if (step === trace.programStep) {
+						return;
+					}
 					trace.programStep = step;
 					diagnose("practice.program_step", {
 						...placeOf(label),
@@ -793,7 +799,9 @@ export async function runScope(
 		closeTurnTrace(trace);
 	}
 	// A local program failure leaves this practice open. It does not count toward consecutive provider stalls.
-	if (programStalled) return null;
+	if (programStop.stalled) {
+		return null;
+	}
 	if (pastSafety() && stoppedBy() === null) {
 		diagnose("turn.near_ceiling", { ...placeOf(label), rest_not_reached: true });
 		return "safety";
