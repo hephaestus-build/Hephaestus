@@ -464,6 +464,8 @@ class CascadeTableTest extends BaseUnitTest {
     static final Map<String, Set<CascadeDependent>> OUTSIDE_ROWS = Map.ofEntries(
             Map.entry("PostgreSQL personal goal", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL practice advice", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry(
@@ -519,7 +521,8 @@ class CascadeTableTest extends BaseUnitTest {
             "PostgreSQL recovery facts",
             "PostgreSQL runtime",
             "PostgreSQL sign-in rate limits",
-            "PostgreSQL transient composition");
+            "PostgreSQL transient composition",
+            "PostgreSQL work-place handoff");
 
     /**
      * The dependent kinds that each store of the person-data map holds. A store that holds none is in
@@ -660,7 +663,8 @@ class CascadeTableTest extends BaseUnitTest {
             "trial",
             "user",
             "workspace",
-            "workspace_onboarding_settings");
+            "workspace_onboarding_settings",
+            "work_place_handoff");
 
     private static final Path MAP = Path.of("../../docs/admin/dsms/personal-data-map.mdx");
     private static final String MAIN_TABLE = "| Store / copy |";

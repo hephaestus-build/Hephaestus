@@ -700,8 +700,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         verify(output).seal(any(), any());
         var seal = inOrder(jobs, events);
         seal.verify(jobs).saveAndFlush(job);
-        seal.verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
-        verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
+        seal.verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
+        verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
         // The first seal reads the staged copies before and after it refuses any; the repeated seal reads none.
         verify(stagingStore, times(2)).staged(1, job.getReviewId(), job.getId());
     }

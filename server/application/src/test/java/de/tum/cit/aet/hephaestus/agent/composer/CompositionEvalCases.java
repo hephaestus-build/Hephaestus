@@ -72,7 +72,7 @@ final class CompositionEvalCases {
 
     /** The composer's system prompt for the review on the work. */
     static String system() {
-        return ComposerTurns.sharedStyle() + "\n\n" + ComposerTurns.prompt("review-composer.md");
+        return ComposerPrompts.reviewSystem();
     }
 
     /** One model request: the case's opening turn and its check_package tool. */

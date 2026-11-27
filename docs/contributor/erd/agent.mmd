@@ -303,6 +303,20 @@ erDiagram
         INTEGER duration_ms
     }
 
+    WorkPlaceHandoff {
+        UUID id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID review_id UK "NOT NULL"
+        UUID job_id FK "NOT NULL"
+        BIGINT item_id "NOT NULL"
+        VARCHAR(1024) item_version
+        VARCHAR(16) producer "NOT NULL"
+        JSONB payload "NOT NULL"
+        VARCHAR(64) payload_digest "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
     WorkspaceLlmConnection {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -392,6 +406,8 @@ erDiagram
     ReviewJob ||--o{ ReviewJobScriptRun : reviewed
     PracticeVersion ||--o{ ReviewJobScriptRun : reviewed
     Workspace ||--o{ ReviewJobScriptRun : reviewed
+    ReviewJob ||--o{ WorkPlaceHandoff : has
+    Workspace ||--o{ WorkPlaceHandoff : has
     Workspace ||--o{ WorkspaceLlmConnection : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has

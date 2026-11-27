@@ -8,10 +8,12 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
@@ -102,6 +104,21 @@ public record CaptureContribution(
             }
         }
         if (failure != null) throw failure;
+    }
+
+    /**
+     * Each input's contribution, in order. When one fails, the contributions already composed are {@linkplain #release
+     * released} and the failure is thrown, so a failed read leaves nothing staged.
+     */
+    public static <T> List<CaptureContribution> composeEach(List<T> inputs, Function<T, CaptureContribution> compose) {
+        List<CaptureContribution> composed = new ArrayList<>();
+        try {
+            for (var input : inputs) composed.add(compose.apply(input));
+        } catch (RuntimeException failure) {
+            release(composed, failure);
+            throw failure;
+        }
+        return List.copyOf(composed);
     }
 
     /** {@link #closeAll} of contributions that a failed read composed and no one reads, kept on {@code failure}. */

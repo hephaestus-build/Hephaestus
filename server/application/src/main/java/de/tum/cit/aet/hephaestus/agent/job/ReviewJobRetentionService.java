@@ -33,6 +33,7 @@ public class ReviewJobRetentionService {
     private final ReviewJobRepository jobRepository;
     private final AgentRuns runs;
     private final ReviewCompositionBasisRepository basisRepository;
+    private final WorkPlaceHandoffRepository handoffs;
     private final PracticeStagingStore staging;
     private final EvidenceFolderPersonDataCatalog evidenceCopies;
     private final AgentProperties agentProperties;
@@ -45,6 +46,7 @@ public class ReviewJobRetentionService {
     public ReviewJobRetentionService(
             ReviewJobRepository jobRepository,
             ReviewCompositionBasisRepository basisRepository,
+            WorkPlaceHandoffRepository handoffs,
             PracticeStagingStore staging,
             EvidenceFolderPersonDataCatalog evidenceCopies,
             AgentProperties agentProperties,
@@ -55,6 +57,7 @@ public class ReviewJobRetentionService {
         this.jobRepository = jobRepository;
         this.runs = runs;
         this.basisRepository = basisRepository;
+        this.handoffs = handoffs;
         this.staging = staging;
         this.evidenceCopies = evidenceCopies;
         this.agentProperties = agentProperties;
@@ -72,13 +75,14 @@ public class ReviewJobRetentionService {
     /**
      * {@code @SchedulerLock} single-flights this across replicas: concurrent passes cannot go faster (the
      * batches serialize on row-level contention anyway) and only multiply lock/WAL pressure.
-     * {@code lockAtMostFor} must stay above the five passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
+     * {@code lockAtMostFor} must stay above the six passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
      */
     @Scheduled(fixedDelay = 6, initialDelay = 1, timeUnit = TimeUnit.HOURS)
-    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT10S")
+    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT40M", lockAtLeastFor = "PT10S")
     public void runRetention() {
         pass.run(log, "staged-practices", () -> staging.discardUnusable(clock.instant(), pass.batchSize()));
         deleteUnusableCompositionInputs();
+        deleteExpiredHandoffs();
         stripPayloads();
         deleteOldRows();
         retireReceiptsOfDeletedJobs();
@@ -94,6 +98,15 @@ public class ReviewJobRetentionService {
         if (result.affected() > 0) {
             log.info("Retention: deleted original composition inputs of {} review(s)", result.affected());
         }
+    }
+
+    /** A work-place handoff copies the work's evidence, so it goes when its copy deadline or its inputs expire. */
+    private void deleteExpiredHandoffs() {
+        Instant now = clock.instant();
+        pass.run(log, "work-place-handoffs", () -> {
+            Integer removed = transactionTemplate.execute(status -> handoffs.deleteExpired(now, pass.batchSize()));
+            return removed != null ? removed : 0;
+        });
     }
 
     private void stripPayloads() {

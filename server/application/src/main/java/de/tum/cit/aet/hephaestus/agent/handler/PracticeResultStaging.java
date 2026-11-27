@@ -186,7 +186,7 @@ public class PracticeResultStaging {
         jobs.saveAndFlush(job);
         var review = assignments.review(job);
         if (review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL)
-            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
+            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
     }
 
     private void retainSealBasis(

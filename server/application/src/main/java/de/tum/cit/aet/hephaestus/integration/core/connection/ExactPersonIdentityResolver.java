@@ -61,10 +61,11 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Optional<Long> accountFor(PersonIdentity identity) {
+        var providers = providerRows();
         Set<PersonIdentity> identities = new LinkedHashSet<>(List.of(identity));
-        includeEquivalentProviders(identities);
+        includeEquivalentProviders(identities, providers);
         Set<Long> owners = new LinkedHashSet<>();
-        for (var exact : identities) owners.addAll(linkedOwners(exact));
+        for (var exact : identities) owners.addAll(linkedOwners(exact, providers));
         if (owners.size() > 1) throw conflict("The exact provider identity is linked to different accounts.");
         return owners.stream().findFirst();
     }
@@ -81,14 +82,15 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
         if (accountId != null && (accountId <= 0 || !accountExists(accountId))) {
             throw invalid("The account id does not exist");
         }
+        var providers = providerRows();
         Set<PersonIdentity> identities = new LinkedHashSet<>(supplied);
-        includeEquivalentProviders(identities);
+        includeEquivalentProviders(identities, providers);
         Set<Long> owners = new LinkedHashSet<>();
         if (accountId != null) {
             owners.add(accountId);
         }
         for (PersonIdentity identity : identities) {
-            owners.addAll(linkedOwners(identity));
+            owners.addAll(linkedOwners(identity, providers));
         }
         if (owners.size() > 1) {
             throw conflict("The supplied identities belong to different accounts. Correct the exact identity scope.");
@@ -103,23 +105,26 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                             rs.getString("team_id")),
                     resolvedAccount));
         }
-        includeEquivalentProviders(identities);
+        // A provider alias committed since the first read joins the scope. Provider rows are only ever added, and their
+        // type and origin never change, so every later check against these rows answers as a lookup of its row would.
+        providers = providerRows();
+        includeEquivalentProviders(identities, providers);
         // An account-only request also covers Outline mirrors without a team key.
         // A supplied scope, including one used to revalidate a preview, keeps its team keys.
         if (supplied.isEmpty()) {
             for (PersonIdentity identity : List.copyOf(identities)) {
-                if (validateProvider(identity).equals("OUTLINE"))
+                if (validateProvider(identity, providers).equals("OUTLINE"))
                     identities.add(new PersonIdentity(identity.providerId(), identity.subject(), null));
             }
         }
         List<Long> users = new ArrayList<>();
         for (PersonIdentity identity : identities) {
-            String type = validateProvider(identity);
+            String type = validateProvider(identity, providers);
             for (var mirror : mirrors)
                 if (mirror.providerTypes().contains(type)) users.addAll(mirror.mirrorIds(identity));
             // Check every link again, including closure additions and disabled links. An account
             // with an internally conflicting link must not widen an erasure request silently.
-            List<Long> linked = linkedOwners(identity);
+            List<Long> linked = linkedOwners(identity, providers);
             if (linked.stream().anyMatch(owner -> !owner.equals(resolvedAccount))) {
                 throw conflict("A provider identity is linked to another account. Resolve the link conflict first.");
             }
@@ -152,10 +157,9 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
     }
 
     /** Provider rows may retain different spellings of the same exact network origin. */
-    private void includeEquivalentProviders(Set<PersonIdentity> identities) {
-        var instances = providerRows();
+    private void includeEquivalentProviders(Set<PersonIdentity> identities, List<Provider> instances) {
         for (var identity : List.copyOf(identities)) {
-            validateProvider(identity);
+            validateProvider(identity, instances);
             var selected = instances.stream()
                     .filter(provider -> provider.id() == identity.providerId())
                     .findFirst()
@@ -174,8 +178,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
         }
     }
 
-    private List<Long> linkedOwners(PersonIdentity identity) {
-        String type = validateProvider(identity);
+    private List<Long> linkedOwners(PersonIdentity identity, List<Provider> providers) {
+        String type = validateProvider(identity, providers);
         // An instance-only Outline request checks all verified teams; a supplied team stays exact.
         boolean outlineInstanceIdentity = type.equals("OUTLINE") && identity.teamId() == null;
         return jdbc.query(
@@ -192,20 +196,19 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 .isEmpty();
     }
 
-    private String validateProvider(PersonIdentity identity) {
-        List<String> types = jdbc.query(
-                "SELECT type FROM identity_provider WHERE id = ?",
-                (rs, row) -> Objects.requireNonNull(rs.getString("type")),
-                identity.providerId());
-        if (types.size() != 1) {
-            throw invalid("The provider instance id does not exist");
-        }
-        String type = types.getFirst();
+    /**
+     * Validates {@code identity} against provider rows that the read already holds. A row is only ever added, and its type
+     * and origin never change, so this answers as a lookup of the identity's own row would. A row those rows lack may
+     * have committed since they were read, so it is looked up on its own, as every check did before.
+     */
+    private String validateProvider(PersonIdentity identity, List<Provider> providers) {
+        var provider = providers.stream()
+                .filter(candidate -> candidate.id() == identity.providerId())
+                .findFirst()
+                .orElseGet(() -> providerRow(identity.providerId()));
+        String type = provider.type();
         if (type.equals("SLACK")) {
-            if (!Boolean.TRUE.equals(jdbc.queryForObject(
-                    "SELECT server_url='https://slack.com' FROM identity_provider WHERE id=?",
-                    Boolean.class,
-                    identity.providerId())))
+            if (!provider.serverUrl().equals("https://slack.com"))
                 throw invalid("A Slack identity requires the configured https://slack.com provider instance");
             if (identity.teamId() == null) {
                 throw invalid("A Slack identity requires its native Slack workspace id");
@@ -214,6 +217,18 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             throw invalid("Only Slack and Outline identities accept a native workspace id");
         }
         return type;
+    }
+
+    private Provider providerRow(long providerId) {
+        List<Provider> rows = jdbc.query(
+                "SELECT id,type,server_url FROM identity_provider WHERE id = ?",
+                (rs, row) -> new Provider(
+                        rs.getLong(1),
+                        Objects.requireNonNull(rs.getString(2)),
+                        Objects.requireNonNull(rs.getString(3))),
+                providerId);
+        if (rows.size() != 1) throw invalid("The provider instance id does not exist");
+        return rows.getFirst();
     }
 
     private static ResponseStatusException invalid(String reason) {

@@ -23,9 +23,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -35,11 +37,17 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -78,6 +86,78 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityRepository links;
+
+    @Autowired
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
+    /**
+     * A supplied provider that commits after the provider rows were read is checked by its own row, so an identity that
+     * breaks its rules is refused for that reason, as a lookup of the row refused it before.
+     */
+    @Test
+    void shouldCheckAProviderCommittedAfterTheProviderRowsByItsOwnRow() {
+        // Far above the identity sequence, so no provider that a later test creates can take this id.
+        long late = ThreadLocalRandom.current().nextLong(1L << 60, Long.MAX_VALUE);
+        var writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var reader = new TransactionTemplate(transactions);
+        reader.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        var inserted = new AtomicBoolean();
+        var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override
+            public <T extends @Nullable Object> List<T> query(String sql, RowMapper<T> rowMapper) {
+                List<T> rows = super.query(sql, rowMapper);
+                if (sql.contains("FROM identity_provider ORDER BY") && inserted.compareAndSet(false, true))
+                    writer.executeWithoutResult(status -> jdbc.update(
+                            "INSERT INTO identity_provider(id,type,server_url) VALUES (?, 'GITHUB', ?)",
+                            late,
+                            "https://" + UUID.randomUUID() + ".example.com"));
+                return rows;
+            }
+        };
+        var resolverAtReadCommitted = new ExactPersonIdentityResolver(
+                orderedJdbc,
+                new StaticListableBeanFactory().getBeanProvider(PersonSourceIdentityContributor.class),
+                List.of());
+
+        assertThatThrownBy(() -> reader.executeWithoutResult(
+                        status -> resolverAtReadCommitted.accountFor(new PersonIdentity(late, "42", "team"))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Only Slack and Outline identities accept a native workspace id");
+    }
+
+    @Test
+    void shouldResolveAnEquivalentProviderCommittedBetweenReadsAtReadCommitted() {
+        String host = UUID.randomUUID() + ".example.com";
+        var canonical = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host));
+        var alias = new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host + ":443/");
+        var writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var reader = new TransactionTemplate(transactions);
+        reader.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+
+        var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override
+            public <T extends @Nullable Object> List<T> query(String sql, RowMapper<T> rowMapper) {
+                List<T> rows = super.query(sql, rowMapper);
+                if (sql.contains("FROM identity_provider ORDER BY") && alias.getId() == null) {
+                    writer.executeWithoutResult(status -> providers.saveAndFlush(alias));
+                }
+                return rows;
+            }
+        };
+        var beans = new StaticListableBeanFactory();
+        var resolverAtReadCommitted = new ExactPersonIdentityResolver(
+                orderedJdbc, beans.getBeanProvider(PersonSourceIdentityContributor.class), List.of());
+        var scope = Objects.requireNonNull(reader.execute(
+                status -> resolverAtReadCommitted.resolve(null, List.of(identity(canonical, "42", null)))));
+
+        assertThat(scope.identities())
+                .containsExactlyInAnyOrder(identity(canonical, "42", null), identity(alias, "42", null));
+    }
 
     @Test
     void shouldResolveDeclaredSourceBucketsWithoutKnowingTheContributorsItemKinds() {
@@ -435,6 +515,31 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         assertThat(scope.identities())
                 .containsExactlyInAnyOrder(identity(github, "42", null), identity(gitlab, "84", null));
         assertThat(scope.userIds()).containsExactlyInAnyOrder(first.getId(), second.getId());
+    }
+
+    /**
+     * Every capture of a contributor's work asks for their account, once per source. The provider rows are read once
+     * for that question, and the identity is validated against them, with no lookup of its own provider row.
+     */
+    @Test
+    void shouldReadTheProviderRowsOnceWhenFindingTheAccountOfAnIdentity() {
+        var github = provider(IdentityProviderType.GITHUB);
+        var account = accounts.saveAndFlush(new Account("Measured account"));
+        link(account, github, "42", null);
+
+        long started = System.nanoTime();
+        var read = reads.measure(() -> resolver.accountFor(identity(github, "42", null)));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(read.value()).contains(Objects.requireNonNull(account.getId()));
+        // The provider rows themselves are one unprepared statement, which the measurement does not record.
+        assertThat(read.sql())
+                .filteredOn(sql -> sql.contains("FROM identity_provider WHERE id"))
+                .isEmpty();
+        assertThat(read.sql())
+                .filteredOn(sql -> sql.contains("FROM identity WHERE provider_id"))
+                .hasSize(1);
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
     }
 
     @Test

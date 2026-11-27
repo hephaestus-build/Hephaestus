@@ -66,6 +66,7 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
         service = new ReviewJobRetentionService(
                 jobRepository,
                 basisRepository,
+                mock(WorkPlaceHandoffRepository.class),
                 mock(PracticeStagingStore.class),
                 evidenceCopies,
                 AGENT_PROPS,

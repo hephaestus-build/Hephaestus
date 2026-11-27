@@ -1835,12 +1835,20 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     /**
      * Freshness at a practice's start compares what its capture read with what the work holds now. A pull request that
      * did not change since fingerprints the same for every record source, also when the discussion sync finished in
-     * between, and a remark that arrived since changes only its own source.
+     * between and when an event review reads its retained occasion, and a remark that arrived since changes only its
+     * own source.
      */
     @ParameterizedTest
-    @CsvSource({"GITHUB,false", "GITHUB,true", "GITLAB,false", "GITLAB,true"})
+    @CsvSource({
+        "GITHUB,false,false",
+        "GITHUB,true,false",
+        "GITLAB,false,false",
+        "GITLAB,true,false",
+        "GITHUB,false,true",
+        "GITLAB,true,true"
+    })
     void shouldFingerprintAnUnchangedPullRequestAtStartAsItsCaptureDid(
-            IdentityProviderType type, boolean syncFinishedAfterCapture) {
+            IdentityProviderType type, boolean syncFinishedAfterCapture, boolean eventReview) {
         var fixture = fixture(type);
         var issue = new Issue();
         issue.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
@@ -1902,23 +1910,41 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         if (syncFinishedAfterCapture)
             jdbc.update("UPDATE issue SET discussion_read_whole=FALSE WHERE id=?", pull.getId());
         var snapshot = sources.pin(pullRef, null);
+        // An event review captures the occasion that its event retained; a requested review reads the work as stored.
+        UUID occasion = eventReview
+                ? transactions.execute(status -> writer.record(new ItemEventInput(
+                        pullRef.workspaceId(),
+                        pullRef.itemId(),
+                        ScmItemEvents.PULL_REQUEST_SYNCHRONIZED,
+                        snapshot.version().value(),
+                        null,
+                        Instant.parse("2026-10-01T11:30:00Z"),
+                        FoundBy.WEBHOOK,
+                        null,
+                        null,
+                        Objects.requireNonNull(sources.retain(pullRef, snapshot.version(), FoundBy.WEBHOOK)))))
+                : null;
 
         try (var evidence = contexts.prepare(
                 snapshot,
-                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, kinds, "3.0.0", 3, null, kinds))) {
+                new CaptureRequest(
+                        UUID.randomUUID(), UUID.randomUUID(), 0, kinds, "3.0.0", 3, null, kinds, occasion))) {
             var captured = CapturedSourceFingerprints.of(mapper, evidence);
             assertThat(captured).isNotEmpty();
             // The sync then finishes without finding anything new: the work itself did not change.
             if (syncFinishedAfterCapture)
                 jdbc.update("UPDATE issue SET discussion_read_whole=TRUE WHERE id=?", pull.getId());
             var current = fingerprints.fingerprints(
-                    pullRef, captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()), null, mapper);
+                    pullRef,
+                    captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()),
+                    occasion,
+                    mapper);
             assertThat(current.entrySet().stream()
                             .collect(Collectors.toMap(entry -> entry.getKey().value(), Map.Entry::getValue)))
                     .isEqualTo(captured);
             var facts = mapper.createObjectNode();
             facts.set(ReviewCaptureDecision.SOURCE_FINGERPRINTS, mapper.valueToTree(captured));
-            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
+            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), occasion, facts);
             assertThat(unchanged.currentness()).isEqualTo(Currentness.CURRENT);
             assertThat(unchanged.changed()).isEmpty();
 
@@ -1933,7 +1959,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                     pull.getId(),
                     Timestamp.from(Instant.parse("2026-10-01T12:00:00Z")),
                     fixture.author().getId());
-            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), null, facts);
+            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), occasion, facts);
             assertThat(changed.currentness()).isEqualTo(Currentness.STALE);
             assertThat(changed.changed()).containsExactly(GeneralReviewCommentContentSource.KIND.value());
         }
