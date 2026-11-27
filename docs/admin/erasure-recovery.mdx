@@ -259,7 +259,7 @@ It does not quote the manifest or the identities.
 
 1. Keep the other Deployments stopped and external egress denied.
 2. Correct the cause that the reason names:
-   - For `MANIFEST_VERSION`, write the manifest as version 5.
+   - For `MANIFEST_VERSION`, rebuild the manifest in the version 5 format. Check the privacy journal for goal deletions after the restore point.
    - For `BACKGROUND_WORK`, remove the setting that turns background work on beside the profile, such as `HEPHAESTUS_BACKGROUND_WORK_ENABLED`.
    - A person erasure can wait for a journal copy. Restore access to the original destination. Restart the recovery Pod. Recovery confirms each pending copy before it continues.
    - For `ERASURE_INCOMPLETE` on a disconnect, turn on the integration of that connection for the recovery run. Without it, nothing can erase its data.

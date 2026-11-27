@@ -74,8 +74,8 @@ A rule that main does not satisfy yet says "1.0 target".
     It also erases again each Slack channel that an admin revoked or that Slack deleted.
     It also reapplies person erasures, also of accounts that their owners deleted.
     The operator redoes repository removals, including the removal of a stopped GitLab project's kept work, before egress opens.
-    The operator lists them in a version 4 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
-    [Reapply erasures after a restore](../admin/erasure-recovery.mdx) owns the procedure.
+    The operator uses the manifest format in [Reapply erasures after a restore](../admin/erasure-recovery.mdx).
+    The manifest stays outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
     Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainTheOldWordsOfSlackMessagesThatTheirAuthorsChangedAfterTheRestorePoint`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainASlackChannelThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why
