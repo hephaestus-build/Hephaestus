@@ -105,6 +105,9 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                             rs.getString("team_id")),
                     resolvedAccount));
         }
+        // A provider alias committed since the first read joins the scope. Provider rows are only ever added, and their
+        // type and origin never change, so every later check against these rows answers as a lookup of its row would.
+        providers = providerRows();
         includeEquivalentProviders(identities, providers);
         // An account-only request also covers Outline mirrors without a team key.
         // A supplied scope, including one used to revalidate a preview, keeps its team keys.
@@ -193,7 +196,10 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 .isEmpty();
     }
 
-    /** Validates {@code identity} against the provider rows that the read already holds, so no row is read twice. */
+    /**
+     * Validates {@code identity} against provider rows that the read already holds. A row is only ever added, and its type
+     * and origin never change, so this answers as a lookup of the identity's own row would.
+     */
     private String validateProvider(PersonIdentity identity, List<Provider> providers) {
         var provider = providers.stream()
                 .filter(candidate -> candidate.id() == identity.providerId())

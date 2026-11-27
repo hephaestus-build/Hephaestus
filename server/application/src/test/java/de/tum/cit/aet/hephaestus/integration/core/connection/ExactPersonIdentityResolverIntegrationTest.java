@@ -103,7 +103,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
         var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
             @Override
-            public <T> List<T> query(String sql, RowMapper<T> rowMapper) {
+            public <T extends @Nullable Object> List<T> query(String sql, RowMapper<T> rowMapper) {
                 List<T> rows = super.query(sql, rowMapper);
                 if (sql.contains("FROM identity_provider ORDER BY") && alias.getId() == null) {
                     writer.executeWithoutResult(status -> providers.saveAndFlush(alias));
@@ -114,8 +114,8 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         var beans = new StaticListableBeanFactory();
         var resolverAtReadCommitted = new ExactPersonIdentityResolver(
                 orderedJdbc, beans.getBeanProvider(PersonSourceIdentityContributor.class), List.of());
-        var scope = Objects.requireNonNull(
-                reader.execute(status -> resolverAtReadCommitted.resolve(null, List.of(identity(canonical, "42", null)))));
+        var scope = Objects.requireNonNull(reader.execute(
+                status -> resolverAtReadCommitted.resolve(null, List.of(identity(canonical, "42", null)))));
 
         assertThat(scope.identities())
                 .containsExactlyInAnyOrder(identity(canonical, "42", null), identity(alias, "42", null));
