@@ -95,6 +95,36 @@ tests:
               summary: Person erasure stopped or could not record its failure state
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: deferrals that last beyond a rollout fire, a rollout's short burst stays silent
+    interval: 5m
+    input_series:
+      - series: 'person_data_erasure_deferrals_total{job="hephaestus",instance="older"}'
+        values: "0+1x20"
+      - series: 'person_data_erasure_deferrals_total{job="hephaestus",instance="rollout"}'
+        values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusPersonErasureDeferred
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: HephaestusPersonErasureDeferred
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Person erasure keeps waiting for a replica that knows its stores
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a rollout that defers an erasure for a few minutes stays silent
+    interval: 5m
+    input_series:
+      - series: 'person_data_erasure_deferrals_total{job="hephaestus"}'
+        values: "0 1 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2"
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HephaestusPersonErasureDeferred
+        exp_alerts: []
+
   - name: a target that cannot be scraped fires, a scraped one does not
     interval: 1m
     input_series:
