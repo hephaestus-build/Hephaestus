@@ -107,14 +107,15 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "llm_usage_event",
                         "llm_usage_event",
-                        "t.source_id IN (" + SELECTED_JOBS
+                        // A personal call never becomes a source key: only its payer's call-id path reaches it.
+                        "t.source_type <> 'PERSONAL_CONVERSATION' AND (t.source_id IN (" + SELECTED_JOBS
                                 + ") OR t.review_id IN (SELECT review_id FROM review_job WHERE id IN ("
                                 + SELECTED_JOBS
                                 + ")) OR (t.source_type='CONVERSATION_TURN' AND t.source_id IN (SELECT mt.id FROM"
                                 + " conversation_turn mt JOIN conversation mc ON mc.id=mt.conversation_id WHERE"
                                 + " mc.account_id=:account)) OR (t.source_type='PRODUCT_FEEDBACK_DRAFT'"
                                 + " AND t.workspace_id IS NULL AND t.source_id IN"
-                                + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))",
+                                + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account)))",
                         "id,workspace_id,job_type,source_type,source_id,source_attempt,review_id,run_id,lease_epoch,action_id,settle_after,call_state,model_kind,practice_id,payer_account_id,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,search_units,total_calls,unreported_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,started_at,occurred_at,usage_provenance",
                         "source_id,workspace_id",
                         "review_id=NULL, payer_account_id=NULL",
@@ -328,6 +329,8 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
             Long account = scope.accountId();
             if (account == null) return sources;
             // A personal call is selected on its own, by its id: its source is the attempt, which only this row names.
+            // The source-keyed export and erasure skip personal rows, so a report or turn that shares an attempt's
+            // UUID never reaches another payer's call.
             List<PersonDataSelection.RowKey> rows = new ArrayList<>(sources.rows());
             rows.addAll(jdbc.query(
                     "SELECT t.id::text FROM llm_usage_event t WHERE t.source_type = 'PERSONAL_CONVERSATION'"
@@ -368,7 +371,8 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     """
                     SELECT jsonb_build_object('source_id', s.source_id, 'workspace_id', s.workspace_id, 'calls',
                         COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.started_at, t.id) FROM llm_usage_event t
-                                  WHERE t.workspace_id IS NOT DISTINCT FROM s.workspace_id AND t.source_id = s.source_id), '[]'::jsonb))::text
+                                  WHERE t.workspace_id IS NOT DISTINCT FROM s.workspace_id AND t.source_id = s.source_id
+                                    AND t.source_type <> 'PERSONAL_CONVERSATION'), '[]'::jsonb))::text
                     FROM jsonb_to_recordset(CAST(:keys AS jsonb)) AS s(source_id uuid, workspace_id bigint)
                     ORDER BY s.source_id
                     """,
@@ -421,6 +425,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                                     THEN 1 ELSE e.unreported_calls END
                         FROM detached d
                         WHERE e.workspace_id IS NOT DISTINCT FROM d.workspace_id AND e.source_id = d.source_id
+                            AND e.source_type <> 'PERSONAL_CONVERSATION'
                         """, Map.of("keys", keys(selection)));
             }
             List<UUID> calls = personalCalls(selection);
