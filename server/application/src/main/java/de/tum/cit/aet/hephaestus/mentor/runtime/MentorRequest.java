@@ -27,8 +27,12 @@ import org.jspecify.annotations.Nullable;
         name = "mentor_request",
         uniqueConstraints = {
             // One request per source; a source has one account, so the pair is unique where the source is.
-            @UniqueConstraint(name = "uk_mentor_request_source", columnNames = {"account_id", "source_id"}),
-            @UniqueConstraint(name = "uk_mentor_request_owner", columnNames = {"account_id", "id"})
+            @UniqueConstraint(
+                    name = "uk_mentor_request_source",
+                    columnNames = {"account_id", "source_id"}),
+            @UniqueConstraint(
+                    name = "uk_mentor_request_owner",
+                    columnNames = {"account_id", "id"})
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

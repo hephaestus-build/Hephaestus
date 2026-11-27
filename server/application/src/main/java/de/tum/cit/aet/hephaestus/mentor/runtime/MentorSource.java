@@ -30,7 +30,9 @@ import lombok.NoArgsConstructor;
                     name = "uk_mentor_source_message",
                     columnNames = {"binding_id", "container_id", "native_message_id"}),
             // A reference names its owner too: a foreign key ignores row-level security.
-            @UniqueConstraint(name = "uk_mentor_source_owner", columnNames = {"account_id", "id"})
+            @UniqueConstraint(
+                    name = "uk_mentor_source_owner",
+                    columnNames = {"account_id", "id"})
         },
         indexes = @Index(name = "idx_mentor_source_workspace", columnList = "workspace_id"))
 @Getter

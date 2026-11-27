@@ -110,7 +110,8 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         UUID otherSource = asOwner(other, () -> seed(other));
         UUID otherRequest = asOwner(
                 other,
-                () -> jdbc.queryForObject("SELECT id FROM mentor_request WHERE source_id = ?", UUID.class, otherSource));
+                () -> jdbc.queryForObject(
+                        "SELECT id FROM mentor_request WHERE source_id = ?", UUID.class, otherSource));
 
         assertThatThrownBy(() -> asOwner(owner, () -> {
                     jdbc.update("UPDATE mentor_event SET request_id = ? WHERE source_id = ?", otherRequest, ownSource);

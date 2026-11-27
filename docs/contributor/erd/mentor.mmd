@@ -11,12 +11,12 @@ erDiagram
 
     MentorEvent {
         UUID id PK
-        BIGINT account_id "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
         BIGINT binding_id UK "NOT NULL"
         VARCHAR(255) native_event_id UK "NOT NULL"
         VARCHAR(32) kind "NOT NULL"
         UUID source_id FK "NOT NULL"
-        UUID request_id
+        UUID request_id FK
         VARCHAR(16) disposition "NOT NULL"
         VARCHAR(32) reason
         VARCHAR(64) source_ref "NOT NULL"
@@ -25,8 +25,8 @@ erDiagram
     }
 
     MentorRequest {
-        UUID id PK
-        BIGINT account_id "NOT NULL"
+        UUID id PK,UK
+        BIGINT account_id FK,UK "NOT NULL"
         UUID source_id FK,UK "NOT NULL"
         INTEGER version "NOT NULL"
         VARCHAR(16) state "NOT NULL"
@@ -48,8 +48,8 @@ erDiagram
     }
 
     MentorSource {
-        UUID id PK
-        BIGINT account_id "NOT NULL"
+        UUID id PK,UK
+        BIGINT account_id UK "NOT NULL"
         BIGINT binding_id UK "NOT NULL"
         BIGINT workspace_id "NOT NULL"
         VARCHAR(255) container_id UK "NOT NULL"
@@ -61,10 +61,11 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
-    MentorSource ||--|| MentorRequest : has
+    MentorSource ||--|| MentorRequest : references
 
     %% One-to-Many relationships
-    MentorSource ||--o{ MentorEvent : has
+    MentorRequest ||--o{ MentorEvent : references
+    MentorSource ||--o{ MentorEvent : references
 
     %% Styling
     classDef primaryEntity stroke-width:2px
