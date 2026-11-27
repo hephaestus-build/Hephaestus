@@ -43,7 +43,7 @@ for (const file of sources) {
 	data[file.replaceAll("/", "__")] = await readFile(new URL(file, import.meta.url), "utf8");
 }
 const image =
-	"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d";
+	"node:24.22.3-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4";
 
 /** One Node program of the ConfigMap, as a Deployment, a Service and the policy that admits the clients. */
 function serve(name: string, command: readonly string[]) {
