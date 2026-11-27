@@ -162,8 +162,10 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         jdbc.update("""
                 INSERT INTO mentor_request(id, account_id, source_id, version, state, audience_transport,
                     audience_connection_id, audience_container_id, scope_account_generation, scope_reader_epoch,
-                    scope_consent_epoch, scope_authority, opened_at, deadline)
-                VALUES (?, ?, ?, 1, 'OPEN', 'SLACK', 7, 'D1', 1, 1, 1, 'PERSONAL', now(), now() + interval '1 hour')
+                    scope_consent_epoch, scope_authority, opened_at, deadline, admitted_revision, admitted_source_ref,
+                    delivery_generation)
+                VALUES (?, ?, ?, 1, 'OPEN', 'SLACK', 7, 'D1', 1, 1, 1, 'PERSONAL', now(), now() + interval '1 hour',
+                    '1.1', 'provider-event:1', 0)
                 """, UUID.randomUUID(), account, source);
         return source;
     }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795767804000-1" author="hephaestus">
+        <comment>The mentor's per-account serialization row, and what each request version admitted and how its delivery is fenced. Nothing writes these before the release that registers them in the person-data inventory.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.mentor_owner (
+    account_id BIGINT NOT NULL CONSTRAINT mentor_ownerPK PRIMARY KEY,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL
+);
+ALTER TABLE public.mentor_owner ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mentor_owner_owner ON public.mentor_owner TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+
+-- Intake has written no request yet (the route answers LEGACY), so the new columns can be required without a default.
+ALTER TABLE public.mentor_request
+    ADD COLUMN admitted_revision VARCHAR(64) NOT NULL,
+    ADD COLUMN admitted_source_ref VARCHAR(64) NOT NULL,
+    ADD COLUMN delivery_generation BIGINT NOT NULL,
+    ADD COLUMN delivery_fence VARCHAR(16),
+    ADD COLUMN end_reason VARCHAR(32),
+    ADD COLUMN settled_at TIMESTAMP(6) WITH TIME ZONE;
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.mentor_request DROP COLUMN settled_at, DROP COLUMN end_reason, DROP COLUMN delivery_fence, DROP COLUMN delivery_generation, DROP COLUMN admitted_source_ref, DROP COLUMN admitted_revision</sql>
+            <sql>DROP TABLE public.mentor_owner</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

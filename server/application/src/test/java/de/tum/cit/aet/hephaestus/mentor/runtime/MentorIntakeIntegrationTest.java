@@ -97,12 +97,15 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     private final long workspace = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
     private MentorIntake intake;
     private long account;
+    /** When set, the authorization port captures no stamp, as for a revoked binding or grant. */
+    private volatile boolean deny;
 
     @BeforeEach
     void setUp() {
         account = linkedAccount();
         MentorAuthorization authorization = mock(MentorAuthorization.class);
         when(authorization.captureSlack(any(), any(), any())).thenAnswer(call -> {
+            if (deny) return Optional.empty();
             VerifiedActor actor = call.getArgument(0);
             Binding where = call.getArgument(1);
             return Optional.ofNullable(actor.linkedAccountId())
@@ -137,6 +140,12 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 .containsEntry("scope_reader_epoch", 5L);
         assertThat(source(message)).containsEntry("producer", "MENTOR").containsEntry("state", "LIVE");
         assertThat(event("e1")).containsEntry("disposition", "OPENED").containsEntry("request_id", request.requestId());
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request.requestId()))
+                .containsEntry("admitted_revision", FIRST)
+                .containsEntry("admitted_source_ref", "provider-event:1")
+                .containsEntry("delivery_generation", 0L);
+        assertThat(owner.queryForList("SELECT account_id FROM mentor_owner WHERE account_id = ?", Long.class, account))
+                .containsExactly(account);
     }
 
     @Test
@@ -225,8 +234,184 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED))
                 .isEqualTo(admitted("e2", new RequestRef(request, 1)));
         assertThat(column(request, "state")).isEqualTo("STOPPED");
+        assertThat(column(request, "end_reason")).isEqualTo("SOURCE_DELETED");
+        assertThat(column(request, "delivery_generation")).isEqualTo(1L);
         assertThat(source(message)).containsEntry("state", "DELETED");
         assertThat(event("e2")).containsEntry("disposition", "FENCED");
+    }
+
+    /** S1: a Stop of an open or a running request stops it and fences its delivery in the receive transaction. */
+    @ParameterizedTest
+    @ValueSource(strings = {"OPEN", "RUNNING"})
+    void shouldStopALiveRequestAndFenceItsDeliveryWhenItsOwnerStopsIt(String state) {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        owner.update("UPDATE mentor_request SET state = ? WHERE id = ?", state, request);
+
+        assertThat(admit(IngressKind.CONTROL_STOP, "e2", message, FIRST))
+                .isEqualTo(admitted("e2", new RequestRef(request, 1)));
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request))
+                .containsEntry("state", "STOPPED")
+                .containsEntry("end_reason", "STOPPED")
+                .containsEntry("delivery_generation", 1L)
+                .containsEntry("delivery_fence", "STOPPED");
+        assertThat(event("e2")).containsEntry("disposition", "FENCED");
+    }
+
+    /** S2: completion won the terminal transition; the Stop keeps its answer but still fences its unsent delivery. */
+    @Test
+    void shouldKeepTheAnswerAndFenceItsDeliveryWhenTheOwnerStopsASettledRequest() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        owner.update("UPDATE mentor_request SET state = 'ANSWERED' WHERE id = ?", request);
+
+        assertThat(admit(IngressKind.CONTROL_STOP, "e2", message, FIRST))
+                .isEqualTo(admitted("e2", new RequestRef(request, 1)));
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request))
+                .containsEntry("state", "ANSWERED")
+                .containsEntry("delivery_generation", 1L)
+                .containsEntry("delivery_fence", "STOPPED");
+        assertThat(column(request, "end_reason")).isNull();
+        assertThat(event("e2")).containsEntry("disposition", "FENCED");
+    }
+
+    /** S3: the person who stops must own the question; any of their verified identities may. */
+    @Test
+    void shouldRefuseAStopByAnotherAccountAndApplyOneByTheOwnerFromAnotherIdentity() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        long stranger = linkedAccount();
+
+        var foreign = envelope(
+                IngressKind.CONTROL_STOP, "e2", message, FIRST, new VerifiedActor("U" + stranger, stranger));
+        assertThat(inTransaction(() -> intake.admit(foreign, Producer.MENTOR))).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "NOT_OWNER");
+        assertThat(column(request, "state")).isEqualTo("OPEN");
+        assertThat(column(request, "delivery_generation")).isEqualTo(0L);
+
+        var own = envelope(IngressKind.CONTROL_STOP, "e3", message, FIRST, new VerifiedActor("U-second", account));
+        assertThat(inTransaction(() -> intake.admit(own, Producer.MENTOR)))
+                .isEqualTo(admitted("e3", new RequestRef(request, 1)));
+        assertThat(column(request, "state")).isEqualTo("STOPPED");
+    }
+
+    /**
+     * S4: another replica holds the owner row or the request. The Stop fails the receive transaction, bounded by its
+     * {@code lock_timeout}, and writes nothing; the provider's retry after the release applies it once.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"mentor_owner", "mentor_request"})
+    void shouldFailTheReceiveAndStopOnceOnRetryWhenAnotherReplicaHoldsTheOwnerOrTheRequest(String held)
+            throws Exception {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var replica =
+                CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    jdbcClient
+                            .sql("SELECT 1 FROM " + held + " WHERE account_id = ? FOR UPDATE")
+                            .param(account)
+                            .query(Integer.class)
+                            .list();
+                    locked.countDown();
+                    await(release);
+                }));
+        locked.await();
+
+        var stop = envelope(IngressKind.CONTROL_STOP, "e2", message, FIRST, actor());
+        assertThatThrownBy(() -> inTransaction(() -> {
+                    jdbcClient.sql("SET LOCAL lock_timeout = '200ms'").update();
+                    return intake.admit(stop, Producer.MENTOR);
+                }))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        assertThat(owner.queryForList(
+                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'",
+                        UUID.class,
+                        binding))
+                .isEmpty();
+        release.countDown();
+        replica.join();
+
+        assertThat(inTransaction(() -> intake.admit(stop, Producer.MENTOR)))
+                .isEqualTo(admitted("e2", new RequestRef(request, 1)));
+        assertThat(inTransaction(() -> intake.admit(stop, Producer.MENTOR))).isInstanceOf(Admission.Duplicate.class);
+        assertThat(column(request, "delivery_generation")).isEqualTo(1L);
+    }
+
+    /**
+     * S5a: an edit that authority no longer admits keeps the admitted revision, so no attempt answers the new words,
+     * and fences the delivery of the old ones. The request stays live: its attempt fails on the revoked authority.
+     */
+    @Test
+    void shouldKeepTheAdmittedRevisionAndFenceTheDeliveryWhenAnUnauthorizedEditChangesALiveQuestion() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        deny = true;
+
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "UNAUTHORIZED");
+        assertThat(source(message)).containsEntry("revision", EDITED);
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request))
+                .containsEntry("state", "OPEN")
+                .containsEntry("version", 1)
+                .containsEntry("admitted_revision", FIRST)
+                .containsEntry("admitted_source_ref", "provider-event:1")
+                .containsEntry("delivery_generation", 1L)
+                .containsEntry("delivery_fence", "SOURCE_EDITED");
+    }
+
+    @Test
+    void shouldMoveTheAdmittedRevisionWithTheVersionWhenAnAuthorizedEditChangesALiveQuestion() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED))
+                .isEqualTo(admitted("e2", new RequestRef(request, 2)));
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request))
+                .containsEntry("admitted_revision", EDITED)
+                .containsEntry("admitted_source_ref", "provider-event:2")
+                .containsEntry("delivery_generation", 0L);
+    }
+
+    /** S5b: an edit of a settled request changes nothing, so its answer still delivers; a delete fences it. */
+    @Test
+    void shouldLeaveTheDeliveryOfASettledRequestToAnEditAndFenceItOnADelete() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        owner.update("UPDATE mentor_request SET state = 'ANSWERED' WHERE id = ?", request);
+
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+        assertThat(source(message)).containsEntry("revision", EDITED);
+        assertThat(column(request, "delivery_generation")).isEqualTo(0L);
+
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e3", message, EDITED))
+                .isEqualTo(admitted("e3", new RequestRef(request, 1)));
+        assertThat(owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request))
+                .containsEntry("state", "ANSWERED")
+                .containsEntry("delivery_generation", 1L)
+                .containsEntry("delivery_fence", "SOURCE_DELETED");
+    }
+
+    /** S6: the owner row has no workspace, so a purge leaves it, and the account's next question opens normally. */
+    @Test
+    void shouldKeepTheOwnerRowAndOpenTheNextQuestionAfterAWorkspacePurge() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(status -> jdbcClient
+                        .sql("SELECT public.mentor_erase_workspace(?)")
+                        .param(workspace)
+                        .query(Integer.class)
+                        .single());
+
+        assertThat(owner.queryForList("SELECT id FROM mentor_request WHERE id = ?", UUID.class, request))
+                .isEmpty();
+        assertThat(owner.queryForList("SELECT account_id FROM mentor_owner WHERE account_id = ?", Long.class, account))
+                .containsExactly(account);
+        assertThat(opened(admit(IngressKind.MESSAGE, "e2", message(), FIRST)).version())
+                .isEqualTo(1);
     }
 
     @Test
@@ -554,7 +739,9 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 now,
-                now.plus(MentorIntake.ANSWER_DEADLINE));
+                now.plus(MentorIntake.ANSWER_DEADLINE),
+                FIRST,
+                "provider-event:1");
 
         assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
                     owners.ofJob(account);

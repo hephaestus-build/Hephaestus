@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorEvent.Disposition;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorEvent.Reason;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorRequest.DeliveryFence;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository.OpenedRequest;
 import de.tum.cit.aet.hephaestus.mentor.spi.Admission;
 import de.tum.cit.aet.hephaestus.mentor.spi.Audience;
@@ -38,9 +39,13 @@ import org.springframework.transaction.annotation.Transactional;
  * source; an edit or a delete binds that stored owner.
  *
  * <p>Inserts use {@code ON CONFLICT DO NOTHING}: a concurrent duplicate waits for the first admission and then changes
- * nothing, where a JPA insert would abort the caller's transaction. Lock order: the source, then its request, then the
- * authority guards of {@link MentorAuthorization}, as the wire proof takes them. The source and the request are taken
- * {@code NOWAIT}: a held lock fails the whole receive transaction, and the provider's retry admits the event again.
+ * nothing, where a JPA insert would abort the caller's transaction. Lock order: the account's owner row, the source, its
+ * request, then the authority guards of {@link MentorAuthorization}, as the wire proof takes them. The owner row waits,
+ * bounded by the receive transaction's {@code lock_timeout}; the source and the request are taken {@code NOWAIT}. A
+ * held lock fails the whole receive transaction, and the provider's retry admits the event again.
+ *
+ * <p>A Stop or a delete fences the request's delivery even when the request has settled, so an answer that won the
+ * terminal transition is still not sent after it. An edit of a settled request changes nothing (ADR 0158 decision 4).
  */
 @Component
 @ConditionalOnServerRole
@@ -99,6 +104,8 @@ public class MentorIntake implements MentorIngress {
         long owner = stored == null ? author : stored;
         if (!fence.holdForAccountWrite(owner)) return new Admission.Admitted(eventId, null);
         owners.ofJob(owner);
+        var _ = rows.insertOwner(owner);
+        var _ = rows.lockOwner(owner);
         if (stored == null) {
             var _ = rows.insertSource(new MentorSourceRepository.NewSource(
                     UUID.randomUUID(),
@@ -119,9 +126,12 @@ public class MentorIntake implements MentorIngress {
         @Nullable
         Request request = rows.lockRequest(source.id(), owner).map(Request::of).orElse(null);
         @Nullable UUID requestId = request == null ? null : request.id();
+        // An edit or a delete names the message's author; a Stop names the person who stopped, who must be its owner.
         Change change = owner == author
                 ? decide(envelope, source, request, owner)
-                : Change.recorded(Reason.AUTHOR_MISMATCH, requestId);
+                : Change.recorded(
+                        envelope.kind() == IngressKind.CONTROL_STOP ? Reason.NOT_OWNER : Reason.AUTHOR_MISMATCH,
+                        requestId);
         int inserted = rows.insertEvent(new MentorSourceRepository.NewEvent(
                 eventId,
                 owner,
@@ -163,17 +173,18 @@ public class MentorIntake implements MentorIngress {
                         ? new Change(Disposition.REVISED, null, request.id(), null)
                         : Change.recorded(Reason.UNAUTHORIZED, request.id());
             }
-            case MESSAGE_DELETED -> {
+            case MESSAGE_DELETED, CONTROL_STOP -> {
                 if (request == null) yield Change.recorded(Reason.NO_REQUEST, null);
-                if (settled) yield Change.recorded(Reason.REQUEST_SETTLED, request.id());
                 yield new Change(Disposition.FENCED, null, request.id(), null);
             }
-            case CONTROL_STOP -> Change.recorded(Reason.STOP_NOT_HANDLED, request == null ? null : request.id());
             case REVIEW_SEALED -> throw new IllegalStateException("admit refuses a sealed review before any write");
         };
     }
 
-    /** A delete always leaves the tombstone; a newer edit raises the stored revision even when the request is settled. */
+    /**
+     * A delete always leaves the tombstone; a newer edit raises the stored revision even when the request is settled. An
+     * unauthorized edit of a live request keeps the admitted revision and fences the delivery of the old text.
+     */
     private @Nullable RequestRef apply(
             IngressEnvelope envelope,
             UUID eventId,
@@ -181,12 +192,17 @@ public class MentorIntake implements MentorIngress {
             @Nullable Request request,
             Change change,
             long account) {
-        if (change.reason() == Reason.AUTHOR_MISMATCH || source.state() == MentorSource.State.DELETED) return null;
+        if (change.reason() == Reason.AUTHOR_MISMATCH
+                || change.reason() == Reason.NOT_OWNER
+                || source.state() == MentorSource.State.DELETED) return null;
         if (envelope.kind() == IngressKind.MESSAGE_DELETED) {
             var _ = rows.markDeleted(source.id(), account);
         } else if (envelope.kind() == IngressKind.MESSAGE_EDITED
                 && newer(envelope.message().revision(), source.revision())) {
             var _ = rows.raiseRevision(source.id(), account, envelope.message().revision());
+            if (change.reason() == Reason.UNAUTHORIZED && request != null && !request.state().settled()) {
+                var _ = rows.fenceDelivery(request.id(), account, DeliveryFence.SOURCE_EDITED.name());
+            }
         }
         UUID id = change.requestId();
         if (id == null) return null;
@@ -198,12 +214,15 @@ public class MentorIntake implements MentorIngress {
                 yield new RequestRef(id, 1);
             }
             case REVISED -> {
-                var _ = rows.revise(id, account);
+                var _ = rows.revise(id, account, envelope.message().revision(), envelope.sourceRef());
                 // The request is locked, so its next version is the locked one plus one.
                 yield new RequestRef(id, Objects.requireNonNull(request).version() + 1);
             }
             case FENCED -> {
-                var _ = rows.stop(id, account);
+                DeliveryFence fence = envelope.kind() == IngressKind.CONTROL_STOP
+                        ? DeliveryFence.STOPPED
+                        : DeliveryFence.SOURCE_DELETED;
+                var _ = rows.stop(id, account, fence.name());
                 yield new RequestRef(id, Objects.requireNonNull(request).version());
             }
             case RECORDED -> null;
@@ -254,7 +273,9 @@ public class MentorIntake implements MentorIngress {
                 authority.bindingGeneration(),
                 authority.actor(),
                 envelope.receivedAt(),
-                envelope.receivedAt().plus(ANSWER_DEADLINE));
+                envelope.receivedAt().plus(ANSWER_DEADLINE),
+                envelope.message().revision(),
+                envelope.sourceRef());
     }
 
     /** A provider revision is applied only when it is newer than the stored one. Slack revisions are decimal stamps. */
