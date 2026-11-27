@@ -122,10 +122,10 @@ class FeedbackProducerSelectionTest {
         assertThat(choose(review(PULL_REQUEST, ReviewOrigin.REQUEST)))
                 .isEqualTo(choice(FeedbackProducer.MENTOR, FeedbackProducerReason.OWNER_BOUND));
         verify(intake)
-                .admit(argThat(sealed -> sealed.accountId() == AUTHOR
-                        && sealed.reviewId().equals(job.getReviewId())
-                        && sealed.jobId().equals(job.getId())
-                        && sealed.admissionDigest().equals("d")));
+                .admit(argThat(review -> review.accountId() == AUTHOR
+                        && review.reviewId().equals(job.getReviewId())
+                        && review.jobId().equals(job.getId())
+                        && review.admissionDigest().equals("d")));
         verify(pins).pin(job.getWorkspaceId(), job.getReviewId(), FeedbackProducer.MENTOR);
     }
 
