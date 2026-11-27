@@ -1,0 +1,17 @@
+feat(export): stream the report instead of buffering it
+fix(export): keep the failure cause when the handler returns
+docs(readme): name the benchmark's input sizes
+test(export): cover an empty report
+refactor(export): move the writer behind an interface
+perf(export): reuse the buffer between pages
+fix(cli): exit with a failure code on a write error
+chore(deps): update the CSV library
+feat(cli): add a flag for the output directory
+fix(export): close the file on every path
+test(cli): cover the missing output directory
+docs(export): describe the page size
+ci: run the benchmark on every pull request
+build: pin the Java toolchain
+Update stuff
+WIP
+more fixes

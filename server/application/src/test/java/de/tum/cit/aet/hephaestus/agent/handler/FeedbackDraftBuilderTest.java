@@ -277,7 +277,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
             var page = destination == FeedbackDestination.PRACTICE_PAGE
                     ? new ComposedFeedback.Page(
                             field.equals("title") ? words : "Keep the failure cause",
-                            field.equals("body") ? words : "Two handlers drop the cause.",
+                            field.equals("body") ? words : "The handlers drop the cause.",
                             field.equals("nextStep") ? words : "Rethrow the failure with its cause.")
                     : null;
             var copy = switch (destination) {
@@ -319,6 +319,12 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
                     assertThat(refused.destination()).isEqualTo(destination);
                     assertThat(refused.rule()).isEqualTo("MENTION");
+                    assertThat(refused.field()).isEqualTo(expectedField);
+                });
+        assertThatThrownBy(() -> FeedbackDraftBuilder.build(
+                        job, request.apply("13 of 17 handlers drop the cause."), admitted, List.of(), anchors))
+                .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                    assertThat(refused.rule()).isEqualTo("COUNT");
                     assertThat(refused.field()).isEqualTo(expectedField);
                 });
     }
