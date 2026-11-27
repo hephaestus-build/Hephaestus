@@ -2552,6 +2552,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		const streamUsage = newUsageLedger();
 		let providerFailures = 0;
+		let programStalls = 0;
 		const measurementReply = { asked: false, received: false };
 		const subscribeSession = (trackedSession: AgentSession) => {
 			const scope = sessionState();
@@ -2909,7 +2910,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					!scope.modelWait.waitsForModel() &&
 					Date.now() - scope.lastEventAt >= STALL_MS
 				) {
-					if (turn.step !== "practice_program" || turn.abortProgram === undefined) {
+					if (turn.step === "practice_program" && turn.abortProgram !== undefined) {
+						programStalls += 1;
+					} else {
 						providerFailures += 1;
 					}
 					stopTurn("stall");
@@ -3200,8 +3203,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
-			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
-				ended("review.unreachable", { unanswered_calls: providerFailures });
+			if (
+				(programStalls > 0 || providerFailures > 0 || measurementReply.asked) &&
+				!measurementReply.received
+			) {
+				ended("review.unreachable", {
+					unanswered_calls: providerFailures,
+					reason: programStalls > 0 ? "stalled" : undefined,
+				});
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);
 			}

@@ -332,7 +332,7 @@ if (scenario !== undefined && scenario !== "") {
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
 	// Drive the same watchdog as the session-stall scenario, at the child program boundary.
-	if (scenario?.startsWith("practice-program-")) {
+	if (scenario.startsWith("practice-program-")) {
 		const file = new URL(
 			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts",
 			import.meta.url,
@@ -2599,8 +2599,6 @@ export default definePracticeScript({
 						stage === "draft-commit"
 					) {
 						index = [practice("test-practice"), practice("second-practice")];
-					} else if (stage === "practice-program-alone-stall") {
-						index = [practice("test-practice")];
 					} else if (stage === "practice-program-stall") {
 						index = ["test-practice", "second-practice", "third-practice"].map((slug) =>
 							practice(slug),
@@ -3363,6 +3361,7 @@ export default definePracticeScript({
 							// No model was called and nothing was staged. The server requeues exit 76 and ends the
 							// job failed, with no retry, on exit 1 (docs/contributor/agent-runs.mdx, The runner's exit).
 							assert.equal(child.status, 76, child.stderr);
+							assert.match(child.stderr, /review\.unreachable unanswered_calls=0 reason=stalled/u);
 							break;
 						}
 						case "practice-program-stall": {
