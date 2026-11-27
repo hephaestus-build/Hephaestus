@@ -367,8 +367,10 @@ class ProviderEventReceiverTest extends BaseUnitTest {
         var arrival = ArgumentCaptor.forClass(ProviderEventStore.Arrival.class);
         var ordered = inOrder(connections, handoff);
         ordered.verify(connections).findAndLockLifecycleConnection(CONNECTION, WORKSPACE);
-        ordered.verify(handoff).store(eq(new VerifiedWebhookHandoff.LockedBinding(CONNECTION, "17", config, null, null)),
-                arrival.capture());
+        ordered.verify(handoff)
+                .store(
+                        eq(new VerifiedWebhookHandoff.LockedBinding(CONNECTION, "17", config, null, null)),
+                        arrival.capture());
         assertThat(stored).isOne();
         assertThat(arrival.getValue().payload()).isEqualTo(BODY);
         verify(store).store(List.of());
