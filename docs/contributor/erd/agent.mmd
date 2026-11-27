@@ -295,6 +295,8 @@ erDiagram
         UUID handed_off_run_id FK,UK
         TIMESTAMPTZ admitted_at
         BIGINT call_pool_id
+        VARCHAR(16) feedback_producer "NOT NULL"
+        VARCHAR(32) feedback_producer_reason
     }
 
     ReviewJobScriptRun {

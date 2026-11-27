@@ -9,8 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
-import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerProperties;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -32,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -188,6 +187,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -1196,8 +1196,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 String.class,
                 review.workspaceId(),
                 review.reviewId());
-        return Arrays.asList(
-                (String) job.get("feedback_producer"), (String) job.get("feedback_producer_reason"), pin);
+        return Arrays.asList((String) job.get("feedback_producer"), (String) job.get("feedback_producer_reason"), pin);
     }
 
     /** An active, visible member who made an explicit AI choice and keeps practice feedback delivery on. */

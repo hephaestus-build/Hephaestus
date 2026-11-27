@@ -170,7 +170,6 @@ class FeedbackProducerSelectionTest {
     }
 
     private static ReviewSnapshot review(ItemRef item, ReviewOrigin origin) {
-        return new ReviewSnapshot(
-                RuntimeReviewTestData.REVIEW, 1, item, ReviewKind.ITEM, null, origin, 1, List.of());
+        return new ReviewSnapshot(RuntimeReviewTestData.REVIEW, 1, item, ReviewKind.ITEM, null, origin, 1, List.of());
     }
 }

@@ -82,7 +82,12 @@ public class FeedbackProducerSelection {
         if (authors.isEmpty()) return workPlace(FeedbackProducerReason.NO_LINKED_AUTHOR);
         if (authors.size() > 1) return workPlace(FeedbackProducerReason.SEVERAL_AUTHORS);
         var outcome = intake.admit(new MentorReviewIntake.SealedReview(
-                job.getWorkspaceId(), job.getReviewId(), job.getId(), authors.getFirst(), admissionDigest, Instant.now()));
+                job.getWorkspaceId(),
+                job.getReviewId(),
+                job.getId(),
+                authors.getFirst(),
+                admissionDigest,
+                Instant.now()));
         return switch (outcome) {
             case MentorReviewIntake.Outcome.Admitted ignored ->
                 new Choice(FeedbackProducer.MENTOR, FeedbackProducerReason.OWNER_BOUND);
