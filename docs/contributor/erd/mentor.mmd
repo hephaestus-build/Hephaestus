@@ -9,6 +9,25 @@ erDiagram
 
     direction LR
 
+    MentorAttempt {
+        UUID id PK,UK
+        BIGINT account_id FK,UK "NOT NULL"
+        UUID request_id FK,UK "NOT NULL"
+        INTEGER request_version UK "NOT NULL"
+        VARCHAR(16) work_class "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(32) end_reason
+        INTEGER claims "NOT NULL"
+        BIGINT lease_epoch "NOT NULL"
+        UUID lease_token
+        TIMESTAMPTZ leased_until
+        TIMESTAMPTZ due_at "NOT NULL"
+        TIMESTAMPTZ deadline "NOT NULL"
+        UUID basis_id
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ ended_at
+    }
+
     MentorEvent {
         UUID id PK
         BIGINT account_id FK "NOT NULL"
@@ -82,6 +101,7 @@ erDiagram
     MentorSource ||--|| MentorRequest : references
 
     %% One-to-Many relationships
+    MentorRequest ||--o{ MentorAttempt : references
     MentorRequest ||--o{ MentorEvent : references
     MentorSource ||--o{ MentorEvent : references
 

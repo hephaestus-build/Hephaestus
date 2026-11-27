@@ -412,8 +412,7 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                         SELECT a.deadline <= r.deadline AND a.deadline <= a.created_at + interval '10 minutes'
                             AND a.due_at <= clock_timestamp()
                         FROM mentor_attempt a JOIN mentor_request r ON r.id = a.request_id WHERE a.request_id = ?
-                        """, Boolean.class, request))
-                .isTrue();
+                        """, Boolean.class, request)).isTrue();
 
         admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED);
         deny = true;
