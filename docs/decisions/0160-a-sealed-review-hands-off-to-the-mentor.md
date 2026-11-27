@@ -83,41 +83,44 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
 
 1. **One advice entry for each workspace, developer and practice.**
    - The entry is current or retired, and it has a list of revisions.
-   - A revision is immutable. It holds the text, the review that caused it and the revision that its writer saw.
+   - A revision is immutable. It holds the text, the review that caused it and the inputs that its writer saw.
    - An update adds a revision. It never changes an earlier revision.
    - The mentor's review handler writes advice. It writes only for a review whose producer is MENTOR.
-   - One review writes at most one revision to an entry. A retry for the same review returns the first result.
+   - One review writes at most one revision to an entry. A retry with the same content returns the first result.
 2. **A revision holds references to evidence, never copies.**
-   - Each reference names an observation by its id, and optionally one of its problems.
-   - Every referenced observation concerns the same developer, practice and workspace. Foreign keys enforce the developer and workspace.
-   - A revision needs at least one reference.
-   - The write passes the composition check of `FeedbackGate` for the practice page.
+   - An input names an observation or an earlier advice revision by its id. Inputs are what the model saw.
+   - A citation is an observation input that the text relies on. A revision cites at least one observation.
+   - Every observation input concerns the same developer and workspace. Foreign keys enforce this.
+   - The citations pass the composition check of `FeedbackGate` for the practice page.
    - That check refuses when feedback is Off, an observation is marked incorrect, or a source changed.
    - Advice needs no admin approval. Approval applies only to feedback on the work.
 3. **Update and retire never touch the evidence.**
    - Both operations write only advice rows. Observations, problems, evidence and feedback stay byte-identical.
-   - Retire sets the state and a reason. The mentor gives Resolved or No longer applies. The owner gives Dismissed.
-   - A later revision makes a retired entry current again. The owner can restore an entry that they dismissed.
-   - After a dismissal, a new revision must cite an observation that is newer than the dismissal.
-   - Each write names the revision that its writer saw. The server refuses a write against a newer revision.
+   - Retire sets the state and a reason: Resolved or No longer applies.
+   - The owner can dismiss advice and restore it. A dismissal is separate from the mentor's state.
+   - After a dismissal, a new revision must cite a new item that was observed after the dismissal.
+   - Each write names the latest revision that its writer saw. The server refuses a write against a newer revision.
 4. **The server computes the recurrence claim from rows at read time.**
-   - The model never writes a count or a pattern claim. The write refuses text that counts work.
-   - The read counts distinct items among the referenced observations that are current and Not met.
+   - The read counts distinct items among the cited observations that are current and Not met.
    - The view names a count, such as "in 3 pull requests", only for two or more items.
    - One review can give advice. It can never give a pattern.
+   - The write refuses text that counts work or uses a fixed list of recurrence words, such as "again".
 5. **Erased evidence makes a revision stale and hidden.**
-   - An erasure of a referenced observation removes the text of each revision that references it.
-   - The walk continues through each later revision whose writer saw a stale revision. This is the A2 basis rule.
+   - The transaction that deletes an observation first removes the text of each revision that took it as input.
+   - The walk continues through each later revision that took a removed revision as input. This is the A2 rule.
+   - The walk selects by the inputs present at delete time. It also reaches revisions written after the request was admitted.
    - A stale revision is never shown, exported with text, or given to the model as earlier advice.
-   - The read also hides a revision when one of its references is gone. Other delete paths cannot show it.
+   - The read also hides a revision when one of its citations is gone. Other delete paths cannot show it.
    - An older revision never replaces a hidden latest revision.
    - An erasure of the developer deletes their advice.
-   - Retention keeps each observation that the latest revision of a current entry references.
+   - Advice revisions expire at the retention cutoff, by their own age. Advice never keeps an observation alive.
 6. **Only the owner reads advice.**
    - The developer reads their advice on their own Practice Profile. The endpoint takes no person parameter.
-   - Admins, View as user and other members get no advice and no sign that advice exists.
+   - No admin view, View as user or other member gets advice or a sign that advice exists.
    - The work-place composer, shared work and Slack DM prompts never receive advice.
-   - The audience is `OWNER`. `TEAM` is a reserved enum value. The database refuses it, and no read accepts it.
+   - Another person's data export never contains the developer's advice.
+   - One exception: the developer's own data export contains their advice. An instance admin handles that bundle only to give it to the developer.
+   - The audience is `OWNER`. `TEAM` is a reserved enum value. Every read refuses it, and no write accepts an audience.
 7. **Old practice-page cards are read-only history.**
    - Existing cards stay visible with their responses and closure.
    - A review that the mentor handles writes no new card.
@@ -146,11 +149,14 @@ Not enforced. The mentor's units RV1 to RV3 add these checks beside the code, an
 - A composition already started before the flip delivers once under its key. The mentor never acts on that review.
 - An update and a retire leave every observation, problem, evidence and feedback row byte-identical.
 - Advice from one review shows no recurrence claim. Two items show a count that the read computes from rows.
-- An erasure of one referenced observation removes the text of that revision and each later revision that saw it.
-- A delete outside erasure hides the revision through its reference count.
-- A write that cites another developer, another practice or an erased observation is refused and writes nothing.
+- An erased observation input removes the text of its revision. The same happens to each later revision that took that revision as input.
+- A revision written after the erasure was admitted, from evidence that the erasure deletes, is also removed.
+- A delete outside erasure hides the revision through its citation count.
+- A write that cites another developer's observation or an erased observation is refused and writes nothing.
 - A write against a newer revision is refused. A retry for the same review writes one revision.
-- An admin, View as user and another member get no advice. A `TEAM` row fails the database check.
+- After an erased citation, the mentor can still revise or retire the entry.
+- An admin, View as user and another member get no advice. A `TEAM` read returns nothing.
+- Another person's data export contains no advice canary.
 - The work-place composer's provider request contains no advice canary.
 
 ## Revisit trigger
