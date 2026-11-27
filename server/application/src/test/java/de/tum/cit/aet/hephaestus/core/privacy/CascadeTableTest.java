@@ -475,6 +475,8 @@ class CascadeTableTest extends BaseUnitTest {
             Map.entry("PostgreSQL mentor intake", EnumSet.noneOf(CascadeDependent.class)),
             // Outside the inventory until the next release registers its stores; nothing writes it before then.
             Map.entry("PostgreSQL project teams", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL host pairing and team grants", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry(

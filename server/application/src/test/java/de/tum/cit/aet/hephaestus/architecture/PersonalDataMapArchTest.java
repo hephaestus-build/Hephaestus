@@ -156,23 +156,37 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * rollout. Nothing writes these tables before the registration release, so they are empty and an erasure that skips
      * them loses nothing. The release that registers a table's store removes its entry.
      */
-    private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.of(
-            "practice_advice",
-            "Advice entries (ADR 0160). Advice writes come only in a release after the registration",
-            "practice_advice_revision",
-            "Advice revisions (ADR 0160). Advice writes come only in a release after the registration",
-            "practice_advice_source",
-            "Advice sources (ADR 0160). Advice writes come only in a release after the registration",
-            "mentor_event",
-            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
-            "mentor_request",
-            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
-            "mentor_source",
-            "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
-            "project_team",
-            "Project teams (ADR 0165). Team writes come only in a release after the registration",
-            "project_team_member",
-            "Project team members (ADR 0165). Membership writes come only in a release after the registration");
+    private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.ofEntries(
+            Map.entry(
+                    "practice_advice",
+                    "Advice entries (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_revision",
+                    "Advice revisions (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_source",
+                    "Advice sources (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_event",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_request",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_source",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "project_team",
+                    "Project teams (ADR 0165). Team writes come only in a release after the registration"),
+            Map.entry(
+                    "project_team_member",
+                    "Project team members (ADR 0165). Membership writes come only in a release after the registration"),
+            Map.entry(
+                    "host_grant",
+                    "Host team grants (ADR 0166). Grant writes come only in a release after the registration"),
+            Map.entry(
+                    "host_pairing",
+                    "Host pairing requests (ADR 0166). Pairing writes come only in a release after the registration"));
 
     /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
     private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(

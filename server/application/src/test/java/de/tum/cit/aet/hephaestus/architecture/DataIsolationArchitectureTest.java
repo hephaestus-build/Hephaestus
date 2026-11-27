@@ -157,6 +157,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "IssuedJwt", // JWT revocation list; account-scoped
             "ClientSession", // Installed-client session (refresh family); account-scoped like IssuedJwt
             "ClientSignInHandoff", // Single-use installed-client sign-in code; precedes any workspace choice
+            "HostPairing", // An editor host's pairing request; precedes any workspace choice (ADR 0166)
             "JwtSigningKey", // System-wide signing keys
             "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
             "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
