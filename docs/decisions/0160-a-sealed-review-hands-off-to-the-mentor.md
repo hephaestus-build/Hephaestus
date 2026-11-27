@@ -119,7 +119,7 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
    - No admin view, View as user or other member gets advice or a sign that advice exists.
    - The work-place composer, shared work and Slack DM prompts never receive advice.
    - Another person's data export never contains the developer's advice.
-   - One exception: the developer's own data export contains their advice. An instance admin handles that bundle only to give it to the developer.
+   - The developer's own data delivery contains their advice. Only the developer downloads it.
    - The audience is `OWNER`. `TEAM` is a reserved enum value. Every read refuses it, and no write accepts an audience.
 7. **Old practice-page cards are read-only history.**
    - Existing cards stay visible with their responses and closure.
