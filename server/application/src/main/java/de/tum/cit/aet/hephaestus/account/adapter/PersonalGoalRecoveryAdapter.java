@@ -22,10 +22,7 @@ public class PersonalGoalRecoveryAdapter implements RestoredRecordDeletions {
     private final OwnerScope owners;
     private final TransactionTemplate transactions;
 
-    public PersonalGoalRecoveryAdapter(
-            JdbcTemplate jdbc,
-            OwnerScope owners,
-            PlatformTransactionManager manager) {
+    public PersonalGoalRecoveryAdapter(JdbcTemplate jdbc, OwnerScope owners, PlatformTransactionManager manager) {
         this.jdbc = jdbc;
         this.owners = owners;
         this.transactions = new TransactionTemplate(manager);
@@ -52,9 +49,11 @@ public class PersonalGoalRecoveryAdapter implements RestoredRecordDeletions {
     }
 
     private void deleteOwnedMatch(long accountId, Set<UUID> ids) {
-        jdbc.queryForList(
+        jdbc
+                .queryForList(
                         "SELECT goal_id FROM personal_goal WHERE account_id = ? AND words IS NOT NULL",
-                        UUID.class, accountId)
+                        UUID.class,
+                        accountId)
                 .stream()
                 .filter(ids::contains)
                 .findFirst()

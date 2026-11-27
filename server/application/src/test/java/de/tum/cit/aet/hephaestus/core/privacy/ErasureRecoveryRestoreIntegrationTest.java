@@ -333,13 +333,18 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         recover(manifest);
         recover(manifest);
         assertThat(exportStatus(export)).isEqualTo("EXPIRED");
-        assertThat(PostgreSQLTestContainer.ownerJdbc().queryForObject(
-                "SELECT payload IS NULL FROM account_export WHERE id = ?", Boolean.class, export)).isTrue();
+        assertThat(PostgreSQLTestContainer.ownerJdbc()
+                        .queryForObject(
+                                "SELECT payload IS NULL FROM account_export WHERE id = ?", Boolean.class, export))
+                .isTrue();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             beans.getBean(OwnerScope.class).ofJob(ownerAccount);
             assertThat(jdbc.queryForObject(
-                    "SELECT words IS NULL AND goal_id = ? AND revision = 2 FROM personal_goal WHERE account_id = ?",
-                    Boolean.class, goal, ownerAccount)).isTrue();
+                            "SELECT words IS NULL AND goal_id = ? AND revision = 2 FROM personal_goal WHERE account_id = ?",
+                            Boolean.class,
+                            goal,
+                            ownerAccount))
+                    .isTrue();
         });
 
         UUID replacement = UUID.randomUUID();
@@ -348,8 +353,11 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             beans.getBean(OwnerScope.class).ofJob(ownerAccount);
             assertThat(jdbc.queryForObject(
-                    "SELECT words FROM personal_goal WHERE account_id = ? AND goal_id = ?",
-                    String.class, ownerAccount, replacement)).isEqualTo("A new goal");
+                            "SELECT words FROM personal_goal WHERE account_id = ? AND goal_id = ?",
+                            String.class,
+                            ownerAccount,
+                            replacement))
+                    .isEqualTo("A new goal");
         });
     }
 
