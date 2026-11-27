@@ -505,6 +505,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
         // A token the SDK has not seen, so its team id cache asks auth.test first, as for a new workspace.
         when(credentialProvider.resolve(any(IntegrationRef.class)))
                 .thenReturn(Optional.of(new BearerToken("xoxb-" + UUID.randomUUID(), null)));
+        return serviceWithLocalSlack(config);
+    }
+
+    private SlackMessageService serviceWithLocalSlack(SlackConfig config) {
         return new SlackMessageService(
                 SlackSendFence.client(config),
                 credentialProvider,
@@ -567,7 +571,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 }
             });
             api.start();
-            try (var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS)) {
+            try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
                 var route = bind(local, "90.000001");
                 var metadata = Message.Metadata.builder()
                         .eventType("mentor_effect").eventPayload(Map.of("marker", "opaque")).build();
@@ -597,7 +601,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 }
             });
             api.start();
-            try (var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS)) {
+            try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
                 assertThat(bind(local, null).readPost("mentor_effect", "opaque", 1))
                         .isEqualTo(new SlackMessageService.Matches(List.of(), true));
             }
