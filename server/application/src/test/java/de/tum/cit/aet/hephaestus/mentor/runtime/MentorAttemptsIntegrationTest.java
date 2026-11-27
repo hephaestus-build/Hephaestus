@@ -431,6 +431,40 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("LIVE");
     }
 
+    /**
+     * A DM is never in the Slack store, so a deleted DM has no tombstone, and intake may never have seen its delete.
+     * The fresh observation, which reads the message from Slack, is then the only witness: without one bound at this
+     * epoch and at most 60 seconds old, a DM question gets no dispatch.
+     */
+    @Test
+    void shouldRefuseADispatchForADirectMessageWithoutAFreshObservation() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(owner.queryForObject("""
+                        SELECT r.audience_container_id = 'D' || r.audience_connection_id AND r.audience_thread_root IS NULL
+                            AND s.state = 'LIVE'
+                        FROM mentor_request r JOIN mentor_source s ON s.id = r.source_id WHERE r.id = ?
+                        """, Boolean.class, lease.requestId()))
+                .as("a live DM question at the top level")
+                .isTrue();
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM slack_message WHERE slack_ts = ?", Long.class, message))
+                .as("no Slack store row for the DM")
+                .isZero();
+
+        assertThat(current(held)).as("no observation").isFalse();
+        observe(lease);
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '61 seconds' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("an observation older than 60 seconds").isFalse();
+        observe(lease);
+        assertThat(current(held)).as("a fresh observation of the DM").isTrue();
+    }
+
     @Test
     void shouldRefuseADispatchAndARenewWhenTheOwnerStopsTheRequest() {
         String message = message();
