@@ -58,8 +58,9 @@ public final class PinnedParks {
      * <ul>
      *   <li>On Linux, JDK 25 runs its socket sub-pollers as virtual threads, and JFR reports their loop as a pinned park.
      *   <li>The VM registers each new object of a class with a finalizer, Jakarta Mail's {@code Service} among them,
-     *       through an upcall into {@code Finalizer.register}. The registration takes one JDK lock, so a thread that
-     *       registers while another one does waits pinned for a list insert.
+     *       through an upcall into {@code Finalizer.register}. The registration takes the lock of the JDK's finalizer
+     *       list, which the finalizer thread also takes. A thread that registers while another thread holds that lock
+     *       waits pinned for one insert or removal.
      * </ul>
      *
      * Work that parks pinned in a socket read or a class initializer, or waits for another thread's class initializer,
