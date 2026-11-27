@@ -23,9 +23,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -78,6 +80,9 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityRepository links;
+
+    @Autowired
+    private SqlReadMeasurement reads;
 
     @Test
     void shouldResolveDeclaredSourceBucketsWithoutKnowingTheContributorsItemKinds() {
@@ -435,6 +440,31 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         assertThat(scope.identities())
                 .containsExactlyInAnyOrder(identity(github, "42", null), identity(gitlab, "84", null));
         assertThat(scope.userIds()).containsExactlyInAnyOrder(first.getId(), second.getId());
+    }
+
+    /**
+     * Every capture of a contributor's work asks for their account, once per source. The provider rows are read once
+     * for that question, and the identity is validated against them, with no lookup of its own provider row.
+     */
+    @Test
+    void shouldReadTheProviderRowsOnceWhenFindingTheAccountOfAnIdentity() {
+        var github = provider(IdentityProviderType.GITHUB);
+        var account = accounts.saveAndFlush(new Account("Measured account"));
+        link(account, github, "42", null);
+
+        long started = System.nanoTime();
+        var read = reads.measure(() -> resolver.accountFor(identity(github, "42", null)));
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(read.value()).contains(Objects.requireNonNull(account.getId()));
+        // The provider rows themselves are one unprepared statement, which the measurement does not record.
+        assertThat(read.sql())
+                .filteredOn(sql -> sql.contains("FROM identity_provider WHERE id"))
+                .isEmpty();
+        assertThat(read.sql())
+                .filteredOn(sql -> sql.contains("FROM identity WHERE provider_id"))
+                .hasSize(1);
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
     }
 
     @Test
