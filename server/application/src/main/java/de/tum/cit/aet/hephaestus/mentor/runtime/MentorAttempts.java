@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository.LiveRequ
 import de.tum.cit.aet.hephaestus.mentor.spi.Audience;
 import de.tum.cit.aet.hephaestus.mentor.spi.AuthorityScope;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorAuthorization;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorSourceEvidence;
 import de.tum.cit.aet.hephaestus.mentor.spi.ProviderObservation;
 import de.tum.cit.aet.hephaestus.mentor.spi.ScopeStamp;
 import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
@@ -45,6 +46,7 @@ public class MentorAttempts {
     private final PersonDataWriteFence fence;
     private final OwnerScope owners;
     private final ObjectProvider<MentorAuthorization> authorization;
+    private final ObjectProvider<MentorSourceEvidence> evidence;
 
     /**
      * Leases up to {@code limit} due attempts of the class for one account. A claim never waits: a held owner row, request
@@ -122,7 +124,20 @@ public class MentorAttempts {
         var audience = audience(request.get());
         if (audience.transport() == Transport.SLACK && !observed.get()) return false;
         @Nullable MentorAuthorization port = authorization.getIfAvailable();
-        return port != null && port.isCurrent(stamp(account, request.get()), audience);
+        if (port == null || !port.isCurrent(stamp(account, request.get()), audience)) return false;
+        return audience.transport() != Transport.SLACK || sourceLive(request.get());
+    }
+
+    /**
+     * Intake can miss a delete that its retries never admitted, so a Slack question also needs the Slack store's own
+     * record: a tombstone there refuses, and so does an unwired port. Its row is held last, after the authority guards.
+     */
+    private boolean sourceLive(LiveRequest request) {
+        if (!"LIVE".equals(request.getSourceState())) return false;
+        @Nullable MentorSourceEvidence store = evidence.getIfAvailable();
+        return store != null
+                && !store.deleted(
+                        request.getSourceWorkspaceId(), request.getSourceContainerId(), request.getSourceMessageId());
     }
 
     static Audience audience(LiveRequest request) {

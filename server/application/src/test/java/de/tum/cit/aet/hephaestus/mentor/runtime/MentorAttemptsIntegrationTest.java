@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Binding;
 import de.tum.cit.aet.hephaestus.mentor.spi.IngressEnvelope;
 import de.tum.cit.aet.hephaestus.mentor.spi.IngressKind;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorAuthorization;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorSourceEvidence;
 import de.tum.cit.aet.hephaestus.mentor.spi.MessageRef;
 import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import de.tum.cit.aet.hephaestus.mentor.spi.ProviderEventKey;
@@ -47,8 +48,10 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -64,6 +67,10 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorAttemptRepository attemptRows;
+
+    /** The Slack adapter that the server wires for the mentor's store evidence. */
+    @Autowired
+    private MentorSourceEvidence sourceEvidence;
 
     @Autowired
     private PersonDataWriteFence fence;
@@ -86,6 +93,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private final JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
     private final long binding = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
     private final long workspace = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
+    private MentorAuthorization authorization;
     private MentorIntake intake;
     private MentorAttempts attempts;
     private long account;
@@ -95,7 +103,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         account = linkedAccount();
-        MentorAuthorization authorization = mock(MentorAuthorization.class);
+        authorization = mock(MentorAuthorization.class);
         when(authorization.captureSlack(any(), any(), any())).thenAnswer(call -> {
             VerifiedActor actor = call.getArgument(0);
             Binding where = call.getArgument(1);
@@ -111,7 +119,12 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         var provider = new StaticListableBeanFactory(Map.of("authorization", authorization))
                 .getBeanProvider(MentorAuthorization.class);
         intake = new MentorIntake(rows, fence, owners, provider);
-        attempts = new MentorAttempts(attemptRows, fence, owners, provider);
+        attempts = new MentorAttempts(attemptRows, fence, owners, provider, store());
+    }
+
+    /** The Slack store's evidence port as the server wires it, for this test's own fence. */
+    private ObjectProvider<MentorSourceEvidence> store() {
+        return new StaticListableBeanFactory(Map.of("evidence", sourceEvidence)).getBeanProvider(MentorSourceEvidence.class);
     }
 
     /** T11: after a crash that followed intake, the queued attempt is leased once, however many replicas try. */
@@ -374,7 +387,8 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 attemptRows,
                 fence,
                 owners,
-                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class));
+                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class),
+                store());
         assertThat(new TransactionTemplate(transactions).execute(status -> unwired.current(held)))
                 .as("no authorization port")
                 .isFalse();
@@ -382,6 +396,39 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
         assertThat(current(held)).as("the version moved").isFalse();
         assertThat(renew(lease, LEASE)).as("the version moved").isFalse();
+    }
+
+    /**
+     * A delete that intake never admitted, because its retries ran out while the request was held, still refuses: the
+     * Slack store's tombstone is read before each dispatch, and an unwired store port refuses too.
+     */
+    @Test
+    void shouldRefuseADispatchWhenTheSlackStoreShowsTheQuestionDeleted() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(current(held)).as("the store has no row: no tombstone to refuse on").isTrue();
+
+        var storeless = new MentorAttempts(
+                attemptRows,
+                fence,
+                owners,
+                new StaticListableBeanFactory(Map.of("authorization", authorization))
+                        .getBeanProvider(MentorAuthorization.class),
+                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorSourceEvidence.class));
+        assertThat(new TransactionTemplate(transactions).execute(status -> storeless.current(held)))
+                .as("no store port")
+                .isFalse();
+
+        tombstoneInSlackStore(message);
+        assertThat(current(held)).as("the Slack store tombstoned the question").isFalse();
+        assertThat(owner.queryForObject(
+                        "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
+                .as("intake never saw the delete")
+                .isEqualTo("LIVE");
     }
 
     @Test
@@ -464,6 +511,30 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 UPDATE mentor_attempt SET observed_epoch = ?, observed_at = clock_timestamp(), observed_reader_epoch = 5,
                     observed_readers = ARRAY['U' || account_id] WHERE id = ?
                 """, lease.leaseEpoch(), lease.attemptId());
+    }
+
+    /** What the Slack store writes for a delete that its own ingest admitted; the workspace row is not needed. */
+    private void tombstoneInSlackStore(String message) {
+        owner.execute((ConnectionCallback<Void>) connection -> {
+            try (var role = connection.createStatement();
+                    var insert = connection.prepareStatement("""
+                            INSERT INTO slack_message (workspace_id, slack_team_id, slack_channel_id, slack_ts, text,
+                                deleted_at, ingested_at)
+                            VALUES (?, ?, ?, ?, NULL, clock_timestamp(), clock_timestamp())
+                            """)) {
+                role.execute("SET session_replication_role = 'replica'");
+                try {
+                    insert.setLong(1, workspace);
+                    insert.setString(2, "T" + binding);
+                    insert.setString(3, "D" + binding);
+                    insert.setString(4, message);
+                    insert.executeUpdate();
+                } finally {
+                    role.execute("SET session_replication_role = 'origin'");
+                }
+            }
+            return null;
+        });
     }
 
     private void lapse(AttemptLease lease) {

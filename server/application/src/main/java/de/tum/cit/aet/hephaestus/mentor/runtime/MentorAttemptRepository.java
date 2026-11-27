@@ -127,11 +127,14 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
                 scope_consent_epoch AS "scopeConsentEpoch", scope_authority AS "scopeAuthority",
                 scope_workspace_id AS "scopeWorkspaceId", scope_workspace_generation AS "scopeWorkspaceGeneration",
                 scope_binding_id AS "scopeBindingId", scope_binding_generation AS "scopeBindingGeneration",
-                scope_native_actor_id AS "scopeNativeActorId"
-            FROM mentor_request
-            WHERE account_id = :account AND id = :request AND version = :version AND state IN ('OPEN', 'RUNNING')
-                AND deadline > clock_timestamp()
-            FOR SHARE
+                scope_native_actor_id AS "scopeNativeActorId", s.workspace_id AS "sourceWorkspaceId",
+                s.container_id AS "sourceContainerId", s.native_message_id AS "sourceMessageId",
+                s.state AS "sourceState"
+            FROM mentor_request r
+            JOIN mentor_source s ON s.account_id = r.account_id AND s.id = r.source_id
+            WHERE r.account_id = :account AND r.id = :request AND r.version = :version
+                AND r.state IN ('OPEN', 'RUNNING') AND r.deadline > clock_timestamp()
+            FOR SHARE OF r
             """, nativeQuery = true)
     Optional<LiveRequest> shareLiveRequest(
             @Param("account") long account, @Param("request") UUID request, @Param("version") int version);
@@ -226,5 +229,13 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
 
         @Nullable
         String getScopeNativeActorId();
+
+        long getSourceWorkspaceId();
+
+        String getSourceContainerId();
+
+        String getSourceMessageId();
+
+        String getSourceState();
     }
 }
