@@ -14,6 +14,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -82,8 +83,9 @@ public class IdentityProvider {
         return "OUTLINE".equals(providerType) ? ScmOrigin.of(serverUrl).orElse(null) : null;
     }
 
+    /** The integration of a provider that hosts work. Only SCM code asks, and an OIDC issuer hosts none. */
     public IntegrationKind kind() {
-        return type.kind();
+        return Objects.requireNonNull(type.kind(), "An OIDC issuer is no integration");
     }
 
     // Proxy-aware, like BaseGitServiceEntity#equals.

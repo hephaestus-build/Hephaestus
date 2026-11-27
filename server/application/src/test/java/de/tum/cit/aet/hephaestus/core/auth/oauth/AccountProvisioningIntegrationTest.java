@@ -321,6 +321,27 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(Account.Status.BLOCKED);
     }
 
+    /** A registration cached before another server made the row OIDC could still complete a callback here. */
+    @Test
+    void shouldRefuseASignInThroughAnOidcRowThatALaterReleaseWrote() {
+        seedProvider("school-stale", LoginProvider.ProviderType.OIDC);
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "school-stale",
+                        "123",
+                        principal("123", "stale@example.test", true, "stale"),
+                        AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOfSatisfying(
+                        OAuth2AuthenticationException.class,
+                        exception ->
+                                assertThat(exception.getError().getErrorCode()).isEqualTo("provider_unavailable"));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM identity_provider WHERE type='OIDC' AND server_url=?",
+                        Long.class,
+                        "https://school-stale.example"))
+                .isZero();
+    }
+
     private void seedProvider(String registrationId, LoginProvider.ProviderType type) {
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);

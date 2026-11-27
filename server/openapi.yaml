@@ -21884,6 +21884,7 @@ components:
       - GITLAB
       - SLACK
       - OUTLINE
+      - OIDC
     IdentityProviderView:
       type: object
       description: |-
@@ -23036,6 +23037,7 @@ components:
       - GITLAB
       - SLACK
       - OUTLINE
+      - OIDC
     LoginProviderView:
       type: object
       description: Admin view of a login provider. The client secret is never included.

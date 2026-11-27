@@ -121,7 +121,8 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
         var providers = identities.providers();
         return person.identities().stream()
                 .flatMap(identity -> providers.stream()
-                        .filter(provider -> provider.id() == identity.providerId())
+                        .filter(provider -> provider.id() == identity.providerId()
+                                && PersonCopyIdentity.PROVIDER_TYPES.contains(provider.type()))
                         .map(provider -> new PersonCopyIdentity(
                                 provider.type(), provider.serverUrl(), identity.subject(), identity.teamId())))
                 .distinct()

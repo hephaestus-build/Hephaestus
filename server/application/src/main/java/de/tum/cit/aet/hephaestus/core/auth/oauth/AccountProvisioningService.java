@@ -87,6 +87,11 @@ public class AccountProvisioningService {
     public ProvisionResult resolveOrProvision(
             String registrationId, String subject, OAuth2User principal, AuthIntentCookie.@Nullable Intent intent) {
         LoginProvider provider = requireLoginProvider(registrationId);
+        // A registration cached before another server replaced this row could be another type's. This release
+        // signs in through no OIDC row, so it never keys a subject into an issuer's namespace.
+        if (provider.getType() == LoginProvider.ProviderType.OIDC) {
+            throw new OAuth2AuthenticationException("provider_unavailable");
+        }
         long providerId =
                 gitProviderRegistry.resolveProviderId(provider.getType().name(), provider.getBaseUrl());
         AuthIntentCookie.Intent.Mode mode = (intent != null) ? intent.mode() : AuthIntentCookie.Intent.Mode.LOGIN;

@@ -303,6 +303,68 @@ class LoginProviderServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseToCreateAnOidcProviderWhenThisReleaseOnlyReadsTheType() {
+        var draft = new LoginProviderService.Draft(
+                "school",
+                LoginProvider.ProviderType.OIDC,
+                "School Login",
+                "https://login.example.org/realms/school",
+                "client-id",
+                "client-secret",
+                null);
+
+        assertThatThrownBy(() -> adminService().create(draft))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldNotSeedAnOidcProviderWhenThisReleaseOnlyReadsTheType() {
+        service(Map.of(
+                        "school",
+                        new AuthProperties.LoginProviderSeed(
+                                LoginProvider.ProviderType.OIDC,
+                                "https://login.example.org/realms/school",
+                                "client-id",
+                                "client-secret",
+                                "School Login")))
+                .seedFromEnvOnStartup();
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void shouldRefuseAnOidcPatchThatOmitsTheIssuer() {
+        var provider = new LoginProvider();
+        provider.setRegistrationId("school");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setBaseUrl("https://login.example.org/realms/school");
+        provider.setDisplayName("School Login");
+        when(repository.findByRegistrationIdForUpdate("school")).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> adminService()
+                        .update("school", new LoginProviderService.Patch("New name", null, null, null, null, null)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRefuseToDeleteAnOidcProviderThatALaterReleaseWrote() {
+        var provider = new LoginProvider();
+        provider.setRegistrationId("school");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setEnabled(true);
+        when(repository.findByRegistrationId("school")).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> adminService().delete("school")).isInstanceOf(ResponseStatusException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
     void createRejectsDuplicateRegistrationId() {
         when(repository.existsByRegistrationId("gitlab-acme")).thenReturn(true);
 
@@ -459,6 +521,23 @@ class LoginProviderServiceTest extends BaseUnitTest {
         LoginProvider outline = outlineProvider("outline", "sealed");
         when(repository.findByRegistrationId("github")).thenReturn(Optional.of(github));
         when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(github, outline));
+
+        assertThatThrownBy(() -> adminService().delete("github")).isInstanceOf(ResponseStatusException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void shouldRefuseToDeleteGitHubWhenOnlyAnOidcProviderThatThisReleaseCannotServeRemains() {
+        LoginProvider github = new LoginProvider();
+        github.setRegistrationId("github");
+        github.setType(LoginProvider.ProviderType.GITHUB);
+        github.setEnabled(true);
+        LoginProvider oidc = new LoginProvider();
+        oidc.setRegistrationId("school");
+        oidc.setType(LoginProvider.ProviderType.OIDC);
+        oidc.setEnabled(true);
+        when(repository.findByRegistrationId("github")).thenReturn(Optional.of(github));
+        when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(github, oidc));
 
         assertThatThrownBy(() -> adminService().delete("github")).isInstanceOf(ResponseStatusException.class);
         verify(repository, never()).delete(any());

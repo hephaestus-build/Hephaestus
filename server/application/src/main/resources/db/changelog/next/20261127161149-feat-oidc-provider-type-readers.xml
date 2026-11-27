@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795782539000-1" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_login_provider_type' AND pg_get_constraintdef(oid) LIKE '%OIDC%'</sqlCheck>
+    </preConditions>
+    <comment>A login provider can be of the type OIDC. This release reads the type, and the next release writes it, so a server of the previous release never meets it. The previous release writes only the old values, so it runs beside the wider check. NOT VALID replaces the check without a table scan. The lock timeout fails the step fast behind a long transaction, so that it can run again. A rerun finds the wider check and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE login_provider DROP CONSTRAINT IF EXISTS ck_login_provider_type, ADD CONSTRAINT ck_login_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OIDC', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE login_provider DROP CONSTRAINT IF EXISTS ck_login_provider_type, ADD CONSTRAINT ck_login_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795782539000-2" author="hephaestus">
+    <comment>Validation reads every row of login_provider without blocking reads or writes. Each stored row met the narrower check, so it meets this one. Validating a valid check again does nothing.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE login_provider VALIDATE CONSTRAINT ck_login_provider_type</sql>
+    <rollback>
+      <sql>SELECT 1</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795782539000-3" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_identity_provider_type' AND pg_get_constraintdef(oid) LIKE '%OIDC%'</sqlCheck>
+    </preConditions>
+    <comment>An identity provider can be an OIDC issuer. This release reads the type, and the next release writes it, so a server of the previous release never meets it. The previous release writes only the old values, so it runs beside the wider check. NOT VALID replaces the check without a table scan. The lock timeout fails the step fast behind a long transaction, so that it can run again. A rerun finds the wider check and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT IF EXISTS ck_identity_provider_type, ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OIDC', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT IF EXISTS ck_identity_provider_type, ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795782539000-4" author="hephaestus">
+    <comment>Validation reads every row of identity_provider without blocking reads or writes. Each stored row met the narrower check, so it meets this one. Validating a valid check again does nothing.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider VALIDATE CONSTRAINT ck_identity_provider_type</sql>
+    <rollback>
+      <sql>SELECT 1</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>

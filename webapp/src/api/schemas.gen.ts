@@ -5294,7 +5294,7 @@ export const IdentitySchema = {
 export const IdentityProviderTypeSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
-	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE", "OIDC"],
 } as const;
 
 export const IdentityProviderViewSchema = {
@@ -6651,7 +6651,7 @@ export const LlmUsageByJobTypeSchema = {
 
 export const LoginProviderProviderTypeSchema = {
 	type: "string",
-	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE", "OIDC"],
 } as const;
 
 export const LoginProviderViewSchema = {
