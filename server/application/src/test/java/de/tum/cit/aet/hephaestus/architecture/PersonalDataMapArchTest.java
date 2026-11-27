@@ -343,9 +343,13 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
                 .contains("personal_goal.account_id");
         required.removeAll(REGISTERED_NEXT_RELEASE.keySet());
+        // By store id or by the table that a store erases: a store can carry another id than its table.
         assertThat(declared)
                 .as("a table registered now leaves REGISTERED_NEXT_RELEASE")
                 .doesNotContainAnyElementsOf(REGISTERED_NEXT_RELEASE.keySet());
+        assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE.keySet(), registry.stores()))
+                .as("a table that a registered store erases leaves REGISTERED_NEXT_RELEASE")
+                .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE.keySet());
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
