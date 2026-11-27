@@ -169,6 +169,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
             "mentor_source",
             "Mentor intake (ADR 0158). Intake writes come only in a release after the registration",
+            "project_team",
+            "Project teams (ADR 0165). Team writes come only in a release after the registration",
             "project_team_member",
             "Project team members (ADR 0165). Membership writes come only in a release after the registration");
 
