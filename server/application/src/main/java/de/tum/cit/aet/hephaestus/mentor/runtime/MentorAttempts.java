@@ -117,16 +117,7 @@ public class MentorAttempts {
         var request = attempts.shareLiveRequest(
                 account, attempt.get().getRequest(), attempt.get().getVersion());
         if (request.isEmpty()) return false;
-        var observed = attempts.shareHeldAttempt(
-                account,
-                credential.attemptId(),
-                credential.leaseEpoch(),
-                credential.leaseToken(),
-                credential.modelId(),
-                credential.connectionId(),
-                credential.payer().name(),
-                credential.payerWorkspaceId(),
-                seconds(ProviderObservation.FRESH_FOR));
+        var observed = attempts.shareHeldAttempt(credential, seconds(ProviderObservation.FRESH_FOR));
         if (observed.isEmpty()) return false;
         var audience = audience(request.get());
         if (audience.transport() == Transport.SLACK && !observed.get()) return false;

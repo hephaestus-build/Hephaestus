@@ -144,22 +144,14 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
             SELECT COALESCE(observed_epoch = lease_epoch
                     AND observed_at > clock_timestamp() - make_interval(secs => :fresh), false)
             FROM mentor_attempt
-            WHERE account_id = :account AND id = :attempt AND lease_epoch = :epoch AND lease_token = :token
-                AND state = 'LEASED' AND leased_until > clock_timestamp() AND deadline > clock_timestamp()
-                AND route_model_id = :model AND route_connection_id = :connection AND route_payer = :payer
-                AND route_workspace_id IS NOT DISTINCT FROM CAST(:workspace AS bigint)
+            WHERE account_id = :#{#c.accountId()} AND id = :#{#c.attemptId()} AND lease_epoch = :#{#c.leaseEpoch()}
+                AND lease_token = :#{#c.leaseToken()} AND state = 'LEASED' AND leased_until > clock_timestamp()
+                AND deadline > clock_timestamp() AND route_model_id = :#{#c.modelId()}
+                AND route_connection_id = :#{#c.connectionId()} AND route_payer = :#{#c.payer().name()}
+                AND route_workspace_id IS NOT DISTINCT FROM CAST(:#{#c.payerWorkspaceId()} AS bigint)
             FOR SHARE
             """, nativeQuery = true)
-    Optional<Boolean> shareHeldAttempt(
-            @Param("account") long account,
-            @Param("attempt") UUID attempt,
-            @Param("epoch") long epoch,
-            @Param("token") UUID token,
-            @Param("model") long model,
-            @Param("connection") long connection,
-            @Param("payer") String payer,
-            @Param("workspace") @Nullable Long workspace,
-            @Param("fresh") double freshSeconds);
+    Optional<Boolean> shareHeldAttempt(@Param("c") AttemptCredential credential, @Param("fresh") double freshSeconds);
 
     /** Extends a running lease, never past the work deadline. */
     @Modifying
