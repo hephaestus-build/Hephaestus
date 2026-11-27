@@ -35,6 +35,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @Component
 @ConditionalOnAgentRuntime
@@ -286,21 +287,24 @@ public class ReviewJobClaimService {
                     ? claimToWithhold(job, fence, CompositionStop.MODEL_UNAVAILABLE)
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
-        @Nullable Long poolId = null;
+        ObjectNode config = objectMapper.valueToTree(snapshot);
+        ReviewPoolAdmission.Claim pool = null;
         if (!composing) {
             // The dispatch already held this review until its pool had room (ReviewPoolAdmission); the pool's lock
             // makes the check exact when two servers dispatched reviews of one pool at once.
-            var pool = poolAdmission.claim(snapshot.model().connectionRef(), job);
-            poolId = pool.poolId();
-            if (!pool.admitted()) return new PoolWait(fence.runId(), poolId);
+            pool = poolAdmission.claim(snapshot.model().connectionRef(), job);
+            if (!pool.admitted()) return new PoolWait(fence.runId(), pool.poolId());
         }
 
         if (!(ResultAdmissionService.isContinuation(job)
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
-        if (poolId != null) admitToPool(job, poolId);
+        if (pool != null) {
+            admitToPool(job, pool.poolId());
+            config.put(ReviewPoolAdmission.SESSION_LIMIT, pool.sessionLimit());
+        }
         job.start(Instant.now());
-        job.setConfigSnapshot(snapshot.toJson(objectMapper));
+        job.setConfigSnapshot(config);
         jobRepository.save(job);
 
         return new ClaimResult(job, fence, snapshot, itemKind);

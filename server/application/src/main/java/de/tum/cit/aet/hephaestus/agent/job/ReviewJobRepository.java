@@ -150,22 +150,21 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
              THEN GREATEST(1, jsonb_array_length(j.input->'assignments')) ELSE 1 END""";
 
     /**
-     * How many measurements a model pool admitted that still run, in every workspace that shares it, their practices,
-     * the newest start, and the pool's limits.
+     * A running measurement and its pool limits. An idle pool has one row without a measurement.
      */
     interface PoolLoad {
-        long getRunning();
+        @Nullable
+        UUID getJobId();
 
-        long getPractices();
-
-        UUID[] getJobIds();
+        int getPractices();
 
         @Nullable
-        Instant getNewestStart();
+        Integer getSessionLimit();
 
-        /** Null only for a pool that is gone. */
         @Nullable
-        Integer getLearnedLimit();
+        Instant getStartedAt();
+
+        int getLearnedLimit();
 
         @Nullable
         Integer getMaxConcurrentCalls();
@@ -173,17 +172,24 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     @WorkspaceAgnostic("A model pool is shared by the workspaces whose models it serves; the load names no workspace")
     @Query(
-            value = "SELECT count(*) AS running, COALESCE(sum(" + PRACTICES + "), 0) AS practices," + """
-         COALESCE(array_agg(j.id), CAST(ARRAY[] AS uuid[])) AS "jobIds",
-         max(j.started_at) AS "newestStart",
-          (SELECT p.learned_limit FROM llm_call_pool p WHERE p.id=:poolId) AS "learnedLimit",
-          (SELECT p.max_concurrent_calls FROM llm_call_pool p WHERE p.id=:poolId) AS "maxConcurrentCalls"
-        FROM review_job j
-        JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
-        WHERE j.call_pool_id=:poolId AND j.status='RUNNING' AND r.kind='REVIEW' AND r.state='LEASED'
+            value = """
+        SELECT m.id AS "jobId", COALESCE(m.practices, 0) AS practices, m."sessionLimit",
+               m.started_at AS "startedAt", p.learned_limit AS "learnedLimit",
+               p.max_concurrent_calls AS "maxConcurrentCalls"
+        FROM llm_call_pool p
+        LEFT JOIN LATERAL (
+          SELECT j.id, j.started_at,
+        """ + PRACTICES + " AS practices, CAST(j.config_snapshot->>'" + ReviewPoolAdmission.SESSION_LIMIT
+                    + """
+        ' AS integer) AS "sessionLimit"
+          FROM review_job j
+          JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
+          WHERE j.call_pool_id=p.id AND j.status='RUNNING' AND r.kind='REVIEW' AND r.state='LEASED'
+        ) m ON TRUE
+        WHERE p.id=:poolId
         """,
             nativeQuery = true)
-    PoolLoad poolLoad(@Param("poolId") long poolId);
+    List<PoolLoad> poolLoad(@Param("poolId") long poolId);
 
     /**
      * The model that a queued measurement froze at its submission: only the reference that names its model pool, read

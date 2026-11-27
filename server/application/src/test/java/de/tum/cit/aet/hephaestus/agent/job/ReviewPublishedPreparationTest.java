@@ -6,8 +6,10 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
@@ -27,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -47,6 +50,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryPro
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
@@ -80,6 +84,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ReviewPublishedPreparationTest extends BaseUnitTest {
     private static final RepositoryKey KEY = new RepositoryKey(100L, 1L);
@@ -253,12 +258,30 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 mock(ReviewJobTelemetry.class, Answers.RETURNS_DEEP_STUBS),
                 files,
                 mock(AgentRunAuthority.class),
-                mock(ReviewPoolAdmission.class));
+                new ReviewPoolAdmission(
+                        jobs,
+                        mock(LlmCallPools.class),
+                        mock(ReviewAssignmentProgress.class),
+                        new SimpleMeterRegistry()));
     }
 
     private ReviewAttemptPreparation.PreparedSandbox prepare(JobEvidenceFiles files) {
         return preparation(files)
                 .prepare(job.getId(), job, fence, snapshot(), new AtomicReference<>(PreparationFailure.Stage.INPUTS));
+    }
+
+    @Test
+    void shouldPassTheClaimedSessionLimitToTheRunner() {
+        ObjectNode config = mapper.valueToTree(snapshot());
+        config.put(ReviewPoolAdmission.SESSION_LIMIT, 3);
+        job.setConfigSnapshot(config);
+        job.setCallPoolId(1L);
+
+        var prepared = prepare(first);
+        try (var staged = prepared.stagedInputs()) {
+            assertThat(staged.directories()).hasSize(1);
+            verify(adapter).buildSandboxSpec(argThat(request -> request.sessionLimit() == 3));
+        }
     }
 
     @Test
