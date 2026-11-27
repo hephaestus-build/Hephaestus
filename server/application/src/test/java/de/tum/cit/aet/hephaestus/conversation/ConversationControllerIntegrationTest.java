@@ -658,7 +658,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.content[0].used.cited")
                 .isEqualTo(false);
         var live = timeline.liveEntry(
-                running.getWorkspaceId(), developer.getId(), answers.getFirst().getId());
+                running.getWorkspaceId(),
+                accountId(developer),
+                answers.getFirst().getId());
         assertThat(live).hasValueSatisfying(entry -> assertThat(entry.used()).isNotNull());
     }
 
