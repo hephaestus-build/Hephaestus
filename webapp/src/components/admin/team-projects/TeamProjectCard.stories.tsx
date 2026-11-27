@@ -13,6 +13,7 @@ const meta = {
 		candidates: [GRACE],
 		onAddMember: fn(),
 		onRemoveMember: fn(),
+		onRemoveTeam: fn(),
 	},
 } satisfies Meta<typeof TeamProjectCard>;
 
@@ -53,5 +54,34 @@ export const PendingAcceptsNoSecondAdd: Story = {
 			await userEvent.click(option);
 		}
 		await expect(args.onAddMember).not.toHaveBeenCalled();
+	},
+};
+
+/** Removing the team asks first: the button only opens the confirmation. */
+export const RemoveTeam: Story = {
+	play: async ({ args, canvas, userEvent: user }) => {
+		await user.click(canvas.getByRole("button", { name: "Remove team project" }));
+		await expect(args.onRemoveTeam).toHaveBeenCalledWith(args.team);
+	},
+};
+
+/** While a change is in flight, the team's controls start no second one. */
+export const Pending: Story = {
+	args: { pending: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Remove team project" })).toBeDisabled();
+		await expect(
+			canvas.getByRole("button", { name: "Remove Ada Lovelace from Team Wayfinding" }),
+		).toBeDisabled();
+	},
+};
+
+/** A change that was not saved says so on the team it concerns. */
+export const WriteError: Story = {
+	args: { writeError: true },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("Your last change to this team was not saved. Try again."),
+		).toBeVisible();
 	},
 };

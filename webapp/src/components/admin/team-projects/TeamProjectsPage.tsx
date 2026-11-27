@@ -24,13 +24,15 @@ export type TeamProjectsState =
 
 export interface TeamProjectsPageProps extends Pick<
 	TeamProjectCardProps,
-	"onAddMember" | "onRemoveMember"
+	"onAddMember" | "onRemoveMember" | "onRemoveTeam"
 > {
 	state: TeamProjectsState;
 	onCreate: (name: string) => void;
 	creating?: boolean;
-	/** The team whose add or removal is in flight. */
+	/** The team whose change is in flight. */
 	pendingTeamId?: string;
+	/** The team whose last change was not saved. */
+	failedTeamId?: string;
 }
 
 function CreateTeamProject({
@@ -72,7 +74,9 @@ export function TeamProjectsPage({
 	creating = false,
 	onAddMember,
 	onRemoveMember,
+	onRemoveTeam,
 	pendingTeamId,
+	failedTeamId,
 }: TeamProjectsPageProps) {
 	return (
 		<section aria-labelledby="team-projects-heading" className="flex flex-col gap-4">
@@ -93,7 +97,9 @@ export function TeamProjectsPage({
 				state={state}
 				onAddMember={onAddMember}
 				onRemoveMember={onRemoveMember}
+				onRemoveTeam={onRemoveTeam}
 				pendingTeamId={pendingTeamId}
+				failedTeamId={failedTeamId}
 			/>
 		</section>
 	);
@@ -103,7 +109,9 @@ function TeamProjectsBody({
 	state,
 	onAddMember,
 	onRemoveMember,
+	onRemoveTeam,
 	pendingTeamId,
+	failedTeamId,
 }: Omit<TeamProjectsPageProps, "onCreate" | "creating">) {
 	switch (state.status) {
 		case "loading": {
@@ -150,7 +158,9 @@ function TeamProjectsBody({
 									)}
 									onAddMember={onAddMember}
 									onRemoveMember={onRemoveMember}
+									onRemoveTeam={onRemoveTeam}
 									pending={team.id === pendingTeamId}
+									writeError={team.id === failedTeamId}
 								/>
 							</li>
 						);
