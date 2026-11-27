@@ -31,26 +31,38 @@ class AdviceTextTest extends BaseUnitTest {
         assertThat(AdviceText.admits(text)).isFalse();
     }
 
-    /** Every string from the three review rounds of #5420. "refuse" over "admit" when in doubt. */
+    /**
+     * Every string from the review rounds of #5420, each marked refuse or admit. When in doubt the rule refuses, so some
+     * rows refuse acceptable advice on purpose.
+     */
     @ParameterizedTest(name = "{1}: {0}")
     @CsvSource(delimiter = '|', textBlock = """
-                    In 3 pull requests the tests were missing.                     | refuse
-                    Three merge requests had no description.                       | refuse
-                    Several of your PRs lack tests.                                | refuse
-                    Across multiple reviews the rollback was missing.              | refuse
-                    Two issues had no acceptance criteria.                         | refuse
-                    You skipped tests in 2 recent pull requests.                   | refuse
-                    Eleven pull requests had no tests.                             | refuse
-                    Two in-flight pull requests had no tests.                      | refuse
-                    Four of your merge requests skipped the checklist.             | refuse
-                    Only 1 pull request included rollback instructions.            | refuse
-                    One pull request is enough for this change.                    | refuse
-                    Add two tests before review.                                   | admit
-                    The two changes in this pull request share one test; split it so each failure points at one change. | admit
-                    Split it into two commits so each review reads one change.     | admit
-                    Add one test per review comment.                               | admit
-                    Add a test for the empty list.                                 | admit
-                    Name the risk of the migration, so a reviewer can check it.    | admit
+                    In 3 pull requests the tests were missing. | refuse
+                    Three merge requests had no description. | refuse
+                    Several of your PRs lack tests. | refuse
+                    Across multiple reviews the rollback was missing. | refuse
+                    Two issues had no acceptance criteria. | refuse
+                    You skipped tests in 2 recent pull requests. | refuse
+                    Eleven pull requests had no tests. | refuse
+                    Two in-flight pull requests had no tests. | refuse
+                    Four of your merge requests skipped the checklist. | refuse
+                    Only 1 pull request included rollback instructions. | refuse
+                    One pull request is enough for this change. | refuse
+                    Two recent, unrelated pull requests lacked rollback instructions. | refuse
+                    Three high\u2011risk merge requests lacked rollback instructions. | refuse
+                    You left acceptance criteria out of 2+ issues. | refuse
+                    Two **reviews** missed the rollback risk. | refuse
+                    Both pull requests lacked rollback instructions. | refuse
+                    Twenty-one pull requests had no tests. | refuse
+                    A few merge requests skipped the checklist. | refuse
+                    The two changes in this pull request share one test; split it so each failure points at one change. | refuse
+                    Split it into two commits so each review reads one change. | refuse
+                    Add one test per review comment. | refuse
+                    Add two tests before review. | admit
+                    Name the risk of the migration, so a reviewer can check it. | admit
+                    Add a test for the empty list. | admit
+                    Name the two risks of this change in the description. | admit
+                    Write the rollback steps in the description before review. | admit
                     """)
     void shouldRefuseEveryCountOfWorkAndAdmitAdviceAboutOneReview(String text, String expected) {
         assertThat(AdviceText.admits(text) ? "admit" : "refuse").isEqualTo(expected);

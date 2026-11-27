@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.advice;
 
 import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -15,18 +16,20 @@ final class AdviceText {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
-     * A count of work: a number, then within two words a work noun, singular or plural. It refuses when in doubt: a
-     * false refusal writes no advice, but a false admission puts a count on the profile that the view must compute. A
-     * preposition between the number and the noun ends the count, so "two tests before review" names no work.
+     * A count of work: a number, then within three words a work noun, singular or plural, matched on the text as plain
+     * lowercase words ({@link #words}). It refuses when in doubt: a false refusal writes no advice, but a false admission
+     * puts a count on the profile that the view must compute (ADR 0160). Only "before" or "after" ends the count, so
+     * "two tests before review" names no work.
      */
     private static final Pattern COUNT_OF_WORK = Pattern.compile(
             "\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen"
-                    + "|seventeen|eighteen|nineteen|twenty|dozens?|several|many|multiple|numerous|a few)\\s+"
-                    + "(?:(?!(?:in|on|at|by|for|from|before|after|during|to|into|per|with|without|within|across|over"
-                    + "|under|between)\\s)[\\w-]+\\s+){0,2}"
-                    + "(?:of\\s+(?:your|the|these|those)\\s+)?"
-                    + "(pull requests?|merge requests?|PRs?|MRs?|issues?|reviews?)\\b",
-            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+                    + "|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|dozens?"
+                    + "|both|couple|pair|few|several|many|multiple|numerous|various) "
+                    + "(?:(?!(?:before|after) )\\S+ ){0,3}"
+                    + "(pull requests?|merge requests?|prs?|mrs?|issues?|reviews?)\\b");
+
+    /** Anything that is not a letter or a digit: punctuation, symbols, dashes and Markdown. */
+    private static final Pattern NOT_A_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 
     private AdviceText() {}
 
@@ -36,6 +39,11 @@ final class AdviceText {
                 && text.length() <= MAX_LENGTH
                 && !HiddenCharacters.hides(text)
                 && !PATTERN_CLAIM.matcher(text).find()
-                && !COUNT_OF_WORK.matcher(text).find();
+                && !COUNT_OF_WORK.matcher(words(text)).find();
+    }
+
+    /** The text as lowercase words with one space between them, so formatting cannot split a count from its noun. */
+    private static String words(String text) {
+        return NOT_A_WORD.matcher(text.toLowerCase(Locale.ROOT)).replaceAll(" ").strip();
     }
 }
