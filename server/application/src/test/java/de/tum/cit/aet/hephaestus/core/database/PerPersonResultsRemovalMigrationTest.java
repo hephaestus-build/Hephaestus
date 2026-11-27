@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("database")
 class PerPersonResultsRemovalMigrationTest {
-    private static final String CHANGELOG = "20261127141851-feat-private-data-operator-model.xml";
+    private static final String CHANGELOG = "-feat-private-data-operator-model.xml";
     private static final long NAMED = 979_410;
     private static final long UNNAMED = 979_411;
 

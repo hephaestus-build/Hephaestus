@@ -1018,8 +1018,11 @@ export const zCreateFeedbackDecisionRequest = z.object({
  */
 export const zFeedbackDestination = z.string();
 
+/**
+ * A developer's current disagreement with feedback, as a workspace admin reads it on a result.
+ */
 export const zFeedbackDisagreement = z.object({
-	comment: z.string(),
+	comment: z.string().nullable(),
 	destination: zFeedbackDestination,
 	feedbackId: z.uuid(),
 	respondedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -1067,7 +1070,7 @@ export const zFeedbackModeAssignment = z.object({
 export const zFeedbackResolution = z.string();
 
 /**
- * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
+ * A developer's answer to feedback: the resolution, and the explanation only for a disagreement that the developer gave in the last 30 days
  */
 export const zFeedbackAnswer = z.object({
 	comment: z.string().nullable(),
@@ -2409,11 +2412,6 @@ export const zPasskeyStatus = z.object({
 	recoveryRequired: z.boolean(),
 	verified: z.boolean(),
 	workspaceAdminRequired: z.boolean(),
-});
-
-export const zPerPersonResults = z.object({
-	canTurnOn: z.boolean(),
-	enabled: z.boolean(),
 });
 
 export const zPersonDataProvider = z.object({
@@ -4232,7 +4230,6 @@ export const zReviewQueueItem = z.object({
 	heldForBudget: z.boolean(),
 	item: zItemRef,
 	jobId: z.uuid(),
-	person: zReviewPerson.nullable(),
 	progress: zReviewProgress.nullable(),
 	reviewId: z.uuid(),
 	since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -4953,7 +4950,6 @@ export const zReview = z.object({
 	origin: zReviewOrigin,
 	practices: z.array(zReviewPractice),
 	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
 	results: zReviewResultCounts,
 	startedBy: zItemEvent.nullable(),
 	status: zReviewStatus,
@@ -4982,7 +4978,6 @@ export const zReviewSummary = z.object({
 	origin: zReviewOrigin,
 	practices: z.array(zReviewPractice),
 	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
 	results: zReviewResultCounts,
 	startedBy: zItemEvent.nullable(),
 	status: zReviewStatus,
@@ -5237,6 +5232,113 @@ export const zStateBasis = zClaimBasis.and(
 		type: z.literal("StateBasis"),
 	}),
 );
+
+export const zSupportShareMessageAuthor = z.enum(["QUESTION", "ANSWER"]);
+
+/**
+ * One message of a shared turn, exactly as the person saw it when they shared it.
+ */
+export const zSupportShareMessage = z.object({
+	author: zSupportShareMessageAuthor,
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	entryId: z.uuid(),
+	text: z.string(),
+});
+
+export const zSupportSharePreviewRequest = z.object({
+	includeText: z.boolean(),
+});
+
+/**
+ * An instance admin who can receive a support share.
+ */
+export const zSupportShareRecipient = z.object({
+	accountId: z.string(),
+	displayName: z.string(),
+});
+
+export const zSupportShareRequest = z.object({
+	includeText: z.boolean(),
+	recipientAccountId: z.string().regex(/[1-9][0-9]{0,18}/),
+	textDigest: z.string().length(64).optional(),
+});
+
+export const zSupportShareState = z.enum(["ACTIVE", "EXPIRED", "REVOKED"]);
+
+/**
+ * A share as the person who made it sees it: to whom, until when, and how often it was read.
+ */
+export const zSupportShare = z.object({
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	expiresAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	includesText: z.boolean(),
+	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	readCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	recipient: zSupportShareRecipient,
+	revokedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	state: zSupportShareState,
+	turnId: z.uuid(),
+	workspaceSlug: z.string(),
+});
+
+/**
+ * The diagnostics of one conversation turn. It holds no text.
+ */
+export const zSupportShareTurn = z.object({
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	failedCall: z.string().optional(),
+	failedCallStatus: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	failureReason: zConversationTurnFailureReason.optional(),
+	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	queuedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	runId: z.uuid(),
+	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	status: zConversationTurnStatus,
+	surface: zConversationTurnSurface,
+	turnId: z.uuid(),
+	workspaceSlug: z.string(),
+});
+
+/**
+ * Exactly what the recipient will read, before the person shares it.
+ */
+export const zSupportSharePreview = z.object({
+	messages: z.array(zSupportShareMessage),
+	recipients: z.array(zSupportShareRecipient),
+	textDigest: z.string().optional(),
+	turn: zSupportShareTurn,
+	validForDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * A share as its recipient reads it. The person chose to show their name and this turn; the share shows nothing
+ * else about them.
+ */
+export const zSupportShareReceived = z.object({
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	expiresAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	includesText: z.boolean(),
+	messages: z.array(zSupportShareMessage),
+	sharedBy: z.string(),
+	textWithheld: z.boolean(),
+	turn: zSupportShareTurn.optional(),
+	workspaceSlug: z.string(),
+});
 
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
@@ -5694,7 +5796,6 @@ export const zReviewBoundResult = z.object({
 	id: z.uuid(),
 	item: zItemRef,
 	outcome: zResultOutcome,
-	person: zReviewPerson.nullable(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -5779,7 +5880,6 @@ export const zReviewProblem = z.object({
 	item: zItemRef,
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
-	person: zReviewPerson.nullable(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -5827,7 +5927,6 @@ export const zReviewResult = z.object({
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: zReviewOrigin,
 	outcome: zResultOutcome,
-	person: zReviewPerson.nullable(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	problemCount: z
@@ -5986,10 +6085,6 @@ export const zUpdateNotificationPreferences = z.object({
  */
 export const zUpdateOutlineCollectionStateRequest = z.object({
 	state: zOutlineCollectionMirrorState,
-});
-
-export const zUpdatePerPersonResults = z.object({
-	enabled: z.boolean(),
 });
 
 export const zUpdatePracticeGroupRequest = z.object({
@@ -6232,7 +6327,6 @@ export const zReviewDetail = z.object({
 	origin: zReviewOrigin,
 	practices: z.array(zReviewPractice),
 	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
 	results: zReviewResultCounts,
 	runtime: zReviewRuntime.nullable(),
 	startedBy: zItemEvent.nullable(),
@@ -6308,32 +6402,6 @@ export const zUserTeams = z.object({
 	name: z.string(),
 	teams: z.array(zTeamSummary),
 	url: z.string(),
-});
-
-export const zUserViewAccount = z.object({
-	account: zAccountRef,
-	accountId: z.string().regex(/^[1-9][0-9]*$/),
-	providerLogin: z.string().nullable(),
-});
-
-/**
- * One numbered page of a list
- */
-export const zOffsetPageDtoUserViewAccount = z.object({
-	content: z.array(zUserViewAccount),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zValue = z.object({
@@ -6987,7 +7055,6 @@ export const zWorkspaceListItem = z.object({
 	displayName: z.string(),
 	id: z.int(),
 	linkHosts: z.array(z.string()),
-	perPersonResultsForAdmins: z.boolean().optional(),
 	practicesEnabled: z.boolean(),
 	providerType: zIdentityProviderType.optional(),
 	publishesPublicActivity: z.boolean(),
@@ -7128,7 +7195,6 @@ export const zReviewProblemDetail = z.object({
 	item: zItemRef,
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
-	person: zReviewPerson.nullable(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	problem: zProblem,
@@ -7172,7 +7238,6 @@ export const zReviewResultDetail = z.object({
 	marks: z.array(zResultMark),
 	origin: zReviewOrigin,
 	outcome: zResultOutcome,
-	person: zReviewPerson.nullable(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	practiceVersionId: z
