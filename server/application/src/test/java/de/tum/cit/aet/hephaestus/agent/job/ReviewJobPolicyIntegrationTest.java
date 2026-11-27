@@ -1147,8 +1147,20 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var poolAdmission = SandboxReviewClaims.poolAdmission(context, pool.pools());
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
         jdbc.update("UPDATE llm_call_pool SET learned_limit=4 WHERE id=?", pool.poolId());
+        long open = withThirtyTwoPractices(retry);
+        var first = claimLeased(retry, pool.claims()).orElseThrow();
+        transactions.executeWithoutResult(status -> {
+            assertThat(jdbc.update(
+                            "UPDATE review_item SET state='WITHHELD', reason='EXECUTION_FAILED'"
+                                    + " WHERE workspace_id=? AND job_id=? AND practice_id<>?",
+                            retry.getWorkspaceId(),
+                            retry.getId(),
+                            open))
+                    .isEqualTo(31);
+            assertThat(reviewRuns.requeue(retry.getId(), first.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
+                    .isTrue();
+        });
         runningMeasurement(pool, another, Instant.now().minus(Duration.ofMinutes(2)));
-        withOneOpenPracticeOfThirtyTwo(retry);
 
         assertThat(poolAdmission.pass(reviews).admits(due(retry))).isTrue();
         assertThat(claimLeased(retry, pool.claims())).isPresent();
@@ -1161,7 +1173,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(claimLeased(another, pool.claims())).isPresent();
     }
 
-    private void withOneOpenPracticeOfThirtyTwo(ReviewJob job) {
+    private long withThirtyTwoPractices(ReviewJob job) {
         var versions = context.getBean(PracticeVersionService.class);
         var kind = new ItemKind("scm.pull_request");
         var definition = DefinitionTestFixtures.definition(kind, "Pool fixture", "Pool fixture", null);
@@ -1179,15 +1191,13 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                             practice.getCurrentVersion().getId());
                     jdbc.update(
                             """
-                            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,reason,job_id)
-                            SELECT ?,?,?,?,item_version,?,?,? FROM review WHERE workspace_id=? AND id=?
+                            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,job_id)
+                            SELECT ?,?,?,?,item_version,? FROM review WHERE workspace_id=? AND id=?
                             """,
                             job.getReviewId(),
                             job.getWorkspaceId(),
                             practice.getId(),
                             item,
-                            index == 32 ? "LISTED" : "WITHHELD",
-                            index == 32 ? null : "EXECUTION_FAILED",
                             job.getId(),
                             job.getWorkspaceId(),
                             job.getReviewId());
@@ -1198,8 +1208,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
             var stored = jobs.findById(job.getId()).orElseThrow();
             stored.setInput(new ReviewJobInput(item, frozen));
             jobs.saveAndFlush(stored);
-            jdbc.update("UPDATE agent_run SET attempt=1, lease_epoch=1 WHERE id=?", job.getRunId());
         });
+        return frozen.getLast().practiceId();
     }
 
     @Test
