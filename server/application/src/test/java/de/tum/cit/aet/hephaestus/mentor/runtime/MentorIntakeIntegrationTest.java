@@ -252,14 +252,16 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     /** A create and a delete that race share the source key: either order ends with one deleted source and no open request. */
     @Test
     void shouldEndWithOneDeletedSourceWhenACreateAndADeleteRace() {
-        for (int round = 0; round < 3; round++) {
+        for (int index = 0; index < 3; index++) {
+            // Each round has its own event ids: a repeated id is a duplicate delivery, not a new race.
+            int round = index;
             String message = message();
             var barrier = new CyclicBarrier(2);
             List<CompletableFuture<Admission>> racers =
                     List.of(IngressKind.MESSAGE, IngressKind.MESSAGE_DELETED).stream()
                             .map(kind -> CompletableFuture.supplyAsync(() -> {
                                 await(barrier);
-                                return admit(kind, kind == IngressKind.MESSAGE ? "e1" : "e2", message, FIRST);
+                                return admit(kind, (kind == IngressKind.MESSAGE ? "e1" : "e2") + round, message, FIRST);
                             }))
                             .toList();
             racers.forEach(CompletableFuture::join);
