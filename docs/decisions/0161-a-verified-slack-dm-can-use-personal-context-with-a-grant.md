@@ -4,7 +4,7 @@
 **Date:** 2026-11-27
 **Authors:** Felix T.J. Dietrich
 
-**Supersedes:** [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md).
+**Amends:** [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decisions 4–5 and the DM fallback.
 
 **Builds on:** [ADR 0158](0158-the-mentor-orders-commitments-per-person-and-answers-per-request.md), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md).
 

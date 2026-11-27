@@ -76,6 +76,6 @@ The files of this directory are the index. Each file name starts with the ADR's 
 A new ADR adds only its own file, so two pull requests that each add an ADR do not conflict.
 To read the numbers, titles and statuses as one table, run `vp run report:decisions`.
 
-- [ADR 0161](0161-a-verified-slack-dm-can-use-personal-context-with-a-grant.md) replaces ADR 0123's Slack detail levels and DM fallback.
+- [ADR 0161](0161-a-verified-slack-dm-can-use-personal-context-with-a-grant.md) amends ADR 0123's Slack detail levels and DM fallback.
 
 Template: [0000-template.md](0000-template.md).
