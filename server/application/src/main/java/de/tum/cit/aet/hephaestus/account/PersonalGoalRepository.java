@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.account;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+@WorkspaceAgnostic("The owner row policy scopes the personal goal to its account")
 interface PersonalGoalRepository extends JpaRepository<PersonalGoal, Long> {
     @Query(
             value =

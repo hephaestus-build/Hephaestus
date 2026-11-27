@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.account;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataErasureAudit;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
@@ -23,6 +24,7 @@ public class PersonalGoals {
     private final OwnerScope owners;
     private final PersonDataWriteFence writeFence;
     private final PrivacyJournal journal;
+    private final PersonDataErasureAudit erasureAudit;
 
     @Transactional(readOnly = true)
     public PersonalGoalDTO read(PersonAct act) {
@@ -51,12 +53,13 @@ public class PersonalGoals {
             // A lost reply or a pending journal write can retry the same exact deletion.
             if (revision != goal.getRevision() - 1
                     || !journal.confirmIfRecorded(id, PrivacyJournalKind.RECORD_DELETED, refs)) throw changed();
-            return PersonalGoalDTO.of(goal);
+        } else {
+            requireRevision(goal, revision);
+            goal.forget();
+            goals.saveAndFlush(goal);
+            journal.record(id, PrivacyJournalKind.RECORD_DELETED, refs);
         }
-        requireRevision(goal, revision);
-        goal.forget();
-        goals.saveAndFlush(goal);
-        journal.record(id, PrivacyJournalKind.RECORD_DELETED, refs);
+        erasureAudit.requestedByOwner(owner);
         return PersonalGoalDTO.of(goal);
     }
 

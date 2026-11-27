@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.export.ExportBundleAssembler;
 import de.tum.cit.aet.hephaestus.core.auth.export.ExportGenerationWorker;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -95,6 +96,26 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(new PersonalGoalDTO(3, null));
         save(token, 0, WORDS).expectStatus().isEqualTo(HttpStatus.CONFLICT).expectBody(Void.class);
         assertThat(read(token)).isEqualTo(new PersonalGoalDTO(3, null));
+    }
+
+    @Test
+    void shouldKeepTheGoalWhenTheOwnersSignInIsStale() {
+        long owner = signup();
+        String freshToken = token(owner);
+        save(freshToken, 0, WORDS).expectStatus().isOk().expectBody(Void.class);
+        String staleToken = issuer.issue(owner, TokenConstraints.session(null, Instant.now().minusSeconds(3600)), null)
+                .value();
+
+        client.delete()
+                .uri(GOAL + "?revision=1")
+                .headers(headers -> headers.setBearerAuth(staleToken))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
+        assertThat(read(freshToken)).isEqualTo(new PersonalGoalDTO(1, WORDS));
     }
 
     @Test
