@@ -84,12 +84,22 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
    Do the same for each copy of a send that ended `UNCERTAIN`.
 6. For such a copy with a `write_marker`, search the provider for the marker.
    Hephaestus appends it to the posted text.
-7. For a copy with a `conversation_entry_id`, read `conversation_id`, `turn_id`, `surface` and `slack_ts` of that `conversation_entry` row.
+7. For a copy with a `conversation_turn_id`, read `conversation_id`, `surface`, `status` and `started_at` of that `conversation_turn` row.
    The surface `APP` has no Slack copy.
+   A Slack turn has a Slack copy only if it ended `DONE`, and only for a claim at or after `started_at`.
+   Read `slack_ts` of the turn's `ANSWER` entries.
 8. For a Slack copy, read `slack_team_id` and `slack_channel_id` of the main conversation.
    For a thread, follow `conversation.parent_conversation_id` to the main conversation.
-9. If a Slack copy has no `slack_ts`, find the bot reply with the Slack [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
-10. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
+9. If a Slack copy has no `slack_ts`, Slack did not confirm the post.
+   If Slack has the reply, it is the first bot message after the question's `slack_ts`, in the question's thread or at the top level of the DM.
+   Its metadata names the question's entry ID.
+   Find it with the Slack [conversations.history](https://docs.slack.dev/reference/methods/conversations.history/) or [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
+   Never delete the question itself.
+10. The preview gives each Slack copy as a locator:
+    - `slack:<team>/<channel>/<ts>` names the reply.
+    - `slack:<team>/<channel>?after=<question ts>&thread=<thread ts>&question=<entry id>` means that Slack did not confirm the post. Find the reply as in step 9.
+    - `slack:conversation/<id>` means that a Slack disconnect cleared the DM of the conversation. Record that you cannot find the reply.
+11. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
 
 ## Delete each copy
 

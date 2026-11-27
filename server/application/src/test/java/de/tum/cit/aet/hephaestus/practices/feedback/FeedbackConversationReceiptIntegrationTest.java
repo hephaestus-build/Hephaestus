@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -55,6 +56,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     @Autowired
     PracticesPersonDataCatalog practicesStores;
+
+    @Autowired
+    PersonDataService personData;
 
     UUID conversationId, copyId, ledgerConversationId, turnId;
 
@@ -551,6 +555,21 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThatThrownBy(() -> custody.requireAcknowledged(workspace.getId(), List.of(conversationId)))
                 .as("retention and purge keep the custody")
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    /**
+     * Once the person's erasure is requested, Hephaestus claims none of their feedback for a conversation. The erasure
+     * admits a settled conversation copy, so a claim after the request must not reach it (#5440).
+     */
+    @Test
+    void shouldRefuseAClaimAfterThePersonsErasureWasRequested() {
+        long administrator =
+                Objects.requireNonNull(persistInstanceAdmin("Administrator").getId());
+        var preview = personData.preview(administrator, developerId, List.of());
+        personData.requestErasure(preview.request().getId(), administrator, false);
+
+        assertThat(claim(1)).isEmpty();
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.PLANNED);
     }
 
     @Test

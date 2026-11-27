@@ -546,6 +546,12 @@ the preview. No feedback body, profile, credential or subject is placed in this 
 An unconfirmed write with no exact inspection locator fails closed. Erasure cannot silently discard
 its delivery record. The JSON export includes `feedback_copy.external_url`.
 
+A conversation copy that a receipt settled unconfirmed is the one exception. Its words are in
+Hephaestus, which the same erasure redacts, or in a Slack reply. The preview lists that reply as an
+external copy with a `slack:` locator, so the erasure needs a confirmed removal. A claim that no
+receipt settled still fails closed. `ConversationSlackReplyLocators` names the reply from the turn,
+the conversation's Slack DM and the stored `slack_ts`, never from the outbox row.
+
 `PersonProcessingSuppression.isReviewJobSuppressed` reads the exact frozen job keys in a fresh
 transaction while an erasure is active or resumable. A leased-session check of the job capability
 hash rejects stale queued callers after completion. Erasure revokes that hash without retaining

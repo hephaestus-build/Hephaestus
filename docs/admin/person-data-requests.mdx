@@ -119,7 +119,8 @@ Keep the request open while you check the selection and the origin of the copies
 ### The erasure refuses the preview
 
 **Cause:** A provider write started, or its result changed, after the preview.
-An unconfirmed write, or a comment without an exact locator, also stops the request and names its send or review.
+An unconfirmed provider write, or a comment without an exact locator, also stops the request and names its send or review.
+An answer of Hephaestus that may have shown feedback does not stop it: the erasure redacts the answer, and the preview lists a Slack reply that may hold the feedback.
 
 **Fix:**
 
@@ -127,6 +128,19 @@ An unconfirmed write, or a comment without an exact locator, also stops the requ
 2. Select **Preview data** again.
 
 **Check:** The erasure accepts the new preview.
+
+### An account deletion waits for a copy outside Hephaestus
+
+**Cause:** The person deleted their account, and a copy of feedback about them may be outside Hephaestus, for example in a Slack reply.
+The request stops with the failure code `EXTERNAL_COPIES_REQUIRE_REMOVAL`.
+
+**Fix:**
+
+1. Open the request, and remove each listed copy.
+   [Remove feedback from a provider](./remove-feedback-from-a-provider) gives the steps.
+2. Select **Resume erasure…**, and confirm the removal of the listed copies.
+
+**Check:** The request shows **Erasure complete**.
 
 ### A server with evidence is offline
 
