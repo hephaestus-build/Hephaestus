@@ -38,10 +38,18 @@ final class ProxyTransportClosure {
         synchronized (this) {
             closing.add(connection);
         }
-        connection.channel().closeFuture().addListener(_ -> {
-            // A database release must not block Netty's event loop.
-            Thread.ofVirtual().name("llm-transport-closed").start(() -> closed(connection));
-        });
+        try {
+            connection.channel().closeFuture().addListener(_ -> {
+                // A database release must not block Netty's event loop.
+                Thread.ofVirtual().name("llm-transport-closed").start(() -> closed(connection));
+            });
+        } catch (IllegalStateException unregistered) {
+            // Netty refuses a listener on a channel that never reached an event loop or has already left it. Such a
+            // channel has no close left to wait for, and the exception would replace the call's own outcome.
+            connection.dispose();
+            closed(connection);
+            return;
+        }
         connection.dispose();
     }
 
