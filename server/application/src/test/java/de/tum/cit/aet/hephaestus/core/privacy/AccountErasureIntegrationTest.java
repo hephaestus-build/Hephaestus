@@ -147,6 +147,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
@@ -486,6 +487,27 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         identity.setProviderUserKey(subject);
         links.saveAndFlush(identity);
         return Objects.requireNonNull(account.getId());
+    }
+
+    @Test
+    void shouldCompleteAnErasureAdmittedBeforeTheAdviceStoresWereAdded() {
+        var admin = new Account("Rolling upgrade erasure operator");
+        admin.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId = Objects.requireNonNull(accounts.saveAndFlush(admin).getId());
+        long subject = Objects.requireNonNull(accounts.saveAndFlush(new Account("Subject of an in-flight erasure"))
+                .getId());
+        var preview = personData.preview(adminId, subject, List.of());
+        UUID id = preview.request().getId();
+        personData.requestErasure(id, adminId, true);
+
+        // An older replica had the same scope and admission hold, with no advice keys in its inventory.
+        var oldSelection =
+                mapper.readValue(Objects.requireNonNull(preview.request().getSelectionsJson()), ObjectNode.class);
+        oldSelection.remove(List.of("practice_advice", "practice_advice_revision", "practice_advice_source"));
+        jdbc.update("UPDATE person_data_request SET selections_json=? WHERE id=?", oldSelection.toString(), id);
+
+        personData.run(id);
+        assertThat(personData.get(id).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
     }
 
     @Test
@@ -1756,9 +1778,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         Map<String, Long> expectedReceipts = new TreeMap<>(counts);
         // Retained controls report no removal. Earlier owner steps already cleared the decision and resolver, and
         // the copies' erasure already deleted the recorded attempt inputs. A copied identity goes last, and the erasure
-        // of its review item already removed it.
+        // of its review item already removed it. The result step's cascade already removed the advice sources.
         for (String store : List.of(
                 "review_item_copied_identity",
+                "practice_advice_source",
                 "identity_restriction",
                 "privacy_journal",
                 "git_repository_history",
