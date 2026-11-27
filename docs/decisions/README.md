@@ -76,4 +76,6 @@ The files of this directory are the index. Each file name starts with the ADR's 
 A new ADR adds only its own file, so two pull requests that each add an ADR do not conflict.
 To read the numbers, titles and statuses as one table, run `vp run report:decisions`.
 
+- [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md) proposes team growth scope and records the 1.0 shared-channel limits.
+
 Template: [0000-template.md](0000-template.md).
