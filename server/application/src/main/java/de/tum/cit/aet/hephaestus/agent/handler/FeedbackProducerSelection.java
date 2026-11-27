@@ -9,11 +9,13 @@ import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewProducerPin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Instant;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,16 +38,19 @@ public class FeedbackProducerSelection {
     private final ReviewProducerPin pins;
     private final ReviewJobAssignments assignments;
     private final MentorReviewIntake intake;
+    private final ApplicationEventPublisher events;
 
     FeedbackProducerSelection(
             FeedbackProducerProperties properties,
             ReviewProducerPin pins,
             ReviewJobAssignments assignments,
-            MentorReviewIntake intake) {
+            MentorReviewIntake intake,
+            ApplicationEventPublisher events) {
         this.properties = properties;
         this.pins = pins;
         this.assignments = assignments;
         this.intake = intake;
+        this.events = events;
         if (properties.isAllowMentorBeforeAdviceErasure())
             log.warn("A seal may choose the mentor before the release that opens it: for a synthetic proof environment"
                     + " only");
@@ -59,6 +64,12 @@ public class FeedbackProducerSelection {
         var choice = decide(job, review, admissionDigest);
         pins.pin(job.getWorkspaceId(), job.getReviewId(), choice.producer());
         return choice;
+    }
+
+    /** Hands the sealed review to its producer's listeners, once the seal kept its inputs and saved the job. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handOff(ReviewJob job) {
+        events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
     }
 
     private Choice decide(ReviewJob job, ReviewSnapshot review, String admissionDigest) {

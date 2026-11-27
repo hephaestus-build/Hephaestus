@@ -33,6 +33,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 /** The selector's decision table (RV1-DESIGN.md S1, S2, S7, S8, S8c, S9 to S12) with the pin and the intake mocked. */
 @Tag("unit")
@@ -60,7 +61,7 @@ class FeedbackProducerSelectionTest {
         closed.setMentorWorkspaceIds(Set.of(job.getWorkspaceId()));
         assigned(assignment(AUTHOR, AboutRole.AUTHOR));
 
-        var choice = new FeedbackProducerSelection(closed, pins, assignments, intake)
+        var choice = new FeedbackProducerSelection(closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
                 .choose(job, review(PULL_REQUEST, ReviewOrigin.REQUEST), "d");
 
         assertThat(choice).isEqualTo(choice(FeedbackProducer.LEGACY, FeedbackProducerReason.GATE_CLOSED));
@@ -141,7 +142,8 @@ class FeedbackProducerSelectionTest {
     }
 
     private FeedbackProducerSelection.Choice choose(ReviewSnapshot review) {
-        return new FeedbackProducerSelection(properties, pins, assignments, intake).choose(job, review, "d");
+        return new FeedbackProducerSelection(properties, pins, assignments, intake, mock(ApplicationEventPublisher.class))
+                .choose(job, review, "d");
     }
 
     private void assigned(ReviewAssignmentSnapshot... assigned) {

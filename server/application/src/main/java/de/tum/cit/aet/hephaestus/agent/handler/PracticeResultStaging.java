@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Instant;
 import java.util.Base64;
@@ -33,7 +32,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +54,6 @@ public class PracticeResultStaging {
     private final ObjectMapper mapper;
     private final PracticeCatalogInjector catalog;
     private final ReviewJobRepository jobs;
-    private final ApplicationEventPublisher events;
     private final FeedbackProducerSelection producers;
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -193,7 +190,7 @@ public class PracticeResultStaging {
         }
         retainSealBasis(identity, job, digest, staged);
         jobs.saveAndFlush(job);
-        if (handsOff) events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
+        if (handsOff) producers.handOff(job);
     }
 
     private void retainSealBasis(

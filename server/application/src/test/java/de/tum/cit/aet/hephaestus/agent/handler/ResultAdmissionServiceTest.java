@@ -16,6 +16,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewProducerPin;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
@@ -24,7 +26,6 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSou
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.PinnedInlineAnchorQuery;
-import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -54,7 +55,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -180,8 +180,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         mapper,
                         new PracticeCatalogInjector(mapper),
                         jobs,
-                        events,
-                        legacyProducer()),
+                        legacyProducer(events)),
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
@@ -961,13 +960,15 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         return new AdmittedResultSnapshot(id, candidate, List.of());
     }
 
-    /** The seal chooses no new producer here: the gate is closed by default. */
-    static FeedbackProducerSelection legacyProducer() {
-        var producers = mock(FeedbackProducerSelection.class);
-        lenient()
-                .when(producers.choose(any(), any(), any()))
-                .thenReturn(new FeedbackProducerSelection.Choice(
-                        FeedbackProducer.LEGACY, FeedbackProducerReason.GATE_CLOSED));
-        return producers;
+    /** The real hand-off with its gate closed, as by default: every seal stays LEGACY and is announced. */
+    static FeedbackProducerSelection legacyProducer(ApplicationEventPublisher events) {
+        var pins = mock(ReviewProducerPin.class);
+        lenient().when(pins.pinned(anyLong(), any())).thenReturn(Optional.empty());
+        return new FeedbackProducerSelection(
+                new FeedbackProducerProperties(),
+                pins,
+                mock(ReviewJobAssignments.class),
+                mock(MentorReviewIntake.class),
+                events);
     }
 }
