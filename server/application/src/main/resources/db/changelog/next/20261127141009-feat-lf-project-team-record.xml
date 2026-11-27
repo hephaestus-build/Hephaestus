@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795788609699-1" author="hephaestus">
+        <comment>Project teams of a workspace (ADR 0165). Nothing writes them yet.</comment>
+        <createTable tableName="project_team">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="project_teamPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="removed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="project_team" columnNames="id, workspace_id" constraintName="uk_project_team_workspace"/>
+        <addForeignKeyConstraint baseTableName="project_team" baseColumnNames="workspace_id" constraintName="sfk_project_team_workspace" onDelete="CASCADE" referencedTableName="workspace" referencedColumnNames="id"/>
+        <createIndex tableName="project_team" indexName="idx_project_team_workspace">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795788609699-2" author="hephaestus">
+        <comment>The members of a project team. A row needs a workspace membership and goes with it.</comment>
+        <createTable tableName="project_team_member">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="project_team_memberPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="joined_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="project_team_member" columnNames="team_id, account_id" constraintName="uk_project_team_member_account"/>
+        <addForeignKeyConstraint baseTableName="project_team_member" baseColumnNames="team_id,workspace_id" constraintName="sfk_project_team_member_team" onDelete="CASCADE" referencedTableName="project_team" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="project_team_member" baseColumnNames="account_id,workspace_id" constraintName="sfk_project_team_member_membership" onDelete="CASCADE" referencedTableName="membership" referencedColumnNames="account_id,workspace_id"/>
+        <createIndex tableName="project_team_member" indexName="idx_project_team_member_team">
+            <column name="team_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="project_team_member" indexName="idx_project_team_member_account">
+            <column name="account_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795788609699-3" author="hephaestus">
+        <comment>A team membership holds only while the workspace membership does. Ending the workspace membership ends it, and no row is accepted for an ended one. The share lock makes an insert wait for an end that runs beside it.</comment>
+        <createProcedure>
+CREATE FUNCTION public.refuse_ended_project_team_member() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.membership m
+        WHERE m.account_id = NEW.account_id AND m.workspace_id = NEW.workspace_id AND m.left_at IS NULL
+        FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a project team member needs a current workspace membership' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.end_project_team_memberships() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM public.project_team_member m
+        WHERE m.account_id = NEW.account_id AND m.workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER project_team_member_current BEFORE INSERT OR UPDATE ON public.project_team_member
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_ended_project_team_member();
+CREATE TRIGGER membership_end_project_teams AFTER UPDATE OF left_at ON public.membership
+    FOR EACH ROW WHEN (NEW.left_at IS NOT NULL) EXECUTE FUNCTION public.end_project_team_memberships();
+        </sql>
+        <rollback>
+DROP TRIGGER membership_end_project_teams ON public.membership;
+DROP TRIGGER project_team_member_current ON public.project_team_member;
+DROP FUNCTION public.end_project_team_memberships();
+DROP FUNCTION public.refuse_ended_project_team_member();
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

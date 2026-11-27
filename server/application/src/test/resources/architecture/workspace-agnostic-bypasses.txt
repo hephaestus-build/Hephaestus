@@ -556,6 +556,7 @@ de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.countByAccou
 de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.findForAdmin(java.lang.String, org.springframework.data.domain.Pageable)
 de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackRepository.lockSubmission(long)
 de.tum.cit.aet.hephaestus.productfeedback.RoutingService
+de.tum.cit.aet.hephaestus.project.ProjectTeamMemberRepository.absorbAccount(long, long)
 de.tum.cit.aet.hephaestus.workspace.MembershipRepository.absorbAccount(long, long)
 de.tum.cit.aet.hephaestus.workspace.MembershipRepository.deleteByAccountId(long)
 de.tum.cit.aet.hephaestus.workspace.MembershipRepository.findById_AccountId(java.lang.Long)
