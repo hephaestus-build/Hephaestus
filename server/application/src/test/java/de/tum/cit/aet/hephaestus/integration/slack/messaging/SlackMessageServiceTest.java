@@ -48,6 +48,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
     private SlackCredentialProvider credentialProvider;
 
     private SlackMessageService service;
+    private SlackRateLimitTracker rateLimits;
 
     /** Read by the guard on the test's thread, and set by a local Slack server's thread in one test. */
     private volatile boolean silentModeEngaged;
@@ -59,9 +60,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
     void setUp() {
         silentModeEngaged = false;
         time = new VirtualSlackTime();
+        rateLimits = new SlackRateLimitTracker(new SimpleMeterRegistry());
         service = new SlackMessageService(
                 credentialProvider,
-                new SlackRateLimitTracker(new SimpleMeterRegistry()),
+                rateLimits,
                 new OutboundEgressGuard(() -> silentModeEngaged),
                 new SlackMetrics(new SimpleMeterRegistry()),
                 new SlackProperties(SlackProperties.SLACK));
@@ -301,6 +303,96 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldDeferAPostBeforeAdmissionWhenTheWorkspaceIsThrottled() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+            rateLimits.recordPostThrottle(7L, 120_750L);
+            rateLimits.recordPostThrottle(7L, 0L);
+            var admissions = new AtomicInteger();
+
+            try (SlackMessageService local = localService(config)) {
+                assertThatThrownBy(() -> local.postAdmitted(
+                                7L,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
+                                () -> admissions.incrementAndGet() == 1))
+                        .isInstanceOfSatisfying(SlackSendException.class, failure -> {
+                            assertThat(failure.isRateLimited()).isTrue();
+                            assertThat(failure.retryAfterMillis()).isPositive();
+                            assertThat(failure.retryAfterMillis() % 1000).isZero();
+                        });
+            }
+            assertThat(admissions).hasValue(0);
+            assertThat(slackApi.getRequestCount()).isZero();
+            assertThat(time.waits()).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldAdmitAPostWhenOnlyAnotherWorkspaceHasAnActiveThrottle() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+            rateLimits.recordPostThrottle(7L, 0L);
+            rateLimits.recordPostThrottle(8L, 120_750L);
+            var admissions = new AtomicInteger();
+
+            try (SlackMessageService local = localService(config)) {
+                assertThat(local.postAdmitted(
+                                7L,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
+                                () -> admissions.incrementAndGet() == 1))
+                        .isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
+            }
+            assertThat(admissions).hasValue(1);
+            assertThat(slackApi.getRequestCount()).isOne();
+        }
+    }
+
+    /** Slack limits each Web API method on its own; a throttled history read does not throttle chat.postMessage. */
+    @Test
+    void shouldPostWhenOnlyAHistoryReadOfTheWorkspaceWasThrottled() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            var historyCalls = new AtomicInteger();
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    String path = request.getUrl().encodedPath();
+                    if (path.equals("/api/auth.test")) return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    if (path.equals("/api/conversations.history"))
+                        return historyCalls.getAndIncrement() == 0
+                                ? new MockResponse.Builder()
+                                        .code(429)
+                                        .addHeader("Retry-After", "30")
+                                        .addHeader("Content-Type", "application/json")
+                                        .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                                        .build()
+                                : json("{\"ok\":true,\"messages\":[],\"has_more\":false}");
+                    return json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
+            slackApi.start();
+            SlackConfig config = localConfig(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            config.getMethodsConfig().setStatsEnabled(false);
+
+            try (SlackMessageService local = localService(config)) {
+                local.fetchHistoryPage(7L, "C1ABCDEFGH", "100.000001", "200.000001", null, 15);
+                assertThat(historyCalls).hasValue(2);
+
+                assertThat(local.postAdmitted(
+                                7L,
+                                new SlackMessageService.Outgoing("D1ABCDEFGH", null, List.of(), "hi", null),
+                                () -> true))
+                        .isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
+            }
+        }
+    }
+
+    @Test
     void shouldReturnTheFirstPostThrottleToTheOutbox() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
@@ -408,7 +500,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
         return new SlackMessageService(
                 SlackSendFence.client(config),
                 credentialProvider,
-                new SlackRateLimitTracker(new SimpleMeterRegistry()),
+                rateLimits,
                 new OutboundEgressGuard(() -> silentModeEngaged),
                 new SlackMetrics(new SimpleMeterRegistry()),
                 time);

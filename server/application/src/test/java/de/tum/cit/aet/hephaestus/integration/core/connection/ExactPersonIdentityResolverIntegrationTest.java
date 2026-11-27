@@ -336,6 +336,29 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         assertThat(resolver.resolve(null, List.of(identity(provider, "84", null)))
                         .scmArtifactIds())
                 .contains(995205L);
+        var owner = sourceOwners.stream()
+                .filter(candidate -> candidate.itemKinds().contains("scm.pull_request"))
+                .findFirst()
+                .orElseThrow();
+        var requested = List.of(995204L, 995205L);
+        var visible = owner.identitiesForSources(workspaceId, "scm.pull_request", requested);
+        assertThat(visible).containsOnlyKeys(995204L, 995205L);
+        assertThat(visible.get(995204L))
+                .containsExactlyInAnyOrder(identity(provider, "42", null), identity(provider, "84", null));
+        assertThat(visible.get(995205L)).containsExactly(identity(provider, "84", null));
+
+        var retained = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("retained-source-privacy"));
+        long retainedId = Objects.requireNonNull(retained.getId());
+        jdbc.update(
+                "INSERT INTO item(workspace_id,kind,source_id) VALUES (?,'scm.pull_request',?)", retainedId, 995204L);
+        var retainedSources = owner.identitiesForSources(retainedId, "scm.pull_request", requested);
+        assertThat(retainedSources.get(995204L)).containsExactlyInAnyOrderElementsOf(visible.get(995204L));
+        assertThat(retainedSources.get(995205L)).isEmpty();
+        jdbc.update(
+                "DELETE FROM item WHERE workspace_id=? AND kind='scm.pull_request' AND source_id=?",
+                retainedId,
+                995204L);
+
         Account administrator = new Account("Administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         long administratorId =

@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.repository;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -56,4 +58,20 @@ interface RepositoryObservationQueries extends org.springframework.data.reposito
             @Param("observation") String observation,
             @Param("visibility") @Nullable String visibility,
             @Param("patch") @Nullable String patch);
+
+    // The mirror trigger invalidates the matching public proofs in the same transaction.
+    @WorkspaceAgnostic(
+            "A verified provider-wide loss narrows one shared mirror identified by provider and repository id")
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE public.repository AS r
+            SET visibility = CASE WHEN r.visibility = 'PUBLIC' THEN 'UNKNOWN' ELSE r.visibility END,
+                metadata_observed_at = clock_timestamp()
+            WHERE r.id = :repositoryId AND r.provider_id = :providerId
+              AND (r.metadata_observed_at IS NULL OR r.metadata_observed_at < :checkedAt)
+            """, nativeQuery = true)
+    int restrictPublicAccess(
+            @Param("providerId") long providerId,
+            @Param("repositoryId") long repositoryId,
+            @Param("checkedAt") Instant checkedAt);
 }

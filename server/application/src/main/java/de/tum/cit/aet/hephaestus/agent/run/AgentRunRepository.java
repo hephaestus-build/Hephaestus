@@ -485,6 +485,23 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     Optional<Integer> lockCurrent(
             @Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
 
+    interface ConversationHandoffRow {
+        Instant getLeasedUntil();
+
+        @Nullable
+        Instant getDeadline();
+    }
+
+    /** Locks the run after its turn. The caller reads the clocks after any wait for this lock. */
+    @Query(value = """
+            SELECT leased_until AS "leasedUntil", deadline FROM agent_run
+            WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch
+              AND state = 'LEASED' AND kind IN ('TURN', 'DIGEST')
+            FOR NO KEY UPDATE
+            """, nativeQuery = true)
+    Optional<ConversationHandoffRow> lockConversationHandoff(
+            @Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
+
     @Query(value = """
             SELECT 1 FROM agent_run
              WHERE id = :runId AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0) AND lease_epoch = :epoch AND state = 'LEASED'

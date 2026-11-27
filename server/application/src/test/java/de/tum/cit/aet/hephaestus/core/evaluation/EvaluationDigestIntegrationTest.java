@@ -10,7 +10,10 @@ import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestAvailability;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
@@ -18,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -28,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
@@ -45,6 +50,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -59,6 +66,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -142,6 +150,9 @@ class EvaluationDigestIntegrationTest {
     @Autowired
     private DigestSandboxRunKind digestKind;
 
+    @Autowired
+    private ControlledClock clock;
+
     @DynamicPropertySource
     static void scenarioProperties(DynamicPropertyRegistry registry) throws IOException {
         registry.add("spring.liquibase.enabled", () -> false);
@@ -217,7 +228,7 @@ class EvaluationDigestIntegrationTest {
     }
 
     @Test
-    void shouldKeepAStartedHistoricalDigestLeasedUntilItsScenarioDeadline() {
+    void shouldKeepAStartedHistoricalDigestLeasedUntilItsScenarioDeadline() throws Exception {
         var digest = queueReplayDigest();
         long workspaceId = digest.run().workspaceId();
         var config = LlmCatalogTestFixtures.admittedConversationConfig();
@@ -226,12 +237,7 @@ class EvaluationDigestIntegrationTest {
         when(digestAdmission.refuses(eq(workspaceId), any())).thenReturn(false);
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), workspaceId, digest.subject(), AgentSandboxKind.CONVERSATION);
-        var lease = Objects.requireNonNull(transactions.execute(status -> {
-            var claim = runs.claimSubject(workspaceId, digest.subject(), Set.of(AgentRunKind.DIGEST))
-                    .orElseThrow();
-            assertThat(digestKind.claimed(sandbox, claim)).isTrue();
-            return claim;
-        }));
+        var lease = claimDigest(digest, sandbox);
         var fence = lease.fence();
         var deadline = DUE.plusSeconds(config.timeoutSeconds()).plus(TurnRunsAdapter.GRACE);
         assertThat(runs.find(digest.run()).orElseThrow().getDeadline()).isEqualTo(deadline);
@@ -243,11 +249,55 @@ class EvaluationDigestIntegrationTest {
         transactions.executeWithoutResult(
                 status -> assertThat(runs.renew(fence)).isPresent());
 
-        setClock(digest.token(), deadline);
+        transactions.executeWithoutResult(status -> {
+            var run = new SandboxRun(sandbox, fence, lease.kind(), lease.attempt());
+            assertThat(digestKind.end(run, SandboxRunKind.Outcome.HANDED_ON)).isTrue();
+            clock.set(deadline);
+        });
+        var queued = runs.find(digest.run()).orElseThrow();
+        assertThat(queued.getState()).isEqualTo(AgentRunState.QUEUED);
+        assertThat(queued.getDeadline()).isNull();
+        assertThat(queued.getAttempt()).isOne();
+
+        var retry = claimDigest(digest, sandbox);
+        var live = runs.find(digest.run()).orElseThrow();
+        var retryDeadline = Objects.requireNonNull(live.getDeadline());
+        clock.set(retryDeadline.minusSeconds(1));
+        var runLock = HeldTransaction.holdIn(
+                transactions,
+                context.getBean(JdbcTemplate.class),
+                () -> assertThat(jdbc.sql(
+                                        "SELECT 1 FROM agent_run WHERE workspace_id = :workspace AND id = :run FOR UPDATE")
+                                .param("workspace", workspaceId)
+                                .param("run", retry.runId())
+                                .query(Integer.class)
+                                .single())
+                        .isOne());
+        var retryRun = new SandboxRun(sandbox, retry.fence(), retry.kind(), retry.attempt());
+        var handoff = CompletableFuture.supplyAsync(() -> Boolean.TRUE.equals(
+                transactions.execute(status -> digestKind.end(retryRun, SandboxRunKind.Outcome.HANDED_ON))));
+        // The handoff has to sample scenario time after it acquires the unchanged run row.
+        runLock.commitAfter(handoff, () -> clock.set(retryDeadline));
+        assertThat(handoff.get(10, TimeUnit.SECONDS)).isFalse();
+        assertThat(runs.isCurrent(retry.fence().run(), retry.epoch())).isTrue();
+        var untouched = runs.find(digest.run()).orElseThrow();
+        assertThat(untouched.getState()).isEqualTo(AgentRunState.LEASED);
+        assertThat(untouched.getDeadline()).isEqualTo(retryDeadline);
+        assertThat(untouched.getLeasedUntil()).isEqualTo(live.getLeasedUntil());
+        assertThat(untouched.getAttempt()).isEqualTo(live.getAttempt());
         transactions.executeWithoutResult(
-                status -> assertThat(runs.renew(fence)).isEmpty());
+                status -> assertThat(runs.renew(retry.fence())).isEmpty());
         reaper.reap();
         assertThat(runs.find(digest.run()).orElseThrow().getStopReason()).isEqualTo(AgentRunStopReason.DEADLINE);
+    }
+
+    private AgentRunLease claimDigest(ReplayDigest digest, AgentSandboxes.LiveSandbox sandbox) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            var claim = runs.claimSubject(digest.run().workspaceId(), digest.subject(), Set.of(AgentRunKind.DIGEST))
+                    .orElseThrow();
+            assertThat(digestKind.claimed(sandbox, claim)).isTrue();
+            return claim;
+        }));
     }
 
     private record ReplayDigest(AgentRunRef run, String subject, String token, long developer) {}

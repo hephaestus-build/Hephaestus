@@ -42,7 +42,7 @@ de.tum.cit.aet.hephaestus.agent.context.providers.conversation.WeeklyDigestConte
 de.tum.cit.aet.hephaestus.agent.context.providers.conversation.WeeklyDigestContentSource -> de.tum.cit.aet.hephaestus.conversation.ConversationEntry x11
 de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnContexts -> de.tum.cit.aet.hephaestus.conversation.Conversation x1
 de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnContexts -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x2
-de.tum.cit.aet.hephaestus.agent.conversation.host.TurnSandboxRunKind -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x11
+de.tum.cit.aet.hephaestus.agent.conversation.host.TurnSandboxRunKind -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x6
 de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x32
 de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnStarter -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x36
 de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnStarter$StartedTurn -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x3

@@ -332,7 +332,6 @@ public class AgentRuns {
 
     private Optional<AgentRunLease> claimNext(Set<AgentRunKind> kinds, Collection<UUID> excluded) {
         if (kinds.isEmpty()) return Optional.empty();
-        if (kinds.contains(AgentRunKind.DIGEST)) cancelErasedDigests(timing.workspaceIds(), null);
         // Only the oldest queued run of a subject is offered, and a claim skips a locked one, so two claims never lease
         // two runs of one subject; the partial unique index on the leased subject refuses it if they did.
         return runs.claim(
@@ -704,6 +703,18 @@ public class AgentRuns {
     public boolean isCurrent(AgentRunRef run, int epoch) {
         return epoch >= 1
                 && runs.findCurrent(run.id(), run.workspaceId(), epoch).isPresent();
+    }
+
+    /** Admits a handoff before its deadline and holds its run for settlement. The caller already locked the turn. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockConversationHandoff(AgentRunFence fence) {
+        var held = runs.lockConversationHandoff(fence.runId(), fence.workspaceId(), fence.epoch());
+        if (held.isEmpty()) return false;
+        var run = held.orElseThrow();
+        Instant now = runs.databaseClock();
+        Instant workNow = Objects.requireNonNullElse(timing.replayNow(), now);
+        Instant deadline = run.getDeadline();
+        return run.getLeasedUntil().isAfter(now) && (deadline == null || deadline.isAfter(workNow));
     }
 
     /** Deletes an ended run that no domain row points to any more, as after {@link #continueAfter}. */

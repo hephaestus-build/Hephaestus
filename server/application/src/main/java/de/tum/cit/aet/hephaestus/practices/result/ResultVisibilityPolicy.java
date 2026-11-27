@@ -91,9 +91,12 @@ public class ResultVisibilityPolicy {
                         .toList());
     }
 
-    /** Runs {@code read} as one read of the workspace, as {@link ResultSourceAuthorization#asOneRead} describes. */
+    /**
+     * Runs {@code read} as one read of the workspace, as {@link ResultSourceAuthorization#asOneRead} and
+     * {@link ResultFreshness#asOneRead} describe.
+     */
     public <T> T asOneRead(long workspaceId, Supplier<T> read) {
-        return sources.asOneRead(workspaceId, read);
+        return sources.asOneRead(workspaceId, () -> freshness.asOneRead(workspaceId, read));
     }
 
     private Set<UUID> incorrectAt(long workspaceId, List<ResultFacts> owned, Instant at) {
