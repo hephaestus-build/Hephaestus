@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795765627663-1" author="hephaestus">
+    <comment>Allow versioned Mentor Slack effects in the existing action outbox.</comment>
+    <sql>
+      SET LOCAL lock_timeout = '5s';
+      ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+        ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+          'RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT',
+          'MENTOR_EFFECT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE')) NOT VALID;
+    </sql>
+    <rollback>
+      ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+        ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+          'RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT',
+          'PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE')) NOT VALID;
+    </rollback>
+  </changeSet>
+    <changeSet id="1795765627663-2" author="hephaestus">
+    <comment>Validate the outbox constraint after releasing the expand lock.</comment>
+    <sql>ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_kind;</sql>
+  </changeSet>
+</databaseChangeLog>
