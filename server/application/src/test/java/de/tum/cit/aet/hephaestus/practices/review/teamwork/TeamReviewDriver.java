@@ -27,10 +27,7 @@ interface TeamReviewDriver {
      * quotes, anchor labels and observation texts, with the state of its evidence.
      */
     record Served(
-            int status,
-            @Nullable String evidence,
-            @Nullable String unavailableBecause,
-            List<String> content) {}
+            int status, @Nullable String evidence, @Nullable String unavailableBecause, List<String> content) {}
 
     /** Staff create a team project and answer its id. */
     UUID createTeamProject(String name);

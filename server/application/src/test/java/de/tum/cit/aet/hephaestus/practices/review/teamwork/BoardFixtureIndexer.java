@@ -32,7 +32,8 @@ final class BoardFixtureIndexer implements SnapshotIndexer {
             throw new SnapshotRefusedException(SnapshotRefusal.UNSUPPORTED_VERSION);
         var elements = new ArrayList<SnapshotIndex.Element>();
         for (JsonNode cell : board.path("cells")) {
-            var label = cell.path("row").asString() + " × " + cell.path("column").asString();
+            var label =
+                    cell.path("row").asString() + " × " + cell.path("column").asString();
             var text = new ArrayList<String>();
             for (JsonNode note : cell.path("notes")) text.add(label + ": " + note.asString());
             if (text.isEmpty()) text.add("(empty)");

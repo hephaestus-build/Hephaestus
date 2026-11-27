@@ -52,7 +52,8 @@ final class ModelFixtureIndexer implements SnapshotIndexer {
                     from + " to " + to,
                     null,
                     List.of(
-                            "Relationship from " + from + " to " + to + ", " + edge.path("drawn").asString(),
+                            "Relationship from " + from + " to " + to + ", "
+                                    + edge.path("drawn").asString(),
                             "Multiplicity at " + to + ": " + (multiplicity.isEmpty() ? "not written" : multiplicity))));
         }
         return new SnapshotIndex(elements, List.of());

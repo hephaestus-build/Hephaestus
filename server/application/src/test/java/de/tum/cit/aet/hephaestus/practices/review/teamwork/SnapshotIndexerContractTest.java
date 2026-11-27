@@ -42,8 +42,9 @@ class SnapshotIndexerContractTest extends BaseUnitTest {
         var foreign = "{\"format\":\"someone-else\",\"secret\":\"CONTENT\"}".getBytes(StandardCharsets.UTF_8);
 
         assertThatThrownBy(() -> capture.indexer().index(foreign))
-                .isInstanceOfSatisfying(SnapshotRefusedException.class, refused -> assertThat(refused.refusal())
-                        .isEqualTo(SnapshotRefusal.UNSUPPORTED_VERSION))
+                .isInstanceOfSatisfying(
+                        SnapshotRefusedException.class,
+                        refused -> assertThat(refused.refusal()).isEqualTo(SnapshotRefusal.UNSUPPORTED_VERSION))
                 .hasMessage("UNSUPPORTED_VERSION");
     }
 

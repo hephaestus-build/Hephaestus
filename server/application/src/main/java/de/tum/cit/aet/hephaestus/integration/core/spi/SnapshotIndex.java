@@ -32,16 +32,11 @@ public record SnapshotIndex(List<Element> elements, List<Limitation> limitations
      *     {@code (empty)}, so a gap can be cited.
      */
     public record Element(
-            String id,
-            String kind,
-            String label,
-            @Nullable String parentId,
-            List<String> text) {
+            String id, String kind, String label, @Nullable String parentId, List<String> text) {
         public static final int MAX_ID_LENGTH = 128;
 
         public Element {
-            if (id.isEmpty() || id.length() > MAX_ID_LENGTH)
-                throw new IllegalArgumentException("Invalid element id");
+            if (id.isEmpty() || id.length() > MAX_ID_LENGTH) throw new IllegalArgumentException("Invalid element id");
             if (kind.isBlank()) throw new IllegalArgumentException("An element needs a kind");
             text = List.copyOf(text);
             // A citation names line numbers, so one string must stay one line.

@@ -113,14 +113,14 @@ class TeamReviewJourneyIntegrationTest extends BaseIntegrationTest {
                     var model = journey(Captures.model());
                     assertThat(model).isEqualTo(board);
                 })
-                .isInstanceOfSatisfying(MissingStep.class, missing -> assertThat(missing.step)
-                        .isEqualTo(FIRST_MISSING_STEP));
+                .isInstanceOfSatisfying(
+                        MissingStep.class, missing -> assertThat(missing.step).isEqualTo(FIRST_MISSING_STEP));
     }
 
     private Shape journey(Captures.Capture capture) {
         long practice = Objects.requireNonNull(course.practice().getId());
-        var team = step(
-                Step.STAFF_CREATE_A_TEAM_PROJECT, () -> product.createTeamProject("Cup return " + capture.name()));
+        var team =
+                step(Step.STAFF_CREATE_A_TEAM_PROJECT, () -> product.createTeamProject("Cup return " + capture.name()));
         var members = step(Step.TWO_PEOPLE_JOIN_IT, () -> product.twoMembers(team));
         var first = members.getFirst();
         var second = members.getLast();
@@ -186,11 +186,7 @@ class TeamReviewJourneyIntegrationTest extends BaseIntegrationTest {
             return sealed;
         });
         return new Shape(
-                sealed.practiceVersion(),
-                sealed.presentation(),
-                sealed.outcome(),
-                sealed.summary(),
-                sealed.nextStep());
+                sealed.practiceVersion(), sealed.presentation(), sealed.outcome(), sealed.summary(), sealed.nextStep());
     }
 
     private static <T> T step(Step step, Supplier<T> action) {
