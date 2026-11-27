@@ -87,7 +87,8 @@ public class MentorIntake implements MentorIngress {
         String container = envelope.audience().containerId();
         String message = envelope.message().nativeMessageId();
         Long stored = rows.owner(binding, container, message);
-        // A new question starts a source, and so does a delete that arrives first: its tombstone keeps a late copy of the
+        // A new question starts a source, and so does a delete that arrives first: its tombstone keeps a late copy of
+        // the
         // create from opening the question. An edit or a Stop of a message the mentor does not hold writes nothing.
         boolean deleted = envelope.kind() == IngressKind.MESSAGE_DELETED;
         boolean starts = producer == Producer.MENTOR && (envelope.kind() == IngressKind.MESSAGE || deleted);

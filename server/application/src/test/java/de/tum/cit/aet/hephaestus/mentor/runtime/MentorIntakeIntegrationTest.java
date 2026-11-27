@@ -255,12 +255,13 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         for (int round = 0; round < 3; round++) {
             String message = message();
             var barrier = new CyclicBarrier(2);
-            List<CompletableFuture<Admission>> racers = List.of(IngressKind.MESSAGE, IngressKind.MESSAGE_DELETED).stream()
-                    .map(kind -> CompletableFuture.supplyAsync(() -> {
-                        await(barrier);
-                        return admit(kind, kind == IngressKind.MESSAGE ? "e1" : "e2", message, FIRST);
-                    }))
-                    .toList();
+            List<CompletableFuture<Admission>> racers =
+                    List.of(IngressKind.MESSAGE, IngressKind.MESSAGE_DELETED).stream()
+                            .map(kind -> CompletableFuture.supplyAsync(() -> {
+                                await(barrier);
+                                return admit(kind, kind == IngressKind.MESSAGE ? "e1" : "e2", message, FIRST);
+                            }))
+                            .toList();
             racers.forEach(CompletableFuture::join);
 
             assertThat(owner.queryForList(
@@ -269,8 +270,7 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
             assertThat(owner.queryForList("""
                             SELECT r.state FROM mentor_request r JOIN mentor_source s ON s.id = r.source_id
                             WHERE s.native_message_id = ?
-                            """, String.class, message))
-                    .allMatch("STOPPED"::equals);
+                            """, String.class, message)).allMatch("STOPPED"::equals);
         }
     }
 
@@ -394,7 +394,8 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     void shouldOpenNoRequestWhenALateCreateArrivesForADeletedSourceThatNeverHadARequest() {
         String message = message();
         var first = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
-        assertThat(inTransaction(() -> unauthorized.admit(first, Producer.MENTOR))).isEqualTo(admitted("e1", null));
+        assertThat(inTransaction(() -> unauthorized.admit(first, Producer.MENTOR)))
+                .isEqualTo(admitted("e1", null));
         assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
 
         assertThat(admit(IngressKind.MESSAGE, "e3", message, FIRST)).isEqualTo(admitted("e3", null));
@@ -409,21 +410,25 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
         var held = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        var replica = CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            owners.ofJob(account);
-            jdbcClient.sql("SELECT id FROM mentor_source WHERE native_message_id = ? FOR UPDATE")
-                    .param(message)
-                    .query(UUID.class)
-                    .single();
-            held.countDown();
-            await(release);
-        }));
+        var replica =
+                CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    jdbcClient
+                            .sql("SELECT id FROM mentor_source WHERE native_message_id = ? FOR UPDATE")
+                            .param(message)
+                            .query(UUID.class)
+                            .single();
+                    held.countDown();
+                    await(release);
+                }));
         held.await();
 
         assertThatThrownBy(() -> admit(IngressKind.MESSAGE, "e2", message, FIRST))
                 .isInstanceOf(PessimisticLockingFailureException.class);
         assertThat(owner.queryForList(
-                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'", UUID.class, binding))
+                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'",
+                        UUID.class,
+                        binding))
                 .isEmpty();
         release.countDown();
         replica.join();
@@ -439,12 +444,28 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     void shouldKeepOneRequestWhenASecondRequestIsOpenedForTheSameSource() {
         String message = message();
         RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
-        UUID source = Objects.requireNonNull(owner.queryForObject(
-                "SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message));
+        UUID source = Objects.requireNonNull(
+                owner.queryForObject("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message));
         Instant now = Instant.now();
         var second = new MentorSourceRepository.OpenedRequest(
-                UUID.randomUUID(), account, source, "SLACK", binding, "D" + binding, null, 3, 5, 7, "PERSONAL", null,
-                null, null, null, null, now, now.plus(MentorIntake.ANSWER_DEADLINE));
+                UUID.randomUUID(),
+                account,
+                source,
+                "SLACK",
+                binding,
+                "D" + binding,
+                null,
+                3,
+                5,
+                7,
+                "PERSONAL",
+                null,
+                null,
+                null,
+                null,
+                null,
+                now,
+                now.plus(MentorIntake.ANSWER_DEADLINE));
 
         assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
                     owners.ofJob(account);
