@@ -28,7 +28,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
-import de.tum.cit.aet.hephaestus.core.action.ActionStore;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -202,7 +201,11 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 digest.getId().toString(),
                 accountId);
         ActionTestSupport.due(jdbc, ConversationSlackReplies.digestKey(digest.getId()));
-        ActionTestSupport.claimLane(jdbc, objectMapper, ConversationSlackReplies.digestKey(digest.getId()), context.getBean(ActionStore.class))
+        ActionTestSupport.claimLane(
+                        jdbc,
+                        objectMapper,
+                        ConversationSlackReplies.digestKey(digest.getId()),
+                        context)
                 .orElseThrow()
                 .fence()
                 .beginWrite();

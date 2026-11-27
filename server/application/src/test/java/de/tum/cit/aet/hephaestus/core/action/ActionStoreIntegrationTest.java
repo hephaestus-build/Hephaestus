@@ -211,10 +211,14 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
         var claim = claimOwn(List.of(id)).getFirst();
 
-        assertThat(store.beginWrite(claim, MARGIN, () -> {
-                    jdbc.update("UPDATE agent_action SET leased_until = clock_timestamp() WHERE id = ?", id);
-                    return true;
-                }, () -> true))
+        assertThat(store.beginWrite(
+                        claim,
+                        MARGIN,
+                        () -> {
+                            jdbc.update("UPDATE agent_action SET leased_until = clock_timestamp() WHERE id = ?", id);
+                            return true;
+                        },
+                        () -> true))
                 .isFalse();
         assertThat(row(id)).containsEntry("write_started_at", null);
     }
@@ -238,7 +242,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                                 }
                             })
                             .isInstanceOfSatisfying(
-                                    SQLException.class, error -> assertThat(error.getSQLState()).isEqualTo("55P03"));
+                                    SQLException.class,
+                                    error -> assertThat(error.getSQLState()).isEqualTo("55P03"));
                     return false;
                 }))
                 .isFalse();
@@ -701,7 +706,9 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         var ended = new ArrayList<ActionEnded>();
         for (var claim : claims) {
             if (claim.id().equals(done)) store.settle(done, claim.epoch(), new ActionResult.Done("ref"), ended::add);
-            else assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true)).isTrue();
+            else
+                assertThat(store.beginWrite(claim, MARGIN, () -> true, () -> true))
+                        .isTrue();
         }
         expireLease(lost);
 

@@ -34,7 +34,6 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
-import de.tum.cit.aet.hephaestus.core.action.ActionStore;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
@@ -379,7 +378,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var running = claims.claim(asked.turn());
         end(running, "Complete");
         ActionTestSupport.due(jdbc, key(asked));
-        assertThat(ActionTestSupport.claimLane(jdbc, mapper, key(asked), context.getBean(ActionStore.class))
+        assertThat(ActionTestSupport.claimLane(jdbc, mapper, key(asked), context)
                         .orElseThrow()
                         .fence()
                         .beginWrite())
@@ -426,7 +425,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         end(claims.claim(asked.turn()), "Complete");
         var id = action(asked);
         if (marked) {
-            assertThat(ActionTestSupport.claimLane(jdbc, mapper, key(asked), context.getBean(ActionStore.class))
+            assertThat(ActionTestSupport.claimLane(jdbc, mapper, key(asked), context)
                             .orElseThrow()
                             .fence()
                             .beginWrite())
@@ -847,7 +846,8 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Complete");
-        var claim = ActionTestSupport.claimLane(jdbc, mapper, key(asked), context.getBean(ActionStore.class)).orElseThrow();
+        var claim = ActionTestSupport.claimLane(jdbc, mapper, key(asked), context)
+                .orElseThrow();
         assertThat(claim.fence().beginWrite()).isTrue();
         var unknown = new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED);
         var ending =

@@ -15,7 +15,6 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.action.ActionStore;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -185,6 +184,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -300,7 +300,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     ObjectMapper mapper;
 
     @Autowired
-    ActionStore actionStore;
+    ApplicationContext context;
 
     @Autowired
     ReviewStart starts;
@@ -767,7 +767,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(lateRow.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.findById(newerResult).orElseThrow().getEndedAt()).isNull();
 
-        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece, actionStore)
+        var oldOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + oldPiece, context)
                 .orElseThrow();
         assertThat(delivery.claim(item.workspaceId(), oldPiece, oldOwner)).isNotNull();
         assertThat(delivery.fence(
@@ -794,7 +794,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 publication.issue(
                         item.workspaceId(), item.itemId(), newer.review().getId(), List.of(developer)));
         assertThat(feedbackRows.findById(newerPiece).orElseThrow().getState()).isEqualTo(FeedbackState.READY);
-        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece, actionStore)
+        var newerOwner = ActionTestSupport.claimLane(jdbc, mapper, "feedback:" + newerPiece, context)
                 .orElseThrow();
         var summary = FeedbackIds.copy(newerPiece, FeedbackCopyKind.SUMMARY, 0);
         assertThat(delivery.claim(item.workspaceId(), newerPiece, newerOwner)).isNotNull();

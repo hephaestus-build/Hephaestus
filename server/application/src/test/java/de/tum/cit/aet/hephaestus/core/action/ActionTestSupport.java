@@ -91,7 +91,8 @@ public final class ActionTestSupport {
      * the process that holds it stopped at any point. Its fence uses the store's write transaction.
      */
     public static Optional<ActionAttempt> claimLane(
-            JdbcTemplate jdbc, ObjectMapper mapper, String laneKey, ActionStore store) {
+            JdbcTemplate jdbc, ObjectMapper mapper, String laneKey, ApplicationContext context) {
+        var store = context.getBean(ActionStore.class);
         return claim(jdbc, laneKey)
                 .map(claim -> new ActionAttempt(
                         claim.id(),
