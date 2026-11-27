@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-A team project member can now record a team decision in the app, with one note in their own words, and start from a draft note by Hephaestus. Nothing is recorded until the member selects Record. Where a review leaves the team a real choice, Hephaestus proposes options, and a later review says what it shows about a recorded decision. No page offers this yet.
+The app can now show the form where a team project member records a team decision, with one note in their own words and a draft note from Hephaestus to start from. Nothing is recorded until the member selects Record, and a draft never replaces the member's own words for good. No page shows the form yet.

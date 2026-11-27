@@ -10,18 +10,18 @@ export const TEAM_DECISION_STATE_DEFS = {
 		label: "Open",
 		icon: CircleDotIcon,
 		badgeVariant: "outline",
-		description: "The team has not acted on this problem yet.",
+		description: "The problem still needs the team’s attention.",
 	},
 	ACTED_ON: {
 		label: "Acted on",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "A member recorded that the team acted on this problem.",
+		description: "The team changed the work for this problem.",
 	},
 	DISMISSED: {
 		label: "Dismissed",
 		icon: CircleSlashIcon,
 		badgeVariant: "secondary",
-		description: "A member recorded that the team will not act on this problem.",
+		description: "The team will not change the work for this problem.",
 	},
 } satisfies StatusDefs<TeamDecisionState>;

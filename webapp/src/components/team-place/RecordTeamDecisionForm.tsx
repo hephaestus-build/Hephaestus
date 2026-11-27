@@ -1,4 +1,4 @@
-import { type SubmitEvent, useState } from "react";
+import { type SubmitEvent, useId, useState } from "react";
 
 import { definitionFor } from "@/components/common/status-def";
 import {
@@ -36,6 +36,8 @@ const ERROR_TEXT: Readonly<Record<RecordDecisionError, string>> = {
 export interface RecordedDecision {
 	state: TeamDecisionState;
 	note: string;
+	/** The record the member saw when the form opened; a newer one makes the server refuse this one. */
+	supersedesId?: string;
 }
 
 export interface RecordTeamDecisionFormProps {
@@ -45,6 +47,8 @@ export interface RecordTeamDecisionFormProps {
 	teamName: string;
 	/** The state the problem has now, preselected. A new decision starts Open. */
 	currentState?: TeamDecisionState;
+	/** The current record of the problem when the form opened, if one exists. */
+	currentRecordId?: string;
 	/** The answer leaves the team a real choice, so the note shows the prompt as its placeholder. */
 	prompt?: boolean;
 	/** A note Hephaestus drafted. "Use this draft" copies it into the note for editing; it records nothing. */
@@ -65,6 +69,7 @@ export function RecordTeamDecisionForm({
 	problemSummary,
 	teamName,
 	currentState = "OPEN",
+	currentRecordId,
 	prompt = false,
 	draftNote,
 	onRecord,
@@ -73,10 +78,18 @@ export function RecordTeamDecisionForm({
 }: RecordTeamDecisionFormProps) {
 	const [state, setState] = useState<TeamDecisionState>(currentState);
 	const [note, setNote] = useState("");
+	// The member's own words that a draft replaced, so "Use this draft" never loses them.
+	const [replaced, setReplaced] = useState<string | undefined>(undefined);
+	const id = useId();
+
+	function applyDraft(draft: string) {
+		setReplaced(note.trim() === "" || note === draft ? replaced : note);
+		setNote(draft);
+	}
 
 	function submit(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		onRecord({ state, note: note.trim() });
+		onRecord({ state, note: note.trim(), supersedesId: currentRecordId });
 	}
 
 	return (
@@ -89,11 +102,11 @@ export function RecordTeamDecisionForm({
 				<RadioGroup<TeamDecisionState> value={state} onValueChange={setState}>
 					{STATES.map((value) => {
 						const def = definitionFor(TEAM_DECISION_STATE_DEFS, value);
-						const id = `team-decision-${value}`;
+						const optionId = `${id}-${value}`;
 						return (
-							<FieldLabel key={value} htmlFor={id}>
+							<FieldLabel key={value} htmlFor={optionId}>
 								<Field orientation="horizontal">
-									<RadioGroupItem id={id} value={value} />
+									<RadioGroupItem id={optionId} value={value} />
 									<FieldContent>
 										<FieldTitle>{def.label}</FieldTitle>
 										<FieldDescription>{def.description}</FieldDescription>
@@ -105,9 +118,9 @@ export function RecordTeamDecisionForm({
 				</RadioGroup>
 			</FieldSet>
 			<Field>
-				<FieldLabel htmlFor="team-decision-note">Note</FieldLabel>
+				<FieldLabel htmlFor={`${id}-note`}>Note</FieldLabel>
 				<Textarea
-					id="team-decision-note"
+					id={`${id}-note`}
 					value={note}
 					onChange={(event) => setNote(event.target.value)}
 					placeholder={prompt ? PROMPT : undefined}
@@ -120,15 +133,24 @@ export function RecordTeamDecisionForm({
 					<p className="whitespace-pre-line text-muted-foreground" dir="auto">
 						{draftNote}
 					</p>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="w-fit"
-						onClick={() => setNote(draftNote)}
-					>
-						Use this draft
-					</Button>
+					<div className="flex flex-wrap gap-2">
+						<Button type="button" variant="outline" size="sm" onClick={() => applyDraft(draftNote)}>
+							Use this draft
+						</Button>
+						{replaced !== undefined && note === draftNote && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setNote(replaced);
+									setReplaced(undefined);
+								}}
+							>
+								Restore your note
+							</Button>
+						)}
+					</div>
 				</div>
 			)}
 			{recordError !== undefined && (

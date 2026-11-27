@@ -70,6 +70,35 @@ export const DraftUsedThenEdited: Story = {
 	},
 };
 
+/** A member wrote first, then used the draft: their own words are one press away, never lost (review of #5471). */
+export const DraftAfterOwnWords: Story = {
+	args: { prompt: true, draftNote: DRAFT },
+	play: async ({ args, canvas }) => {
+		const note = canvas.getByRole("textbox", { name: "Note" });
+		await userEvent.type(note, "We disagree: the route is documented in our appendix.");
+		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
+		await expect(note).toHaveValue(DRAFT);
+		await userEvent.click(canvas.getByRole("button", { name: "Restore your note" }));
+		await expect(note).toHaveValue("We disagree: the route is documented in our appendix.");
+		await expect(canvas.queryByRole("button", { name: "Restore your note" })).toBeNull();
+		await expect(args.onRecord).not.toHaveBeenCalled();
+	},
+};
+
+/** Recording names the record the member saw, so a newer one makes the server refuse instead of overwrite. */
+export const RecordsAgainstTheSeenRecord: Story = {
+	args: { currentState: "OPEN", currentRecordId: "d1000000-0000-4000-8000-000000000001" },
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("radio", { name: /^Acted on/u }));
+		await userEvent.click(canvas.getByRole("button", { name: "Record" }));
+		await expect(args.onRecord).toHaveBeenCalledWith({
+			state: "ACTED_ON",
+			note: "",
+			supersedesId: "d1000000-0000-4000-8000-000000000001",
+		});
+	},
+};
+
 /** A team declines: Dismissed, with its reason in the note. */
 export const Declined: Story = {
 	play: async ({ args, canvas }) => {
