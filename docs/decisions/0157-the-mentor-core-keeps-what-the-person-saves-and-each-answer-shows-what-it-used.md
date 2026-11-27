@@ -257,6 +257,8 @@ ADR 0156's own choice is declined too: one chosen practice on a card that no mod
 
 ## Update — 2026-11-27: A personal goal belongs to the account
 
+This update amends [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) and [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) for personal goals.
+
 A person can save one current personal goal before joining a project.
 The app saves, edits and forgets it under the PostgreSQL owner policy and its current revision.
 A project still owns its requirements, assessments and practice evidence.
