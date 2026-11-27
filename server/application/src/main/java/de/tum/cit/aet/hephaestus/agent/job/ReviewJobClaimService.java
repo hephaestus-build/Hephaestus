@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -59,7 +58,6 @@ public class ReviewJobClaimService {
     private final LlmBudgetService llmBudgetService;
     private final @Nullable LlmAdmissionService llmAdmissionService;
     private final ReviewJobTelemetry jobTelemetry;
-    private final LlmCallPools callPools;
     private final ReviewPoolAdmission poolAdmission;
     private final AgentRuns runs;
     private final ReviewRunKind reviewRuns;
@@ -74,14 +72,12 @@ public class ReviewJobClaimService {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            LlmCallPools callPools,
             ReviewPoolAdmission poolAdmission,
             AgentRuns runs,
             ReviewRunKind reviewRuns) {
         this.jobRepository = jobRepository;
         this.runs = runs;
         this.reviewRuns = reviewRuns;
-        this.callPools = callPools;
         this.poolAdmission = poolAdmission;
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
@@ -99,7 +95,7 @@ public class ReviewJobClaimService {
         if (job.getAdmittedAt() != null) return;
         Instant admitted = Instant.now();
         job.setAdmittedAt(admitted);
-        String pool = callPools.poolLabel(poolId);
+        String pool = poolAdmission.poolLabel(poolId);
         Duration waited = Duration.between(job.getSubmittedAt(), admitted);
         TransactionCallbacks.afterCommit(() -> jobTelemetry.poolAdmitted(pool, waited));
     }
@@ -294,9 +290,9 @@ public class ReviewJobClaimService {
         if (!composing) {
             // The dispatch already held this review until its pool had room (ReviewPoolAdmission); the pool's lock
             // makes the check exact when two servers dispatched reviews of one pool at once.
-            poolId = callPools.poolFor(snapshot.model().connectionRef());
-            callPools.lockAdmission(poolId);
-            if (!poolAdmission.admits(poolId, job)) return new PoolWait(fence.runId(), poolId);
+            var pool = poolAdmission.claim(snapshot.model().connectionRef(), job);
+            poolId = pool.poolId();
+            if (!pool.admitted()) return new PoolWait(fence.runId(), poolId);
         }
 
         if (!(ResultAdmissionService.isContinuation(job)

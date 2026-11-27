@@ -75,7 +75,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -942,7 +942,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
                 SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
@@ -990,7 +989,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),
-                pools,
                 SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
@@ -1310,7 +1308,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var third = queued(pool.selected());
         var meters = new SimpleMeterRegistry();
         var admission =
-                new ReviewPoolAdmission(jobs, pool.pools(), context.getBean(ReviewAssignmentStore.class), meters);
+                new ReviewPoolAdmission(jobs, pool.pools(), context.getBean(ReviewAssignmentProgress.class), meters);
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
 
         var pass = admission.pass(reviews);
@@ -1464,7 +1462,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                pools,
                 SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
@@ -1498,7 +1495,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                pools,
                 SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);
@@ -1527,7 +1523,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
                 SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
@@ -1745,7 +1740,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
                 SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);
@@ -1779,7 +1773,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmBudgetService.class),
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                idleCalls(),
                 SandboxReviewClaims.poolAdmission(context, idleCalls()),
                 agentRuns,
                 reviewRuns);

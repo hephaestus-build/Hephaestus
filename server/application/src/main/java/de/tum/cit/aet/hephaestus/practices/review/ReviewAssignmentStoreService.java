@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
@@ -37,7 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
+public class ReviewAssignmentStoreService implements ReviewAssignmentStore, ReviewAssignmentProgress {
     private final ReviewRepository reviews;
     private final ReviewItemRepository items;
     private final ReviewStagedPayloadRepository payloads;

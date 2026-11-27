@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import java.time.Instant;
@@ -40,15 +40,15 @@ import org.springframework.stereotype.Component;
 public class ReviewPoolAdmission implements RunAdmission {
     private final ReviewJobRepository jobs;
     private final LlmCallPools pools;
-    private final ReviewAssignmentStore assignments;
+    private final ReviewAssignmentProgress progress;
     private final MeterRegistry meters;
     private final Map<String, AtomicLong> held = new ConcurrentHashMap<>();
 
     public ReviewPoolAdmission(
-            ReviewJobRepository jobs, LlmCallPools pools, ReviewAssignmentStore assignments, MeterRegistry meters) {
+            ReviewJobRepository jobs, LlmCallPools pools, ReviewAssignmentProgress progress, MeterRegistry meters) {
         this.jobs = jobs;
         this.pools = pools;
-        this.assignments = assignments;
+        this.progress = progress;
         this.meters = meters;
     }
 
@@ -86,7 +86,7 @@ public class ReviewPoolAdmission implements RunAdmission {
             if (unread.isEmpty()) return;
             unread.forEach(run -> poolOfRun.put(run, null));
             var queued = jobs.findQueuedModels(unread);
-            var ended = assignments.endedPracticeCounts(queued.stream()
+            var ended = progress.endedPracticeCounts(queued.stream()
                     .map(ReviewJobRepository.QueuedModel::getJobId)
                     .toList());
             for (var model : queued) {
@@ -141,21 +141,30 @@ public class ReviewPoolAdmission implements RunAdmission {
         }
     }
 
-    /** Whether the pool takes another measurement of this job's open practices now. */
-    boolean admits(long poolId, ReviewJob job) {
+    record Claim(long poolId, boolean admitted) {}
+
+    /** Rechecks dispatch's decision while holding the pool's admission lock. */
+    Claim claim(LlmModelResolver.ConnectionRef model, ReviewJob job) {
+        long poolId = pools.poolFor(model);
+        pools.lockAdmission(poolId);
         var load = jobs.poolLoad(poolId);
-        if (load.getRunning() == 0) return true;
+        if (load.getRunning() == 0) return new Claim(poolId, true);
         var jobIds = new ArrayList<>(List.of(load.getJobIds()));
         jobIds.add(job.getId());
-        var ended = assignments.endedPracticeCounts(jobIds);
-        return admitsWhileBusy(poolId, load, openWidth(load.getPractices() + originalWidth(job), ended));
+        var ended = progress.endedPracticeCounts(jobIds);
+        long practices = openWidth(load.getPractices() + originalWidth(job), ended);
+        return new Claim(poolId, admitsWhileBusy(poolId, load, practices));
+    }
+
+    String poolLabel(long poolId) {
+        return pools.poolLabel(poolId);
     }
 
     /** The same rule serves dispatch and the claim that holds the pool lock. */
     private boolean admits(long poolId, int practices) {
         var load = jobs.poolLoad(poolId);
         if (load.getRunning() == 0) return true;
-        var ended = assignments.endedPracticeCounts(List.of(load.getJobIds()));
+        var ended = progress.endedPracticeCounts(List.of(load.getJobIds()));
         return admitsWhileBusy(poolId, load, openWidth(load.getPractices(), ended) + practices);
     }
 
@@ -195,7 +204,7 @@ public class ReviewPoolAdmission implements RunAdmission {
      */
     int sessionLimit(long poolId, ReviewJob job) {
         var load = jobs.poolLoad(poolId);
-        var ended = assignments.endedPracticeCounts(List.of(load.getJobIds()));
+        var ended = progress.endedPracticeCounts(List.of(load.getJobIds()));
         int own = remaining(originalWidth(job), ended.getOrDefault(job.getId(), 0));
         return sessionLimit(load, openWidth(load.getPractices(), ended), own);
     }

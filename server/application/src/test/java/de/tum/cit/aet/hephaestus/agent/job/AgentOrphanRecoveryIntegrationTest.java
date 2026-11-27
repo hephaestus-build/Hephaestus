@@ -1206,7 +1206,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 null,
                 context.getBean(ReviewJobTelemetry.class),
-                pools,
                 SandboxReviewClaims.poolAdmission(context, pools),
                 agentRuns,
                 reviewRuns);

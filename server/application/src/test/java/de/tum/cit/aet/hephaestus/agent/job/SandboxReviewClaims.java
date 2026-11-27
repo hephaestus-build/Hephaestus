@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.context.ApplicationContext;
@@ -38,7 +38,6 @@ public final class SandboxReviewClaims {
                 budgets,
                 null,
                 context.getBean(ReviewJobTelemetry.class),
-                calls,
                 poolAdmission(context, calls),
                 context.getBean(AgentRuns.class),
                 context.getBean(ReviewRunKind.class));
@@ -48,7 +47,7 @@ public final class SandboxReviewClaims {
         return new ReviewPoolAdmission(
                 context.getBean(ReviewJobRepository.class),
                 calls,
-                context.getBean(ReviewAssignmentStore.class),
+                context.getBean(ReviewAssignmentProgress.class),
                 new SimpleMeterRegistry());
     }
 
