@@ -41,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -249,31 +250,105 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         assertThat(requests(message)).isEmpty();
     }
 
-    /** A create and a delete that race share the source key: either order ends with one deleted source and no open request. */
-    @Test
-    void shouldEndWithOneDeletedSourceWhenACreateAndADeleteRace() {
-        for (int index = 0; index < 3; index++) {
-            // Each round has its own event ids: a repeated id is a duplicate delivery, not a new race.
-            int round = index;
-            String message = message();
-            var barrier = new CyclicBarrier(2);
-            List<CompletableFuture<Admission>> racers =
-                    List.of(IngressKind.MESSAGE, IngressKind.MESSAGE_DELETED).stream()
-                            .map(kind -> CompletableFuture.supplyAsync(() -> {
-                                await(barrier);
-                                return admit(kind, (kind == IngressKind.MESSAGE ? "e1" : "e2") + round, message, FIRST);
-                            }))
-                            .toList();
-            racers.forEach(CompletableFuture::join);
-
-            assertThat(owner.queryForList(
-                            "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
-                    .containsExactly("DELETED");
-            assertThat(owner.queryForList("""
-                            SELECT r.state FROM mentor_request r JOIN mentor_source s ON s.id = r.source_id
-                            WHERE s.native_message_id = ?
-                            """, String.class, message)).allMatch("STOPPED"::equals);
+    /** A create and a delete with no source yet: the second insert waits on the first one's source key, in either order. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldEndWithOneDeletedSourceInEitherCommitOrderWhenACreateAndADeleteRace(boolean deleteFirst)
+            throws Exception {
+        String message = message();
+        IngressKind first = deleteFirst ? IngressKind.MESSAGE_DELETED : IngressKind.MESSAGE;
+        IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
+        var admitted = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+            Admission result = intake.admit(envelope(first, "e1", message, FIRST, actor()), Producer.MENTOR);
+            admitted.countDown();
+            await(commit);
+            return result;
+        }));
+        assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
+        var loser = CompletableFuture.supplyAsync(() -> admit(second, "e2", message, FIRST));
+        boolean blocked = false;
+        for (int poll = 0; poll < 200 && !blocked && !loser.isDone(); poll++) {
+            blocked = Objects.requireNonNull(owner.queryForObject(
+                            "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'",
+                            Integer.class))
+                    > 0;
+            Thread.sleep(50);
         }
+        assertThat(loser.isDone()).isFalse();
+        assertThat(blocked).isTrue();
+        commit.countDown();
+        Admission one = winner.get(30, TimeUnit.SECONDS);
+        Admission two = loser.get(30, TimeUnit.SECONDS);
+
+        assertThat(owner.queryForList(
+                        "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
+                .containsExactly("DELETED");
+        if (deleteFirst) {
+            assertThat(two).isEqualTo(admitted("e2", null));
+            assertThat(event("e2")).containsEntry("reason", "SOURCE_DELETED");
+            assertThat(requests(message)).isEmpty();
+        } else {
+            UUID request = opened(one).requestId();
+            assertThat(two).isEqualTo(admitted("e2", new RequestRef(request, 1)));
+            assertThat(requests(message)).containsExactly(request);
+            assertThat(column(request, "state")).isEqualTo("STOPPED");
+        }
+    }
+
+    /**
+     * An unanswered source (its first create was not authorized) meets an authorized create and a delete. The one that
+     * holds the source fails the other at once, and the other's retry sees what the first committed: the delete stops
+     * the request that the create opened, or the create finds the tombstone.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldLeaveNoOpenRequestInEitherOrderWhenACreateAndADeleteMeetAnUnansweredSource(boolean deleteFirst)
+            throws Exception {
+        String message = message();
+        var refused = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
+        assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR))).isEqualTo(admitted("e1", null));
+        IngressKind first = deleteFirst ? IngressKind.MESSAGE_DELETED : IngressKind.MESSAGE;
+        IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
+        var admitted = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+            Admission result = intake.admit(envelope(first, "e2", message, FIRST, actor()), Producer.MENTOR);
+            admitted.countDown();
+            await(commit);
+            return result;
+        }));
+        assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> admit(second, "e3", message, FIRST))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        commit.countDown();
+        Admission one = winner.get(30, TimeUnit.SECONDS);
+        Admission retry = admit(second, "e3", message, FIRST);
+
+        assertThat(source(message)).containsEntry("state", "DELETED");
+        if (deleteFirst) {
+            assertThat(retry).isEqualTo(admitted("e3", null));
+            assertThat(event("e3")).containsEntry("reason", "SOURCE_DELETED");
+            assertThat(requests(message)).isEmpty();
+        } else {
+            UUID request = opened(one).requestId();
+            assertThat(retry).isEqualTo(admitted("e3", new RequestRef(request, 1)));
+            assertThat(column(request, "state")).isEqualTo("STOPPED");
+        }
+    }
+
+    @Test
+    void shouldWriteNoRowForADeleteOnALegacyRoute() {
+        String message = message();
+        var delete = envelope(IngressKind.MESSAGE_DELETED, "e1", message, EDITED, actor());
+
+        assertThat(inTransaction(() -> intake.admit(delete))).isEqualTo(admitted("e1", null));
+        assertThat(owner.queryForList("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message))
+                .isEmpty();
+        assertThat(owner.queryForList("SELECT id FROM mentor_event WHERE binding_id = ?", UUID.class, binding))
+                .isEmpty();
     }
 
     @Test

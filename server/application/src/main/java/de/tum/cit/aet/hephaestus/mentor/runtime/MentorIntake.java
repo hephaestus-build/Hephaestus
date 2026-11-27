@@ -88,8 +88,7 @@ public class MentorIntake implements MentorIngress {
         String message = envelope.message().nativeMessageId();
         Long stored = rows.owner(binding, container, message);
         // A new question starts a source, and so does a delete that arrives first: its tombstone keeps a late copy of
-        // the
-        // create from opening the question. An edit or a Stop of a message the mentor does not hold writes nothing.
+        // the create from opening the question. An edit or a Stop of a message the mentor does not hold writes nothing.
         boolean deleted = envelope.kind() == IngressKind.MESSAGE_DELETED;
         boolean starts = producer == Producer.MENTOR && (envelope.kind() == IngressKind.MESSAGE || deleted);
         if (stored == null && !starts) return new Admission.Admitted(eventId, null);
@@ -113,9 +112,8 @@ public class MentorIntake implements MentorIngress {
             return new Admission.Admitted(eventId, null);
         }
         Source source = Source.of(locked.get());
-        UUID requestId = source.request();
-        @Nullable
-        Request request = requestId == null ? null : Request.of(requestId, rows.lockRequest(requestId, owner));
+        @Nullable Request request = rows.lockRequest(source.id(), owner).map(Request::of).orElse(null);
+        @Nullable UUID requestId = request == null ? null : request.id();
         Change change = owner == author
                 ? decide(envelope, source, request, owner)
                 : Change.recorded(Reason.AUTHOR_MISMATCH, requestId);
@@ -140,7 +138,7 @@ public class MentorIntake implements MentorIngress {
     /** Runs after the source and its request are locked; it captures authority only then, in the wire proof's order. */
     private Change decide(IngressEnvelope envelope, Source source, @Nullable Request request, long account) {
         if (source.state() == MentorSource.State.DELETED) {
-            return Change.recorded(Reason.SOURCE_DELETED, source.request());
+            return Change.recorded(Reason.SOURCE_DELETED, request == null ? null : request.id());
         }
         boolean settled = request != null && request.state().settled();
         return switch (envelope.kind()) {
@@ -152,7 +150,7 @@ public class MentorIntake implements MentorIngress {
             }
             case MESSAGE_EDITED -> {
                 if (!newer(envelope.message().revision(), source.revision())) {
-                    yield Change.recorded(Reason.STALE_REVISION, source.request());
+                    yield Change.recorded(Reason.STALE_REVISION, request == null ? null : request.id());
                 }
                 if (request == null) yield Change.recorded(Reason.NO_REQUEST, null);
                 if (settled) yield Change.recorded(Reason.REQUEST_SETTLED, request.id());
@@ -165,7 +163,7 @@ public class MentorIntake implements MentorIngress {
                 if (settled) yield Change.recorded(Reason.REQUEST_SETTLED, request.id());
                 yield new Change(Disposition.FENCED, null, request.id(), null);
             }
-            case CONTROL_STOP -> Change.recorded(Reason.STOP_NOT_HANDLED, source.request());
+            case CONTROL_STOP -> Change.recorded(Reason.STOP_NOT_HANDLED, request == null ? null : request.id());
         };
     }
 
@@ -270,20 +268,15 @@ public class MentorIntake implements MentorIngress {
             @Nullable Long bindingGeneration,
             @Nullable String actor) {}
 
-    private record Source(
-            UUID id,
-            MentorSource.State state,
-            String revision,
-            @Nullable UUID request) {
+    private record Source(UUID id, MentorSource.State state, String revision) {
         static Source of(MentorSourceRepository.LockedSource row) {
-            return new Source(
-                    row.getId(), MentorSource.State.valueOf(row.getState()), row.getRevision(), row.getRequest());
+            return new Source(row.getId(), MentorSource.State.valueOf(row.getState()), row.getRevision());
         }
     }
 
     private record Request(UUID id, MentorRequest.State state, int version) {
-        static Request of(UUID id, MentorSourceRepository.LockedRequest row) {
-            return new Request(id, MentorRequest.State.valueOf(row.getState()), row.getVersion());
+        static Request of(MentorSourceRepository.LockedRequest row) {
+            return new Request(row.getId(), MentorRequest.State.valueOf(row.getState()), row.getVersion());
         }
     }
 

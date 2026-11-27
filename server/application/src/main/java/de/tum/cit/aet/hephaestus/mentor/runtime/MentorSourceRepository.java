@@ -37,8 +37,7 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
     int insertSource(@Param("s") NewSource s);
 
     @Query(value = """
-            SELECT s.id AS id, s.producer AS producer, s.state AS state, s.revision AS revision,
-                (SELECT r.id FROM mentor_request r WHERE r.source_id = s.id AND r.account_id = s.account_id) AS request
+            SELECT s.id AS id, s.producer AS producer, s.state AS state, s.revision AS revision
             FROM mentor_source s
             WHERE s.account_id = :account AND s.binding_id = :binding AND s.container_id = :container
                 AND s.native_message_id = :message
@@ -50,12 +49,16 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             @Param("container") String container,
             @Param("message") String message);
 
+    /**
+     * The source's request, locked after the source in a statement of its own: its snapshot then shows a request that
+     * a create committed before the source lock was granted.
+     */
     @Query(value = """
-            SELECT r.state AS state, r.version AS version FROM mentor_request r
-            WHERE r.id = :id AND r.account_id = :account
+            SELECT r.id AS id, r.state AS state, r.version AS version FROM mentor_request r
+            WHERE r.source_id = :source AND r.account_id = :account
             FOR UPDATE NOWAIT
             """, nativeQuery = true)
-    LockedRequest lockRequest(@Param("id") UUID id, @Param("account") long account);
+    Optional<LockedRequest> lockRequest(@Param("source") UUID source, @Param("account") long account);
 
     @Modifying
     @Query(value = """
@@ -122,12 +125,11 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
         String getState();
 
         String getRevision();
-
-        @Nullable
-        UUID getRequest();
     }
 
     interface LockedRequest {
+        UUID getId();
+
         String getState();
 
         int getVersion();
