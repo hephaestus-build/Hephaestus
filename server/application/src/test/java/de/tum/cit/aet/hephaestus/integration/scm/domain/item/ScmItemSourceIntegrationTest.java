@@ -2094,13 +2094,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 PullRequestContentSource.CHECKS,
                 GeneralReviewCommentContentSource.KIND,
                 ReviewThreadContentSource.KIND);
-        // A page read's service method starts the request's transaction. measure() reads in a READ COMMITTED
-        // transaction
-        // of its own, so the snapshot starts its own too: a transaction that joins another keeps the other's isolation.
-        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
-        snapshot.setReadOnly(true);
-        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
-        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var snapshot = inOneSnapshot();
 
         var one = reads.measure(() -> Objects.requireNonNull(snapshot.execute(
                 status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper))));
@@ -2112,6 +2106,53 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 .as("pull request lookups of five sources in one snapshot, %s", five.sql())
                 .isPositive()
                 .isEqualTo(pullRequestLookups(one.sql()));
+    }
+
+    /**
+     * A read-only REPEATABLE READ transaction, as a page read runs ({@code PageReadSnapshot}). A page read's service
+     * method starts the request's transaction. measure() reads in a READ COMMITTED transaction of its own, so this one
+     * starts its own too: a transaction that joins another keeps the other's isolation.
+     */
+    private TransactionTemplate inOneSnapshot() {
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return snapshot;
+    }
+
+    /**
+     * In one snapshot, the record sources of a pull request decide each contributor's consent once: every source
+     * names the same author, and each decision would read the same rows. Each source still records its own copy.
+     */
+    @Test
+    void shouldDecideEachContributorOnceWhenItsRecordSourcesAreReadInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        Set<SourceKind> all = Set.of(
+                PullRequestContentSource.CORE,
+                PullRequestContentSource.COMMENTS,
+                PullRequestContentSource.CHECKS,
+                GeneralReviewCommentContentSource.KIND,
+                ReviewThreadContentSource.KIND);
+        var snapshot = inOneSnapshot();
+
+        var one = reads.measure(() -> Objects.requireNonNull(snapshot.execute(
+                status -> fingerprints.fingerprints(pullRef, Set.of(PullRequestContentSource.CORE), null, mapper))));
+        var five = reads.measure(() -> Objects.requireNonNull(
+                snapshot.execute(status -> fingerprints.fingerprints(pullRef, all, null, mapper))));
+
+        assertThat(five.value()).containsKey(PullRequestContentSource.CORE);
+        assertThat(accountLookups(five.sql()))
+                .as("account lookups of five sources in one snapshot, %s", five.sql())
+                .isPositive()
+                .isEqualTo(accountLookups(one.sql()));
+    }
+
+    /** The account of a provider identity, which every consent decision reads. */
+    private static long accountLookups(List<String> sql) {
+        return sql.stream()
+                .filter(statement -> statement.contains("FROM identity WHERE provider_id=? AND provider_user_key=?"))
+                .count();
     }
 
     /** The pull request with its author, repository and provider, which repository authorization reads first. */

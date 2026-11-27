@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import de.tum.cit.aet.hephaestus.core.SnapshotMemo;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
@@ -29,6 +30,11 @@ public class ScmCaptureConsent {
     private final AccountDirectory accounts;
     private final PersonProcessingSuppression suppression;
     private final PersonDataCopyRecorder copies;
+    /**
+     * Each contributor's decision, once per read-only snapshot: the record sources of a capture name the same people,
+     * and in one snapshot every check reads the same rows. Only a permit is kept; a refusal throws and decides again.
+     */
+    private final SnapshotMemo<PersonIdentity, Boolean> permitted = new SnapshotMemo<>(Boolean.class);
 
     /**
      * One person whose content a capture exports: the native identity privacy decides by, and the identity a copy of
@@ -57,8 +63,14 @@ public class ScmCaptureConsent {
         var distinct = new LinkedHashMap<PersonIdentity, Contributor>();
         contributors.forEach(contributor -> distinct.putIfAbsent(contributor.identity(), contributor));
         for (Contributor contributor : distinct.values()) {
-            var identity = contributor.identity();
-            if (suppression.isSuppressed(identity.providerId(), identity.subject(), null)) throw withheld();
+            permitted.get(contributor.identity(), () -> decide(contributor.identity()));
+            copies.recordIdentity(contributor.copy());
+        }
+    }
+
+    /** Whether privacy lets a capture export this person's content; throws when it does not. */
+    private boolean decide(PersonIdentity identity) {
+        if (suppression.isSuppressed(identity.providerId(), identity.subject(), null)) throw withheld();
             Optional<Long> accountId;
             try {
                 accountId = identities.accountFor(identity);
@@ -77,8 +89,7 @@ public class ScmCaptureConsent {
                         || (account.status() != Account.Status.ACTIVE && account.status() != Account.Status.UNCLAIMED))
                     throw withheld();
             }
-            copies.recordIdentity(contributor.copy());
-        }
+        return true;
     }
 
     private static ItemCaptureException withheld() {
