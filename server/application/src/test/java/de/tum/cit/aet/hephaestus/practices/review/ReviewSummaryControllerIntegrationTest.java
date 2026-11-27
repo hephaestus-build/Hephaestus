@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
@@ -504,6 +505,24 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldReportAFinishedReviewAsReady() {
         var result = data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("READY");
+    }
+
+    @Test
+    void shouldNotReportAReviewThatCheckedEveryPracticeAsPartlyChecked() {
+        // Settlement closes an admitted review as partial when no attempt confirmed its feedback composition.
+        var result = data.result(
+                scenario,
+                ResultOutcome.MET,
+                Instant.parse("2026-10-20T00:00:00Z"),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.COMPOSITION_UNCONFIRMED);
+
         get("/practices/reviews/" + result.getReviewId())
                 .expectStatus()
                 .isOk()
