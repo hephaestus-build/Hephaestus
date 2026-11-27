@@ -186,17 +186,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
@@ -933,15 +933,19 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             try (var executor = Executors.newFixedThreadPool(2)) {
                 for (int round = 0; round < 200; round++) {
                     var barrier = new CyclicBarrier(2);
-                    Callable<MentorReviewIntake.Outcome> seal = () -> Objects.requireNonNull(transactions.execute(status -> {
-                        arrive(barrier);
-                        return mentorIntake.admit(sealed);
-                    }));
+                    Callable<MentorReviewIntake.Outcome> seal =
+                            () -> Objects.requireNonNull(transactions.execute(status -> {
+                                arrive(barrier);
+                                return mentorIntake.admit(sealed);
+                            }));
                     var first = executor.submit(seal);
                     var second = executor.submit(seal);
                     var outcomes = List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
-                    assertThat(outcomes).as("round %d", round).hasSize(2).allSatisfy(outcome -> assertThat(outcome)
-                            .isInstanceOf(MentorReviewIntake.Outcome.Admitted.class));
+                    assertThat(outcomes)
+                            .as("round %d", round)
+                            .hasSize(2)
+                            .allSatisfy(outcome ->
+                                    assertThat(outcome).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class));
                     assertThat(outcomes.getFirst()).as("round %d", round).isEqualTo(outcomes.getLast());
                     assertThat(mentorEvents(review)).as("round %d", round).hasSize(1);
                     transactions.executeWithoutResult(status -> {
@@ -973,7 +977,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             mayHaveMentor(review);
             long account = review.developerId();
             var cases = List.of(
-                    Map.entry("UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry(
+                            "UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET ai_choice='NO_AI' WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET feedback_delivery_enabled=false WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET status='UNCLAIMED' WHERE id=?", "AUTHOR_INACTIVE"),
