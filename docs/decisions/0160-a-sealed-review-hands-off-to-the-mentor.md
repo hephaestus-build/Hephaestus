@@ -4,7 +4,7 @@
 **Date:** 2026-11-27
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) (the compose stage, decisions 11 to 14 and 16), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the cutover steps)
+**Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md): its compose stage, decisions 11 to 14 and the private destinations of decision 16. [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md): the cutover steps.
 
 **Builds on:** [ADR 0158](0158-the-mentor-orders-commitments-per-person-and-answers-per-request.md) (the mentor runtime), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery identity and readback)
 
