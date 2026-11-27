@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 /**
  * The transaction of a practice page read: standings, group standings, the profile overview and its review list. Each
- * runs as one read-only REPEATABLE READ snapshot, so every source, access and consent check of one page load reads the
- * database as of one moment. A page then never shows two states across its sections, and a check that repeats inside
- * it can be kept ({@code SnapshotMemo}). A withdrawal that commits during a load shows on the next load.
+ * request runs as one read-only REPEATABLE READ snapshot, so the source, access and consent checks of one request read
+ * the database as of one moment, and a check that repeats inside it can be kept ({@code SnapshotMemo}). A withdrawal
+ * that commits during a request shows on the next one. A page that makes several requests reads several moments.
+ * Checks that run in a transaction or connection of their own still read the latest data, as before: the review job
+ * erasure holds and the copy fence's custody receipts.
  */
 public final class PageReadSnapshot {
     /**
