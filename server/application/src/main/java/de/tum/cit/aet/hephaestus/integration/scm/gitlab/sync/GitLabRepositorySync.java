@@ -310,11 +310,13 @@ public class GitLabRepositorySync {
 
             var metadataRead = syncTargetProvider.beginReadersProof(
                     session.scopeId(), rtmId, read.nativeId(), read.connection().providerId());
+            boolean unavailable = syncTargetProvider.isRepositoryUnavailable(session.scopeId(), rtmId);
             try {
                 var metadata = projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId());
                 if (!admission.current(read)) continue;
                 if (metadata.isEmpty()) {
                     admission.runWrite(read, () -> syncTargetProvider.recordRepositoryLoss(metadataRead));
+                    if (unavailable) projectSyncService.recheckPublicAccess(read, metadataRead);
                     GitLabSyncReports.warn(
                             handle,
                             SyncResult.Status.ABORTED_ERROR,
@@ -350,6 +352,7 @@ public class GitLabRepositorySync {
             } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
                 if (!admission.current(read)) continue;
                 admission.runWrite(read, () -> syncTargetProvider.recordRepositoryLoss(metadataRead));
+                if (unavailable) projectSyncService.recheckPublicAccess(read, metadataRead);
                 GitLabSyncReports.warn(
                         handle,
                         SyncResult.Status.ABORTED_ERROR,

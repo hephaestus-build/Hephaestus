@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,9 +16,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.Credential;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.RepositoryReads;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -35,7 +40,9 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -82,6 +89,9 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
     @Mock
     private SourceProviderNamespaces providerNamespaces;
 
+    @Mock
+    private RepositoryObservationStore observations;
+
     private final GitLabProperties gitLabProperties = new GitLabProperties(
             "https://gitlab.com",
             Duration.ofSeconds(30),
@@ -119,7 +129,8 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 providerNamespaces,
                 new GitLabExceptionClassifier(new SimpleMeterRegistry()),
                 projectAdmission,
-                clients);
+                clients,
+                observations);
     }
 
     @ParameterizedTest
@@ -152,6 +163,34 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                     .body("{\"message\":\"" + message + "\"}")
                     .build());
         }));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecheckPublicLossWithTheCurrentMonitorAndCredential(boolean rotated) {
+        var read = new GitLabProjectAdmission.ProjectRead(originalConnection, 11L, 42L, 7L);
+        var credential = new Credential(originalConnection.connectionId(), 1L, 1L);
+        var current = rotated ? new Credential(originalConnection.connectionId(), 2L, 1L) : credential;
+        var before = new ReadersRead(1L, 7L, 42L, TEST_PROVIDER_ID, 1L, Instant.EPOCH, credential);
+        var after = new ReadersRead(1L, 7L, 42L, TEST_PROVIDER_ID, 2L, Instant.EPOCH, current);
+        when(providerNamespaces.isMirrorProvider(
+                        TEST_PROVIDER_ID, IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl()))
+                .thenReturn(true);
+        when(observations.isPublic(11L)).thenReturn(true);
+        when(observations.databaseTime()).thenReturn(Instant.EPOCH);
+        when(projectAdmission.beginRepositoryReads(originalConnection))
+                .thenReturn(new RepositoryReads(1L, TEST_PROVIDER_ID, Instant.EPOCH, Map.of(42L, after), current));
+        doAnswer(invocation -> {
+                    invocation.<Runnable>getArgument(1).run();
+                    return true;
+                })
+                .when(projectAdmission)
+                .runWrite(eq(read), any());
+
+        publicProjectResponse(HttpStatus.NOT_FOUND, "404 Project Not Found").recheckPublicAccess(read, before);
+
+        if (rotated) verify(observations, never()).restrictPublicAccess(anyLong(), anyLong(), any());
+        else verify(observations).restrictPublicAccess(TEST_PROVIDER_ID, 11L, Instant.EPOCH);
     }
 
     @ParameterizedTest

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNames
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryObservationStore.Result;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -21,6 +22,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGro
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission.ProjectRead;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -63,6 +66,7 @@ public class GitLabProjectSyncService {
     private final SourceProviderNamespaces providerNamespaces;
     private final GitLabProjectAdmission admission;
     private final WebClient publicClient;
+    private final RepositoryObservationStore observations;
 
     public GitLabProjectSyncService(
             GitLabGraphQlClientProvider graphQlClientProvider,
@@ -73,7 +77,8 @@ public class GitLabProjectSyncService {
             SourceProviderNamespaces providerNamespaces,
             GitLabExceptionClassifier exceptionClassifier,
             GitLabProjectAdmission admission,
-            GitLabWebClients webClients) {
+            GitLabWebClients webClients,
+            RepositoryObservationStore observations) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.exceptionClassifier = exceptionClassifier;
@@ -83,6 +88,7 @@ public class GitLabProjectSyncService {
         this.gitLabProperties = gitLabProperties;
         this.providerNamespaces = providerNamespaces;
         this.publicClient = webClients.builder().build();
+        this.observations = observations;
     }
 
     /**
@@ -216,6 +222,34 @@ public class GitLabProjectSyncService {
         } catch (WebClientResponseException.Unauthorized | WebClientResponseException.Forbidden e) {
             return false;
         }
+    }
+
+    /** Rechecks an unavailable monitor during scheduled sync, independent of webhook delivery order. */
+    public void recheckPublicAccess(ProjectRead read, ReadersRead metadata) {
+        if (metadata.credential() == null
+                || !Objects.equals(metadata.syncTargetId(), read.monitorId())
+                || !providerNamespaces.isMirrorProvider(
+                        read.connection().providerId(),
+                        IdentityProviderType.GITLAB,
+                        ScmOrigin.of(gitLabProperties.defaultServerUrl()).orElseThrow())
+                || !observations.isPublic(read.repositoryId())) return;
+        Instant checkedAt = observations.databaseTime();
+        try {
+            if (!isPublicProjectMissing(read.nativeId())) return;
+        } catch (RuntimeException e) {
+            log.info(
+                    "Public project check unavailable during scheduled sync: projectId={}, error={}",
+                    read.nativeId(),
+                    e.getClass().getSimpleName());
+            return;
+        }
+        admission.runWrite(read, () -> {
+            var current = admission.beginRepositoryReads(read.connection()).forRepository(read.nativeId());
+            if (Objects.equals(metadata.credential(), current.credential())
+                    && Objects.equals(metadata.syncTargetId(), current.syncTargetId())) {
+                observations.restrictPublicAccess(read.connection().providerId(), read.repositoryId(), checkedAt);
+            }
+        });
     }
 
     /** Stores {@code project} and its group as GitLab reported them, in the caller's transaction when there is one. */

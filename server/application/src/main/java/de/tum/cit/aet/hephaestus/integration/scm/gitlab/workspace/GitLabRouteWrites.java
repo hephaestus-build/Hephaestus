@@ -329,7 +329,11 @@ public class GitLabRouteWrites {
                     syncTargetProvider.recordRepositoryLoss(metadata);
                 }
             });
-            throw e;
+            log.info(
+                    "Deferred public project check to scheduled sync: projectId={}, error={}",
+                    nativeId,
+                    e.getClass().getSimpleName());
+            return;
         }
         transaction.executeWithoutResult(status -> {
             String step = unavailable ? "gitlab.route.unavailable." : "gitlab.route.project.";

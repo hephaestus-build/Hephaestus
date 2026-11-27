@@ -362,14 +362,9 @@ class GitLabRouteAdmissionTest {
             });
 
             String body = projectEvent("project_destroy", PROJECT_A, path);
-            if (result.equals("retry")) {
-                installOriginalPermits();
-                assertThatThrownBy(() -> admission.admit(WORKSPACE_ID, message(body, h -> {}), () -> {}))
-                        .hasMessage("Public project check unavailable");
-            } else {
-                assertProjectNotAdmitted(body);
-            }
+            assertProjectNotAdmitted(body);
             verify(syncTargets).recordRepositoryLoss(before);
+            verify(syncTargets, never()).removeSyncTarget(anyLong());
             verify(observations, times(result.equals("missing") ? 1 : 0))
                     .restrictPublicAccess(PROVIDER_ID, PROJECT_A, Instant.EPOCH);
         }

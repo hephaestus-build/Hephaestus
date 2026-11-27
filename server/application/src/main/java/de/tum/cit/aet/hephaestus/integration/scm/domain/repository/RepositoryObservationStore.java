@@ -77,6 +77,12 @@ public class RepositoryObservationStore implements Observations {
         this.mapper = mapper;
     }
 
+    @Transactional(readOnly = true)
+    public boolean isPublic(long repositoryId) {
+        Repository repository = Objects.requireNonNull(entityManager).find(Repository.class, repositoryId);
+        return repository != null && repository.isPublicOnProvider();
+    }
+
     public static Map<String, @Nullable Object> path(String fullName, String name, String url) {
         var patch = new HashMap<String, @Nullable Object>();
         patch.put("name_with_owner", fullName);
