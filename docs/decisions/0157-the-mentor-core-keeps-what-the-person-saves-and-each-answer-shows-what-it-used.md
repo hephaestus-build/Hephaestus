@@ -254,3 +254,28 @@ These options of the held ADR 0156 ([#5222](https://github.com/hephaestus-build/
 - **A model turn at the check-in time** (its option 6). It costs a call when nothing changed. Decision 17 uses a fixed-text notice.
 
 ADR 0156's own choice is declined too: one chosen practice on a card that no model ever reads. It does not let a goal shape help.
+
+## Update — 2026-11-27: A personal goal belongs to the account
+
+This update amends [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) and [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) for personal goals.
+
+A person can save one current personal goal before joining a project.
+The app saves, edits and forgets it under the PostgreSQL owner policy and its current revision.
+A project still owns its requirements, assessments and practice evidence.
+The saved goal has no workspace practice link.
+This replaces the workspace and practice-link requirements in decisions 1 and 2 for personal goals.
+An earlier workspace record keeps its original custody.
+
+Forget clears the words and records the goal ID in the privacy journal.
+The row keeps the ID and revision so a retry can confirm the same deletion.
+A restore applies that exact journal fact.
+The owner export reads the current goal under its source lock.
+Changing the goal expires an earlier ready export.
+
+Decision 6's typed read and basis gates apply before a personal goal reaches a model.
+An admitted app route can read the owner's goal. A default Slack route excludes it.
+ADR 0161 defines the separate grant and admission checks that can allow a verified one-to-one Slack DM to use it.
+The shared composer, review and digest have no goal capability.
+
+The 1.0 release walk-through saves and forgets a goal before the person connects a project.
+It checks owner access, exact journal replay, export withdrawal, and a separate personal-goal canary for a default and a granted DM.

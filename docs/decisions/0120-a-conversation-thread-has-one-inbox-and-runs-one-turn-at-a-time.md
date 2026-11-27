@@ -1,6 +1,6 @@
 # ADR 0120: A conversation thread has one inbox and runs one turn at a time
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0158](0158-the-mentor-orders-commitments-per-person-and-answers-per-request.md)
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 

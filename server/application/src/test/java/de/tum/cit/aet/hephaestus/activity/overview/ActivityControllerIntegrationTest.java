@@ -80,6 +80,7 @@ import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -108,6 +109,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
@@ -115,6 +117,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -251,6 +254,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private GitLabProjectProcessor gitLabProjects;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Autowired
     private PersonDataRegistry personDataRegistry;
@@ -548,6 +554,85 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isEqualTo(freshB.requestedAt());
             assertThat(page().people()).isEmpty();
             assertThat(page().repositories()).isEmpty();
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void shouldCloseSharedGitLabActivityOnlyWhenThePublicCheckConfirmsTheLoss(boolean newerPublicRead) {
+            var source = ensureGitLabProvider();
+            long providerId = Objects.requireNonNull(source.getId());
+            long nativeId = monitored.getNativeId();
+            monitored.setProvider(source);
+            repositoryRepository.saveAndFlush(monitored);
+            actorOnProvider(ada, source);
+            connectPublicSource(source);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+
+            Workspace receiving = workspace;
+            workspace = createWorkspace(
+                    "gitlab-observer", "Observer", "observer-group", AccountType.ORG, persistUser("observer-owner"));
+            ensureMembership(workspace, ada, WorkspaceRole.MEMBER);
+            long otherId = repositoryToMonitorRepository
+                    .saveAndFlush(
+                            WorkspaceTestFixtures.repositoryMonitor(workspace, monitored.getNameWithOwner(), nativeId))
+                    .getId();
+            connectPublicSource(source);
+            publish();
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+            var delayed = syncTargets.beginReadersProof(workspace.getId(), otherId, nativeId, providerId);
+
+            var foreign = repository("other-instance/widgets", false);
+            foreign.setProvider(gitProviderRepository
+                    .findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.lrz.de")
+                    .orElseGet(() -> gitProviderRepository.save(
+                            new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))));
+            foreign.setNativeId(nativeId);
+            foreign.setVisibility(Repository.Visibility.PUBLIC);
+            foreign.setPrivate(false);
+            repositoryRepository.saveAndFlush(foreign);
+            var foreignWorkspace = createWorkspace(
+                    "gitlab-elsewhere", "Elsewhere", "other-instance", AccountType.ORG, persistUser("other-owner"));
+            connectActivitySource(foreignWorkspace, foreign.getProvider());
+            long foreignMonitor = repositoryToMonitorRepository
+                    .saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                            foreignWorkspace, foreign.getNameWithOwner(), nativeId))
+                    .getId();
+            long foreignProvider = Objects.requireNonNull(foreign.getProvider().getId());
+            confirm(
+                    observations,
+                    syncTargets.beginReadersProof(foreignWorkspace.getId(), foreignMonitor, nativeId, foreignProvider),
+                    true);
+
+            Instant checkedAt = observations.databaseTime();
+            if (newerPublicRead) {
+                confirm(
+                        observations,
+                        syncTargets.beginReadersProof(workspace.getId(), otherId, nativeId, providerId),
+                        true);
+            }
+            transactions.executeWithoutResult(
+                    status -> observations.restrictPublicAccess(providerId, monitored.getId(), checkedAt));
+
+            assertThat(page().people()).hasSize(newerPublicRead ? 1 : 0);
+            if (!newerPublicRead) {
+                var response = gitLabProjects.processGraphQlResponse(gitLabProject("public"), null, source, delayed);
+                assertThat(Objects.requireNonNull(response).applied()).isFalse();
+                assertThat(page().people()).isEmpty();
+            }
+            assertThat(repositoryRepository
+                            .findById(foreign.getId())
+                            .orElseThrow()
+                            .isPublicOnProvider())
+                    .isTrue();
+            assertThat(repositoryToMonitorRepository
+                            .findById(foreignMonitor)
+                            .orElseThrow()
+                            .getPublicObservationAt())
+                    .isNotNull();
+            workspace = receiving;
+            assertThat(page().people()).hasSize(newerPublicRead ? 1 : 0);
         }
 
         private GitLabProjectResponse gitLabProject(String visibility) {

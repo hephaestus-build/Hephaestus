@@ -269,6 +269,33 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
+     * The overview asks whether the same work is current several times: for the quotes at each edge of its window, and
+     * for the later work that may close each card, at each edge. One read reads each piece of work once for all of
+     * them. Every review here is one the work occasioned, so later work can close a card.
+     */
+    @Test
+    void shouldReadEachPieceOfWorkOnceForTheWholeOverview() {
+        works = IntStream.range(0, 6).mapToObj(index -> onNewWork()).toList();
+        seed(2 * works.size());
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role=replica");
+            jdbc.update(
+                    "UPDATE review SET origin='EVENT', requested_by_id=NULL WHERE workspace_id=?",
+                    scenario.workspace().getId());
+        });
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+
+        clearInvocations(sourceFingerprints);
+        long started = System.nanoTime();
+        var read = overview.getOverview(context);
+        var elapsed = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(read.latestReview()).isNotNull();
+        assertThat(fingerprintReads()).isPositive().isLessThanOrEqualTo(works.size());
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(5));
+    }
+
+    /**
      * An ended result's sources are stale whatever its work holds now, so reading whether they are current reads no
      * work for it. Oldest first, the list's page holds only results that a later review of their work replaced.
      */
