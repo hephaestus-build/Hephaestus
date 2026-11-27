@@ -96,9 +96,9 @@ class EmailAdapterTest extends BaseUnitTest {
                 1,
                 false,
                 null,
-                () -> {
+                proof -> {
                     fenced++;
-                    return fenceAccepts;
+                    return fenceAccepts && proof.getAsBoolean();
                 },
                 null));
     }

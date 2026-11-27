@@ -79,7 +79,7 @@ class FeedbackSendServiceTest {
             1,
             false,
             null,
-            () -> true,
+            proof -> proof.getAsBoolean(),
             null);
     final Feedback feedback = Feedback.builder()
             .id(id)
@@ -372,7 +372,7 @@ class FeedbackSendServiceTest {
                 1,
                 false,
                 null,
-                () -> margin.getAndDecrement() > 0,
+                proof -> margin.getAndDecrement() > 0 && proof.getAsBoolean(),
                 null);
         when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
         when(transactions.claim(eq(1L), eq(id), eq(leased)))

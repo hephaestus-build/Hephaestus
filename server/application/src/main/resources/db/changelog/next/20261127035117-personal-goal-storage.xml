@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795730301791-1" author="hephaestus">
+        <comment>Store an account's personal goal under its owner policy. Keep the version after Forget to fence stale saves.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.personal_goal (
+    account_id bigint PRIMARY KEY,
+    goal_id uuid UNIQUE,
+    words varchar(500),
+    revision bigint NOT NULL,
+    CONSTRAINT sfk_personal_goal_account FOREIGN KEY (account_id) REFERENCES public.account(id) ON DELETE CASCADE,
+    CONSTRAINT ck_personal_goal_content CHECK ((goal_id IS NULL) = (words IS NULL)),
+    CONSTRAINT ck_personal_goal_revision CHECK (revision > 0)
+);
+
+ALTER TABLE public.personal_goal ENABLE ROW LEVEL SECURITY;
+CREATE POLICY personal_goal_owner ON public.personal_goal TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+
+CREATE FUNCTION public.personal_goal_export_changed() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    PERFORM public.person_row_sweep('EXPORT_SOURCES_CHANGED',
+        CASE WHEN TG_OP = 'DELETE' THEN OLD.account_id ELSE NEW.account_id END, NULL, NULL);
+    RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER trg_personal_goal_export_changed
+    AFTER INSERT OR UPDATE OF words OR DELETE ON public.personal_goal
+    FOR EACH ROW EXECUTE FUNCTION public.personal_goal_export_changed();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+LOCK TABLE public.personal_goal IN ACCESS EXCLUSIVE MODE;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.personal_goal) THEN
+        RAISE EXCEPTION 'Restore the verified pre-upgrade database backup to reverse personal goal storage with rows.';
+    END IF;
+END
+$$;
+DROP TABLE public.personal_goal;
+DROP FUNCTION public.personal_goal_export_changed();
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

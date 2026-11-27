@@ -119,6 +119,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "CommitIdentityChange", // Numeric record of corrected links on shared commit rows
             "NotificationSubscription", // Native account email preferences span workspaces and are erased with that
             // account
+            "PersonalGoal", // Account owner policy, also before a person joins a workspace.
             "Organization", // Synced from GitHub, workspace is set separately
             "Workspace", // Is the tenant root
             "WorkspaceSlugReservation", // Instance-wide DNS namespace tombstones

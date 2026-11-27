@@ -88,9 +88,11 @@ public final class ActionTestSupport {
 
     /**
      * Claims the due head of one lane as the executor would, and returns the attempt without carrying it out, as if
-     * the process that holds it stopped at any point. Its fence is the executor's.
+     * the process that holds it stopped at any point. Its fence uses the store's write transaction.
      */
-    public static Optional<ActionAttempt> claimLane(JdbcTemplate jdbc, ObjectMapper mapper, String laneKey) {
+    public static Optional<ActionAttempt> claimLane(
+            JdbcTemplate jdbc, ObjectMapper mapper, String laneKey, ApplicationContext context) {
+        var store = context.getBean(ActionStore.class);
         return claim(jdbc, laneKey)
                 .map(claim -> new ActionAttempt(
                         claim.id(),
@@ -102,14 +104,7 @@ public final class ActionTestSupport {
                         claim.epoch(),
                         claim.writeStarted(),
                         claim.readbackRef(),
-                        () -> jdbc.update(
-                                        "UPDATE agent_action SET write_started_at = COALESCE(write_started_at,"
-                                                + " clock_timestamp()), updated_at = clock_timestamp()"
-                                                + " WHERE id = ? AND lease_epoch = ? AND state = 'EXECUTING'"
-                                                + " AND leased_until > clock_timestamp() + interval '60 seconds'",
-                                        claim.id(),
-                                        claim.epoch())
-                                == 1,
+                        proof -> store.beginWrite(claim, ActionExecutor.WRITE_MARGIN, () -> true, proof),
                         claim.nativeRecipient() == null
                                 ? null
                                 : mapper.readValue(claim.nativeRecipient(), PersonIdentity.class)));

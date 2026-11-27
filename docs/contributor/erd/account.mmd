@@ -1,0 +1,31 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    PersonalGoal {
+        BIGINT account_id PK,FK
+        UUID goal_id UK
+        VARCHAR(500) words
+        BIGINT revision "NOT NULL"
+    }
+
+    Account["Account · Core"]
+
+    %% Relationships
+    %% One-to-One relationships
+    Account ||--|| PersonalGoal : has
+
+    %% Styling
+    classDef primaryEntity stroke-width:2px
+    classDef associationEntity stroke-width:1px
+    classDef metadataEntity stroke-width:1px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity

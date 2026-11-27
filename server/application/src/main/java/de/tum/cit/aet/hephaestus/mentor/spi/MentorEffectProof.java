@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.spi;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /** The runtime's proof of its effects, for the transport that writes them. Database only: the transport reads the provider
  * before, outside any transaction. */
@@ -16,6 +17,9 @@ public interface MentorEffectProof {
      */
     Proof check(EffectRef ref, ProviderObservation observed);
 
-    /** Records a terminal outcome in the outbox's end transaction. */
-    void settle(EffectRef ref, EffectOutcome outcome);
+    /**
+     * Records the terminal outcome of the outbox action that carried an effect, once, in the outbox's end transaction. The
+     * action id is the key, so an expiry before the action ran settles too.
+     */
+    void settleAction(UUID actionId, EffectOutcome outcome);
 }

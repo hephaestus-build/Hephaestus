@@ -63,7 +63,7 @@ class SlackConsentAdapterTest extends BaseUnitTest {
                 1L,
                 started,
                 null,
-                () -> true,
+                proof -> proof.getAsBoolean(),
                 null);
     }
 

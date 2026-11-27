@@ -17,6 +17,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -84,6 +85,30 @@ public class CredentialReader {
                 .flatMap(this::credentialsOf)
                 .filter(BearerToken.class::isInstance)
                 .map(BearerToken.class::cast);
+    }
+
+    public record BoundBot(String userId, BearerToken credential) {}
+
+    /** One credential snapshot from the pinned active installation, including its verified bot user. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Optional<BoundBot> findActiveSlackBot(long workspaceId, long connectionId, String teamId) {
+        return connectionRepository
+                .findByIdAndWorkspaceId(connectionId, workspaceId)
+                .filter(connection -> connection.getKind() == IntegrationKind.SLACK)
+                .filter(connection ->
+                        connection.getState() == IntegrationState.ACTIVE && teamId.equals(connection.getInstanceKey()))
+                .flatMap(connection -> {
+                    if (!(connection.getConfig() instanceof ConnectionConfig.SlackConfig config)
+                            || !teamId.equals(config.teamId())
+                            || config.botUserId() == null) {
+                        return Optional.empty();
+                    }
+                    String botUserId = config.botUserId();
+                    return credentialsOf(connection)
+                            .flatMap(bundle -> bundle instanceof BearerToken token
+                                    ? Optional.of(new BoundBot(botUserId, token))
+                                    : Optional.empty());
+                });
     }
 
     /** The credential a disconnect retained, read only to remove what it controls at the provider. */

@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0161](0161-a-verified-slack-dm-can-use-personal-context-with-a-grant.md) for decisions 4–5 and the DM fallback.
+
 **Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (one route for each turn), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery keys and readback)
 
 **Relates to:** ADR 0132 (proposed in #4865: help settings, goals and noted records)

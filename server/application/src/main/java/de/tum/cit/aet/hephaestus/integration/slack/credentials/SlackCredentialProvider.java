@@ -49,6 +49,11 @@ public class SlackCredentialProvider implements ApiCredentialProvider {
         return credentialReader.credentialsOf(conn);
     }
 
+    public Optional<CredentialReader.BoundBot> resolveActiveBinding(
+            long workspaceId, long connectionId, String teamId) {
+        return credentialReader.findActiveSlackBot(workspaceId, connectionId, teamId);
+    }
+
     /** Resolve the active installation and its reply eligibility in one snapshot before any Slack call. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Optional<BearerToken> resolveActiveTeam(long workspaceId, String teamId, BooleanSupplier eligible) {

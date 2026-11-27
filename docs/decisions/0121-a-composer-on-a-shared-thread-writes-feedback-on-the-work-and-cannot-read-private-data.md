@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0162](0162-a-team-owns-its-growth-record-in-its-workspace.md) for shared Slack channels.
+
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) decisions 2, 11 and 12. [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work and its update of 2026-11-09 on the review run kinds.
 
 **Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (threads, inbox items and the commit rule), [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) (private practice feedback has one reader), [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) (citations)
