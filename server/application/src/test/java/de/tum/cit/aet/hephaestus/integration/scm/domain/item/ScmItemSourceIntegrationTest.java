@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemMergeTimeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateValue;
@@ -2190,6 +2191,28 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                         && statement.contains("left join repository r1_0")
                         && statement.contains("pr1_0.id=?"))
                 .count();
+    }
+
+    /**
+     * In one read-only snapshot a second pin of the same work compares the version it asks for on every call: a pin
+     * kept from the first call never answers for a version the work does not have.
+     */
+    @Test
+    void shouldRefuseAnotherVersionWhenAPullRequestIsPinnedAgainInOneSnapshot() {
+        var pullRef = recordedPullRequest(fixture(IdentityProviderType.GITHUB));
+        var snapshot = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+
+        snapshot.executeWithoutResult(status -> {
+            var current = sources.pin(pullRef, null);
+            assertThat(sources.pin(pullRef, current.version()).version()).isEqualTo(current.version());
+            var other = new ItemVersion("0".repeat(64), current.version().baseVersion());
+            assertThatThrownBy(() -> sources.pin(pullRef, other))
+                    .isInstanceOfSatisfying(
+                            ItemCaptureException.class,
+                            failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.VERSION_UNAVAILABLE));
+        });
     }
 
     private ItemRef recordedPullRequest(Fixture fixture) {

@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.sql.Connection;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -55,10 +56,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
-import java.sql.Connection;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class ScmCaptureConsentTest extends BaseUnitTest {
     @Test
