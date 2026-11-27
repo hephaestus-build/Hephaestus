@@ -143,6 +143,17 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseAnApprovedPairingWhenItsApproverLeavesTheWorkspace() {
+        UUID approved = approvedPairing(student);
+        UUID classmatesPairing = approvedPairing(classmate);
+
+        memberships.leave(id(course), student);
+
+        assertThat(pairingExists(approved)).isFalse();
+        assertThat(pairingExists(classmatesPairing)).isTrue();
+    }
+
+    @Test
     void shouldDeleteTheGrantsAndPairingsOfAnErasedAccountAndNoOthers() {
         grant(course, team, student);
         approvedPairing(student);
