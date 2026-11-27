@@ -146,13 +146,14 @@ class PersonalPurseLedgerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         var selection = store.select(scope);
         assertThat(store.export(selection, scope).toString())
-                .contains("1.00", "0.50")
+                .contains("\"cost_usd\":1.0", "\"cost_bound_usd\":0.5")
                 .doesNotContain(ended.toString(), open.toString(), source.toString());
         store.erase(selection, scope);
 
         assertThat(column(ended, "payer_account_id")).isNull();
         assertThat(column(open, "payer_account_id")).isNull();
-        assertThat(column(ended, "source_id")).isNotEqualTo(source.toString());
+        assertThat(column(ended, "source_id")).isNull();
+        assertThat(column(open, "source_id")).isNull();
         assertThat(column(open, "call_state")).isEqualTo("SETTLED");
         assertThat(column(other, "payer_account_id")).isEqualTo(Long.toString(bob));
         var after = ledger.personalSpend(ada, start(month), start(month.plusMonths(1)));
