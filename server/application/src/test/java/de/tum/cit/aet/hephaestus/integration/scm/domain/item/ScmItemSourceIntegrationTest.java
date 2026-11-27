@@ -1167,6 +1167,34 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(transferred.value()).isFalse();
     }
 
+    /**
+     * Outside a read-only snapshot, a check of an item reads again each time, so a change that commits between two
+     * checks of the same item reaches the later one. Only a page read's snapshot keeps a verdict.
+     */
+    @Test
+    void shouldCheckAnItemAgainWhenItIsCheckedAgainOutsideASnapshot() {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        long workspaceId = fixture.workspace().getId();
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        var issue = progressIssue(fixture, 331, null);
+        var ref = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var readCommitted = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        readCommitted.setReadOnly(true);
+
+        var verdicts = readCommitted.execute(status -> {
+            boolean before = sourceAccess.permits(ref, purpose);
+            CompletableFuture.runAsync(
+                            () -> jdbc.update("UPDATE issue SET deleted_at = now() WHERE id = ?", issue.getId()))
+                    .join();
+            return List.of(before, sourceAccess.permits(ref, purpose));
+        });
+
+        assertThat(verdicts).containsExactly(true, false);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,
