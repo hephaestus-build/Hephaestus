@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.AgentPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.auth.AccountDirectoryService;
@@ -201,6 +202,33 @@ class PersonalPurseLedgerIntegrationTest extends AbstractWorkspaceIntegrationTes
         store.erase(store.select(scope), scope);
 
         assertThat(column(probe, "source_id")).isEqualTo(source.toString());
+    }
+
+    @Test
+    void shouldKeepAPersonalCallOutOfAnotherAccountsReportExportAndErasure() {
+        long reporter = accountId(persistUser("purse-report-owner"));
+        long payer = accountId(persistUser("purse-report-other-payer"));
+        UUID call = personal(payer, "OPEN", "UNPRICED", null, "0.75", at(YearMonth.of(2031, 9), 2));
+        UUID source = UUID.fromString(column(call, "source_id"));
+        jdbc.update("""
+                INSERT INTO product_feedback(id,account_id,kind,message,submission_minute,created_at)
+                VALUES (?,?,'BUG','Synthetic report',clock_timestamp(),clock_timestamp())
+                """, source, reporter);
+        var scope = new PersonScope(reporter, List.of(), List.of());
+        var store = ledgerStore();
+
+        var selection = store.select(scope);
+        var exported = store.export(selection, scope);
+        store.erase(selection, scope);
+
+        assertSoftly(softly -> {
+            softly.assertThat(exported.toString())
+                    .as("the reporter's export excludes the other payer's personal call")
+                    .doesNotContain(call.toString());
+            softly.assertThat(column(call, "source_id"))
+                    .as("erasing the reporter preserves the other payer's attempt ID")
+                    .isEqualTo(source.toString());
+        });
     }
 
     @Test
