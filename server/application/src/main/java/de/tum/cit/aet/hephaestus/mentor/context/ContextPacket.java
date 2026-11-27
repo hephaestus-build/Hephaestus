@@ -72,7 +72,9 @@ public final class ContextPacket {
      */
     public static Result assemble(
             ObjectMapper mapper, List<Item> admitted, int inputWindow, ToIntFunction<String> tokens) {
-        List<Item> inputs = admitted.stream().filter(item -> item.section() == Section.INPUT).toList();
+        List<Item> inputs = admitted.stream()
+                .filter(item -> item.section() == Section.INPUT)
+                .toList();
         if (inputs.size() != 1 || !inputs.getFirst().pinned()) {
             throw new IllegalArgumentException("A packet requires one pinned input");
         }
