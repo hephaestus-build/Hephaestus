@@ -2,7 +2,16 @@
 export interface TeamProjectPerson {
 	accountId: number;
 	displayName: string;
+	/** Tells two members with one name apart before an admin grants one of them access. */
+	login?: string;
 	avatarUrl?: string;
+}
+
+/** A member's name, with their login when they have one. */
+export function personLabel(person: TeamProjectPerson): string {
+	return person.login === undefined
+		? person.displayName
+		: `${person.displayName} (${person.login})`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { ADA, ALAN, EMPTY_TEAM, GRACE, WAYFINDING } from "./fixtures";
 import { TeamProjectsPage } from "./TeamProjectsPage";
@@ -52,17 +52,28 @@ export const RemoveMember: Story = {
 	},
 };
 
-/** A team draws only from current workspace members who are not in it yet. */
+/** A team draws only from current workspace members who are not in it yet, and only Add to team adds one. */
 export const AddMember: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(
-			canvas.getByRole("combobox", { name: "Add a member to Team Wayfinding" }),
+			canvas.getByRole("combobox", { name: "Choose a member to add to Team Wayfinding" }),
 		);
 		// The list opens in a portal, outside the canvas.
-		const grace = await screen.findByRole("option", { name: "Grace Hopper" });
+		const grace = await screen.findByRole("option", { name: "Grace Hopper (ghopper)" });
 		await expect(screen.queryByRole("option", { name: "Alan Turing" })).toBeNull();
 		await userEvent.click(grace);
+		await expect(args.onAddMember).not.toHaveBeenCalled();
+		const wayfinding = within(canvas.getByRole("article", { name: "Team Wayfinding" }));
+		await userEvent.click(wayfinding.getByRole("button", { name: "Add to team" }));
 		await expect(args.onAddMember).toHaveBeenCalledWith(WAYFINDING, GRACE.accountId);
+	},
+};
+
+/** Creating: the button says so at once. */
+export const Creating: Story = {
+	args: { creating: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Creating…" })).toBeVisible();
 	},
 };
 

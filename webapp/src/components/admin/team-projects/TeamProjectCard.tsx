@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +13,7 @@ import { getInitials } from "@/lib/avatar";
 import { formatNumber } from "@/lib/numbers";
 import { hasText } from "@/lib/text";
 
-import type { TeamProjectPerson, TeamProjectRow } from "./team-projects";
+import { personLabel, type TeamProjectPerson, type TeamProjectRow } from "./team-projects";
 
 export interface TeamProjectCardProps {
 	team: TeamProjectRow;
@@ -32,9 +34,11 @@ export function TeamProjectCard({
 	onRemoveMember,
 	pending = false,
 }: TeamProjectCardProps) {
+	// The select only holds the choice: Base UI commits a typed match on a closed select, so a keystroke must never add.
+	const [chosen, setChosen] = useState<string | null>(null);
 	const items = candidates.map((person) => ({
 		value: String(person.accountId),
-		label: person.displayName,
+		label: personLabel(person),
 	}));
 	return (
 		<article aria-label={`Team ${team.name}`} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -57,7 +61,7 @@ export function TeamProjectCard({
 								{hasText(member.avatarUrl) && <AvatarImage src={member.avatarUrl} alt="" />}
 								<AvatarFallback>{getInitials(member.displayName)}</AvatarFallback>
 							</Avatar>
-							<bdi className="min-w-0 flex-1 truncate">{member.displayName}</bdi>
+							<bdi className="min-w-0 flex-1 truncate">{personLabel(member)}</bdi>
 							<Button
 								variant="ghost"
 								size="xs"
@@ -72,31 +76,38 @@ export function TeamProjectCard({
 				</ul>
 			)}
 			{items.length > 0 && (
-				<Select<string>
-					value={null}
-					items={items}
-					onValueChange={(accountId) => {
-						if (accountId !== null) {
-							onAddMember(team, Number(accountId));
-						}
-					}}
-				>
-					<SelectTrigger
+				<div className="flex flex-wrap items-center gap-2">
+					<Select<string> value={chosen} items={items} disabled={pending} onValueChange={setChosen}>
+						<SelectTrigger
+							size="sm"
+							className="w-full sm:w-64"
+							aria-label={`Choose a member to add to Team ${team.name}`}
+						>
+							<SelectValue placeholder="Choose a workspace member" />
+						</SelectTrigger>
+						<SelectContent aria-label={`Choose a member to add to Team ${team.name}`}>
+							{items.map((item) => (
+								<SelectItem key={item.value} value={item.value}>
+									{item.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+					<Button
+						variant="outline"
 						size="sm"
-						className="w-full sm:w-64"
 						pending={pending}
-						aria-label={`Add a member to Team ${team.name}`}
+						disabled={chosen === null}
+						onClick={() => {
+							if (chosen !== null) {
+								onAddMember(team, Number(chosen));
+								setChosen(null);
+							}
+						}}
 					>
-						<SelectValue placeholder="Add a workspace member" />
-					</SelectTrigger>
-					<SelectContent aria-label={`Add a member to Team ${team.name}`}>
-						{items.map((item) => (
-							<SelectItem key={item.value} value={item.value}>
-								{item.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+						Add to team
+					</Button>
+				</div>
 			)}
 		</article>
 	);

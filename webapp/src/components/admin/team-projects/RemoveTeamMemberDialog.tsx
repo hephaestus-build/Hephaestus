@@ -29,7 +29,7 @@ export function RemoveTeamMemberDialog({
 			subject={removal}
 			title={({ team, member }) => `Remove ${member.displayName} from Team ${team.name}?`}
 			description={({ member }) =>
-				`${member.displayName} loses access to this team's place, decisions and reviewed versions at once. The versions they sent to this team are withdrawn. Their messages stay under their name. You can add them again, but the withdrawn versions do not come back.`
+				`${member.displayName} loses access to this team’s reviews, review discussions and decisions at once. The versions they sent to this team are withdrawn, so the messages that cite them are hidden. Their notes on those versions are deleted. Their own messages stay under their name. If you add them again, they read the discussion only from that day.`
 			}
 			confirmLabel="Remove from team"
 			onConfirm={onConfirm}
