@@ -342,36 +342,47 @@ if (scenario !== undefined && scenario !== "") {
 		mock.module(file.href, {
 			exports: {
 				...programs,
-				forkedProgram(start: Parameters<typeof programs.forkedProgram>[0]) {
-					const child = programs.forkedProgram(start);
+				forkedProgram(): ReturnType<typeof programs.forkedProgram> {
+					let connected = true;
+					let closed: (signal: string | null) => void;
+					let message: (value: unknown) => void;
 					let guard: ReturnType<typeof setTimeout> | undefined;
-					child.onClose(() => {
+					const close = () => {
+						if (!connected) return;
+						connected = false;
 						clearTimeout(guard);
 						record("program:closed");
-					});
+						queueMicrotask(() => closed(null));
+					};
 					return {
-						...child,
 						get connected() {
-							return child.connected;
+							return connected;
 						},
-						send(message: unknown) {
-							if (isRecord(message) && message.kind === "abort") record("program:abort");
-							child.send(message);
+						send(value) {
+							if (!isRecord(value)) return;
+							if (value.kind === "job") {
+								now += 301_000;
+								record("program:started");
+								queueMicrotask(() => message({ kind: "meta", meta: {} }));
+								guard = setTimeout(() => {
+									record("program:no-abort");
+									close();
+								}, 8_000);
+								guard.unref();
+							}
+							if (value.kind === "abort") record("program:abort");
+							if (value.kind === "exit") close();
 						},
-						onMessage(listener: (message: unknown) => void) {
-							child.onMessage((message) => {
-								if (isRecord(message) && message.kind === "meta") {
-									record("program:started");
-									now += 301_000;
-									guard = setTimeout(() => {
-										record("program:no-abort");
-										child.kill();
-									}, 8_000);
-									guard.unref();
-								}
-								listener(message);
-							});
+						onMessage(listener) {
+							message = listener;
 						},
+						onClose(listener) {
+							closed = listener;
+						},
+						onOutput() {},
+						onError() {},
+						disconnect: close,
+						kill: close,
 					};
 				},
 			},
@@ -2677,7 +2688,7 @@ export default definePracticeScript({
 							encoding: "utf8",
 						},
 					);
-					assert.equal(child.error, undefined);
+					assert.equal(child.error, undefined, child.stderr);
 					// A scenario's runtime lines are all ones the worker keeps, with no field left out, and never quote a
 					// tool, a provider or a model: some scenarios put the canary in a tool result and in provider errors.
 					assert.deepEqual(
