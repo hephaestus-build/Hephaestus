@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,9 @@ public class LoginProviderClientRegistrationRepository
 
     /** Marks a registration whose ID token Hephaestus validates against the issuer's discovered key set. */
     public static final String OIDC_PROVIDER = "hephaestus.oidc-provider";
+
+    /** The {@link LoginProvider#registrationVersion() row version} that a registration was built from. */
+    public static final String PROVIDER_VERSION = "hephaestus.provider-version";
 
     public static boolean isOidcProvider(ClientRegistration registration) {
         return Boolean.TRUE.equals(
@@ -80,18 +84,10 @@ public class LoginProviderClientRegistrationRepository
     }
 
     private Optional<ClientRegistration> registrationOf(LoginProvider provider) {
-        String version = String.join(
-                "|",
-                String.valueOf(provider.getId()),
-                provider.getType().name(),
-                provider.getBaseUrl(),
-                provider.getClientId(),
-                provider.getScopes(),
-                provider.getDisplayName(),
-                String.valueOf(provider.getUpdatedAt()));
+        String version = provider.registrationVersion();
         Built built = cache.getIfPresent(provider.getRegistrationId());
         if (built != null && built.version().equals(version)) return Optional.of(built.registration());
-        Optional<ClientRegistration> registration = toRegistration(provider);
+        Optional<ClientRegistration> registration = toRegistration(provider, version);
         registration.ifPresent(value -> cache.put(provider.getRegistrationId(), new Built(version, value)));
         return registration;
     }
@@ -137,7 +133,9 @@ public class LoginProviderClientRegistrationRepository
     }
 
     /** Empty for an OIDC provider whose issuer cannot be read now. */
-    private Optional<ClientRegistration> toRegistration(LoginProvider provider) {
+    private Optional<ClientRegistration> toRegistration(LoginProvider provider, String version) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put(PROVIDER_VERSION, version);
         String base = provider.getBaseUrl().replaceAll("/+$", "");
         ClientRegistration.Builder builder = ClientRegistration.withRegistrationId(provider.getRegistrationId())
                 .clientId(provider.getClientId())
@@ -179,8 +177,8 @@ public class LoginProviderClientRegistrationRepository
                         .tokenUri(endpoints.tokenUri())
                         .jwkSetUri(endpoints.jwkSetUri())
                         .issuerUri(endpoints.issuer())
-                        .userNameAttributeName("sub")
-                        .providerConfigurationMetadata(Map.of(OIDC_PROVIDER, true));
+                        .userNameAttributeName("sub");
+                metadata.put(OIDC_PROVIDER, true);
             }
             case OUTLINE ->
                 // Outline (self-hosted) is a plain OAuth2 provider (v0.77+), NOT OIDC: no id_token, no
@@ -198,6 +196,6 @@ public class LoginProviderClientRegistrationRepository
                         .tokenUri(base + "/oauth/token")
                         .userInfoUri(base + "/api/v4/user");
         }
-        return Optional.of(builder.build());
+        return Optional.of(builder.providerConfigurationMetadata(metadata).build());
     }
 }

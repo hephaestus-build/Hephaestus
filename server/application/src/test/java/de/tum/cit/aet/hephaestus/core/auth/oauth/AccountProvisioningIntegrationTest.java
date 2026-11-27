@@ -57,6 +57,9 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
     private LoginProviderRepository loginProviderRepository;
 
     @Autowired
+    private ProviderBinding providerBinding;
+
+    @Autowired
     private PlatformTransactionManager transactions;
 
     @Autowired
@@ -366,6 +369,90 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM identity WHERE provider_user_key='other-issuer'", Long.class))
                 .isZero();
+    }
+
+    /** Another server replaces the row under the same registration id after the callback authenticated. */
+    @Test
+    void shouldRefuseASignInWhoseProviderRowWasReplacedByAnotherTypeAfterItAuthenticated() {
+        seedProvider("bound-replaced", LoginProvider.ProviderType.OIDC);
+        String authenticated = rowVersion("bound-replaced");
+        loginProviderRepository.delete(
+                loginProviderRepository.findByRegistrationId("bound-replaced").orElseThrow());
+        seedProvider("bound-replaced", LoginProvider.ProviderType.GITLAB);
+        OAuth2User principal = principal("4242", "replaced@example.test", true, "replaced");
+
+        assertThatThrownBy(() -> bound("bound-replaced", authenticated, principal, "4242"))
+                .isInstanceOfSatisfying(
+                        OAuth2AuthenticationException.class,
+                        exception ->
+                                assertThat(exception.getError().getErrorCode()).isEqualTo("provider_changed"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identity WHERE provider_user_key='4242'", Long.class))
+                .isZero();
+    }
+
+    /** An admin edits the row in place after the callback authenticated; a new sign-in then works. */
+    @Test
+    void shouldRefuseASignInWhoseProviderRowWasEditedAfterItAuthenticatedAndAcceptTheRetry() {
+        seedProvider("bound-edited", LoginProvider.ProviderType.OIDC);
+        String authenticated = rowVersion("bound-edited");
+        LoginProvider row =
+                loginProviderRepository.findByRegistrationId("bound-edited").orElseThrow();
+        row.setDisplayName("Renamed");
+        loginProviderRepository.saveAndFlush(row);
+        var token = new OidcIdToken(
+                "id-token",
+                Instant.now(),
+                Instant.now().plusSeconds(300),
+                Map.of("iss", "https://bound-edited.example", "sub", "edited-subject"));
+        OAuth2User principal = new DefaultOidcUser(List.of(new SimpleGrantedAuthority("ROLE_USER")), token, "sub");
+
+        assertThatThrownBy(() -> bound("bound-edited", authenticated, principal, "edited-subject"))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM identity WHERE provider_user_key='edited-subject'", Long.class))
+                .isZero();
+
+        bound("bound-edited", rowVersion("bound-edited"), principal, "edited-subject");
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM identity WHERE provider_user_key='edited-subject'", Long.class))
+                .isOne();
+    }
+
+    /** The same check covers GitHub and GitLab, whose rows an admin can change during a sign-in too. */
+    @Test
+    void shouldRefuseAGitHubSignInWhoseProviderRowChangedAfterItAuthenticated() {
+        seedProvider("bound-github", LoginProvider.ProviderType.GITHUB);
+        String authenticated = rowVersion("bound-github");
+        LoginProvider row =
+                loginProviderRepository.findByRegistrationId("bound-github").orElseThrow();
+        row.setClientId("another-client-id");
+        loginProviderRepository.saveAndFlush(row);
+
+        assertThatThrownBy(() -> bound(
+                        "bound-github",
+                        authenticated,
+                        principal("gh-bound", "bound@example.test", true, "bound"),
+                        "gh-bound"))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identity WHERE provider_user_key='gh-bound'", Long.class))
+                .isZero();
+    }
+
+    private String rowVersion(String registrationId) {
+        return loginProviderRepository
+                .findByRegistrationId(registrationId)
+                .orElseThrow()
+                .registrationVersion();
+    }
+
+    private AccountProvisioningService.ProvisionResult bound(
+            String registrationId, String authenticatedVersion, OAuth2User principal, String subject) {
+        var token = new ProviderBoundToken(principal, principal.getAuthorities(), registrationId, authenticatedVersion);
+        return providerBinding.provision(
+                token,
+                () -> service.resolveOrProvision(
+                        registrationId, subject, principal, AuthIntentCookie.Intent.login(null, null)));
     }
 
     private void seedProvider(String registrationId, LoginProvider.ProviderType type) {

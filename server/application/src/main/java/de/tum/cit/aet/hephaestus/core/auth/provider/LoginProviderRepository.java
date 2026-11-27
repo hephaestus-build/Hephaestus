@@ -50,4 +50,9 @@ public interface LoginProviderRepository extends JpaRepository<LoginProvider, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM LoginProvider p WHERE p.registrationId = :registrationId")
     Optional<LoginProvider> findByRegistrationIdForUpdate(@Param("registrationId") String registrationId);
+
+    /** The row, share-locked until the caller's transaction ends, so no admin change commits meanwhile. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT p FROM LoginProvider p WHERE p.registrationId = :registrationId")
+    Optional<LoginProvider> findByRegistrationIdForShare(@Param("registrationId") String registrationId);
 }

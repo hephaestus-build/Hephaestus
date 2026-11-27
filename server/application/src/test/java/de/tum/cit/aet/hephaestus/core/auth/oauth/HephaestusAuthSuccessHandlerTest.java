@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,7 +101,18 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
                 new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(registeredExtensionIds)),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 CookieCsrfTokenRepository.withHttpOnlyFalse(),
+                boundProvisioning(),
                 /* webappBaseUrl */ "");
+    }
+
+    /** The provider row binding has its own integration tests; here it runs provisioning as it is. */
+    @SuppressWarnings("unchecked")
+    private static ProviderBinding boundProvisioning() {
+        ProviderBinding binding = mock(ProviderBinding.class);
+        lenient()
+                .when(binding.provision(any(), any()))
+                .thenAnswer(call -> ((Supplier<Object>) call.getArgument(1)).get());
+        return binding;
     }
 
     private static AuthIntentCookie.Intent clientIntent() {

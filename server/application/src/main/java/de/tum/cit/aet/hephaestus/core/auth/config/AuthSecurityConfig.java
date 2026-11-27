@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.auth.oauth.GitHubEmailOAuth2UserService;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthFailureHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.HephaestusAuthSuccessHandler;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.OutlineAuthInfoUserService;
+import de.tum.cit.aet.hephaestus.core.auth.oauth.ProviderBoundToken;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderClientRegistrationRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
@@ -45,6 +46,7 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ReactorClientHttpRequestFactory;
 import org.springframework.http.converter.FormHttpMessageConverter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
@@ -61,6 +63,7 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2LoginAuthenticationFilter;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -314,6 +317,27 @@ public class AuthSecurityConfig {
                     // GitHub: enrich attributes with the primary+verified email from /user/emails so
                     // VerifiedEmailResolver can stamp primaryEmailVerifiedAt. OIDC providers are untouched.
                     oauth.userInfoEndpoint(userInfo -> userInfo.userService(oauthUserService()));
+                    // The result names the row version whose registration authenticated it (ProviderBinding).
+                    oauth.withObjectPostProcessor(new ObjectPostProcessor<OAuth2LoginAuthenticationFilter>() {
+                        @Override
+                        public <O extends OAuth2LoginAuthenticationFilter> O postProcess(O filter) {
+                            filter.setAuthenticationResultConverter(result -> new ProviderBoundToken(
+                                    Objects.requireNonNull(
+                                            result.getPrincipal(), "An authenticated sign-in has a principal"),
+                                    result.getAuthorities(),
+                                    result.getClientRegistration().getRegistrationId(),
+                                    result.getClientRegistration()
+                                                            .getProviderDetails()
+                                                            .getConfigurationMetadata()
+                                                            .get(
+                                                                    LoginProviderClientRegistrationRepository
+                                                                            .PROVIDER_VERSION)
+                                                    instanceof String version
+                                            ? version
+                                            : null));
+                            return filter;
+                        }
+                    });
                     oauth.successHandler(successHandler);
                     oauth.failureHandler(failureHandler);
                 });

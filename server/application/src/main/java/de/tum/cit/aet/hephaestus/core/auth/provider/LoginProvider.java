@@ -119,6 +119,23 @@ public class LoginProvider {
                 type == ProviderType.OIDC ? baseUrl.trim() : baseUrl.trim().replaceAll("/+$", "");
     }
 
+    /**
+     * The version of the row that a sign-in registration is built from. A sign-in completes only against the row
+     * version that started it, so an admin who replaces or edits the row meanwhile never gets a subject keyed into
+     * the new row's namespace.
+     */
+    public String registrationVersion() {
+        return String.join(
+                "|",
+                String.valueOf(id),
+                String.valueOf(type),
+                baseUrl,
+                clientId,
+                scopes,
+                displayName,
+                String.valueOf(updatedAt));
+    }
+
     public String clientSecret(SystemSecrets secrets) {
         return secrets.openText(sealedClientSecret, secretBinding());
     }
