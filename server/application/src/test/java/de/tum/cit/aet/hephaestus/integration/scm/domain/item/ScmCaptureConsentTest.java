@@ -51,6 +51,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -494,6 +496,28 @@ class ScmCaptureConsentTest extends BaseUnitTest {
             batch.require();
         }));
         batch.decidedTimes(2);
+    }
+
+    @Test
+    void shouldWithholdWhenALaterSourceSeesANewlyLinkedAccountBeforeItsChoiceChanges() {
+        var batch = Batch.of(AiChoice.CLOUD);
+        var linked = new AtomicBoolean();
+        var choice = new AtomicReference<>(AiChoice.NO_AI);
+        when(batch.identities().accountFor(batch.contributor().identity()))
+                .thenAnswer(invocation -> linked.get() ? Optional.of(101L) : Optional.empty());
+        when(batch.accounts().find(101L)).thenAnswer(invocation -> Optional.of(Batch.account(choice.get())));
+
+        // Model the committed states visible to each read of this SCM identity.
+        Runnable sources = () -> {
+            batch.require();
+            linked.set(true);
+            batch.require();
+            choice.set(AiChoice.CLOUD);
+        };
+
+        assertWithheld(sources);
+        linked.set(false);
+        assertWithheld(() -> batch.inBatch(sources));
     }
 
     private User person(IdentityProvider provider, long nativeId) {
