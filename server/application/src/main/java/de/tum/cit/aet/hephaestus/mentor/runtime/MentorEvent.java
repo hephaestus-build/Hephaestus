@@ -27,8 +27,8 @@ import org.jspecify.annotations.Nullable;
                         name = "uk_mentor_event_key",
                         columnNames = {"binding_id", "native_event_id"}),
         indexes = {
-            @Index(name = "idx_mentor_event_account", columnList = "account_id"),
-            @Index(name = "idx_mentor_event_source", columnList = "source_id")
+            @Index(name = "idx_mentor_event_source", columnList = "account_id, source_id"),
+            @Index(name = "idx_mentor_event_request", columnList = "account_id, request_id")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

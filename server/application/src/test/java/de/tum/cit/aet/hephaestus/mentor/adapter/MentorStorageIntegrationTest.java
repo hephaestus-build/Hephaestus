@@ -103,6 +103,25 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRejectAnEventReferenceToAnotherAccountsRequest() {
+        long owner = account();
+        long other = account();
+        UUID ownSource = asOwner(owner, () -> seed(owner));
+        UUID otherSource = asOwner(other, () -> seed(other));
+        UUID otherRequest = asOwner(
+                other,
+                () -> jdbc.queryForObject("SELECT id FROM mentor_request WHERE source_id = ?", UUID.class, otherSource));
+
+        assertThatThrownBy(() -> asOwner(owner, () -> {
+                    jdbc.update("UPDATE mentor_event SET request_id = ? WHERE source_id = ?", otherRequest, ownSource);
+                    return ownSource;
+                }))
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .hasMessageContaining("violates foreign key constraint");
+    }
+
+    @Test
     void shouldExportMetadataAndEraseOnlyTheSubjectsMentorRowsWhenTheAccountIsErased() {
         long subject = account();
         long other = account();

@@ -8,7 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
@@ -26,8 +25,11 @@ import org.jspecify.annotations.Nullable;
 @PersonOwned
 @Table(
         name = "mentor_request",
-        uniqueConstraints = @UniqueConstraint(name = "uk_mentor_request_source", columnNames = "source_id"),
-        indexes = @Index(name = "idx_mentor_request_account", columnList = "account_id"))
+        uniqueConstraints = {
+            // One request per source; a source has one account, so the pair is unique where the source is.
+            @UniqueConstraint(name = "uk_mentor_request_source", columnNames = {"account_id", "source_id"}),
+            @UniqueConstraint(name = "uk_mentor_request_owner", columnNames = {"account_id", "id"})
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MentorRequest {
