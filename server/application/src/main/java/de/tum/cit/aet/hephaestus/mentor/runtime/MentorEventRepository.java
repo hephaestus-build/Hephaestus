@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor.runtime;
 
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake.SealedReview;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,30 +20,19 @@ interface MentorEventRepository extends Repository<MentorEvent, UUID> {
     @Query(value = """
             INSERT INTO mentor_event (id, account_id, kind, disposition, workspace_id, review_id, job_id,
               admission_digest, occurred_at, received_at)
-            VALUES (:id, :accountId, 'REVIEW_SEALED', 'PENDING', :workspaceId, :reviewId, :jobId, :digest, :sealedAt,
-              :receivedAt)
+            VALUES (:id, :#{#s.accountId()}, 'REVIEW_SEALED', 'PENDING', :#{#s.workspaceId()}, :#{#s.reviewId()},
+              :#{#s.jobId()}, :#{#s.admissionDigest()}, :#{#s.sealedAt()}, :receivedAt)
             ON CONFLICT (review_id, workspace_id) DO NOTHING
             """, nativeQuery = true)
     int insertReviewSealed(
-            @Param("id") UUID id,
-            @Param("accountId") long accountId,
-            @Param("workspaceId") long workspaceId,
-            @Param("reviewId") UUID reviewId,
-            @Param("jobId") UUID jobId,
-            @Param("digest") String admissionDigest,
-            @Param("sealedAt") Instant sealedAt,
-            @Param("receivedAt") Instant receivedAt);
+            @Param("id") UUID id, @Param("s") SealedReview sealed, @Param("receivedAt") Instant receivedAt);
 
-    /** The review's event, when the bound account owns it. */
+    /** The review's event, when the bound account owns it for the same job and admission. */
     @Query(value = """
             SELECT CAST(id AS text) FROM mentor_event
-            WHERE workspace_id = :workspaceId AND review_id = :reviewId AND account_id = :accountId
-              AND job_id = :jobId AND admission_digest = :digest
+            WHERE workspace_id = :#{#s.workspaceId()} AND review_id = :#{#s.reviewId()}
+              AND account_id = :#{#s.accountId()} AND job_id = :#{#s.jobId()}
+              AND admission_digest = :#{#s.admissionDigest()}
             """, nativeQuery = true)
-    Optional<String> findReviewSealed(
-            @Param("workspaceId") long workspaceId,
-            @Param("reviewId") UUID reviewId,
-            @Param("accountId") long accountId,
-            @Param("jobId") UUID jobId,
-            @Param("digest") String admissionDigest);
+    Optional<String> findReviewSealed(@Param("s") SealedReview sealed);
 }

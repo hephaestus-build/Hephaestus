@@ -973,7 +973,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             mayHaveMentor(review);
             long account = review.developerId();
             var cases = List.of(
-                    Map.entry("UPDATE account SET ai_choice=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET ai_choice='NO_AI' WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET feedback_delivery_enabled=false WHERE id=?", "AUTHOR_NOT_CONSENTING"),
                     Map.entry("UPDATE account SET status='UNCLAIMED' WHERE id=?", "AUTHOR_INACTIVE"),
@@ -998,7 +998,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     /** An active, visible member who made an explicit AI choice and keeps practice feedback delivery on. */
     private void mayHaveMentor(ClaimedReview review) {
         jdbc.update(
-                "UPDATE account SET status='ACTIVE', ai_choice='CLOUD', feedback_delivery_enabled=true WHERE id=?",
+                "UPDATE account SET status='ACTIVE', ai_choice='CLOUD', ai_choice_at=now(), feedback_delivery_enabled=true"
+                        + " WHERE id=?",
                 review.developerId());
         jdbc.update(
                 "UPDATE membership SET hidden=false, left_at=NULL WHERE workspace_id=? AND account_id=?",

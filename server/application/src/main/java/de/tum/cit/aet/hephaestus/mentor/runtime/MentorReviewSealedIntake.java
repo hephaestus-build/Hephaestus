@@ -48,20 +48,10 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
         // A random id keeps the review key the only unique key that two seals of one review can meet, so the
         // targeted conflict absorbs every race between them, and a provider event's keys are never absorbed.
         UUID id = UUID.randomUUID();
-        if (events.insertReviewSealed(
-                        id,
-                        account,
-                        sealed.workspaceId(),
-                        sealed.reviewId(),
-                        sealed.jobId(),
-                        sealed.admissionDigest(),
-                        sealed.sealedAt(),
-                        Instant.now())
-                == 1) return new Outcome.Admitted(id);
+        if (events.insertReviewSealed(id, sealed, Instant.now()) == 1) return new Outcome.Admitted(id);
         // The review has an event. Only the same owner, job and admission is this seal again; row-level security hides
         // another owner's event, so that is a mismatch too.
-        return events.findReviewSealed(
-                        sealed.workspaceId(), sealed.reviewId(), account, sealed.jobId(), sealed.admissionDigest())
+        return events.findReviewSealed(sealed)
                 .<Outcome>map(existing -> new Outcome.Admitted(UUID.fromString(existing)))
                 .orElse(new Outcome.Refused(Refusal.EVENT_MISMATCH));
     }
