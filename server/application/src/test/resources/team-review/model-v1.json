@@ -1,0 +1,10 @@
+{
+  "format": "synthetic-model",
+  "classes": [
+    { "id": "c-order", "name": "Order", "members": ["- total: Money"] },
+    { "id": "c-line", "name": "OrderLine", "members": ["- quantity: int"] }
+  ],
+  "relationships": [
+    { "id": "e-lines", "from": "c-line", "to": "c-order", "drawn": "a filled diamond", "multiplicityAtTo": "" }
+  ]
+}
