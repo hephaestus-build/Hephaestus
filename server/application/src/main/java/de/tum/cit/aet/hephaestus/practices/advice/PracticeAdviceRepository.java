@@ -14,6 +14,8 @@ public interface PracticeAdviceRepository extends JpaRepository<PracticeAdvice, 
     Optional<PracticeAdvice> findByWorkspaceIdAndPersonAccountIdAndPracticeId(
             long workspaceId, long personAccountId, long practiceId);
 
+    Optional<PracticeAdvice> findByIdAndWorkspaceId(UUID id, long workspaceId);
+
     @Query(
             value = "SELECT a.* FROM practice_advice a WHERE a.workspace_id=:workspaceId"
                     + " AND a.person_account_id=:accountId AND a.practice_id=:practiceId FOR UPDATE",
