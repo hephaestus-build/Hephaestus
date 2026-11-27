@@ -296,6 +296,7 @@
 	"docs/decisions/0152-a-distress-hold-on-contact-is-a-decision-for-after-1-0.md",
 	"docs/decisions/0153-a-public-page-shows-instance-reach-released-once-each-half-year.md",
 	"docs/decisions/0155-one-app-origin-and-a-workspace-host-serves-only-the-public-page.md",
+	"docs/decisions/0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
