@@ -3,8 +3,9 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 /** Why an advice write wrote nothing (PRACTICE-ADVICE table A). The caller records each as a deliberate silence. */
 public enum AdviceRefusal {
     /**
-     * Advice writes are not set up: the workspace is not on the instance's advice allowlist, or the review producer
-     * port or the advice erasure listener is absent. Feedback mode Off is a {@link #GATE_REFUSED}.
+     * Advice writes are not set up: the workspace is not on the instance's advice allowlist, the review producer port
+     * is absent, or the advice erasure listener is absent and the instance does not allow writes without it. Only a
+     * synthetic proof environment allows that. Feedback mode Off is a {@link #GATE_REFUSED}.
      */
     NOT_ENABLED,
     /** The developer is erased, unclaimed, or no longer an active member. */
