@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.slack.credentials;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
@@ -51,28 +49,8 @@ public class SlackCredentialProvider implements ApiCredentialProvider {
         return credentialReader.credentialsOf(conn);
     }
 
-    public record BoundBot(String userId, BearerToken credential) {}
-
-    /** One credential snapshot from the pinned active installation, including its verified bot user. */
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Optional<BoundBot> resolveActiveBinding(long workspaceId, long connectionId, String teamId) {
-        return connectionService
-                .findReferenced(new IntegrationRef(IntegrationKind.SLACK, workspaceId, teamId, connectionId))
-                .filter(connection ->
-                        connection.getState() == IntegrationState.ACTIVE && teamId.equals(connection.getInstanceKey()))
-                .flatMap(connection -> {
-                    if (!(connection.getConfig() instanceof ConnectionConfig.SlackConfig config)
-                            || !teamId.equals(config.teamId())
-                            || config.botUserId() == null) {
-                        return Optional.empty();
-                    }
-                    String botUserId = config.botUserId();
-                    return credentialReader
-                            .credentialsOf(connection)
-                            .flatMap(bundle -> bundle instanceof BearerToken token
-                                    ? Optional.of(new BoundBot(botUserId, token))
-                                    : Optional.empty());
-                });
+    public Optional<CredentialReader.BoundBot> resolveActiveBinding(long workspaceId, long connectionId, String teamId) {
+        return credentialReader.findActiveSlackBot(workspaceId, connectionId, teamId);
     }
 
     /** Resolve the active installation and its reply eligibility in one snapshot before any Slack call. */

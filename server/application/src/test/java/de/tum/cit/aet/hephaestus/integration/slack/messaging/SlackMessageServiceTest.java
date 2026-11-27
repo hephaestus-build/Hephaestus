@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
-import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider.BoundBot;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader.BoundBot;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.EphemeralMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.mentor.spi.Route;
@@ -231,10 +231,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     @Test
     void shouldCallSlackAtTheConfiguredApiBase() {
-        assertThat(SlackMessageService.nativeConfig(new SlackProperties(SlackProperties.SLACK))
+        assertThat(SlackSendFence.nativeConfig(new SlackProperties(SlackProperties.SLACK))
                         .getMethodsEndpointUrlPrefix())
                 .isEqualTo("https://slack.com/api/");
-        assertThat(SlackMessageService.nativeConfig(new SlackProperties("http://slack.fake:8080/"))
+        assertThat(SlackSendFence.nativeConfig(new SlackProperties("http://slack.fake:8080/"))
                         .getMethodsEndpointUrlPrefix())
                 .isEqualTo("http://slack.fake:8080/api/");
     }

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
 import com.slack.api.Slack;
-import com.slack.api.SlackConfig;
 import com.slack.api.methods.MethodsClient;
 import com.slack.api.methods.SlackApiException;
 import com.slack.api.methods.SlackApiTextResponse;
@@ -27,7 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
-import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider.BoundBot;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader.BoundBot;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics.MembershipStatus;
@@ -55,14 +54,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.BooleanNode;
 
 /**
  * Per-workspace Slack messaging. Bot token resolved at send time via
@@ -76,19 +73,6 @@ public class SlackMessageService implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SlackMessageService.class);
     private static final JsonMapper MEMBERSHIP_JSON = JsonMapper.builder().build();
-    private static final List<String> REQUIRED_NON_MEMBER_FLAGS =
-            List.of("is_restricted", "is_ultra_restricted", "is_bot", "is_app_user");
-    // Slack may omit the deleted field for an active user.
-    private static final List<String> OPTIONAL_NON_MEMBER_FLAGS = List.of(
-            "deleted",
-            "is_stranger",
-            "is_external",
-            "is_invited_user",
-            "is_profile_only_user",
-            "is_forgotten",
-            "is_connector_bot",
-            "is_workflow_bot");
-
     private static final int CONVERSATIONS_LIST_PAGE_SIZE = 200;
     private static final int CONVERSATIONS_LIST_MAX_PAGES = 20;
 
@@ -122,7 +106,7 @@ public class SlackMessageService implements AutoCloseable {
             SlackMetrics metrics,
             SlackProperties properties) {
         this(
-                SlackSendFence.client(nativeConfig(properties)),
+                SlackSendFence.client(SlackSendFence.nativeConfig(properties)),
                 credentialProvider,
                 rateLimitTracker,
                 egressGuard,
@@ -147,20 +131,6 @@ public class SlackMessageService implements AutoCloseable {
         this.egressGuard = egressGuard;
         this.metrics = metrics;
         this.time = time;
-    }
-
-    /**
-     * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
-     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under the API origin of {@code properties}. The SDK's shared
-     * default client and its configuration stay unchanged.
-     */
-    static SlackConfig nativeConfig(SlackProperties properties) {
-        SlackConfig config = new SlackConfig();
-        config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
-        config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
-        // SDK statistics can issue auth.test before a method call. An admitted post must make only its own request.
-        config.getMethodsConfig().setStatsEnabled(false);
-        return config;
     }
 
     /** Closes this gateway's own Slack client: its HTTP client and the executors of its configuration. */
@@ -280,6 +250,9 @@ public class SlackMessageService implements AutoCloseable {
         }
 
         public Posted post(List<LayoutBlock> blocks, String text, String marker, BooleanSupplier admit) {
+            if (!egressGuard.deliveryAllowed("slack.write")) {
+                throw new SlackSendException(target.workspaceId(), target.channelId(), "silent_mode_engaged");
+            }
             var metadata = Message.Metadata.builder()
                     .eventType(EVENT_TYPE)
                     .eventPayload(Map.of("marker", marker))
@@ -706,7 +679,7 @@ public class SlackMessageService implements AutoCloseable {
             var token = credential.get();
             status = token.isEmpty()
                     ? MembershipStatus.CREDENTIAL
-                    : membershipStatus(
+                    : SlackMembership.status(
                             callHonoringRateLimit(
                                     SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                                     () -> readMembership(token.get(), subject)),
@@ -720,7 +693,7 @@ public class SlackMessageService implements AutoCloseable {
                     ? MembershipStatus.RATE_LIMITED
                     : MembershipStatus.PROVIDER;
             if (response != null) {
-                cause = membershipHttpFailure(HttpStatusCode.valueOf(response.code()));
+                cause = SlackMembership.httpFailure(HttpStatusCode.valueOf(response.code()));
             }
         } catch (RestClientResponseException unavailable) {
             status = MembershipStatus.PROVIDER;
@@ -737,36 +710,6 @@ public class SlackMessageService implements AutoCloseable {
             throw new SlackMembershipUnavailableException(status, cause);
         }
         return status == MembershipStatus.CONFIRMED;
-    }
-
-    private static RestClientResponseException membershipHttpFailure(HttpStatusCode status) {
-        // The inbox uses the status to classify the failure. Keep provider response data out of the exception.
-        return new RestClientResponseException("Slack membership lookup failed", status, "", null, null, null);
-    }
-
-    private static MembershipStatus membershipStatus(JsonNode response, String teamId, String subject) {
-        if (BooleanNode.FALSE.equals(response.path("ok"))) {
-            String error = response.path("error").asString("");
-            if (SlackSendException.isProviderUnavailable(error)) {
-                throw membershipHttpFailure(HttpStatus.SERVICE_UNAVAILABLE);
-            }
-            return "user_not_found".equals(error) ? MembershipStatus.INELIGIBLE : MembershipStatus.PROVIDER;
-        }
-        var user = response.path("user");
-        var userTeam = user.path("team_id").asString("");
-        if (!BooleanNode.TRUE.equals(response.path("ok"))
-                || !subject.equals(user.path("id").asString(""))
-                || userTeam.isBlank()) return MembershipStatus.PAYLOAD;
-        if (!teamId.equals(userTeam)
-                || REQUIRED_NON_MEMBER_FLAGS.stream().anyMatch(flag -> BooleanNode.TRUE.equals(user.path(flag)))
-                || OPTIONAL_NON_MEMBER_FLAGS.stream().anyMatch(flag -> BooleanNode.TRUE.equals(user.path(flag)))) {
-            return MembershipStatus.INELIGIBLE;
-        }
-        boolean incomplete = REQUIRED_NON_MEMBER_FLAGS.stream()
-                        .anyMatch(flag -> !user.path(flag).isBoolean())
-                || OPTIONAL_NON_MEMBER_FLAGS.stream()
-                        .anyMatch(flag -> user.has(flag) && !user.path(flag).isBoolean());
-        return incomplete ? MembershipStatus.PAYLOAD : MembershipStatus.CONFIRMED;
     }
 
     private JsonNode readMembership(String token, String subject) throws IOException, SlackApiException {
@@ -842,7 +785,7 @@ public class SlackMessageService implements AutoCloseable {
                 }
                 if (response.getChannels() != null) {
                     response.getChannels().stream()
-                            .map(SlackMessageService::toConversationInfo)
+                            .map(SlackConversationInfo::from)
                             .forEach(channels::add);
                 }
                 cursor = response.getResponseMetadata() == null
@@ -884,7 +827,7 @@ public class SlackMessageService implements AutoCloseable {
                         response.getError());
                 return Optional.empty();
             }
-            return Optional.ofNullable(response.getChannel()).map(SlackMessageService::toConversationInfo);
+            return Optional.ofNullable(response.getChannel()).map(SlackConversationInfo::from);
         } catch (SlackApiException | IOException e) {
             log.warn(
                     "Slack conversations.info transport failure: workspaceId={}, channelId={}, error={}",
@@ -919,7 +862,7 @@ public class SlackMessageService implements AutoCloseable {
             if (channel == null) {
                 return new ConversationLookup.Unavailable("empty_response");
             }
-            return new ConversationLookup.Found(toConversationInfo(channel));
+            return new ConversationLookup.Found(SlackConversationInfo.from(channel));
         } catch (SlackApiException | IOException e) {
             log.debug(
                     "Slack conversations.info transport failure: workspaceId={}, channelId={}, error={}",
@@ -1042,19 +985,19 @@ public class SlackMessageService implements AutoCloseable {
                 methods -> methods.conversationsJoin(req -> req.channel(channelId)));
     }
 
-    private static SlackConversationInfo toConversationInfo(Conversation conversation) {
-        return new SlackConversationInfo(
-                conversation.getId(),
-                conversation.getName() == null || conversation.getName().isBlank()
-                        ? conversation.getId()
-                        : conversation.getName(),
-                conversation.isPrivate(),
-                conversation.isMember(),
-                conversation.isArchived());
-    }
-
     public record SlackConversationInfo(
-            String channelId, String channelName, boolean privateChannel, boolean member, boolean archived) {}
+            String channelId, String channelName, boolean privateChannel, boolean member, boolean archived) {
+        private static SlackConversationInfo from(Conversation conversation) {
+            return new SlackConversationInfo(
+                    conversation.getId(),
+                    conversation.getName() == null || conversation.getName().isBlank()
+                            ? conversation.getId()
+                            : conversation.getName(),
+                    conversation.isPrivate(),
+                    conversation.isMember(),
+                    conversation.isArchived());
+        }
+    }
 
     /** A synchronous Slack Web API call that may throw the SDK's checked failures. */
     @FunctionalInterface

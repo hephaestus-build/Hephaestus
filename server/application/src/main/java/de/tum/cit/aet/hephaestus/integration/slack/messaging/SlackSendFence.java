@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 import com.slack.api.Slack;
 import com.slack.api.SlackConfig;
 import com.slack.api.util.http.SlackHttpClient;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import java.io.IOException;
 import java.net.ProtocolException;
 import java.util.function.BooleanSupplier;
@@ -23,6 +24,20 @@ final class SlackSendFence implements Interceptor {
     private static final SlackSendFence INSTANCE = new SlackSendFence();
 
     private SlackSendFence() {}
+
+    /**
+     * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
+     * ({@link SlackMessageService#NATIVE_CALL_TIMEOUT_MS}) and the methods under the API origin of {@code properties}. The SDK's shared
+     * default client and its configuration stay unchanged.
+     */
+    static SlackConfig nativeConfig(SlackProperties properties) {
+        SlackConfig config = new SlackConfig();
+        config.setHttpClientCallTimeoutMillis(SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+        config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
+        // SDK statistics can issue auth.test before a method call. An admitted post must make only its own request.
+        config.getMethodsConfig().setStatsEnabled(false);
+        return config;
+    }
 
     static Slack client(SlackConfig config) {
         var http = SlackHttpClient.buildOkHttpClient(config)
