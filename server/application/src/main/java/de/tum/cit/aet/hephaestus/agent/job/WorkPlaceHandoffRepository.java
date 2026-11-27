@@ -16,7 +16,9 @@ public interface WorkPlaceHandoffRepository extends Repository<WorkPlaceHandoffR
 
     /**
      * Writes the review's one handoff, or nothing when a seal of the same review already did. A racing seal waits for
-     * the first one's commit on the review key and then commits too, instead of failing on it.
+     * the first one's commit and then commits too, instead of failing on it. The clause names no conflict target: the id
+     * derives from the review, so the primary key and the review key both say that the review has its handoff, and a
+     * row of an earlier release has a random id under the same review key.
      *
      * @return 1 when this seal wrote the handoff
      */
@@ -27,7 +29,7 @@ public interface WorkPlaceHandoffRepository extends Repository<WorkPlaceHandoffR
             VALUES (:#{#h.id}, :#{#h.workspaceId}, :#{#h.reviewId}, :#{#h.jobId}, :#{#h.itemId},
               CAST(:#{#h.itemVersion} AS VARCHAR), :#{#h.producer.name()}, CAST(:#{#h.payload.toString()} AS JSONB),
               :#{#h.payloadDigest}, :#{#h.expiresAt}, :#{#h.createdAt})
-            ON CONFLICT (workspace_id, review_id) DO NOTHING
+            ON CONFLICT DO NOTHING
             """, nativeQuery = true)
     int insertOnce(@Param("h") WorkPlaceHandoffRow handoff);
 

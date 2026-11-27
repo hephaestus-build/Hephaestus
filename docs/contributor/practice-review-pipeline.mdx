@@ -786,10 +786,12 @@ A review is eligible when it is an item review of a pull or merge request, not a
 Its item must take a copy on the work, and at least one public result must be Not met.
 The row's key is the workspace and the review, so a repeated seal writes nothing.
 
-A second seal of the same review that races the first waits for its commit on that key, then commits and writes nothing.
-Only a database failure undoes the seal.
+A second seal of the same review that races the first waits for its commit, then commits and writes nothing.
+A database failure undoes the seal.
+So does a failure after which a transactional collaborator marked the seal for rollback.
 A retained input that does not decode, or a reference that is missing, records a failed handoff, and the seal commits without one.
 `agent_job_work_place_handoff_total` counts each decision with its reason ([Metrics](/admin/metrics)).
+
 An issue gets no handoff in 1.0. A Slack thread and an Outline document get no copy on the work.
 
 The handoff is a scoped copy that `WorkPlaceScope` derives from the inputs that `review_compose` would compose from.

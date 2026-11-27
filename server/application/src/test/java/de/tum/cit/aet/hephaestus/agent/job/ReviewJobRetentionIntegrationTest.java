@@ -20,11 +20,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
@@ -48,6 +54,74 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @Test
+    void shouldCommitBothOfTwoSimultaneousHandoffInsertsOfOneReview() throws Exception {
+        assertThat(racingFailures()).isEmpty();
+    }
+
+    private List<String> racingFailures() throws Exception {
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("handoff-race"));
+        ReviewJob job = jobRepository.saveAndFlush(oldTerminalJob(workspace));
+        long workspaceId = job.getWorkspaceId();
+        // The id the enrolment derives: both seals of one review insert the same primary key.
+        UUID id = UUID.nameUUIDFromBytes(
+                ("work-place-handoff:" + workspaceId + ":" + job.getReviewId()).getBytes(StandardCharsets.UTF_8));
+        var row = WorkPlaceHandoffRow.builder()
+                .id(id)
+                .workspaceId(workspaceId)
+                .reviewId(job.getReviewId())
+                .jobId(job.getId())
+                .itemId(7L)
+                .producer(WorkPlaceHandoffRow.Producer.LEGACY)
+                .payload(objectMapper.createObjectNode().put("version", 1))
+                .payloadDigest("d".repeat(64))
+                .expiresAt(Instant.now().plus(Duration.ofHours(1)))
+                .createdAt(Instant.now())
+                .build();
+        var failures = new CopyOnWriteArrayList<String>();
+        // About half of the rounds collided on the primary key before the fix.
+        int rounds = 200;
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            for (int round = 0; round < rounds; round++) {
+                int current = round;
+                runtimeJdbc.update(
+                        "DELETE FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                        workspaceId,
+                        job.getReviewId());
+                var barrier = new CyclicBarrier(2);
+                Runnable seal = () -> {
+                    try {
+                        transactions.executeWithoutResult(status -> {
+                            // Like the seal: each transaction checks, sees no committed row, then inserts.
+                            handoffs.existsByWorkspaceIdAndReviewId(workspaceId, job.getReviewId());
+                            try {
+                                barrier.await(30, TimeUnit.SECONDS);
+                            } catch (Exception broken) {
+                                throw new IllegalStateException(broken);
+                            }
+                            handoffs.insertOnce(row);
+                        });
+                    } catch (RuntimeException failed) {
+                        failures.add("round " + current + ": " + failed.getMessage());
+                    }
+                };
+                var first = CompletableFuture.runAsync(seal, executor);
+                var second = CompletableFuture.runAsync(seal, executor);
+                CompletableFuture.allOf(first, second).get(60, TimeUnit.SECONDS);
+                assertThat(runtimeJdbc.queryForObject(
+                                "SELECT count(*) FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                                Integer.class,
+                                workspaceId,
+                                job.getReviewId()))
+                        .isOne();
+            }
+        }
+        return failures.stream().limit(3).toList();
+    }
 
     @Test
     @Transactional

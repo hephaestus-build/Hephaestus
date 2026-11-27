@@ -83,14 +83,14 @@ Attempts that lose their holder before they return a result have their own `agen
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
-`agent_job_work_place_handoff_total` counts each item review that a seal admits, once. A trial is not counted:
+`agent_job_work_place_handoff_total` counts each seal of an item review. A trial is not counted. A second seal of the same review counts as `already_written`:
 
 | `outcome` | `reason` | Meaning |
 | --- | --- | --- |
 | `written` | `none` | The seal wrote the copy for the pull or merge request |
 | `skipped` | `ineligible_review` | A backfill, or an item with no work place, such as an issue |
 | `skipped` | `no_copy_on_the_work` | The item takes no copy on the work |
-| `skipped` | `inputs_unusable` | The review's retained inputs were erased or expired, so no composition could read them either |
+| `skipped` | `inputs_unusable` | The review's retained inputs were erased, expired or removed, or their digest or manifest did not match, so no composition could read them either |
 | `skipped` | `nothing_public` | No public result is Not met, so the work place has nothing to say |
 | `skipped` | `already_written` | Another seal of the same review wrote the copy |
 | `failed` | `unreadable` | A retained input did not decode, or a reference was missing. The seal commits without a copy, and `HephaestusWorkPlaceHandoffFailing` fires |

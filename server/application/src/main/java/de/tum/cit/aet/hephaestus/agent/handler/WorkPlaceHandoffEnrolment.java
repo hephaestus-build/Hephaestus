@@ -148,7 +148,8 @@ public class WorkPlaceHandoffEnrolment {
 
     /**
      * Writes the handoff of the review this transaction sealed, once, when its work place has something to read. A
-     * database failure rolls the seal back, and any other failure is recorded and leaves the seal to commit.
+     * database failure rolls the seal back, and so does a failure after which a transactional collaborator marked the
+     * seal for rollback. Any other failure is recorded and leaves the seal to commit.
      */
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
