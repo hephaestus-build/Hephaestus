@@ -529,7 +529,10 @@ export const RichReview: Story = {
 		await screen.findByRole("group", { name: "How this came about" });
 		panel = within(await settledDrawerPanel());
 		await userEvent.click(panel.getByRole("combobox", { name: "Steps" }));
-		await userEvent.click(screen.getByRole("option", { name: "Only met (10)" }));
+		// The list of steps mounts after the click, and its options land a frame later.
+		const onlyMet = await screen.findByRole("option", { name: "Only met (10)" });
+		await expectSettledVisible(onlyMet);
+		await userEvent.click(onlyMet);
 		results = panel.getByRole("list", { name: "Observations of this review" });
 		await expect(results.children).toHaveLength(10);
 		const mixedFeedback = panel.getByRole("button", { name: /^Feedback F\s/u });
