@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor.ExternalDelivery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
@@ -73,6 +74,9 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
     private PersonDataService personData;
 
     @Autowired
+    private AccountDeletionAdmission deletions;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     @Autowired
@@ -112,6 +116,9 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
 
         assertComplete(preview.request().getId());
         assertThat(copies(feedback)).isZero();
+        assertThat(unredactedAnswers(asked.turn()))
+                .as("the step redacts the claimed turn (#5446)")
+                .isZero();
     }
 
     /** The developer's own account deletion finishes; before, it answered 409 for good. */
@@ -123,11 +130,12 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
         end(asked.turn(), ConversationTurn.Status.STOPPED, showing(feedback));
         assertThat(settled(feedback)).isEqualTo("UNCONFIRMED/WRITE_STARTED/-");
 
-        UUID request = admitAccountDeletion();
-        assertThat(personData.get(request).request().getFailureCode()).isNull();
-        personData.run(request);
+        assertThat(deletions.needsAdministrator(developer)).isFalse();
+        personData.eraseForAccount(developer);
 
-        assertComplete(request);
+        assertThat(accountRepository.findById(developer).orElseThrow().getStatus())
+                .isEqualTo(Account.Status.DELETED);
+        assertThat(copies(feedback)).isZero();
     }
 
     /** A failed Slack turn posts a failure notice without the feedback's words. */
@@ -164,6 +172,7 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
         personData.run(request);
 
         assertComplete(request);
+        assertThat(unredactedAnswers(asked.turn())).isZero();
     }
 
     /** The teammate deleted the question, which forgets the post's outbox row; the reply can still be in Slack. */
@@ -212,7 +221,7 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
         completion.recordDelivery(workspace.getId(), asked.turn().getId(), Set.of(), Set.of(feedback));
         assertThat(settled(feedback)).isEqualTo("UNCONFIRMED/WRITE_STARTED/-");
 
-        UUID request = admitAccountDeletion();
+        UUID request = admitAccountDeletionThatWaitsForAnAdministrator();
         var stopped = personData.get(request);
         assertThat(stopped.request().getFailureCode()).isEqualTo("EXTERNAL_COPIES_REQUIRE_REMOVAL");
         assertThat(stopped.externalDeliveries())
@@ -229,8 +238,10 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
     void shouldKeepALostAttemptsCopyInsideHephaestusWhenTheRetryPostsAReply() {
         Asked asked = ask(main, ConversationTurn.Surface.SLACK);
         UUID feedback = claimed(asked.turn());
-        transactions.executeWithoutResult(
+        ConversationTurnService.LostAttempt lost = transactions.execute(
                 tx -> turns.requeueRunning(workspace.getId(), main.getId()).orElseThrow());
+        assertThat(Objects.requireNonNull(lost).attempt())
+                .isEqualTo(asked.turn().getAttempt());
         assertThat(settled(feedback)).isEqualTo("UNCONFIRMED/WRITE_STARTED/-");
         ConversationTurn retry = claims.claimNext().orElseThrow();
         admit(retry);
@@ -310,10 +321,14 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
         return ConversationFeedbackRows.settled(jdbc, feedback);
     }
 
-    private UUID admitAccountDeletion() {
-        return Objects.requireNonNull(
-                transactions.execute(tx -> Objects.requireNonNull(personData.admitAccountErasure(developer))
-                        .getId()));
+    /** The developer deletes their account, and the request that waits for an administrator. */
+    private UUID admitAccountDeletionThatWaitsForAnAdministrator() {
+        assertThat(deletions.needsAdministrator(developer)).isTrue();
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM person_data_request WHERE (scope_json::jsonb)->>'accountId'=?"
+                        + " ORDER BY created_at DESC LIMIT 1",
+                UUID.class,
+                Long.toString(developer)));
     }
 
     private void assertComplete(UUID request) {
@@ -326,6 +341,13 @@ class UnconfirmedConversationCopyErasureIntegrationTest extends AbstractWorkspac
     private long copies(UUID feedback) {
         return Objects.requireNonNull(
                 jdbc.queryForObject("SELECT count(*) FROM feedback_copy WHERE feedback_id=?", Long.class, feedback));
+    }
+
+    private long unredactedAnswers(ConversationTurn turn) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM conversation_entry WHERE turn_id=? AND kind='ANSWER' AND redacted_at IS NULL",
+                Long.class,
+                turn.getId()));
     }
 
     private List<UUID> answers(ConversationTurn turn) {

@@ -208,10 +208,14 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
         """, nativeQuery = true)
     int retryAbsent(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
+    /**
+     * Records a provider send's error on a copy. A conversation copy gets {@code last_error} only from its receipt: a
+     * person's erasure reads it as the mark that a receipt settled the claim (#5440).
+     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_copy SET last_error=:error,stop_reason=:reason,readback=:readback
-        WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId
+        WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind <> 'CHAT_TURN'
         """, nativeQuery = true)
     int recordError(
             @Param("workspaceId") long workspaceId,

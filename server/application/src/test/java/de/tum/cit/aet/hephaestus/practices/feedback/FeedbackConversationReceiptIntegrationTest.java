@@ -557,6 +557,17 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                 .isInstanceOf(ResponseStatusException.class);
     }
 
+    /** A provider send's error never marks a running claim as settled, which a person's erasure would admit (#5440). */
+    @Test
+    void shouldRecordNoSendErrorOnAConversationCopy() {
+        claim();
+
+        assertThat(copies.recordError(
+                        workspace.getId(), conversationId, copyId, null, FeedbackCopyReadback.UNKNOWN.name(), "x"))
+                .isZero();
+        assertThat(chatCopy().getLastError()).isNull();
+    }
+
     /**
      * Once the person's erasure is requested, Hephaestus claims none of their feedback for a conversation. The erasure
      * admits a settled conversation copy, so a claim after the request must not reach it (#5440).

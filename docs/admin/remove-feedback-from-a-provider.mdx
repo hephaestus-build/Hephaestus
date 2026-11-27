@@ -91,7 +91,8 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
 8. For a Slack copy, read `slack_team_id` and `slack_channel_id` of the main conversation.
    For a thread, follow `conversation.parent_conversation_id` to the main conversation.
 9. If a Slack copy has no `slack_ts`, Slack did not confirm the post.
-   If Slack has the reply, it is the first bot message after the question's `slack_ts`, in the question's thread or at the top level of the DM.
+   If Slack has the reply, it is the first bot message after the question's `slack_ts`.
+   It is in the question's thread, or at the top level of the DM.
    Its metadata names the question's entry ID.
    Find it with the Slack [conversations.history](https://docs.slack.dev/reference/methods/conversations.history/) or [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
    Never delete the question itself.
