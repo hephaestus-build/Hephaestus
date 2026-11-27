@@ -285,9 +285,11 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
         when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
         when(bound.readPost(MARKER, 3)).thenThrow(new SlackSendException(7L, "D1", "ratelimited", retryAfterMillis));
 
-        assertThat(adapter.execute(attempt(true))).isEqualTo(retryAfterMillis == 12_345
-                ? new ActionResult.Reread(Duration.ofSeconds(13))
-                : new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
+        assertThat(adapter.execute(attempt(true)))
+                .isEqualTo(
+                        retryAfterMillis == 12_345
+                                ? new ActionResult.Reread(Duration.ofSeconds(13))
+                                : new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
         verify(bound, never()).post(anyList(), anyString(), anyString(), any());
     }
 

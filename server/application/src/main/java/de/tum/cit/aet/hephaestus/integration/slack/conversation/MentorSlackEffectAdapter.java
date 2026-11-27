@@ -238,7 +238,9 @@ class MentorSlackEffectAdapter implements ActionAdapter {
             boolean canRetry = canWait(allowed.intent().deadline(), RETRY_DELAY);
             if (status.get() == WireDecision.ADMITTED)
                 return canRetry ? new ActionResult.Reread(RETRY_DELAY) : unconfirmed();
-            return canRetry ? new ActionResult.Retry(RETRY_DELAY) : new ActionResult.Cancelled(ActionStopReason.EXPIRED);
+            return canRetry
+                    ? new ActionResult.Retry(RETRY_DELAY)
+                    : new ActionResult.Cancelled(ActionStopReason.EXPIRED);
         }
     }
 

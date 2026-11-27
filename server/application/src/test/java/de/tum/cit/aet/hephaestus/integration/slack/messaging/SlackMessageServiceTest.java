@@ -587,12 +587,19 @@ class SlackMessageServiceTest extends BaseUnitTest {
     @Test
     void shouldPreserveRetryAfterWhenBoundReadbackIsThrottledPastItsBudget() throws Exception {
         try (MockWebServer api = new MockWebServer()) {
-            api.enqueue(new MockResponse.Builder().code(429).addHeader("Retry-After", "121").build());
+            api.enqueue(new MockResponse.Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "121")
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                    .build());
             api.start();
-            try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
+            var config = SlackMessageService.nativeConfig(new SlackProperties(api.url("/").toString()));
+            try (var local = serviceWithLocalSlack(config)) {
                 assertThatThrownBy(() -> bind(local, null).readPost("opaque", 1))
-                        .isInstanceOfSatisfying(SlackSendException.class,
-                                error -> assertThat(error.retryAfterMillis()).isEqualTo(121_000L));
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class, error -> assertThat(error.retryAfterMillis())
+                                        .isEqualTo(121_000L));
             }
         }
     }
