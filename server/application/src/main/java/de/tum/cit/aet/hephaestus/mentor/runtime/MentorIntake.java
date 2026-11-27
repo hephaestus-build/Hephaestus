@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.ProviderEventKey;
 import de.tum.cit.aet.hephaestus.mentor.spi.RequestRef;
 import de.tum.cit.aet.hephaestus.mentor.spi.ScopeStamp;
 import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
@@ -34,12 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Admits verified provider events in the transport's receive transaction: database only, and the only writer of the
  * mentor's sources, events and requests. A message's owner is the account of its verified author, pinned on its
- * source.
+ * source; an edit or a delete binds that stored owner.
  *
  * <p>Inserts use {@code ON CONFLICT DO NOTHING}: a concurrent duplicate waits for the first admission and then changes
- * nothing, where a JPA insert would abort the caller's transaction. Lock order: the source, then the authority guards
- * of {@link MentorAuthorization}, as the wire proof takes them. The source is taken {@code NOWAIT}: a held lock fails
- * the whole receive transaction, and the provider's retry admits the event again.
+ * nothing, where a JPA insert would abort the caller's transaction. Lock order: the source, then its request, then the
+ * authority guards of {@link MentorAuthorization}, as the wire proof takes them. The source and the request are taken
+ * {@code NOWAIT}: a held lock fails the whole receive transaction, and the provider's retry admits the event again.
  */
 @Component
 @ConditionalOnServerRole
@@ -69,7 +70,11 @@ public class MentorIntake implements MentorIngress {
         return admit(envelope, route(envelope.binding(), envelope.audience()));
     }
 
-    /** {@code producer} is pinned on a new source; a legacy one is not the mentor's, so it writes nothing. */
+    /**
+     * {@code producer} is pinned on a new source, and only a message's first event asks for it: a new message, or a
+     * delete that arrives before it. A mutation of a source the mentor pinned is admitted whatever the route answers
+     * now, so a rollback keeps fencing the requests it opened.
+     */
     Admission admit(IngressEnvelope envelope, Producer producer) {
         if (envelope.eventKey().bindingId() != envelope.binding().connectionId()) {
             throw new IllegalArgumentException("The event key names another binding than the envelope.");
@@ -78,47 +83,48 @@ public class MentorIntake implements MentorIngress {
         Long author = envelope.actor().linkedAccountId();
         // An unlinked actor, a bot and the app itself have no account: the provider event row keeps the disposition.
         if (author == null) return new Admission.Admitted(eventId, null);
-        // Only a new question is admitted yet: an edit, a delete or a stop writes nothing.
-        if (envelope.kind() != IngressKind.MESSAGE) return new Admission.Admitted(eventId, null);
         long binding = envelope.binding().connectionId();
         String container = envelope.audience().containerId();
         String message = envelope.message().nativeMessageId();
         Long stored = rows.owner(binding, container, message);
-        if (stored == null && producer == Producer.LEGACY) return new Admission.Admitted(eventId, null);
-        // A message that another account owns is not this author's question.
-        if (stored != null && stored.longValue() != author) return new Admission.Admitted(eventId, null);
-        if (!fence.holdForAccountWrite(author)) return new Admission.Admitted(eventId, null);
-        owners.ofJob(author);
+        // A new question starts a source, and so does a delete that arrives first: its tombstone keeps a late copy of
+        // the create from opening the question. An edit or a Stop of a message the mentor does not hold writes nothing.
+        boolean deleted = envelope.kind() == IngressKind.MESSAGE_DELETED;
+        boolean starts = producer == Producer.MENTOR && (envelope.kind() == IngressKind.MESSAGE || deleted);
+        if (stored == null && !starts) return new Admission.Admitted(eventId, null);
+        long owner = stored == null ? author : stored;
+        if (!fence.holdForAccountWrite(owner)) return new Admission.Admitted(eventId, null);
+        owners.ofJob(owner);
         if (stored == null) {
             var _ = rows.insertSource(new MentorSourceRepository.NewSource(
                     UUID.randomUUID(),
-                    author,
+                    owner,
                     binding,
                     envelope.binding().workspaceId(),
                     container,
                     message,
                     producer.name(),
-                    envelope.message().revision()));
+                    envelope.message().revision(),
+                    (deleted ? MentorSource.State.DELETED : MentorSource.State.LIVE).name()));
         }
-        var locked = rows.lockSource(author, binding, container, message);
+        var locked = rows.lockSource(owner, binding, container, message);
         if (locked.isEmpty() || Producer.valueOf(locked.get().getProducer()) == Producer.LEGACY) {
             return new Admission.Admitted(eventId, null);
         }
-        UUID source = locked.get().getId();
-        @Nullable UUID existing = locked.get().getRequest();
-        // A new request captures authority only after its source is locked, in the wire proof's order.
-        Change change = existing != null
-                ? Change.recorded(Reason.ALREADY_OPENED, existing)
-                : stamp(envelope, author)
-                        .map(stamp -> new Change(Disposition.OPENED, null, UUID.randomUUID(), stamp))
-                        .orElseGet(() -> Change.recorded(Reason.UNAUTHORIZED, null));
+        Source source = Source.of(locked.get());
+        @Nullable
+        Request request = rows.lockRequest(source.id(), owner).map(Request::of).orElse(null);
+        @Nullable UUID requestId = request == null ? null : request.id();
+        Change change = owner == author
+                ? decide(envelope, source, request, owner)
+                : Change.recorded(Reason.AUTHOR_MISMATCH, requestId);
         int inserted = rows.insertEvent(new MentorSourceRepository.NewEvent(
                 eventId,
-                author,
+                owner,
                 binding,
                 envelope.eventKey().nativeEventId(),
                 envelope.kind().name(),
-                source,
+                source.id(),
                 // The event dedupes the delivery before its request exists; it is linked once the request is open.
                 change.disposition() == Disposition.OPENED ? null : change.requestId(),
                 change.disposition().name(),
@@ -127,11 +133,76 @@ public class MentorIntake implements MentorIngress {
                 envelope.occurredAt(),
                 envelope.receivedAt()));
         if (inserted == 0) return new Admission.Duplicate(eventId);
-        UUID opened = change.requestId();
-        if (change.disposition() != Disposition.OPENED || opened == null) return new Admission.Admitted(eventId, null);
-        var _ = rows.openRequest(opened(opened, author, source, envelope, Objects.requireNonNull(change.stamp())));
-        var _ = rows.linkRequest(eventId, author, opened);
-        return new Admission.Admitted(eventId, new RequestRef(opened, 1));
+        return new Admission.Admitted(eventId, apply(envelope, eventId, source, request, change, owner));
+    }
+
+    /** Runs after the source and its request are locked; it captures authority only then, in the wire proof's order. */
+    private Change decide(IngressEnvelope envelope, Source source, @Nullable Request request, long account) {
+        if (source.state() == MentorSource.State.DELETED) {
+            return Change.recorded(Reason.SOURCE_DELETED, request == null ? null : request.id());
+        }
+        boolean settled = request != null && request.state().settled();
+        return switch (envelope.kind()) {
+            case MESSAGE -> {
+                if (request != null) yield Change.recorded(Reason.ALREADY_OPENED, request.id());
+                yield stamp(envelope, account)
+                        .map(stamp -> new Change(Disposition.OPENED, null, UUID.randomUUID(), stamp))
+                        .orElseGet(() -> Change.recorded(Reason.UNAUTHORIZED, null));
+            }
+            case MESSAGE_EDITED -> {
+                if (!newer(envelope.message().revision(), source.revision())) {
+                    yield Change.recorded(Reason.STALE_REVISION, request == null ? null : request.id());
+                }
+                if (request == null) yield Change.recorded(Reason.NO_REQUEST, null);
+                if (settled) yield Change.recorded(Reason.REQUEST_SETTLED, request.id());
+                yield stamp(envelope, account).isPresent()
+                        ? new Change(Disposition.REVISED, null, request.id(), null)
+                        : Change.recorded(Reason.UNAUTHORIZED, request.id());
+            }
+            case MESSAGE_DELETED -> {
+                if (request == null) yield Change.recorded(Reason.NO_REQUEST, null);
+                if (settled) yield Change.recorded(Reason.REQUEST_SETTLED, request.id());
+                yield new Change(Disposition.FENCED, null, request.id(), null);
+            }
+            case CONTROL_STOP -> Change.recorded(Reason.STOP_NOT_HANDLED, request == null ? null : request.id());
+        };
+    }
+
+    /** A delete always leaves the tombstone; a newer edit raises the stored revision even when the request is settled. */
+    private @Nullable RequestRef apply(
+            IngressEnvelope envelope,
+            UUID eventId,
+            Source source,
+            @Nullable Request request,
+            Change change,
+            long account) {
+        if (change.reason() == Reason.AUTHOR_MISMATCH || source.state() == MentorSource.State.DELETED) return null;
+        if (envelope.kind() == IngressKind.MESSAGE_DELETED) {
+            var _ = rows.markDeleted(source.id(), account);
+        } else if (envelope.kind() == IngressKind.MESSAGE_EDITED
+                && newer(envelope.message().revision(), source.revision())) {
+            var _ = rows.raiseRevision(source.id(), account, envelope.message().revision());
+        }
+        UUID id = change.requestId();
+        if (id == null) return null;
+        return switch (change.disposition()) {
+            case OPENED -> {
+                var _ = rows.openRequest(
+                        opened(id, account, source.id(), envelope, Objects.requireNonNull(change.stamp())));
+                var _ = rows.linkRequest(eventId, account, id);
+                yield new RequestRef(id, 1);
+            }
+            case REVISED -> {
+                var _ = rows.revise(id, account);
+                // The request is locked, so its next version is the locked one plus one.
+                yield new RequestRef(id, Objects.requireNonNull(request).version() + 1);
+            }
+            case FENCED -> {
+                var _ = rows.stop(id, account);
+                yield new RequestRef(id, Objects.requireNonNull(request).version());
+            }
+            case RECORDED -> null;
+        };
     }
 
     /** An absent authorization port, another transport or a stamp for another account opens no request. */
@@ -179,6 +250,11 @@ public class MentorIntake implements MentorIngress {
                 envelope.receivedAt().plus(ANSWER_DEADLINE));
     }
 
+    /** A provider revision is applied only when it is newer than the stored one. Slack revisions are decimal stamps. */
+    private static boolean newer(String revision, String stored) {
+        return new BigDecimal(revision).compareTo(new BigDecimal(stored)) > 0;
+    }
+
     static UUID eventId(ProviderEventKey key) {
         return UUID.nameUUIDFromBytes(
                 ("mentor-event:" + key.bindingId() + ":" + key.nativeEventId()).getBytes(StandardCharsets.UTF_8));
@@ -192,6 +268,18 @@ public class MentorIntake implements MentorIngress {
             @Nullable Long binding,
             @Nullable Long bindingGeneration,
             @Nullable String actor) {}
+
+    private record Source(UUID id, MentorSource.State state, String revision) {
+        static Source of(MentorSourceRepository.LockedSource row) {
+            return new Source(row.getId(), MentorSource.State.valueOf(row.getState()), row.getRevision());
+        }
+    }
+
+    private record Request(UUID id, MentorRequest.State state, int version) {
+        static Request of(MentorSourceRepository.LockedRequest row) {
+            return new Request(row.getId(), MentorRequest.State.valueOf(row.getState()), row.getVersion());
+        }
+    }
 
     private record Change(
             Disposition disposition,

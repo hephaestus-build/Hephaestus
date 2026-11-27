@@ -12,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * The SQL of the mentor's rows, which are account-owned under row-level security: each statement names the account or
- * runs as the owner. Only {@link MentorIntake} writes them; the lock is {@code NOWAIT}, so a held row fails the
+ * runs as the owner. Only {@link MentorIntake} writes them; the locks are {@code NOWAIT}, so a held row fails the
  * caller's transaction instead of waiting.
  */
 @WorkspaceAgnostic("The mentor's rows are account-owned; row-level security scopes them to the bound account")
@@ -31,14 +31,13 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             INSERT INTO mentor_source(id, account_id, binding_id, workspace_id, container_id, native_message_id, producer,
                 revision, state)
             VALUES (:#{#s.id()}, :#{#s.account()}, :#{#s.binding()}, :#{#s.workspace()}, :#{#s.container()},
-                :#{#s.message()}, :#{#s.producer()}, :#{#s.revision()}, 'LIVE')
+                :#{#s.message()}, :#{#s.producer()}, :#{#s.revision()}, :#{#s.state()})
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)
     int insertSource(@Param("s") NewSource s);
 
     @Query(value = """
-            SELECT s.id AS id, s.producer AS producer,
-                (SELECT r.id FROM mentor_request r WHERE r.source_id = s.id AND r.account_id = s.account_id) AS request
+            SELECT s.id AS id, s.producer AS producer, s.state AS state, s.revision AS revision
             FROM mentor_source s
             WHERE s.account_id = :account AND s.binding_id = :binding AND s.container_id = :container
                 AND s.native_message_id = :message
@@ -49,6 +48,17 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             @Param("binding") long binding,
             @Param("container") String container,
             @Param("message") String message);
+
+    /**
+     * The source's request, locked after the source in a statement of its own: its snapshot then shows a request that
+     * a create committed before the source lock was granted.
+     */
+    @Query(value = """
+            SELECT r.id AS id, r.state AS state, r.version AS version FROM mentor_request r
+            WHERE r.source_id = :source AND r.account_id = :account
+            FOR UPDATE NOWAIT
+            """, nativeQuery = true)
+    Optional<LockedRequest> lockRequest(@Param("source") UUID source, @Param("account") long account);
 
     @Modifying
     @Query(value = """
@@ -79,6 +89,30 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
 
     @Modifying
     @Query(
+            value = "UPDATE mentor_request SET version = version + 1 WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int revise(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_request SET state = 'STOPPED' WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int stop(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_source SET state = 'DELETED' WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int markDeleted(@Param("id") UUID id, @Param("account") long account);
+
+    @Modifying
+    @Query(
+            value = "UPDATE mentor_source SET revision = :revision WHERE id = :id AND account_id = :account",
+            nativeQuery = true)
+    int raiseRevision(@Param("id") UUID id, @Param("account") long account, @Param("revision") String revision);
+
+    @Modifying
+    @Query(
             value = "UPDATE mentor_event SET request_id = :request WHERE id = :id AND account_id = :account",
             nativeQuery = true)
     int linkRequest(@Param("id") UUID id, @Param("account") long account, @Param("request") UUID request);
@@ -88,8 +122,17 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
 
         String getProducer();
 
-        @Nullable
-        UUID getRequest();
+        String getState();
+
+        String getRevision();
+    }
+
+    interface LockedRequest {
+        UUID getId();
+
+        String getState();
+
+        int getVersion();
     }
 
     record NewSource(
@@ -100,7 +143,8 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             String container,
             String message,
             String producer,
-            String revision) {}
+            String revision,
+            String state) {}
 
     record NewEvent(
             UUID id,

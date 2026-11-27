@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.mentor.spi.VerifiedActor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -37,9 +39,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,13 +52,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** The create rows of the intake state table (T1, T2, T10, T18, T19) and the canonical-message cases. */
+/** The intake state table of RUNTIME-DESIGN.md (T1, T2, T4, T5, T10, T18, T19) and the canonical-message cases. */
 class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     private static final String FIRST = "1700000000.000100";
+    private static final String EDITED = "1700000005.000200";
+
+    @Autowired
+    private JdbcClient jdbcClient;
 
     @Autowired
     private MentorSourceRepository rows;
@@ -164,6 +176,191 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         assertThat(requests(message)).containsExactly(request.requestId());
     }
 
+    @Test
+    void shouldRaiseTheVersionOnlyForANewerRevisionWhenTheRequestIsOpen() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED))
+                .isEqualTo(admitted("e2", new RequestRef(request, 2)));
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e3", message, FIRST)).isEqualTo(admitted("e3", null));
+        assertThat(event("e3")).containsEntry("reason", "STALE_REVISION");
+        assertThat(source(message)).containsEntry("revision", EDITED);
+        assertThat(column(request, "version")).isEqualTo(2);
+    }
+
+    @Test
+    void shouldRecordAnEditAndKeepTheRequestWhenTheRequestIsSettled() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        owner.update("UPDATE mentor_request SET state = 'ANSWERED' WHERE id = ?", request);
+
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "REQUEST_SETTLED");
+        assertThat(column(request, "version")).isEqualTo(1);
+        assertThat(column(request, "state")).isEqualTo("ANSWERED");
+    }
+
+    @Test
+    void shouldStopTheRequestAndKeepATombstoneWhenTheQuestionIsDeleted() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED))
+                .isEqualTo(admitted("e2", new RequestRef(request, 1)));
+        assertThat(column(request, "state")).isEqualTo("STOPPED");
+        assertThat(source(message)).containsEntry("state", "DELETED");
+        assertThat(event("e2")).containsEntry("disposition", "FENCED");
+    }
+
+    @Test
+    void shouldOpenNoRequestWhenALateCopyOfTheCreateArrivesAfterTheDelete() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED);
+
+        assertThat(admit(IngressKind.MESSAGE, "e3", message, FIRST)).isEqualTo(admitted("e3", null));
+        assertThat(event("e3")).containsEntry("reason", "SOURCE_DELETED");
+        assertThat(requests(message)).containsExactly(request);
+        assertThat(column(request, "state")).isEqualTo("STOPPED");
+    }
+
+    @Test
+    void shouldWriteNothingForAnEditThatArrivesBeforeTheCreate() {
+        String message = message();
+        assertThat(admit(IngressKind.MESSAGE_EDITED, "e1", message, EDITED)).isEqualTo(admitted("e1", null));
+        assertThat(owner.queryForList("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message))
+                .isEmpty();
+
+        assertThat(opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).version())
+                .isEqualTo(1);
+        assertThat(source(message)).containsEntry("revision", FIRST);
+    }
+
+    /** Slack can deliver a delete before its create, so the delete leaves the tombstone that refuses the create. */
+    @Test
+    void shouldOpenNoRequestWhenTheDeleteArrivesBeforeTheCreate() {
+        String message = message();
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e1", message, EDITED)).isEqualTo(admitted("e1", null));
+        assertThat(source(message))
+                .containsEntry("state", "DELETED")
+                .containsEntry("producer", "MENTOR")
+                .containsEntry("account_id", account);
+
+        assertThat(admit(IngressKind.MESSAGE, "e2", message, FIRST)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "SOURCE_DELETED");
+        assertThat(requests(message)).isEmpty();
+    }
+
+    /** A create and a delete with no source yet: the second insert waits on the first one's source key, in either order. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldEndWithOneDeletedSourceInEitherCommitOrderWhenACreateAndADeleteRace(boolean deleteFirst)
+            throws Exception {
+        String message = message();
+        IngressKind first = deleteFirst ? IngressKind.MESSAGE_DELETED : IngressKind.MESSAGE;
+        IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
+        var admitted = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+            Admission result = intake.admit(envelope(first, "e1", message, FIRST, actor()), Producer.MENTOR);
+            admitted.countDown();
+            await(commit);
+            return result;
+        }));
+        assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
+        var loser = CompletableFuture.supplyAsync(() -> admit(second, "e2", message, FIRST));
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> loser.isDone() || waitingTransactions() > 0);
+        assertThat(loser.isDone()).isFalse();
+        assertThat(waitingTransactions()).isPositive();
+        commit.countDown();
+        Admission one = winner.get(30, TimeUnit.SECONDS);
+        Admission two = loser.get(30, TimeUnit.SECONDS);
+
+        assertThat(owner.queryForList(
+                        "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
+                .containsExactly("DELETED");
+        if (deleteFirst) {
+            assertThat(two).isEqualTo(admitted("e2", null));
+            assertThat(event("e2")).containsEntry("reason", "SOURCE_DELETED");
+            assertThat(requests(message)).isEmpty();
+        } else {
+            UUID request = opened(one).requestId();
+            assertThat(two).isEqualTo(admitted("e2", new RequestRef(request, 1)));
+            assertThat(requests(message)).containsExactly(request);
+            assertThat(column(request, "state")).isEqualTo("STOPPED");
+        }
+    }
+
+    /**
+     * An unanswered source (its first create was not authorized) meets an authorized create and a delete. The one that
+     * holds the source fails the other at once, and the other's retry sees what the first committed: the delete stops
+     * the request that the create opened, or the create finds the tombstone.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldLeaveNoOpenRequestInEitherOrderWhenACreateAndADeleteMeetAnUnansweredSource(boolean deleteFirst)
+            throws Exception {
+        String message = message();
+        var refused = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
+        assertThat(inTransaction(() -> unauthorized.admit(refused, Producer.MENTOR)))
+                .isEqualTo(admitted("e1", null));
+        IngressKind first = deleteFirst ? IngressKind.MESSAGE_DELETED : IngressKind.MESSAGE;
+        IngressKind second = deleteFirst ? IngressKind.MESSAGE : IngressKind.MESSAGE_DELETED;
+        var admitted = new CountDownLatch(1);
+        var commit = new CountDownLatch(1);
+        var winner = CompletableFuture.supplyAsync(() -> inTransaction(() -> {
+            Admission result = intake.admit(envelope(first, "e2", message, FIRST, actor()), Producer.MENTOR);
+            admitted.countDown();
+            await(commit);
+            return result;
+        }));
+        assertThat(admitted.await(30, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> admit(second, "e3", message, FIRST))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        commit.countDown();
+        Admission one = winner.get(30, TimeUnit.SECONDS);
+        Admission retry = admit(second, "e3", message, FIRST);
+
+        assertThat(source(message)).containsEntry("state", "DELETED");
+        if (deleteFirst) {
+            assertThat(retry).isEqualTo(admitted("e3", null));
+            assertThat(event("e3")).containsEntry("reason", "SOURCE_DELETED");
+            assertThat(requests(message)).isEmpty();
+        } else {
+            UUID request = opened(one).requestId();
+            assertThat(retry).isEqualTo(admitted("e3", new RequestRef(request, 1)));
+            assertThat(column(request, "state")).isEqualTo("STOPPED");
+        }
+    }
+
+    @Test
+    void shouldWriteNoRowForADeleteOnALegacyRoute() {
+        String message = message();
+        var delete = envelope(IngressKind.MESSAGE_DELETED, "e1", message, EDITED, actor());
+
+        assertThat(inTransaction(() -> intake.admit(delete))).isEqualTo(admitted("e1", null));
+        assertThat(owner.queryForList("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message))
+                .isEmpty();
+        assertThat(owner.queryForList("SELECT id FROM mentor_event WHERE binding_id = ?", UUID.class, binding))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRecordAndRefuseAMutationWhoseActorIsNotTheMessagesOwner() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        long stranger = linkedAccount();
+        var edit = envelope(
+                IngressKind.MESSAGE_EDITED, "e2", message, EDITED, new VerifiedActor("U" + stranger, stranger));
+
+        assertThat(inTransaction(() -> intake.admit(edit, Producer.MENTOR))).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("account_id", account).containsEntry("reason", "AUTHOR_MISMATCH");
+        assertThat(column(request, "version")).isEqualTo(1);
+        assertThat(source(message)).containsEntry("revision", FIRST);
+    }
+
     /** T19 and bot posts: neither an unlinked person nor a bot or the app itself has an account to own a row. */
     @ParameterizedTest
     @ValueSource(strings = {"U-unlinked", "B-bot"})
@@ -190,6 +387,68 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldStillReviseAMentorPinnedSourceWhenTheRouteIsLegacyAgain() {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        var edit = envelope(IngressKind.MESSAGE_EDITED, "e2", message, EDITED, actor());
+
+        assertThat(inTransaction(() -> intake.admit(edit))).isEqualTo(admitted("e2", new RequestRef(request, 2)));
+    }
+
+    /**
+     * Two replicas: one holds the source, as a mutation or a workspace purge does, and the other's intake fails at once
+     * instead of waiting. The receive transaction rolls back, and the provider's retry admits the event once.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldFailTheReceiveAndAdmitOnceOnRetryWhenAnotherReplicaHoldsTheSource(boolean purge) throws Exception {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var replica =
+                CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    if (purge) {
+                        jdbcClient
+                                .sql("SELECT public.mentor_erase_workspace(?)")
+                                .param(workspace)
+                                .query(Integer.class)
+                                .single();
+                    } else {
+                        owners.ofJob(account);
+                        jdbcClient
+                                .sql("SELECT id FROM mentor_source WHERE native_message_id = ? FOR UPDATE")
+                                .param(message)
+                                .query(UUID.class)
+                                .single();
+                    }
+                    held.countDown();
+                    await(release);
+                }));
+        held.await();
+
+        assertThatThrownBy(() -> admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        assertThat(owner.queryForList(
+                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'",
+                        UUID.class,
+                        binding))
+                .isEmpty();
+        release.countDown();
+        replica.join();
+
+        if (purge) {
+            assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+            assertThat(owner.queryForList("SELECT id FROM mentor_request WHERE id = ?", UUID.class, request))
+                    .isEmpty();
+        } else {
+            assertThat(admit(IngressKind.MESSAGE_EDITED, "e2", message, EDITED))
+                    .isEqualTo(admitted("e2", new RequestRef(request, 2)));
+            assertThat(event("e2")).containsEntry("disposition", "REVISED");
+        }
+    }
+
+    @Test
     void shouldAdmitOnRetryWhenTheFirstReceiveTransactionRolledBack() {
         String message = message();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
@@ -201,6 +460,94 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
 
         assertThat(opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).version())
                 .isEqualTo(1);
+    }
+
+    /** A tombstone alone refuses a late create: the source never had a request to answer it as a duplicate. */
+    @Test
+    void shouldOpenNoRequestWhenALateCreateArrivesForADeletedSourceThatNeverHadARequest() {
+        String message = message();
+        var first = envelope(IngressKind.MESSAGE, "e1", message, FIRST, actor());
+        assertThat(inTransaction(() -> unauthorized.admit(first, Producer.MENTOR)))
+                .isEqualTo(admitted("e1", null));
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
+
+        assertThat(admit(IngressKind.MESSAGE, "e3", message, FIRST)).isEqualTo(admitted("e3", null));
+        assertThat(event("e3")).containsEntry("reason", "SOURCE_DELETED");
+        assertThat(requests(message)).isEmpty();
+    }
+
+    /** A held source fails a new question's receive at once: never Duplicate, never UNAUTHORIZED. */
+    @Test
+    void shouldFailTheReceiveWhenANewEventMeetsAHeldSource() throws Exception {
+        String message = message();
+        RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var replica =
+                CompletableFuture.runAsync(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    jdbcClient
+                            .sql("SELECT id FROM mentor_source WHERE native_message_id = ? FOR UPDATE")
+                            .param(message)
+                            .query(UUID.class)
+                            .single();
+                    held.countDown();
+                    await(release);
+                }));
+        held.await();
+
+        assertThatThrownBy(() -> admit(IngressKind.MESSAGE, "e2", message, FIRST))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+        assertThat(owner.queryForList(
+                        "SELECT id FROM mentor_event WHERE binding_id = ? AND native_event_id = 'e2'",
+                        UUID.class,
+                        binding))
+                .isEmpty();
+        release.countDown();
+        replica.join();
+        assertThat(requests(message)).containsExactly(request.requestId());
+    }
+
+    /**
+     * Two new event ids can both find no request when the second statement's snapshot predates the first commit. The
+     * interleaving falls inside one statement, so this drives its outcome: the second request raises on the per-source
+     * key and fails the receive, and its retry records the event with exactly one request.
+     */
+    @Test
+    void shouldKeepOneRequestWhenASecondRequestIsOpenedForTheSameSource() {
+        String message = message();
+        RequestRef request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST));
+        UUID source = Objects.requireNonNull(
+                owner.queryForObject("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message));
+        Instant now = Instant.now();
+        var second = new MentorSourceRepository.OpenedRequest(
+                UUID.randomUUID(),
+                account,
+                source,
+                "SLACK",
+                binding,
+                "D" + binding,
+                null,
+                3,
+                5,
+                7,
+                "PERSONAL",
+                null,
+                null,
+                null,
+                null,
+                null,
+                now,
+                now.plus(MentorIntake.ANSWER_DEADLINE));
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    rows.openRequest(second);
+                }))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(admit(IngressKind.MESSAGE, "e2", message, FIRST)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "ALREADY_OPENED");
+        assertThat(requests(message)).containsExactly(request.requestId());
     }
 
     @Test
@@ -267,16 +614,36 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 """, UUID.class, message);
     }
 
+    private @Nullable Object column(UUID request, String column) {
+        return owner.queryForMap("SELECT * FROM mentor_request WHERE id = ?", request)
+                .get(column);
+    }
+
     /** The original ts of a message. */
     private static String message() {
         var random = ThreadLocalRandom.current();
         return random.nextLong(1_000_000_000L, 9_999_999_999L) + "." + random.nextInt(100_000, 999_999);
     }
 
+    /** Transactions that wait for another one's lock: the loser of a forced-order race. */
+    private int waitingTransactions() {
+        return Objects.requireNonNull(owner.queryForObject(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'", Integer.class));
+    }
+
     private static void await(CyclicBarrier barrier) {
         try {
             barrier.await();
         } catch (Exception interrupted) {
+            throw new IllegalStateException(interrupted);
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
             throw new IllegalStateException(interrupted);
         }
     }
