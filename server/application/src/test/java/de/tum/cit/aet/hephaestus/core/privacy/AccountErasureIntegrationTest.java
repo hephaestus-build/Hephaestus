@@ -445,6 +445,50 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldExportAndEraseAnOidcAccountWithoutTouchingTheSameSubjectAtAnotherIssuerOnTheHost() {
+        var administrator = new Account("OIDC erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        // An issuer can have a path, and its subject is an opaque string that two issuers can both use.
+        String subject = "ada";
+        var school = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.OIDC, "https://login.erasure.example.test/realms/school"));
+        var other = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.OIDC, "https://login.erasure.example.test/realms/other"));
+        long erased = oidcAccount("OIDC person", school, subject);
+        long kept = oidcAccount("Same subject at another issuer", other, subject);
+
+        assertThat(freshAccountExport(erased)).contains("OIDC");
+
+        var preview = personData.preview(administratorId, erased, List.of());
+        personData.requestErasure(preview.request().getId(), administratorId, true);
+        personData.run(preview.request().getId());
+
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(links.findByAccount_Id(erased)).isEmpty();
+        assertThat(suppression.isSuppressed(Objects.requireNonNull(school.getId()), subject, null))
+                .isTrue();
+        assertThat(suppression.isSuppressed(Objects.requireNonNull(other.getId()), subject, null))
+                .isFalse();
+        assertThat(suppression.isAccountSuppressed(kept)).isFalse();
+        assertThat(links.findByAccount_Id(kept))
+                .extracting(Identity::getProviderUserKey)
+                .containsExactly(subject);
+    }
+
+    private long oidcAccount(String name, IdentityProvider issuer, String subject) {
+        var account = accounts.saveAndFlush(new Account(name));
+        var identity = new Identity();
+        identity.setAccount(account);
+        identity.setProviderId(Objects.requireNonNull(issuer.getId()));
+        identity.setProviderUserKey(subject);
+        links.saveAndFlush(identity);
+        return Objects.requireNonNull(account.getId());
+    }
+
+    @Test
     void shouldKeepTheErasurePreviewValidAfterReplayRetentionDeletesTheRow() {
         Account administrator = new Account("Replay erasure administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);

@@ -52,10 +52,17 @@ public class LoginProviderService implements SystemSecretOwner {
     // "read" is Outline's read-everything scope, sufficient for the POST /api/auth.info identity
     // probe.
     static final String OUTLINE_SCOPES = "read";
+    // OIDC requires "openid": it selects Spring's OIDC path, which validates the ID token.
+    static final String OIDC_SCOPES = "openid profile email";
     private static final String GITHUB_COM = "https://github.com";
     private static final String SLACK_COM = "https://slack.com";
 
     private static final Logger log = LoggerFactory.getLogger(LoginProviderService.class);
+
+    // Expand step of a rolling upgrade: this release reads OIDC rows, and only the next one writes them,
+    // so a server of the previous release never meets a type that it cannot read.
+    private static final String OIDC_NOT_YET = "This release cannot add an OpenID Connect login provider yet."
+            + " Upgrade to the next release to add one.";
 
     private final LoginProviderRepository repository;
     private final LoginProviderClientRegistrationRepository registrationCache;
@@ -369,6 +376,10 @@ public class LoginProviderService implements SystemSecretOwner {
         if (type == LoginProvider.ProviderType.GITHUB) {
             return GITHUB_COM;
         }
+        if (type == LoginProvider.ProviderType.OIDC) {
+            // The admin API, an update and the environment seed all pass here.
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, OIDC_NOT_YET);
+        }
         if (type == LoginProvider.ProviderType.SLACK) {
             // Slack login is slack.com only (the registration builder hardcodes the slack.com OIDC
             // endpoints).
@@ -393,7 +404,9 @@ public class LoginProviderService implements SystemSecretOwner {
         return value;
     }
 
+    // This release does not sign in through an OIDC row that a later release wrote; it only reads the row.
     private boolean isApproved(LoginProvider provider) {
+        if (provider.getType() == LoginProvider.ProviderType.OIDC) return false;
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
                 || outlineOriginPolicy.allows(provider.getBaseUrl()));
     }
@@ -407,6 +420,7 @@ public class LoginProviderService implements SystemSecretOwner {
             case GITLAB -> GITLAB_SCOPES;
             case SLACK -> SLACK_SCOPES;
             case OUTLINE -> OUTLINE_SCOPES;
+            case OIDC -> OIDC_SCOPES;
         };
     }
 
@@ -430,10 +444,10 @@ public class LoginProviderService implements SystemSecretOwner {
         return trimmed;
     }
 
-    // Link-only providers cannot prevent lockout; count only providers that can start a sign-in.
+    // Only a provider that this release signs in through prevents lockout.
     private void requireNotLastEnabled(String registrationId, String verb) {
         List<LoginProvider> enabled = repository.findByEnabledTrueOrderByDisplayNameAsc().stream()
-                .filter(p -> p.getType() != null && !p.getType().isLinkOnly())
+                .filter(p -> p.getType() != null && p.getType().signsIn())
                 .toList();
         boolean isLast = enabled.stream().allMatch(p -> p.getRegistrationId().equals(registrationId));
         if (!enabled.isEmpty() && isLast) {

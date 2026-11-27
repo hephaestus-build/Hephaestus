@@ -169,6 +169,67 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldKeepGitHubAndAnOnlyOidcIdentityWhenThisReleaseCannotSignInThroughOidc() {
+        Account account = accountRepository.save(new Account("OIDC User"));
+        Identity github = seedLink(account, IdentityProviderType.GITHUB, "https://github.com", "gh-oidc");
+        // An issuer can have a path, and its subject is an opaque string.
+        Identity oidc = seedLink(
+                account,
+                IdentityProviderType.OIDC,
+                "https://login.example.org/realms/school",
+                "3f6c2a1e-9b1d-4f0e-a2c4-5d6e7f8a9b0c");
+        Account oidcOnly = accountRepository.save(new Account("OIDC-only User"));
+        Identity onlyOidc =
+                seedLink(oidcOnly, IdentityProviderType.OIDC, "https://login.example.org/realms/school", "only-oidc");
+        String token = tokenFor(account);
+
+        webTestClient
+                .get()
+                .uri("/user/identities")
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(AccountWebController.IdentityViewDTO.class)
+                .value(views -> assertThat(views)
+                        .extracting(AccountWebController.IdentityViewDTO::providerType)
+                        .containsExactlyInAnyOrder("GITHUB", "OIDC"));
+        // This release does not sign in through OIDC, so GitHub is the last way in that it serves.
+        webTestClient
+                .delete()
+                .uri("/user/identities/{id}", persistedId(github.getId()))
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        // A release that signs in through OIDC can still use the only identity of the other account.
+        webTestClient
+                .delete()
+                .uri("/user/identities/{id}", persistedId(onlyOidc.getId()))
+                .headers(h -> h.setBearerAuth(tokenFor(oidcOnly)))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        webTestClient
+                .delete()
+                .uri("/user/identities/{id}", persistedId(oidc.getId()))
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(identityRepository.findActiveByAccountId(persistedId(account.getId())))
+                .extracting(Identity::getId)
+                .containsExactly(persistedId(github.getId()));
+        assertThat(identityRepository.findActiveByAccountId(persistedId(oidcOnly.getId())))
+                .extracting(Identity::getId)
+                .containsExactly(persistedId(onlyOidc.getId()));
+    }
+
+    @Test
     void cannotUnlinkAnotherAccountsIdentity() {
         Account me = accountRepository.save(new Account("Me"));
         seedLink(me, IdentityProviderType.GITHUB, "https://github.com", "gh-me");

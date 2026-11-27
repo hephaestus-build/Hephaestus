@@ -223,11 +223,13 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 SELECT p.type,p.server_url,i.subject,i."teamId"
                 FROM jsonb_to_recordset(CAST(? AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
                 JOIN identity_provider p ON p.id=i."providerId"
+                WHERE p.type=ANY(?)
                 """,
                 (rs, row) -> new PersonCopyIdentity(
                         Objects.requireNonNull(rs.getString(1)), Objects.requireNonNull(rs.getString(2)),
                         Objects.requireNonNull(rs.getString(3)), rs.getString(4)),
-                mapper.writeValueAsString(person.identities()));
+                mapper.writeValueAsString(person.identities()),
+                new SqlArrayValue("text", PersonCopyIdentity.PROVIDER_TYPES.toArray()));
         parameters.put("copyIdentities", mapper.writeValueAsString(identities));
         return new PersonDataSelection(namedJdbc.query(
                 """

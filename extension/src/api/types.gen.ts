@@ -3432,7 +3432,7 @@ export type LlmUsageByJobType = {
 	unpricedEventCount: number;
 };
 
-export type LoginProviderProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+export type LoginProviderProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE" | "OIDC";
 
 /**
  * Admin view of a login provider. The client secret is never included.

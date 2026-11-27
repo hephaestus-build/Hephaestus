@@ -10,8 +10,11 @@ public record PersonCopyIdentity(
         String providerOrigin,
         String subject,
         @Nullable String teamId) {
+    /** The provider types a capture copies words from. An OIDC sign-in issuer is none of them. */
+    public static final Set<String> PROVIDER_TYPES = Set.of("GITHUB", "GITLAB", "SLACK", "OUTLINE");
+
     public PersonCopyIdentity {
-        if (!Set.of("GITHUB", "GITLAB", "SLACK", "OUTLINE").contains(providerType)
+        if (!PROVIDER_TYPES.contains(providerType)
                 || providerOrigin.isBlank()
                 || subject.isBlank()
                 || subject.length() > 255

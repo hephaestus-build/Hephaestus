@@ -2009,7 +2009,7 @@ export const zLlmUsageByJobType = z.object({
 	unpricedEventCount: z.int(),
 });
 
-export const zLoginProviderProviderType = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
+export const zLoginProviderProviderType = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE", "OIDC"]);
 
 export const zCreateLoginProviderRequest = z.object({
 	baseUrl: z.string().optional(),

@@ -133,10 +133,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Transactional(readOnly = true)
     public boolean visibleInWorkspace(long providerId, long workspaceId) {
         var provider = providers.findById(providerId).orElse(null);
-        if (provider == null) return false;
+        // An OIDC issuer is no workspace source, so no workspace sees it.
+        var kind = provider == null ? null : provider.kind();
+        if (provider == null || kind == null) return false;
         var origin = ScmOrigin.of(provider.serverUrl());
         if (origin.isEmpty()) return false;
-        return connections.hasActiveSourceInstance(workspaceId, provider.kind(), origin.get());
+        return connections.hasActiveSourceInstance(workspaceId, kind, origin.get());
     }
 
     @Override

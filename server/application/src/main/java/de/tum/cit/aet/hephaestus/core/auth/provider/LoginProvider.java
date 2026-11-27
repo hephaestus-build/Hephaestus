@@ -42,11 +42,21 @@ public class LoginProvider {
         /** Link-only OIDC provider; attaching its identity requires an authenticated account. */
         SLACK,
         /** Link-only OAuth2 provider; Outline identity comes from POST /api/auth.info, without OIDC discovery. */
-        OUTLINE;
+        OUTLINE,
+        /** A generic OpenID Connect issuer; {@code base_url} holds the issuer. It signs in. */
+        OIDC;
 
         /** Link-only providers cannot start an unauthenticated sign-in. */
         public boolean isLinkOnly() {
             return this == SLACK || this == OUTLINE;
+        }
+
+        /**
+         * Whether this release signs in through the type. OIDC is not link-only, but this release only reads
+         * an OIDC row that a later release wrote, so it cannot keep an instance open.
+         */
+        public boolean signsIn() {
+            return this == GITHUB || this == GITLAB;
         }
     }
 

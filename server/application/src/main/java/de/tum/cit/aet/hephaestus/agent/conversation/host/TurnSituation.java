@@ -103,6 +103,7 @@ public class TurnSituation {
     }
 
     private String label(IdentityProviderLookup.@Nullable Provider provider) {
-        return provider == null ? "Account" : manifests.displayName(provider.kind());
+        var kind = provider == null ? null : provider.kind();
+        return kind == null ? "Account" : manifests.displayName(kind);
     }
 }
