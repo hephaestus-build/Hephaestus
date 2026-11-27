@@ -84,6 +84,8 @@ public class MentorEvent {
 
     public enum Reason {
         UNAUTHORIZED,
+        /** The actor's account is not the one that owns the message. */
+        AUTHOR_MISMATCH,
         ALREADY_OPENED,
         NO_REQUEST,
         STALE_REVISION,

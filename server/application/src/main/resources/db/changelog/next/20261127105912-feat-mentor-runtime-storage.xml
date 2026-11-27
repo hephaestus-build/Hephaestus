@@ -15,7 +15,9 @@ CREATE TABLE public.mentor_source (
     state VARCHAR(16) NOT NULL,
     CONSTRAINT uk_mentor_source_message UNIQUE (binding_id, container_id, native_message_id),
     -- A foreign key ignores row-level security, so a reference names the owner too.
-    CONSTRAINT uk_mentor_source_owner UNIQUE (account_id, id)
+    CONSTRAINT uk_mentor_source_owner UNIQUE (account_id, id),
+    CONSTRAINT ck_mentor_source_producer CHECK (producer IN ('LEGACY', 'MENTOR')),
+    CONSTRAINT ck_mentor_source_state CHECK (state IN ('LIVE', 'DELETED'))
 );
 CREATE INDEX idx_mentor_source_workspace ON public.mentor_source (workspace_id);
 CREATE TABLE public.mentor_request (
@@ -43,7 +45,10 @@ CREATE TABLE public.mentor_request (
     CONSTRAINT uk_mentor_request_source UNIQUE (account_id, source_id),
     CONSTRAINT uk_mentor_request_owner UNIQUE (account_id, id),
     CONSTRAINT sfk_mentor_request_source FOREIGN KEY (account_id, source_id)
-        REFERENCES public.mentor_source (account_id, id)
+        REFERENCES public.mentor_source (account_id, id),
+    CONSTRAINT ck_mentor_request_state CHECK (state IN ('OPEN', 'RUNNING', 'ANSWERED', 'CONTINUED', 'FAILED',
+        'STOPPED', 'SUPERSEDED', 'EXPIRED')),
+    CONSTRAINT ck_mentor_request_audience_transport CHECK (audience_transport IN ('SLACK', 'APP'))
 );
 CREATE TABLE public.mentor_event (
     id UUID NOT NULL CONSTRAINT mentor_eventPK PRIMARY KEY,
@@ -62,7 +67,11 @@ CREATE TABLE public.mentor_event (
     CONSTRAINT sfk_mentor_event_source FOREIGN KEY (account_id, source_id)
         REFERENCES public.mentor_source (account_id, id),
     CONSTRAINT sfk_mentor_event_request FOREIGN KEY (account_id, request_id)
-        REFERENCES public.mentor_request (account_id, id)
+        REFERENCES public.mentor_request (account_id, id),
+    CONSTRAINT ck_mentor_event_kind CHECK (kind IN ('MESSAGE', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'CONTROL_STOP')),
+    CONSTRAINT ck_mentor_event_disposition CHECK (disposition IN ('OPENED', 'REVISED', 'FENCED', 'RECORDED')),
+    CONSTRAINT ck_mentor_event_reason CHECK (reason IN ('UNAUTHORIZED', 'AUTHOR_MISMATCH', 'ALREADY_OPENED',
+        'NO_REQUEST', 'STALE_REVISION', 'SOURCE_DELETED', 'REQUEST_SETTLED', 'STOP_NOT_HANDLED'))
 );
 CREATE INDEX idx_mentor_event_source ON public.mentor_event (account_id, source_id);
 CREATE INDEX idx_mentor_event_request ON public.mentor_event (account_id, request_id);
