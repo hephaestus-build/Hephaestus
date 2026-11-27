@@ -219,11 +219,13 @@ public class SlackMessageService implements AutoCloseable {
 
     /** Snapshots one active credential. The outbox still proves its binding generation at the send fence. */
     public Optional<BoundRoute> bind(Route target) {
-        if (target.transport() != Transport.SLACK || !target.channelId().startsWith("D")
+        if (target.transport() != Transport.SLACK
+                || !target.channelId().startsWith("D")
                 || SlackTs.toEpochMicros(target.sourceTs()) == null) {
             return Optional.empty();
         }
-        return credentialProvider.resolveActiveBinding(target.workspaceId(), target.connectionId(), target.teamId())
+        return credentialProvider
+                .resolveActiveBinding(target.workspaceId(), target.connectionId(), target.teamId())
                 .map(bot -> new BoundRoute(target, bot));
     }
 
@@ -240,7 +242,10 @@ public class SlackMessageService implements AutoCloseable {
         }
 
         public boolean observesAskerInDm() {
-            if (!isCurrentFullMember(target.workspaceId(), target.teamId(), target.nativeAskerId(),
+            if (!isCurrentFullMember(
+                    target.workspaceId(),
+                    target.teamId(),
+                    target.nativeAskerId(),
                     () -> Optional.of(bot.credential().token()))) {
                 return false;
             }
@@ -248,20 +253,30 @@ public class SlackMessageService implements AutoCloseable {
             try {
                 var response = callHonoringRateLimit(
                         SlackBackoff.interactive(time, rateLimitTracker, target.workspaceId()),
-                        () -> slack.methods(bot.credential().token())
-                                .conversationsInfo(req -> req.channel(channelId)));
+                        () -> slack.methods(bot.credential().token()).conversationsInfo(req -> req.channel(channelId)));
                 Conversation dm = response.getChannel();
-                if (!response.isOk() || dm == null || !channelId.equals(dm.getId()) || !dm.isIm()
-                        || dm.isMpim() || dm.isShared() || dm.isExtShared() || !target.nativeAskerId().equals(dm.getUser())) {
+                if (!response.isOk()
+                        || dm == null
+                        || !channelId.equals(dm.getId())
+                        || !dm.isIm()
+                        || dm.isMpim()
+                        || dm.isShared()
+                        || dm.isExtShared()
+                        || !target.nativeAskerId().equals(dm.getUser())) {
                     return false;
                 }
             } catch (SlackApiException | IOException e) {
                 throw new SlackSendException(target.workspaceId(), channelId, "transport_failure", e);
             }
-            return readMatches(message -> target.sourceTs().equals(message.getTs())
-                            && target.nativeAskerId().equals(message.getUser()) && exactParent(message)
-                            ? Candidate.MATCH : Candidate.IGNORE, 1)
-                    .ts().contains(target.sourceTs());
+            return readMatches(
+                            message -> target.sourceTs().equals(message.getTs())
+                                            && target.nativeAskerId().equals(message.getUser())
+                                            && exactParent(message)
+                                    ? Candidate.MATCH
+                                    : Candidate.IGNORE,
+                            1)
+                    .ts()
+                    .contains(target.sourceTs());
         }
 
         public Posted post(List<LayoutBlock> blocks, String text, String marker, BooleanSupplier admit) {
@@ -273,40 +288,57 @@ public class SlackMessageService implements AutoCloseable {
             String channel = target.channelId();
             var request = postRequest(new Outgoing(channel, target.outboundParent(), blocks, text, metadata));
             var response = callWriteWithCredential(
-                    workspace, channel, () -> Optional.of(bot.credential().token()), admit,
+                    workspace,
+                    channel,
+                    () -> Optional.of(bot.credential().token()),
+                    admit,
                     methods -> methods.chatPostMessage(request));
             String ts = response.getTs();
             Message message = response.getMessage();
-            if (!channel.equals(response.getChannel()) || ts == null || SlackTs.compare(ts, target.sourceTs()) <= 0
-                    || message == null || !ts.equals(message.getTs()) || !exactParent(message)) {
+            if (!channel.equals(response.getChannel())
+                    || ts == null
+                    || SlackTs.compare(ts, target.sourceTs()) <= 0
+                    || message == null
+                    || !ts.equals(message.getTs())
+                    || !exactParent(message)) {
                 throw new SlackSendException(workspace, channel, "invalid_receipt");
             }
             return new Posted(channel, ts);
         }
 
         public Matches readPost(String marker, int maxPages) {
-            return readMatches(message -> {
-                Message.Metadata metadata = message.getMetadata();
-                if (metadata == null) {
-                    // A bot post without metadata could be the write whose receipt we lost.
-                    return bot.userId().equals(message.getUser()) && exactParent(message)
-                            ? Candidate.INCOMPLETE : Candidate.IGNORE;
-                }
-                if (!EVENT_TYPE.equals(metadata.getEventType())) return Candidate.IGNORE;
-                var payload = metadata.getEventPayload();
-                if (payload == null || !(payload.get("marker") instanceof String value))
-                    return Candidate.INCOMPLETE;
-                if (!marker.equals(value)) return Candidate.IGNORE;
-                return bot.userId().equals(message.getUser()) && exactParent(message)
-                                && SlackTs.compare(message.getTs(), target.sourceTs()) > 0
-                        ? Candidate.MATCH : Candidate.INCOMPLETE;
-            }, maxPages);
+            return readMatches(
+                    message -> {
+                        Message.Metadata metadata = message.getMetadata();
+                        if (metadata == null) {
+                            // A bot post without metadata could be the write whose receipt we lost.
+                            return bot.userId().equals(message.getUser()) && exactParent(message)
+                                    ? Candidate.INCOMPLETE
+                                    : Candidate.IGNORE;
+                        }
+                        if (!EVENT_TYPE.equals(metadata.getEventType())) return Candidate.IGNORE;
+                        var payload = metadata.getEventPayload();
+                        if (payload == null || !(payload.get("marker") instanceof String value))
+                            return Candidate.INCOMPLETE;
+                        if (!marker.equals(value)) return Candidate.IGNORE;
+                        return bot.userId().equals(message.getUser())
+                                        && exactParent(message)
+                                        && SlackTs.compare(message.getTs(), target.sourceTs()) > 0
+                                ? Candidate.MATCH
+                                : Candidate.INCOMPLETE;
+                    },
+                    maxPages);
         }
 
         private Matches readMatches(Function<Message, Candidate> matcher, int maxPages) {
             return readMessages(
-                    target.workspaceId(), bot.credential().token(), target.channelId(), target.outboundParent(),
-                    target.sourceTs(), matcher, maxPages);
+                    target.workspaceId(),
+                    bot.credential().token(),
+                    target.channelId(),
+                    target.outboundParent(),
+                    target.sourceTs(),
+                    matcher,
+                    maxPages);
         }
 
         private boolean exactParent(Message message) {
@@ -427,11 +459,15 @@ public class SlackMessageService implements AutoCloseable {
             @Nullable BooleanSupplier admitAtSend,
             WriteCall<T> call) {
         return callWriteWithCredential(
-                workspaceId, channel,
+                workspaceId,
+                channel,
                 () -> teamId == null
                         ? resolveToken(workspaceId)
-                        : credentialProvider.resolveActiveTeam(workspaceId, teamId, eligible).map(BearerToken::token),
-                admitAtSend, call);
+                        : credentialProvider
+                                .resolveActiveTeam(workspaceId, teamId, eligible)
+                                .map(BearerToken::token),
+                admitAtSend,
+                call);
     }
 
     private <T extends SlackApiTextResponse> T callWriteWithCredential(
@@ -443,8 +479,9 @@ public class SlackMessageService implements AutoCloseable {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
         }
-        String token = credential.get().orElseThrow(
-                () -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
+        String token = credential
+                .get()
+                .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
             MethodsClient methods = slack.methods(token);
             T response;
@@ -530,15 +567,30 @@ public class SlackMessageService implements AutoCloseable {
             int maxPages) {
         String token = resolveToken(workspaceId)
                 .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
-        return readMessages(workspaceId, token, channel, threadTs, oldest,
-                message -> match.test(message) ? Candidate.MATCH : Candidate.IGNORE, maxPages);
+        return readMessages(
+                workspaceId,
+                token,
+                channel,
+                threadTs,
+                oldest,
+                message -> match.test(message) ? Candidate.MATCH : Candidate.IGNORE,
+                maxPages);
     }
 
-    private enum Candidate { IGNORE, MATCH, INCOMPLETE }
+    private enum Candidate {
+        IGNORE,
+        MATCH,
+        INCOMPLETE
+    }
 
     private Matches readMessages(
-            long workspaceId, String token, String channel, @Nullable String threadTs, String oldest,
-            Function<Message, Candidate> match, int maxPages) {
+            long workspaceId,
+            String token,
+            String channel,
+            @Nullable String threadTs,
+            String oldest,
+            Function<Message, Candidate> match,
+            int maxPages) {
         if (maxPages < 1) throw new IllegalArgumentException("Readback needs at least one page");
         long deadline = time.nanoTime() + Duration.ofSeconds(30).toNanos();
         // Consent readback shares one short budget so a throttled later page leaves time for the write fence.
@@ -591,7 +643,8 @@ public class SlackMessageService implements AutoCloseable {
                 for (Message message : messages) {
                     Candidate candidate = match.apply(message);
                     String ts = message.getTs();
-                    if (candidate == Candidate.INCOMPLETE || (candidate == Candidate.MATCH && (ts == null || ts.isBlank()))) {
+                    if (candidate == Candidate.INCOMPLETE
+                            || (candidate == Candidate.MATCH && (ts == null || ts.isBlank()))) {
                         return new Matches(List.of(), true);
                     }
                     if (candidate == Candidate.MATCH && ts != null) matched.add(ts);

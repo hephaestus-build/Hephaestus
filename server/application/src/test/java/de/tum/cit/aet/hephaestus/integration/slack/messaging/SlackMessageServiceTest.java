@@ -554,7 +554,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
                         case "/api/auth.test" -> json("{\"ok\":true,\"team_id\":\"T1\"}");
                         case "/api/chat.postMessage" -> {
                             posts.incrementAndGet();
-                            assertThat(bodyOf(request)).contains("channel=D1", "thread_ts=90.000001", "mentor_effect", "opaque");
+                            assertThat(bodyOf(request))
+                                    .contains("channel=D1", "thread_ts=90.000001", "mentor_effect", "opaque");
                             yield json("{\"ok\":true,\"ts\":\"110.000001\"}");
                         }
                         case "/api/conversations.replies" -> {
@@ -572,7 +573,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
             try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
                 var route = bind(local, "90.000001");
                 assertThatThrownBy(() -> route.post(List.of(), "fixed notice", "opaque", () -> true))
-                        .isInstanceOfSatisfying(SlackSendException.class,
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
                                 error -> assertThat(error.slackError()).isEqualTo("invalid_receipt"));
                 assertThat(route.readPost("opaque", 1).ts()).containsExactly("110.000001");
                 assertThat(posts).hasValue(1);
