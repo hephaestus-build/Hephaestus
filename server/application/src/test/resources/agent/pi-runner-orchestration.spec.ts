@@ -363,7 +363,7 @@ if (scenario !== undefined && scenario !== "") {
 							if (value.kind === "job") {
 								now += 301_000;
 								record("program:started");
-								queueMicrotask(() => message({ kind: "meta", meta: {} }));
+								queueMicrotask(() => message(JSON.stringify({ kind: "meta", meta: {} })));
 								guard = setTimeout(() => {
 									record("program:no-abort");
 									close();
