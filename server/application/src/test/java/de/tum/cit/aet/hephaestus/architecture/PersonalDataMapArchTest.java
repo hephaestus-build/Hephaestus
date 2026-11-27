@@ -186,7 +186,13 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "Host team grants (ADR 0166). Grant writes come only in a release after the registration"),
             Map.entry(
                     "host_pairing",
-                    "Host pairing requests (ADR 0166). Pairing writes come only in a release after the registration"));
+                    "Host pairing requests (ADR 0166). Pairing writes come only in a release after the registration"),
+            Map.entry(
+                    "team_item",
+                    "Submitted team items (ADR 0165). Item writes come only in a release after the registration"),
+            Map.entry(
+                    "team_item_version",
+                    "Submitted team versions (ADR 0165). Version writes come only in a release after the registration"));
 
     /**
      * Personal tables that only the account purge erases, because no erasure inventory names their store yet (ADR 0164).

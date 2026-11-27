@@ -126,3 +126,10 @@ Rule 6 required a lifecycle listener for every kind.
 No code dispatched its install, uninstall, scope and rename hooks, so each listener was an empty marker, and the provider adapters own these events.
 The listener SPI and the approval writer SPI are removed.
 Boot now requires a credential provider for every kind and the beans of each declared capability.
+
+## Update — 2026-11-27: `integration` holds `submission`
+
+[ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) decision 13 adds work that a team submits itself.
+To the list in rule 1 it adds `submission`, and later one package for each capture tool.
+These packages have no provider connection.
+`IntegrationStructuralRulesTest#integrationTopLevelHasOnlyExpectedSubpackages` names them, and `PracticeReviewModuleBoundaryTest#shouldKeepDomainAndProviderTypesOutOfCoreProducts` keeps product modules from importing them.

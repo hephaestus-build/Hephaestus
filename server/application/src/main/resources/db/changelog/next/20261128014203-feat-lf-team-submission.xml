@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+      A server of the previous release deletes accounts, memberships and project teams while this runs. So each change
+      set waits for at most one existing table that such a delete writes, or takes them in the order of the delete.
+    -->
+    <changeSet id="1795794480000-1" author="hephaestus">
+        <comment>The work of a project team, one item for each piece (ADR 0165). Nothing writes it yet.</comment>
+        <createTable tableName="team_item">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="team_itemPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="removed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="team_item" columnNames="id, workspace_id" constraintName="uk_team_item_workspace"/>
+        <addForeignKeyConstraint baseTableName="team_item" baseColumnNames="team_id,workspace_id" constraintName="sfk_team_item_team" onDelete="CASCADE" referencedTableName="project_team" referencedColumnNames="id,workspace_id"/>
+        <createIndex tableName="team_item" indexName="idx_team_item_team">
+            <column name="team_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>ALTER TABLE public.team_item ADD CONSTRAINT ck_team_item_kind CHECK (kind ~ '^team\.[a-z][a-z0-9_]*$');</sql>
+        <rollback>
+            <dropTable tableName="team_item"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-2" author="hephaestus">
+        <comment>The immutable versions of a team item. An ended version keeps its row, so its sequence number is never reused. The account key comes first, because an account erasure locks the account before it reaches a team. A delete of an account row detaches only what an erasure has already ended: the submitter check refuses any other.</comment>
+        <createTable tableName="team_item_version">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="team_item_versionPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sequence_number" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submitted_by" type="BIGINT"/>
+            <column name="submitted_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_key" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_in_transaction" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(200)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="team_item_version" baseColumnNames="submitted_by" constraintName="sfk_team_item_version_submitter" onDelete="SET NULL" referencedTableName="account" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="team_item_version" baseColumnNames="item_id,workspace_id" constraintName="sfk_team_item_version_item" onDelete="CASCADE" referencedTableName="team_item" referencedColumnNames="id,workspace_id"/>
+        <addUniqueConstraint tableName="team_item_version" columnNames="item_id, sequence_number" constraintName="uk_team_item_version_sequence"/>
+        <addUniqueConstraint tableName="team_item_version" columnNames="item_id, request_key" constraintName="uk_team_item_version_request"/>
+        <addUniqueConstraint tableName="team_item_version" columnNames="id, workspace_id" constraintName="uk_team_item_version_workspace"/>
+        <createIndex tableName="team_item_version" indexName="idx_team_item_version_item">
+            <column name="item_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="team_item_version" indexName="idx_team_item_version_submitter">
+            <column name="submitted_by"/>
+        </createIndex>
+        <sql>
+ALTER TABLE public.team_item_version ADD CONSTRAINT ck_team_item_version_state
+    CHECK (state IN ('AVAILABLE', 'WITHDRAWN', 'EXPIRED', 'ERASED'));
+-- Only an erasure removes the submitter, and it always does, so no version is detached from it before.
+ALTER TABLE public.team_item_version ADD CONSTRAINT ck_team_item_version_submitter
+    CHECK ((state = 'ERASED') = (submitted_by IS NULL));
+-- The title is submitted content: it exists only while the version is available.
+ALTER TABLE public.team_item_version ADD CONSTRAINT ck_team_item_version_title
+    CHECK (state = 'AVAILABLE' OR title IS NULL);
+        </sql>
+        <rollback>
+            <dropTable tableName="team_item_version"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-3" author="hephaestus">
+        <comment>The rules of team items and versions, for every writer. A new version takes share locks on its account, its submitter's team membership, the team and the item, in that order, so an erasure, a leave or a removal that runs beside it either waits and ends the version, or wins and the insert is refused. Update guards only validate, so they run after the row write.</comment>
+        <createProcedure>
+CREATE FUNCTION public.admit_team_item() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.project_team t
+        WHERE t.id = NEW.team_id AND t.workspace_id = NEW.workspace_id AND t.removed_at IS NULL
+        FOR SHARE;
+    IF NOT FOUND OR NEW.removed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'a team item needs a standing project team' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.guard_team_item() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id, NEW.workspace_id, NEW.team_id, NEW.kind, NEW.created_at)
+        IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.team_id, OLD.kind, OLD.created_at)
+        OR (OLD.removed_at IS NOT NULL AND NEW.removed_at IS DISTINCT FROM OLD.removed_at) THEN
+        RAISE EXCEPTION 'a team item keeps its identity, and a removed item stays removed' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.withdraw_removed_team_item() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE public.team_item_version v SET state = 'WITHDRAWN', title = NULL
+        WHERE v.item_id = NEW.id AND v.workspace_id = NEW.workspace_id AND v.state = 'AVAILABLE';
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.remove_items_of_removed_project_team() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE public.team_item i SET removed_at = NEW.removed_at
+        WHERE i.team_id = NEW.id AND i.workspace_id = NEW.workspace_id AND i.removed_at IS NULL;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.admit_team_item_version() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    item_team uuid;
+BEGIN
+    IF NEW.state != 'AVAILABLE' THEN
+        RAISE EXCEPTION 'a new team item version is available' USING ERRCODE = '23514';
+    END IF;
+    PERFORM 1 FROM public.account a WHERE a.id = NEW.submitted_by AND a.status = 'ACTIVE' FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a team item version needs an active account' USING ERRCODE = '23514';
+    END IF;
+    SELECT i.team_id INTO item_team FROM public.team_item i
+        WHERE i.id = NEW.item_id AND i.workspace_id = NEW.workspace_id;
+    PERFORM 1 FROM public.project_team_member m
+        WHERE m.team_id = item_team AND m.workspace_id = NEW.workspace_id AND m.account_id = NEW.submitted_by
+        FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a team item version needs a member of the item''s team' USING ERRCODE = '23514';
+    END IF;
+    PERFORM 1 FROM public.project_team t
+        WHERE t.id = item_team AND t.workspace_id = NEW.workspace_id AND t.removed_at IS NULL FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a team item version needs a standing project team' USING ERRCODE = '23514';
+    END IF;
+    PERFORM 1 FROM public.team_item i
+        WHERE i.id = NEW.item_id AND i.workspace_id = NEW.workspace_id AND i.removed_at IS NULL FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a team item version needs a standing item' USING ERRCODE = '23514';
+    END IF;
+    NEW.created_in_transaction := pg_current_xact_id()::text::bigint;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.guard_team_item_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id, NEW.workspace_id, NEW.item_id, NEW.sequence_number, NEW.submitted_at, NEW.request_key,
+            NEW.created_in_transaction)
+        IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.item_id, OLD.sequence_number, OLD.submitted_at,
+            OLD.request_key, OLD.created_in_transaction)
+        OR (NEW.submitted_by IS NOT NULL AND NEW.submitted_by IS DISTINCT FROM OLD.submitted_by)
+        OR (NEW.title IS NOT NULL AND NEW.title IS DISTINCT FROM OLD.title)
+        OR NEW.expires_at > OLD.expires_at
+        OR (NEW.state IS DISTINCT FROM OLD.state AND OLD.state != 'AVAILABLE' AND NEW.state != 'ERASED')
+        OR (NEW.state = 'AVAILABLE' AND OLD.state != 'AVAILABLE') THEN
+        RAISE EXCEPTION 'a team item version is immutable and ends once' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.withdraw_departed_team_member_versions() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE public.team_item_version v SET state = 'WITHDRAWN', title = NULL FROM public.team_item i
+        WHERE i.id = v.item_id AND i.workspace_id = v.workspace_id
+        AND i.team_id = OLD.team_id AND i.workspace_id = OLD.workspace_id
+        AND v.submitted_by = OLD.account_id AND v.state = 'AVAILABLE';
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <rollback>
+DROP FUNCTION public.withdraw_departed_team_member_versions();
+DROP FUNCTION public.guard_team_item_version();
+DROP FUNCTION public.admit_team_item_version();
+DROP FUNCTION public.remove_items_of_removed_project_team();
+DROP FUNCTION public.withdraw_removed_team_item();
+DROP FUNCTION public.guard_team_item();
+DROP FUNCTION public.admit_team_item();
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-4" author="hephaestus">
+        <sql>
+CREATE TRIGGER team_item_version_admit BEFORE INSERT ON public.team_item_version
+    FOR EACH ROW EXECUTE FUNCTION public.admit_team_item_version();
+CREATE TRIGGER team_item_version_guard AFTER UPDATE ON public.team_item_version
+    FOR EACH ROW EXECUTE FUNCTION public.guard_team_item_version();
+        </sql>
+        <rollback>
+DROP TRIGGER team_item_version_guard ON public.team_item_version;
+DROP TRIGGER team_item_version_admit ON public.team_item_version;
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-5" author="hephaestus">
+        <sql>
+CREATE TRIGGER team_item_admit BEFORE INSERT ON public.team_item
+    FOR EACH ROW EXECUTE FUNCTION public.admit_team_item();
+CREATE TRIGGER team_item_guard AFTER UPDATE ON public.team_item
+    FOR EACH ROW EXECUTE FUNCTION public.guard_team_item();
+CREATE TRIGGER team_item_removed AFTER UPDATE OF removed_at ON public.team_item
+    FOR EACH ROW WHEN (NEW.removed_at IS NOT NULL) EXECUTE FUNCTION public.withdraw_removed_team_item();
+        </sql>
+        <rollback>
+DROP TRIGGER team_item_removed ON public.team_item;
+DROP TRIGGER team_item_guard ON public.team_item;
+DROP TRIGGER team_item_admit ON public.team_item;
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-6" author="hephaestus">
+        <sql>
+CREATE TRIGGER project_team_removes_items AFTER UPDATE OF removed_at ON public.project_team
+    FOR EACH ROW WHEN (NEW.removed_at IS NOT NULL) EXECUTE FUNCTION public.remove_items_of_removed_project_team();
+        </sql>
+        <rollback>
+DROP TRIGGER project_team_removes_items ON public.project_team;
+        </rollback>
+    </changeSet>
+    <changeSet id="1795794480000-7" author="hephaestus">
+        <comment>The strictest pending retention (P4): a person who leaves a team takes their available versions with them.</comment>
+        <sql>
+CREATE TRIGGER project_team_member_withdraws_versions AFTER DELETE ON public.project_team_member
+    FOR EACH ROW EXECUTE FUNCTION public.withdraw_departed_team_member_versions();
+        </sql>
+        <rollback>
+DROP TRIGGER project_team_member_withdraws_versions ON public.project_team_member;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
