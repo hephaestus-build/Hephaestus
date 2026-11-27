@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.slack.api.Slack;
 import com.slack.api.SlackConfig;
+import com.slack.api.model.Message;
 import com.slack.api.model.ResponseMetadata;
 import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -16,11 +19,15 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider.BoundBot;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.EphemeralMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
+import de.tum.cit.aet.hephaestus.mentor.spi.Route;
+import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,6 +40,7 @@ import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
 import okio.ByteString;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -531,6 +539,76 @@ class SlackMessageServiceTest extends BaseUnitTest {
         assertThat(SlackMessageService.Matches.holdsMore(false, next)).isTrue();
         assertThat(SlackMessageService.Matches.holdsMore(false, last)).isFalse();
         assertThat(SlackMessageService.Matches.holdsMore(false, null)).isFalse();
+    }
+
+    @Test
+    void shouldRecoverTheAcceptedBoundPostWhenItsReceiptOmitsTheChannel() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            var posts = new AtomicInteger();
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    return switch (request.getUrl().encodedPath()) {
+                        case "/api/auth.test" -> json("{\"ok\":true,\"team_id\":\"T1\"}");
+                        case "/api/chat.postMessage" -> {
+                            posts.incrementAndGet();
+                            assertThat(bodyOf(request)).contains("channel=D1", "thread_ts=90.000001");
+                            yield json("{\"ok\":true,\"ts\":\"110.000001\"}");
+                        }
+                        case "/api/conversations.replies" -> {
+                            assertThat(bodyOf(request)).contains("channel=D1", "ts=90.000001", "oldest=100.000001");
+                            yield json("""
+                                    {"ok":true,"messages":[{"ts":"110.000001","user":"UBOT","thread_ts":"90.000001",
+                                    "metadata":{"event_type":"mentor_effect","event_payload":{"marker":"opaque"}}}]}
+                                    """);
+                        }
+                        default -> new MockResponse.Builder().code(400).build();
+                    };
+                }
+            });
+            api.start();
+            try (var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS)) {
+                var route = bind(local, "90.000001");
+                var metadata = Message.Metadata.builder()
+                        .eventType("mentor_effect").eventPayload(Map.of("marker", "opaque")).build();
+                assertThatThrownBy(() -> route.post(List.of(), "fixed notice", metadata, () -> true))
+                        .isInstanceOfSatisfying(SlackSendException.class,
+                                error -> assertThat(error.slackError()).isEqualTo("invalid_receipt"));
+                assertThat(route.readPost("mentor_effect", "opaque", 1).ts()).containsExactly("110.000001");
+                assertThat(posts).hasValue(1);
+                verify(credentialProvider).resolveActiveBinding(7L, 42L, "T1");
+                verify(credentialProvider, never()).resolve(any(IntegrationRef.class));
+            }
+        }
+    }
+
+    @Test
+    void shouldNotTreatAMatchingMarkerWithoutATimestampAsAbsent() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (request.getUrl().encodedPath().equals("/api/auth.test"))
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    return json("""
+                            {"ok":true,"has_more":false,"messages":[{"user":"UBOT",
+                            "metadata":{"event_type":"mentor_effect","event_payload":{"marker":"opaque"}}}]}
+                            """);
+                }
+            });
+            api.start();
+            try (var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS)) {
+                assertThat(bind(local, null).readPost("mentor_effect", "opaque", 1))
+                        .isEqualTo(new SlackMessageService.Matches(List.of(), true));
+            }
+        }
+    }
+
+    private SlackMessageService.BoundRoute bind(SlackMessageService service, @Nullable String parent) {
+        when(credentialProvider.resolveActiveBinding(7L, 42L, "T1"))
+                .thenReturn(Optional.of(new BoundBot("UBOT", new BearerToken("xoxb-" + UUID.randomUUID(), null))));
+        return service.bind(new Route(Transport.SLACK, "T1", "D1", parent, "100.000001", 7L, 42L, 9L, "U1"))
+                .orElseThrow();
     }
 
     @Test
