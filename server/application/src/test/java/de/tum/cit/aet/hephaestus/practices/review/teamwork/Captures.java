@@ -14,8 +14,8 @@ import org.springframework.core.io.ClassPathResource;
  */
 final class Captures {
     /**
-     * One kind for both: a practice runs on one kind, so the same practice version can review both captures only here.
-     * A real indexer declares the kinds of its own tool.
+     * One kind for both, because a practice runs on one kind. The two captures prove the seam between a tool and the
+     * review, not that one practice reviews several kinds: a real indexer declares the kinds of its own tool.
      */
     static final ItemKind KIND = new ItemKind("team.board");
 

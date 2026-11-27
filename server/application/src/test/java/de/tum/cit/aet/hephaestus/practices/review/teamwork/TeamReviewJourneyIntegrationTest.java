@@ -25,7 +25,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * The first integrated proof of a team review: submit a pinned synthetic version, run the existing practice review, read
  * the same anchored result in the app and in the editor, submit a second version that leaves the first as it was even
  * when its live source is gone, deny everyone else, and withdraw the first version. It runs once for each capture, and
- * both must give the same practice version and the same shape of observation.
+ * both must give the same practice version and the same shape of observation. That proves the seam between a tool and
+ * the review, on one item kind; it says nothing about reuse across kinds.
  *
  * <p>The journey does not run yet. This test holds the step it stops at, so the pull request that makes a step work
  * writes that step's calls and moves {@link #FIRST_MISSING_STEP} forward. The last one removes the expectation and runs

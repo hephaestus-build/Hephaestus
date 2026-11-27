@@ -23,7 +23,7 @@ final class ModelFixtureIndexer implements SnapshotIndexer {
 
     @Override
     public String normalizer() {
-        return "synthetic-model/1";
+        return "fixture-graph/1";
     }
 
     @Override

@@ -22,7 +22,7 @@ final class BoardFixtureIndexer implements SnapshotIndexer {
 
     @Override
     public String normalizer() {
-        return "synthetic-board/1";
+        return "fixture-grid/1";
     }
 
     @Override
