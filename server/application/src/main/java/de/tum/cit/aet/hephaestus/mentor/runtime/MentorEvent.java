@@ -94,7 +94,7 @@ public class MentorEvent {
         OPENED,
         /** A newer revision raised the open request's version. */
         REVISED,
-        /** A delete stopped the open request. */
+        /** A delete or a Stop fenced the request's delivery, and stopped the request if it was live. */
         FENCED,
         /** The event changed no request; the reason says why. */
         RECORDED
@@ -109,6 +109,7 @@ public class MentorEvent {
         STALE_REVISION,
         SOURCE_DELETED,
         REQUEST_SETTLED,
-        STOP_NOT_HANDLED
+        /** A Stop by a person who does not own the message. */
+        NOT_OWNER
     }
 }
