@@ -95,6 +95,8 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .orShould()
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
                 .orShould()
+                .haveFullyQualifiedName(SlackMessageService.BoundRoute.class.getName())
+                .orShould()
                 .haveFullyQualifiedName(EmailAdapter.class.getName())
                 .because(
                         "gateway status is limited to the reviewed SPI, GitLab notes, Slack and email client surfaces");

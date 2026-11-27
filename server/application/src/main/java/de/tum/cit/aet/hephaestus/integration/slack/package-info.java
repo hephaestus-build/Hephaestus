@@ -41,6 +41,7 @@
             "integration.core::handler",
             "integration.core::items",
             "integration.core::spi",
+            "mentor::spi",
             // Hephaestus's Slack surface writes questions, edits, deletions, stops and votes into the developer's
             // conversation ledger, projects Slack turns into the DM, and erases Slack-written entries on a disconnect,
             // an uninstall or a revoked token.
