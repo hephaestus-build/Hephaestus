@@ -37,6 +37,7 @@ de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.findAllEnabl
 de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.findAllForCallPools()
 de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.joinCallPool(java.lang.Long, java.util.Collection)
 de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository.leaveCallPool(java.lang.Long)
+de.tum.cit.aet.hephaestus.agent.config.PersonalModelAssignmentRepository
 de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository.existsByInstanceModelId(java.lang.Long)
 de.tum.cit.aet.hephaestus.agent.context.JobEvidenceMaintenanceConfiguration
 de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository.deleteEnded()
@@ -109,6 +110,7 @@ de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.deleteExpired(java
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findAppliedInstanceModelId(java.util.UUID)
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findUnpriced(org.springframework.data.domain.Pageable)
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.findUnpricedAfter(java.time.Instant, java.util.UUID, org.springframework.data.domain.Pageable)
+de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.personalSpend(long, java.time.Instant, java.time.Instant)
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository.settleAbandonedInstanceCalls()
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper
 de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRetentionSweeper

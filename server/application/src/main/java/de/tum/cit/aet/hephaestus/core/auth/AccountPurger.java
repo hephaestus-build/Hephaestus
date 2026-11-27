@@ -89,6 +89,7 @@ public class AccountPurger {
         account.setPrimaryEmailVerifiedAt(null);
         account.setAiChoice(null);
         account.setAiChoiceAt(null);
+        account.setAiPersonalScopeAt(null);
         account.setFeedbackDeliveryEnabled(false);
         account.setPublicActivityVisible(false);
         account.setTimeZone(null);

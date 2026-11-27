@@ -77,6 +77,8 @@ erDiagram
         BOOLEAN allow_workspace_connections "NOT NULL"
         TIMESTAMPTZ updated_at
         BIGINT updated_by_account_id FK
+        NUMERIC(10,2) personal_monthly_budget_usd
+        NUMERIC(10,2) personal_account_monthly_budget_usd
     }
 
     LlmCallPermit {
@@ -184,7 +186,7 @@ erDiagram
         BIGINT workspace_id FK,UK
         VARCHAR(40) job_type "NOT NULL"
         VARCHAR(32) source_type "NOT NULL"
-        UUID source_id "NOT NULL"
+        UUID source_id
         INTEGER source_attempt "NOT NULL"
         VARCHAR(128) model
         BIGINT input_tokens "NOT NULL"
@@ -221,6 +223,7 @@ erDiagram
         UUID action_id
         TIMESTAMPTZ settle_after
         BIGINT applied_instance_model_id
+        BIGINT payer_account_id FK
     }
 
     PersonEvidenceCopy {
@@ -230,6 +233,12 @@ erDiagram
         JSONB payload "NOT NULL"
         BIGINT workspace_id UK "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    PersonalModelAssignment {
+        VARCHAR(16) tier PK
+        TIMESTAMPTZ changed_at "NOT NULL"
+        BIGINT llm_model_id FK "NOT NULL"
     }
 
     ReviewAttemptInput {
@@ -394,10 +403,12 @@ erDiagram
     LlmConnection ||--o{ LlmModel : has
     LlmCallPool ||--o{ LlmModel : has
     LlmModel ||--o{ LlmModelPrice : has
+    Account ||--o{ LlmUsageEvent : has
     AgentRun ||--o{ LlmUsageEvent : run_id
     Review ||--o{ LlmUsageEvent : has
     AgentRun ||--o{ LlmUsageEvent : run_id
     Workspace ||--o{ LlmUsageEvent : has
+    LlmModel ||--o{ PersonalModelAssignment : has
     ReviewJob ||--o{ ReviewAttemptInput : reviewed
     Workspace ||--o{ ReviewAttemptInput : reviewed
     Workspace ||--o{ ReviewCompositionBasi : reviewed

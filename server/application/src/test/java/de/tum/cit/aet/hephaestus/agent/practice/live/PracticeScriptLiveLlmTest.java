@@ -425,7 +425,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         lifecycle.cancel(context.id(), job.getId());
 
         Map<UsageSourceType, LlmUsageEvent> ledger = usageEvents.findAll().stream()
-                .filter(event -> event.getSourceId().equals(job.getId()))
+                .filter(event -> job.getId().equals(event.getSourceId()))
                 .filter(event -> event.getSourceType() != UsageSourceType.REVIEW_JOB)
                 .collect(Collectors.toMap(LlmUsageEvent::getSourceType, Function.identity()));
         assertThat(ledger).isEmpty();

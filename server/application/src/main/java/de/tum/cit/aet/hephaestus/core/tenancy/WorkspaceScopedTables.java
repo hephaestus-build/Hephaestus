@@ -120,8 +120,10 @@ public class WorkspaceScopedTables {
             // so the
             // inspector watches it and its cross-tenant admin reads opt out per method
             // instead.
-            // Instance LLM settings singleton (egress allowlist + BYO enable); global
+            // Instance LLM settings singleton (egress allowlist + BYO enable + personal purse caps); global
             "instance_llm_settings",
+            // The instance model for personal conversations, one for each tier; no workspace owner
+            "personal_model_assignment",
             // Instance-wide practice catalog overrides; no workspace owner
             "catalog_entry",
             // ECB daily reference rates for display-only currency conversion; not a
