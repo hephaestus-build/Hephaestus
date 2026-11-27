@@ -64,7 +64,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                 .toList();
         assertThat(tables)
                 .as("Enroll each @PersonOwned store in this rule when it enters the person data inventory")
-                .containsExactlyInAnyOrder(EXPORT_TABLE, PERSONAL_GOAL_TABLE, "mentor_event", "mentor_request", "mentor_source");
+                .containsExactlyInAnyOrder(
+                        EXPORT_TABLE, PERSONAL_GOAL_TABLE, "mentor_event", "mentor_request", "mentor_source");
         assertThat(classes.stream()
                         .filter(type -> type.isAnnotatedWith(PersonDataStores.class))
                         .flatMap(type -> Arrays.stream(
