@@ -264,11 +264,11 @@ export const Continuing: Story = {
 					{
 						...reviewQueueHead.waitingLong,
 						progress: {
-				practicesEnded: 76,
-				practicesTotal: 200,
-				continuing: true,
-				stage: "CONTINUING",
-			},
+							practicesEnded: 76,
+							practicesTotal: 200,
+							continuing: true,
+							stage: "CONTINUING",
+						},
 					},
 				],
 			},
