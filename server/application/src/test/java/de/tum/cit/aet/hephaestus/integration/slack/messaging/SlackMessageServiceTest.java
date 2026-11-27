@@ -606,6 +606,20 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
+    @Test
+    void shouldLeaveABotPostWithNoAuthorOrMetadataUnconfirmed() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.enqueue(json("""
+                    {"ok":true,"has_more":false,"messages":[{"bot_id":"B1","ts":"110.000001"}]}
+                    """));
+            api.start();
+            try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
+                assertThat(bind(local, null).readPost("opaque", 1))
+                        .isEqualTo(new SlackMessageService.Matches(List.of(), true));
+            }
+        }
+    }
+
     private SlackMessageService.BoundRoute bind(SlackMessageService service, @Nullable String parent) {
         when(credentialProvider.resolveActiveBinding(7L, 42L, "T1"))
                 .thenReturn(Optional.of(new BoundBot("UBOT", new BearerToken("xoxb-" + UUID.randomUUID(), null))));
