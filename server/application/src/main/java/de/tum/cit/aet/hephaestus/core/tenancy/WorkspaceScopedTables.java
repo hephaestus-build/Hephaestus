@@ -68,6 +68,8 @@ public class WorkspaceScopedTables {
             // GDPR Art. 20 self-service export — account-scoped, spans a principal's data
             // across workspaces.
             "account_export",
+            // Account-owned personal goal. Its access boundary is the PostgreSQL owner policy.
+            "personal_goal",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
             // Restricted recovery facts outlive the workspace or account they identify.

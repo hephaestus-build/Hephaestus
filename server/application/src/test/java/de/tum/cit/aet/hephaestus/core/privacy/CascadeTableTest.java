@@ -467,6 +467,7 @@ class CascadeTableTest extends BaseUnitTest {
      * keyed by the row's name, with the dependent kinds each holds.
      */
     static final Map<String, Set<CascadeDependent>> OUTSIDE_ROWS = Map.ofEntries(
+            Map.entry("PostgreSQL personal goal", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),

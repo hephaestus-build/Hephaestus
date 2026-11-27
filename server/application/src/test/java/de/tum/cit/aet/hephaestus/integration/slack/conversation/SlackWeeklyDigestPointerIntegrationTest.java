@@ -201,7 +201,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 digest.getId().toString(),
                 accountId);
         ActionTestSupport.due(jdbc, ConversationSlackReplies.digestKey(digest.getId()));
-        ActionTestSupport.claimLane(jdbc, objectMapper, ConversationSlackReplies.digestKey(digest.getId()))
+        ActionTestSupport.claimLane(jdbc, objectMapper, ConversationSlackReplies.digestKey(digest.getId()), context)
                 .orElseThrow()
                 .fence()
                 .beginWrite();

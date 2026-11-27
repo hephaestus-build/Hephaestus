@@ -99,7 +99,7 @@ class FeedbackSendTransactionsTest {
                 epoch,
                 false,
                 null,
-                () -> true,
+                proof -> proof.getAsBoolean(),
                 null);
     }
 

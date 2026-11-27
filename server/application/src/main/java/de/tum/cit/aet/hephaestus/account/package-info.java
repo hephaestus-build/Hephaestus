@@ -15,6 +15,7 @@
             "core::auth-validation",
             "core::current-account",
             "core::exception",
+            "core::person-data",
             "core::runtime",
             "core::security",
             "core::web",

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
@@ -31,9 +32,16 @@ public record ActionAttempt(
     @FunctionalInterface
     public interface Fence {
         /**
-         * Records that the provider call starts. It refuses when the lease is gone or the action was cancelled; the
-         * adapter then must not call the provider, and returns {@link ActionResult.Abandoned}.
+         * Records that the provider call starts. Returns false if the lease has gone or the action was cancelled.
          */
-        boolean beginWrite();
+        default boolean beginWrite() {
+            return beginWrite(() -> true);
+        }
+
+        /**
+         * Checks the additional database proof under the action lock after source admission. Hold any proof locks until
+         * the marker commits. The predicate must not call the provider. A false result denies the write.
+         */
+        boolean beginWrite(BooleanSupplier additionalProof);
     }
 }

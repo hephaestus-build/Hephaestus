@@ -46,7 +46,7 @@ class PostedCopyCorrectorTest {
             1,
             false,
             null,
-            () -> true,
+            proof -> proof.getAsBoolean(),
             null);
 
     @Test
