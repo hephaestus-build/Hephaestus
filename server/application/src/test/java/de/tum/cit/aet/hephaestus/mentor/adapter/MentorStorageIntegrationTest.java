@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.util.Comparator;
 import java.util.List;
@@ -16,6 +17,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,6 +42,12 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorPersonDataCatalog catalog;
+
+    @Autowired
+    private MentorWorkspaceCleanup cleanup;
+
+    @Autowired
+    private SlackWorkspaceContentEraser slackContent;
 
     @Test
     void shouldHideAnotherAccountsMentorRowsButNameTheirOwnerWhenAnotherOwnerOrNoOwnerIsBound() {
@@ -115,8 +124,10 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         });
     }
 
-    @Test
-    void shouldEraseEveryAccountsRowsOfOnlyThePurgedWorkspaceWhenNoOwnerIsBound() {
+    /** A workspace purge and a Slack disconnect or restore, which both run with no owner bound. */
+    @ParameterizedTest
+    @ValueSource(strings = {"purge", "slack-disconnect"})
+    void shouldEraseEveryAccountsRowsOfOnlyThatWorkspaceWhenItIsPurgedOrItsSlackIsDisconnected(String path) {
         long first = account();
         long second = account();
         long purged = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
@@ -124,10 +135,11 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         UUID secondErased = asOwner(second, () -> seed(second, purged));
         UUID kept = asOwner(first, () -> seed(first, purged - 1));
 
-        assertThat(new TransactionTemplate(transactions)
-                        .execute(status ->
-                                jdbc.queryForObject("SELECT public.mentor_erase_workspace(?)", Integer.class, purged)))
-                .isEqualTo(2);
+        if (path.equals("purge")) {
+            new TransactionTemplate(transactions).executeWithoutResult(status -> cleanup.deleteWorkspaceData(purged));
+        } else {
+            slackContent.eraseWorkspace(purged);
+        }
         asOwner(first, () -> {
             assertThat(jdbc.queryForList(
                             "SELECT id FROM mentor_source WHERE id IN (?, ?)", UUID.class, firstErased, kept))

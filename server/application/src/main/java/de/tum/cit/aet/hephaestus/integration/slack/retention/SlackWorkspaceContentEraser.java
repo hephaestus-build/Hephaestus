@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class SlackWorkspaceContentEraser {
     private final SlackParticipantConsentRepository slackParticipantConsentRepository;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
     private final AgentActions actions;
+    private final MentorWorkspaceErasure mentorRows;
 
     /** Idempotent: an already-erased (or never-populated) workspace deletes 0 rows. */
     @Transactional
@@ -48,5 +50,6 @@ public class SlackWorkspaceContentEraser {
         conversationEntries.redactCopyingToolResults(workspaceId, null);
         conversations.clearSlackIdentities(workspaceId);
         slackParticipantConsentRepository.deleteByWorkspaceId(workspaceId);
+        mentorRows.eraseWorkspace(workspaceId);
     }
 }
