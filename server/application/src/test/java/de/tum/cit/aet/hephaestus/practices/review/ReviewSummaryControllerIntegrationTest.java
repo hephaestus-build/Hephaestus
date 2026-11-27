@@ -433,7 +433,9 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].progress.practicesTotal")
                 .isEqualTo(3)
                 .jsonPath("$.content[0].progress.continuing")
-                .isEqualTo(true);
+                .isEqualTo(true)
+                .jsonPath("$.content[0].progress.stage")
+                .isEqualTo("CONTINUING");
         get("/practices/reviews/" + review.getId())
                 .expectStatus()
                 .isOk()
@@ -500,14 +502,60 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldReportNoProgressForAFinishedReview() {
-        data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
-        get("/practices/reviews")
+    void shouldReportAFinishedReviewAsReady() {
+        var result = data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
+        get("/practices/reviews/" + result.getReviewId())
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].progress")
-                .isEmpty();
+                .jsonPath("$.progress.stage")
+                .isEqualTo("READY");
+    }
+
+    @Test
+    void shouldReportObservationsAsReadyOnlyOnceTheyAreSealed() {
+        // Every practice ended, but the attempt keeps what it staged private until the seal.
+        var staged = data.continuingReview(scenario, scenarioAccountId, 2, 2);
+        var sealed = data.result(
+                scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"), ReviewStatus.RUNNING, null);
+
+        get("/practices/reviews/" + staged.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("QUEUED");
+        get("/practices/reviews/" + sealed.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("OBSERVATIONS_READY");
+    }
+
+    @Test
+    void shouldReportAnEndedReviewThatCheckedNothingAsWithheld() {
+        var review = data.activeReview(
+                scenario, scenarioAccountId, ReviewStatus.QUEUED, Instant.parse("2026-10-20T00:00:00Z"), null);
+        jdbc.sql("UPDATE review_item SET state = 'WITHHELD', reason = 'READINESS_REFUSED'"
+                        + " WHERE review_id = :id AND workspace_id = :ws")
+                .param("id", review.getId())
+                .param("ws", scenario.workspace().getId())
+                .update();
+        jdbc.sql("UPDATE review SET status = 'PARTIAL', stop_reason = 'READINESS_REFUSED', completed_at = now()"
+                        + " WHERE id = :id AND workspace_id = :ws")
+                .param("id", review.getId())
+                .param("ws", scenario.workspace().getId())
+                .update();
+
+        get("/practices/reviews/" + review.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("WITHHELD")
+                .jsonPath("$.progress.practicesTotal")
+                .isEqualTo(0);
     }
 
     @Test

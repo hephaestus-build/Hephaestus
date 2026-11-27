@@ -389,7 +389,12 @@ export const Continuing: Story = {
 	args: {
 		review: ready({
 			...reviewDetailQueued,
-			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+			progress: {
+				practicesEnded: 76,
+				practicesTotal: 200,
+				continuing: true,
+				stage: "CONTINUING",
+			},
 		}),
 	},
 	play: async () => {

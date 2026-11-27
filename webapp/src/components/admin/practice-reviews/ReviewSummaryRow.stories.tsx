@@ -138,7 +138,12 @@ export const Continuing: Story = {
 		review: {
 			...running,
 			status: "QUEUED",
-			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+			progress: {
+				practicesEnded: 76,
+				practicesTotal: 200,
+				continuing: true,
+				stage: "CONTINUING",
+			},
 		},
 	},
 	play: async ({ canvas }) => {

@@ -159,7 +159,12 @@ export const FirstReviewContinuing: Story = {
 			at: minutesBefore(40),
 			item: pullRequest(12),
 			status: "QUEUED",
-			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+			progress: {
+				practicesEnded: 76,
+				practicesTotal: 200,
+				continuing: true,
+				stage: "CONTINUING",
+			},
 		},
 	},
 	play: async ({ canvas }) => {
