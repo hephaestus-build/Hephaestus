@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.util.List;
@@ -39,5 +41,29 @@ class FeedbackCopyCleanupCustodyIntegrationTest extends AbstractFeedbackIntegrat
         assertThatCode(() -> custody.requireAcknowledged(workspace.getId(), List.of(parent.getId())))
                 .doesNotThrowAnyException();
         assertThat(feedback.expiredIds(workspace.getId(), AT, 100)).contains(parent.getId());
+    }
+
+    /** Only a conversation copy that a receipt settled passes a person's erasure; a provider write still needs custody. */
+    @Test
+    void shouldRetainAnUnknownProviderWriteForAPersonsErasureAlsoWhenItRecordedAnError() {
+        var parent = piece(FeedbackDestination.ON_WORK, FeedbackState.UNCONFIRMED, null);
+        var id = FeedbackIds.copy(parent.getId(), FeedbackCopyKind.SUMMARY, 0);
+        copies.saveAndFlush(FeedbackCopy.builder()
+                .id(id)
+                .workspaceId(workspace.getId())
+                .feedbackId(parent.getId())
+                .kind(FeedbackCopyKind.SUMMARY)
+                .position(0)
+                .state(FeedbackCopyState.WRITE_STARTED)
+                .writeKey(id.toString())
+                .writeMarker(FeedbackIds.writeMarker(id))
+                .writeStartedAt(AT)
+                .lastError("The provider did not answer")
+                .createdAt(AT)
+                .build());
+
+        assertThatThrownBy(
+                        () -> custody.requireAcknowledgedForPersonErasure(workspace.getId(), List.of(parent.getId())))
+                .isInstanceOf(ResponseStatusException.class);
     }
 }

@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
@@ -49,6 +52,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     @Autowired
     OwnerScope owners;
+
+    @Autowired
+    PracticesPersonDataCatalog practicesStores;
 
     UUID conversationId, copyId, ledgerConversationId, turnId;
 
@@ -509,6 +515,42 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(sends.findById(conversationId)).isEmpty();
         assertThatCode(() -> custody.requireAcknowledged(workspace.getId(), List.of(conversationId)))
                 .doesNotThrowAnyException();
+    }
+
+    /**
+     * A person's erasure passes a conversation copy that a receipt settled unconfirmed: the step redacts the answers of
+     * its turn, and the erasure's admission decides on a Slack reply (#5440). A claim that no receipt settled still
+     * refuses the step, and retention and purge still refuse the unconfirmed copy.
+     */
+    @Test
+    void shouldLetAPersonsErasurePassASettledUnconfirmedCopyButNotARunningClaim() {
+        var person = new PersonScope(developerId, List.of(), List.of());
+        PersonDataContributor copiesStep = practicesStores.contributors().stream()
+                .filter(contributor -> contributor.store().equals("feedback_copy"))
+                .findFirst()
+                .orElseThrow();
+        var fence = claim();
+        var running = copiesStep.select(person);
+        assertThat(running.rows()).hasSize(1);
+        assertThatThrownBy(() -> copiesStep.prepareErasure(running, person))
+                .as("a claim that no receipt settled")
+                .isInstanceOf(ResponseStatusException.class);
+
+        conversationClaims.recordConversationReceipt(
+                workspace.getId(),
+                fence,
+                receipt(
+                        ConversationCopyOutcome.UNCONFIRMED,
+                        null,
+                        fence.writeStartedAt().plusSeconds(1),
+                        "The answer stopped after it showed the feedback"));
+
+        var settled = copiesStep.select(person);
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+        assertThatCode(() -> copiesStep.prepareErasure(settled, person)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> custody.requireAcknowledged(workspace.getId(), List.of(conversationId)))
+                .as("retention and purge keep the custody")
+                .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test

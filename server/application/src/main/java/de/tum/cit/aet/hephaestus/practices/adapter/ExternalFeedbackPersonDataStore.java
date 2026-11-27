@@ -80,7 +80,7 @@ final class ExternalFeedbackPersonDataStore extends JdbcPersonDataStore {
     public void prepareErasure(PersonDataSelection selection, PersonScope frozenScope) {
         var byWorkspace = inspectionRows(selection).stream()
                 .collect(Collectors.groupingBy(row -> row.path("workspaceId").longValue()));
-        byWorkspace.forEach((workspace, rows) -> custody.requireAcknowledged(
+        byWorkspace.forEach((workspace, rows) -> custody.requireAcknowledgedForPersonErasure(
                 workspace,
                 rows.stream()
                         .map(row -> UUID.fromString(row.path("feedbackId").asString()))
