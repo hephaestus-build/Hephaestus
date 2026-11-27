@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
+import de.tum.cit.aet.hephaestus.core.SnapshotMemo;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -31,6 +33,8 @@ public class ReviewRepositoryPreparer {
     private final ConnectionService connections;
     private final List<ScmTokenSource> tokenSources;
     private final RepositoryRepository repositories;
+    /** One authorization per piece of work and connection in a snapshot read: every source of a capture asks again. */
+    private final SnapshotMemo<AccessKey, Access> accesses = new SnapshotMemo<>();
 
     /** The reviewed repository of pinned work, authorized for the workspace: what {@link #fetch} syncs. */
     public record Remote(RepositoryKey key, String cloneUrl, ScmTokenSource source, ScmCapturedWork work) {}
@@ -75,6 +79,23 @@ public class ReviewRepositoryPreparer {
     }
 
     private Remote authorized(ItemSnapshot pinned, ScmCapturedWork work) {
+        var key = new AccessKey(
+                pinned.item().workspaceId(),
+                pinned.integration(),
+                work.sourceId(),
+                work.repositoryId(),
+                work.repositoryPath());
+        var granted = accesses.get(key, () -> access(pinned, work));
+        return new Remote(granted.key(), granted.cloneUrl(), granted.source(), work);
+    }
+
+    /** Everything {@link #access} reads from its arguments, so two equal keys read the same rows. */
+    private record AccessKey(
+            long workspaceId, IntegrationRef integration, long sourceId, long repositoryId, String repositoryPath) {}
+
+    private record Access(RepositoryKey key, String cloneUrl, ScmTokenSource source) {}
+
+    private Access access(ItemSnapshot pinned, ScmCapturedWork work) {
         long workspaceId = pinned.item().workspaceId();
         var pullRequest = pullRequests
                 .findByIdWithAuthorAndRepository(work.sourceId())
@@ -113,7 +134,7 @@ public class ReviewRepositoryPreparer {
         String cloneUrl = GitCloneUrl.of(serverUrl, work.repositoryPath())
                 .orElseThrow(() -> new ItemCaptureException(
                         ItemCaptureCode.CAPTURE_FAILED, "Repository has an invalid provider path"));
-        return new Remote(new RepositoryKey(workspaceId, work.repositoryId()), cloneUrl, source, work);
+        return new Access(new RepositoryKey(workspaceId, work.repositoryId()), cloneUrl, source);
     }
 
     /**

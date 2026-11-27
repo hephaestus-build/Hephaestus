@@ -45,6 +45,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -78,7 +79,7 @@ public class PracticeStandingService {
     private final PracticeTrendService practiceTrendService;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = PageReadSnapshot.TIMEOUT_SECONDS)
     public List<PracticeStandingDTO> getStandings(Long workspaceId) {
         return getStandingSnapshot(workspaceId).dtos();
     }

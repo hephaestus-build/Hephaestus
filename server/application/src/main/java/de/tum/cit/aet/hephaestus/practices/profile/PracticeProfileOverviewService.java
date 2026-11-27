@@ -25,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
+import de.tum.cit.aet.hephaestus.practices.result.PageReadSnapshot;
 
 @Service
 @ConditionalOnServerRole
@@ -43,6 +45,7 @@ public class PracticeProfileOverviewService {
     private final ProductReferenceQuery references;
     private final ReviewProgressService progress;
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = PageReadSnapshot.TIMEOUT_SECONDS)
     public PracticeProfileOverviewDTO getOverview(WorkspaceContext ws) {
         return visibility.asOneRead(ws.id(), () -> readOverview(ws));
     }
