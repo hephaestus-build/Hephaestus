@@ -190,6 +190,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -911,6 +915,55 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // A Slack disconnect erases only the provider events of the workspace.
             transactions.executeWithoutResult(status -> workspaceErasure.eraseWorkspace(review.workspaceId()));
             assertThat(mentorEvents(review)).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldCommitBothOfTwoSimultaneousReviewSealedEventsOfOneReview() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            var digest = "a".repeat(64);
+            var sealed = new MentorReviewIntake.SealedReview(
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.identity().jobId(),
+                    review.developerId(),
+                    digest,
+                    Instant.now());
+            try (var executor = Executors.newFixedThreadPool(2)) {
+                for (int round = 0; round < 200; round++) {
+                    var barrier = new CyclicBarrier(2);
+                    Callable<MentorReviewIntake.Outcome> seal = () -> Objects.requireNonNull(transactions.execute(status -> {
+                        arrive(barrier);
+                        return mentorIntake.admit(sealed);
+                    }));
+                    var first = executor.submit(seal);
+                    var second = executor.submit(seal);
+                    var outcomes = List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+                    assertThat(outcomes).as("round %d", round).hasSize(2).allSatisfy(outcome -> assertThat(outcome)
+                            .isInstanceOf(MentorReviewIntake.Outcome.Admitted.class));
+                    assertThat(outcomes.getFirst()).as("round %d", round).isEqualTo(outcomes.getLast());
+                    assertThat(mentorEvents(review)).as("round %d", round).hasSize(1);
+                    transactions.executeWithoutResult(status -> {
+                        owners.ofJob(review.developerId());
+                        jdbc.update(
+                                "DELETE FROM mentor_event WHERE workspace_id=? AND review_id=?",
+                                review.workspaceId(),
+                                review.reviewId());
+                    });
+                }
+            }
+        }
+    }
+
+    private static void arrive(CyclicBarrier barrier) {
+        try {
+            barrier.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (BrokenBarrierException | TimeoutException e) {
+            throw new IllegalStateException(e);
         }
     }
 

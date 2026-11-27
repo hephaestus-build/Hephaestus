@@ -10,7 +10,11 @@ import org.springframework.data.repository.query.Param;
 
 /** The sealed review events. Row-level security scopes each statement to the account bound to the transaction. */
 interface MentorEventRepository extends Repository<MentorEvent, UUID> {
-    /** @return 1 when this call wrote the review's event, 0 when the review has one */
+    /**
+     * A second seal of the review waits for the first one's commit on the review key, then writes nothing.
+     *
+     * @return 1 when this call wrote the review's event, 0 when the review has one
+     */
     @Modifying
     @Query(value = """
             INSERT INTO mentor_event (id, account_id, kind, disposition, workspace_id, review_id, job_id,

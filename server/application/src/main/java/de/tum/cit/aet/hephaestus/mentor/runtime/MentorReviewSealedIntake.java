@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +45,9 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
         if (!memberships.holdActiveVisibleMember(sealed.workspaceId(), account))
             return new Outcome.Refused(Refusal.AUTHOR_NOT_MEMBER);
         owners.ofJob(account);
-        UUID id = id(sealed.workspaceId(), sealed.reviewId());
+        // A random id keeps the review key the only unique key that two seals of one review can meet, so the
+        // targeted conflict absorbs every race between them, and a provider event's keys are never absorbed.
+        UUID id = UUID.randomUUID();
         if (events.insertReviewSealed(
                         id,
                         account,
@@ -63,11 +64,5 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
                         sealed.workspaceId(), sealed.reviewId(), account, sealed.jobId(), sealed.admissionDigest())
                 .<Outcome>map(existing -> new Outcome.Admitted(UUID.fromString(existing)))
                 .orElse(new Outcome.Refused(Refusal.EVENT_MISMATCH));
-    }
-
-    /** The review names its event, so every seal of it names the same row. */
-    static UUID id(long workspaceId, UUID reviewId) {
-        return UUID.nameUUIDFromBytes(
-                ("review-sealed:" + workspaceId + ":" + reviewId).getBytes(StandardCharsets.UTF_8));
     }
 }
