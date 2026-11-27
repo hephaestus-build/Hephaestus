@@ -33,6 +33,7 @@
             "integration.core::items",
             "integration.core::review-metrics",
             "integration.core::spi",
+            "mentor::spi",
             "conversation",
             "conversation::spi",
             "practices",

@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -265,7 +266,11 @@ public class WorkPlaceHandoffEnrolment {
                         .jobId(job.getId())
                         .itemId(review.item().itemId())
                         .itemVersion(version == null ? null : version.value())
-                        .producer(WorkPlaceHandoffRow.Producer.LEGACY)
+                        // A new producer leaves the copy on the work to a composer on the work place.
+                        .producer(
+                                job.getFeedbackProducer() == FeedbackProducer.LEGACY
+                                        ? WorkPlaceHandoffRow.Producer.LEGACY
+                                        : WorkPlaceHandoffRow.Producer.COMPOSER)
                         .payload(copy.payload())
                         .payloadDigest(copy.digest())
                         .expiresAt(copy.expiresAt())

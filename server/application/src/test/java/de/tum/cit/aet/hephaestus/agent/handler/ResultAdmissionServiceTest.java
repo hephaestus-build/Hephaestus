@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
+import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -178,7 +180,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         mapper,
                         new PracticeCatalogInjector(mapper),
                         jobs,
-                        events),
+                        events,
+                        legacyProducer()),
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
@@ -956,5 +959,15 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         lenient().when(candidate.practiceId()).thenReturn(practiceId);
         lenient().when(candidate.outcome()).thenReturn(outcome);
         return new AdmittedResultSnapshot(id, candidate, List.of());
+    }
+
+    /** The seal chooses no new producer here: the gate is closed by default. */
+    static FeedbackProducerSelection legacyProducer() {
+        var producers = mock(FeedbackProducerSelection.class);
+        lenient()
+                .when(producers.choose(any(), any(), any()))
+                .thenReturn(new FeedbackProducerSelection.Choice(
+                        FeedbackProducer.LEGACY, FeedbackProducerReason.GATE_CLOSED));
+        return producers;
     }
 }

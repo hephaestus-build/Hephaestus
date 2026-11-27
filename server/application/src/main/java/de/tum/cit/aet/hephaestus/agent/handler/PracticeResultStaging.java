@@ -57,6 +57,7 @@ public class PracticeResultStaging {
     private final PracticeCatalogInjector catalog;
     private final ReviewJobRepository jobs;
     private final ApplicationEventPublisher events;
+    private final FeedbackProducerSelection producers;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public StageResponseDTO stage(
@@ -182,11 +183,17 @@ public class PracticeResultStaging {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void finishSeal(AdmissionIdentity identity, ReviewJob job, String digest, List<StagedPractice> staged) {
+        var review = assignments.review(job);
+        boolean handsOff = review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL;
+        // The producer is chosen before the seal keeps any input, so a later unit can keep less for a new producer.
+        if (handsOff) {
+            var choice = producers.choose(job, review, digest);
+            job.setFeedbackProducer(choice.producer());
+            job.setFeedbackProducerReason(choice.reason());
+        }
         retainSealBasis(identity, job, digest, staged);
         jobs.saveAndFlush(job);
-        var review = assignments.review(job);
-        if (review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL)
-            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
+        if (handsOff) events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
     }
 
     private void retainSealBasis(
