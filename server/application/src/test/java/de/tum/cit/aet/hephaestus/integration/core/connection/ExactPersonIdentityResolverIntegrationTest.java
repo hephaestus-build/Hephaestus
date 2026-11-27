@@ -122,6 +122,40 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldReportInvalidTeamKeyWhenSuppliedProviderCommitsAfterListRead() {
+        long providerId =
+                Objects.requireNonNull(jdbc.queryForObject("SELECT nextval('git_provider_id_seq')", Long.class));
+        String serverUrl = "https://" + UUID.randomUUID() + ".example.com";
+        var writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var reader = new TransactionTemplate(transactions);
+        reader.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        var orderedJdbc = new JdbcTemplate(Objects.requireNonNull(jdbc.getDataSource())) {
+            @Override
+            public <T extends @Nullable Object> List<T> query(String sql, RowMapper<T> rowMapper) {
+                List<T> rows = super.query(sql, rowMapper);
+                if (sql.contains("FROM identity_provider ORDER BY")) {
+                    writer.executeWithoutResult(status -> jdbc.update(
+                            "INSERT INTO identity_provider (id, type, server_url) VALUES (?, 'GITLAB', ?)",
+                            providerId,
+                            serverUrl));
+                }
+                return rows;
+            }
+        };
+        var beans = new StaticListableBeanFactory();
+        var resolverAtReadCommitted = new ExactPersonIdentityResolver(
+                orderedJdbc, beans.getBeanProvider(PersonSourceIdentityContributor.class), List.of());
+        var supplied = new PersonIdentity(providerId, "42", "team-1");
+
+        assertThatThrownBy(() -> reader.execute(status -> resolverAtReadCommitted.resolve(null, List.of(supplied))))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        failure -> assertThat(failure.getReason())
+                                .isEqualTo("Only Slack and Outline identities accept a native workspace id"));
+    }
+
+    @Test
     void shouldResolveDeclaredSourceBucketsWithoutKnowingTheContributorsItemKinds() {
         var account = accounts.saveAndFlush(new Account("scope-" + UUID.randomUUID()));
         var beans = new StaticListableBeanFactory();
