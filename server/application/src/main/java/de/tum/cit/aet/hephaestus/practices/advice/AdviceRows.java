@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceRef;
 import de.tum.cit.aet.hephaestus.practices.spi.RetireAdvice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviseAdvice;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +37,7 @@ public class AdviceRows {
     private final PracticeAdviceRevisionRepository revisions;
     private final PracticeAdviceSourceRepository sources;
     private final PracticeAdviceReceiptRepository receipts;
+    private final EntityManager entities;
 
     /** The live observations among {@code ids}, each key-share locked in id order. */
     public Map<UUID, Result> shareObservations(long workspaceId, List<UUID> ids) {
@@ -55,8 +57,15 @@ public class AdviceRows {
                 .collect(Collectors.toMap(Problem::getId, Function.identity()));
     }
 
+    /**
+     * Locks the entry and reads it as it is now. The native lock returns the instance that this transaction may already
+     * hold, from an earlier read or before a native update, so it is refreshed under the lock: a version check or a
+     * dismissal check never runs on a stale copy.
+     */
     public Optional<PracticeAdvice> lockEntry(long workspaceId, long accountId, long practiceId) {
-        return entries.lockEntry(workspaceId, accountId, practiceId);
+        var entry = entries.lockEntry(workspaceId, accountId, practiceId);
+        entry.ifPresent(entities::refresh);
+        return entry;
     }
 
     /** Whether this write created the entry, at version 0. */

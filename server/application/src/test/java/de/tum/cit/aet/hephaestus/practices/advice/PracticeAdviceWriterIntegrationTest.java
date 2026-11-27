@@ -61,6 +61,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** PRACTICE-ADVICE table A rows 4 to 12, on the migrated schema. Rows 1 to 3: {@link PracticeAdviceWriterAdmissionTest}. */
@@ -98,6 +100,12 @@ class PracticeAdviceWriterIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AdviceRows rows;
+
+    @Autowired
+    private PracticeAdviceRepository entries;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private IdentityRepository identities;
@@ -308,6 +316,57 @@ class PracticeAdviceWriterIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("RETIRED:RESOLVED:true");
         assertThat(receipts(written.adviceId()))
                 .containsOnly(Map.entry(first.getReviewId(), "REVISE:1"), Map.entry(later.getReviewId(), "RETIRE:2"));
+    }
+
+    @Test
+    void shouldRefuseAStaleRetireInTheSameTransaction() {
+        Result first = observed(scenario, hoursAgo(3));
+        revise(first.getReviewId(), null, TEXT, List.of(ref(first, null)), List.of());
+        UUID review = observed(scenario, hoursAgo(2)).getReviewId();
+        UUID otherReview = observed(scenario, hoursAgo(1)).getReviewId();
+
+        transactions.executeWithoutResult(status -> {
+            assertThat(retire(review, 1)).isInstanceOf(Written.class);
+            assertThat(retire(otherReview, 1)).isEqualTo(refused(AdviceRefusal.VERSION_MOVED));
+        });
+        assertThat(jdbc.sql("SELECT version FROM practice_advice")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldSeeADismissalThatCommittedAfterThisTransactionReadTheEntry() {
+        var dismissedWork = data.onOtherWork(scenario);
+        Result first = data.result(dismissedWork, ResultOutcome.NOT_MET, hoursAgo(3));
+        var written = (Written) revise(first.getReviewId(), null, TEXT, List.of(ref(first, null)), List.of());
+        data.end(first, hoursAgo(1));
+        Result again =
+                data.result(dismissedWork, ResultOutcome.NOT_MET, Instant.now().minusSeconds(60));
+        var separate = new TransactionTemplate(transactionManager);
+        separate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        var write = transactions.execute(status -> {
+            // As the mentor's prior read does: the entry is now in this transaction, without a dismissal.
+            assertThat(entries.findByWorkspaceIdAndPersonAccountIdAndPracticeId(ws, owner, practice))
+                    .hasValueSatisfying(
+                            entry -> assertThat(entry.getDismissedAt()).isNull());
+            separate.executeWithoutResult(inner -> jdbc.sql(
+                            "UPDATE practice_advice SET dismissed_at=:at, dismissed_items=ARRAY[:item]::bigint[]"
+                                    + " WHERE id=:id")
+                    .param("at", Timestamp.from(hoursAgo(2)))
+                    .param("item", dismissedWork.item().getId())
+                    .param("id", written.adviceId())
+                    .update());
+            return writer.revise(new ReviseAdvice(
+                    ws, owner, practice, again.getReviewId(), 1L, TEXT, List.of(ref(again, null)), List.of()));
+        });
+
+        assertThat(write).isEqualTo(refused(AdviceRefusal.OWNER_DISMISSED));
+        assertThat(jdbc.sql("SELECT dismissed_at IS NOT NULL FROM practice_advice")
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
     }
 
     private AdviceWrite revise(

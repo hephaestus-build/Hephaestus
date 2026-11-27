@@ -10,6 +10,10 @@ import org.springframework.data.repository.query.Param;
 /** Advice entries. Every write locks its entry first and raises {@code version} by one. */
 public interface PracticeAdviceRepository extends JpaRepository<PracticeAdvice, UUID> {
 
+    /** The entry as this transaction reads it, without a lock. */
+    Optional<PracticeAdvice> findByWorkspaceIdAndPersonAccountIdAndPracticeId(
+            long workspaceId, long personAccountId, long practiceId);
+
     @Query(
             value = "SELECT a.* FROM practice_advice a WHERE a.workspace_id=:workspaceId"
                     + " AND a.person_account_id=:accountId AND a.practice_id=:practiceId FOR UPDATE",

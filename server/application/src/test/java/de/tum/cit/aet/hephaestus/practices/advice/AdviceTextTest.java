@@ -48,7 +48,9 @@ class AdviceTextTest extends BaseUnitTest {
                 "Three merge requests had no description.",
                 "Several of your PRs lack tests.",
                 "Across multiple reviews the rollback was missing.",
-                "Two issues had no acceptance criteria."
+                "Two issues had no acceptance criteria.",
+                "You skipped tests in 2 recent pull requests.",
+                "Eleven pull requests had no tests."
             })
     void shouldRefuseACountOfWork(String text) {
         assertThat(AdviceText.admits(text)).isFalse();
