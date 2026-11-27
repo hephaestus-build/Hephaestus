@@ -155,3 +155,56 @@ export const PhoneBusyWithLongPage: Story = {
 	decorators: [PhonePanel],
 	play: keepsControlsApart("From Practice review settings of the payments workspace"),
 };
+
+/** The private conversation says, for as long as the composer shows, that only the person reads it. */
+export const PrivateAudience: Story = {
+	args: { audience: { kind: "PRIVATE" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Only you")).toBeVisible();
+		await expect(
+			canvas.getByRole("textbox", { name: "Message Hephaestus" }),
+		).toHaveAccessibleDescription(/Only you/u);
+	},
+};
+
+/** A team place thread names its team as the audience. */
+export const TeamAudience: Story = {
+	args: { label: "Message Team Wayfinding", audience: { kind: "TEAM", teamName: "Wayfinding" } },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("textbox", { name: "Message Team Wayfinding" }),
+		).toHaveAccessibleDescription(/Team Wayfinding/u);
+	},
+};
+
+/**
+ * Each audience has its own composer and its own draft. Text written to the team stays in the team's draft, the
+ * private draft stays empty, and switching back restores each one in its own place. Nothing is sent.
+ */
+export const DraftsStayWithTheirAudience: Story = {
+	render: (args) => (
+		<div className="flex flex-col gap-4">
+			<ConversationComposer
+				{...args}
+				label="Message Team Wayfinding"
+				audience={{ kind: "TEAM", teamName: "Wayfinding" }}
+				draftKey="story:team:wayfinding:thread:1"
+			/>
+			<ConversationComposer
+				{...args}
+				label="Ask privately"
+				audience={{ kind: "PRIVATE" }}
+				draftKey="story:main"
+			/>
+		</div>
+	),
+	play: async ({ args, canvas, userEvent }) => {
+		const team = canvas.getByRole("textbox", { name: "Message Team Wayfinding" });
+		const own = canvas.getByRole("textbox", { name: "Ask privately" });
+		await userEvent.type(team, "Which need first?");
+		await userEvent.type(own, "Am I reading this observation right?");
+		await expect(team).toHaveValue("Which need first?");
+		await expect(own).toHaveValue("Am I reading this observation right?");
+		await expect(args.onSend).not.toHaveBeenCalled();
+	},
+};
