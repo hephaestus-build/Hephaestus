@@ -89,7 +89,7 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
    - One review writes at most one revision to an entry. A retry with the same content returns the first result.
 2. **A revision holds references to evidence, never copies.**
    - The sources of a revision are the observations that the model saw for it.
-   - They also include every source of each earlier advice revision that the model saw.
+   - The model never sees earlier advice text. Each revision comes from current evidence only.
    - So the sources name every observation behind the text, and no revision names another revision.
    - A citation is a source that the text relies on. A revision cites at least one observation of its practice.
    - Every source belongs to the same developer and workspace as its entry. Foreign keys enforce this.
@@ -111,7 +111,8 @@ The product says "Advice from Hephaestus". The code uses `PracticeAdvice`.
    - Each transaction that deletes an observation first removes the text of each revision with that source.
    - This applies to erasure, source withdrawal and retention.
    - The update reads the sources present at delete time. It also reaches revisions written after an erasure was admitted.
-   - A write that uses a removed revision or a deleted observation is refused.
+   - A write that uses a deleted observation is refused.
+   - Each delete path redacts in an earlier release than any code that can write advice.
    - A stale revision is never shown, exported with text, or given to the model as earlier advice.
    - The read also hides a revision when one of its sources is gone.
    - An older revision never replaces a hidden latest revision.
@@ -153,9 +154,9 @@ Not enforced. The mentor's units RV1 to RV3 add these checks beside the code, an
 - A composition already started before the flip delivers once under its key. The mentor never acts on that review.
 - An update and a retire leave every observation, problem, evidence and feedback row byte-identical.
 - Advice from one review shows no recurrence claim. Two items show a count that the read computes from rows.
-- An erased source removes the text of every revision with that source, also through earlier advice that the model saw.
+- An erased source removes the text of every revision with that source.
 - A revision written after the erasure was admitted, from evidence that the erasure deletes, is also removed.
-- A write that uses a revision removed during the model call is refused.
+- The read for the mentor never returns advice text.
 - Retention removes the text of a revision before it deletes the revision's sources.
 - A write that cites another developer's observation or an erased observation is refused and writes nothing.
 - A write against a newer revision is refused. A retry for the same review writes one revision.
