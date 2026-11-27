@@ -93,23 +93,12 @@ public class ProviderEventStore {
     public int store(List<Arrival> arrivals) {
         int stored = 0;
         for (Arrival arrival : arrivals) {
-            stored += events.store(row(arrival, mapper));
+            stored += events.store(ProviderEventIntake.row(arrival, mapper));
         }
         if (stored > 0) {
             notifications.queuedAfterCommit();
         }
         return stored;
-    }
-
-    static ProviderEventRepository.NewEvent row(Arrival arrival, ObjectMapper mapper) {
-        return new ProviderEventRepository.NewEvent(
-                arrival.workspaceId(),
-                arrival.provider(),
-                arrival.subject(),
-                scopeKey(arrival.workspaceId(), arrival.subject()),
-                arrival.deliveryKey(),
-                mapper.writeValueAsString(arrival.headers()),
-                arrival.payload());
     }
 
     /** Bounds each later statement of the caller's transaction, so a blocked database fails it instead of holding it. */

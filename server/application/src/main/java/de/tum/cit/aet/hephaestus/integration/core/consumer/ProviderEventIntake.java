@@ -26,7 +26,8 @@ public class ProviderEventIntake {
     public Optional<Handled> storeHandled(long workspaceId, Arrival arrival) {
         if (!Long.valueOf(workspaceId).equals(arrival.workspaceId()))
             throw new IllegalArgumentException("Arrival must match the verified workspace");
-        return events.storeHandled(ProviderEventStore.row(arrival, mapper)).map(receipt -> new Handled(receipt.getId(), receipt.getReceivedAt()));
+        return events.storeHandled(row(arrival, mapper))
+                .map(receipt -> new Handled(receipt.getId(), receipt.getReceivedAt()));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -39,4 +40,14 @@ public class ProviderEventIntake {
         events.boundLocks(timeout.toMillis() + "ms");
     }
 
+    static ProviderEventRepository.NewEvent row(Arrival arrival, ObjectMapper mapper) {
+        return new ProviderEventRepository.NewEvent(
+                arrival.workspaceId(),
+                arrival.provider(),
+                arrival.subject(),
+                ProviderEventStore.scopeKey(arrival.workspaceId(), arrival.subject()),
+                arrival.deliveryKey(),
+                mapper.writeValueAsString(arrival.headers()),
+                arrival.payload());
+    }
 }
