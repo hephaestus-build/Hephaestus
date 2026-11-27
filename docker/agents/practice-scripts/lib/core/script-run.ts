@@ -166,6 +166,16 @@ async function stopScript(
 	return null;
 }
 
+/** The host's last transition for one program. These codes contain no program data. */
+export type ProgramStep =
+	| "start_child"
+	| "await_meta"
+	| "run_child"
+	| "answer_read"
+	| "hand_off_review"
+	| "stop_child"
+	| "drain_requests";
+
 /** What the host gives one practice's program. */
 export interface ProgramServices {
 	/** Starts the program's process. */
@@ -175,6 +185,7 @@ export interface ProgramServices {
 	review: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
 	signal: AbortSignal;
 	log: (line: string) => void;
+	step?: (step: ProgramStep) => void;
 }
 
 export interface ProgramExecution {
@@ -261,6 +272,7 @@ export async function runCustomProgram(
 	// Its own file and the toolkit: another practice's program and inputs stay out of reach.
 	const staged = path.dirname(path.dirname(modulePath));
 	const readable = readableRoots([modulePath, path.join(staged, "lib"), path.join(staged, "kits")]);
+	services.step?.("start_child");
 	const child = services.start({
 		execArgv: [
 			"--permission",
@@ -298,6 +310,7 @@ export async function runCustomProgram(
 	const stopChild = () => {
 		if (!stopping) {
 			stopping = true;
+			services.step?.("stop_child");
 			void (async () => {
 				processDone.resolve(await stopScript(child, processClosed.promise));
 			})();
@@ -457,6 +470,7 @@ export async function runCustomProgram(
 			return;
 		}
 		metaAccepted = true;
+		if (open.size === 0) services.step?.("run_child");
 		child.send({ kind: "meta-accepted" } satisfies HostMessage);
 	};
 
@@ -467,14 +481,19 @@ export async function runCustomProgram(
 	) => {
 		try {
 			if (message.kind === "read") {
+				services.step?.("answer_read");
 				await answerRead(message, callSignal);
 			} else {
+				services.step?.("hand_off_review");
 				await answerReview(message, callSignal);
 			}
 		} catch (error) {
 			fail("error", `the host could not answer a ${message.kind} request: ${messageOf(error)}`);
 		} finally {
 			outstanding.delete(request);
+			if (message.kind === "read" && open.size === 0 && !stopping && !handOff.happened) {
+				services.step?.(metaAccepted ? "run_child" : "await_meta");
+			}
 		}
 	};
 
@@ -590,6 +609,7 @@ export async function runCustomProgram(
 		}
 	});
 	const deadline = setTimeout(() => sendAbort("deadline"), Math.max(0, job.deadline - Date.now()));
+	services.step?.("await_meta");
 	child.send({ kind: "job", job: { ...job, modulePath } } satisfies HostMessage);
 	const exit = await processDone.promise;
 	if (exit !== null && handOff.happened) {
@@ -607,6 +627,7 @@ export async function runCustomProgram(
 			calls,
 		};
 	}
+	services.step?.("drain_requests");
 	const drainTimer = new AbortController();
 	try {
 		const drained = await Promise.race([

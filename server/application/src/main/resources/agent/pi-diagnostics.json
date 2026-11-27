@@ -23,6 +23,7 @@
 		"practice.oversized",
 		"practice.program_finished",
 		"practice.program_log",
+		"practice.program_step",
 		"practice.result_refused",
 		"practice.staging_failed",
 		"practice.unsubmitted",
@@ -138,6 +139,15 @@
 		"practice": "count",
 		"practices": "count",
 		"program": ["built_in", "custom"],
+		"program_step": [
+			"answer_read",
+			"await_meta",
+			"drain_requests",
+			"hand_off_review",
+			"run_child",
+			"start_child",
+			"stop_child"
+		],
 		"program_stop": [
 			"budget",
 			"cancelled",

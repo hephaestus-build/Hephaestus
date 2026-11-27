@@ -363,7 +363,10 @@ if (scenario !== undefined && scenario !== "") {
 							if (value.kind === "job") {
 								now += 301_000;
 								record("program:started");
-								queueMicrotask(() => message(JSON.stringify({ kind: "meta", meta: {} })));
+								queueMicrotask(() => {
+									message(JSON.stringify({ kind: "meta", meta: {} }));
+									message(JSON.stringify({ kind: "log", text: "sk-orchestration-secret" }));
+								});
 								guard = setTimeout(() => {
 									record("program:no-abort");
 									close();
@@ -1186,7 +1189,7 @@ if (scenario !== undefined && scenario !== "") {
 										});
 										await assert.rejects(tool("submit_result").execute("refused", {}));
 										record("answered-refusal");
-									} else if (mode === "stored-error") {
+									} else if (mode === "stored-error" || mode === "stored-stall") {
 										await tool("submit_result").execute(
 											"stored",
 											notMet("Submitted before the provider failed"),
@@ -2258,6 +2261,7 @@ if (scenario !== undefined && scenario !== "") {
 		"provider-reply-blank-error",
 		"provider-reply-abort-only",
 		"provider-reply-stored-error",
+		"provider-reply-stored-stall",
 		"batch",
 		"replacement-witness",
 		"comment-undecided",
@@ -2369,6 +2373,7 @@ if (scenario !== undefined && scenario !== "") {
 					"does not count blank text on a provider error as a received reply",
 				"provider-reply-abort-only": "does not count an empty abort as a received reply",
 				"provider-reply-stored-error": "admits a stored result despite a later provider error",
+				"provider-reply-stored-stall": "admits a stored result despite a later session stall",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
@@ -3293,8 +3298,12 @@ export default definePracticeScript({
 						case "provider-reply-partial-abort":
 						case "provider-reply-blank-error":
 						case "provider-reply-abort-only":
-						case "provider-reply-stored-error": {
-							const stored = stage === "provider-reply-stored-error";
+						case "provider-reply-stored-error":
+						case "provider-reply-stored-stall": {
+							const stored = stage.startsWith("provider-reply-stored-");
+							if (stage === "provider-reply-stored-stall") {
+								assert.match(child.stderr, /turn\.stopped .*stopped_by=stall step=prompt/u);
+							}
 							const unanswered = [
 								"provider-reply-unanswered-stall",
 								"provider-reply-blank-error",
@@ -3338,7 +3347,15 @@ export default definePracticeScript({
 							]);
 							assert.equal(child.status, 78, child.stderr);
 							assert.equal(
-								child.stderr.match(/turn\.stopped .*stopped_by=stall step=practice_program/gu)?.length,
+								child.stderr.match(/turn\.stopped .*stopped_by=stall step=practice_program program_step=run_child/gu)?.length,
+								2,
+							);
+							assert.equal(
+								child.stderr.match(/turn\.finished .*stopped_by=stall program_step=run_child/gu)?.length,
+								2,
+							);
+							assert.equal(
+								child.stderr.match(/practice\.program_step .*program_step=drain_requests/gu)?.length,
 								2,
 							);
 							assert.deepEqual(
