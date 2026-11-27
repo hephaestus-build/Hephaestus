@@ -20,15 +20,9 @@ import tools.jackson.databind.ObjectMapper;
     "slack_message",
     "slack_participant_consent",
     "slack_channel_consent_event",
-    "slack_monitored_channel",
-    "slack_dm_producer_pin"
+    "slack_monitored_channel"
 })
-@ErasesColumns({
-    "slack_message.author_slack_user_id",
-    "slack_participant_consent.slack_user_id",
-    "slack_dm_producer_pin.author",
-    "slack_dm_producer_pin.account_id"
-})
+@ErasesColumns({"slack_message.author_slack_user_id", "slack_participant_consent.slack_user_id"})
 public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -37,16 +31,6 @@ public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new SlackThreadPersonDataContributor(jdbc, mapper),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
-                        "slack_dm_producer_pin",
-                        "slack_dm_producer_pin",
-                        "t.account_id = :account",
-                        "id,workspace_id,connection_id,team_id,channel_id,source_ts,thread_root,author,account_id,producer",
-                        "id",
-                        "",
-                        -60),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

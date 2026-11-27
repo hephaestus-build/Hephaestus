@@ -219,6 +219,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * connection is installed on, and the repository that a workspace monitors. It is a person's login when the account
      * is a personal one. Person export lists it, and it stays while the source exists.
      */
+    // These tables remain empty until the release that registers their account-erasure store.
+    private static final Set<String> REGISTERED_NEXT_RELEASE = Set.of("slack_dm_producer_pin");
+
     private static final Set<String> SOURCE_NAMESPACE =
             Set.of("connection.display_name", "repository_to_monitor.name_with_owner");
 
@@ -328,6 +331,13 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(declared).doesNotContain("personal_goal");
         assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
                 .contains("personal_goal.account_id");
+        required.removeAll(REGISTERED_NEXT_RELEASE);
+        assertThat(declared)
+                .as("a registered table leaves REGISTERED_NEXT_RELEASE")
+                .doesNotContainAnyElementsOf(REGISTERED_NEXT_RELEASE);
+        assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE, registry.stores()))
+                .as("a table covered by a registered store leaves REGISTERED_NEXT_RELEASE")
+                .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE);
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);

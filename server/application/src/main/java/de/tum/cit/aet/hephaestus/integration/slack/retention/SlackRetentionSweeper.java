@@ -22,7 +22,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Bounded-retention sweep for ingested Slack messages.
+ * Bounded-retention sweep for ingested Slack messages and DM producer pins.
  *
  * <p>Enumerates every workspace that currently holds at least one {@code slack_message} row, resolves
  * that workspace's retention window (its {@link ConnectionConfig.SlackConfig#retentionDaysOrDefault()},
@@ -70,7 +70,7 @@ public class SlackRetentionSweeper implements CopyingSourceRetention {
     }
 
     /**
-     * Run the sweep immediately across every workspace with ingested Slack messages. Exposed (rather
+     * Run the sweep immediately across workspaces with Slack messages or DM producer pins. Exposed (rather
      * than invoked only via the cron) so callers and integration tests can drive it deterministically.
      *
      * @return the total number of {@code slack_message} rows deleted across all workspaces

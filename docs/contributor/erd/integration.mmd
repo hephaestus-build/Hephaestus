@@ -82,7 +82,6 @@ erDiagram
         BIGINT lifecycle_generation "NOT NULL"
         BIGINT provider_repair_capture_generation
         VARCHAR(512) outline_origin
-        TIMESTAMPTZ slack_dm_pin_epoch "NOT NULL"
     }
 
     ConnectionActivity {
@@ -586,19 +585,6 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
-    SlackDmProducerPin {
-        BIGINT id PK
-        BIGINT workspace_id FK,UK "NOT NULL"
-        BIGINT connection_id FK,UK "NOT NULL"
-        VARCHAR(64) team_id "NOT NULL"
-        VARCHAR(64) channel_id UK "NOT NULL"
-        VARCHAR(17) source_ts UK "NOT NULL"
-        VARCHAR(17) thread_root
-        VARCHAR(64) author
-        BIGINT account_id
-        VARCHAR(16) producer "NOT NULL"
-    }
-
     SlackMessage {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -819,7 +805,6 @@ erDiagram
     IdentityProvider ||--o{ Repository : references
     Account ||--o{ SlackChannelConsentEvent : has
     Workspace ||--o{ SlackChannelConsentEvent : has
-    Connection ||--o{ SlackDmProducerPin : has
     Membership ||--o{ SlackMessage : references
     Workspace ||--o{ SlackMessage : has
     Workspace ||--o{ SlackMonitoredChannel : has

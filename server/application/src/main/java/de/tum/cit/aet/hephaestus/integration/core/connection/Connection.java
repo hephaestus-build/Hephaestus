@@ -132,9 +132,9 @@ public class Connection {
     private @Nullable Instant updatedAt;
 
     /** Deliveries older than the rollout of producer pins may already have used the legacy Slack consumer. */
-    @Column(name = "slack_dm_pin_epoch", nullable = false, updatable = false, insertable = false)
+    @Column(name = "slack_dm_pinning_started_at", nullable = false, updatable = false, insertable = false)
     @ColumnDefault("CURRENT_TIMESTAMP")
-    private @Nullable Instant slackDmPinEpoch;
+    private @Nullable Instant slackDmPinningStartedAt;
 
     @Version
     @Column(nullable = false)
@@ -149,8 +149,8 @@ public class Connection {
     @ColumnDefault("0")
     private long attentionRevision;
 
-    public @Nullable Instant getSlackDmPinEpoch() {
-        return slackDmPinEpoch;
+    public @Nullable Instant getSlackDmPinningStartedAt() {
+        return slackDmPinningStartedAt;
     }
 
     public @Nullable Problem getAttentionProblem() {
