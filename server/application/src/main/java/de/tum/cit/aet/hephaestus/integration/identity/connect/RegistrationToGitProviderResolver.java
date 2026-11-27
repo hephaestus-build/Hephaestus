@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.identity.connect;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.security.ProviderNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
@@ -94,7 +95,9 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         }
         return providers
                 .findById(gitProviderId)
-                .map(provider -> ScmOrigin.of(provider.serverUrl()).orElse(provider.serverUrl()))
+                // An OIDC issuer keeps its path, so two realms on one host stay apart.
+                .map(provider -> ProviderNamespace.of(provider.type().name(), provider.serverUrl())
+                        .orElse(provider.serverUrl()))
                 .orElse(null);
     }
 

@@ -1,0 +1,76 @@
+---
+title: Sign in with OpenID Connect
+description: Register a client at an OpenID Connect provider, such as a university single sign-on, and add it as a login provider.
+page_type: how-to
+---
+
+Add an OpenID Connect (OIDC) provider, such as a university or company single sign-on, so that people sign in with it.
+The sign-in page then offers **Continue with** the display name that you give the provider, for example **Continue with TUM Login**.
+The existing sign-in options stay.
+
+Hephaestus is not an identity server here. It sends people to the provider, then reads the provider's discovery document and validates the ID token that the provider returns.
+
+## Before you start
+
+- An installed instance that serves its host over HTTPS ([Install on Kubernetes](./kubernetes)).
+- Every server of the instance runs the release that adds OIDC sign-in. See [Upgrade](#upgrade).
+- The issuer of the provider, such as `https://login.example.org/realms/example`. Hephaestus reads `<issuer>/.well-known/openid-configuration`, and the document must name the same issuer.
+- The issuer, its token endpoint and its key set on a public HTTPS address. A provider on a private network needs the Git provider list, `hephaestus.scm.egress.private-hosts`, as [Admit a Git provider on a private network](./private-network#admit-a-git-provider-on-a-private-network) describes.
+- The instance admin role, and a recent sign-in.
+
+## Register the client at the provider
+
+Ask the provider's administrator for a client with these values:
+
+| Setting | Value |
+| --- | --- |
+| Client type | Confidential, with a client secret |
+| Client authentication | `client_secret_basic` |
+| Flow | Authorization code with PKCE `S256`. No implicit or password grant. |
+| Redirect URI | `https://<host>/api/login/oauth2/code/<registration-id>`, exactly, with no wildcard |
+| Scopes | `openid profile email` |
+| ID token claims | `sub`, and if possible `name`, `email` and `email_verified` |
+| Signature | RS256, ES256 or PS256 |
+
+- `<registration-id>` is the ID that you give the provider in Hephaestus, such as `tum`. You cannot change it later.
+- Hephaestus reads the claims from the ID token only. It calls no userinfo endpoint. A provider that sends `name` or `email` only from userinfo gives an account with the name `user-<sub>` and no email.
+- Ask whether `sub` stays the same for a person. Hephaestus keys each person on the issuer and `sub`. A provider that changes `sub`, or gives each client its own `sub`, gives the person a new account.
+- Receive the client secret through a secret channel, never in a chat.
+
+## Add the login provider
+
+1. Open **Instance administration → Login providers**, and select **Add provider**.
+2. Set **Provider type** to **OpenID Connect (single sign-on)**.
+3. Enter the **Registration ID**, such as `tum`, and the **Display name**, such as `TUM Login`.
+4. Enter the **Issuer URL**.
+5. Enter the client ID and the client secret.
+6. Leave **Scopes** blank to use `openid profile email`. Scopes must contain `openid`.
+7. Select **Add provider**.
+
+Hephaestus reads the discovery document before it saves the provider. If it cannot read the document, or the document names another issuer or an endpoint that is not HTTPS, it saves nothing and shows the reason.
+
+You cannot change the issuer of a saved provider. Each person's account is keyed on it. For another issuer, add another provider.
+
+## Check that it worked
+
+1. Open the sign-in page in a private browser window.
+2. Check that it shows **Continue with** the display name of the provider.
+3. Sign in with a test account of the provider.
+4. Open **User settings → Connected accounts**, and check that the provider is listed.
+
+If the button is missing, Hephaestus could not read the discovery document. The server log names the issuer with `auth.oidc`.
+
+## What people see
+
+- A person who signs in with the provider for the first time gets a new account. Hephaestus never joins two accounts by email.
+- A person who already has an account signs in as before, then connects the provider under **User settings → Connected accounts**. The sign-in page says so.
+- A person can disconnect the provider in the same place, unless it is their only sign-in method.
+- A first sign-in gives no workspace membership. A workspace admin invites the person, or the person uses a join link.
+
+## Upgrade
+
+The release before the one that adds OIDC sign-in reads OIDC providers and does not offer them.
+Upgrade to the OIDC release from that release only, with a rolling update.
+Add the provider after every server runs the new release.
+
+If you roll back to the release before, sessions and accounts stay. The sign-in page does not offer the provider, and a person whose only sign-in method is the provider cannot start a new sign-in until you upgrade again.

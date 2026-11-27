@@ -109,3 +109,46 @@ export const Edit: Story = {
 		await expect(screen.getByLabelText("Registration ID")).toBeDisabled();
 	},
 };
+
+const editingOidc: LoginProviderView = {
+	registrationId: "school",
+	type: "OIDC",
+	displayName: "School Login",
+	baseUrl: "https://login.school.test/realms/students",
+	scopes: "openid profile email",
+	enabled: true,
+	seededFromEnv: false,
+	redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/school",
+	createdAt: new Date("2026-11-27T00:00:00Z"),
+	updatedAt: new Date("2026-11-27T00:00:00Z"),
+};
+
+/** An OpenID Connect provider asks for its issuer and names the client settings to register. */
+export const CreateOpenIdConnect: Story = {
+	play: async () => {
+		await userEvent.click(await screen.findByRole("combobox", { name: "Provider type" }));
+		await userEvent.click(await screen.findByRole("option", { name: /OpenID Connect/iu }));
+
+		await expect(screen.getByLabelText("Issuer URL")).toBeEnabled();
+		screen.getByText(/PKCE \(S256\)/u);
+		await expect(screen.getByLabelText("Scopes")).toHaveAttribute(
+			"placeholder",
+			"openid profile email",
+		);
+	},
+};
+
+/** The issuer keys every identity that the provider signed in, so it cannot change. */
+export const EditOpenIdConnect: Story = {
+	args: { editing: editingOidc },
+	play: async ({ args }) => {
+		await expectSettledVisible(await screen.findByText("Edit login provider"));
+		await expect(screen.getByLabelText("Issuer URL")).toBeDisabled();
+		await userEvent.type(screen.getByLabelText("Display name"), " for students");
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		await expect(args.onUpdate).toHaveBeenCalledWith(
+			"school",
+			expect.objectContaining({ baseUrl: undefined }),
+		);
+	},
+};

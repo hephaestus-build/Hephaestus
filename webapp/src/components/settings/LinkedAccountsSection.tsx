@@ -46,16 +46,17 @@ const LINK_ONLY_PROVIDER_TYPES = new Set(["SLACK", "OUTLINE"]);
  * rather than derived from the link-only set: the server counts no other type, so an identity of a
  * type not listed here never holds the account's last sign-in.
  */
-const SIGN_IN_PROVIDER_TYPES = new Set(["GITHUB", "GITLAB"]);
+const SIGN_IN_PROVIDER_TYPES = new Set(["GITHUB", "GITLAB", "OIDC"]);
 
 const signsIn = (identity: IdentityView) =>
 	SIGN_IN_PROVIDER_TYPES.has(identity.providerType.toUpperCase());
 
 /**
  * Providers an instance can run more than one deployment of, each its own registration. An account
- * linked to one deployment is not linked to another, so these are matched by origin, not by type.
+ * linked to one deployment is not linked to another, so these are matched by origin, not by type. An
+ * OIDC provider is matched by its issuer, path included, which the server sends on both sides.
  */
-const PER_INSTANCE_PROVIDER_TYPES = new Set(["GITLAB", "OUTLINE"]);
+const PER_INSTANCE_PROVIDER_TYPES = new Set(["GITLAB", "OUTLINE", "OIDC"]);
 
 type LinkableProvider = IdentityProviderView & { registrationId: string };
 
@@ -197,7 +198,7 @@ export function LinkedAccountsSection({
 	);
 
 	const signInCount = identities.filter(signsIn).length;
-	// A GitHub or GitLab offered below would let the last one go; Slack and Outline would not.
+	// A GitHub, GitLab or OIDC provider offered below would let the last one go; Slack and Outline would not.
 	const canConnectSignIn = signInProviders.some(
 		(provider) =>
 			SIGN_IN_PROVIDER_TYPES.has(provider.providerType?.toUpperCase() ?? "") &&

@@ -46,6 +46,22 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName(
+            "an OIDC provider is its issuer with the path and no trailing slash, as its linked identities report it")
+    void oidcProviderIsItsIssuer() {
+        ClientRegistration reg = ClientRegistration.withRegistrationId("school")
+                .clientId("client")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("{baseUrl}/login/oauth2/code/school")
+                .authorizationUri("https://sso.example.org/auth")
+                .tokenUri("https://sso.example.org/token")
+                .issuerUri("https://login.example.org/realms/students/")
+                .build();
+        assertThat(IdentityProviderDiscoveryController.issuerOf(reg))
+                .isEqualTo("https://login.example.org/realms/students/");
+    }
+
+    @Test
     @DisplayName("GitLab.com (default port) has a port-less origin")
     void gitlabDotComDefaultPort() {
         ClientRegistration reg = registration("https://gitlab.com/oauth/authorize");

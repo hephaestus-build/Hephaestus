@@ -257,6 +257,58 @@ export const OneOutlineOfTwoConnected: Story = {
 	},
 };
 
+const schoolLogin: IdentityView = {
+	id: 5,
+	providerType: "OIDC",
+	subject: "3f6c2a1e-9b1d-4f0e-a2c4-5d6e7f8a9b0c",
+	displayName: "Ada Lovelace",
+};
+// Two realms on one host are two issuers, so the server sends each issuer with its path.
+const schoolLoginProvider: IdentityProviderView = {
+	registrationId: "school",
+	displayName: "School Login",
+	providerType: "OIDC",
+	baseUrl: "https://login.school.test/realms/students",
+};
+const staffLoginProvider: IdentityProviderView = {
+	registrationId: "school-staff",
+	displayName: "Staff Login",
+	providerType: "OIDC",
+	baseUrl: "https://login.school.test/realms/staff",
+};
+const schoolLoginLinked = { type: "OIDC", serverUrl: "https://login.school.test/realms/students" };
+
+/**
+ * Connected through single sign-on and GitHub. It is a sign-in method, so GitHub can go; the other
+ * realm on the same host is another issuer and stays offered.
+ */
+export const SingleSignOnBesideGitHub: Story = {
+	args: {
+		identities: [github, schoolLogin],
+		providers: [githubProvider, schoolLoginProvider, staffLoginProvider],
+		linkedProviders: [githubLinked, schoolLoginLinked],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Disconnect The Octocat" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Disconnect Ada Lovelace" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Connect Staff Login" })).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Connect School Login" })).toBeNull();
+	},
+};
+
+/** Single sign-on is the only way in, so it cannot be disconnected. */
+export const OnlySingleSignOn: Story = {
+	args: {
+		identities: [schoolLogin],
+		providers: [schoolLoginProvider],
+		linkedProviders: [schoolLoginLinked],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/only sign-in method/iu)).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Disconnect Ada Lovelace" })).toBeNull();
+	},
+};
+
 /** A disconnect is in flight — that row shows a spinner and the button is disabled. */
 export const Disconnecting: Story = {
 	args: { unlinkingId: 1 },

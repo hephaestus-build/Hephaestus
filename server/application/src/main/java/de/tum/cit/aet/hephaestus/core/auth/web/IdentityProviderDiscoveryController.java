@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ProviderNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -82,7 +83,7 @@ public class IdentityProviderDiscoveryController {
                     reg.getRegistrationId(),
                     reg.getClientName() != null ? reg.getClientName() : reg.getRegistrationId(),
                     type.name(),
-                    baseUrlOf(reg)));
+                    type == LoginProvider.ProviderType.OIDC ? issuerOf(reg) : baseUrlOf(reg)));
         }
         // Optional passwordless dev sign-in. Advertised ONLY when enabled (never in prod), so the SPA
         // login page renders a "Dev sign-in" affordance (username field → POST /auth/dev-login) instead
@@ -91,6 +92,12 @@ public class IdentityProviderDiscoveryController {
             views.add(new IdentityProviderViewDTO(DEV_REGISTRATION_ID, "Dev sign-in", DEV_PROVIDER_TYPE, ""));
         }
         return ResponseEntity.ok(views);
+    }
+
+    /** An OIDC provider is its issuer, path included, as the account's linked identity reports it. */
+    static String issuerOf(ClientRegistration reg) {
+        return ProviderNamespace.of("OIDC", reg.getProviderDetails().getIssuerUri())
+                .orElse("");
     }
 
     /** The {@link ScmOrigin} of the authorization endpoint, so clients compare instances as plain strings. */
