@@ -136,7 +136,9 @@ Decisions 1 to 10 and 13 stay.
 
 - A `TEAM` seal writes one `REVIEW_SEALED` event under the team's key. Retries, delivery keys and readback follow ADR 0160 and [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md).
 - Practice Review still owns applicability, coverage, observations and the seal. The composer creates no evidence and changes no result.
-- The composer reads the item's sealed rows, its earlier review, the team's decisions and the team place. It never reads a personal record.
+- The composer reads the item's sealed rows, its earlier review, the team place and the team's current decisions and guidance. It never reads a personal record.
+- It reads an earlier review only if that review sealed after the latest current member joined. It reads team place discussion only from after that time.
+- Current decisions and guidance have their own reader rule. Every current member reads them, whatever their join date.
 - It writes team guidance and the team place only. It writes no work comment, contact or Slack message.
 - Team guidance takes the `TEAM` audience that ADR 0160 reserves. Only current members of that team read it (ADR 0162 decision 4).
 - Each read, send and model load checks current team membership. A non-member gets the same refusal as for a missing record.
@@ -191,3 +193,4 @@ Not enforced yet. Before the team mentor is enabled, tests must add these checks
 - Withdrawal hides the guidance and replies that cite the version.
 - A review that runs although a member refuses AI records `OBSERVATIONS` with its reason.
 - No team step writes to Slack.
+- After a member joins, a team composer request holds no discussion and no earlier review from before that time.
