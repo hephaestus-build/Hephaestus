@@ -33,7 +33,8 @@ class WorkspaceAgnosticRatchetTest extends HephaestusArchitectureTest {
     void shouldListEveryWorkspaceAgnosticBypass() throws IOException {
         var actual = new TreeSet<>(bypasses());
         var listed = new TreeSet<String>();
-        for (String line : Files.readAllLines(LIST)) if (!line.isBlank() && !line.startsWith("#")) listed.add(line.strip());
+        for (String line : Files.readAllLines(LIST))
+            if (!line.isBlank() && !line.startsWith("#")) listed.add(line.strip());
         var unlisted = new TreeSet<>(actual);
         unlisted.removeAll(listed);
         var stale = new TreeSet<>(listed);
@@ -43,8 +44,7 @@ class WorkspaceAgnosticRatchetTest extends HephaestusArchitectureTest {
                 .as(
                         "@WorkspaceAgnostic bypasses against %s. Add the line of a new bypass in the commit that adds it,"
                                 + " with its reason, and remove the line of one that went. Current bypasses:%n%s",
-                        LIST.getFileName(),
-                        String.join("\n", actual))
+                        LIST.getFileName(), String.join("\n", actual))
                 .isEqualTo(Map.of("unlisted", Set.of(), "stale", Set.of()));
     }
 
