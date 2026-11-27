@@ -105,7 +105,10 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
     If the person linked another Slack account after the reply, the reply is in an earlier DM of the bot.
     Hephaestus cannot list its earlier DMs, because it does not request the Slack scope `im:read`.
     If the named DM has no message with that `entry_id`, record `not found: possibly in the person's earlier DM`.
-    Do not record the copy as removed.
+    Write the reason beside it in the incident record.
+    The erasure dialog has no choice for this case.
+    When you tick its box to finish the erasure, Hephaestus stores the copy as removed.
+    Thus the incident record keeps the not-found result and its reason.
 12. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
 
 ## Delete each copy
