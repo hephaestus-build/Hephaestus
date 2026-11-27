@@ -14,7 +14,10 @@ class AdviceTextTest extends BaseUnitTest {
             strings = {
                 "Name the risk of the migration in the description, so a reviewer can check the rollback.",
                 "The two changes in this pull request share one test; split it so each failure points at one change.",
-                "Add a test for the empty list."
+                "Add a test for the empty list.",
+                "Add two tests before review.",
+                "Split it into two commits so each review reads one change.",
+                "One pull request is enough for this change."
             })
     void shouldAdmitAdviceAboutWhatOneReviewObserved(String text) {
         assertThat(AdviceText.admits(text)).isTrue();
@@ -50,7 +53,9 @@ class AdviceTextTest extends BaseUnitTest {
                 "Across multiple reviews the rollback was missing.",
                 "Two issues had no acceptance criteria.",
                 "You skipped tests in 2 recent pull requests.",
-                "Eleven pull requests had no tests."
+                "Eleven pull requests had no tests.",
+                "Two in-flight pull requests had no tests.",
+                "Four of your merge requests skipped the checklist."
             })
     void shouldRefuseACountOfWork(String text) {
         assertThat(AdviceText.admits(text)).isFalse();

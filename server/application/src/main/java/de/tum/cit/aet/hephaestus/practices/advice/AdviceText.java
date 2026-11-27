@@ -14,13 +14,17 @@ final class AdviceText {
             "\\b(again|every time|each time|repeatedly|recurring|patterns?|often|usually|consistently|you keep|keeps)\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
-    /** A number, up to two words, then work: "3 pull requests", "2 recent pull requests", "several of your PRs". */
+    /**
+     * A count of work: a number, then within two words a plural work noun, with no preposition between. A count of two
+     * or more takes the plural, so "two tests before review" names no count of work, and "two in-flight pull requests"
+     * does.
+     */
     private static final Pattern COUNT_OF_WORK = Pattern.compile(
             "\\b(\\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen"
                     + "|seventeen|eighteen|nineteen|twenty|dozens?|several|many|multiple|numerous|a few)\\s+"
-                    + "(?:(?!(?:in|on|for|from|this|that)\\b)\\w+\\s+){0,2}"
+                    + "(?:(?!(?:in|on|for|from|this|that|before|after|during|to|per|with)\\s)[\\w-]+\\s+){0,2}"
                     + "(?:of\\s+(?:your|the|these|those)\\s+)?"
-                    + "(pull requests?|merge requests?|PRs?|MRs?|issues?|reviews?)\\b",
+                    + "(pull requests|merge requests|PRs|MRs|issues|reviews)\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private AdviceText() {}
