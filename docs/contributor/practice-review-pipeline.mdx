@@ -785,6 +785,7 @@ The seal of an eligible review writes one `work_place_handoff` row in its own tr
 A review is eligible when it is an item review of a pull or merge request, not a trial and not a backfill.
 Its item must take a copy on the work, and at least one public result must be Not met.
 The row's key is the workspace and the review, so a repeated seal writes nothing.
+
 A second seal of the same review that races the first waits for its commit on that key, then commits and writes nothing.
 Only a database failure undoes the seal.
 A retained input that does not decode, or a reference that is missing, records a failed handoff, and the seal commits without one.
@@ -941,7 +942,6 @@ On GitHub it reopens when one of them comes back. On GitLab it stays resolved, a
 One `RESOLVE_FEEDBACK_THREAD` action changes one thread, on GitHub and GitLab.
 The action records the writing account before it writes, so the thread event of its own write is not read as a person's.
 A person's resolve or reopen, or an event without an actor, ends Hephaestus's changes to that thread.
-
 A person's reply after the note keeps Hephaestus from resolving the thread. A reply does not stop a reopen.
 [ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) § Update — 2026-11-21: problem lineage resolves and reopens threads owns the rules.
 
