@@ -11,8 +11,8 @@ import java.util.regex.Pattern;
  * many items it saw this in, from the live observations, so the text itself never counts work or claims a pattern.
  *
  * <p>The count rule refuses when in doubt: a false refusal writes no advice, but a false admission puts a count on the
- * profile that the view must compute. It reads each sentence as plain lowercase words, so punctuation, dashes and
- * Markdown cannot hide a count.
+ * profile that the view must compute. Text that names both a number and a piece of work is refused, wherever in the text
+ * the two stand, because no word distance or sentence break tells a count of work from a number about one review.
  */
 final class AdviceText {
     static final int MAX_LENGTH = 2000;
@@ -21,7 +21,6 @@ final class AdviceText {
             "\\b(again|every time|each time|repeatedly|recurring|patterns?|often|usually|consistently|you keep|keeps)\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
-    private static final Pattern SENTENCE_END = Pattern.compile("[.!?\\n]+");
     /** Anything that is not a letter or a digit: punctuation, symbols, dashes and Markdown. */
     private static final Pattern NOT_A_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 
@@ -72,6 +71,8 @@ final class AdviceText {
             "numerous",
             "various",
             "single",
+            "twice",
+            "thrice",
             "first",
             "second",
             "third",
@@ -81,15 +82,18 @@ final class AdviceText {
             "seventh",
             "eighth",
             "ninth",
-            "tenth");
-    private static final Set<String> SINGULAR_WORK = Set.of("pr", "mr", "issue", "review");
-    private static final Set<String> PLURAL_WORK = Set.of("prs", "mrs", "issues", "reviews");
-
-    private enum Work {
-        NONE,
-        SINGULAR,
-        PLURAL
-    }
+            "tenth",
+            "eleventh",
+            "twelfth",
+            "thirteenth",
+            "fourteenth",
+            "fifteenth",
+            "sixteenth",
+            "seventeenth",
+            "eighteenth",
+            "nineteenth",
+            "twentieth");
+    private static final Set<String> WORK = Set.of("pr", "prs", "mr", "mrs", "issue", "issues", "review", "reviews");
 
     private AdviceText() {}
 
@@ -103,50 +107,38 @@ final class AdviceText {
     }
 
     /**
-     * Whether a sentence counts work. A plural work noun counts with any number in its sentence, before or after it. A
-     * singular one counts with a number at most two words before it, as in "one more pull request". A work noun right
-     * after "before" or "after" is a moment, not work, so "two tests before review" counts nothing.
+     * Whether the text names a number and a piece of work: a pull or merge request, a PR, an MR, an issue or a review. A
+     * work noun right after "before" or "after" is a moment, not work, so "add two tests before review" counts nothing.
      */
     private static boolean countsWork(String text) {
-        for (String sentence : SENTENCE_END.splitAsStream(text).toList()) {
-            List<String> words = words(sentence);
-            boolean anyNumber = words.stream().anyMatch(AdviceText::isNumber);
-            for (int i = 0; i < words.size(); i++) {
-                Work work = workAt(words, i);
-                if (work == Work.NONE) continue;
-                if (i > 0
-                        && (words.get(i - 1).equals("before")
-                                || words.get(i - 1).equals("after"))) continue;
-                boolean counted = work == Work.PLURAL
-                        ? anyNumber
-                        : words.subList(Math.max(0, i - 3), i).stream().anyMatch(AdviceText::isNumber);
-                if (counted) return true;
-            }
+        List<String> words = words(text);
+        if (words.stream().noneMatch(AdviceText::isNumber)) return false;
+        for (int i = 0; i < words.size(); i++) {
+            if (!workAt(words, i)) continue;
+            if (i > 0 && (words.get(i - 1).equals("before") || words.get(i - 1).equals("after"))) continue;
+            return true;
         }
         return false;
     }
 
-    /** The work noun that starts at {@code i}: "pull request", "merge request", "pr", "mr", "issue" or "review". */
-    private static Work workAt(List<String> words, int i) {
+    /** Whether a work noun starts at {@code i}; "request" after "pull" or "merge" belongs to that noun. */
+    private static boolean workAt(List<String> words, int i) {
         String word = words.get(i);
         if ((word.equals("pull") || word.equals("merge")) && i + 1 < words.size()) {
             String next = words.get(i + 1);
-            if (next.equals("request")) return Work.SINGULAR;
-            if (next.equals("requests")) return Work.PLURAL;
+            return next.equals("request") || next.equals("requests");
         }
-        if (PLURAL_WORK.contains(word)) return Work.PLURAL;
-        if (SINGULAR_WORK.contains(word)) return Work.SINGULAR;
-        return Work.NONE;
+        return WORK.contains(word);
     }
 
     private static boolean isNumber(String word) {
         return NUMBER_WORDS.contains(word) || NUMERAL.matcher(word).matches();
     }
 
-    /** The sentence as lowercase words: punctuation, symbols, dashes and Markdown become word breaks. */
-    private static List<String> words(String sentence) {
+    /** The text as lowercase words: punctuation, symbols, dashes, line breaks and Markdown become word breaks. */
+    private static List<String> words(String text) {
         return NOT_A_WORD
-                .splitAsStream(sentence.toLowerCase(Locale.ROOT))
+                .splitAsStream(text.toLowerCase(Locale.ROOT))
                 .filter(word -> !word.isEmpty())
                 .toList();
     }

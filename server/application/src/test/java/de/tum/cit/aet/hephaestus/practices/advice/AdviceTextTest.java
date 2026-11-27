@@ -66,18 +66,35 @@ class AdviceTextTest extends BaseUnitTest {
                     Pull requests without tests: 3. | refuse
                     Add tests to one more pull request. | refuse
                     Add one test per review comment. | refuse
-                    The two changes in this pull request share one test; split it so each failure points at one change. | admit
-                    Split it into two commits so each review reads one change. | admit
+                    Three of your recent pull request descriptions were empty. | refuse
+                    Five of your last review comments went unanswered. | refuse
+                    Two changes to config.yml came in pull requests without a description. | refuse
+                    Pull requests since v2.4 without tests: 3. | refuse
+                    You merged a pull request without review three times. | refuse
+                    Five of the last six times you opened a pull request, it had no tests. | refuse
+                    Three times now, you opened a PR without a description. | refuse
+                    Look at your recent pull requests. Three of them had no tests. | refuse
+                    Twice you opened a pull request without tests. | refuse
+                    The two changes in this pull request share one test; split it so each failure points at one change. | refuse
+                    Split it into two commits so each review reads one change. | refuse
+                    This review found two missing tests. | refuse
+                    Add two tests before the review. | refuse
                     Add two tests before review. | admit
                     Add two tests before reviews start. | admit
-                    This review found two missing tests. | admit
                     Name the risk of the migration, so a reviewer can check it. | admit
                     Add a test for the empty list. | admit
                     Name the two risks of this change in the description. | admit
                     Write the rollback steps in the description before review. | admit
+                    Add a test for the empty branch, and name the rollback in the pull request description. | admit
                     """)
     void shouldRefuseEveryCountOfWorkAndAdmitAdviceAboutOneReview(String text, String expected) {
         assertThat(AdviceText.admits(text) ? "admit" : "refuse").isEqualTo(expected);
+    }
+
+    @Test
+    void shouldRefuseACountThatALineBreakSeparatesFromItsWork() {
+        assertThat(AdviceText.admits("Three of your\npull requests had no tests."))
+                .isFalse();
     }
 
     @ParameterizedTest
