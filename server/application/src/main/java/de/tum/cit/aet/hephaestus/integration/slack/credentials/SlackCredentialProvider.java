@@ -49,7 +49,8 @@ public class SlackCredentialProvider implements ApiCredentialProvider {
         return credentialReader.credentialsOf(conn);
     }
 
-    public Optional<CredentialReader.BoundBot> resolveActiveBinding(long workspaceId, long connectionId, String teamId) {
+    public Optional<CredentialReader.BoundBot> resolveActiveBinding(
+            long workspaceId, long connectionId, String teamId) {
         return credentialReader.findActiveSlackBot(workspaceId, connectionId, teamId);
     }
 

@@ -54,5 +54,4 @@ final class SlackMembership {
                         .anyMatch(flag -> user.has(flag) && !user.path(flag).isBoolean());
         return incomplete ? MembershipStatus.PAYLOAD : MembershipStatus.CONFIRMED;
     }
-
 }
