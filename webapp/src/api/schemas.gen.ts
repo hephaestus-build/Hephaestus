@@ -14268,8 +14268,7 @@ export const ReviewProblemDetailSchema = {
 
 export const ReviewProgressSchema = {
 	type: "object",
-	description:
-		"How far an active item review got; absent for a scan, which lists its items in pages",
+	description: "How far an item review got; absent for a scan, which lists its items in pages",
 	properties: {
 		continuing: {
 			type: "boolean",
@@ -14288,8 +14287,11 @@ export const ReviewProgressSchema = {
 			description:
 				"Practices that the review's attempts work on. A practice decided before the first attempt, such as one withheld for readiness, is not counted.",
 		},
+		stage: {
+			$ref: "#/components/schemas/ReviewStage",
+		},
 	},
-	required: ["continuing", "practicesEnded", "practicesTotal"],
+	required: ["continuing", "practicesEnded", "practicesTotal", "stage"],
 } as const;
 
 export const ReviewQueueSchema = {
@@ -14992,6 +14994,23 @@ export const ReviewScopeRepositorySchema = {
 		},
 	},
 	required: ["baseBranches", "repositoryItemId"],
+} as const;
+
+export const ReviewStageSchema = {
+	type: "string",
+	description:
+		"The one state a status display shows for an item review. It follows from stored states only: it estimates no share of the work and no remaining time, and it carries no observation.",
+	enum: [
+		"QUEUED",
+		"CONTINUING",
+		"CHECKING",
+		"OBSERVATIONS_READY",
+		"READY",
+		"PARTLY_CHECKED",
+		"WITHHELD",
+		"FAILED",
+		"STOPPED",
+	],
 } as const;
 
 export const ReviewStatusSchema = {

@@ -500,6 +500,15 @@ public class ReviewIntegrationData {
         return review;
     }
 
+    /** The same, on the review that recorded {@code result}. */
+    @Transactional
+    public void withheldAtCreation(Scenario s, Result result) {
+        withheldAtCreation(
+                s,
+                reviews.findByIdAndWorkspaceId(result.getReviewId(), result.getWorkspaceId())
+                        .orElseThrow());
+    }
+
     /** A practice that the review withheld when it was created, before any attempt, as readiness does. */
     @Transactional
     public void withheldAtCreation(Scenario s, Review review) {

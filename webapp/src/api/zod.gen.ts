@@ -4071,44 +4071,6 @@ export const zReviewPracticeStatus = z.enum([
 	"FAILED",
 ]);
 
-/**
- * How far an active item review got; absent for a scan, which lists its items in pages
- */
-export const zReviewProgress = z.object({
-	continuing: z.boolean(),
-	practicesEnded: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	practicesTotal: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-export const zReviewQueueItem = z.object({
-	heldForBudget: z.boolean(),
-	item: zItemRef,
-	jobId: z.uuid(),
-	person: zReviewPerson.nullable(),
-	progress: zReviewProgress.nullable(),
-	reviewId: z.uuid(),
-	since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	status: zReviewJobStatus,
-});
-
-export const zReviewQueue = z.object({
-	asOf: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	finishedLastDay: z.int(),
-	finishedLastHour: z.int(),
-	finishedPerHourLastDay: z.number(),
-	head: z.array(zReviewQueueItem),
-	heldForBudget: z.int(),
-	oldestWaitingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	running: z.int(),
-	waiting: z.int(),
-});
-
 export const zReviewQueueState = z.enum(["WAITING", "HELD", "RUNNING"]);
 
 export const zReviewReadinessBlocker = z.enum([
@@ -4233,6 +4195,60 @@ export const zReviewScopeMode = z.enum(["ALL", "SELECTED"]);
 export const zReviewScopeRepository = z.object({
 	baseBranches: z.array(z.string()),
 	repositoryItemId: z.string().regex(/[1-9][0-9]*/),
+});
+
+/**
+ * The one state a status display shows for an item review. It follows from stored states only: it estimates no share of the work and no remaining time, and it carries no observation.
+ */
+export const zReviewStage = z.enum([
+	"QUEUED",
+	"CONTINUING",
+	"CHECKING",
+	"OBSERVATIONS_READY",
+	"READY",
+	"PARTLY_CHECKED",
+	"WITHHELD",
+	"FAILED",
+	"STOPPED",
+]);
+
+/**
+ * How far an item review got; absent for a scan, which lists its items in pages
+ */
+export const zReviewProgress = z.object({
+	continuing: z.boolean(),
+	practicesEnded: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	practicesTotal: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	stage: zReviewStage,
+});
+
+export const zReviewQueueItem = z.object({
+	heldForBudget: z.boolean(),
+	item: zItemRef,
+	jobId: z.uuid(),
+	person: zReviewPerson.nullable(),
+	progress: zReviewProgress.nullable(),
+	reviewId: z.uuid(),
+	since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	status: zReviewJobStatus,
+});
+
+export const zReviewQueue = z.object({
+	asOf: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	finishedLastDay: z.int(),
+	finishedLastHour: z.int(),
+	finishedPerHourLastDay: z.number(),
+	head: z.array(zReviewQueueItem),
+	heldForBudget: z.int(),
+	oldestWaitingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	running: z.int(),
+	waiting: z.int(),
 });
 
 /**

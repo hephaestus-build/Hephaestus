@@ -6453,7 +6453,7 @@ export type ReviewProblemDetail = {
 };
 
 /**
- * How far an active item review got; absent for a scan, which lists its items in pages
+ * How far an item review got; absent for a scan, which lists its items in pages
  */
 export type ReviewProgress = {
 	/**
@@ -6468,6 +6468,7 @@ export type ReviewProgress = {
 	 * Practices that the review's attempts work on. A practice decided before the first attempt, such as one withheld for readiness, is not counted.
 	 */
 	practicesTotal: number;
+	stage: ReviewStage;
 };
 
 export type ReviewQueue = {
@@ -6642,6 +6643,20 @@ export type ReviewScopeRepository = {
 	baseBranches: Array<string>;
 	repositoryItemId: string;
 };
+
+/**
+ * The one state a status display shows for an item review. It follows from stored states only: it estimates no share of the work and no remaining time, and it carries no observation.
+ */
+export type ReviewStage =
+	| "QUEUED"
+	| "CONTINUING"
+	| "CHECKING"
+	| "OBSERVATIONS_READY"
+	| "READY"
+	| "PARTLY_CHECKED"
+	| "WITHHELD"
+	| "FAILED"
+	| "STOPPED";
 
 /**
  * Extensible enum: a client accepts a value that the examples do not name. Where the review stands.

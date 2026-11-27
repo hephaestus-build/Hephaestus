@@ -16,6 +16,7 @@ import type {
 	ReviewJob,
 	ReviewPractice,
 	ReviewProgress,
+	ReviewStage,
 	ReviewRef,
 	ReviewSummary,
 } from "@/api/types.gen";
@@ -377,14 +378,32 @@ export function shownReviewStatusDef(
 	return progress?.continuing === true ? REVIEW_CONTINUING_DEF : definitionFor(defs, status);
 }
 
+/** The stages in which the count of finished practices still says something the status does not. */
+const SHOWS_COUNT = {
+	QUEUED: true,
+	CONTINUING: true,
+	CHECKING: true,
+	OBSERVATIONS_READY: true,
+	READY: false,
+	PARTLY_CHECKED: false,
+	WITHHELD: false,
+	FAILED: false,
+	STOPPED: false,
+} satisfies Record<ReviewStage, boolean>;
+
 /**
- * "76 of 200 practices finished", with a result or a recorded reason. Nothing before an attempt
- * finished one: "0 of 200" would read as a count that never moves.
+ * "76 of 200 practices finished", with a result or a recorded reason, while the review is under way.
+ * Nothing before an attempt finished one: "0 of 200" would read as a count that never moves.
  */
 export function reviewProgressWords(
 	progress: ReviewProgress | null | undefined,
 ): string | undefined {
-	if (progress === null || progress === undefined || progress.practicesEnded === 0) {
+	if (
+		progress === null ||
+		progress === undefined ||
+		progress.practicesEnded === 0 ||
+		!SHOWS_COUNT[progress.stage]
+	) {
 		return undefined;
 	}
 	const noun = progress.practicesTotal === 1 ? "practice" : "practices";
