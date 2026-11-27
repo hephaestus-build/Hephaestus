@@ -513,6 +513,7 @@ de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureService
 de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureSubjectRepository.stateOf(java.util.Collection)
 de.tum.cit.aet.hephaestus.practices.result.PracticeStagingService.discardUnusable(java.time.Instant, int)
 de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService.purge()
+de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository.countEndedPracticesByJob(java.util.List)
 de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.activeScans(org.springframework.data.domain.Pageable)
 de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.modelDigest(java.lang.String)
 de.tum.cit.aet.hephaestus.practices.review.ReviewRepository.workspacesWithExpiredProof(java.time.Instant, java.time.Instant)

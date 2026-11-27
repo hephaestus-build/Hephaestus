@@ -311,14 +311,11 @@ public class ReviewAttemptPreparation {
             List<String> command,
             Map<String, String> environment) {}
 
-    /**
-     * How many practices the runner may measure at once: as many as the model pool lets this review hold, so a review
-     * that the pool took alone runs its practices in waves instead of opening every session at once.
-     */
     private int sessionLimit(ReviewJob job) {
-        int practices = Math.max(1, job.getInput().assignments().size());
         Long pool = job.getCallPoolId();
-        return pool == null ? practices : poolAdmission.sessionLimit(pool, job);
+        return pool == null
+                ? Math.max(1, job.getInput().assignments().size())
+                : poolAdmission.sessionLimit(pool, job);
     }
 
     /** The adapter's stable execution plan. Credentials and request trace context are supplied separately. */

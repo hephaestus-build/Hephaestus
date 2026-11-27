@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,10 +86,13 @@ public class ReviewPoolAdmission implements RunAdmission {
             if (unread.isEmpty()) return;
             unread.forEach(run -> poolOfRun.put(run, null));
             var queued = jobs.findQueuedModels(unread);
-            var ended = assignments.endedPracticeCounts(queued.stream().map(ReviewJobRepository.QueuedModel::getJobId).toList());
+            var ended = assignments.endedPracticeCounts(queued.stream()
+                    .map(ReviewJobRepository.QueuedModel::getJobId)
+                    .toList());
             for (var model : queued) {
                 poolOfRun.put(model.getRunId(), poolOf(model));
-                practicesOfRun.put(model.getRunId(), remaining(model.getPractices(), ended.getOrDefault(model.getJobId(), 0)));
+                practicesOfRun.put(
+                        model.getRunId(), remaining(model.getPractices(), ended.getOrDefault(model.getJobId(), 0)));
             }
         }
 
@@ -137,18 +141,26 @@ public class ReviewPoolAdmission implements RunAdmission {
         }
     }
 
-    /** Whether the pool takes another measurement of {@code practices} practices now. */
+    /** Whether the pool takes another measurement of this job's open practices now. */
     boolean admits(long poolId, ReviewJob job) {
-        int ended = assignments.endedPracticeCounts(List.of(job.getId())).getOrDefault(job.getId(), 0);
-        return admits(poolId, remaining(originalWidth(job), ended));
+        var load = jobs.poolLoad(poolId);
+        if (load.getRunning() == 0) return true;
+        var jobIds = new ArrayList<>(List.of(load.getJobIds()));
+        jobIds.add(job.getId());
+        var ended = assignments.endedPracticeCounts(jobIds);
+        return admitsWhileBusy(poolId, load, openWidth(load.getPractices() + originalWidth(job), ended));
     }
 
     /** The same rule serves dispatch and the claim that holds the pool lock. */
     private boolean admits(long poolId, int practices) {
         var load = jobs.poolLoad(poolId);
         if (load.getRunning() == 0) return true;
-        if (reserved(load, assignments.endedPracticeCounts(List.of(load.getJobIds()))) + practices > room(load))
-            return false;
+        var ended = assignments.endedPracticeCounts(List.of(load.getJobIds()));
+        return admitsWhileBusy(poolId, load, openWidth(load.getPractices(), ended) + practices);
+    }
+
+    private boolean admitsWhileBusy(long poolId, ReviewJobRepository.PoolLoad load, long practices) {
+        if (practices > room(load)) return false;
         Instant newest = load.getNewestStart();
         return !pools.congested(poolId)
                 && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
@@ -162,8 +174,8 @@ public class ReviewPoolAdmission implements RunAdmission {
         return Math.max(1, job.getInput().assignments().size());
     }
 
-    private static long reserved(ReviewJobRepository.PoolLoad load, Map<UUID, Integer> ended) {
-        return Math.max(0, load.getPractices() - ended.values().stream().mapToLong(Integer::longValue).sum());
+    private static long openWidth(long practices, Map<UUID, Integer> ended) {
+        return Math.max(0, practices - ended.values().stream().mapToLong(Integer::longValue).sum());
     }
 
     /**
@@ -185,7 +197,7 @@ public class ReviewPoolAdmission implements RunAdmission {
         var load = jobs.poolLoad(poolId);
         var ended = assignments.endedPracticeCounts(List.of(load.getJobIds()));
         int own = remaining(originalWidth(job), ended.getOrDefault(job.getId(), 0));
-        return sessionLimit(load, reserved(load, ended), own);
+        return sessionLimit(load, openWidth(load.getPractices(), ended), own);
     }
 
     static int sessionLimit(ReviewJobRepository.PoolLoad load, long reserved, int practices) {

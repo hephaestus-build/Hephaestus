@@ -1169,21 +1169,33 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var definition = DefinitionTestFixtures.definition(kind, "Pool fixture", "Pool fixture", null);
         long item = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT item_id FROM review WHERE workspace_id=? AND id=?",
-                Long.class, job.getWorkspaceId(), job.getReviewId()));
-        var frozen = LongStream.rangeClosed(1, 32).mapToObj(index -> {
-            var practice = versions.create(new PracticeVersionService.NewPractice(
-                    job.getWorkspaceId(), "pool-fixture-" + index, kind, definition, null, 0, null));
-            jdbc.update(
-                    "INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status)"
-                            + " VALUES (?,?,?,?,'READY')",
-                    job.getReviewId(), job.getWorkspaceId(), practice.getId(), practice.getCurrentVersion().getId());
-            jdbc.update(
-                    "INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,state,reason,job_id)"
-                            + " VALUES (?,?,?,?,?,?,?)",
-                    job.getReviewId(), job.getWorkspaceId(), practice.getId(), item,
-                    index == 32 ? "LISTED" : "WITHHELD", index == 32 ? null : "EXECUTION_FAILED", job.getId());
-            return new ReviewAssignmentId(job.getReviewId(), practice.getId(), item);
-        }).toList();
+                Long.class,
+                job.getWorkspaceId(),
+                job.getReviewId()));
+        var frozen = LongStream.rangeClosed(1, 32)
+                .mapToObj(index -> {
+                    var practice = versions.create(new PracticeVersionService.NewPractice(
+                            job.getWorkspaceId(), "pool-fixture-" + index, kind, definition, null, 0, null));
+                    jdbc.update(
+                            "INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status)"
+                                    + " VALUES (?,?,?,?,'READY')",
+                            job.getReviewId(),
+                            job.getWorkspaceId(),
+                            practice.getId(),
+                            practice.getCurrentVersion().getId());
+                    jdbc.update(
+                            "INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,state,reason,job_id)"
+                                    + " VALUES (?,?,?,?,?,?,?)",
+                            job.getReviewId(),
+                            job.getWorkspaceId(),
+                            practice.getId(),
+                            item,
+                            index == 32 ? "LISTED" : "WITHHELD",
+                            index == 32 ? null : "EXECUTION_FAILED",
+                            job.getId());
+                    return new ReviewAssignmentId(job.getReviewId(), practice.getId(), item);
+                })
+                .toList();
         transactions.executeWithoutResult(status -> {
             var stored = jobs.findById(job.getId()).orElseThrow();
             stored.setInput(new ReviewJobInput(item, frozen));
@@ -1297,7 +1309,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var second = queued(pool.selected());
         var third = queued(pool.selected());
         var meters = new SimpleMeterRegistry();
-        var admission = new ReviewPoolAdmission(jobs, pool.pools(), context.getBean(ReviewAssignmentStore.class), meters);
+        var admission =
+                new ReviewPoolAdmission(jobs, pool.pools(), context.getBean(ReviewAssignmentStore.class), meters);
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
 
         var pass = admission.pass(reviews);
@@ -1333,8 +1346,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE agent_run SET available_at=clock_timestamp() + interval '1 hour' WHERE id=?",
                 budgetHeld.getRunId());
-        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools())
-                .pass(EnumSet.of(AgentRunKind.REVIEW));
+        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools()).pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(next)))
                 .as("an idle sandbox of a run that is not due holds no place in the pool")
@@ -1350,8 +1362,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET config_snapshot=jsonb_build_object('schemaVersion', ?) WHERE id=?",
                 ConfigSnapshot.SCHEMA_VERSION,
                 job.getId());
-        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools())
-                .pass(EnumSet.of(AgentRunKind.REVIEW));
+        var pass = SandboxReviewClaims.poolAdmission(context, pool.pools()).pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(job))).isTrue();
     }
