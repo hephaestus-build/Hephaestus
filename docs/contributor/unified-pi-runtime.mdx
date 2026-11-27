@@ -953,11 +953,14 @@ After the erasure is requested, the fence refuses each later write:
 - The weekly digest is not written.
 
 The erasure of a person (`ConversationPersonDataCatalog`) exports and deletes the person's own conversations.
-In the conversations of other people, it redacts the Hephaestus messages that showed feedback about the person (`ConversationFeedbackCopyPersonDataStore`).
+In the conversations of other people, it redacts the Hephaestus messages that showed feedback about the person, and the answers that read them (`ConversationFeedbackCopyPersonDataStore`).
 As its last step, it redacts the tool results that can copy the person's data (`ConversationToolResultCopyPersonDataStore`).
 A turn that ran during that step erases the same copies when it ends (`ConversationRedaction.eraseStaleCopies`).
 A `show_feedback` result copies no one's data, so it stays.
 The [data map](/admin/dsms/personal-data-map) owns the inventory of person data.
+
+Before the `feedback_copy` step deletes a conversation copy, it redacts every answer of the turn that claimed the copy (`PersonFeedbackAnswerRedaction`).
+The model read the words when the claim returned them, so the receipt does not limit this step.
 
 ## Limits
 

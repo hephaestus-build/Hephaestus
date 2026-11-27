@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
@@ -26,6 +27,7 @@ class CopiedIdentityErasureOrderTest {
                         mock(NamedParameterJdbcTemplate.class),
                         JsonMapper.builder().build(),
                         mock(FeedbackCopyCleanupCustody.class),
+                        mock(PersonFeedbackAnswerRedaction.class),
                         mock(PersonIdentityResolver.class),
                         mock(ScanReportService.class),
                         mock(AdviceRedaction.class))

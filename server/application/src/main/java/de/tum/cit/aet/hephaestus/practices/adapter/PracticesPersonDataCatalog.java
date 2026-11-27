@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -79,6 +80,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final FeedbackCopyCleanupCustody custody;
+    private final PersonFeedbackAnswerRedaction answers;
     private final PersonIdentityResolver identities;
     private final ScanReportService reports;
     private final AdviceRedaction advice;
@@ -203,6 +205,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 -216),
                         new ExternalFeedbackPersonDataStore(
                                 custody,
+                                answers,
                                 jdbc,
                                 mapper,
                                 "feedback_copy",
