@@ -622,6 +622,27 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
+    /** Review probe premise (passes): an unreachable Slack fails the post without asking for admission. */
+    @Test
+    void probeAPostThatCannotConnectNeverAsksForAdmission() throws Exception {
+        MockWebServer api = new MockWebServer();
+        api.start();
+        var config = localConfig(api, 1000);
+        api.close();
+        var asked = new AtomicInteger();
+        try (var local = serviceWithLocalSlack(config)) {
+            var route = bind(local, null);
+            assertThatThrownBy(() -> route.post(List.of(), "fixed notice", "opaque", () -> {
+                        asked.incrementAndGet();
+                        return true;
+                    }))
+                    .isInstanceOfSatisfying(
+                            SlackSendException.class,
+                            error -> assertThat(error.slackError()).isEqualTo("transport_failure"));
+            assertThat(asked).hasValue(0);
+        }
+    }
+
     private SlackMessageService.BoundRoute bind(SlackMessageService service, @Nullable String parent) {
         when(credentialProvider.resolveActiveBinding(7L, 42L, "T1"))
                 .thenReturn(Optional.of(new BoundBot("UBOT", new BearerToken("xoxb-" + UUID.randomUUID(), null))));

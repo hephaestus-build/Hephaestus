@@ -251,6 +251,39 @@ class MentorSlackEffectAdapterTest extends BaseUnitTest {
         assertThatIllegalStateException().isThrownBy(() -> adapter().ended(ended));
     }
 
+    /** Review probe: a read that Slack refused proves nothing, so it must not end the once-only notice. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void probeAFailedReadbackIsReadAgainWithinTheDeadline(boolean writeStarted) {
+        var adapter = ready();
+        when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
+        // What the gateway throws for a 429 beyond its budget, an HTTP 5xx or a timeout.
+        when(bound.readPost(MARKER, 3)).thenThrow(new SlackSendException(7L, "D1", "transport_failure"));
+
+        // A possible earlier write keeps its marker (Reread). A fresh attempt wrote nothing.
+        assertThat(adapter.execute(attempt(writeStarted)))
+                .isInstanceOfAny(
+                        writeStarted
+                                ? new Class<?>[] {ActionResult.Reread.class}
+                                : new Class<?>[] {
+                                    ActionResult.Defer.class, ActionResult.Retry.class, ActionResult.Reread.class
+                                });
+    }
+
+    /** Review probe: a post that failed before its send boundary wrote nothing and was refused by nobody. */
+    @Test
+    void probeAConnectionFailureBeforeAdmissionIsNotAPermanentRefusal() {
+        var adapter = ready();
+        when(runtime.check(REF, OBSERVED)).thenReturn(ALLOWED);
+        readyToPost();
+        // The send fence is a network interceptor: a connect failure never asks it for admission.
+        when(bound.post(anyList(), anyString(), eq(MARKER), any()))
+                .thenThrow(new SlackSendException(7L, "D1", "transport_failure"));
+
+        assertThat(adapter.execute(attempt(false)))
+                .isInstanceOfAny(ActionResult.Defer.class, ActionResult.Retry.class);
+    }
+
     private MentorSlackEffectAdapter ready() {
         when(proof.getIfAvailable()).thenReturn(runtime);
         when(runtime.observationTarget(REF)).thenReturn(Optional.of(new ObservationTarget(REF, ROUTE, 3L, 5L)));
