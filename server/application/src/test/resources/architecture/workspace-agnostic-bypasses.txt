@@ -1,0 +1,1 @@
+# Every @WorkspaceAgnostic bypass, one per line, sorted: a type by its name, a method by its full name (WorkspaceAgnosticRatchetTest).
