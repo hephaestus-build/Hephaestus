@@ -390,9 +390,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 owners,
                 new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class),
                 store());
-        assertThat(current(unwired, held))
-                .as("no authorization port")
-                .isFalse();
+        assertThat(current(unwired, held)).as("no authorization port").isFalse();
 
         admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
         assertThat(current(held)).as("the version moved").isFalse();
@@ -422,9 +420,7 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 new StaticListableBeanFactory(Map.of("authorization", authorization))
                         .getBeanProvider(MentorAuthorization.class),
                 new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorSourceEvidence.class));
-        assertThat(current(storeless, held))
-                .as("no store port")
-                .isFalse();
+        assertThat(current(storeless, held)).as("no store port").isFalse();
 
         tombstoneInSlackStore(message);
         assertThat(current(held)).as("the Slack store tombstoned the question").isFalse();
