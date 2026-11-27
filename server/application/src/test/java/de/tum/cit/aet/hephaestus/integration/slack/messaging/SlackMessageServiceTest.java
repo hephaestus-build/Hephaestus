@@ -594,12 +594,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
                     .body("{\"ok\":false,\"error\":\"ratelimited\"}")
                     .build());
             api.start();
-            var config = SlackMessageService.nativeConfig(new SlackProperties(api.url("/").toString()));
+            var config = SlackMessageService.nativeConfig(
+                    new SlackProperties(api.url("/").toString()));
             try (var local = serviceWithLocalSlack(config)) {
                 assertThatThrownBy(() -> bind(local, null).readPost("opaque", 1))
                         .isInstanceOfSatisfying(
-                                SlackSendException.class, error -> assertThat(error.retryAfterMillis())
-                                        .isEqualTo(121_000L));
+                                SlackSendException.class,
+                                error -> assertThat(error.retryAfterMillis()).isEqualTo(121_000L));
             }
         }
     }
