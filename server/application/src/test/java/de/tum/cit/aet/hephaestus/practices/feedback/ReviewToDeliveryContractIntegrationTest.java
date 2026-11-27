@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
@@ -164,6 +163,7 @@ import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
@@ -1005,7 +1005,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             });
 
             assertThat(outcome)
-                    .isEqualTo(new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.AUTHOR_NOT_CONSENTING));
+                    .isEqualTo(
+                            new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.AUTHOR_NOT_CONSENTING));
             assertThat(mentorEvents(review)).isEmpty();
         }
     }
@@ -1021,8 +1022,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     second.workspaceId(),
                     author);
             assertThat(admitSealed(first, "a".repeat(64))).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
-            assertThat(Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(
-                            new MentorReviewIntake.SealedReview(
+            assertThat(Objects.requireNonNull(
+                            transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
                                     second.workspaceId(),
                                     second.reviewId(),
                                     second.identity().jobId(),
@@ -1037,7 +1038,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(Objects.requireNonNull(transactions.execute(status -> {
                         owners.ofJob(author);
                         return jdbc.queryForObject(
-                                "SELECT count(*) FROM mentor_event WHERE workspace_id=?", Integer.class, second.workspaceId());
+                                "SELECT count(*) FROM mentor_event WHERE workspace_id=?",
+                                Integer.class,
+                                second.workspaceId());
                     })))
                     .as("the purged workspace's event")
                     .isZero();
