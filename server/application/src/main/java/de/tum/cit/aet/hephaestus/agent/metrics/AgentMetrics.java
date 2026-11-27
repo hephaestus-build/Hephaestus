@@ -12,6 +12,8 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_RETENTION_STRIPPED = "agent.job.retention.stripped";
     public static final String AGENT_JOB_STAGE_DURATION = "agent.job.stage.duration";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
+    /** Sealed reviews by what the seal did with the work-place handoff: {@code outcome} and {@code reason}. */
+    public static final String AGENT_JOB_WORK_PLACE_HANDOFF = "agent.job.work_place_handoff";
     public static final String AGENT_RUN_REAPED = "agent.run.reaped";
     /** Runs that have not ended, by kind, band, state and hold; the sampler's gauge. */
     public static final String AGENT_RUN_RUNS = "agent.run.runs";

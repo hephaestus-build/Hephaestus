@@ -103,7 +103,7 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
 
     private UUID handoff(ReviewJob job, Instant expiresAt) {
         UUID id = UUID.randomUUID();
-        handoffs.save(WorkPlaceHandoffRow.builder()
+        handoffs.insertOnce(WorkPlaceHandoffRow.builder()
                 .id(id)
                 .workspaceId(job.getWorkspaceId())
                 .reviewId(job.getReviewId())

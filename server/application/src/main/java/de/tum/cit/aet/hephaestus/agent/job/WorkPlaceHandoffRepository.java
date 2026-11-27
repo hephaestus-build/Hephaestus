@@ -11,10 +11,25 @@ import org.springframework.data.repository.query.Param;
 /** Insert-once writes and the retention delete: no read lists a payload. */
 public interface WorkPlaceHandoffRepository extends Repository<WorkPlaceHandoffRow, UUID> {
 
-    WorkPlaceHandoffRow save(WorkPlaceHandoffRow handoff);
-
-    /** Whether the review already handed its work place a copy: the seal reaches its listener once per review. */
+    /** Whether the review already handed its work place a copy: another job of the review sealed it. */
     boolean existsByWorkspaceIdAndReviewId(long workspaceId, UUID reviewId);
+
+    /**
+     * Writes the review's one handoff, or nothing when a seal of the same review already did. A racing seal waits for
+     * the first one's commit on the review key and then commits too, instead of failing on it.
+     *
+     * @return 1 when this seal wrote the handoff
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO work_place_handoff (id, workspace_id, review_id, job_id, item_id, item_version, producer,
+              payload, payload_digest, expires_at, created_at)
+            VALUES (:#{#h.id}, :#{#h.workspaceId}, :#{#h.reviewId}, :#{#h.jobId}, :#{#h.itemId},
+              CAST(:#{#h.itemVersion} AS VARCHAR), :#{#h.producer.name()}, CAST(:#{#h.payload.toString()} AS JSONB),
+              :#{#h.payloadDigest}, :#{#h.expiresAt}, :#{#h.createdAt})
+            ON CONFLICT (workspace_id, review_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertOnce(@Param("h") WorkPlaceHandoffRow handoff);
 
     /** Deletes handoffs past their expiry, oldest first. */
     @WorkspaceAgnostic("Cross-workspace retention sweep over job-scoped rows")

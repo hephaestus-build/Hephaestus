@@ -1063,6 +1063,26 @@ tests:
               summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a failed work-place handoff fires, a skipped one does not
+    interval: 1m
+    input_series:
+      - series: 'agent_job_work_place_handoff_total{job="hephaestus",instance="server:9090",outcome="failed",reason="unreadable"}'
+        values: "0 0 1x10"
+      - series: 'agent_job_work_place_handoff_total{job="hephaestus",instance="server:9090",outcome="skipped",reason="nothing_public"}'
+        values: "0 5 9x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusWorkPlaceHandoffFailing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusWorkPlaceHandoffFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A sealed review kept no copy for its work place because its retained inputs could not be read
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a review failed by lost lease holders fires, a constant count does not
     interval: 1m
     input_series:
