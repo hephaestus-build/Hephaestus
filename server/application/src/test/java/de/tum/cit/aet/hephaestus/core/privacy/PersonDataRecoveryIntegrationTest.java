@@ -210,11 +210,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var journal = new DatabasePrivacyJournal(jdbc, mapper, Optional.of(resolver), shipping);
         var recoveryService = advisedService(beans.getBean(PersonDataRegistry.class), List.of(), journal, shipping);
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(accountId, List.of(), false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -267,11 +268,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         }));
         assertThat(accounts.findById(personId).orElseThrow().getStatus()).isEqualTo(Account.Status.ACTIVE);
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(recovery),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -378,11 +380,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             }
         }
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                4,
+                5,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(null, identities, false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
