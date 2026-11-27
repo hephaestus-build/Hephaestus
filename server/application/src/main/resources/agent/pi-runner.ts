@@ -252,6 +252,17 @@ interface OpenSession {
 
 export interface TurnTrace {
 	practiceSlug?: string;
+	step?:
+		| "input_read"
+		| "lead_resolution"
+		| "model_dispatch"
+		| "practice_program"
+		| "prompt"
+		| "prompt_prepare"
+		| "scan_read"
+		| "session_close"
+		| "session_open"
+		| "stage_result";
 	phase: SessionPhase;
 	modelError: boolean;
 	/** Failed or aborted model calls of this turn, by the adapter's own closed kind; no provider text is kept. */
@@ -1587,6 +1598,9 @@ async function runReview(): Promise<void> {
 			if (!turn || !state.turnDemand) {
 				return;
 			}
+			if (turn.step === "model_dispatch") {
+				turn.step = "prompt";
+			}
 			turn.calls += 1;
 			turn.outputTokens += output;
 			turn.inputTokens += callChargedInputTokens(event.message.usage);
@@ -1669,7 +1683,11 @@ async function runReview(): Promise<void> {
 	function stopTurn(reason: StopReason): void {
 		const state = sessionState();
 		const turn = state.currentTurn;
-		diagnose("turn.stopped", { ...placeOf(turn?.label ?? "review"), stopped_by: reason });
+		diagnose("turn.stopped", {
+			...placeOf(turn?.label ?? "review"),
+			stopped_by: reason,
+			step: reason === "stall" ? turn?.step : undefined,
+		});
 		if (turn && turn.stoppedBy === null) {
 			turn.stoppedBy = reason;
 		}
@@ -2822,6 +2840,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						options?.maxTokens ?? requestModel.maxTokens,
 						trace.budget.outputTokens - trace.outputTokens,
 					);
+					trace.step = "model_dispatch";
 					return stream(requestModel, context, { ...options, maxTokens: scope.callOutputLimit });
 				};
 			}

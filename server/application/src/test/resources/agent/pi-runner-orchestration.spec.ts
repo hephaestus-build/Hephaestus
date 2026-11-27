@@ -3265,7 +3265,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.ok(order.indexOf("abort-compaction") < order.indexOf("abort"));
 							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
-							assert.match(child.stderr, /turn\.stopped .*stopped_by=stall/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=stall step=prompt/u);
 							assert.doesNotMatch(child.stderr, /already processing/u);
 							assert.deepEqual(
 								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
