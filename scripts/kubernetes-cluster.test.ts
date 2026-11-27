@@ -1299,7 +1299,10 @@ await test("the removal drill reads the fake's two counts and refuses anything e
 		entries: 3,
 		answers: 0,
 	});
-	assert.throws(() => removedTurn('{"status":"STOPPED","entries":3}'), /no status or entry counts/u);
+	assert.throws(
+		() => removedTurn('{"status":"STOPPED","entries":3}'),
+		/no status or entry counts/u,
+	);
 });
 
 await test("a removal fenced its reply only when the turn stopped at once and stored nothing after it", () => {
@@ -1333,6 +1336,8 @@ await test("a removed anchor passes only when a reply sent its text and no later
 	assert.deepEqual(failures({ afterReply: { requests: 6, containing: 1 } }), [
 		"no request of the reply held it",
 	]);
-	assert.deepEqual(failures({ afterNext: { requests: 6, containing: 3 } }), ["it made no model request"]);
+	assert.deepEqual(failures({ afterNext: { requests: 6, containing: 3 } }), [
+		"it made no model request",
+	]);
 	assert.deepEqual(failures({ afterNext: { requests: 8, containing: 4 } }), ["1 requests held it"]);
 });

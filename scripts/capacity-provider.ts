@@ -81,11 +81,15 @@ if (values.grid === true) {
 			} else if (toolMode === "roll" && request.method === "POST" && request.url === "/release") {
 				released = true;
 				response.writeHead(204).end();
-			} else if (toolMode === "roll" && request.method === "GET" && request.url?.startsWith("/seen?")) {
+			} else if (
+				toolMode === "roll" &&
+				request.method === "GET" &&
+				request.url?.startsWith("/seen?")
+			) {
 				const text = new URL(request.url, "http://provider").searchParams.get("text") ?? "";
-				response.writeHead(200, { "content-type": "application/json" }).end(
-					JSON.stringify(seenCounts(received, text)),
-				);
+				response
+					.writeHead(200, { "content-type": "application/json" })
+					.end(JSON.stringify(seenCounts(received, text)));
 			} else if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
 				response.writeHead(404).end();
 			} else {

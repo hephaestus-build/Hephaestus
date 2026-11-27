@@ -2444,7 +2444,6 @@ async function withTurnDrill(
 	}
 }
 
-
 /** The drill turn's run fence and physical conversation sandbox, from the database. */
 async function drillTurnState(turnId: string): Promise<TurnState> {
 	return turnState(
@@ -2493,98 +2492,117 @@ export async function turnRoll(
 	extra: readonly string[],
 	profiles: readonly string[],
 ): Promise<void> {
-	await withTurnDrill("turn-roll", work, podCidr, extra, profiles, async ({ base, token, slackSigningSecret }) => {
-		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/conversation`, token, {
-			requestId: randomUUID(),
-			text: "Run the turn-roll command.",
-		});
-		if ("status" in submitted || !UUID.test(submitted.id)) {
-			throw new Error(`turn roll: the question was refused: ${JSON.stringify(submitted)}`);
-		}
-		process.stdout.write(`turn roll: asked turn ${submitted.id}\n`);
-		const state = async () => drillTurnState(submitted.id);
-		const running = await until(
-			"the turn did not start in its conversation sandbox",
-			5,
-			state,
-			(observed) =>
-				observed.status !== "QUEUED" &&
-				(observed.status !== "RUNNING" || observed.sandboxId !== null),
-		);
-		const { sandboxId, claim } = running;
-		if (running.status !== "RUNNING" || sandboxId === null || claim === null || running.epoch < 1) {
-			throw new Error(
-				`turn roll: the turn ended ${running.status} before it held its conversation sandbox`,
+	await withTurnDrill(
+		"turn-roll",
+		work,
+		podCidr,
+		extra,
+		profiles,
+		async ({ base, token, slackSigningSecret }) => {
+			const submitted = await submitTurn(
+				`${base}/workspaces/${ROLL_WORKSPACE}/conversation`,
+				token,
+				{
+					requestId: randomUUID(),
+					text: "Run the turn-roll command.",
+				},
 			);
-		}
-		const recorded = {
-			attempt: running.attempt,
-			runId: running.runId,
-			epoch: running.epoch,
-			sandboxId,
-			claim,
-		};
-		await until("the conversation sandbox did not start its bash command", 5, async () =>
-			bashRunning(claim),
-		(observed) => observed);
-		const claimUid = await sandboxClaimIdentity(claim, sandboxId);
-		report([
-			{
-				claim: `the physical conversation sandbox claim ${claim} exists`,
-				failure: claimUid === null ? "it does not" : undefined,
-			},
-		]);
-		process.stdout.write(
-			`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
-		);
+			if ("status" in submitted || !UUID.test(submitted.id)) {
+				throw new Error(`turn roll: the question was refused: ${JSON.stringify(submitted)}`);
+			}
+			process.stdout.write(`turn roll: asked turn ${submitted.id}\n`);
+			const state = async () => drillTurnState(submitted.id);
+			const running = await until(
+				"the turn did not start in its conversation sandbox",
+				5,
+				state,
+				(observed) =>
+					observed.status !== "QUEUED" &&
+					(observed.status !== "RUNNING" || observed.sandboxId !== null),
+			);
+			const { sandboxId, claim } = running;
+			if (
+				running.status !== "RUNNING" ||
+				sandboxId === null ||
+				claim === null ||
+				running.epoch < 1
+			) {
+				throw new Error(
+					`turn roll: the turn ended ${running.status} before it held its conversation sandbox`,
+				);
+			}
+			const recorded = {
+				attempt: running.attempt,
+				runId: running.runId,
+				epoch: running.epoch,
+				sandboxId,
+				claim,
+			};
+			await until(
+				"the conversation sandbox did not start its bash command",
+				5,
+				async () => bashRunning(claim),
+				(observed) => observed,
+			);
+			const claimUid = await sandboxClaimIdentity(claim, sandboxId);
+			report([
+				{
+					claim: `the physical conversation sandbox claim ${claim} exists`,
+					failure: claimUid === null ? "it does not" : undefined,
+				},
+			]);
+			process.stdout.write(
+				`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
+			);
 
-		// This roll carries the Slack fake's address to the release's own server, as the sign-in Pod has it from its start.
-		await rollRestart(`${RELEASE}-server`, { [SLACK_API_BASE_ENV]: SLACK_API_BASE });
-		report([
-			...heldChecks("after the server roll", recorded, await state()),
-			{
-				claim: `after the server roll, the physical claim and Pod ${claim} are unchanged`,
-				failure:
-					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
-						? undefined
-						: "the claim is gone or was replaced",
-			},
-		]);
+			// This roll carries the Slack fake's address to the release's own server, as the sign-in Pod has it from its start.
+			await rollRestart(`${RELEASE}-server`, { [SLACK_API_BASE_ENV]: SLACK_API_BASE });
+			report([
+				...heldChecks("after the server roll", recorded, await state()),
+				{
+					claim: `after the server roll, the physical claim and Pod ${claim} are unchanged`,
+					failure:
+						(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+							? undefined
+							: "the claim is gone or was replaced",
+				},
+			]);
 
-		// The fake answers at the next model call, after the command that runs now.
-		await releaseRollProvider();
-		await until(
-			"the turn did not end",
-			5,
-			state,
-			(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
-		);
-		const outcome = turnOutcome(
-			await psql(
-				`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM conversation_turn t WHERE t.id = '${submitted.id}'`,
-			),
-		);
-		report(outcomeChecks(outcome));
-		// The conversation sandbox stays warm for the next TURN; its idle rule, not turn completion, reaps it.
-		const ended = await state();
-		report([
-			{
-				claim: "the completed turn kept its conversation sandbox",
-				failure:
-					ended.sandboxId === sandboxId && ended.claim === claim
-						? undefined
-						: "the sandbox row is gone or was replaced",
-			},
-			{
-				claim: "the completed turn kept its physical claim",
-				failure:
-					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
-						? undefined
-						: "the claim is gone or was replaced",
-			},
-		]);
-		await slackTurn(base, token, slackSigningSecret);
-	});
+			// The fake answers at the next model call, after the command that runs now.
+			await releaseRollProvider();
+			await until(
+				"the turn did not end",
+				5,
+				state,
+				(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
+			);
+			const outcome = turnOutcome(
+				await psql(
+					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM conversation_turn t WHERE t.id = '${submitted.id}'`,
+				),
+			);
+			report(outcomeChecks(outcome));
+			// The conversation sandbox stays warm for the next TURN; its idle rule, not turn completion, reaps it.
+			const ended = await state();
+			report([
+				{
+					claim: "the completed turn kept its conversation sandbox",
+					failure:
+						ended.sandboxId === sandboxId && ended.claim === claim
+							? undefined
+							: "the sandbox row is gone or was replaced",
+				},
+				{
+					claim: "the completed turn kept its physical claim",
+					failure:
+						(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+							? undefined
+							: "the claim is gone or was replaced",
+				},
+			]);
+			await slackTurn(base, token, slackSigningSecret);
+		},
+	);
 }
 
 /** How many completion requests the fake kept, and how many of them contained a text. */
@@ -2663,7 +2681,9 @@ export function anchorChecks(counts: AnchorCounts): RollCheck[] {
 		{
 			claim: "while the anchor exists, a reply in its thread sends the anchor's text to the model",
 			failure:
-				afterReply.containing > beforeReply.containing ? undefined : "no request of the reply held it",
+				afterReply.containing > beforeReply.containing
+					? undefined
+					: "no request of the reply held it",
 		},
 		{
 			claim: "the turn after the removal called the model",
@@ -2783,7 +2803,8 @@ export async function turnRemoval(
 		report(
 			[
 				{
-					claim: "two server replicas serve the turns, and the sign-in server takes the drill's requests",
+					claim:
+						"two server replicas serve the turns, and the sign-in server takes the drill's requests",
 					failure: ready >= 2 ? undefined : `${ready} server replicas are ready`,
 				},
 			],
