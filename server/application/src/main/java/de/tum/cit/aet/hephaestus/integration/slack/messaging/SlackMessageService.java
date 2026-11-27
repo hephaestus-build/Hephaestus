@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
 import com.slack.api.Slack;
+import com.slack.api.SlackConfig;
 import com.slack.api.methods.MethodsClient;
 import com.slack.api.methods.SlackApiException;
 import com.slack.api.methods.SlackApiTextResponse;
@@ -106,7 +107,7 @@ public class SlackMessageService implements AutoCloseable {
             SlackMetrics metrics,
             SlackProperties properties) {
         this(
-                SlackSendFence.client(SlackSendFence.nativeConfig(properties)),
+                SlackSendFence.client(nativeConfig(properties)),
                 credentialProvider,
                 rateLimitTracker,
                 egressGuard,
@@ -131,6 +132,20 @@ public class SlackMessageService implements AutoCloseable {
         this.egressGuard = egressGuard;
         this.metrics = metrics;
         this.time = time;
+    }
+
+    /**
+     * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
+     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under the API origin of {@code properties}. The SDK's shared
+     * default client and its configuration stay unchanged.
+     */
+    static SlackConfig nativeConfig(SlackProperties properties) {
+        SlackConfig config = new SlackConfig();
+        config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
+        config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
+        // SDK statistics can issue auth.test before a method call. An admitted post must make only its own request.
+        config.getMethodsConfig().setStatsEnabled(false);
+        return config;
     }
 
     /** Closes this gateway's own Slack client: its HTTP client and the executors of its configuration. */
@@ -164,7 +179,7 @@ public class SlackMessageService implements AutoCloseable {
      */
     public Posted postAdmitted(long workspaceId, Outgoing post, BooleanSupplier admitAtSend) {
         Objects.requireNonNull(admitAtSend);
-        ChatPostMessageRequest built = postRequest(post);
+        ChatPostMessageRequest built = BoundRoute.postRequest(post);
         String channelId = post.channelId();
         ChatPostMessageResponse response = callWrite(
                 workspaceId, null, channelId, () -> true, admitAtSend, methods -> methods.chatPostMessage(built));
@@ -172,19 +187,6 @@ public class SlackMessageService implements AutoCloseable {
         String ts = response.getTs();
         if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channelId, "invalid_receipt");
         return new Posted(postedTo == null || postedTo.isBlank() ? channelId : postedTo, ts);
-    }
-
-    private static ChatPostMessageRequest postRequest(Outgoing post) {
-        var request = ChatPostMessageRequest.builder()
-                .channel(post.channelId())
-                .blocks(post.blocks())
-                .text(post.text())
-                .unfurlLinks(false)
-                .unfurlMedia(false)
-                .metadata(post.metadata());
-        String parent = post.threadTs();
-        if (parent != null && !parent.isBlank()) request.threadTs(parent);
-        return request.build();
     }
 
     /** Snapshots one active credential. The outbox still proves its binding generation at the send fence. */
@@ -247,6 +249,19 @@ public class SlackMessageService implements AutoCloseable {
                             1)
                     .ts()
                     .contains(target.sourceTs());
+        }
+
+        private static ChatPostMessageRequest postRequest(Outgoing post) {
+            var request = ChatPostMessageRequest.builder()
+                    .channel(post.channelId())
+                    .blocks(post.blocks())
+                    .text(post.text())
+                    .unfurlLinks(false)
+                    .unfurlMedia(false)
+                    .metadata(post.metadata());
+            String parent = post.threadTs();
+            if (parent != null && !parent.isBlank()) request.threadTs(parent);
+            return request.build();
         }
 
         public Posted post(List<LayoutBlock> blocks, String text, String marker, BooleanSupplier admit) {

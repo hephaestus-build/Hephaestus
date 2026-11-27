@@ -231,10 +231,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     @Test
     void shouldCallSlackAtTheConfiguredApiBase() {
-        assertThat(SlackSendFence.nativeConfig(new SlackProperties(SlackProperties.SLACK))
+        assertThat(SlackMessageService.nativeConfig(new SlackProperties(SlackProperties.SLACK))
                         .getMethodsEndpointUrlPrefix())
                 .isEqualTo("https://slack.com/api/");
-        assertThat(SlackSendFence.nativeConfig(new SlackProperties("http://slack.fake:8080/"))
+        assertThat(SlackMessageService.nativeConfig(new SlackProperties("http://slack.fake:8080/"))
                         .getMethodsEndpointUrlPrefix())
                 .isEqualTo("http://slack.fake:8080/api/");
     }

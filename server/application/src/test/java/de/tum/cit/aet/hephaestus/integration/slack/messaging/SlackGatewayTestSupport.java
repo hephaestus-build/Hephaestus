@@ -14,7 +14,7 @@ public final class SlackGatewayTestSupport {
 
     public static SlackMessageService withConnectionListener(
             SlackProperties properties, SlackCredentialProvider credentials, EventListener listener) {
-        var config = SlackSendFence.nativeConfig(properties);
+        var config = SlackMessageService.nativeConfig(properties);
         var client = SlackSendFence.client(config);
         var http = client.getHttpClient()
                 .getOkHttpClient()
