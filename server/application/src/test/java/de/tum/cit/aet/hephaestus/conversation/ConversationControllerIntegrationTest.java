@@ -282,7 +282,9 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .findByWorkspaceIdAndRequestId(workspace.getId(), requestId.toString())
                 .orElseThrow();
         assertThat(turn.getPageContext()).isEqualTo("Pull request #421 in acme/web");
-        assertThat(situation.render(workspace.getId(), turn.getId(), ZoneOffset.UTC))
+        assertThat(situation
+                        .render(workspace.getId(), turn.getId(), ZoneOffset.UTC)
+                        .text())
                 .contains("They asked from this page in Hephaestus: Pull request #421 in acme/web.");
         assertThat(turnRepository.findByWorkspaceIdAndConversationIdAndStatus(
                         workspace.getId(), turn.getConversationId(), ConversationTurn.Status.QUEUED))

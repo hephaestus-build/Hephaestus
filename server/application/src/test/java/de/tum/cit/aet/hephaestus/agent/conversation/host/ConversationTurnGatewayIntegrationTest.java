@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
@@ -113,6 +114,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
+    private static final String FIRST_QUESTION = "How should I pin the image?";
+
     @Autowired
     private ApplicationContext beans;
 
@@ -158,14 +161,16 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 "ask-gateway-" + suffix, "Hephaestus Gateway", "ask-gateway-org", AccountType.ORG, developerUser);
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
-        turn = ConversationTurnStarts.askAndStart(
-                beans, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
-
         sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
-        sandbox = sandboxes.ensure(
-                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
+        startTurn(conversation, FIRST_QUESTION);
         gateway = newGateway();
         gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
+    }
+
+    private void startTurn(Conversation target, String question) {
+        turn = ConversationTurnStarts.askAndStart(beans, metrics, workspace.getId(), target.getId(), question);
+        sandbox = sandboxes.ensure(
+                workspace.getId(), TurnRunsAdapter.subject(target.getId()), AgentSandboxKind.CONVERSATION);
     }
 
     private ConfigurableApplicationContext newGateway() throws Exception {
@@ -182,6 +187,7 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
                 agentRuns,
                 served,
                 contexts,
+                beans.getBean(ConversationSituation.class),
                 beans.getBean(ConversationTurnAccess.class),
                 beans.getBean(ConversationTurnService.class),
                 completion,
@@ -373,6 +379,97 @@ class ConversationTurnGatewayIntegrationTest extends AbstractWorkspaceIntegratio
 
             assertThat(call.get(10, TimeUnit.SECONDS).statusCode()).isEqualTo(409);
             assertThat(upstream.getRequestCount()).isEqualTo(expectedSent);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepRemovedAnchorTextOutOfTheNextModelRequest(boolean inThread) throws Exception {
+        var entries = beans.getBean(ConversationEntryRepository.class);
+        long workspaceId = workspace.getId();
+        var source = entries.findStimulus(workspaceId, turn.getId());
+        var ended = http.send(
+                turnRequest("end")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                contract("end.request.json").replace("Pin it by digest.", FIRST_QUESTION)))
+                        .build(),
+                HttpResponse.BodyHandlers.discarding());
+        assertThat(ended.statusCode()).isEqualTo(204);
+        var copy = entries.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, turn.getId(), ConversationEntry.Kind.ANSWER)
+                .getLast();
+        assertThat(copy.getText()).isEqualTo(FIRST_QUESTION);
+        var thread = conversations.openThread(workspaceId, copy.getId());
+        conversations.openThread(workspaceId, source.getId());
+
+        startTurn(conversation, "What threads are open?");
+        var before = http.send(turnRequest("context").GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(before.statusCode()).isEqualTo(200);
+        var mapper = beans.getBean(ObjectMapper.class);
+        assertThat(mapper.readTree(before.body()).path("situation").asString()).contains(FIRST_QUESTION);
+        var admission = Objects.requireNonNull(beans.getBean(ConversationTurnRepository.class)
+                .findByIdAndWorkspaceId(turn.getId(), workspaceId)
+                .orElseThrow()
+                .getAdmission());
+        assertThat(admission.path("situationEntryIds"))
+                .extracting(entry -> entry.asString())
+                .containsExactlyInAnyOrder(
+                        source.getId().toString(), copy.getId().toString());
+
+        beans.getBean(ConversationEntryService.class).deleteMessage(workspaceId, source.getId());
+        assertThat(entries.findByIdAndWorkspaceId(copy.getId(), workspaceId)
+                        .orElseThrow()
+                        .isRedacted())
+                .isFalse();
+        startTurn(inThread ? thread : conversation, "What should I check next?");
+        try (var upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("""
+                            data: {"id":"answer","object":"chat.completion.chunk","created":1,"model":"restart-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Check the image manifest."},"finish_reason":"stop"}]}
+
+                            data: [DONE]
+
+                            """)
+                    .build());
+            admitModel(upstream.url("/v1").toString());
+
+            var search = http.send(
+                    turnRequest("search")
+                            .POST(HttpRequest.BodyPublishers.ofString("{\"query\":\"pin\"}"))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(search.statusCode()).isEqualTo(200);
+            assertThat(search.body())
+                    .doesNotContain(FIRST_QUESTION, copy.getId().toString());
+
+            runTurnWithProvider();
+            var request = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(Objects.requireNonNull(request.getBody()).utf8())
+                    .contains("What should I check next?")
+                    .doesNotContain(FIRST_QUESTION)
+                    .contains(inThread ? "(deleted since)" : "- On a deleted message:");
+        }
+    }
+
+    private void runTurnWithProvider() throws Exception {
+        var mapper = beans.getBean(ObjectMapper.class);
+        var driver = new ProcessBuilder("node", "src/test/resources/agent/turn-gateway.ts")
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
+        try (var input = driver.outputWriter(StandardCharsets.UTF_8)) {
+            input.write(mapper.writeValueAsString(Map.of(
+                    "url", "http://localhost:" + gatewayPort,
+                    "runId", turn.getRunId(),
+                    "epoch", turn.getAttempt(),
+                    "token", credential())));
+            input.newLine();
+            input.flush();
+            assertThat(driver.waitFor(1, TimeUnit.MINUTES)).isTrue();
+            assertThat(driver.exitValue()).isZero();
+        } finally {
+            if (driver.isAlive()) driver.destroyForcibly();
         }
     }
 

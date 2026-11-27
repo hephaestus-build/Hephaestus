@@ -55,6 +55,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationPartialUpdates;
 import de.tum.cit.aet.hephaestus.conversation.ConversationReplica;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRetentionSweeper;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -170,6 +171,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 ConversationTurnFixtures.contexts(beans),
+                beans.getBean(ConversationSituation.class),
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
@@ -355,6 +357,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 ConversationTurnFixtures.contexts(beans),
+                beans.getBean(ConversationSituation.class),
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),
@@ -459,6 +462,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 contexts,
+                beans.getBean(ConversationSituation.class),
                 turnAccess,
                 turns,
                 beans.getBean(ConversationTurnCompletion.class),

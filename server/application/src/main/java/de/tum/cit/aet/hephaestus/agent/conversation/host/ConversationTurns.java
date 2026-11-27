@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -110,6 +111,10 @@ public class ConversationTurns {
      * would ({@code ConversationTurnService#updatePartial}), so no read that an erasure overtook is answered.
      */
     public <T> T read(SandboxRun run, Function<TurnAttempt, T> reader) {
+        return read(run, reader, (turn, value) -> {});
+    }
+
+    <T> T read(SandboxRun run, Function<TurnAttempt, T> reader, BiConsumer<TurnAttempt, T> admit) {
         TurnAttempt turn = write(run, false, held -> held);
         T value = reader.apply(turn);
         write(run, false, held -> {
@@ -118,6 +123,7 @@ public class ConversationTurns {
             if (startedAt == null
                     || copyFence.erasedSince(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, startedAt))
                 throw new StaleRunException(run.fence());
+            admit.accept(held, value);
             return held;
         });
         return value;

@@ -433,7 +433,7 @@ class TurnContextBuildCostIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .allSatisfy(entry -> assertThat(entry.copyAuthorityComplete()).isTrue());
         ConversationTurnContexts contexts = ConversationTurnFixtures.contexts(beans);
         contexts.context(attempt);
-        return statements.measure(() -> contexts.context(attempt));
+        return statements.measure(() -> contexts.context(attempt).context());
     }
 
     /** Each statement that the larger build prepared more often, with how many more times. */

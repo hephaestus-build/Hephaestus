@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationSituation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
@@ -43,6 +44,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     private final AgentRuns runs;
     private final ConversationTurns turns;
     private final ConversationTurnContexts contexts;
+    private final ConversationSituation situations;
     private final ConversationTurnAccess rows;
     private final ConversationTurnService turnService;
     private final ConversationTurnCompletion completion;
@@ -55,6 +57,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             AgentRuns runs,
             ConversationTurns turns,
             ConversationTurnContexts contexts,
+            ConversationSituation situations,
             ConversationTurnAccess rows,
             ConversationTurnService turnService,
             ConversationTurnCompletion completion,
@@ -65,6 +68,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
         this.runs = runs;
         this.turns = turns;
         this.contexts = contexts;
+        this.situations = situations;
         this.rows = rows;
         this.turnService = turnService;
         this.completion = completion;
@@ -123,7 +127,11 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     /** The turn's system prompt, path, situation and model, as {@code GET …/context} answers it. */
     @Override
     public JsonNode context(SandboxRun run) {
-        return turns.read(run, turn -> mapper.valueToTree(contexts.context(turn)));
+        var prepared = turns.read(
+                run,
+                contexts::context,
+                (turn, context) -> situations.recordInputs(turn.workspaceId(), turn.turnId(), context.quotedEntries()));
+        return mapper.valueToTree(prepared.context());
     }
 
     /**
