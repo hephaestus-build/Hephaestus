@@ -109,7 +109,9 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         assertThat(isMember(course, team, owner)).as("a workspace owner").isFalse();
         assertThat(isMember(course, team, admin)).as("a workspace admin").isFalse();
         assertThat(isMember(course, UUID.randomUUID(), student)).isFalse();
-        assertThat(isMember(course, elsewhere, student)).as("a team of another workspace").isFalse();
+        assertThat(isMember(course, elsewhere, student))
+                .as("a team of another workspace")
+                .isFalse();
         assertThat(isMember(otherCourse, team, student)).isFalse();
         assertThat(isMember(otherCourse, team, classmate)).isFalse();
     }
@@ -119,7 +121,8 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         UUID removed = team(course, student);
         UUID left = team(course, student);
 
-        jdbc.update("UPDATE project_team SET removed_at = now() WHERE id = ? AND workspace_id = ?", removed, id(course));
+        jdbc.update(
+                "UPDATE project_team SET removed_at = now() WHERE id = ? AND workspace_id = ?", removed, id(course));
         jdbc.update(
                 "DELETE FROM project_team_member WHERE team_id = ? AND workspace_id = ? AND account_id = ?",
                 left,
@@ -255,7 +258,9 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
         assertThat(isMember(course, shared, student)).isTrue();
         assertThat(isMember(course, onlyAbsorbed, student)).isTrue();
         assertThat(isMember(otherCourse, elsewhere, student)).isTrue();
-        assertThat(count("SELECT count(*) FROM project_team_member WHERE team_id = ? AND workspace_id = " + id(course), shared))
+        assertThat(count(
+                        "SELECT count(*) FROM project_team_member WHERE team_id = ? AND workspace_id = " + id(course),
+                        shared))
                 .isOne();
         assertThat(rows(course, unclaimed)).isZero();
         assertThat(rows(otherCourse, unclaimed)).isZero();
@@ -326,15 +331,15 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
     }
 
     private long account(Account.Status status) {
-        return Objects.requireNonNull(accounts.save(AccountFixtures.withStatus("Student", status))
-                .getId());
+        return Objects.requireNonNull(
+                accounts.save(AccountFixtures.withStatus("Student", status)).getId());
     }
 
     private PersonIdentity identity(long accountId) {
         var provider = providers
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseGet(() ->
-                        providers.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+                .orElseGet(
+                        () -> providers.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
         var identity = new Identity();
         identity.setAccount(accounts.findById(accountId).orElseThrow());
         identity.setProviderId(Objects.requireNonNull(provider.getId()));
@@ -378,7 +383,8 @@ class ProjectTeamAuthorityIntegrationTest extends BaseIntegrationTest {
 
     private long rows(Workspace workspace, long account) {
         return count(
-                "SELECT count(*) FROM project_team_member WHERE workspace_id = " + id(workspace) + " AND account_id = ?",
+                "SELECT count(*) FROM project_team_member WHERE workspace_id = " + id(workspace)
+                        + " AND account_id = ?",
                 account);
     }
 

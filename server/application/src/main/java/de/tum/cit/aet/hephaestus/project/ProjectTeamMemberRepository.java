@@ -16,9 +16,7 @@ public interface ProjectTeamMemberRepository extends JpaRepository<ProjectTeamMe
           AND m.teamId = :teamId AND m.accountId = :accountId AND t.removedAt IS NULL
         """)
     boolean isInStandingTeam(
-            @Param("workspaceId") long workspaceId,
-            @Param("teamId") UUID teamId,
-            @Param("accountId") long accountId);
+            @Param("workspaceId") long workspaceId, @Param("teamId") UUID teamId, @Param("accountId") long accountId);
 
     /** Adds the claimed account to every team of the absorbed one that it is not in yet. */
     @Modifying

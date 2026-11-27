@@ -1,7 +1,9 @@
-package de.tum.cit.aet.hephaestus.project;
+package de.tum.cit.aet.hephaestus.project.adapter;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.project.ProjectTeamMemberRepository;
+import de.tum.cit.aet.hephaestus.project.ProjectTeamRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -16,7 +18,7 @@ import org.springframework.stereotype.Component;
 @Order(20)
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-class ProjectTeamLifecycle implements WorkspacePurgeContributor, AccountAbsorptionContributor {
+class ProjectTeamLifecycleAdapter implements WorkspacePurgeContributor, AccountAbsorptionContributor {
     private final ProjectTeamRepository teams;
     private final ProjectTeamMemberRepository members;
 
