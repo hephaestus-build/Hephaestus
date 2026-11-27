@@ -4,6 +4,8 @@
 **Date:** 2026-11-26
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0163](0163-the-mentor-builds-a-context-packet-from-current-source-refs.md) (admitted source refs for decision 8)
+
 **Supersedes:** the held proposal ADR 0156 in [#5222](https://github.com/hephaestus-build/Hephaestus/pull/5222). It never reached main.
 
 **Amends:**
