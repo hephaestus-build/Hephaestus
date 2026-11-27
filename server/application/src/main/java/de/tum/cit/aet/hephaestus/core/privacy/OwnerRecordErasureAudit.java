@@ -16,10 +16,10 @@ class OwnerRecordErasureAudit implements PersonDataErasureAudit {
 
     @Override
     public void requestedByOwner(long accountId) {
-        TransactionCallbacks.afterCommit(() -> logger.event(AuthEvent.EventType.PERSON_DATA_ERASURE_REQUESTED,
-                        AuthEvent.Result.SUCCESS)
-                .account(accountId)
-                .actingAccount(accountId)
-                .record());
+        TransactionCallbacks.afterCommit(
+                () -> logger.event(AuthEvent.EventType.PERSON_DATA_ERASURE_REQUESTED, AuthEvent.Result.SUCCESS)
+                        .account(accountId)
+                        .actingAccount(accountId)
+                        .record());
     }
 }

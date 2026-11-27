@@ -5757,7 +5757,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PersonalGoal"
-          description: OK
+          description: Goal forgotten
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller has not signed in recently (problem type step-up-required)
         "4XX":
           content:
             application/problem+json:

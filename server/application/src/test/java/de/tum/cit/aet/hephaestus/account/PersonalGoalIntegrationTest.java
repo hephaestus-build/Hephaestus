@@ -103,7 +103,8 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         long owner = signup();
         String freshToken = token(owner);
         save(freshToken, 0, WORDS).expectStatus().isOk().expectBody(Void.class);
-        String staleToken = issuer.issue(owner, TokenConstraints.session(null, Instant.now().minusSeconds(3600)), null)
+        String staleToken = issuer.issue(
+                        owner, TokenConstraints.session(null, Instant.now().minusSeconds(3600)), null)
                 .value();
 
         client.delete()

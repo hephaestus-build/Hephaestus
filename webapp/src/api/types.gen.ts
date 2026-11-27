@@ -14293,6 +14293,10 @@ export type ForgetPersonalGoalData = {
 
 export type ForgetPersonalGoalErrors = {
 	/**
+	 * The caller has not signed in recently (problem type step-up-required)
+	 */
+	403: ProblemDetail;
+	/**
 	 * A problem. Its type names the kind.
 	 */
 	"4XX": ProblemDetail;
@@ -14306,7 +14310,7 @@ export type ForgetPersonalGoalError = ForgetPersonalGoalErrors[keyof ForgetPerso
 
 export type ForgetPersonalGoalResponses = {
 	/**
-	 * OK
+	 * Goal forgotten
 	 */
 	200: PersonalGoal;
 };
