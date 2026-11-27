@@ -44,6 +44,11 @@ public final class ActionVariants {
         return path;
     }
 
+    /** This build can carry the kind but lacks the runtime needed to claim or settle any variant. */
+    public static ActionVariants none() {
+        return new ActionVariants("$ ? (1 == 0)");
+    }
+
     /**
      * The payload has one shape, the record {@code payload}. A later enum component of that record, or of a record
      * inside it, is guarded on its own: a row whose enum value this build lacks is not admitted.

@@ -94,7 +94,7 @@ class MentorSlackEffectAdapter implements ActionAdapter {
 
     @Override
     public ActionVariants variants() {
-        return ActionVariants.one(Payload.class);
+        return runtime.getIfAvailable() == null ? ActionVariants.none() : ActionVariants.one(Payload.class);
     }
 
     @Override
