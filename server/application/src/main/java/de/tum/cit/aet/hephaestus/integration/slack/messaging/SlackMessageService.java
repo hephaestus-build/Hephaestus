@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -229,6 +230,7 @@ public class SlackMessageService implements AutoCloseable {
     /** Provider operations on the exact route with the same bound credential for observation, readback and write. */
     @OutboundEgressGateway
     public final class BoundRoute {
+        private static final String EVENT_TYPE = "mentor_effect";
         private final Route target;
         private final BoundBot bot;
 
@@ -262,7 +264,11 @@ public class SlackMessageService implements AutoCloseable {
                     .ts().contains(target.sourceTs());
         }
 
-        public Posted post(List<LayoutBlock> blocks, String text, Message.Metadata metadata, BooleanSupplier admit) {
+        public Posted post(List<LayoutBlock> blocks, String text, String marker, BooleanSupplier admit) {
+            var metadata = Message.Metadata.builder()
+                    .eventType(EVENT_TYPE)
+                    .eventPayload(Map.of("marker", marker))
+                    .build();
             long workspace = target.workspaceId();
             String channel = target.channelId();
             var request = postRequest(new Outgoing(channel, target.outboundParent(), blocks, text, metadata));
@@ -278,7 +284,7 @@ public class SlackMessageService implements AutoCloseable {
             return new Posted(channel, ts);
         }
 
-        public Matches readPost(String eventType, String marker, int maxPages) {
+        public Matches readPost(String marker, int maxPages) {
             return readMatches(message -> {
                 Message.Metadata metadata = message.getMetadata();
                 if (metadata == null) {
@@ -286,7 +292,7 @@ public class SlackMessageService implements AutoCloseable {
                     return bot.userId().equals(message.getUser()) && exactParent(message)
                             ? Candidate.INCOMPLETE : Candidate.IGNORE;
                 }
-                if (!eventType.equals(metadata.getEventType())) return Candidate.IGNORE;
+                if (!EVENT_TYPE.equals(metadata.getEventType())) return Candidate.IGNORE;
                 var payload = metadata.getEventPayload();
                 if (payload == null || !(payload.get("marker") instanceof String value))
                     return Candidate.INCOMPLETE;

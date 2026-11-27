@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.slack.api.Slack;
 import com.slack.api.SlackConfig;
-import com.slack.api.model.Message;
 import com.slack.api.model.ResponseMetadata;
 import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -27,7 +26,6 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -556,7 +554,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                         case "/api/auth.test" -> json("{\"ok\":true,\"team_id\":\"T1\"}");
                         case "/api/chat.postMessage" -> {
                             posts.incrementAndGet();
-                            assertThat(bodyOf(request)).contains("channel=D1", "thread_ts=90.000001");
+                            assertThat(bodyOf(request)).contains("channel=D1", "thread_ts=90.000001", "mentor_effect", "opaque");
                             yield json("{\"ok\":true,\"ts\":\"110.000001\"}");
                         }
                         case "/api/conversations.replies" -> {
@@ -573,12 +571,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
             api.start();
             try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
                 var route = bind(local, "90.000001");
-                var metadata = Message.Metadata.builder()
-                        .eventType("mentor_effect").eventPayload(Map.of("marker", "opaque")).build();
-                assertThatThrownBy(() -> route.post(List.of(), "fixed notice", metadata, () -> true))
+                assertThatThrownBy(() -> route.post(List.of(), "fixed notice", "opaque", () -> true))
                         .isInstanceOfSatisfying(SlackSendException.class,
                                 error -> assertThat(error.slackError()).isEqualTo("invalid_receipt"));
-                assertThat(route.readPost("mentor_effect", "opaque", 1).ts()).containsExactly("110.000001");
+                assertThat(route.readPost("opaque", 1).ts()).containsExactly("110.000001");
                 assertThat(posts).hasValue(1);
                 verify(credentialProvider).resolveActiveBinding(7L, 42L, "T1");
                 verify(credentialProvider, never()).resolve(any(IntegrationRef.class));
@@ -602,7 +598,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
             });
             api.start();
             try (var local = serviceWithLocalSlack(localConfig(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS))) {
-                assertThat(bind(local, null).readPost("mentor_effect", "opaque", 1))
+                assertThat(bind(local, null).readPost("opaque", 1))
                         .isEqualTo(new SlackMessageService.Matches(List.of(), true));
             }
         }
