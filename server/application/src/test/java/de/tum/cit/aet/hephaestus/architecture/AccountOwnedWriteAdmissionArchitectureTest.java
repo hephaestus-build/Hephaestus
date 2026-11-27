@@ -16,6 +16,9 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempts;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorIntake;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorReviewSealedIntake;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository;
@@ -28,6 +31,7 @@ import jakarta.persistence.criteria.CriteriaUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -118,14 +122,15 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
     }
 
     /**
-     * Mentor DML lives in two repositories, and only each one's own intake writes through it, after the account's write
+     * Mentor DML lives in three repositories, and only each one's own writer calls it, after the account's write
      * fence and with the owner bound: a provider event through {@link MentorIntake}, a sealed review's event through
-     * {@link MentorReviewSealedIntake}.
+     * {@link MentorReviewSealedIntake}, and the attempt leases through {@link MentorAttempts}.
      */
     @Test
     void shouldKeepMentorWritesBehindTheFencedIntakes() throws IOException {
         var writers = Set.of(
                 Path.of("src/main/java", MentorSourceRepository.class.getName().replace('.', '/') + ".java"),
+                Path.of("src/main/java", MentorAttemptRepository.class.getName().replace('.', '/') + ".java"),
                 Path.of("src/main/java", MENTOR_EVENT_REPOSITORY.replace('.', '/') + ".java"));
         try (var files = Files.walk(PRODUCTION_SOURCES)) {
             for (Path file :
@@ -154,6 +159,15 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         .map(call -> call.getDescription()))
                 .as("Write a sealed review's event through MentorReviewSealedIntake")
                 .isEmpty();
+        assertThat(classes.stream()
+                        .flatMap(type -> type.getMethodCallsFromSelf().stream())
+                        .filter(call -> call.getTargetOwner().isAssignableTo(MentorAttemptRepository.class))
+                        .filter(call -> !call.getOriginOwner().isEquivalentTo(MentorAttempts.class))
+                        .map(call -> call.getDescription()))
+                .as("Lease the mentor's attempts through MentorAttempts")
+                .isEmpty();
+        fenced(classes.get(MentorAttempts.class)
+                .getMethod("claim", long.class, WorkClass.class, int.class, Duration.class));
         fenced(classes.get(MentorIntake.class).getMethod("admit", IngressEnvelope.class, Producer.class));
         fenced(classes.get(MentorReviewSealedIntake.class).getMethod("admit", MentorReviewIntake.SealedReview.class));
     }
