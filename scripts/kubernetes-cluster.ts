@@ -2666,29 +2666,40 @@ export function fencedChecks(atRemoval: RemovedTurn, later: RemovedTurn): RollCh
 	];
 }
 
-/** The fake's counts of the removed anchor's text around each step. */
+/** The fake's counts of the removed question's text around each step. */
 export interface AnchorCounts {
 	beforeReply: Seen;
-	afterReply: Seen;
+	afterQuestionReply: Seen;
+	afterAnswerReply: Seen;
 	beforeNext: Seen;
 	afterNext: Seen;
 }
 
-/** The checks that an anchor's text reached the model while it existed, and no request after its removal. */
+/**
+ * The checks that the text reached the model through each thread while its source existed, and no request after
+ * the source's removal: each positive control must see the text, or the text's later absence proves nothing.
+ */
 export function anchorChecks(counts: AnchorCounts): RollCheck[] {
-	const { beforeReply, afterReply, beforeNext, afterNext } = counts;
+	const { beforeReply, afterQuestionReply, afterAnswerReply, beforeNext, afterNext } = counts;
 	return [
 		{
-			claim:
-				"while its source exists, a reply in a thread on the question or its quoting answer sends the text to the model",
+			claim: "while the question exists, a reply in its thread sends its text to the model",
 			failure:
-				afterReply.containing > beforeReply.containing
+				afterQuestionReply.containing > beforeReply.containing
 					? undefined
 					: "no request of the reply held it",
 		},
 		{
-			claim: "the turn after the removal called the model",
-			failure: afterNext.requests > beforeNext.requests ? undefined : "it made no model request",
+			claim:
+				"while the question exists, a reply in the thread on its quoting answer sends the quote to the model",
+			failure:
+				afterAnswerReply.containing > afterQuestionReply.containing
+					? undefined
+					: "no request of the reply held it",
+		},
+		{
+			claim: "the turns after the removal called the model",
+			failure: afterNext.requests > beforeNext.requests ? undefined : "they made no model request",
 		},
 		{
 			claim: "no model request after the removal holds the removed question's text",
@@ -2872,9 +2883,10 @@ export async function turnRemoval(
 			anchor.questionId,
 		);
 		await answered(onQuestion.id);
+		const afterQuestionReply = await seenByFake(marker);
 		const onAnswer = await ask(conversation, token, "Which tag was it?", quoting);
 		await answered(onAnswer.id);
-		const afterReply = await seenByFake(marker);
+		const afterAnswerReply = await seenByFake(marker);
 		await deleteEntry(conversation, token, anchor.questionId);
 		const beforeNext = await seenByFake(marker);
 		// Erasing the quoting answer with its source also leaves its thread without a parent to reply to.
@@ -2892,7 +2904,10 @@ export async function turnRemoval(
 		const next = await ask(conversation, token, "What threads are open?");
 		await answered(next.id);
 		const afterNext = await seenByFake(marker);
-		report(anchorChecks({ beforeReply, afterReply, beforeNext, afterNext }), "turn removal");
+		report(
+			anchorChecks({ beforeReply, afterQuestionReply, afterAnswerReply, beforeNext, afterNext }),
+			"turn removal",
+		);
 	});
 }
 

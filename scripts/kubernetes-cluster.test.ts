@@ -1320,24 +1320,28 @@ await test("a removal fenced its reply only when the turn stopped at once and st
 	]);
 });
 
-await test("a removed anchor passes only when a reply sent its text and no later request did", () => {
+await test("a removed question passes only when each thread reply sent its text and no later request did", () => {
 	const counts = {
 		beforeReply: { requests: 4, containing: 1 },
-		afterReply: { requests: 6, containing: 3 },
+		afterQuestionReply: { requests: 5, containing: 2 },
+		afterAnswerReply: { requests: 6, containing: 3 },
 		beforeNext: { requests: 6, containing: 3 },
-		afterNext: { requests: 8, containing: 3 },
+		afterNext: { requests: 9, containing: 3 },
 	};
 	const failures = (changed: Partial<typeof counts>) =>
 		anchorChecks({ ...counts, ...changed }).flatMap((check) =>
 			check.failure === undefined ? [] : [check.failure],
 		);
 	assert.deepEqual(failures({}), []);
-	// The check must be able to see the text, or its absence proves nothing.
-	assert.deepEqual(failures({ afterReply: { requests: 6, containing: 1 } }), [
+	// Each positive control must see the text, or its later absence proves nothing.
+	assert.deepEqual(failures({ afterQuestionReply: { requests: 5, containing: 1 } }), [
+		"no request of the reply held it",
+	]);
+	assert.deepEqual(failures({ afterAnswerReply: { requests: 6, containing: 2 } }), [
 		"no request of the reply held it",
 	]);
 	assert.deepEqual(failures({ afterNext: { requests: 6, containing: 3 } }), [
-		"it made no model request",
+		"they made no model request",
 	]);
-	assert.deepEqual(failures({ afterNext: { requests: 8, containing: 4 } }), ["1 requests held it"]);
+	assert.deepEqual(failures({ afterNext: { requests: 9, containing: 4 } }), ["1 requests held it"]);
 });
