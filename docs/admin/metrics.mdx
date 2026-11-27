@@ -70,6 +70,7 @@ ORDER BY c.workspace_id, p.slug, c.kind, c.change;
 | `agent_job_total`             | Counter   | `outcome` | Committed terminal transitions                                  |
 | `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, and total durations                   |
 | `agent_job_stage_duration_seconds` | Histogram | `stage`, `outcome` | Duration of one stage of a review attempt |
+| `agent_job_work_place_handoff_total` | Counter | `outcome`, `reason` | Sealed reviews by what the seal did with the copy for the work place |
 | `agent_review_practice_coverage_eligible` and `agent_review_practice_coverage_evaluated` | Summary | none | Eligible and evaluated practices per attempt with valid reported coverage. Divide the change in `_sum` by the change in `_count` for the mean in a window |
 | `agent_review_zero_evaluated_total` | Counter | none | Attempts with valid coverage that reports one or more eligible practices and zero evaluated practices |
 | `agent_review_last_zero_evaluated_timestamp_seconds` | Gauge | none | Unix time of the last such attempt on this process, or zero before one occurs |
@@ -81,6 +82,18 @@ Attempts that lose their holder before they return a result have their own `agen
 `execution`, or `total`. Identifiers, model and provider names, server IDs, and exception text are not
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
+
+`agent_job_work_place_handoff_total` counts each seal of an item review. A trial is not counted. A second seal of the same review counts as `already_written`:
+
+| `outcome` | `reason` | Meaning |
+| --- | --- | --- |
+| `written` | `none` | The seal wrote the copy for the pull or merge request |
+| `skipped` | `ineligible_review` | A backfill, or an item with no work place, such as an issue |
+| `skipped` | `no_copy_on_the_work` | The item takes no copy on the work |
+| `skipped` | `inputs_unusable` | The review's retained inputs were erased, expired or removed, or their digest or manifest did not match, so no composition could read them either |
+| `skipped` | `nothing_public` | No public result is Not met, so the work place has nothing to say |
+| `skipped` | `already_written` | Another seal of the same review wrote the copy |
+| `failed` | `unreadable` | A retained input did not decode, or a reference was missing. The seal commits without a copy, and `HephaestusWorkPlaceHandoffFailing` fires |
 
 `agent_job_stage_duration_seconds` measures each stage of one attempt:
 

@@ -596,6 +596,13 @@ groups:
         annotations:
           summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusWorkPlaceHandoffFailing
+        expr: sum(increase(agent_job_work_place_handoff_total{job="hephaestus",outcome="failed"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A sealed review kept no copy for its work place because its retained inputs could not be read
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentQueueStalled
         expr: max by (band) (agent_run_oldest_due_age_seconds{job="hephaestus"}) > 3600
         for: 5m
