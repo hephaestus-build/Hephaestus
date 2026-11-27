@@ -282,8 +282,8 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
         UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
         long stranger = linkedAccount();
 
-        var foreign = envelope(
-                IngressKind.CONTROL_STOP, "e2", message, FIRST, new VerifiedActor("U" + stranger, stranger));
+        var foreign =
+                envelope(IngressKind.CONTROL_STOP, "e2", message, FIRST, new VerifiedActor("U" + stranger, stranger));
         assertThat(inTransaction(() -> intake.admit(foreign, Producer.MENTOR))).isEqualTo(admitted("e2", null));
         assertThat(event("e2")).containsEntry("reason", "NOT_OWNER");
         assertThat(column(request, "state")).isEqualTo("OPEN");

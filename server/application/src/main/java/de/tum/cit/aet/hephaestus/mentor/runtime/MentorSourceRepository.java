@@ -38,9 +38,7 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
      * Serializes the account's commitment and control transitions. It waits, bounded by the receive transaction's
      * {@code lock_timeout}, because every transition of the account takes it first and holds it briefly.
      */
-    @Query(
-            value = "SELECT account_id FROM mentor_owner WHERE account_id = :account FOR UPDATE",
-            nativeQuery = true)
+    @Query(value = "SELECT account_id FROM mentor_owner WHERE account_id = :account FOR UPDATE", nativeQuery = true)
     Optional<Long> lockOwner(@Param("account") long account);
 
     @Modifying
