@@ -70,8 +70,7 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList("SELECT id FROM mentor_source WHERE id = ?", UUID.class, foreign))
                 .as("no owner bound")
                 .isEmpty();
-        assertThat(jdbc.queryForObject(
-                        "SELECT public.mentor_source_owner(7, 'D1', ?)", Long.class, foreign.toString()))
+        assertThat(jdbc.queryForObject("SELECT public.mentor_source_owner(7, 'D1', ?)", Long.class, foreign.toString()))
                 .as("the owner selector names only the account")
                 .isEqualTo(second);
         assertThatThrownBy(() -> asOwner(first, () -> seed(second)))
@@ -79,7 +78,8 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
                 .rootCause()
                 .hasMessageContaining("row-level security");
         asOwner(second, () -> {
-            assertThat(jdbc.queryForObject("SELECT state FROM mentor_request WHERE source_id = ?", String.class, foreign))
+            assertThat(jdbc.queryForObject(
+                            "SELECT state FROM mentor_request WHERE source_id = ?", String.class, foreign))
                     .isEqualTo("OPEN");
             return foreign;
         });
@@ -101,9 +101,10 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
                 assertThat(store.export(selection, scope))
                         .as(store.store())
                         .singleElement()
-                        .satisfies(row -> assertThat(row.path("account_id").asLong())
-                                .isEqualTo(subject))
-                        .satisfies(row -> assertThat(row.has("scope_reader_epoch")).isFalse());
+                        .satisfies(row ->
+                                assertThat(row.path("account_id").asLong()).isEqualTo(subject))
+                        .satisfies(
+                                row -> assertThat(row.has("scope_reader_epoch")).isFalse());
                 assertThat(store.erase(selection, scope)).as(store.store()).isOne();
             }
             return erased;
@@ -144,8 +145,7 @@ class MentorStorageIntegrationTest extends BaseIntegrationTest {
             assertThat(jdbc.queryForList(
                             "SELECT id FROM mentor_source WHERE id IN (?, ?)", UUID.class, firstErased, kept))
                     .containsExactly(kept);
-            assertThat(jdbc.queryForList(
-                            "SELECT id FROM mentor_request WHERE source_id = ?", UUID.class, firstErased))
+            assertThat(jdbc.queryForList("SELECT id FROM mentor_request WHERE source_id = ?", UUID.class, firstErased))
                     .isEmpty();
             return kept;
         });

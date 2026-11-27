@@ -26,6 +26,7 @@ final class PersonErasureAllStoresFixture {
     static final String CANARY = "person-all-stores-canary";
     /** Row-level security hides these rows from the application role with no owner bound, so the owner seeds them. */
     private static final Set<String> OWNER_SECURED = Set.of("mentor_event", "mentor_request", "mentor_source");
+
     private final JdbcTemplate jdbc;
     private final JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
     private final SchemaRowSeeder rows;

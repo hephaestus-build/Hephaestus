@@ -1,0 +1,74 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    MentorEvent {
+        UUID id PK
+        BIGINT account_id "NOT NULL"
+        BIGINT binding_id UK "NOT NULL"
+        VARCHAR(255) native_event_id UK "NOT NULL"
+        VARCHAR(32) kind "NOT NULL"
+        UUID source_id FK "NOT NULL"
+        UUID request_id
+        VARCHAR(16) disposition "NOT NULL"
+        VARCHAR(32) reason
+        VARCHAR(64) source_ref "NOT NULL"
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        TIMESTAMPTZ received_at "NOT NULL"
+    }
+
+    MentorRequest {
+        UUID id PK
+        BIGINT account_id "NOT NULL"
+        UUID source_id FK,UK "NOT NULL"
+        INTEGER version "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(16) audience_transport "NOT NULL"
+        BIGINT audience_connection_id
+        VARCHAR(255) audience_container_id "NOT NULL"
+        VARCHAR(255) audience_thread_root
+        BIGINT scope_account_generation "NOT NULL"
+        BIGINT scope_reader_epoch "NOT NULL"
+        BIGINT scope_consent_epoch "NOT NULL"
+        VARCHAR(16) scope_authority "NOT NULL"
+        BIGINT scope_workspace_id
+        BIGINT scope_workspace_generation
+        BIGINT scope_binding_id
+        BIGINT scope_binding_generation
+        VARCHAR(255) scope_native_actor_id
+        TIMESTAMPTZ opened_at "NOT NULL"
+        TIMESTAMPTZ deadline "NOT NULL"
+    }
+
+    MentorSource {
+        UUID id PK
+        BIGINT account_id "NOT NULL"
+        BIGINT binding_id UK "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+        VARCHAR(255) container_id UK "NOT NULL"
+        VARCHAR(255) native_message_id UK "NOT NULL"
+        VARCHAR(16) producer "NOT NULL"
+        VARCHAR(64) revision "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+    }
+
+    %% Relationships
+    %% One-to-One relationships
+    MentorSource ||--|| MentorRequest : has
+
+    %% One-to-Many relationships
+    MentorSource ||--o{ MentorEvent : has
+
+    %% Styling
+    classDef primaryEntity stroke-width:2px
+    classDef associationEntity stroke-width:1px
+    classDef metadataEntity stroke-width:1px
+    classDef referenceEntity stroke-dasharray:5 5
+
