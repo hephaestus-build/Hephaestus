@@ -1,9 +1,6 @@
-import { ChevronDownIcon } from "lucide-react";
-
 import type { ConversationAnswerUse, ConversationUsedSource } from "@/api/types.gen";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { formatDateTime } from "@/lib/dates";
+
+import { AnswerUseDisclosure, UseGroup } from "./AnswerUseDisclosure";
 
 /** The documents that Hephaestus prepares about the person's work, in the person's terms. */
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
@@ -65,18 +62,6 @@ export function usedSourceLabel(source: ConversationUsedSource): string {
 	}
 }
 
-/**
- * The answer's words, shortened to its opening and its close, so that each disclosure on the page has its own
- * accessible name: two answers that start alike usually end differently.
- */
-function excerpt(text: string): string {
-	const words = text.replaceAll(/\s+/gu, " ").trim();
-	if (words.length <= 96) {
-		return words;
-	}
-	return `${words.slice(0, 47).trimEnd()} … ${words.slice(-40).trimStart()}`;
-}
-
 function closingLine(used: ConversationAnswerUse): string {
 	const also = used.askedFromPage
 		? "this conversation and the page you asked from"
@@ -101,61 +86,24 @@ export interface AnswerUseProps {
  */
 export function AnswerUse({ used, answeredAt, text }: AnswerUseProps) {
 	return (
-		<Collapsible>
-			<CollapsibleTrigger
-				aria-label={`What Hephaestus used (Hephaestus, ${formatDateTime(answeredAt)}: ${excerpt(text)})`}
-				render={
-					<Button variant="ghost" size="xs" className="group -ml-2 w-fit text-muted-foreground" />
-				}
-			>
-				What Hephaestus used
-				<ChevronDownIcon
-					data-icon="inline-end"
-					aria-hidden
-					className="transition-transform group-data-[panel-open]:rotate-180"
+		<AnswerUseDisclosure answeredAt={answeredAt} text={text}>
+			{used.cited && (
+				<UseGroup
+					title="Cited"
+					items={["The observations, problems and feedback that this answer links to"]}
 				/>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
-				<div className="mt-1 flex flex-col gap-3 rounded-lg border p-3 text-sm">
-					{used.cited && (
-						<UseGroup
-							title="Cited"
-							items={["The observations, problems and feedback that this answer links to"]}
-						/>
+			)}
+			{used.recorded ? (
+				<>
+					{used.read.length > 0 && <UseGroup title="Read" items={used.read.map(usedSourceLabel)} />}
+					{used.couldNotCheck.length > 0 && (
+						<UseGroup title="Could not check" items={used.couldNotCheck.map(usedSourceLabel)} />
 					)}
-					{used.recorded ? (
-						<>
-							{used.read.length > 0 && (
-								<UseGroup title="Read" items={used.read.map(usedSourceLabel)} />
-							)}
-							{used.couldNotCheck.length > 0 && (
-								<UseGroup title="Could not check" items={used.couldNotCheck.map(usedSourceLabel)} />
-							)}
-							<p className="text-muted-foreground">{closingLine(used)}</p>
-						</>
-					) : (
-						<p className="text-muted-foreground">
-							Hephaestus did not record what this answer used.
-						</p>
-					)}
-				</div>
-			</CollapsibleContent>
-		</Collapsible>
-	);
-}
-
-function UseGroup({ title, items }: { title: string; items: readonly string[] }) {
-	return (
-		<section className="flex flex-col gap-1" aria-label={title}>
-			<p className="font-medium text-foreground">{title}</p>
-			<ul className="list-disc pl-5 text-muted-foreground">
-				{items.map((item) => (
-					// The server lists each kind of source once, so its words are unique in a group.
-					<li key={item} className="break-words">
-						{item}
-					</li>
-				))}
-			</ul>
-		</section>
+					<p className="text-muted-foreground">{closingLine(used)}</p>
+				</>
+			) : (
+				<p className="text-muted-foreground">Hephaestus did not record what this answer used.</p>
+			)}
+		</AnswerUseDisclosure>
 	);
 }
