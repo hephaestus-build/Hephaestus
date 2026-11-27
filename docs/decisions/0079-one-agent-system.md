@@ -31,6 +31,7 @@ Each ADR above has an update block, dated 2026-11-09, that names the sections th
 - [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md)
 - [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md)
 - [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md)
+- [ADR 0158](0158-the-mentor-orders-commitments-per-person-and-answers-per-request.md)
 - [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md)
 - [ADR 0145](0145-pi-runs-every-agent-loop-behind-the-pi-runtime-interface.md)
 - [ADR 0147](0147-capacity-degrades-gracefully-and-a-question-is-never-refused-for-load.md)

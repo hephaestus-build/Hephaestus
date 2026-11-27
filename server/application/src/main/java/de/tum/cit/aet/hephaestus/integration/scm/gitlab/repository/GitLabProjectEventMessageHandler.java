@@ -20,9 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code project_transfer} and {@code project_update}), normalized to the "project" event key by the webhook receiver.
  *
  * <p>{@link GitLabRouteAdmission} does the work before this handler runs, through {@link GitLabRouteWrites}: it
- * stores the project as GitLab reports it to the connection and adjusts the workspace's monitor. The payload's id and
- * path are never written, and the shared repository row is never deleted, since GitLab not reporting a project to one
- * connection does not prove it is gone.
+ * stores the project as GitLab reports it to the connection and adjusts the workspace's monitor. A destroy event can
+ * also close public activity when a separate, unauthenticated project lookup confirms loss of public access.
  * This handler exists so the dispatcher routes the event to admission.
  */
 @Component

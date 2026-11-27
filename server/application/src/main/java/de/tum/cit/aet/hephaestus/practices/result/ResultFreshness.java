@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -36,8 +37,29 @@ import tools.jackson.databind.JsonNode;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ResultFreshness implements FreshnessRead {
+    /** The read that {@link #asOneRead} opened on this thread, if any. */
+    private static final ThreadLocal<@Nullable OneRead> ACTIVE_READ = new ThreadLocal<>();
+
     private final ReviewPracticeRepository practices;
     private final ProductItemQuery items;
+
+    /**
+     * Runs {@code read} as one read of the workspace's sources: a later check of a piece of work takes the answer of an
+     * earlier read of the same work that read every kind the check names. A read already open for the workspace on this thread is joined, and the answers
+     * are dropped when the outermost read returns.
+     */
+    @Override
+    public <T> T asOneRead(long workspaceId, Supplier<T> read) {
+        var open = ACTIVE_READ.get();
+        if (open != null && open.workspaceId() == workspaceId) return read.get();
+        ACTIVE_READ.set(new OneRead(workspaceId, new HashMap<>()));
+        try {
+            return read.get();
+        } finally {
+            if (open == null) ACTIVE_READ.remove();
+            else ACTIVE_READ.set(open);
+        }
+    }
 
     public Map<UUID, Currentness> states(long workspaceId, Collection<Result> rows) {
         return currentness(freshnessFor(workspaceId, claims(rows)));
@@ -169,7 +191,9 @@ public class ResultFreshness implements FreshnessRead {
             var compared = expected.getOrDefault(result.id(), Map.of());
             var read = WorkRead.of(result, occasions);
             var answered = Objects.requireNonNull(currentByRead.get(read));
-            if (!answered.keySet().containsAll(compared.keySet()))
+            // A result that compares every kind of the shared read would read the same kinds again.
+            if (!answered.keySet().containsAll(compared.keySet())
+                    && !compared.keySet().equals(kindsByRead.get(read)))
                 answered = currentByScope.computeIfAbsent(
                         new ReadScope(read.itemId(), compared.keySet(), read.occasion()),
                         scope -> currentFingerprints(refs, read, scope.kinds()));
@@ -178,11 +202,30 @@ public class ResultFreshness implements FreshnessRead {
         return Map.copyOf(states);
     }
 
+    /**
+     * The work's current fingerprints of {@code kinds}, from one read. Inside {@link #asOneRead}, a check whose kinds a
+     * kept read of the work answered takes that read's answer, so the read checks the work once. A check that names
+     * another kind reads all of them again, kept and new, and that read is kept: every answer still comes from a single
+     * read, so it never mixes what the work held at two moments. A read that fails is not kept. When it read more kinds
+     * than the check names, the check reads its own kinds, so a failing source fails only the results that compare it.
+     */
     private Map<SourceKind, String> currentFingerprints(Map<Long, ItemRef> refs, WorkRead read, Set<SourceKind> kinds) {
-        return kinds.isEmpty()
-                ? Map.of()
-                : items.read(Objects.requireNonNull(refs.get(read.itemId())), Set.copyOf(kinds), read.occasion())
-                        .fingerprints();
+        if (kinds.isEmpty()) return Map.of();
+        var item = Objects.requireNonNull(refs.get(read.itemId()));
+        var open = ACTIVE_READ.get();
+        if (open == null || open.workspaceId() != item.workspaceId())
+            return items.read(item, Set.copyOf(kinds), read.occasion()).fingerprints();
+        var kept = open.reads().get(read);
+        if (kept != null && kept.kinds().containsAll(kinds)) return kept.fingerprints();
+        var wanted = new HashSet<>(kinds);
+        if (kept != null) wanted.addAll(kept.kinds());
+        var answer = items.read(item, Set.copyOf(wanted), read.occasion());
+        if (answer.unreadReason() != null)
+            return kept == null
+                    ? Map.of()
+                    : items.read(item, Set.copyOf(kinds), read.occasion()).fingerprints();
+        open.reads().put(read, new KeptRead(Set.copyOf(wanted), answer.fingerprints()));
+        return answer.fingerprints();
     }
 
     /**
@@ -238,6 +281,11 @@ public class ResultFreshness implements FreshnessRead {
     }
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}
+
+    /** A read of {@code kinds} of a piece of work that ran, and what it answered. */
+    private record KeptRead(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {}
+
+    private record OneRead(long workspaceId, Map<WorkRead, KeptRead> reads) {}
 
     private record ReadScope(
             long itemId, Set<SourceKind> kinds, @Nullable UUID occasion) {}

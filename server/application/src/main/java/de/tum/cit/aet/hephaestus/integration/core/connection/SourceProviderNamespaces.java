@@ -62,6 +62,14 @@ public class SourceProviderNamespaces {
         return providers.findByTypeAndServerUrl(type, serverUrl);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isMirrorProvider(long providerId, IdentityProviderType type, String serverUrl) {
+        return providers
+                .findByTypeAndServerUrl(type, serverUrl)
+                .filter(provider -> Objects.equals(provider.getId(), providerId))
+                .isPresent();
+    }
+
     /** Existing provider aggregate for a mirror write already bound to its provider id. */
     @Transactional(readOnly = true)
     public Optional<IdentityProvider> findForMirror(long providerId) {

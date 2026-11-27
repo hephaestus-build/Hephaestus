@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.0-rc.21
+
+### Patch Changes
+
+- Start queued practice reviews without scanning unrelated commit attribution. Large repositories no longer slow down an identity check for a single review.
+- Commit link correction continues past paused credentials. When another active connection can read the same repository, the job uses it to answer deferred emails.
+- A conversation sandbox cannot restart an attempt by handing it off after its deadline. The run keeps its deadline outcome.
+- When GitLab confirms a deleted project is no longer publicly accessible, its retained activity stops appearing on all public workspace pages that monitored it.
+- A delayed GitHub or GitLab response can no longer mark a repository available again after a newer check finds that access is gone. Public activity waits for a fresh confirmation of access.
+
+  Private repositories on different provider instances can refresh at the same time, even when they share a native ID. Public activity measures confirmation age with the database clock.
+
+  Public activity requires a public confirmation from the workspace's own GitHub or GitLab connection. A private answer closes public activity in every workspace that monitors the repository. A delayed answer cannot restore an old path after a newer rename.
+
+  After the upgrade, each repository returns to its workspace's public page when the next metadata sync confirms that it is public.
+
+- Prepare the authorization contract for new app and Slack mentor requests.
+- The practice profile overview loads faster. Hephaestus checks each piece of work once per page read, even when the overview asks about it for several reasons.
+- The item event trace records that a review already started when its occasion is replayed after the repository leaves the workspace.
+- Fleet claims for weekly digests skip the cleanup scan for erased digests. The background reaper still clears queued digests left by older releases.
+- Feedback updates use the same visibility rules for the old and new state when deciding whether to expire a ready account export.
+- Hephaestus defers Slack posts during a recorded posting rate limit and checks delivery admission again on the next attempt.
+
 ## 1.0.0-rc.20
 
 ### Minor Changes

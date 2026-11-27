@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795727978428-1" author="hephaestus">
+        <comment>Use the same developer-visible states for both sides of the feedback export expiry trigger.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION public.account_export_feedback_state_visible(state character varying) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT SECURITY INVOKER
+    AS $$ SELECT state IN ('READY', 'DELIVERED', 'UNCONFIRMED', 'FAILED') $$;
+
+CREATE OR REPLACE TRIGGER trg_feedback_changed_exports
+    AFTER UPDATE OF state, body, destination, delivered_at, person_account_id ON public.feedback
+    FOR EACH ROW
+    WHEN (OLD.person_account_id IS NOT NULL AND OLD.delivered_at IS NOT NULL
+          AND public.account_export_feedback_state_visible(OLD.state)
+          AND (NOT public.account_export_feedback_state_visible(NEW.state)
+               OR (OLD.body, OLD.destination, OLD.delivered_at, OLD.person_account_id)
+                  IS DISTINCT FROM (NEW.body, NEW.destination, NEW.delivered_at, NEW.person_account_id)))
+    EXECUTE FUNCTION public.account_export_feedback_changed();
+        </sql>
+        <rollback>
+            <sql splitStatements="false">
+CREATE OR REPLACE TRIGGER trg_feedback_changed_exports
+    AFTER UPDATE OF state, body, destination, delivered_at, person_account_id ON public.feedback
+    FOR EACH ROW
+    WHEN (OLD.person_account_id IS NOT NULL AND OLD.delivered_at IS NOT NULL
+          AND OLD.state IN ('READY', 'DELIVERED', 'UNCONFIRMED', 'FAILED')
+          AND (NEW.state NOT IN ('READY', 'DELIVERED', 'UNCONFIRMED', 'FAILED')
+               OR (OLD.body, OLD.destination, OLD.delivered_at, OLD.person_account_id)
+                  IS DISTINCT FROM (NEW.body, NEW.destination, NEW.delivered_at, NEW.person_account_id)))
+    EXECUTE FUNCTION public.account_export_feedback_changed();
+
+DROP FUNCTION public.account_export_feedback_state_visible(character varying);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
