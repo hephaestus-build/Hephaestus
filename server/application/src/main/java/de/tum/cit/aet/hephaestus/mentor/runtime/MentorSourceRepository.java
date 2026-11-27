@@ -31,7 +31,7 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             INSERT INTO mentor_source(id, account_id, binding_id, workspace_id, container_id, native_message_id, producer,
                 revision, state)
             VALUES (:#{#s.id()}, :#{#s.account()}, :#{#s.binding()}, :#{#s.workspace()}, :#{#s.container()},
-                :#{#s.message()}, :#{#s.producer()}, :#{#s.revision()}, 'LIVE')
+                :#{#s.message()}, :#{#s.producer()}, :#{#s.revision()}, :#{#s.state()})
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)
     int insertSource(@Param("s") NewSource s);
@@ -141,7 +141,8 @@ public interface MentorSourceRepository extends Repository<MentorSource, UUID> {
             String container,
             String message,
             String producer,
-            String revision) {}
+            String revision,
+            String state) {}
 
     record NewEvent(
             UUID id,

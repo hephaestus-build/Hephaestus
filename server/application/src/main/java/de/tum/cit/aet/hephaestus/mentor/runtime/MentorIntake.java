@@ -71,8 +71,9 @@ public class MentorIntake implements MentorIngress {
     }
 
     /**
-     * {@code producer} is pinned on a new source, and only a new message asks for it: a mutation of a source the mentor
-     * pinned is admitted whatever the route answers now, so a rollback keeps fencing the requests it opened.
+     * {@code producer} is pinned on a new source, and only a message's first event asks for it: a new message, or a
+     * delete that arrives before it. A mutation of a source the mentor pinned is admitted whatever the route answers
+     * now, so a rollback keeps fencing the requests it opened.
      */
     Admission admit(IngressEnvelope envelope, Producer producer) {
         if (envelope.eventKey().bindingId() != envelope.binding().connectionId()) {
@@ -86,9 +87,11 @@ public class MentorIntake implements MentorIngress {
         String container = envelope.audience().containerId();
         String message = envelope.message().nativeMessageId();
         Long stored = rows.owner(binding, container, message);
-        boolean create = envelope.kind() == IngressKind.MESSAGE && producer == Producer.MENTOR;
-        // Only a new question starts a source: a mutation of a message the mentor does not hold writes nothing.
-        if (stored == null && !create) return new Admission.Admitted(eventId, null);
+        // A new question starts a source, and so does a delete that arrives first: its tombstone keeps a late copy of the
+        // create from opening the question. An edit or a Stop of a message the mentor does not hold writes nothing.
+        boolean deleted = envelope.kind() == IngressKind.MESSAGE_DELETED;
+        boolean starts = producer == Producer.MENTOR && (envelope.kind() == IngressKind.MESSAGE || deleted);
+        if (stored == null && !starts) return new Admission.Admitted(eventId, null);
         long owner = stored == null ? author : stored;
         if (!fence.holdForAccountWrite(owner)) return new Admission.Admitted(eventId, null);
         owners.ofJob(owner);
@@ -101,7 +104,8 @@ public class MentorIntake implements MentorIngress {
                     container,
                     message,
                     producer.name(),
-                    envelope.message().revision()));
+                    envelope.message().revision(),
+                    (deleted ? MentorSource.State.DELETED : MentorSource.State.LIVE).name()));
         }
         var locked = rows.lockSource(owner, binding, container, message);
         if (locked.isEmpty() || Producer.valueOf(locked.get().getProducer()) == Producer.LEGACY) {

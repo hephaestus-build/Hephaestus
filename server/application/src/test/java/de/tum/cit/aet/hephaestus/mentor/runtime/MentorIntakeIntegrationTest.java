@@ -226,13 +226,52 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
     void shouldWriteNothingForAnEditThatArrivesBeforeTheCreate() {
         String message = message();
         assertThat(admit(IngressKind.MESSAGE_EDITED, "e1", message, EDITED)).isEqualTo(admitted("e1", null));
-        assertThat(admit(IngressKind.MESSAGE_DELETED, "e2", message, EDITED)).isEqualTo(admitted("e2", null));
         assertThat(owner.queryForList("SELECT id FROM mentor_source WHERE native_message_id = ?", UUID.class, message))
                 .isEmpty();
 
-        assertThat(opened(admit(IngressKind.MESSAGE, "e3", message, FIRST)).version())
+        assertThat(opened(admit(IngressKind.MESSAGE, "e2", message, FIRST)).version())
                 .isEqualTo(1);
         assertThat(source(message)).containsEntry("revision", FIRST);
+    }
+
+    /** Slack can deliver a delete before its create, so the delete leaves the tombstone that refuses the create. */
+    @Test
+    void shouldOpenNoRequestWhenTheDeleteArrivesBeforeTheCreate() {
+        String message = message();
+        assertThat(admit(IngressKind.MESSAGE_DELETED, "e1", message, EDITED)).isEqualTo(admitted("e1", null));
+        assertThat(source(message))
+                .containsEntry("state", "DELETED")
+                .containsEntry("producer", "MENTOR")
+                .containsEntry("account_id", account);
+
+        assertThat(admit(IngressKind.MESSAGE, "e2", message, FIRST)).isEqualTo(admitted("e2", null));
+        assertThat(event("e2")).containsEntry("reason", "SOURCE_DELETED");
+        assertThat(requests(message)).isEmpty();
+    }
+
+    /** A create and a delete that race share the source key: either order ends with one deleted source and no open request. */
+    @Test
+    void shouldEndWithOneDeletedSourceWhenACreateAndADeleteRace() {
+        for (int round = 0; round < 3; round++) {
+            String message = message();
+            var barrier = new CyclicBarrier(2);
+            List<CompletableFuture<Admission>> racers = List.of(IngressKind.MESSAGE, IngressKind.MESSAGE_DELETED).stream()
+                    .map(kind -> CompletableFuture.supplyAsync(() -> {
+                        await(barrier);
+                        return admit(kind, kind == IngressKind.MESSAGE ? "e1" : "e2", message, FIRST);
+                    }))
+                    .toList();
+            racers.forEach(CompletableFuture::join);
+
+            assertThat(owner.queryForList(
+                            "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
+                    .containsExactly("DELETED");
+            assertThat(owner.queryForList("""
+                            SELECT r.state FROM mentor_request r JOIN mentor_source s ON s.id = r.source_id
+                            WHERE s.native_message_id = ?
+                            """, String.class, message))
+                    .allMatch("STOPPED"::equals);
+        }
     }
 
     @Test
