@@ -1,0 +1,44 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    ProjectTeam {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(100) name "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ removed_at
+    }
+
+    ProjectTeamMember {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        UUID team_id FK,UK "NOT NULL"
+        BIGINT account_id FK,UK "NOT NULL"
+        TIMESTAMPTZ joined_at "NOT NULL"
+    }
+
+    Membership["Membership · Workspace (Tenancy)"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-Many relationships
+    Workspace ||--o{ ProjectTeam : has
+    Membership ||--o{ ProjectTeamMember : belongs_to
+    ProjectTeam ||--o{ ProjectTeamMember : belongs_to
+
+    %% Styling
+    classDef primaryEntity stroke-width:2px
+    classDef associationEntity stroke-width:1px
+    classDef metadataEntity stroke-width:1px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Membership referenceEntity
+    class Workspace referenceEntity
