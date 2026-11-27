@@ -158,12 +158,10 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
      * runs {@code @WorkspaceAgnostic}, so the tenancy {@code StatementInspector} treats this as exempt). Callers
      * outside a bypass scope will trip the inspector — that is intentional.
      */
-    @Query(
-            value = """
+    @Query(value = """
                     SELECT workspace_id FROM slack_message
                     UNION SELECT workspace_id FROM slack_dm_producer_pin
-                    """,
-            nativeQuery = true)
+                    """, nativeQuery = true)
     List<Long> findWorkspaceIdsWithRetainedData();
 
     /**
