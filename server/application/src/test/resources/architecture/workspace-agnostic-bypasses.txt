@@ -271,6 +271,7 @@ de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer.delete
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer.reap()
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.awaitLease(long)
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.backlog()
+de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.boundLocks(java.lang.String)
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.boundStatements(java.lang.String)
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.claim(long)
 de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventRepository.claimStep(long, java.lang.String)

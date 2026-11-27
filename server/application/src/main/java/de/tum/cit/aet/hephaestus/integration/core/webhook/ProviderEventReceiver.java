@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions;
+import de.tum.cit.aet.hephaestus.integration.core.spi.VerifiedWebhookHandoff;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,6 +25,7 @@ import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -72,6 +74,7 @@ public class ProviderEventReceiver {
 
     private final EventTraceContext traceContext;
     private final TransactionTemplate transactions;
+    private final Map<IntegrationKind, VerifiedWebhookHandoff> handoffs = new EnumMap<>(IntegrationKind.class);
     private final ExecutorService stores = Executors.newVirtualThreadPerTaskExecutor();
 
     public ProviderEventReceiver(
@@ -80,13 +83,19 @@ public class ProviderEventReceiver {
             ConnectionRepository connections,
             MeterRegistry meters,
             EventTraceContext traceContext,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            List<VerifiedWebhookHandoff> handoffs) {
         this.store = store;
         this.subscriptions = subscriptions;
         this.connections = connections;
         this.meters = meters;
         this.traceContext = traceContext;
         this.transactions = transactions;
+        for (var handoff : handoffs) {
+            if (this.handoffs.putIfAbsent(handoff.kind(), handoff) != null) {
+                throw new IllegalArgumentException("Duplicate verified webhook handoff for " + handoff.kind());
+            }
+        }
     }
 
     /**
@@ -201,6 +210,8 @@ public class ProviderEventReceiver {
                 rejected(provider, "connection-not-active");
                 return 0;
             }
+            var handoff = handoffs.get(kind);
+            int handled = 0;
             for (var candidate : candidates) {
                 long workspaceId = candidate.workspaceId();
                 Connection connection = locked.get(candidate.connectionId());
@@ -229,10 +240,17 @@ public class ProviderEventReceiver {
                                 .serverUrl();
                 var workspaceHeaders = new LinkedHashMap<>(stored);
                 workspaceHeaders.put(ProviderEvent.SOURCE_SERVER_URL, source);
-                arrivals.add(new ProviderEventStore.Arrival(
-                        workspaceId, provider, subject, deliveryKey, workspaceHeaders, body));
+                var arrival = new ProviderEventStore.Arrival(
+                        workspaceId, provider, subject, deliveryKey, workspaceHeaders, body);
+                if (handoff == null) arrivals.add(arrival);
+                else {
+                    long id = candidate.connectionId();
+                    handled += handoff.store(
+                            new VerifiedWebhookHandoff.LockedBinding(id, connection.getInstanceKey(), configured),
+                            arrival);
+                }
             }
-            return store.store(arrivals);
+            return handled + store.store(arrivals);
         });
         return count == null ? 0 : count;
     }
