@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import org.junit.jupiter.api.Tag;
@@ -26,7 +27,8 @@ class CopiedIdentityErasureOrderTest {
                         JsonMapper.builder().build(),
                         mock(FeedbackCopyCleanupCustody.class),
                         mock(PersonIdentityResolver.class),
-                        mock(ScanReportService.class))
+                        mock(ScanReportService.class),
+                        mock(AdviceRedaction.class))
                 .contributors();
         int identities = stores.stream()
                 .filter(store -> store.store().equals("review_item_copied_identity"))

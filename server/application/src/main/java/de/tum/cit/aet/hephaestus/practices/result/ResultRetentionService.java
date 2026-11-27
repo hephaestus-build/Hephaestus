@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialProperties;
@@ -43,6 +44,7 @@ public class ResultRetentionService {
     private final FeedbackRepository feedback;
     private final FeedbackCopyCleanupCustody custody;
     private final ScanReportService reports;
+    private final AdviceRedaction advice;
     private final FeedbackRetentionProperties retention;
     private final PracticeTrialProperties trials;
     private final PlatformTransactionManager transactions;
@@ -99,11 +101,15 @@ public class ResultRetentionService {
                 for (var parent : parents)
                     if (reviews.lockByIdAndWorkspaceId(parent, workspaceId).isEmpty())
                         throw new IllegalStateException("The retained review is missing.");
-                for (var id : ids)
-                    if (results.lockByIdAndWorkspaceId(id, workspaceId).isEmpty())
-                        throw new IllegalStateException("The retained result is missing.");
+                // FOR UPDATE, in the id order of every advice redaction: unlike the JPA write lock (FOR NO KEY UPDATE),
+                // it keeps a new feedback citation out until commit, so the set chosen below is the set deleted.
+                if (results.lockInIdOrder(workspaceId, ids.toArray(UUID[]::new)).size() != ids.size())
+                    throw new IllegalStateException("The retained result is missing.");
                 reports.eraseResultReferences(workspaceId, ids);
-                return results.deleteWithoutFeedbackBasis(workspaceId, ids.toArray(UUID[]::new));
+                // Advice loses its text only for a result that is deleted here.
+                var deleted = results.withoutFeedbackBasis(workspaceId, ids.toArray(UUID[]::new));
+                advice.beforeResultsDeleted(workspaceId, deleted);
+                return results.deleteWithoutFeedbackBasis(workspaceId, deleted.toArray(UUID[]::new));
             });
         } while (erased != null && erased == RESULT_BATCH);
     }

@@ -10,12 +10,16 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -77,6 +81,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
     private final FeedbackCopyCleanupCustody custody;
     private final PersonIdentityResolver identities;
     private final ScanReportService reports;
+    private final AdviceRedaction advice;
 
     @Override
     public List<ConversationCopy> conversationCopies(PersonScope person) {
@@ -298,7 +303,24 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,explanation,severity,evidence,example,coverage,evidence_version,recorded_at,ended_at,end_reason",
                                 "id,workspace_id",
                                 "",
-                                -150),
+                                -150) {
+                            // In this step's transaction, before the delete: advice written from these results, also
+                            // after the request was admitted, loses its text with them (ADR 0160).
+                            @Override
+                            public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                                selection.rows().stream()
+                                        .collect(Collectors.groupingBy(
+                                                row -> Long.parseLong(Objects.requireNonNull(
+                                                        row.columns().get("workspace_id"))),
+                                                TreeMap::new,
+                                                Collectors.mapping(
+                                                        row -> UUID.fromString(Objects.requireNonNull(
+                                                                row.columns().get("id"))),
+                                                        Collectors.toList())))
+                                        .forEach(advice::beforeResultsDeleted);
+                                return super.erase(selection, frozenScope);
+                            }
+                        },
                         // Exported on its own; the result step has already deleted these rows.
                         new JdbcPersonDataStore(
                                 jdbc,
