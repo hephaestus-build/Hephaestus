@@ -36,20 +36,28 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient client;
+
     @Autowired
     private AccountRepository accounts;
+
     @Autowired
     private HephaestusJwtIssuer issuer;
+
     @Autowired
     private AccountExportRepository exports;
+
     @Autowired
     private ExportGenerationWorker exporter;
+
     @MockitoSpyBean
     private ExportBundleAssembler assembler;
+
     @Autowired
     private PersonalGoalRepository goals;
+
     @Autowired
     private OwnerScope owners;
+
     @Autowired
     private PlatformTransactionManager transactionManager;
 
@@ -58,9 +66,15 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         var owner = signup();
         String token = token(owner);
         assertThat(read(token)).isEqualTo(new PersonalGoalDTO(0, null));
-        save(token, 0, WORDS).expectStatus().isOk().expectBody(PersonalGoalDTO.class)
+        save(token, 0, WORDS)
+                .expectStatus()
+                .isOk()
+                .expectBody(PersonalGoalDTO.class)
                 .isEqualTo(new PersonalGoalDTO(1, WORDS));
-        save(token, 1, EDIT).expectStatus().isOk().expectBody(PersonalGoalDTO.class)
+        save(token, 1, EDIT)
+                .expectStatus()
+                .isOk()
+                .expectBody(PersonalGoalDTO.class)
                 .isEqualTo(new PersonalGoalDTO(2, EDIT));
         long other = signup();
         assertThat(read(token(other))).isEqualTo(new PersonalGoalDTO(0, null));
@@ -71,8 +85,13 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         });
         assertThat(denied).isEmpty();
         client.get().uri(GOAL).exchange().expectStatus().isUnauthorized().expectBody(Void.class);
-        client.delete().uri(GOAL + "?revision=2").headers(headers -> headers.setBearerAuth(token))
-                .exchange().expectStatus().isOk().expectBody(PersonalGoalDTO.class)
+        client.delete()
+                .uri(GOAL + "?revision=2")
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PersonalGoalDTO.class)
                 .isEqualTo(new PersonalGoalDTO(3, null));
         save(token, 0, WORDS).expectStatus().isEqualTo(HttpStatus.CONFLICT).expectBody(Void.class);
         assertThat(read(token)).isEqualTo(new PersonalGoalDTO(3, null));
@@ -85,16 +104,22 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         save(ownerToken, 0, WORDS).expectStatus().isOk().expectBody(Void.class);
         var administrator = new Account("Instance administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
-        String adminToken = token(Objects.requireNonNull(accounts.save(administrator).getId()));
+        String adminToken =
+                token(Objects.requireNonNull(accounts.save(administrator).getId()));
 
         assertThat(read(adminToken)).isEqualTo(new PersonalGoalDTO(0, null));
-        client.get().uri(GOAL).headers(headers -> {
+        client.get()
+                .uri(GOAL)
+                .headers(headers -> {
                     headers.setBearerAuth(adminToken);
                     headers.set(UserViewContextHolder.WORKSPACE_HEADER, "test-project");
                     headers.set(UserViewContextHolder.ACCOUNT_HEADER, Long.toString(owner));
                     headers.set(UserViewContextHolder.REASON_HEADER, "Check the test account");
                 })
-                .exchange().expectStatus().isForbidden().expectBody(Void.class);
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
         assertThat(read(ownerToken)).isEqualTo(new PersonalGoalDTO(1, WORDS));
     }
 
@@ -115,7 +140,10 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         long other = signup();
         String ownerToken = token(owner);
         save(ownerToken, 0, WORDS).expectStatus().isOk().expectBody(Void.class);
-        save(token(other), 0, "Write one example in a review.").expectStatus().isOk().expectBody(Void.class);
+        save(token(other), 0, "Write one example in a review.")
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
         long ownerExport = seedExport(owner);
         long otherExport = seedExport(other);
         exporter.generate(ownerExport, owner);
@@ -144,17 +172,24 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
         var assembled = new CountDownLatch(1);
         var resume = new CountDownLatch(1);
         doAnswer(call -> {
-            var bundle = call.callRealMethod();
-            assembled.countDown();
-            assertThat(resume.await(30, TimeUnit.SECONDS)).isTrue();
-            return bundle;
-        }).when(assembler).assemble(owner);
+                    var bundle = call.callRealMethod();
+                    assembled.countDown();
+                    assertThat(resume.await(30, TimeUnit.SECONDS)).isTrue();
+                    return bundle;
+                })
+                .when(assembler)
+                .assemble(owner);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var generating = executor.submit(() -> exporter.generate(export, owner));
             try {
                 assertThat(assembled.await(30, TimeUnit.SECONDS)).isTrue();
-                client.delete().uri(GOAL + "?revision=1").headers(headers -> headers.setBearerAuth(token))
-                        .exchange().expectStatus().isOk().expectBody(Void.class);
+                client.delete()
+                        .uri(GOAL + "?revision=1")
+                        .headers(headers -> headers.setBearerAuth(token))
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody(Void.class);
             } finally {
                 resume.countDown();
             }
@@ -165,25 +200,41 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private int saveStatus(String token, String words) {
-        return save(token, 0, words).expectBody(Void.class).returnResult().getStatus().value();
+        return save(token, 0, words)
+                .expectBody(Void.class)
+                .returnResult()
+                .getStatus()
+                .value();
     }
 
     private WebTestClient.ResponseSpec save(String token, long revision, String words) {
-        return client.put().uri(GOAL).headers(headers -> headers.setBearerAuth(token))
-                .bodyValue(new SavePersonalGoalDTO(revision, words)).exchange();
+        return client.put()
+                .uri(GOAL)
+                .headers(headers -> headers.setBearerAuth(token))
+                .bodyValue(new SavePersonalGoalDTO(revision, words))
+                .exchange();
     }
 
     private PersonalGoalDTO read(String token) {
-        return Objects.requireNonNull(client.get().uri(GOAL).headers(headers -> headers.setBearerAuth(token))
-                .exchange().expectStatus().isOk().expectBody(PersonalGoalDTO.class).returnResult().getResponseBody());
+        return Objects.requireNonNull(client.get()
+                .uri(GOAL)
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PersonalGoalDTO.class)
+                .returnResult()
+                .getResponseBody());
     }
 
     private long signup() {
-        return Objects.requireNonNull(accounts.save(new Account("Goal developer")).getId());
+        return Objects.requireNonNull(
+                accounts.save(new Account("Goal developer")).getId());
     }
 
     private String token(long account) {
-        return issuer.issue(account, TokenConstraints.session(null, Instant.now()), null).value();
+        return issuer.issue(account, TokenConstraints.session(null, Instant.now()), null)
+                .value();
     }
 
     private long seedExport(long owner) {

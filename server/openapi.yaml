@@ -5740,6 +5740,93 @@ paths:
       summary: Remove a passkey
       tags:
       - Passkeys
+  /user/personal-goal:
+    delete:
+      operationId: forgetPersonalGoal
+      parameters:
+      - in: query
+        name: revision
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Forget your personal goal
+      tags:
+      - Account
+    get:
+      operationId: getPersonalGoal
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Read your personal goal
+      tags:
+      - Account
+    put:
+      operationId: savePersonalGoal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePersonalGoal"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalGoal"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Save or edit your personal goal
+      tags:
+      - Account
   /user/public-activity:
     get:
       operationId: getPublicActivityChoice
@@ -24249,6 +24336,18 @@ components:
             $ref: "#/components/schemas/Identity"
       required:
       - identities
+    PersonalGoal:
+      type: object
+      description: "The goal in the signed-in account's own words, with the revision\
+        \ of the goal slot."
+      properties:
+        revision:
+          type: integer
+          format: int64
+        words:
+          type: string
+      required:
+      - revision
     Practice:
       type: object
       properties:
@@ -30066,6 +30165,20 @@ components:
       required:
       - displayName
       - slug
+    SavePersonalGoal:
+      type: object
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+        words:
+          type: string
+          maxLength: 500
+          minLength: 0
+      required:
+      - revision
+      - words
     ScanAvailability:
       type: object
       properties:

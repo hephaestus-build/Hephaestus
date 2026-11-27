@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.exception.JournalPendingException;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
@@ -40,11 +41,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.http.MediaType;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -136,20 +136,32 @@ class PrivacyJournalOutageIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     void shouldConfirmTheSameGoalDeletionAfterABucketOutage() {
-        long account = Objects.requireNonNull(persistAccount("Goal journal requester").getId());
+        long account =
+                Objects.requireNonNull(persistAccount("Goal journal requester").getId());
         String token = "mock-jwt-member-" + account;
         String path = "/user/personal-goal";
-        client.put().uri(path).headers(headers -> headers.setBearerAuth(token))
+        client.put()
+                .uri(path)
+                .headers(headers -> headers.setBearerAuth(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"revision":0,"words":"Private goal for the journal retry"}
                         """)
-                .exchange().expectStatus().isOk();
+                .exchange()
+                .expectStatus()
+                .isOk();
 
         when(bucket.store(any(), any())).thenReturn(false);
         expectJournalPending(deleteGoal(path, token));
-        client.get().uri(path).headers(headers -> headers.setBearerAuth(token))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.words").doesNotExist();
+        client.get()
+                .uri(path)
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.words")
+                .doesNotExist();
 
         when(bucket.store(any(), any())).thenReturn(true);
         deleteGoal(path, token).expectStatus().isOk();
@@ -165,7 +177,10 @@ class PrivacyJournalOutageIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     private WebTestClient.ResponseSpec deleteGoal(String path, String token) {
-        return client.delete().uri(path + "?revision=1").headers(headers -> headers.setBearerAuth(token)).exchange();
+        return client.delete()
+                .uri(path + "?revision=1")
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange();
     }
 
     private WebTestClient.ResponseSpec deleteEntry(String slug, UUID entryId, long account) {

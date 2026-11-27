@@ -91,7 +91,8 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
                         && call.getName().equals("fromPrincipal"))
                 .anyMatch(call -> call.getTargetOwner().isEquivalentTo(PersonDataWriteFence.class)
                         && call.getName().equals("holdForAccountRecordWrite"));
-        assertThat(goals.getMethod("save", PersonAct.class, long.class, String.class).getMethodCallsFromSelf())
+        assertThat(goals.getMethod("save", PersonAct.class, long.class, String.class)
+                        .getMethodCallsFromSelf())
                 .anyMatch(call -> call.getName().equals("admitWrite"));
         assertThat(goals.getMethod("forget", PersonAct.class, long.class).getMethodCallsFromSelf())
                 .anyMatch(call -> call.getName().equals("admitWrite"));

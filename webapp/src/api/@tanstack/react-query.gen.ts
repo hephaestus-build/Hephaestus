@@ -276,6 +276,7 @@ export {
 export { fileAllSavedProductFeedbackMutation } from "./react-query/fileAllSavedProductFeedback.gen.js";
 export { fileSavedProductFeedbackMutation } from "./react-query/fileSavedProductFeedback.gen.js";
 export { followProviderRoleMutation } from "./react-query/followProviderRole.gen.js";
+export { forgetPersonalGoalMutation } from "./react-query/forgetPersonalGoal.gen.js";
 export {
 	getAccountAiChoiceOptions,
 	getAccountAiChoiceQueryKey,
@@ -457,6 +458,10 @@ export {
 	getPerPersonResultsOptions,
 	getPerPersonResultsQueryKey,
 } from "./react-query/getPerPersonResults.gen.js";
+export {
+	getPersonalGoalOptions,
+	getPersonalGoalQueryKey,
+} from "./react-query/getPersonalGoal.gen.js";
 export { getPracticeOptions, getPracticeQueryKey } from "./react-query/getPractice.gen.js";
 export {
 	getPracticeDefinitionOptionsOptions,
@@ -914,6 +919,7 @@ export { retryProductFeedbackFilingMutation } from "./react-query/retryProductFe
 export { revokeMcpClientGrantMutation } from "./react-query/revokeMcpClientGrant.gen.js";
 export { revokeOtherSessionsMutation } from "./react-query/revokeOtherSessions.gen.js";
 export { revokeSessionMutation } from "./react-query/revokeSession.gen.js";
+export { savePersonalGoalMutation } from "./react-query/savePersonalGoal.gen.js";
 export { savePracticeDraftMutation } from "./react-query/savePracticeDraft.gen.js";
 export { setCatalogGroupStatusMutation } from "./react-query/setCatalogGroupStatus.gen.js";
 export { setCatalogPracticeStatusMutation } from "./react-query/setCatalogPracticeStatus.gen.js";
