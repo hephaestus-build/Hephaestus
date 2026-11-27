@@ -71,24 +71,24 @@ public class ScmCaptureConsent {
     /** Whether privacy lets a capture export this person's content; throws when it does not. */
     private boolean decide(PersonIdentity identity) {
         if (suppression.isSuppressed(identity.providerId(), identity.subject(), null)) throw withheld();
-            Optional<Long> accountId;
-            try {
-                accountId = identities.accountFor(identity);
-            } catch (ResponseStatusException conflict) {
-                if (conflict.getStatusCode().value() == HttpStatus.CONFLICT.value())
-                    throw new ItemCaptureException(
-                            ItemCaptureCode.CONSENT_WITHHELD,
-                            "A contributor has withheld permission to process this work",
-                            conflict);
-                throw conflict;
-            }
-            if (accountId.isPresent()) {
-                var account = accounts.find(accountId.orElseThrow()).orElseThrow(ScmCaptureConsent::withheld);
-                if (suppression.isAccountSuppressed(account.id())
-                        || account.aiChoice() == AiChoice.NO_AI
-                        || (account.status() != Account.Status.ACTIVE && account.status() != Account.Status.UNCLAIMED))
-                    throw withheld();
-            }
+        Optional<Long> accountId;
+        try {
+            accountId = identities.accountFor(identity);
+        } catch (ResponseStatusException conflict) {
+            if (conflict.getStatusCode().value() == HttpStatus.CONFLICT.value())
+                throw new ItemCaptureException(
+                        ItemCaptureCode.CONSENT_WITHHELD,
+                        "A contributor has withheld permission to process this work",
+                        conflict);
+            throw conflict;
+        }
+        if (accountId.isPresent()) {
+            var account = accounts.find(accountId.orElseThrow()).orElseThrow(ScmCaptureConsent::withheld);
+            if (suppression.isAccountSuppressed(account.id())
+                    || account.aiChoice() == AiChoice.NO_AI
+                    || (account.status() != Account.Status.ACTIVE && account.status() != Account.Status.UNCLAIMED))
+                throw withheld();
+        }
         return true;
     }
 

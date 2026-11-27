@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Practice pages decide each contributor's consent once per page load, instead of once for each record source of their work. A withdrawal still takes effect on the next load.
+Each read of practice standings, the practice profile overview and its review list decides a contributor's consent once, instead of once for each record source of their work. A withdrawal takes effect on the next read.
