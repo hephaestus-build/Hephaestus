@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
     <changeSet id="1795773600000-1" author="hephaestus">
-        <comment>A review's producer can also be TEAM, for a team-owned item, or OBSERVATIONS, with no composed feedback (ADR 0160, ADR 0165). Both producer columns accept exactly the five values.</comment>
+        <comment>A review's producer can also be TEAM, for a team-owned item, or OBSERVATIONS, with no composed feedback (ADR 0160, ADR 0165). Both producer columns accept exactly the five values, and an item kind that LEGACY never composes for records why it took OBSERVATIONS.</comment>
         <sql splitStatements="false"><![CDATA[
 ALTER TABLE public.review DROP CONSTRAINT ck_review_feedback_producer, ADD CONSTRAINT ck_review_feedback_producer
     CHECK (feedback_producer IS NULL
@@ -9,10 +9,18 @@ ALTER TABLE public.review DROP CONSTRAINT ck_review_feedback_producer, ADD CONST
 ALTER TABLE public.review_job DROP CONSTRAINT ck_review_job_feedback_producer,
     ADD CONSTRAINT ck_review_job_feedback_producer
     CHECK (feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE', 'TEAM', 'OBSERVATIONS'));
+-- An item kind that LEGACY never composes for seals OBSERVATIONS until a team mentor produces for it.
+ALTER TABLE public.review_job DROP CONSTRAINT ck_review_job_feedback_producer_reason,
+    ADD CONSTRAINT ck_review_job_feedback_producer_reason
+    CHECK (feedback_producer_reason IS NULL OR feedback_producer_reason IN ('INHERITED', 'GATE_CLOSED',
+        'NOT_SELECTED', 'UNSUPPORTED_ROUTE', 'NO_LINKED_AUTHOR', 'SEVERAL_AUTHORS', 'AUTHOR_INACTIVE',
+        'AUTHOR_NOT_MEMBER', 'AUTHOR_NOT_CONSENTING', 'OWNER_REFUSED', 'EVENT_MISMATCH', 'OWNER_BOUND',
+        'TEAM_MENTORING_OFF'));
         ]]></sql>
         <rollback>
             <sql>ALTER TABLE public.review DROP CONSTRAINT ck_review_feedback_producer, ADD CONSTRAINT ck_review_feedback_producer CHECK (feedback_producer IS NULL OR feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'))</sql>
             <sql>ALTER TABLE public.review_job DROP CONSTRAINT ck_review_job_feedback_producer, ADD CONSTRAINT ck_review_job_feedback_producer CHECK (feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'))</sql>
+            <sql>ALTER TABLE public.review_job DROP CONSTRAINT ck_review_job_feedback_producer_reason, ADD CONSTRAINT ck_review_job_feedback_producer_reason CHECK (feedback_producer_reason IS NULL OR feedback_producer_reason IN ('INHERITED', 'GATE_CLOSED', 'NOT_SELECTED', 'UNSUPPORTED_ROUTE', 'NO_LINKED_AUTHOR', 'SEVERAL_AUTHORS', 'AUTHOR_INACTIVE', 'AUTHOR_NOT_MEMBER', 'AUTHOR_NOT_CONSENTING', 'OWNER_REFUSED', 'EVENT_MISMATCH', 'OWNER_BOUND'))</sql>
         </rollback>
     </changeSet>
 </databaseChangeLog>

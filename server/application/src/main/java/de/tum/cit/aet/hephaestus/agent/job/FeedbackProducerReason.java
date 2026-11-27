@@ -25,5 +25,7 @@ public enum FeedbackProducerReason {
     /** The review already has a mailbox row for another owner or another admission. */
     EVENT_MISMATCH,
     /** The mailbox row for the author is written. */
-    OWNER_BOUND
+    OWNER_BOUND,
+    /** An item kind that LEGACY never composes for, such as a team's work, while no team mentor produces for it. */
+    TEAM_MENTORING_OFF
 }
