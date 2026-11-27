@@ -20,9 +20,14 @@ import tools.jackson.databind.ObjectMapper;
     "slack_message",
     "slack_participant_consent",
     "slack_channel_consent_event",
-    "slack_monitored_channel"
+    "slack_monitored_channel",
+    "slack_dm_producer_pin"
 })
-@ErasesColumns({"slack_message.author_slack_user_id", "slack_participant_consent.slack_user_id"})
+@ErasesColumns({
+    "slack_message.author_slack_user_id",
+    "slack_participant_consent.slack_user_id",
+    "slack_dm_producer_pin.author"
+})
 public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -31,6 +36,24 @@ public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new SlackThreadPersonDataContributor(jdbc, mapper),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "slack_dm_producer_pin",
+                        "slack_dm_producer_pin",
+                        """
+                        t.account_id = :account OR EXISTS (
+                            SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))
+                                AS i("providerId" bigint, subject text, "teamId" text)
+                            JOIN identity_provider p ON p.id = i."providerId"
+                            WHERE p.type = 'SLACK' AND p.server_url = 'https://slack.com'
+                                AND i.subject = t.author AND i."teamId" = t.team_id
+                        )
+                        """,
+                        "id,workspace_id,connection_id,team_id,channel_id,source_ts,thread_root,author,account_id,producer",
+                        "id",
+                        "",
+                        -60),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

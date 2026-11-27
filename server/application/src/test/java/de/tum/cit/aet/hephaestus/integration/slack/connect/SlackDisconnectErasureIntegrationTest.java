@@ -14,12 +14,16 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport.BoundConversation;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPin;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
+import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -34,6 +38,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -103,6 +108,9 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
     private SlackMessageRepository messages;
 
     @Autowired
+    private SlackDmProducerPinRepository pins;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private long workspaceId;
@@ -145,6 +153,39 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
                 slackStrategy);
 
         assertErased(conversation);
+    }
+
+    @Test
+    void shouldEraseMentorIntakeWhenSlackDisconnectKeepsTheConnectionRow() {
+        long connectionId = Objects.requireNonNull(connection.getId());
+        var pin = pins.save(new SlackDmProducerPin(
+                workspaceId, connectionId, TEAM, "DERASE", TS, null, "UERASE", memberId, Producer.MENTOR));
+        jdbcTemplate.update("""
+                INSERT INTO provider_event (
+                    workspace_id, provider, subject, scope_key, delivery_key, headers, payload,
+                    state, attempt, failures, lease_epoch, available_at, ended_at)
+                VALUES (?, 'slack', 'slack.TERASE.DERASE.message_im', 'mentor-fixture', 'mentor-receipt',
+                    jsonb_build_object(CAST(? AS text), 'MENTOR'), ''::bytea, 'DONE', 0, 0, 0, now(), now())
+                """, workspaceId, ProviderEvent.PRODUCER);
+
+        connectionService.disconnect(
+                connection,
+                ConnectionService.TransitionRequest.byAccount(
+                        IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", memberId,
+                        UUID.randomUUID().toString(), null),
+                slackStrategy);
+
+        assertThat(pin.getId()).isNotNull();
+        assertThat(connectionRepository.findById(connectionId))
+                .get()
+                .extracting(Connection::getState)
+                .isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(pins.findByWorkspaceIdAndConnectionIdAndChannelIdAndSourceTs(
+                workspaceId, connectionId, "DERASE", TS)).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ? AND delivery_key = 'mentor-receipt'",
+                        Long.class, workspaceId))
+                .isZero();
     }
 
     @Test

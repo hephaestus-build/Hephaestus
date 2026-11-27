@@ -14,6 +14,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -268,6 +269,12 @@ public class ProviderEventStore {
         List<ProviderEventRepository.ErasedRow> erased = events.deleteResource(workspaceId, provider, resource);
         DeliveryInbox.erasedByHandler(erased);
         return erased.size();
+    }
+
+    /** Erases one provider producer's terminal copies in the workspace. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int deleteHandledByHeader(long workspaceId, String provider, String key, String value) {
+        return events.deleteHandledByHeader(workspaceId, provider, key, value);
     }
 
     /** The dead letters of one workspace, or of the installation when {@code workspaceId} is null, after {@code idAfter}. */

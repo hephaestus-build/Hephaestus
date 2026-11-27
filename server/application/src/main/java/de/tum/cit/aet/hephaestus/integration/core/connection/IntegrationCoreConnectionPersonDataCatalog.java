@@ -92,7 +92,9 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                                 + " WHEN i.subject !~ '^[A-Za-z0-9-]{1,64}$' THEN false"
                                 + " WHEN t.provider = 'slack' AND i.\"teamId\" IS NOT NULL"
                                 + " AND split_part(t.subject, '.', 2) <> i.\"teamId\" THEN false"
-                                + " ELSE convert_from(t.payload, 'UTF8')"
+                                + " ELSE (t.provider = 'slack' AND t.headers->>'"
+                                + ProviderEvent.SLACK_SOURCE_AUTHOR + "' = i.subject)"
+                                + " OR convert_from(t.payload, 'UTF8')"
                                 + " ~ ('(^|[^A-Za-z0-9-])' || i.subject || '($|[^A-Za-z0-9-])') END)",
                         "id,workspace_id,provider,state,error_class,received_at,ended_at",
                         "id",

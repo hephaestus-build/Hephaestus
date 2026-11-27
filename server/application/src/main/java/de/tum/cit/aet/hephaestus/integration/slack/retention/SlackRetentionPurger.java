@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.retention;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
@@ -25,6 +26,7 @@ public class SlackRetentionPurger {
     private final SlackMessageRepository slackMessageRepository;
     private final SlackThreadRepository slackThreadRepository;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
+    private final SlackDmProducerPinRepository pins;
 
     /**
      * Prune everything for {@code workspaceId} older than {@code cutoff}, in a fresh transaction that commits (or
@@ -39,6 +41,7 @@ public class SlackRetentionPurger {
         // Aged threads: last_ts strictly older than the cutoff, rendered as a Slack ts string for a lexicographic
         // (== numeric, for the fixed <10-digit>.<6-digit> format) comparison.
         String cutoffTs = SlackTs.ofInstant(cutoff);
+        pins.deleteOlderThan(workspaceId, cutoffTs);
         List<Long> agedThreadIds = slackThreadRepository.findAgedThreadIds(workspaceId, cutoffTs);
 
         conversationFeedbackErasure.eraseForThreads(workspaceId, agedThreadIds);
