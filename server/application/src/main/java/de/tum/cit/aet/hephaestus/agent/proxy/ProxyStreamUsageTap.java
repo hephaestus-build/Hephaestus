@@ -1,13 +1,21 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Body;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Part;
+import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamIdleException;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -83,6 +91,29 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
         this.objectMapper = objectMapper;
         this.protocol = protocol;
         this.anthropicUsage = objectMapper.createObjectNode();
+    }
+
+    /** A review's first answer has one deadline. Comments and progress frames do not extend it. */
+    static Flux<Part> endingBeforeFirstContent(
+            Flux<Part> source, ObjectMapper objectMapper, LlmApiProtocol protocol, Duration limit) {
+        return Flux.defer(() -> {
+            var clock = Schedulers.parallel();
+            long startedAt = clock.now(TimeUnit.NANOSECONDS);
+            var firstContent = new ProxyStreamUsageTap(objectMapper, protocol);
+            Mono<Long> rest = Mono.defer(() -> Mono.delay(
+                    Duration.ofNanos(Math.max(0L, limit.toNanos() - (clock.now(TimeUnit.NANOSECONDS) - startedAt))),
+                    clock));
+            // Observe upstream chunks before they can wait behind a servlet write. The relay owns usage accounting.
+            return source.doOnNext(part -> {
+                        if (!firstContent.hasContent() && part instanceof Body chunk) {
+                            firstContent.accept(chunk.bytes());
+                        }
+                    })
+                    .timeout(
+                            rest,
+                            part -> firstContent.hasContent() ? Mono.never() : rest,
+                            Flux.error(UpstreamIdleException::new));
+        });
     }
 
     /**

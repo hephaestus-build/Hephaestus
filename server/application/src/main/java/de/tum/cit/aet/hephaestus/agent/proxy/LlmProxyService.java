@@ -12,10 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
-import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Body;
-import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.Part;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
-import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamIdleException;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -995,7 +992,8 @@ class LlmProxyService {
                                     .contentType()
                                     .filter(MediaType.TEXT_EVENT_STREAM::isCompatibleWith)
                                     .isPresent()) {
-                        return endingBeforeFirstContent(responseParts, reviewProtocol, bounds.idle());
+                        return ProxyStreamUsageTap.endingBeforeFirstContent(
+                                responseParts, objectMapper, reviewProtocol, bounds.idle());
                     }
                     return responseParts;
                 })
@@ -1018,28 +1016,6 @@ class LlmProxyService {
         } finally {
             transport.finish(completed);
         }
-    }
-
-    /** A review's first answer has one deadline. Comments and progress frames do not extend it. */
-    private Flux<Part> endingBeforeFirstContent(Flux<Part> source, LlmApiProtocol protocol, Duration limit) {
-        return Flux.defer(() -> {
-            var clock = Schedulers.parallel();
-            long startedAt = clock.now(TimeUnit.NANOSECONDS);
-            var firstContent = new ProxyStreamUsageTap(objectMapper, protocol);
-            Mono<Long> rest = Mono.defer(() -> Mono.delay(
-                    Duration.ofNanos(Math.max(0L, limit.toNanos() - (clock.now(TimeUnit.NANOSECONDS) - startedAt))),
-                    clock));
-            // Observe the upstream chunks before they can wait behind a servlet write. The relay owns usage accounting.
-            return source.doOnNext(part -> {
-                        if (!firstContent.hasContent() && part instanceof Body chunk) {
-                            firstContent.accept(chunk.bytes());
-                        }
-                    })
-                    .timeout(
-                            rest,
-                            part -> firstContent.hasContent() ? Mono.never() : rest,
-                            Flux.error(UpstreamIdleException::new));
-        });
     }
 
     /**
