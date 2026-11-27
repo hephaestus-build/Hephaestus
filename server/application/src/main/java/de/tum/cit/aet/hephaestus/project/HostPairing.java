@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.project;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,9 +30,15 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HostPairing {
 
-    public enum Status {
+    /** Refusal, expiry and redemption delete the row, so approval is the one transition it records. */
+    public enum Status implements Lifecycle<Status> {
         PENDING,
-        APPROVED
+        APPROVED;
+
+        @Override
+        public boolean canTransitionTo(Status next) {
+            return this == PENDING && next == APPROVED;
+        }
     }
 
     @Id

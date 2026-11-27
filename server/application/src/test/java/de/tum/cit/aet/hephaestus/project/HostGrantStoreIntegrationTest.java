@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,9 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private AccountService accountService;
 
+    @Autowired
+    private HostGrantRepository grantRepository;
+
     private Workspace course;
     private Workspace otherCourse;
     private long student;
@@ -84,7 +88,9 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
 
         assertThat(openGrants(student)).isZero();
         assertThat(approvedPairings(student)).isZero();
-        assertThat(pairingExists(pending)).as("a pending request names no account").isTrue();
+        assertThat(pairingExists(pending))
+                .as("a pending request names no account")
+                .isTrue();
         assertThat(isOpen(classmatesGrant)).isTrue();
         assertThat(pairingExists(classmatesPairing)).isTrue();
     }
@@ -164,6 +170,28 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLetAGrantStandOnlyInItsWorkspaceWhileItIsOpenAndItsMemberStaysInAStandingTeam() {
+        memberships.createMembership(otherCourse, student, WorkspaceRole.MEMBER);
+        UUID open = grant(course, team, student);
+        UUID revoked = grant(course, team, student);
+        UUID expired = grant(course, team, student);
+        UUID removedTeam = team(course, student);
+        UUID ofRemovedTeam = grant(course, removedTeam, student);
+        UUID elsewhere = grant(otherCourse, team(otherCourse, student), student);
+        jdbc.update("UPDATE host_grant SET revoked_at = now() WHERE id = ?", revoked);
+        jdbc.update("UPDATE host_grant SET expires_at = now() - interval '1 second' WHERE id = ?", expired);
+        jdbc.update("UPDATE project_team SET removed_at = now() WHERE id = ?", removedTeam);
+
+        assertThat(isStanding(course, open)).isTrue();
+        assertThat(isStanding(otherCourse, open)).as("asked in another workspace").isFalse();
+        assertThat(isStanding(course, elsewhere)).as("a grant of another workspace").isFalse();
+        assertThat(isStanding(course, revoked)).isFalse();
+        assertThat(isStanding(course, expired)).isFalse();
+        assertThat(isStanding(course, ofRemovedTeam)).as("a removed team").isFalse();
+        assertThat(isStanding(course, UUID.randomUUID())).isFalse();
+    }
+
+    @Test
     void shouldRefuseAGrantForANonMemberOrAcrossWorkspacesAndAnApprovalWithoutAnAccount() {
         long outsider = account();
         memberships.createMembership(course, outsider, WorkspaceRole.MEMBER);
@@ -176,9 +204,12 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> grant(course, elsewhere, student))
                 .as("a team of another workspace")
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update("INSERT INTO host_pairing(id, code_hash, code_challenge, host_kind, status,"
-                        + " created_at, expires_at) VALUES (?, ?, 'challenge', 'FIGJAM', 'APPROVED', now(),"
-                        + " now() + interval '5 minutes')", UUID.randomUUID(), hash()))
+        assertThatThrownBy(() -> jdbc.update(
+                        "INSERT INTO host_pairing(id, code_hash, code_challenge, host_kind, status,"
+                                + " created_at, expires_at) VALUES (?, ?, 'challenge', 'FIGJAM', 'APPROVED', now(),"
+                                + " now() + interval '5 minutes')",
+                        UUID.randomUUID(),
+                        hash()))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update(
                         "INSERT INTO host_pairing(id, code_hash, code_challenge, host_kind, status, approved_account_id,"
@@ -188,6 +219,10 @@ class HostGrantStoreIntegrationTest extends BaseIntegrationTest {
                         hash(),
                         student))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private boolean isStanding(Workspace workspace, UUID grant) {
+        return grantRepository.isStanding(id(workspace), grant, Instant.now());
     }
 
     private Workspace workspace(String name) {
