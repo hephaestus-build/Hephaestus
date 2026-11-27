@@ -14,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -369,7 +368,7 @@ class ProviderEventReceiverTest extends BaseUnitTest {
         ordered.verify(connections).findAndLockLifecycleConnection(CONNECTION, WORKSPACE);
         ordered.verify(handoff)
                 .store(
-                        eq(new VerifiedWebhookHandoff.LockedBinding(CONNECTION, "17", config, null, null)),
+                        eq(new VerifiedWebhookHandoff.LockedBinding(CONNECTION, "17", config)),
                         arrival.capture());
         assertThat(stored).isOne();
         assertThat(arrival.getValue().payload()).isEqualTo(BODY);
@@ -387,7 +386,6 @@ class ProviderEventReceiverTest extends BaseUnitTest {
                 store,
                 subscriptions,
                 connections,
-                mock(ConnectionAuditRepository.class),
                 meters,
                 mock(EventTraceContext.class),
                 new TransactionTemplate(manager),

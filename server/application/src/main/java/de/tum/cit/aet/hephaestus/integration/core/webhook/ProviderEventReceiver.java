@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
@@ -68,7 +67,6 @@ public class ProviderEventReceiver {
     private final ProviderEventStore store;
     private final ProviderEventSubscriptions subscriptions;
     private final ConnectionRepository connections;
-    private final ConnectionAuditRepository connectionAudit;
     private final MeterRegistry meters;
 
     @PersistenceContext
@@ -83,7 +81,6 @@ public class ProviderEventReceiver {
             ProviderEventStore store,
             ProviderEventSubscriptions subscriptions,
             ConnectionRepository connections,
-            ConnectionAuditRepository connectionAudit,
             MeterRegistry meters,
             EventTraceContext traceContext,
             TransactionTemplate transactions,
@@ -91,7 +88,6 @@ public class ProviderEventReceiver {
         this.store = store;
         this.subscriptions = subscriptions;
         this.connections = connections;
-        this.connectionAudit = connectionAudit;
         this.meters = meters;
         this.traceContext = traceContext;
         this.transactions = transactions;
@@ -251,13 +247,7 @@ public class ProviderEventReceiver {
                     long id = candidate.connectionId();
                     handled += handoff.store(
                             new VerifiedWebhookHandoff.LockedBinding(
-                                    id,
-                                    connection.getInstanceKey(),
-                                    configured,
-                                    connection.getSlackDmPinEpoch(),
-                                    connectionAudit
-                                            .latestActivation(workspaceId, id)
-                                            .orElse(null)),
+                                    id, connection.getInstanceKey(), configured),
                             arrival);
                 }
             }
