@@ -34,6 +34,24 @@ public interface TeamItemVersionRepository extends Repository<TeamItemVersion, U
             nativeQuery = true)
     boolean existsDue();
 
+    /** Withdraws the version if it is still available. */
+    @Modifying
+    @Transactional
+    @Query(
+            value = "UPDATE team_item_version SET state = 'WITHDRAWN', title = NULL"
+                    + " WHERE id = :versionId AND workspace_id = :workspaceId AND state = 'AVAILABLE'",
+            nativeQuery = true)
+    int withdraw(@Param("workspaceId") long workspaceId, @Param("versionId") UUID versionId);
+
+    /** Withdraws every available version that the account submitted in the workspace. */
+    @Modifying
+    @Transactional
+    @Query(
+            value = "UPDATE team_item_version SET state = 'WITHDRAWN', title = NULL"
+                    + " WHERE workspace_id = :workspaceId AND submitted_by = :accountId AND state = 'AVAILABLE'",
+            nativeQuery = true)
+    int withdrawSubmittedBy(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
     /** Ends every version of the account, whatever its state, and removes the account and the title from it. */
     @WorkspaceAgnostic("Account erasure spans workspaces")
     @Modifying

@@ -31,8 +31,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Reapplies the erasures that a database restore undid, from the operator-held manifest: disconnects, then workspace
- * purges, then erased documentation collections, deleted conversation messages, erased Slack channels and Slack
- * messages changed in Slack, then people. It runs only in a server with background work off, so no scheduled task,
+ * purges, then erased documentation collections, deleted conversation messages, withdrawn team work, erased Slack
+ * channels and Slack messages changed in Slack, then people. It runs only in a server with background work off, so no scheduled task,
  * claimer or inbox subscriber writes while it skips the purge's quiescence guards; the {@code erasure-recovery} profile
  * turns background work off, and startup stops if anything turns it on again.
  */
@@ -96,7 +96,8 @@ final class PersonDataRecovery implements SmartLifecycle {
     }
 
     /**
-     * Version 5 adds exact personal goal deletions. An earlier manifest cannot say that there were none.
+     * Version 5 adds exact personal goal deletions. An earlier manifest cannot say that there were none. The two team
+     * work lists may be absent while nothing submits team work.
      */
     record Manifest(
             int version,
@@ -110,9 +111,17 @@ final class PersonDataRecovery implements SmartLifecycle {
             List<MessageDeletion> messageDeletions,
             List<UUID> recordDeletions,
             List<SlackMessageChange> slackMessageChanges,
-            List<SlackChannelErasure> slackChannelErasures) {}
+            List<SlackChannelErasure> slackChannelErasures,
+            @Nullable List<TeamVersionWithdrawal> teamVersionWithdrawals,
+            @Nullable List<WorkspaceDeparture> workspaceDepartures) {}
 
     record WorkspacePurge(long workspaceId) {}
+
+    /** A submitted team version that was withdrawn. */
+    record TeamVersionWithdrawal(long workspaceId, UUID versionId) {}
+
+    /** A person who left a workspace, which withdraws the team work that they submitted there. */
+    record WorkspaceDeparture(long workspaceId, long accountId) {}
 
     record Disconnect(long workspaceId, long connectionId) {}
 
@@ -162,8 +171,10 @@ final class PersonDataRecovery implements SmartLifecycle {
             long size = Files.size(path);
             reason = FailureReason.MANIFEST_INVALID;
             if (size > MAX_MANIFEST_BYTES) throw new IllegalStateException();
+            // A fraction must not be cut to a whole number: it would name another account, workspace or record.
             Manifest manifest = mapper.readerFor(Manifest.class)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
                     .readValue(Files.readAllBytes(path));
             reason = FailureReason.MANIFEST_VERSION;
             if (manifest.version() != 5) throw new IllegalStateException();
@@ -177,6 +188,9 @@ final class PersonDataRecovery implements SmartLifecycle {
             var recordDeletions = Set.copyOf(manifest.recordDeletions());
             Objects.requireNonNull(manifest.slackMessageChanges());
             Objects.requireNonNull(manifest.slackChannelErasures());
+            List<TeamVersionWithdrawal> withdrawals =
+                    Objects.requireNonNullElse(manifest.teamVersionWithdrawals(), List.of());
+            List<WorkspaceDeparture> departures = Objects.requireNonNullElse(manifest.workspaceDepartures(), List.of());
             boolean none = manifest.people().isEmpty()
                     && manifest.workspacePurges().isEmpty()
                     && manifest.disconnects().isEmpty()
@@ -184,7 +198,9 @@ final class PersonDataRecovery implements SmartLifecycle {
                     && manifest.messageDeletions().isEmpty()
                     && recordDeletions.isEmpty()
                     && manifest.slackMessageChanges().isEmpty()
-                    && manifest.slackChannelErasures().isEmpty();
+                    && manifest.slackChannelErasures().isEmpty()
+                    && withdrawals.isEmpty()
+                    && departures.isEmpty();
             Instant now = Instant.now();
             if (manifest.restorePoint().isAfter(now)
                     || manifest.noLaterErasures() != none
@@ -206,6 +222,10 @@ final class PersonDataRecovery implements SmartLifecycle {
                                             && channel.copiesErasedThrough().isAfter(now))
                                     || channel.channelId() == null
                                     || channel.channelId().isBlank())
+                    || withdrawals.stream()
+                            .anyMatch(version -> version.workspaceId() <= 0 || version.versionId() == null)
+                    || departures.stream()
+                            .anyMatch(departure -> departure.workspaceId() <= 0 || departure.accountId() <= 0)
                     || manifest.slackMessageChanges().stream()
                             .anyMatch(message -> message.workspaceId() <= 0
                                     || message.messageId() <= 0
@@ -237,6 +257,8 @@ final class PersonDataRecovery implements SmartLifecycle {
             for (CollectionErasure collection : manifest.collectionErasures())
                 collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
             content.deleteAgain(manifest.messageDeletions(), recordDeletions);
+            // Before the people: erasure of an account also ends the versions that this leaves available.
+            content.withdrawAgain(withdrawals, departures);
             for (SlackChannelErasure channel : manifest.slackChannelErasures()) {
                 Instant erasedAt = Objects.requireNonNullElse(channel.erasedAt(), manifest.restorePoint());
                 slackChannels.eraseAgain(

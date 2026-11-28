@@ -4,6 +4,6 @@
  */
 @org.springframework.modulith.ApplicationModule(
         displayName = "Integration · Submission",
-        allowedDependencies = {"core", "core::auth-spi", "core::runtime", "project::spi"})
+        allowedDependencies = {"core", "core::auth-spi", "core::person-data", "core::runtime", "project::spi"})
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.integration.submission;

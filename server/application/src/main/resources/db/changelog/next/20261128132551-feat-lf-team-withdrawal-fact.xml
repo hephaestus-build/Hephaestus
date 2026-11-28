@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!-- The kinds are expanded in the release before the first fact of the new kind, so every replica reads it. -->
+    <changeSet id="1795854587000-1" author="hephaestus">
+        <comment>The privacy journal admits the withdrawal of a submitted team version. Nothing records it yet.</comment>
+        <sql>
+SET LOCAL lock_timeout = '5s';
+ALTER TABLE public.privacy_journal
+    DROP CONSTRAINT ck_privacy_journal_kind,
+    ADD CONSTRAINT ck_privacy_journal_kind CHECK (kind IN (
+        'ACCOUNT_ERASED', 'PERSON_ERASED', 'WORKSPACE_PURGED', 'CONNECTION_ERASED', 'COLLECTION_ERASED',
+        'ENTRY_DELETED', 'SLACK_CHANNEL_ERASED', 'SLACK_MESSAGE_CHANGED', 'SLACK_PARTICIPANT_WITHDRAWN',
+        'REPOSITORY_REMOVED', 'SCOPE_ERASED', 'RECORD_DELETED', 'GROWTH_DELETED', 'SEGMENT_ITEM_FORGOTTEN',
+        'TRANSFER_REVOKED', 'RECORD_KEPT_OUT', 'SPACE_EXCLUDED', 'TRANSFER_RECALLED', 'SUPPORT_SHARE_REVOKED',
+        'DRIVER_BINDING_REVOKED', 'WORKSPACE_POLICY_NARROWED', 'MEMBERSHIP_ENDED', 'ACCOUNT_SUSPENDED',
+        'SESSION_REVOKED', 'CONSENT_WITHDRAWN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_OWED',
+        'RESEARCH_REMOVAL_RECORDED', 'RESEARCH_MAPPING_ERASED', 'EXPERIMENT_WITHDRAWN', 'EXPERIMENT_KEY_DESTROYED',
+        'TEAM_VERSION_WITHDRAWN')) NOT VALID;
+        </sql>
+        <rollback>
+SET LOCAL lock_timeout = '5s';
+ALTER TABLE public.privacy_journal
+    DROP CONSTRAINT ck_privacy_journal_kind,
+    ADD CONSTRAINT ck_privacy_journal_kind CHECK (kind IN (
+        'ACCOUNT_ERASED', 'PERSON_ERASED', 'WORKSPACE_PURGED', 'CONNECTION_ERASED', 'COLLECTION_ERASED',
+        'ENTRY_DELETED', 'SLACK_CHANNEL_ERASED', 'SLACK_MESSAGE_CHANGED', 'SLACK_PARTICIPANT_WITHDRAWN',
+        'REPOSITORY_REMOVED', 'SCOPE_ERASED', 'RECORD_DELETED', 'GROWTH_DELETED', 'SEGMENT_ITEM_FORGOTTEN',
+        'TRANSFER_REVOKED', 'RECORD_KEPT_OUT', 'SPACE_EXCLUDED', 'TRANSFER_RECALLED', 'SUPPORT_SHARE_REVOKED',
+        'DRIVER_BINDING_REVOKED', 'WORKSPACE_POLICY_NARROWED', 'MEMBERSHIP_ENDED', 'ACCOUNT_SUSPENDED',
+        'SESSION_REVOKED', 'CONSENT_WITHDRAWN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_OWED',
+        'RESEARCH_REMOVAL_RECORDED', 'RESEARCH_MAPPING_ERASED', 'EXPERIMENT_WITHDRAWN', 'EXPERIMENT_KEY_DESTROYED'));
+        </rollback>
+    </changeSet>
+    <changeSet id="1795854587000-2" author="hephaestus">
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE public.privacy_journal VALIDATE CONSTRAINT ck_privacy_journal_kind;</sql>
+        <!-- Validation adds nothing that the rollback of the change set before it does not undo. -->
+        <rollback><sql>SELECT 1;</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

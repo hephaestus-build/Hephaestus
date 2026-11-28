@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredRecordDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredTeamWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
 import java.util.Set;
@@ -19,11 +20,24 @@ final class RestoredOwnerContent {
     private final JdbcTemplate jdbc;
     private final RestoredMessageDeletions messages;
     private final RestoredRecordDeletions records;
+    private final RestoredTeamWork teamWork;
 
-    RestoredOwnerContent(JdbcTemplate jdbc, RestoredMessageDeletions messages, RestoredRecordDeletions records) {
+    RestoredOwnerContent(
+            JdbcTemplate jdbc,
+            RestoredMessageDeletions messages,
+            RestoredRecordDeletions records,
+            RestoredTeamWork teamWork) {
         this.jdbc = jdbc;
         this.messages = messages;
         this.records = records;
+        this.teamWork = teamWork;
+    }
+
+    void withdrawAgain(
+            List<PersonDataRecovery.TeamVersionWithdrawal> versions,
+            List<PersonDataRecovery.WorkspaceDeparture> departures) {
+        for (var version : versions) teamWork.withdrawAgain(version.workspaceId(), version.versionId());
+        for (var departure : departures) teamWork.withdrawDepartedAgain(departure.workspaceId(), departure.accountId());
     }
 
     void deleteAgain(List<PersonDataRecovery.MessageDeletion> deletedMessages, Set<UUID> recordIds) {
