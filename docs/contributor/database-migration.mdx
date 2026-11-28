@@ -334,6 +334,8 @@ Prove that an unsupported queued kind stays unclaimed, and that the preceding re
 An erasure pass compares the stores that a request froze and erased with the replica's inventory.
 A release from #5382 on handles a new store in both directions of a roll:
 
+- A replica can confirm an erasure whose preview a newer replica made.
+  It checks the stores that it knows and admits the request.
 - A replica can meet a store or a receipt that it does not know.
   It then stops the pass and leaves the request for a replica of the newer release.
   The request does not fail, and each store that the pass already erased keeps its receipt.
