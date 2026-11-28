@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptCredential;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptLease;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttemptRepository;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempts;
@@ -67,11 +69,15 @@ class MentorLockOrderArchitectureTest extends HephaestusArchitectureTest {
                     .as("%s locks the attempt before the request", method.getFullName())
                     .isLessThan(attempt.getAsInt());
         });
-        // The rule is not vacuous: the claim locks both.
+        // The rule is not vacuous: the claim, the renew and the dispatch fence lock both.
+        var attempts = classes.get(MentorAttempts.class);
         assertThat(both)
-                .contains(classes.get(MentorAttempts.class)
-                        .getMethod("claim", long.class, WorkClass.class, int.class, Duration.class)
-                        .getFullName());
+                .contains(
+                        attempts.getMethod("claim", long.class, WorkClass.class, int.class, Duration.class)
+                                .getFullName(),
+                        attempts.getMethod("renew", AttemptLease.class, Duration.class)
+                                .getFullName(),
+                        attempts.getMethod("current", AttemptCredential.class).getFullName());
     }
 
     @Test

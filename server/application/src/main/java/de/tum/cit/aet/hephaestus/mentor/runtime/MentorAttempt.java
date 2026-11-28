@@ -16,6 +16,8 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -81,7 +83,28 @@ public class MentorAttempt {
     @Column(nullable = false)
     private Instant deadline;
 
-    /** The result's evidence basis, written by the commit. */
+    /** The frozen route's payer, model and connection, set once when the attempt is prepared. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private AttemptCredential.@Nullable PayerKind routePayer;
+
+    private @Nullable Long routeWorkspaceId;
+
+    private @Nullable Long routeModelId;
+
+    private @Nullable Long routeConnectionId;
+
+    /** The provider observation that proved the asker, bound to the lease epoch it was taken for. */
+    private @Nullable Long observedEpoch;
+
+    private @Nullable Instant observedAt;
+
+    private @Nullable Long observedReaderEpoch;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "text[]")
+    private String @Nullable [] observedReaders;
+
     private @Nullable UUID basisId;
 
     @Column(nullable = false)

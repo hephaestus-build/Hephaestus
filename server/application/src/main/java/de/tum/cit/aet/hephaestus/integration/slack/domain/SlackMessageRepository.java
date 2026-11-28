@@ -209,6 +209,20 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
     int eraseEditedText(@Param("workspaceId") long workspaceId, @Param("id") long id);
 
     /**
+     * Whether the stored message is tombstoned, holding its row against a concurrent tombstone. Empty when the store
+     * never stored it: the mentor's dispatch fence then has no tombstone to refuse on.
+     */
+    @Query(value = """
+        SELECT deleted_at IS NOT NULL FROM slack_message
+        WHERE workspace_id = :workspaceId AND slack_channel_id = :slackChannelId AND slack_ts = :slackTs
+        FOR SHARE
+        """, nativeQuery = true)
+    Optional<Boolean> shareTombstoned(
+            @Param("workspaceId") long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("slackTs") String slackTs);
+
+    /**
      * Slack {@code message_deleted} tombstone (GDPR Art. 17), durable against out-of-order delivery: UPSERT a
      * contentless tombstone (stamp {@code deleted_at}, {@code text = NULL}). On an already-ingested row it tombstones
      * it in place; if the delete raced ahead of a NAK-redelivered base insert, it writes the tombstone first so the

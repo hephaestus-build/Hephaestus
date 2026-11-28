@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795771544565-1" author="hephaestus">
+        <comment>What a mentor attempt's dispatch fence matches: the payer, model and connection of its frozen route, and the provider observation bound to its lease epoch.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.mentor_attempt
+    ADD COLUMN route_payer VARCHAR(16)
+        CONSTRAINT ck_mentor_attempt_route_payer CHECK (route_payer IN ('WORKSPACE', 'PERSONAL_PURSE')),
+    ADD COLUMN route_workspace_id BIGINT,
+    ADD COLUMN route_model_id BIGINT,
+    ADD COLUMN route_connection_id BIGINT,
+    ADD COLUMN observed_epoch BIGINT,
+    ADD COLUMN observed_at TIMESTAMP(6) WITH TIME ZONE,
+    ADD COLUMN observed_reader_epoch BIGINT,
+    ADD COLUMN observed_readers TEXT[];
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.mentor_attempt DROP COLUMN observed_readers, DROP COLUMN observed_reader_epoch, DROP COLUMN observed_at, DROP COLUMN observed_epoch, DROP COLUMN route_connection_id, DROP COLUMN route_model_id, DROP COLUMN route_workspace_id, DROP COLUMN route_payer</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

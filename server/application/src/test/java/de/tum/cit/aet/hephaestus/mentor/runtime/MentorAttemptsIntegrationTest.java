@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.mentor.runtime.AttemptCredential.PayerKind;
 import de.tum.cit.aet.hephaestus.mentor.runtime.MentorAttempt.WorkClass;
 import de.tum.cit.aet.hephaestus.mentor.spi.Admission;
 import de.tum.cit.aet.hephaestus.mentor.spi.Audience;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Binding;
 import de.tum.cit.aet.hephaestus.mentor.spi.IngressEnvelope;
 import de.tum.cit.aet.hephaestus.mentor.spi.IngressKind;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorAuthorization;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorSourceEvidence;
 import de.tum.cit.aet.hephaestus.mentor.spi.MessageRef;
 import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import de.tum.cit.aet.hephaestus.mentor.spi.ProviderEventKey;
@@ -31,6 +33,8 @@ import de.tum.cit.aet.hephaestus.mentor.spi.Transport;
 import de.tum.cit.aet.hephaestus.mentor.spi.VerifiedActor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -41,25 +45,34 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** The attempt claims of R2-DESIGN.md (T11, T13b, Own): claims, reclaims and the account's lease limits. */
+/** The attempt leases of R2-DESIGN.md (T11, T13b, Own, Fence, Renew): claims, reclaims, renewals and the dispatch fence. */
 class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private static final Duration LEASE = Duration.ofMinutes(2);
+    private static final long MODEL = 7;
+    private static final long CONNECTION = 9;
 
     @Autowired
     private MentorSourceRepository rows;
 
     @Autowired
     private MentorAttemptRepository attemptRows;
+
+    /** The Slack adapter that the server wires for the mentor's store evidence. */
+    @Autowired
+    private MentorSourceEvidence sourceEvidence;
 
     @Autowired
     private PersonDataWriteFence fence;
@@ -82,15 +95,21 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private final JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
     private final long binding = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
     private final long workspace = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
+    private MentorAuthorization authorization;
     private MentorIntake intake;
     private MentorAttempts attempts;
     private long account;
+    /** What the authorization port answers for a stored stamp; false is a revoke. */
+    private volatile boolean authorized = true;
+    /** Whether intake's capture admits the asker; false refuses an edit. */
+    private volatile boolean capturing = true;
 
     @BeforeEach
     void setUp() {
         account = linkedAccount();
-        MentorAuthorization authorization = mock(MentorAuthorization.class);
+        authorization = mock(MentorAuthorization.class);
         when(authorization.captureSlack(any(), any(), any())).thenAnswer(call -> {
+            if (!capturing) return Optional.empty();
             VerifiedActor actor = call.getArgument(0);
             Binding where = call.getArgument(1);
             return Optional.of(new ScopeStamp(
@@ -101,13 +120,17 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                     new AuthorityScope.Slack(
                             where.workspaceId(), 11, where.connectionId(), 13, actor.nativeActorId())));
         });
-        intake = new MentorIntake(
-                rows,
-                fence,
-                owners,
-                new StaticListableBeanFactory(Map.of("authorization", authorization))
-                        .getBeanProvider(MentorAuthorization.class));
-        attempts = new MentorAttempts(attemptRows, fence, owners);
+        when(authorization.isCurrent(any(), any())).thenAnswer(call -> authorized);
+        var provider = new StaticListableBeanFactory(Map.of("authorization", authorization))
+                .getBeanProvider(MentorAuthorization.class);
+        intake = new MentorIntake(rows, fence, owners, provider);
+        attempts = new MentorAttempts(attemptRows, fence, owners, provider, store());
+    }
+
+    /** The Slack store's evidence port as the server wires it, for this test's own fence. */
+    private ObjectProvider<MentorSourceEvidence> store() {
+        return new StaticListableBeanFactory(Map.of("evidence", sourceEvidence))
+                .getBeanProvider(MentorSourceEvidence.class);
     }
 
     /** T11: after a crash that followed intake, the queued attempt is leased once, however many replicas try. */
@@ -131,21 +154,24 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(requestState(request)).isEqualTo("RUNNING");
     }
 
-    /** T13b: a lapsed lease is taken again under a new epoch and token, so its old holder's claim no longer matches. */
+    /** T13b: a lapsed lease is taken again under a new epoch and token, and its old holder can neither renew nor call. */
     @Test
     void shouldFailTheOldHolderWhenAReclaimTakesALapsedLease() {
         UUID request = ask(message());
         AttemptLease first = claimOne(WorkClass.INTERACTIVE);
+        prepare(first);
         lapse(first);
 
         AttemptLease second = claimOne(WorkClass.INTERACTIVE);
         assertThat(second.attemptId()).isEqualTo(first.attemptId());
         assertThat(second.leaseEpoch()).isEqualTo(2);
         assertThat(second.leaseToken()).isNotEqualTo(first.leaseToken());
-        assertThat(attempt(request))
-                .containsEntry("claims", 2)
-                .containsEntry("lease_epoch", 2L)
-                .containsEntry("lease_token", second.leaseToken());
+        observe(second);
+
+        assertThat(renew(first, LEASE)).isFalse();
+        assertThat(current(credential(first))).isFalse();
+        assertThat(current(credential(second))).isTrue();
+        assertThat(attempt(request)).containsEntry("claims", 2);
     }
 
     @Test
@@ -241,6 +267,291 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo((long) MentorAttempts.OWNER_LEASES);
     }
 
+    /** Fence: the credential must match the held claim and its frozen route, and the request's authority still holds. */
+    @Test
+    void shouldAdmitADispatchOnlyForTheHeldClaimOnItsFrozenRoute() {
+        ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(current(held)).isTrue();
+
+        List<Function<AttemptCredential, AttemptCredential>> wrong = List.of(
+                c -> new AttemptCredential(
+                        linkedAccount(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch() + 1,
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        UUID.randomUUID(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL + 1,
+                        CONNECTION,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION + 1,
+                        c.payer(),
+                        c.payerWorkspaceId()),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        PayerKind.PERSONAL_PURSE,
+                        null),
+                c -> new AttemptCredential(
+                        c.accountId(),
+                        c.attemptId(),
+                        c.leaseEpoch(),
+                        c.leaseToken(),
+                        MODEL,
+                        CONNECTION,
+                        c.payer(),
+                        workspace + 1));
+        for (var change : wrong) assertThat(current(change.apply(held))).isFalse();
+    }
+
+    @Test
+    void shouldRefuseADispatchWhenTheLeaseTheRequestOrTheObservationNoLongerHolds() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        AttemptCredential held = credential(lease);
+
+        assertThat(current(held)).as("no observation bound").isFalse();
+        observe(lease);
+        assertThat(current(held)).isTrue();
+        authorized = false;
+        assertThat(current(held)).as("revoked").isFalse();
+        authorized = true;
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '2 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("stale observation").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET observed_epoch = observed_epoch - 1, observed_at = clock_timestamp()"
+                        + " WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("observation of another epoch").isFalse();
+        observe(lease);
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("past the work deadline").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).isTrue();
+        owner.update(
+                "UPDATE mentor_request SET deadline = clock_timestamp() - interval '1 second' WHERE id = ?",
+                lease.requestId());
+        assertThat(current(held)).as("past the request deadline").isFalse();
+        owner.update(
+                "UPDATE mentor_request SET deadline = clock_timestamp() + interval '1 hour' WHERE id = ?",
+                lease.requestId());
+        lapse(lease);
+        assertThat(current(held)).as("the lease lapsed").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET leased_until = clock_timestamp() + interval '2 minutes' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).isTrue();
+        var unwired = new MentorAttempts(
+                attemptRows,
+                fence,
+                owners,
+                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorAuthorization.class),
+                store());
+        assertThat(current(unwired, held)).as("no authorization port").isFalse();
+
+        admit(IngressKind.MESSAGE_EDITED, "e9", message, "1700000009.000100");
+        assertThat(current(held)).as("the version moved").isFalse();
+        assertThat(renew(lease, LEASE)).as("the version moved").isFalse();
+    }
+
+    /**
+     * A delete that intake never admitted, because its retries ran out while the request was held, still refuses: the
+     * Slack store's tombstone is read before each dispatch, and an unwired store port refuses too.
+     */
+    @Test
+    void shouldRefuseADispatchWhenTheSlackStoreShowsTheQuestionDeleted() throws SQLException {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(current(held))
+                .as("the store has no row: no tombstone to refuse on")
+                .isTrue();
+
+        var storeless = new MentorAttempts(
+                attemptRows,
+                fence,
+                owners,
+                new StaticListableBeanFactory(Map.of("authorization", authorization))
+                        .getBeanProvider(MentorAuthorization.class),
+                new StaticListableBeanFactory(Map.of()).getBeanProvider(MentorSourceEvidence.class));
+        assertThat(current(storeless, held)).as("no store port").isFalse();
+
+        tombstoneInSlackStore(message);
+        assertThat(current(held)).as("the Slack store tombstoned the question").isFalse();
+        assertThat(owner.queryForObject(
+                        "SELECT state FROM mentor_source WHERE native_message_id = ?", String.class, message))
+                .as("intake never saw the delete")
+                .isEqualTo("LIVE");
+    }
+
+    /**
+     * A DM is never in the Slack store, so a deleted DM has no tombstone, and intake may never have seen its delete.
+     * The fresh observation, which reads the message from Slack, is then the only witness: without one bound at this
+     * epoch and at most 60 seconds old, a DM question gets no dispatch.
+     */
+    @Test
+    void shouldRefuseADispatchForADirectMessageWithoutAFreshObservation() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        AttemptCredential held = credential(lease);
+        assertThat(owner.queryForObject("""
+                        SELECT r.audience_container_id = 'D' || r.audience_connection_id AND r.audience_thread_root IS NULL
+                            AND s.state = 'LIVE'
+                        FROM mentor_request r JOIN mentor_source s ON s.id = r.source_id WHERE r.id = ?
+                        """, Boolean.class, lease.requestId()))
+                .as("a live DM question at the top level")
+                .isTrue();
+        assertThat(owner.queryForObject("SELECT count(*) FROM slack_message WHERE slack_ts = ?", Long.class, message))
+                .as("no Slack store row for the DM")
+                .isZero();
+
+        assertThat(current(held)).as("no observation").isFalse();
+        observe(lease);
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '61 seconds' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("an observation older than 60 seconds").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() + interval '30 seconds' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held))
+                .as("an observation stamped after the database clock")
+                .isFalse();
+        observe(lease);
+        assertThat(current(held)).as("a fresh observation of the DM").isTrue();
+    }
+
+    /** Only a Slack question has its dispatch checks: any other transport refuses until its own checks land. */
+    @Test
+    void shouldRefuseADispatchForAQuestionOnAnotherTransportThanSlack() {
+        UUID request = ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        assertThat(current(credential(lease))).isTrue();
+
+        owner.update("UPDATE mentor_request SET audience_transport = 'APP' WHERE id = ?", request);
+        assertThat(current(credential(lease))).isFalse();
+    }
+
+    @Test
+    void shouldRefuseADispatchAndARenewWhenTheOwnerStopsTheRequest() {
+        String message = message();
+        ask(message);
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+
+        admit(IngressKind.CONTROL_STOP, "e8", message, "1700000000.000100");
+        assertThat(current(credential(lease))).isFalse();
+        assertThat(renew(lease, LEASE)).isFalse();
+    }
+
+    /** An edit that authority refused keeps the version, so the admitted revision refuses until an admitted edit. */
+    @Test
+    void shouldRefuseADispatchAndARenewAfterAnUnauthorizedEditUntilAnAuthorizedEditAdmitsTheText() {
+        String message = message();
+        UUID request = ask(message);
+        AttemptLease first = claimOne(WorkClass.INTERACTIVE);
+        prepare(first);
+        observe(first);
+        assertThat(current(credential(first))).isTrue();
+
+        capturing = false;
+        admit(IngressKind.MESSAGE_EDITED, "u" + message, message, "1700000000.000200");
+        assertThat(owner.queryForMap("SELECT version, delivery_fence FROM mentor_request WHERE id = ?", request))
+                .containsEntry("version", 1)
+                .containsEntry("delivery_fence", "SOURCE_EDITED");
+        assertThat(current(credential(first)))
+                .as("the lease on the text before the refused edit")
+                .isFalse();
+        assertThat(renew(first, LEASE)).isFalse();
+
+        capturing = true;
+        admit(IngressKind.MESSAGE_EDITED, "a" + message, message, "1700000000.000300");
+        AttemptLease second = claimOne(WorkClass.INTERACTIVE);
+        assertThat(second.requestVersion()).isEqualTo(2);
+        prepare(second);
+        observe(second);
+        assertThat(current(credential(second)))
+                .as("the lease on the admitted edit")
+                .isTrue();
+        assertThat(current(credential(first))).isFalse();
+    }
+
+    /** Renew: a lease never runs past the attempt's work deadline, and a lapsed lease cannot be renewed. */
+    @Test
+    void shouldCapARenewAtTheWorkDeadlineAndRefuseItAfterTheLeaseLapsed() {
+        UUID request = ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        owner.update(
+                "UPDATE mentor_attempt SET deadline = clock_timestamp() + interval '5 seconds' WHERE id = ?",
+                lease.attemptId());
+
+        assertThat(renew(lease, Duration.ofMinutes(10))).isTrue();
+        assertThat(owner.queryForObject(
+                        "SELECT leased_until <= deadline FROM mentor_attempt WHERE id = ?",
+                        Boolean.class,
+                        lease.attemptId()))
+                .isTrue();
+        lapse(lease);
+        assertThat(renew(lease, LEASE)).isFalse();
+        assertThat(requestState(request)).isEqualTo("RUNNING");
+    }
+
     private UUID ask(String message) {
         var admission = admit(IngressKind.MESSAGE, "e" + message, message, "1700000000.000100");
         return Objects.requireNonNull(((Admission.Admitted) admission).request())
@@ -274,10 +585,75 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         return leases.getFirst();
     }
 
+    /** What prepare (R2a4) freezes: the payer, model and connection of the route. */
+    private void prepare(AttemptLease lease) {
+        owner.update("""
+                UPDATE mentor_attempt SET route_payer = 'WORKSPACE', route_workspace_id = ?, route_model_id = ?,
+                    route_connection_id = ? WHERE id = ?
+                """, workspace, MODEL, CONNECTION, lease.attemptId());
+    }
+
+    /** What bind (R2a4) stores: an observation taken for this lease epoch, now. */
+    private void observe(AttemptLease lease) {
+        owner.update("""
+                UPDATE mentor_attempt SET observed_epoch = ?, observed_at = clock_timestamp(), observed_reader_epoch = 5,
+                    observed_readers = ARRAY['U' || account_id] WHERE id = ?
+                """, lease.leaseEpoch(), lease.attemptId());
+    }
+
+    /**
+     * What the Slack store writes for a delete that its own ingest admitted. The superuser seeds it with foreign keys
+     * off, so the test needs no workspace row.
+     */
+    private void tombstoneInSlackStore(String message) throws SQLException {
+        var administrator = PostgreSQLTestContainer.administrator();
+        try (var session = DriverManager.getConnection(
+                administrator.jdbcUrl(), administrator.username(), administrator.password())) {
+            session.setAutoCommit(false);
+            var seed = new JdbcTemplate(new SingleConnectionDataSource(session, true));
+            seed.execute("SET LOCAL session_replication_role = replica");
+            seed.execute("SET LOCAL search_path TO " + owner.queryForObject("SELECT current_schema()", String.class));
+            assertThat(seed.update("""
+                            INSERT INTO slack_message (workspace_id, slack_team_id, slack_channel_id, slack_ts, text,
+                                deleted_at, ingested_at)
+                            VALUES (?, ?, ?, ?, NULL, clock_timestamp(), clock_timestamp())
+                            """, workspace, "T" + binding, "D" + binding, message))
+                    .isEqualTo(1);
+            session.commit();
+        }
+    }
+
     private void lapse(AttemptLease lease) {
         owner.update(
                 "UPDATE mentor_attempt SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?",
                 lease.attemptId());
+    }
+
+    private AttemptCredential credential(AttemptLease lease) {
+        return new AttemptCredential(
+                lease.accountId(),
+                lease.attemptId(),
+                lease.leaseEpoch(),
+                lease.leaseToken(),
+                MODEL,
+                CONNECTION,
+                PayerKind.WORKSPACE,
+                workspace);
+    }
+
+    private boolean renew(AttemptLease lease, Duration duration) {
+        return Objects.requireNonNull(
+                new TransactionTemplate(transactions).execute(status -> attempts.renew(lease, duration)));
+    }
+
+    private boolean current(AttemptCredential credential) {
+        return current(attempts, credential);
+    }
+
+    /** The dispatch fence of one wiring, in its own transaction as a grant runs it. */
+    private boolean current(MentorAttempts wiring, AttemptCredential credential) {
+        return Objects.requireNonNull(
+                new TransactionTemplate(transactions).execute(status -> wiring.current(credential)));
     }
 
     private Map<String, @Nullable Object> attempt(UUID request) {

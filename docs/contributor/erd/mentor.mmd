@@ -26,6 +26,14 @@ erDiagram
         UUID basis_id
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ ended_at
+        VARCHAR(16) route_payer
+        BIGINT route_workspace_id
+        BIGINT route_model_id
+        BIGINT route_connection_id
+        BIGINT observed_epoch
+        TIMESTAMPTZ observed_at
+        BIGINT observed_reader_epoch
+        ARRAY observed_readers
     }
 
     MentorEvent {
