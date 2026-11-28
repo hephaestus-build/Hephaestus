@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -87,6 +88,48 @@ public class MentorRequest {
 
     @Column(nullable = false)
     private Instant deadline;
+
+    /**
+     * The question revision and provider-event ref that this version admitted. Only an authorized edit, which raises
+     * the version, moves them; an attempt answers this revision, never the source's newest. A request without
+     * them answers nothing.
+     */
+    @Column(length = 64)
+    private @Nullable String admittedRevision;
+
+    @Column(length = 64)
+    private @Nullable String admittedSourceRef;
+
+    /**
+     * Raised under the request lock by a Stop, a delete, or an unauthorized edit, whether the request is live or
+     * settled. An effect pins it, and its delivery is refused once it moved: a Stop that lost to completion still
+     * fences the unsent answer.
+     */
+    @ColumnDefault("0")
+    private long deliveryGeneration;
+
+    /** Why the delivery generation last moved. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private @Nullable DeliveryFence deliveryFence;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private @Nullable EndReason endReason;
+
+    private @Nullable Instant settledAt;
+
+    public enum DeliveryFence {
+        STOPPED,
+        SOURCE_DELETED,
+        SOURCE_EDITED
+    }
+
+    /** Why a request settled. */
+    public enum EndReason {
+        STOPPED,
+        SOURCE_DELETED
+    }
 
     public enum State implements Lifecycle<State> {
         OPEN,

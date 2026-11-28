@@ -60,7 +60,7 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
             Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTOR_DML = Pattern.compile(
             "\\b(?:insert into|update|merge into|delete from|truncate(?: table)?) (?:only )?"
-                    + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:event|request|source)\"?(?![\\w$])",
+                    + "(?:\"?public\"?\\s*\\.\\s*)?\"?mentor_(?:event|owner|request|source)\"?(?![\\w$])",
             Pattern.CASE_INSENSITIVE);
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java");
     private static final String MENTOR_EVENT_REPOSITORY =
@@ -76,7 +76,12 @@ class AccountOwnedWriteAdmissionArchitectureTest extends HephaestusArchitectureT
         assertThat(tables)
                 .as("Enroll each @PersonOwned store in this rule when it enters the person data inventory")
                 .containsExactlyInAnyOrder(
-                        EXPORT_TABLE, PERSONAL_GOAL_TABLE, "mentor_event", "mentor_request", "mentor_source");
+                        EXPORT_TABLE,
+                        PERSONAL_GOAL_TABLE,
+                        "mentor_event",
+                        "mentor_owner",
+                        "mentor_request",
+                        "mentor_source");
         assertThat(classes.stream()
                         .filter(type -> type.isAnnotatedWith(PersonDataStores.class))
                         .flatMap(type -> Arrays.stream(

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795767804000-1" author="hephaestus">
+        <comment>The mentor's per-account serialization row, and what each request version admitted and how its delivery is fenced. v1.0.0-rc.24 has the mentor tables but calls no mentor intake, so it writes no row, and nothing writes these before the release that registers them in the person-data inventory. The new columns still only expand, as every migration does.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.mentor_owner (
+    account_id BIGINT NOT NULL CONSTRAINT mentor_ownerPK PRIMARY KEY,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL
+);
+ALTER TABLE public.mentor_owner ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mentor_owner_owner ON public.mentor_owner TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+        ]]></sql>
+        <!-- A request without admitted pins answers nothing. An unfenced request has generation 0. -->
+        <addColumn tableName="mentor_request">
+            <column name="admitted_revision" type="VARCHAR(64)"/>
+            <column name="admitted_source_ref" type="VARCHAR(64)"/>
+            <column name="delivery_generation" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="delivery_fence" type="VARCHAR(16)"/>
+            <column name="end_reason" type="VARCHAR(32)"/>
+            <column name="settled_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.mentor_request
+    ADD CONSTRAINT ck_mentor_request_delivery_fence
+        CHECK (delivery_fence IN ('STOPPED', 'SOURCE_DELETED', 'SOURCE_EDITED')),
+    ADD CONSTRAINT ck_mentor_request_end_reason CHECK (end_reason IN ('STOPPED', 'SOURCE_DELETED'));
+
+-- A Stop by someone else than the owner records NOT_OWNER. v1.0.0-rc.24 has the table but calls no mentor intake, so
+-- no row holds STOP_NOT_HANDLED, and the list drops it in one release.
+ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_reason,
+    ADD CONSTRAINT ck_mentor_event_reason CHECK (reason IN ('UNAUTHORIZED', 'AUTHOR_MISMATCH', 'ALREADY_OPENED',
+        'NO_REQUEST', 'STALE_REVISION', 'SOURCE_DELETED', 'REQUEST_SETTLED', 'NOT_OWNER'));
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.mentor_event DROP CONSTRAINT ck_mentor_event_reason, ADD CONSTRAINT ck_mentor_event_reason CHECK (reason IN ('UNAUTHORIZED', 'AUTHOR_MISMATCH', 'ALREADY_OPENED', 'NO_REQUEST', 'STALE_REVISION', 'SOURCE_DELETED', 'REQUEST_SETTLED', 'STOP_NOT_HANDLED'))</sql>
+            <sql>ALTER TABLE public.mentor_request DROP COLUMN settled_at, DROP COLUMN end_reason, DROP COLUMN delivery_fence, DROP COLUMN delivery_generation, DROP COLUMN admitted_source_ref, DROP COLUMN admitted_revision</sql>
+            <sql>DROP TABLE public.mentor_owner</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

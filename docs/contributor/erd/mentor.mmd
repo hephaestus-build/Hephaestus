@@ -28,6 +28,11 @@ erDiagram
         VARCHAR(64) admission_digest
     }
 
+    MentorOwner {
+        BIGINT account_id PK
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
     MentorRequest {
         UUID id PK,UK
         BIGINT account_id FK,UK "NOT NULL"
@@ -49,6 +54,12 @@ erDiagram
         VARCHAR(255) scope_native_actor_id
         TIMESTAMPTZ opened_at "NOT NULL"
         TIMESTAMPTZ deadline "NOT NULL"
+        VARCHAR(64) admitted_revision
+        VARCHAR(64) admitted_source_ref
+        BIGINT delivery_generation "NOT NULL"
+        VARCHAR(16) delivery_fence
+        VARCHAR(32) end_reason
+        TIMESTAMPTZ settled_at
     }
 
     MentorSource {

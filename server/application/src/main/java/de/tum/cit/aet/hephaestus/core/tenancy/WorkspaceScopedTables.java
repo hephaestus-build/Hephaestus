@@ -74,6 +74,7 @@ public class WorkspaceScopedTables {
             "personal_goal",
             // The personal mentor's intake rows: account-owned under row-level security.
             "mentor_event",
+            "mentor_owner",
             "mentor_request",
             "mentor_source",
             // A person's support share: it belongs to the person and its one recipient, not to the workspace it
