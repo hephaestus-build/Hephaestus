@@ -3,30 +3,9 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmModelRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettings;
-import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
-import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
-import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionService;
-import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelService;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
-import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
-import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentService;
-import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatcher;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
-import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolations;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -75,13 +54,9 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
-import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.io.IOException;
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -94,23 +69,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
-import mockwebserver3.Dispatcher;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
-import mockwebserver3.RecordedRequest;
 import org.awaitility.core.ConditionTimeoutException;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -118,7 +85,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.TestSocketUtils;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * One review of a real pull request, from its request to its admitted results and the run that composes them, with only the container and the
@@ -131,9 +97,9 @@ import tools.jackson.databind.ObjectMapper;
 @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
 // Its worker claims every queued review job of the shared database, so its context must not outlive the class.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Import({AgentRuntimeTestSupport.class, AgentRuntimeTestSupport.Sandbox.class})
 class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final MockWebServer PROVIDER = new MockWebServer();
     private static final int GATEWAY_PORT = TestSocketUtils.findAvailableTcpPort();
 
     @DynamicPropertySource
@@ -146,15 +112,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "review-end-to-end");
         // The stub provider listens on this host.
         registry.add("hephaestus.llm.egress.allow-loopback", () -> "true");
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class Sandbox {
-        @Bean
-        @Primary
-        ReviewSandboxStub reviewSandboxStub(ObjectMapper mapper) {
-            return new ReviewSandboxStub(mapper);
-        }
     }
 
     /** What happens to the work between its capture and the first practice start. */
@@ -193,25 +150,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private SandboxDispatcher dispatcher;
 
     @Autowired
-    private ReviewComposeSandboxKind composeKind;
-
-    @Autowired
-    private CompositionClosing compositionClosing;
-
-    @Autowired
-    private AgentRuns agentRuns;
-
-    @Autowired
-    private InstanceLlmSettingsRepository instanceLlmSettings;
-
-    @Autowired
-    private WorkspaceLlmConnectionService connections;
-
-    @Autowired
-    private WorkspaceLlmModelService models;
-
-    @Autowired
-    private ModelAssignmentService bindings;
+    private AgentRuntimeTestSupport runtime;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -263,30 +202,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private AgentRunReaper reaper;
-
-    @BeforeAll
-    static void startProvider() throws IOException {
-        PROVIDER.setDispatcher(new Dispatcher() {
-            @Override
-            public MockResponse dispatch(RecordedRequest request) {
-                return new MockResponse.Builder()
-                        .code(200)
-                        .addHeader("Content-Type", "application/json")
-                        .body("""
-                            {"id":"stub","object":"chat.completion","created":1,"model":"review",
-                             "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"MET"}}],
-                             "usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15}}
-                            """)
-                        .build();
-            }
-        });
-        PROVIDER.start();
-    }
-
-    @AfterAll
-    static void stopProvider() {
-        PROVIDER.close();
-    }
 
     @AfterEach
     void clearContext() {
@@ -421,33 +336,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
             names = {"GITHUB", "GITLAB"})
     void shouldWithholdTheEventPracticeAsReplacedWhenACommitReplacesTheOccasion(IdentityProviderType provider) {
         assertReplaced(review(provider, Asked.BY_EVENT, Between.A_COMMIT_IS_PUSHED));
-    }
-
-    /**
-     * Runs each queued composition of the review as its review sandbox's loop would, with a model that decides nothing:
-     * the run withholds what is open and ends, so the review can end.
-     */
-    private void composeQueued(UUID reviewId) {
-        var queued = jdbc.queryForList(
-                "SELECT r.workspace_id, r.concurrency_key FROM agent_run r JOIN review_job j ON j.run_id = r.id"
-                        + " WHERE j.review_id = ? AND r.kind = 'REVIEW_COMPOSE' AND r.state = 'QUEUED'",
-                reviewId);
-        for (var row : queued) {
-            long workspaceId = ((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue();
-            String subject = (String) Objects.requireNonNull(row.get("concurrency_key"));
-            var sandbox =
-                    new AgentSandboxes.LiveSandbox(UUID.randomUUID(), workspaceId, subject, AgentSandboxKind.REVIEW);
-            // The lease and the claim commit together, as the gateway's next does.
-            var run = transactions.execute(status -> agentRuns
-                    .claimSubject(workspaceId, subject, Set.of(AgentRunKind.REVIEW_COMPOSE))
-                    .filter(lease -> composeKind.claimed(sandbox, lease))
-                    .map(lease -> new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))
-                    .orElse(null));
-            if (run == null) continue;
-            var composing = composeKind.prepare(run);
-            compositionClosing.withholdOpen(composing.job(), composing.identity(), CompositionStop.NO_DECISION);
-            transactions.executeWithoutResult(status -> composeKind.end(run, SandboxRunKind.Outcome.COMPLETED));
-        }
     }
 
     private void assertReplaced(Reviewed reviewed) {
@@ -585,13 +473,13 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var work = work(IdentityProviderType.GITHUB);
         var whole = wholeDiscussion(work);
         sandbox.prepare(() -> {});
-        int providerRequests = PROVIDER.getRequestCount();
+        int providerRequests = runtime.modelRequests();
 
         UUID reviewId = requested(work, whole);
         settle(reviewId);
 
         assertCompletedWithoutMeasurement(reviewId, 0);
-        assertThat(PROVIDER.getRequestCount()).isEqualTo(providerRequests);
+        assertThat(runtime.modelRequests()).isEqualTo(providerRequests);
         assertThat(membership(reviewId, whole))
                 .containsEntry("state", "WITHHELD")
                 .containsEntry("reason", "READINESS_REFUSED");
@@ -634,7 +522,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var practice = practice(work.workspace(), Reads.THE_WORK);
         sandbox.prepare(() -> {});
         sandbox.crashAfterNextStage(this::expireLease);
-        int providerRequests = PROVIDER.getRequestCount();
+        int providerRequests = runtime.modelRequests();
 
         UUID reviewId = requested(work, practice);
         settle(reviewId);
@@ -642,7 +530,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertComposedWithoutMeasurement(reviewId, work);
         assertThat(membership(reviewId, practice)).containsEntry("state", "JUDGED");
         assertThat(reviewRow(reviewId)).containsEntry("status", "COMPLETE").containsEntry("stop_reason", null);
-        assertThat(PROVIDER.getRequestCount() - providerRequests).isEqualTo(1);
+        assertThat(runtime.modelRequests() - providerRequests).isEqualTo(1);
     }
 
     /**
@@ -773,7 +661,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
             discussionReadWhole(work, false);
             expireLease(runId);
         });
-        int providerRequests = PROVIDER.getRequestCount();
+        int providerRequests = runtime.modelRequests();
 
         UUID reviewId = requested(work, first, second);
         settle(reviewId);
@@ -785,7 +673,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(reviewRow(reviewId))
                 .containsEntry("status", "PARTIAL")
                 .containsEntry("stop_reason", "READINESS_REFUSED");
-        assertThat(PROVIDER.getRequestCount() - providerRequests).isEqualTo(1);
+        assertThat(runtime.modelRequests() - providerRequests).isEqualTo(1);
     }
 
     /**
@@ -802,7 +690,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "SELECT j.status AS job, r.state AS run, r.attempt FROM review_job j"
                         + " JOIN agent_run r ON r.id = j.run_id WHERE j.run_id = ?::uuid",
                 runId)));
-        int providerRequests = PROVIDER.getRequestCount();
+        int providerRequests = runtime.modelRequests();
 
         UUID reviewId = requested(work, practice);
         settle(reviewId);
@@ -818,7 +706,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsEntry("run", "QUEUED")
                 .containsEntry("attempt", 1);
         assertCompletedWithoutMeasurement(reviewId, 1);
-        assertThat(PROVIDER.getRequestCount()).isEqualTo(providerRequests);
+        assertThat(runtime.modelRequests()).isEqualTo(providerRequests);
         assertThat(membership(reviewId, practice))
                 .containsEntry("state", "WITHHELD")
                 .containsEntry("reason", "SOURCES_MOVED");
@@ -990,7 +878,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     jdbc.update("UPDATE issue SET head_ref_oid=? WHERE id=?", "c".repeat(40), pull.getId());
             }
         });
-        int providerRequests = PROVIDER.getRequestCount();
+        int providerRequests = runtime.modelRequests();
 
         UUID reviewId =
                 asked == Asked.BY_EVENT ? opened(workspace, item, pull, type, developer) : requested(work, practice);
@@ -1021,7 +909,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                         reviewId,
                                         practice.getId()))
                         .values()),
-                PROVIDER.getRequestCount() - providerRequests,
+                runtime.modelRequests() - providerRequests,
                 sandbox.calls.toString());
     }
 
@@ -1036,7 +924,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .until(() -> {
                         dispatcher.dispatch();
                         sandbox.drive();
-                        composeQueued(reviewId);
+                        runtime.composeQueued(reviewId);
                         completion.tick();
                         // A practice withheld at its start is final before the review that held it ends.
                         return !jdbc.queryForList(
@@ -1136,14 +1024,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private Workspace workspace(User developer, IdentityProvider provider) {
-        InstanceLlmSettings settings = instanceLlmSettings.findById((short) 1).orElseGet(() -> {
-            InstanceLlmSettings created = new InstanceLlmSettings();
-            created.setId((short) 1);
-            return created;
-        });
-        settings.setAllowWorkspaceConnections(true);
-        instanceLlmSettings.save(settings);
-
         String slug = "review-end-to-end-" + System.nanoTime();
         Workspace workspace = createWorkspace(
                 slug, "Review end to end", slug + "-org", AccountType.ORG, persistUser(slug + "-owner"));
@@ -1152,46 +1032,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ensureAdminMembership(workspace);
         ensureMembership(workspace, developer, Membership.WorkspaceRole.MEMBER);
         connectActivitySource(workspace, provider);
-        WorkspaceContext context =
-                WorkspaceContext.fromWorkspace(workspace, Set.of(Membership.WorkspaceRole.ADMIN), null);
-        WorkspaceContextHolder.setContext(context);
-        var connection = connections.create(
-                context,
-                new CreateWorkspaceLlmConnectionRequestDTO(
-                        null,
-                        "stub-provider",
-                        PROVIDER.url("/v1").toString(),
-                        LlmApiProtocol.OPENAI_COMPLETIONS,
-                        LlmAuthMode.BEARER,
-                        "stub-key",
-                        true,
-                        null));
-        Long model = models.create(
-                        context,
-                        connection.getId(),
-                        new CreateWorkspaceLlmModelRequestDTO(
-                                null,
-                                "review",
-                                "review",
-                                128_000,
-                                4_096,
-                                null,
-                                null,
-                                null,
-                                true,
-                                PricingMode.PRICED,
-                                new BigDecimal("0.10"),
-                                new BigDecimal("0.40"),
-                                new BigDecimal("0.05"),
-                                new BigDecimal("0.10"),
-                                null,
-                                null))
-                .getId();
-        bindings.upsertBinding(
-                context,
-                ModelPurpose.PRACTICE_REVIEW,
-                DataHandlingTier.UNDECLARED,
-                new ModelAssignmentRequestDTO(null, model, null, true));
+        runtime.bindReviewModel(workspace);
         return workspace;
     }
 

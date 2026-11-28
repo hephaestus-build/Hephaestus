@@ -61,6 +61,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("practices.review.ReviewEndToEndIntegrationTest", "review-end-to-end"),
+            assignment("practices.review.ScanEndToEndFixtures", "scan-end-to-end"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
             assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
             assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
@@ -168,6 +169,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "review-end-to-end",
                     "real server and worker roles, claim, capture, gateway, proxy and admission with only the sandbox container and the model provider stubbed"),
+            Map.entry(
+                    "scan-end-to-end",
+                    "real scan request, pin, driver, Git capture, gateway, proxy, admission and report with only the"
+                            + " sandbox container, the model provider, and the repository's remote and credential"
+                            + " stubbed"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
             Map.entry(
                     "gitlab-workspace-creation",
@@ -360,6 +366,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "AgentRuntimeOffIntegrationTest",
             "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.review.ReviewEndToEndIntegrationTest",
+            "practices.review.ScanEndToEndFixtures",
             "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
@@ -417,7 +424,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
-            "practices.review.ReviewEndToEndIntegrationTest");
+            "practices.review.ReviewEndToEndIntegrationTest",
+            "practices.review.ScanEndToEndFixtures");
 
     private static final Set<String> CONTEXT_ANNOTATIONS = Set.of(
             "ActiveProfiles",
@@ -457,6 +465,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "practices.review.ReviewEndToEndIntegrationTest",
+            "practices.review.ScanEndToEndFixtures",
             "core.runtime.AgentRuntimeWithoutCluster",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
