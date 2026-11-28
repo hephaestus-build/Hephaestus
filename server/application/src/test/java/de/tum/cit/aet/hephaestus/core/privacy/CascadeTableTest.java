@@ -100,6 +100,8 @@ class CascadeTableTest extends BaseUnitTest {
     private static final String SANDBOX_RUNS = "agent.conversation.host.TurnSandboxRunKindIntegrationTest#";
     private static final String DERIVED_RESULTS = "practices.adapter.ProviderDerivedErasureIntegrationTest#";
     private static final String BASIS = "conversation.ConversationBasisIntegrationTest#";
+    private static final String ADVICE = "conversation.ConversationAdviceErasureIntegrationTest#";
+    private static final String CLAIMED = "core.privacy.ClaimedFeedbackAnswerErasureIntegrationTest#";
 
     private static final String DELETE_PROOF =
             ENTRIES + "shouldEraseEverySummaryAndSearchResultOfAMessageWhenTheDeveloperDeletesIt";
@@ -289,9 +291,14 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeCause.SOURCE_ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
                     Action.KEEP,
-                    List.of(),
-                    "An app answer that repeats an erased source keeps the conversation retention (personal-data map,"
-                            + " conversations). A Slack disconnect also erases every entry written in Slack."),
+                    List.of(
+                            ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsEvidenceIsWithdrawn",
+                            ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsSlackThreadIsErased"),
+                    "A withdrawal that deletes results (an SCM mirror erasure, an Outline or Slack disconnect, a"
+                            + " channel erasure) erases every answer whose basis read advice from them. Otherwise an app"
+                            + " answer that repeats an erased source keeps the conversation retention (personal-data"
+                            + " map, conversations), until #5278 makes the Slack erasures transitive and #5158 and #5277"
+                            + " reach the other sources. A Slack disconnect also erases every entry written in Slack."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
@@ -299,10 +306,16 @@ class CascadeTableTest extends BaseUnitTest {
                     List.of(
                             PERSON_ERASURE + "shouldEraseTheToolResultsOfTurnsThatRanWhileTheErasureFailedAndResumed",
                             PERSON_ERASURE + "shouldEraseAnAnswerThatUsesEarlierContextWithoutAnotherToolCall",
-                            "core.privacy.PersonOutlineCopiesIntegrationTest#outlineErasureStateTable"),
-                    "The answers of turns that read the person's data are erased. Gap, owned by #4979: a later answer"
-                            + " that repeats an erased feedback copy without reading it again stays, until its answer"
-                            + " basis makes it stale."),
+                            "core.privacy.PersonOutlineCopiesIntegrationTest#outlineErasureStateTable",
+                            CLAIMED + "shouldRedactALaterAnswerThatReadTheMessageWhichShowedTheFeedback",
+                            ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsEvidenceIsErased",
+                            ADVICE + "shouldEraseALaterAnswerThatReadOnlyTheAnswerThatReadAdvice"),
+                    "The answers of turns that read the person's data are erased, with every answer whose basis read"
+                            + " one of them, a feedback copy about the person, or advice from the person's results. An"
+                            + " answer written before attempts recorded their basis has unknown sources: it stays app"
+                            + " history, and Hephaestus never reads it again. Gap, owned by #5278: the Outline branch"
+                            + " of the copy erasure redacts the answers that it reaches without what derives from"
+                            + " them."),
             new Cell(CascadeCause.NARROWING, CascadeDependent.DERIVED_ANSWER, Action.KEEP, List.of(), NARROWING_GAP),
             // SLACK_POST
             new Cell(

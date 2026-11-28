@@ -24,13 +24,16 @@ class DerivedResultEraser {
     private final ScanReportService reports;
     private final AdviceRedaction advice;
 
-    /** Erases {@code ids} and the feedback based on them in the caller's transaction; returns the rows erased. */
-    int erase(long ws, List<UUID> ids) {
+    /**
+     * Erases {@code ids} and the feedback based on them in the caller's transaction; returns the rows erased. The cause
+     * tells the conversation side whether the answers that read advice from them go too.
+     */
+    int erase(long ws, List<UUID> ids, AdviceStaleCause cause) {
         if (ids.isEmpty()) return 0;
         var selected = ids.toArray(UUID[]::new);
         custody.requireAcknowledged(ws, rows.feedbackForResults(ws, selected));
         reports.eraseResultReferences(ws, ids);
-        advice.beforeResultsDeleted(ws, ids, AdviceStaleCause.WITHDRAWAL);
+        advice.beforeResultsDeleted(ws, ids, cause);
         int feedback = rows.deleteFeedbackForResults(ws, selected);
         return feedback + rows.deleteResults(ws, selected);
     }

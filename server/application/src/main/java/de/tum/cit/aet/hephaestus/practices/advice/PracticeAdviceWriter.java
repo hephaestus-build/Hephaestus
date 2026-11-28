@@ -68,7 +68,7 @@ public class PracticeAdviceWriter implements PracticeAdviceWrites {
     private final PracticeAdviceProperties properties;
     /** Empty until the runtime records each review's producer (RV1). */
     private final List<ReviewFeedbackProducers> producers;
-    /** Empty until the conversation side hears that advice went stale (#5278). */
+    /** Empty where no conversation side hears that advice went stale. */
     private final List<AdviceErasureListener> listeners;
 
     private final AccountDirectory accounts;

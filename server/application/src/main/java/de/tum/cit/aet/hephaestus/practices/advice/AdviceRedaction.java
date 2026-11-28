@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdviceRedaction {
     private final ResultRepository results;
     private final PracticeAdviceRevisionRepository revisions;
-    /** Empty until the conversation side provides one (#5278). */
+    /** The conversation side ({@code ConversationAdviceErasure}) on a server. */
     private final List<AdviceErasureListener> listeners;
 
     /** Runs in the caller's deleting transaction, before the delete; returns the revisions that lost their text. */

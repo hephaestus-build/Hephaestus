@@ -40,6 +40,7 @@ The real constraint is that a revocation must be complete in the transaction of 
 Option 4.
 
 1. **Refer, never copy, inside a workspace.** A derived record cites its sources through one table of provenance references, `basis_edge`. Its source kinds are an entry, a record and a suggestion.
+   - Update 2026-11-28 (#5278): an advice revision that a basis reads has its own table, `basis_advice_edge`. Each table keeps a foreign key that removes its rows with their source.
 2. **A revocation bumps a generation.** Every consumer of the revoked source becomes stale in that transaction.
    - Validity is checked when a record is read. A stale record never shapes an answer.
    - Staleness is transitive. A record derived from a stale record is stale too.

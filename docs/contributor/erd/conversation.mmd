@@ -9,6 +9,12 @@ erDiagram
 
     direction LR
 
+    BasisAdviceEdge {
+        UUID basis_id PK
+        UUID revision_id PK,FK
+        BIGINT workspace_id "NOT NULL"
+    }
+
     BasisEdge {
         UUID basis_id PK
         UUID source_id PK,FK
@@ -95,6 +101,7 @@ erDiagram
 
     Account["Account · Core"]
     AgentRun["AgentRun · Agent"]
+    PracticeAdviceRevision["PracticeAdviceRevision · Practices"]
     Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
@@ -103,6 +110,7 @@ erDiagram
     AgentRun ||--|| ConversationTurn : has
 
     %% One-to-Many relationships
+    PracticeAdviceRevision ||--o{ BasisAdviceEdge : has
     ConversationEntry ||--o{ BasisEdge : references
     Account ||--o{ Conversation : has
     Conversation ||--o{ Conversation : has
@@ -124,4 +132,5 @@ erDiagram
 
     class Account referenceEntity
     class AgentRun referenceEntity
+    class PracticeAdviceRevision referenceEntity
     class Workspace referenceEntity

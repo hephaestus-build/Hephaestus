@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795864193756-1" author="hephaestus">
+        <createTable tableName="basis_advice_edge">
+            <column name="basis_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_advice_edgePK"/>
+            </column>
+            <column name="revision_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_advice_edgePK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795864193756-2" author="hephaestus">
+        <createIndex indexName="idx_basis_advice_edge_revision" tableName="basis_advice_edge">
+            <column name="revision_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795864193756-3" author="hephaestus">
+        <comment>An advice revision that a basis read. The row goes with the revision: its text goes first, in the transaction that erases the answers that read it.</comment>
+        <sql>ALTER TABLE public.basis_advice_edge ADD CONSTRAINT sfk_basis_advice_edge_revision FOREIGN KEY (revision_id) REFERENCES public.practice_advice_revision (id) ON DELETE CASCADE</sql>
+        <rollback>
+            <sql>ALTER TABLE public.basis_advice_edge DROP CONSTRAINT sfk_basis_advice_edge_revision</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -785,9 +785,19 @@ It goes with the entry that it names.
 When the developer deletes a message, `ConversationRedaction.deleteHistory` erases each entry whose basis holds the message.
 It continues through the entries whose basis holds an erased entry, until it reaches no more.
 Thus, an answer that copied the message through the path, through a search, or through an earlier answer loses its words too.
-The person-data erasure of the copying tool results does the same (`redactPersonCopies`).
+The person-data erasure of the copying tool results and of the feedback copies does the same (`redactWithDerived`).
 Retention does not: an entry whose retention ends leaves the entries derived from it to their own retention.
 A Slack edit keeps the derived entries, and it erases only the copies of the earlier words.
+
+A basis can also read an advice revision (`basis_advice_edge`).
+The read that hands advice to an attempt binds the exact revision ID with `ConversationBasis.bindAdvice` before the advice leaves.
+It locks the revisions first (`AdviceRevisionTexts.lockWithText`), then the tree, in the order that the erasure locks them.
+
+When an erasure or a withdrawal deletes the results behind the advice, `AdviceRedaction` removes the advice text and calls `ConversationAdviceErasure` in the same transaction.
+It locks the trees of the turns that read the revision, then erases each entry whose basis read it, and what derives from those.
+An attempt that ends after the revision lost its text stores nothing that the advice could shape (`lostSource`).
+A retention removes the advice text and keeps the answers.
+A row of `basis_advice_edge` holds ids only, and it goes with the revision.
 
 When an attempt ends, it checks whether an entry of its basis was erased since it read it (`ConversationBasis.lostSource`).
 In that case, the attempt stores only skeletons and fails with `context_changed`.

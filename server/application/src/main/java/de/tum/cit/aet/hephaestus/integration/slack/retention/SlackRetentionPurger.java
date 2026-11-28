@@ -44,7 +44,7 @@ public class SlackRetentionPurger {
         pins.deleteOlderThan(workspaceId, cutoffTs);
         List<Long> agedThreadIds = slackThreadRepository.findAgedThreadIds(workspaceId, cutoffTs);
 
-        conversationFeedbackErasure.eraseForThreads(workspaceId, agedThreadIds);
+        conversationFeedbackErasure.expireForThreads(workspaceId, agedThreadIds);
 
         if (agedThreadIds.isEmpty()) {
             return 0;

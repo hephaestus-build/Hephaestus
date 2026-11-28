@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
@@ -1009,6 +1010,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
             status.setRollbackOnly();
             UUID conversationId =
                     conversations.findOrCreateMain(workspaceId, accountId).getId();
+            // A tool result that can copy anyone's data, which reaches the answers and digests after it.
             var copy = entries.append(
                     workspaceId,
                     conversationId,
@@ -1016,7 +1018,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                             ConversationEntry.Kind.TOOL_RESULT,
                             ConversationEntry.Surface.SYSTEM,
                             "",
-                            null,
+                            ConversationLedgerFixtures.toolResult(
+                                    ConversationLedgerFixtures.piId(), "call-read", "read", "copied", false),
                             null,
                             null,
                             null));
@@ -1027,7 +1030,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
             var erasedRun = new AgentRunRef(
                     turnRows.findById(erasedTurnId).orElseThrow().getRunId(), workspaceId);
 
-            redaction.redactPersonCopies(List.of(copy.getId()));
+            redaction.redactWithDerived(List.of(copy.getId()));
             assertThat(turnRows.findById(erasedTurnId).orElseThrow().getStatus())
                     .as("the erasure ends the digest turn in its own transaction")
                     .isEqualTo(ConversationTurn.Status.STOPPED);

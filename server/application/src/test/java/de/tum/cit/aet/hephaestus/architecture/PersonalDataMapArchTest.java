@@ -97,6 +97,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // Which conversation entry an attempt read, and its revision: entry ids, no words and no person. A row
             // goes with the entry it names, so a person's erasure deletes it with their conversations.
             "basis_edge",
+            // Which advice revision an attempt read: ids, no words and no person. A row goes with the revision.
+            "basis_advice_edge",
             "commit_pull_request",
             "connection",
             "connection_activity",

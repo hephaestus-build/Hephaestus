@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -176,7 +177,8 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
         UUID seen = revision(entry, 2, List.of(kept.getId()), List.of(withdrawn.getId()));
         UUID unrelated = revision(entry, 3, List.of(kept.getId()), List.of());
 
-        transactions.executeWithoutResult(status -> withdrawal.erase(ws, List.of(withdrawn.getId())));
+        transactions.executeWithoutResult(
+                status -> withdrawal.erase(ws, List.of(withdrawn.getId()), AdviceStaleCause.WITHDRAWAL));
 
         assertThat(exists("result", withdrawn.getId())).isFalse();
         assertStale(cited);

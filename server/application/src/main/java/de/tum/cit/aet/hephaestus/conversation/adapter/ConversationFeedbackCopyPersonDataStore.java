@@ -73,7 +73,7 @@ final class ConversationFeedbackCopyPersonDataStore extends ConversationEntryPer
 
     @Override
     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
-        redaction.redactPersonCopies(selection.rows().stream()
+        redaction.redactWithDerived(selection.rows().stream()
                 .map(row -> UUID.fromString(Objects.requireNonNull(row.columns().get("id"))))
                 .toList());
         return selection.rows().size();
