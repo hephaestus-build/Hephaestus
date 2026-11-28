@@ -17,6 +17,7 @@ const meta = {
 		onCreate: fn(),
 		onAddMember: fn(),
 		onRemoveMember: fn(),
+		onRemoveTeam: fn(),
 	},
 	decorators: [
 		(Story) => (

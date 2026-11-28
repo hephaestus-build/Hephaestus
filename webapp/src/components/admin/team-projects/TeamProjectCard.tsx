@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,17 +23,26 @@ export interface TeamProjectCardProps {
 	onAddMember: (team: TeamProjectRow, accountId: number) => void;
 	/** Asks before the removal; see `RemoveTeamMemberDialog`. */
 	onRemoveMember: (team: TeamProjectRow, member: TeamProjectPerson) => void;
-	/** An add or a removal for this team is in flight. */
+	/** Asks before the team is removed; see `RemoveTeamProjectDialog`. */
+	onRemoveTeam: (team: TeamProjectRow) => void;
+	/** A change to this team is in flight. */
 	pending?: boolean;
+	/** The last change to this team was not saved. */
+	writeError?: boolean;
 }
 
-/** One team project on the staff screen: its members, its review count, and adding or removing a member. */
+/**
+ * One team project on the staff screen: its members and its review count, adding or removing a member, and removing
+ * the team. A change that was not saved says so here, on the team it concerns.
+ */
 export function TeamProjectCard({
 	team,
 	candidates,
 	onAddMember,
 	onRemoveMember,
+	onRemoveTeam,
 	pending = false,
+	writeError = false,
 }: TeamProjectCardProps) {
 	// The select only holds the choice: Base UI commits a typed match on a closed select, so a keystroke must never add.
 	const [chosen, setChosen] = useState<string | null>(null);
@@ -51,6 +61,13 @@ export function TeamProjectCard({
 					{formatNumber(team.reviewCount)} {team.reviewCount === 1 ? "review" : "reviews"}
 				</p>
 			</div>
+			{writeError && (
+				<Alert variant="destructive">
+					<AlertDescription>
+						Your last change to this team was not saved. Try again.
+					</AlertDescription>
+				</Alert>
+			)}
 			{team.members.length === 0 ? (
 				<p className="text-sm text-muted-foreground">No members yet. Add one below.</p>
 			) : (
@@ -109,6 +126,15 @@ export function TeamProjectCard({
 					</Button>
 				</div>
 			)}
+			<Button
+				variant="ghost"
+				size="sm"
+				className="w-fit text-destructive"
+				disabled={pending}
+				onClick={() => onRemoveTeam(team)}
+			>
+				Remove team project
+			</Button>
 		</article>
 	);
 }
