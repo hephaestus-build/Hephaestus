@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.advice;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.AdviceErasureListener;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -30,14 +31,14 @@ public class AdviceRedaction {
 
     /** Runs in the caller's deleting transaction, before the delete; returns the revisions that lost their text. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<UUID> beforeResultsDeleted(long workspaceId, Collection<UUID> resultIds) {
+    public List<UUID> beforeResultsDeleted(long workspaceId, Collection<UUID> resultIds, AdviceStaleCause cause) {
         if (resultIds.isEmpty()) return List.of();
         var ids = resultIds.stream().distinct().toArray(UUID[]::new);
         results.lockInIdOrder(workspaceId, ids);
         var stale = revisions.lockWithSourcesIn(workspaceId, ids);
         if (stale.isEmpty()) return List.of();
         revisions.redact(workspaceId, stale.toArray(UUID[]::new));
-        for (var listener : listeners) listener.staleRevisions(workspaceId, stale);
+        for (var listener : listeners) listener.staleRevisions(workspaceId, stale, cause);
         return stale;
     }
 }

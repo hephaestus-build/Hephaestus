@@ -149,6 +149,17 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
+    PracticeAdviceReceipt {
+        UUID advice_id PK,FK
+        UUID review_id PK
+        BIGINT workspace_id PK,FK
+        BIGINT person_account_id FK "NOT NULL"
+        VARCHAR(16) kind "NOT NULL"
+        BYTEA content_digest "NOT NULL"
+        BIGINT version "NOT NULL"
+        TIMESTAMPTZ written_at "NOT NULL"
+    }
+
     PracticeAdviceRevision {
         UUID id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -478,6 +489,7 @@ erDiagram
     Account ||--o{ PracticeAdvice : has
     Practice ||--o{ PracticeAdvice : has
     Workspace ||--o{ PracticeAdvice : has
+    PracticeAdvice ||--o{ PracticeAdviceReceipt : has
     PracticeAdvice ||--o{ PracticeAdviceRevision : has
     Problem ||--o{ PracticeAdviceSource : has
     Result ||--o{ PracticeAdviceSource : has

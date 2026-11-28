@@ -167,6 +167,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "practice_advice_source",
                     "Advice sources (ADR 0160). Advice writes come only in a release after the registration"),
             Map.entry(
+                    "practice_advice_receipt",
+                    "One advice decision per review, by the entry's owner key (ADR 0160). Deleted with its entry"),
+            Map.entry(
                     "mentor_event",
                     "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
             Map.entry(

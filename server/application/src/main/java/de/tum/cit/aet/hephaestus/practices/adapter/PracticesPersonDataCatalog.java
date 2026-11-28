@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -320,7 +321,8 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                                         row -> UUID.fromString(Objects.requireNonNull(
                                                                 row.columns().get("id"))),
                                                         Collectors.toList())))
-                                        .forEach(advice::beforeResultsDeleted);
+                                        .forEach((workspace, ids) ->
+                                                advice.beforeResultsDeleted(workspace, ids, AdviceStaleCause.ERASURE));
                                 return super.erase(selection, frozenScope);
                             }
                         },

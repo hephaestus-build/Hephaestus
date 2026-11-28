@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Duration;
@@ -67,7 +68,7 @@ class ResultRetentionLockOrderTest extends BaseUnitTest {
         var order = inOrder(results, advice);
         order.verify(results).lockInIdOrder(eq(WORKSPACE), any());
         order.verify(results).withoutFeedbackBasis(eq(WORKSPACE), any());
-        order.verify(advice).beforeResultsDeleted(WORKSPACE, List.of(candidate));
+        order.verify(advice).beforeResultsDeleted(WORKSPACE, List.of(candidate), AdviceStaleCause.RETENTION);
         order.verify(results).deleteWithoutFeedbackBasis(eq(WORKSPACE), any());
     }
 }
