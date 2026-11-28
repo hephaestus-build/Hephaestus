@@ -139,4 +139,24 @@ DROP FUNCTION public.admit_review_setup_team();
 DROP FUNCTION public.guard_review_setup();
         </rollback>
     </changeSet>
+    <changeSet id="1795832700000-5" author="hephaestus">
+        <comment>A team project never moves to another workspace. A review setup names a team by a plain id, which the admission trigger checks when it is written, so a moved team would leave the name behind in the old workspace.</comment>
+        <createProcedure>
+CREATE FUNCTION public.keep_project_team_workspace() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.id IS DISTINCT FROM OLD.id OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+        RAISE EXCEPTION 'a team project keeps its id and its workspace' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER project_team_keeps_workspace AFTER UPDATE OF id, workspace_id ON public.project_team
+    FOR EACH ROW EXECUTE FUNCTION public.keep_project_team_workspace();
+        </sql>
+        <rollback>
+DROP TRIGGER project_team_keeps_workspace ON public.project_team;
+DROP FUNCTION public.keep_project_team_workspace();
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
