@@ -66,9 +66,10 @@ public class DatabaseTestUtils {
     }
 
     /**
-     * Empties every application table. The ledger listener of each cached test context can read them at any moment, and
-     * a read locks its tables in its own order. The cleanup therefore never waits for a table lock: it gets all of them
-     * at once or starts again, so it is never part of a deadlock.
+     * Empties every application table and deletes the fixture system secrets. The ledger listener of each cached test
+     * context can read a table at any moment, and a read locks its tables in its own order. The cleanup therefore never
+     * waits for another transaction: it gets all of its locks at once or starts again, so it is not part of a deadlock
+     * with one.
      */
     public void cleanDatabase() {
         DatabaseCleanupEvent event = new DatabaseCleanupEvent();
@@ -111,6 +112,10 @@ public class DatabaseTestUtils {
             try (var ignored = TenancyBypass.open("Clear fixture rows in the integration database")) {
                 currentEntityManager
                         .createNativeQuery("LOCK TABLE " + tables + " IN ACCESS EXCLUSIVE MODE NOWAIT")
+                        .executeUpdate();
+                // The DELETE below would wait for a writer's row lock. This mode refuses writers, not readers.
+                currentEntityManager
+                        .createNativeQuery("LOCK TABLE system_secret IN EXCLUSIVE MODE NOWAIT")
                         .executeUpdate();
                 // Singleton caches outlive database cleanup. Never reuse ids for different rows in one context.
                 currentEntityManager
