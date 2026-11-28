@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -144,9 +145,12 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -1071,7 +1075,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"public review not accepted", "expired inputs", "retry limit reached"})
     @DisplayName("a timed-out run of an admitted review hands it on, and its composition run ends it timed out")
-    void shouldEndAnAdmittedTimedOutReviewTimedOutWhenItsCompositionEnds(String why) {
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldEndAnAdmittedTimedOutReviewTimedOutWhenItsCompositionEnds(String why, CapturedOutput output) {
         int attempt = why.equals("retry limit reached") ? 5 : 0;
         UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), attempt);
         admitWithResult(jobId);
@@ -1114,9 +1119,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.TIMED_OUT);
         assertThat(ended.getErrorMessage()).isEqualTo("The container timed out.");
-        // This run decided no destination, so the review's feedback is still open and its inputs stay for it.
-        assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
-                .isPresent();
+        // A timed-out composition is never resumed, so the release after its commit removes the inputs it kept (#5491).
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(
+                                compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
+                        .isEmpty());
+        assertThat(output).doesNotContain("Could not remove original composition inputs");
         assertThat(usageCalls(jobId)).containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
     }
 
