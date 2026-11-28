@@ -292,8 +292,9 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("turnId") UUID turnId);
 
     /**
-     * The words a completed Hephaestus answer showed for one piece of feedback, by the database function
-     * {@code conversation_receipt_words}: the one rule that the receipt guard on this table applies too.
+     * The words a completed Hephaestus answer shows for one piece of feedback, by the database function
+     * {@code conversation_receipt_words}: the one rule that the receipt guard on this table applies too. The answer is
+     * the one home of these words; a receipt keeps none.
      */
     @Query(
             value = "SELECT conversation_receipt_words(:workspaceId, :feedbackId, :entryId, :turnId)",
@@ -306,7 +307,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state='POSTED',posted_at=:at,body=:body,conversation_entry_id=:entryId,
+        UPDATE feedback_copy SET state='POSTED',posted_at=:at,conversation_entry_id=:entryId,
           stop_reason=NULL,last_error=NULL,readback=NULL
         WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind='CHAT_TURN'
           AND conversation_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
@@ -318,7 +319,6 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("copyId") UUID copyId,
             @Param("turnId") UUID turnId,
             @Param("entryId") UUID entryId,
-            @Param("body") String body,
             @Param("at") Instant at);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

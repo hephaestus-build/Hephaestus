@@ -318,17 +318,20 @@ The call names the feedback by a well-formed id in any letter case.
 | The attempt lost its lease (`ConversationTurnCompletion.billLostAttempt`). | `UNCONFIRMED` |
 
 A delivered copy records the Hephaestus message that showed the feedback in `feedback_copy.conversation_entry_id`.
-It also stores the words that the answer showed: the `text` of the successful `show_feedback` calls of that message for that feedback.
+The copy keeps no words: the answer is their home.
+The words that the answer showed are the `text` of the successful `show_feedback` calls of that message for that feedback.
 The database function `conversation_receipt_words` holds this rule.
-The receipt query and the trigger that guards `feedback_copy` both use it.
+The receipt and the trigger that guards `feedback_copy` both use it: a receipt posts only while the answer shows words.
 A receipt that the store refuses for good leaves the copy claimed, so the feedback stays `UNCONFIRMED`.
 
 Hephaestus's feedback history and the account export read the words through `conversation_receipt_words`, not from `feedback_copy.body`.
 When a redaction erases the answer or its `show_feedback` result, the function returns no words.
 Then those readers show none.
-The copy still stores the words, so a server of the previous release can read them while an upgrade rolls.
-The person export of a data request also copies them from `feedback_copy.body`.
-Issue #5504 removes them.
+
+The upgrade cleared the words that earlier releases stored in a copy with a write fence or an answer binding.
+While an upgrade from the previous release rolls, a server of that release still posts the shown words with its receipt.
+The guard admits exactly those words, and the person export of a data request copies them.
+Issue #5519 clears them and refuses them once no replica stores them.
 
 A receipt that the 1.0 upgrade brought from 0.x has no answer and no `write_started_at`.
 Its stored words have no other home, so the feedback history and the account export show them in that case only.

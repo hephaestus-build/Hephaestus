@@ -115,10 +115,11 @@ class FeedbackConversationClaims implements ConversationClaims {
                 var entryId = receipt.conversationEntryId();
                 if (entryId == null) throw conflict("A delivered conversation copy names the answer that showed it.");
                 String unavailable = "The completed assistant words are unavailable.";
-                var words = copies.completedConversationText(
+                // The receipt keeps no words: the answer shows them, until a redaction erases them with it.
+                if (copies.completedConversationText(
                                 workspaceId, fence.conversationTurnId(), entryId, fence.feedbackId())
                         .filter(text -> !text.isBlank())
-                        .orElseThrow(() -> conflict(unavailable));
+                        .isEmpty()) throw conflict(unavailable);
                 int recorded;
                 try {
                     recorded = copies.recordConversationDelivered(
@@ -127,11 +128,10 @@ class FeedbackConversationClaims implements ConversationClaims {
                             fence.copyId(),
                             fence.conversationTurnId(),
                             entryId,
-                            words,
                             receipt.at());
                 } catch (DataAccessException failure) {
-                    // The copy's guard checks the words against the answer again. A redaction that committed since
-                    // they were read fails that check, which refuses the receipt as the read would have.
+                    // The copy's guard checks the answer's words again, as of its own read. It refuses a redaction
+                    // that it sees; a redaction that commits later leaves a posted receipt whose answer shows no words.
                     if (sqlState(failure, "23514"))
                         throw new ResponseStatusException(HttpStatus.CONFLICT, unavailable, failure);
                     throw failure;

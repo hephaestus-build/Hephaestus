@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
@@ -59,6 +60,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     @Autowired
     PersonDataService personData;
+
+    @Autowired
+    ConversationRedaction redaction;
 
     UUID conversationId, copyId, ledgerConversationId, turnId;
 
@@ -207,6 +211,21 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     private FeedbackCopy chatCopy() {
         return copies.findById(copyId).orElseThrow();
+    }
+
+    /** The words that the answer which the copy names shows for the feedback, read as its developer. */
+    private @Nullable String shownWords() {
+        var copy = chatCopy();
+        return new TransactionTemplate(transactionManager).execute(status -> {
+            owners.ofJob(developerId);
+            return jdbc.queryForObject(
+                    "SELECT conversation_receipt_words(?,?,?,?)",
+                    String.class,
+                    workspace.getId(),
+                    conversationId,
+                    copy.getConversationEntryId(),
+                    copy.getConversationTurnId());
+        });
     }
 
     private Feedback conversation() {
@@ -391,7 +410,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     @Test
-    void shouldRecordOnlyTheWordsTheCompletedAnswerShowedAndPreserveApprovalContent() {
+    void shouldBindTheCompletedAnswerWithoutKeepingItsWordsAndPreserveApprovalContent() {
         var approvedContent = digests.current(workspace.getId(), conversationId);
         var fence = claim();
         UUID entry = answer();
@@ -400,9 +419,12 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
         assertThat(chatCopy().getBody())
-                .as("the receipt holds the words of the call, never the answer's other text")
-                .isEqualTo("Try a focused test.");
+                .as("the receipt keeps no words: the answer is their one home")
+                .isNull();
         assertThat(chatCopy().getConversationEntryId()).isEqualTo(entry);
+        assertThat(shownWords())
+                .as("the bound answer shows the words of the call, never the answer's other text")
+                .isEqualTo("Try a focused test.");
         assertThat(chatCopy().getPostedAt()).isEqualTo(at);
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.POSTED);
         assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
@@ -427,7 +449,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
 
-        assertThat(chatCopy().getBody()).isEqualTo("Try a focused test.");
+        assertThat(chatCopy().getBody()).isNull();
+        assertThat(chatCopy().getConversationEntryId()).isEqualTo(entry);
+        assertThat(shownWords()).isEqualTo("Try a focused test.");
         assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
     }
 
@@ -444,7 +468,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         conversationClaims.recordConversationReceipt(
                 workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null));
 
-        assertThat(chatCopy().getBody()).isEqualTo("Try a focused test.");
+        assertThat(chatCopy().getBody()).isNull();
+        assertThat(shownWords()).isEqualTo("Try a focused test.");
+        assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
     }
 
     @Test
@@ -454,11 +480,38 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         endTurn();
         Instant at = fence.writeStartedAt().plusSeconds(1);
 
-        assertThatThrownBy(() -> conversationClaims.recordConversationReceipt(
-                        workspace.getId(), fence, receipt(ConversationCopyOutcome.DELIVERED, entry, at, null)))
-                .isInstanceOf(ResponseStatusException.class);
-        assertThat(chatCopy().getBody()).isNull();
+        assertUnavailableReceipt(fence, entry, at);
+        assertThat(chatCopy().getPostedAt()).isNull();
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
         assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+    }
+
+    @Test
+    void shouldRefuseADeliveryWhoseAnswerShowsOnlyBlankWords() {
+        var fence = claim();
+        UUID entry = answer(new Call("call-1", conversationId.toString(), "   ", true));
+        endTurn();
+        Instant at = fence.writeStartedAt().plusSeconds(1);
+
+        assertUnavailableReceipt(fence, entry, at);
+        assertThat(chatCopy().getPostedAt()).isNull();
+        assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+    }
+
+    @Test
+    void shouldRefuseADeliveryWhoseAnswerWasRedacted() {
+        var fence = claim();
+        UUID entry = answer();
+        endTurn();
+        writeLedger(developerId, () -> redaction.redact(List.of(entry)));
+        Instant at = fence.writeStartedAt().plusSeconds(1);
+
+        assertUnavailableReceipt(fence, entry, at);
+        assertThat(chatCopy().getPostedAt()).isNull();
+        assertThat(chatCopy().getConversationEntryId()).isNull();
+        assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+        assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(conversation().getDeliveredAt()).isNull();
     }
 
     @Test
@@ -519,6 +572,35 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(sends.findById(conversationId)).isEmpty();
         assertThatCode(() -> custody.requireAcknowledged(workspace.getId(), List.of(conversationId)))
                 .doesNotThrowAnyException();
+    }
+
+    /** The person export of a data request copies the stored copy row, so a delivered receipt gives it no words. */
+    @Test
+    void shouldGiveThePersonExportNoWordsOfADeliveredReceipt() {
+        var fence = claim();
+        UUID entry = answer();
+        endTurn();
+        conversationClaims.recordConversationReceipt(
+                workspace.getId(),
+                fence,
+                receipt(
+                        ConversationCopyOutcome.DELIVERED,
+                        entry,
+                        fence.writeStartedAt().plusSeconds(1),
+                        null));
+        var person = new PersonScope(developerId, List.of(), List.of());
+        PersonDataContributor copiesStep = practicesStores.contributors().stream()
+                .filter(contributor -> contributor.store().equals("feedback_copy"))
+                .findFirst()
+                .orElseThrow();
+
+        var exported = copiesStep.export(copiesStep.select(person), person);
+
+        assertThat(exported.toString())
+                .as("the delivered receipt is in the person export")
+                .contains(copyId.toString())
+                .as("the answer is the only home of the shown words")
+                .doesNotContain("Try a focused test.");
     }
 
     /**
