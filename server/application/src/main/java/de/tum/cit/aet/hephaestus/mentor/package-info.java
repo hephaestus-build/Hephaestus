@@ -10,6 +10,8 @@
             "core::auth-types",
             "core::person-data",
             "core::runtime",
+            // A mentor row goes with its review: the review keys point at practices (sfk_mentor_event_review).
+            "practices::spi",
             "workspace::spi"
         })
 @NullMarked
