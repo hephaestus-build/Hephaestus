@@ -286,8 +286,9 @@ It checks owner access, exact journal replay, export withdrawal, and a separate 
 
 The update of 2026-11-27 moved the personal goal to the account, but decisions 1 to 3 still describe workspace rows.
 This update states the rules that the merged code follows (`account/PersonalGoal.java`, `account/PersonalGoals.java`).
-For a personal goal, it replaces decision 1's workspace binding, decision 2's limit and decision 3's table.
+For a personal goal, it replaces decision 1, decision 2's limit and decision 3's table.
 
+- **The goal is not an `owned_record`.** It is one `personal_goal` row in the `account` module. The row keeps the current words and a revision number. It keeps no older words, no author kind and no hash of the text shown. Decision 1 still applies to the record kinds that come later.
 - **The account owns the goal.** The `personal_goal` row has the owner account and no workspace or project. Its access boundary is the PostgreSQL owner policy.
 - **A person has one current goal.** The limit of three active goals in each workspace does not apply. Its text has 1 to 500 characters.
 - **A project only scopes practice links.** A goal has no practice link now. A link comes with its first caller. It is then a separate row that names the goal and a practice that one of the person's projects uses. The link row binds its workspace (ADR 0084). A project decides which practices a goal can link. It never owns, reads or deletes the goal.
@@ -300,7 +301,7 @@ For a personal goal, it replaces decision 1's workspace binding, decision 2's li
 | A goal | **Edit** the text | The same goal with a new revision. The confirmation shows **Undo**. |
 | A goal | **Undo** of an edit | An **Edit** back to the earlier words, as a new revision |
 | A goal | **Forget**, after a recent sign-in | No goal. The words are cleared, and the row keeps the goal ID and revision, so a retry confirms the same deletion. The journal records a deletion fact with the goal ID only. Decision 6 makes its uses stale. |
-| Any | An act that names a revision other than the current one | Refused as changed since shown, under the owner lock |
+| Any | An act that names a revision other than the current one | Refused as changed since shown, under the owner lock. A retry of the same **Forget** is the one exception. |
 | Any | The account is not active, or its erasure has started | **Save**, **Edit** and **Forget** are refused |
 | A goal with a link | The practice leaves the project's practices | The goal and the link stay. The line says that the practice is no longer in use. **Edit** removes it. |
 | A goal | The membership in a project ends | The goal stays. That project's links stop showing. |
