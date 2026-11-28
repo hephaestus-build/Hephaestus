@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795770917318-1" author="hephaestus">
+        <comment>The mentor's attempts: one per request version, leased on the database clock under an epoch and a token. Each row belongs to one account. Nothing writes the table before the release that registers it in the person-data inventory.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.mentor_attempt (
+    id UUID NOT NULL CONSTRAINT mentor_attemptPK PRIMARY KEY,
+    account_id BIGINT NOT NULL,
+    request_id UUID NOT NULL,
+    request_version INTEGER NOT NULL,
+    work_class VARCHAR(16) NOT NULL
+        CONSTRAINT ck_mentor_attempt_work_class CHECK (work_class IN ('INTERACTIVE', 'CALLBACK', 'BACKGROUND')),
+    state VARCHAR(16) NOT NULL CONSTRAINT ck_mentor_attempt_state CHECK (state IN ('QUEUED', 'LEASED', 'ENDED')),
+    end_reason VARCHAR(32) CONSTRAINT ck_mentor_attempt_end_reason CHECK (end_reason IN ('ANSWERED', 'CONTINUED',
+        'FENCED', 'VERSION_STALE', 'REQUEST_EXPIRED', 'TIMED_OUT', 'ATTEMPTS_EXHAUSTED', 'AUTHORIZATION_CHANGED',
+        'BASIS_CHANGED', 'CONSENT_CHANGED', 'TEMPORARY', 'NOT_ADMITTED')),
+    claims INTEGER NOT NULL,
+    lease_epoch BIGINT NOT NULL,
+    lease_token UUID,
+    leased_until TIMESTAMP(6) WITH TIME ZONE,
+    due_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    deadline TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    basis_id UUID,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    ended_at TIMESTAMP(6) WITH TIME ZONE,
+    CONSTRAINT uk_mentor_attempt_version UNIQUE (account_id, request_id, request_version),
+    CONSTRAINT uk_mentor_attempt_owner UNIQUE (account_id, id),
+    -- A foreign key ignores row-level security, so the reference names the owner too. Every eraser of a request,
+    -- an older release's included, removes its attempts with it.
+    CONSTRAINT sfk_mentor_attempt_request FOREIGN KEY (account_id, request_id)
+        REFERENCES public.mentor_request (account_id, id) ON DELETE CASCADE
+);
+CREATE INDEX idx_mentor_attempt_due ON public.mentor_attempt (account_id, work_class, state, due_at);
+
+-- A claim is a new lease, which the maintenance barrier refuses while a migration runs (ADR 0096).
+CREATE TRIGGER mentor_attempt_maintenance_barrier AFTER UPDATE OF lease_epoch, state ON public.mentor_attempt
+    FOR EACH ROW WHEN (NEW.lease_epoch > OLD.lease_epoch OR (NEW.state = 'LEASED' AND OLD.state != 'LEASED'))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER mentor_attempt_maintenance_barrier_insert BEFORE INSERT ON public.mentor_attempt FOR EACH ROW
+    WHEN (NEW.leased_until IS NOT NULL) EXECUTE FUNCTION refuse_lease_during_migration();
+
+ALTER TABLE public.mentor_attempt ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mentor_attempt_owner ON public.mentor_attempt TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+        ]]></sql>
+        <rollback>
+            <sql>DROP TABLE public.mentor_attempt</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

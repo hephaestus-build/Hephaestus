@@ -168,6 +168,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "MentorRequest",
             "SupportShare", // A person shares one turn with one instance admin; account-scoped (ADR 0164)
             "MentorOwner",
+            "MentorAttempt",
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "ProviderEventStep", // Owned by its provider event and deleted with it

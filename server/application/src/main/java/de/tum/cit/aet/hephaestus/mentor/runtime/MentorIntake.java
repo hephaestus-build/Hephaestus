@@ -53,6 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MentorIntake implements MentorIngress {
     static final Duration ANSWER_DEADLINE = Duration.ofHours(1);
+    private static final double BUDGET_SECONDS = MentorAttempt.INTERACTIVE_BUDGET.toSeconds();
 
     private final MentorSourceRepository rows;
     private final PersonDataWriteFence fence;
@@ -213,10 +214,13 @@ public class MentorIntake implements MentorIngress {
                 var _ = rows.openRequest(
                         opened(id, account, source.id(), envelope, Objects.requireNonNull(change.stamp())));
                 var _ = rows.linkRequest(eventId, account, id);
+                queueAttempt(account, id);
                 yield new RequestRef(id, 1);
             }
             case REVISED -> {
                 var _ = rows.revise(id, account, envelope.message().revision(), envelope.sourceRef());
+                // The older version's attempt is fenced at its next check; this one answers the edit.
+                queueAttempt(account, id);
                 // The request is locked, so its next version is the locked one plus one.
                 yield new RequestRef(id, Objects.requireNonNull(request).version() + 1);
             }
@@ -231,6 +235,14 @@ public class MentorIntake implements MentorIngress {
             case PENDING ->
                 throw new IllegalStateException("Only a sealed review's event waits, and intake writes none");
         };
+    }
+
+    /** The request row was written or locked in this transaction, so the insert must find it. */
+    private void queueAttempt(long account, UUID request) {
+        int queued = rows.queueAttempt(UUID.randomUUID(), account, request, BUDGET_SECONDS);
+        if (queued != 1) {
+            throw new IllegalStateException("Mentor request " + request + " queued " + queued + " attempts");
+        }
     }
 
     /** An absent authorization port, another transport or a stamp for another account opens no request. */

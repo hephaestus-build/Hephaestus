@@ -207,6 +207,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "Submitted team content (ADR 0165). Snapshot writes come only in a release after the registration"),
             Map.entry(
                     "mentor_owner",
+                    "Mentor control (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_attempt",
                     "Mentor control (ADR 0158). Intake writes come only in a release after the registration"));
 
     /**
