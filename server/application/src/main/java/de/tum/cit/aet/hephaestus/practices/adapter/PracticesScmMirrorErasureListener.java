@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.adapter;
 
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,6 @@ public class PracticesScmMirrorErasureListener {
     @Transactional
     public void onScmMirrorErased(ScmMirrorErasedEvent event) {
         long ws = event.workspaceId();
-        eraser.erase(ws, rows.scmResultIds(ws));
+        eraser.erase(ws, rows.scmResultIds(ws), AdviceStaleCause.WITHDRAWAL);
     }
 }

@@ -216,7 +216,7 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                     """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
                         Map.of("workspaceId", workspaceId),
                         (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
-                redaction.redactPersonCopies(toolResults);
+                redaction.redactWithDerived(toolResults);
             }
             if (!sources.isEmpty()) {
                 requireCopyProvenance(workspaceId, frozenScope);

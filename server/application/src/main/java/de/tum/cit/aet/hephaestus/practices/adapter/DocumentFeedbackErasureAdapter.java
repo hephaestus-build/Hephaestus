@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.adapter;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,6 @@ public class DocumentFeedbackErasureAdapter implements DocumentFeedbackErasure {
     @Override
     @Transactional
     public int eraseAllDocumentsForWorkspace(long ws) {
-        return eraser.erase(ws, rows.documentResultIds(ws));
+        return eraser.erase(ws, rows.documentResultIds(ws), AdviceStaleCause.WITHDRAWAL);
     }
 }

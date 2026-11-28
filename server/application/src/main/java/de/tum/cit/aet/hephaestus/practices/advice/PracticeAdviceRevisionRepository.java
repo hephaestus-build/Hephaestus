@@ -26,6 +26,23 @@ public interface PracticeAdviceRevisionRepository extends JpaRepository<Practice
             nativeQuery = true)
     List<UUID> lockWithSourcesIn(@Param("workspaceId") long workspaceId, @Param("resultIds") UUID[] resultIds);
 
+    /**
+     * Locks the revisions of the workspace among {@code ids} that still have their text ({@code FOR KEY SHARE}, in id
+     * order). A redaction that commits while this waits leaves its revisions out.
+     */
+    @Query(
+            value = "SELECT id FROM practice_advice_revision WHERE workspace_id=:workspaceId"
+                    + " AND id=ANY(CAST(:ids AS uuid[])) AND text IS NOT NULL ORDER BY id FOR KEY SHARE",
+            nativeQuery = true)
+    List<UUID> lockWithText(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
+    /** Whether a revision of the workspace among {@code ids} has no text. */
+    @Query(
+            value = "SELECT EXISTS(SELECT 1 FROM practice_advice_revision WHERE workspace_id=:workspaceId"
+                    + " AND id=ANY(CAST(:ids AS uuid[])) AND text IS NULL)",
+            nativeQuery = true)
+    boolean anyWithoutText(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
     /** Removes the text and marks the revisions stale. A revision that is already stale keeps its first time. */
     @Modifying
     @Query(

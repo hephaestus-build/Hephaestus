@@ -605,8 +605,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
      * ({@code ConversationFeedbackCopyPersonDataStore}). A {@code search_conversation} result quotes the developer's own
      * conversation and goes with the entries it quotes.
      */
-    String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
-            + " 'load_context', 'fetch_context')";
+    String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN "
+            + "('read', 'bash', 'load_context', 'fetch_context')";
 
     interface CopyingToolResult {
         UUID getId();
@@ -752,25 +752,52 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     List<UUID> lockTreesOf(@Param("ids") UUID[] ids);
 
     /**
+     * Locks the main conversation row of each tree of the workspace where an attempt read one of these advice revisions
+     * ({@link BasisAdviceEdge}), in id order, as {@link #lockTreesOf} does: the tree of a turn whose current attempt read
+     * one, and of an entry that an earlier attempt stored.
+     */
+    @Query(value = """
+            SELECT c.id FROM conversation c
+            WHERE c.workspace_id = :workspaceId AND c.id IN (
+                SELECT COALESCE(t.parent_conversation_id, t.id)
+                FROM basis_advice_edge b
+                JOIN conversation_turn u ON u.basis_id = b.basis_id AND u.workspace_id = b.workspace_id
+                JOIN conversation t ON t.id = u.conversation_id AND t.workspace_id = b.workspace_id
+                WHERE b.workspace_id = :workspaceId AND b.revision_id = ANY(CAST(:ids AS uuid[]))
+                UNION
+                SELECT COALESCE(t.parent_conversation_id, t.id)
+                FROM basis_advice_edge b
+                JOIN conversation_entry e ON e.basis_id = b.basis_id AND e.workspace_id = b.workspace_id
+                JOIN conversation t ON t.id = e.conversation_id AND t.workspace_id = b.workspace_id
+                WHERE b.workspace_id = :workspaceId AND b.revision_id = ANY(CAST(:ids AS uuid[])))
+            ORDER BY c.id
+            FOR NO KEY UPDATE
+            """, nativeQuery = true)
+    List<UUID> lockTreesOfAdviceReaders(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
+    /**
      * Redacts these entries and their copies as {@link ConversationRedaction} describes; without {@code withTargets}, only
-     * the copies. With {@code withDerivedAnswers}, it also redacts every entry derived from one it redacts: the entries
+     * the copies. With {@code withDerivedAnswers}, it also redacts every entry derived from one it redacts: the answers
+     * after a tool result that can copy anyone's data ({@link #COPIES_PERSON_DATA}), which no basis records, the entries
      * whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far as they reach. The
-     * walk passes through entries that an earlier redaction erased, because what derived from them before that
-     * redaction still holds their words. Only entries that still hold words change.
+     * walk passes through entries that an earlier redaction erased, also when one of {@code ids} is one, because what
+     * derived from them before that redaction still holds their words. Only entries that still hold words change.
      */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """
             WITH RECURSIVE target AS (
-                SELECT id, conversation_id, seq, kind, turn_id FROM conversation_entry
+                SELECT id, conversation_id, seq, kind, turn_id, payload FROM conversation_entry
                 WHERE id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL
             ), derived AS (
                 SELECT a.id, a.conversation_id, a.seq, a.kind
-                FROM target t
-                JOIN conversation_entry a ON a.conversation_id = t.conversation_id
+                FROM target e
+                JOIN conversation_entry a ON a.conversation_id = e.conversation_id
                     OR a.conversation_id IN (
-                        SELECT c.id FROM conversation c WHERE c.parent_conversation_id = t.conversation_id)
-                WHERE :withDerivedAnswers AND t.kind = 'TOOL_RESULT' AND a.kind IN ('ANSWER', 'DIGEST') AND a.redacted_at IS NULL
-                  AND (a.conversation_id <> t.conversation_id OR a.seq > t.seq OR a.turn_id = t.turn_id)
+                        SELECT c.id FROM conversation c WHERE c.parent_conversation_id = e.conversation_id)
+                WHERE :withDerivedAnswers AND a.kind IN ('ANSWER', 'DIGEST') AND a.redacted_at IS NULL
+                  AND
+            """ + COPIES_PERSON_DATA + """
+                  AND (a.conversation_id <> e.conversation_id OR a.seq > e.seq OR a.turn_id = e.turn_id)
             ), messages AS (
                 SELECT id, conversation_id, seq, kind FROM target
                 UNION SELECT id, conversation_id, seq, kind FROM derived
@@ -807,7 +834,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             ), dependent (id, workspace_id) AS (
                 SELECT e.id, e.workspace_id FROM conversation_entry e
                 WHERE :withDerivedAnswers
-                  AND e.id IN (SELECT id FROM changed UNION SELECT id FROM covering)
+                  AND (e.id IN (SELECT id FROM changed UNION SELECT id FROM covering)
+                       OR e.id = ANY(CAST(:ids AS uuid[])))
                 UNION
                 SELECT d.id, d.workspace_id
                 FROM dependent x

@@ -41,7 +41,7 @@ public class SlackRetentionPurger {
         String cutoffTs = SlackTs.ofInstant(cutoff);
         List<Long> agedThreadIds = slackThreadRepository.findAgedThreadIds(workspaceId, cutoffTs);
 
-        conversationFeedbackErasure.eraseForThreads(workspaceId, agedThreadIds);
+        conversationFeedbackErasure.expireForThreads(workspaceId, agedThreadIds);
 
         if (agedThreadIds.isEmpty()) {
             return 0;

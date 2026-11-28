@@ -27,6 +27,6 @@ class ConversationFeedbackAnswerRedaction implements PersonFeedbackAnswerRedacti
             if (!turns.isEmpty()) answers.addAll(entries.findUnredactedAnswerIds(workspace, turns));
         });
         // Locks the conversation trees before the caller deletes the copies, as a receipt takes them.
-        redaction.redactPersonCopies(answers);
+        redaction.redactWithDerived(answers);
     }
 }
