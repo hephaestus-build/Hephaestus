@@ -6,8 +6,26 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface TeamItemVersionRepository extends Repository<TeamItemVersion, UUID> {
+    /**
+     * Ends up to {@code limit} versions whose expiry date passed, by the database clock. It waits for no writer: a
+     * version that another transaction holds is skipped, and a later call ends it.
+     */
+    @WorkspaceAgnostic("Expiry spans workspaces")
+    @Modifying
+    @Transactional(timeout = 30)
+    @Query(value = """
+                    WITH due AS MATERIALIZED (
+                        SELECT id FROM team_item_version
+                        WHERE state = 'AVAILABLE' AND expires_at <= now()
+                        ORDER BY id LIMIT :limit FOR NO KEY UPDATE SKIP LOCKED
+                    )
+                    UPDATE team_item_version v SET state = 'EXPIRED', title = NULL FROM due WHERE v.id = due.id
+                    """, nativeQuery = true)
+    int expireDue(@Param("limit") int limit);
+
     /** Ends every version of the account, whatever its state, and removes the account and the title from it. */
     @WorkspaceAgnostic("Account erasure spans workspaces")
     @Modifying

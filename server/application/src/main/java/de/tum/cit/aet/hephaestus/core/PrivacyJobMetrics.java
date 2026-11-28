@@ -25,7 +25,8 @@ public class PrivacyJobMetrics {
         CONVERSATION_COPY_RETENTION("conversation_copy_retention"),
         EXPORT_GENERATION("export_generation"),
         EXPORT_RETENTION("export_retention"),
-        LLM_USAGE_RETENTION("llm_usage_retention");
+        LLM_USAGE_RETENTION("llm_usage_retention"),
+        TEAM_VERSION_EXPIRY("team_version_expiry");
 
         private final String tag;
 
