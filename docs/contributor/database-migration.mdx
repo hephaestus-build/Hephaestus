@@ -332,8 +332,10 @@ Prove that an unsupported queued kind stays unclaimed, and that the preceding re
 #### A new person-data store
 
 An erasure pass compares the stores that a request froze and erased with the replica's inventory.
-A release from #5382 on handles a new store in both directions of a roll:
+A release that includes #5458 and #5492 (issue #5382) handles a new store in both directions of a roll:
 
+- A replica can confirm an erasure whose preview a newer replica made.
+  It checks the stores that it knows and admits the request.
 - A replica can meet a store or a receipt that it does not know.
   It then stops the pass and leaves the request for a replica of the newer release.
   The request does not fail, and each store that the pass already erased keeps its receipt.
@@ -343,7 +345,8 @@ A release from #5382 on handles a new store in both directions of a roll:
 Add a new store in this order:
 
 1. Ship its table in one release, with no store and no writer.
-2. Register the store as a live store in a later release whose preceding release includes #5382.
+2. Register the store as a live store in a later release whose preceding release includes #5458 and #5492.
+   A release with #5458 alone still refuses to confirm a preview that a newer replica made.
 3. Add its writers one release after the registration.
    An older replica can complete an erasure without the new store.
    So nothing may write the table before every replica knows the store.

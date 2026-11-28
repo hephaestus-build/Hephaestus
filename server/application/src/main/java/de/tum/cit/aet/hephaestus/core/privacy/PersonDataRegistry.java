@@ -65,9 +65,14 @@ public class PersonDataRegistry {
         return Collections.unmodifiableMap(selected);
     }
 
+    /**
+     * Whether the frozen selections still hold for this inventory: every store of it is frozen, and each store whose
+     * selection must stay unchanged selects the same rows. A frozen store that this inventory does not know is a newer
+     * release's, which may add only a live store; its erasure pass leaves the request for a replica of that release.
+     */
     public boolean unchanged(PersonScope scope, Map<String, PersonDataSelection> frozen) {
         return frozen.keySet()
-                        .equals(stores.stream()
+                        .containsAll(stores.stream()
                                 .map(PersonDataContributor::store)
                                 .collect(Collectors.toSet()))
                 && stores.stream()

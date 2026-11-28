@@ -170,12 +170,30 @@ class PersonDataRollingReleaseIntegrationTest extends BaseIntegrationTest {
         assertThat(avatar()).isNull();
     }
 
+    @Test
+    void shouldAdmitOnAnOlderReplicaAPreviewThatANewerReleaseMade() {
+        UUID id = admit(newer, older);
+
+        assertThat(requests.findById(id).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.ERASING);
+        older.run(id);
+        assertWaiting(id);
+        newer.run(id);
+        assertThat(requests.findById(id).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(profileName()).isNull();
+        assertThat(avatar()).isNull();
+    }
+
     private UUID admit(PersonDataService by) {
+        return admit(by, by);
+    }
+
+    /** One replica makes the preview, and another confirms it: a load balancer may send them to either release. */
+    private UUID admit(PersonDataService previewer, PersonDataService confirmer) {
         var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
-        UUID id = Objects.requireNonNull(tx.execute(status -> by.preview(adminId, null, identities)))
+        UUID id = Objects.requireNonNull(tx.execute(status -> previewer.preview(adminId, null, identities)))
                 .request()
                 .getId();
-        tx.executeWithoutResult(status -> by.requestErasure(id, adminId, true));
+        tx.executeWithoutResult(status -> confirmer.requestErasure(id, adminId, true));
         return id;
     }
 
