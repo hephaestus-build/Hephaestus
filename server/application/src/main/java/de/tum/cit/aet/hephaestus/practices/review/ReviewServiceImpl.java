@@ -270,7 +270,9 @@ public class ReviewServiceImpl implements ReviewService {
                                 || r.commentAnswer() != null))
                 || (r.origin() != ReviewOrigin.TRIAL && r.practiceVersionId() != null)
                 || ((r.origin() == ReviewOrigin.SCHEDULE || r.origin() == ReviewOrigin.BACKFILL)
-                        && r.batchId() == null))
+                        && r.batchId() == null
+                        // A setup's scheduled review is linked by its setup and its key (ADR 0167 decision 9).
+                        && (r.origin() != ReviewOrigin.SCHEDULE || r.setupId() == null || r.requestKey() == null)))
             throw new IllegalArgumentException("The review origin requires its recorded link.");
         if (r.kind() == ReviewKind.SCAN
                 && r.origin() == ReviewOrigin.REQUEST

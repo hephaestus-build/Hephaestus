@@ -228,6 +228,8 @@ public class ItemEventReviewListener {
             case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
                 throw new IllegalStateException("An item review cannot compete with a scan", refusal);
             case TRIAL_ACTIVE -> throw new IllegalStateException("Only a trial counts the active trials", refusal);
+            case SETUP_UNAVAILABLE, SETUP_UNSUPPORTED ->
+                throw new IllegalStateException("An event review has no review setup", refusal);
         };
         // A refusal that can pass keeps the whole window waiting, so its occasions still select when it is retried. A
         // conflict concerns the newest occasion's version only.

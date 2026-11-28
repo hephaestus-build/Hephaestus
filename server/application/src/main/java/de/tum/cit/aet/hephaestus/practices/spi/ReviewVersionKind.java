@@ -9,7 +9,10 @@ public enum ReviewVersionKind {
     /** An item at a revision, such as a pull request, an issue, a conversation thread or a document. */
     ITEM_REVISION;
 
-    /** The kind of a review created before reviews stored one. */
+    /**
+     * The kind of a review that names no other: a review created before reviews stored one, and a new review that no
+     * submitted version starts.
+     */
     public static ReviewVersionKind ofOlder(ReviewKind kind) {
         return kind == ReviewKind.SCAN ? REPOSITORY_COMMIT : ITEM_REVISION;
     }

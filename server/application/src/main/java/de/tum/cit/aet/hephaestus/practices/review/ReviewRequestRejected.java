@@ -23,7 +23,11 @@ public final class ReviewRequestRejected extends ErrorResponseException {
         /** A practice came to read another source while the review was requested; the same request can pass now. */
         PRACTICES_CHANGED,
         /** The workspace already has as many trials queued or running as it may have. */
-        TRIAL_ACTIVE;
+        TRIAL_ACTIVE,
+        /** The review setup is missing, of another workspace, removed or turned off: one answer for each. */
+        SETUP_UNAVAILABLE,
+        /** The review setup cannot start this review, such as a review of a repository without a budget. */
+        SETUP_UNSUPPORTED;
 
         public boolean transientReason() {
             return this == BUDGET_UNAVAILABLE
@@ -70,7 +74,8 @@ public final class ReviewRequestRejected extends ErrorResponseException {
             case REQUEST_CONFLICT, VERSION_CHANGED, WORKSPACE_INACTIVE, SCAN_ACTIVE, PRACTICES_CHANGED, TRIAL_ACTIVE ->
                 HttpStatus.CONFLICT;
             case BUDGET_UNAVAILABLE -> HttpStatus.TOO_MANY_REQUESTS;
-            case ITEM_INELIGIBLE, REF_UNSUPPORTED -> HttpStatus.UNPROCESSABLE_CONTENT;
+            case ITEM_INELIGIBLE, REF_UNSUPPORTED, SETUP_UNSUPPORTED -> HttpStatus.UNPROCESSABLE_CONTENT;
+            case SETUP_UNAVAILABLE -> HttpStatus.NOT_FOUND;
             case MODEL_UNAVAILABLE, SOURCE_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
     }
