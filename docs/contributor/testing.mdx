@@ -100,6 +100,9 @@ The `test` profile starts no background work: no scheduled task, provider-event 
 `hephaestus.background-work.enabled` is false there, as in the `specs` and `cds-training` profiles.
 Thus no background write races a test or the cleanup that truncates its tables.
 A `LISTEN` connection that wakes the waits and streams of requests still runs, since the tests of those requests need it.
+Each cached test context keeps its own connection, and its reads can run while the cleanup truncates the tables.
+Thus the cleanup takes every table lock without waiting, or starts again.
+Then it cannot deadlock with a reader.
 
 A test runs the work by calling it, for example `ProviderEventConsumer#claimAndHandle` or a sweeper's method.
 A test that receives over HTTP and needs claimer threads starts them with `StoredEventHandling.runningClaimers` and stops them after the test.
