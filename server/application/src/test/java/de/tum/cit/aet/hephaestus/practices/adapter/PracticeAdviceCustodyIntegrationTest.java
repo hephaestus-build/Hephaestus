@@ -3,6 +3,10 @@ package de.tum.cit.aet.hephaestus.practices.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataBundles;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -29,12 +33,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Advice lasts no longer than its evidence (ADR 0160): each path that deletes a result first removes the text of every
- * advice revision with that result as a source, in the same transaction. SQL ties every advice row to one developer and
- * workspace.
+ * advice revision with that result as a source, in the same transaction. The developer's own advice goes with their
+ * erasure, also advice written after the preview, and no one else's request selects it. SQL ties every advice row to one
+ * developer and workspace.
  */
 class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
     private static final String TEXT = "advice-custody-canary";
@@ -49,6 +55,9 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
     private TransactionTemplate transactions;
 
     @Autowired
+    private PlatformTransactionManager platformTransactions;
+
+    @Autowired
     private PracticesPersonDataCatalog practices;
 
     @Autowired
@@ -59,6 +68,15 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PracticesWorkspacePurgeAdapter purge;
+
+    @Autowired
+    private PracticeAdvicePersonDataCatalog advice;
+
+    @Autowired
+    private AccountRepository accounts;
+
+    @Autowired
+    private PersonDataService personData;
 
     private Scenario scenario;
     private long ws;
@@ -95,6 +113,58 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
         eraseInOrder(practices.contributors(), frozen, scope(developer));
 
         assertStale(late);
+    }
+
+    @Test
+    void shouldDeleteTheDevelopersAdviceAlsoWhenItWasWrittenAfterThePreview() {
+        var frozen = preview(advice.contributors(), scope(developer));
+        UUID entry = entry(scenario);
+        revision(entry, 1, List.of(result(scenario).getId()), List.of());
+        receipt(entry);
+        UUID theirs = entry(theirs());
+        receipt(theirs);
+
+        eraseInOrder(advice.contributors(), frozen, scope(developer));
+
+        assertThat(exists("practice_advice", entry)).isFalse();
+        assertThat(count("practice_advice_revision")).isZero();
+        assertThat(count("practice_advice_source")).isZero();
+        assertThat(exists("practice_advice", theirs))
+                .as("another developer's advice")
+                .isTrue();
+        assertThat(count("practice_advice_receipt"))
+                .as("only another developer's receipt stays")
+                .isOne();
+    }
+
+    @Test
+    void shouldNeverSelectADevelopersAdviceForAnotherPerson() {
+        UUID entry = entry(scenario);
+        revision(entry, 1, List.of(result(scenario).getId()), List.of());
+        receipt(entry);
+        long other = Objects.requireNonNull(data.member(ws).getId());
+
+        advice.contributors()
+                .forEach(store -> assertThat(store.select(scope(other)).rows())
+                        .as(store.store())
+                        .isEmpty());
+    }
+
+    @Test
+    void shouldListTheDevelopersRevisionWithoutItsTextInThePersonDataRecords() {
+        UUID revision = revision(entry(scenario), 1, List.of(result(scenario).getId()), List.of());
+        var admin = new Account("Advice export operator");
+        admin.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId = Objects.requireNonNull(accounts.saveAndFlush(admin).getId());
+        var preview = personData.preview(adminId, developer, List.of());
+
+        var revisions = PersonDataBundles.of(
+                        personData, platformTransactions, preview.request().getId())
+                .path("stores")
+                .path("practice_advice_revision");
+        assertThat(revisions.size()).as("the developer's revision is listed").isOne();
+        assertThat(revisions.path(0).path("id").asString()).isEqualTo(revision.toString());
+        assertThat(revisions.toString()).doesNotContain(TEXT);
     }
 
     @Test
@@ -229,6 +299,18 @@ class PracticeAdviceCustodyIntegrationTest extends BaseIntegrationTest {
             for (UUID result : seen) source(id, result, false, ordinal++);
         });
         return id;
+    }
+
+    /** One review's decision on the entry, by the entry's owner key. */
+    private void receipt(UUID entry) {
+        jdbc.sql("INSERT INTO practice_advice_receipt(advice_id,workspace_id,review_id,person_account_id,kind,"
+                        + "content_digest,version,written_at) SELECT a.id,a.workspace_id,:review,a.person_account_id,"
+                        + "'REVISE',:digest,1,:at FROM practice_advice a WHERE a.id=:entry")
+                .param("review", UUID.randomUUID())
+                .param("digest", new byte[32])
+                .param("at", Timestamp.from(Instant.now()))
+                .param("entry", entry)
+                .update();
     }
 
     private void source(UUID revision, UUID result, boolean cited, int ordinal) {
