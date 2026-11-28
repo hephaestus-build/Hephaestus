@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -39,13 +40,30 @@ import tools.jackson.databind.node.ObjectNode;
  * requests sandboxes through, so it holds each sandbox's token and gateway; {@link #drive} then pulls each sandbox's run
  * and measures it over HTTP, as the container does: it reads its workspace from the gateway, starts each assigned
  * practice, asks the review model once through the proxy, stages a result for each practice that started, seals them,
- * uploads its output, and ends its run. Only the model's judgement is fixed: each started practice is MET, citing the
- * pull request's title.
+ * uploads its output, and ends its run. Only the model's judgement is a stub: each started practice is MET, citing the
+ * pull request's title. In a scan, {@link #judgeFiles} decides each file for each practice instead, and the sandbox
+ * pulls each file's run in turn.
  */
 final class ReviewSandboxStub implements SandboxClaims {
 
     /** What the runner did, in order; a test reads it to see what reached the gateway. */
     record Call(String path, int status, String body) {}
+
+    /** The model's judgement of one file for one practice: met, or not met with one problem on its first line. */
+    record Judgement(@Nullable String problem) {
+        static Judgement met() {
+            return new Judgement(null);
+        }
+
+        static Judgement notMet(String problem) {
+            return new Judgement(problem);
+        }
+    }
+
+    /** A file that a scan's sandbox judged for a practice. */
+    record Judged(String practiceSlug, String path) {}
+
+    private static final String TREE = "scm.repository.tree";
 
     private final ObjectMapper mapper;
     private final HttpClient http =
@@ -65,6 +83,8 @@ final class ReviewSandboxStub implements SandboxClaims {
 
     private final AtomicReference<@Nullable Loss> loss = new AtomicReference<>();
     private volatile Consumer<String> afterLostAttempt = runId -> {};
+    private volatile @Nullable BiFunction<String, String, Judgement> files;
+    final List<Judged> judged = new CopyOnWriteArrayList<>();
 
     ReviewSandboxStub(ObjectMapper mapper) {
         this.mapper = mapper;
@@ -73,6 +93,16 @@ final class ReviewSandboxStub implements SandboxClaims {
     void prepare(Runnable betweenCaptureAndStart) {
         calls.clear();
         beforeStart = betweenCaptureAndStart;
+    }
+
+    /**
+     * The sandbox measures scans: it judges each assigned file with {@code judgement}, given the practice's slug and
+     * the file's path, and reads the pinned file completely, as a scan's MET needs.
+     */
+    void judgeFiles(BiFunction<String, String, Judgement> judgement) {
+        calls.clear();
+        judged.clear();
+        files = judgement;
     }
 
     /**
@@ -177,7 +207,7 @@ final class ReviewSandboxStub implements SandboxClaims {
             if (lost != null) {
                 measured.remove(claim.name());
                 afterLostAttempt.accept(runId);
-            }
+            } else if (files != null) measured.remove(claim.name());
         }
     }
 
@@ -191,7 +221,9 @@ final class ReviewSandboxStub implements SandboxClaims {
         Map<String, byte[]> workspace =
                 untar(send(runtime + "/workspace", token, null).body());
         JsonNode task = mapper.readTree(workspace.get(SandboxLayout.TASK_ENVELOPE_FILENAME));
-        String record = coreRecordPath(mapper.readTree(workspace.get(SandboxLayout.MANIFEST_PATH)), workspace);
+        JsonNode manifest = mapper.readTree(workspace.get(SandboxLayout.MANIFEST_PATH));
+        var scan = files;
+        @Nullable String record = scan == null ? coreRecordPath(manifest, workspace) : null;
         List<JsonNode> assigned = new ArrayList<>();
         workspace.forEach((path, bytes) -> {
             if (path.startsWith(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX)
@@ -220,8 +252,15 @@ final class ReviewSandboxStub implements SandboxClaims {
                     .put("practiceSlug", slug)
                     .put("itemId", inputs.path("scope").path("item").path("id").asString())
                     .put("itemVersion", inputs.path("scope").path("version").asString());
-            result.set("candidate", met(record, Objects.requireNonNull(workspace.get(record))));
-            result.putArray("readReceipts");
+            var receipts = result.putArray("readReceipts");
+            if (scan == null) {
+                String path = Objects.requireNonNull(record);
+                result.set("candidate", met(path, Objects.requireNonNull(workspace.get(path))));
+            } else {
+                String path = inputs.path("scope").path("item").path("path").asString();
+                judged.add(new Judged(slug, path));
+                result.set("candidate", file(manifest, workspace, path, scan.apply(slug, path), receipts));
+            }
             post(
                     proxy + "/stage-result",
                     token,
@@ -302,6 +341,71 @@ final class ReviewSandboxStub implements SandboxClaims {
                 .put("failedReads", 0)
                 .put("complete", true)
                 .putArray("receipts");
+        return candidate;
+    }
+
+    /**
+     * A scan's judgement of its assigned file, as the runner stages it: one complete read of the pinned file, and a
+     * citation of its first line, on the result when it is met and on its problem when it is not.
+     */
+    private ObjectNode file(
+            JsonNode manifest, Map<String, byte[]> workspace, String path, Judgement judgement, ArrayNode receipts) {
+        @Nullable String witness = null;
+        for (JsonNode file : manifest.path("files"))
+            if (witness == null && file.path("kind").asString().equals(TREE))
+                witness = file.path("file").path("path").asString();
+        @Nullable JsonNode text = null;
+        for (JsonNode captured : manifest.path("citableTexts"))
+            if (captured.path("source").asString().equals(TREE)
+                    && captured.path("path").asString().equals(path)
+                    && captured.path("commit").isString()) text = captured;
+        if (witness == null || text == null)
+            throw new IllegalStateException("The capture holds no pinned text of " + path + ": " + manifest);
+        String commit = text.path("commit").asString();
+        byte[] bytes = Objects.requireNonNull(
+                workspace.get(text.path("stagedPath").asString()), "The workspace holds no copy of " + path);
+        String quote = new String(bytes, StandardCharsets.UTF_8).split("\n", 2)[0];
+        receipts.addObject()
+                .put("sourceKind", TREE)
+                .put("sourcePath", witness)
+                .put("path", path)
+                .put("version", commit)
+                .put("status", "COMPLETE")
+                .put("contentDigest", text.path("sha256").asString());
+        @Nullable String problemSummary = judgement.problem();
+        var candidate = mapper.createObjectNode()
+                .put("outcome", problemSummary == null ? "MET" : "NOT_MET")
+                .put("summary", problemSummary == null ? "The file meets the practice" : problemSummary)
+                .put("explanation", "The file's first line shows it.");
+        var citations = candidate.putArray("citations");
+        var citation = mapper.createObjectNode()
+                .put("sourceKind", TREE)
+                .put("sourcePath", witness)
+                .put("path", path)
+                .put("commit", commit)
+                .put("startLine", 1)
+                .put("endLine", 1)
+                .put("quote", quote);
+        if (problemSummary == null) citations.add(citation);
+        else {
+            var problem = candidate
+                    .putArray("problems")
+                    .addObject()
+                    .put("severity", "MAJOR")
+                    .put("summary", problemSummary)
+                    .put("explanation", "The file's first line does not meet the criterion.");
+            problem.putArray("citations").add(citation);
+            problem.putObject("basis").put("type", "state").put("explanation", "The file is in this state now.");
+        }
+        candidate.putObject("evidence");
+        var coverage = candidate
+                .putObject("coverage")
+                .put("source", "host")
+                .put("reads", receipts.size())
+                .put("truncatedReads", 0)
+                .put("failedReads", 0)
+                .put("complete", true);
+        coverage.set("receipts", receipts.deepCopy());
         return candidate;
     }
 
