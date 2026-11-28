@@ -1210,6 +1210,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null));
     }
 

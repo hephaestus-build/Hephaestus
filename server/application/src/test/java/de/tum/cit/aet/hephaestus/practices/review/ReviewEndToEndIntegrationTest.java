@@ -965,6 +965,9 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null));
     }
 
