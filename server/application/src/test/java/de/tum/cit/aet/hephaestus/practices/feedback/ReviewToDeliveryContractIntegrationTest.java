@@ -1212,13 +1212,17 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     "SELECT lower(status) AS status,lower(stop_reason) AS reason FROM review WHERE workspace_id=? AND id=?",
                     review.workspaceId(),
                     review.reviewId());
+            // The counter is global: another review's composition may end while this test runs (its release resumes a
+            // waiting repair after commit). The log below proves that this review ends once.
             assertThat(meters.find(PracticeMetrics.REVIEW_ENDED).counters().stream()
-                            .filter(counter -> counter.count() != endedBefore.getOrDefault(counter.getId(), 0.0))
-                            .map(counter -> counter.getId().getTag("status") + "/"
-                                    + counter.getId().getTag("reason") + "/"
-                                    + (counter.count() - endedBefore.getOrDefault(counter.getId(), 0.0))))
-                    .as("the review ends once, with its own status and stop reason")
-                    .containsExactly(ended.get("status") + "/" + ended.get("reason") + "/1.0");
+                            .filter(counter -> String.valueOf(ended.get("status"))
+                                            .equals(counter.getId().getTag("status"))
+                                    && String.valueOf(ended.get("reason"))
+                                            .equals(counter.getId().getTag("reason")))
+                            .map(counter -> counter.count() - endedBefore.getOrDefault(counter.getId(), 0.0))
+                            .filter(delta -> delta != 0.0))
+                    .as("the review ends with its own status and stop reason")
+                    .containsExactly(1.0);
             assertThat(logs.events("practice_review.ended"))
                     .filteredOn(fields -> review.reviewId().toString().equals(fields.get("review.id")))
                     .singleElement()
