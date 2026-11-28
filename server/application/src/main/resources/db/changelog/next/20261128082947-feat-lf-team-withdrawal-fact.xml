@@ -4,6 +4,7 @@
     <changeSet id="1795854587000-1" author="hephaestus">
         <comment>The privacy journal admits the withdrawal of a submitted team version. Nothing records it yet.</comment>
         <sql>
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE public.privacy_journal
     DROP CONSTRAINT ck_privacy_journal_kind,
     ADD CONSTRAINT ck_privacy_journal_kind CHECK (kind IN (
@@ -17,6 +18,7 @@ ALTER TABLE public.privacy_journal
         'TEAM_VERSION_WITHDRAWN')) NOT VALID;
         </sql>
         <rollback>
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE public.privacy_journal
     DROP CONSTRAINT ck_privacy_journal_kind,
     ADD CONSTRAINT ck_privacy_journal_kind CHECK (kind IN (
@@ -30,7 +32,8 @@ ALTER TABLE public.privacy_journal
         </rollback>
     </changeSet>
     <changeSet id="1795854587000-2" author="hephaestus">
-        <sql>ALTER TABLE public.privacy_journal VALIDATE CONSTRAINT ck_privacy_journal_kind;</sql>
-        <rollback/>
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE public.privacy_journal VALIDATE CONSTRAINT ck_privacy_journal_kind;</sql>
+        <!-- Validation adds nothing that the rollback of the change set before it does not undo. -->
+        <rollback><sql>SELECT 1;</sql></rollback>
     </changeSet>
 </databaseChangeLog>
