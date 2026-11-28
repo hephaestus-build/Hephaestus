@@ -691,8 +691,7 @@ final class CompositionEvalCases {
             ObjectNode toolParameters,
             Admission admission,
             PrivateFeedback.Request request,
-            Map<String, List<String>> routes,
-            int supportCount) {
+            Map<String, List<String>> routes) {
         Checked check(JsonNode raw) {
             var slugs = Evidence.notMetPractices(admission.results());
             var draft = new PrivateFeedback.Draft(List.copyOf(slugs), request, admission, List.of(), Map.of(), routes);
@@ -705,9 +704,7 @@ final class CompositionEvalCases {
             var texts = new LinkedHashMap<String, String>();
             for (int i = 0; i < draft.feedback.size(); i++)
                 texts.put("feedback[" + i + "]", draft.feedback.get(i).feedbackBody());
-            // The practice page states how many items its pattern spans: the support count that the server computed.
-            var verified =
-                    destination.equals("PRACTICE_PAGE") ? Set.of(Integer.toString(supportCount)) : Set.<String>of();
+            var verified = destination.equals("PRACTICE_PAGE") ? supportedItems(response) : Set.<String>of();
             var refused = FeedbackTextCheck.refusal(texts, quotes(response), verified);
             if (refused == null) return new Checked(true, List.of(), null, null);
             String why = CompositionSessions.textRefusal(refused);
@@ -774,8 +771,18 @@ final class CompositionEvalCases {
                 PrivateFeedback.toolParameters(List.copyOf(slugs), request),
                 state,
                 request,
-                routes,
-                supportCount);
+                routes);
+    }
+
+    /**
+     * The count that preparation verifies for a practice page card: the distinct items of the practice's support
+     * occurrences, as {@code FeedbackDraftBuilder} reads them from the admitted rows and the support history.
+     */
+    private static Set<String> supportedItems(JsonNode response) {
+        var items = new HashSet<String>();
+        for (JsonNode practice : response.path("practicePageSupport").path("practices"))
+            for (JsonNode occurrence : practice.path("occurrences")) items.add(occurrence.path("itemId").asString());
+        return items.isEmpty() ? Set.of() : Set.of(Integer.toString(items.size()));
     }
 
     /** The quotes of the admitted results and their problems, which supply a composed text's links and counts. */

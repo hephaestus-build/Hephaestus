@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,7 +23,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,7 @@ public final class FeedbackDraftBuilder {
         var drafts = new ArrayList<FeedbackDraft>();
         for (var piece : request.composition()) {
             if (!allowedResults.containsAll(piece.resultIds())) throw new AdmissionConflictException();
-            var refusal = texts.refusal(piece, verifiedCounts(piece, byId, historyById));
+            var refusal = texts.refusal(piece, verifiedCounts(piece, byId, historical));
             if (refusal != null) {
                 log.info(
                         "Refused composed {} feedback of review job {}: {} in {}",
@@ -211,21 +211,25 @@ public final class FeedbackDraftBuilder {
     }
 
     /**
-     * The count that the server verified for a piece: the distinct items that a practice page pattern spans, from the
-     * admitted rows and the support history. No other destination states such a count.
+     * The count that the server verified for a piece: the distinct items that a practice page pattern spans. They are
+     * the items of the piece's admitted rows and of the support history of the same practice and developer, because a
+     * card cites only this run's result. No other destination states such a count.
      */
     private static Set<String> verifiedCounts(
-            ComposedFeedback piece, Map<UUID, AdmittedResultSnapshot> admitted, Map<UUID, ResultHistoryEntry> history) {
+            ComposedFeedback piece, Map<UUID, AdmittedResultSnapshot> admitted, List<ResultHistoryEntry> history) {
         if (piece.destination() != FeedbackDestination.PRACTICE_PAGE) return Set.of();
-        long items = piece.resultIds().stream()
-                .flatMap(id -> {
-                    var row = admitted.get(id);
-                    if (row != null) return Stream.of(row.candidate().itemId());
-                    var prior = history.get(id);
-                    return prior == null ? Stream.<Long>empty() : Stream.of(prior.itemId());
-                })
-                .distinct()
-                .count();
-        return Set.of(Long.toString(items));
+        var rows = piece.resultIds().stream()
+                .map(admitted::get)
+                .filter(Objects::nonNull)
+                .toList();
+        if (rows.isEmpty()) return Set.of();
+        long practice = rows.getFirst().candidate().practiceId();
+        Long developer = rows.getFirst().candidate().developerId();
+        var items = new HashSet<Long>();
+        rows.forEach(row -> items.add(row.candidate().itemId()));
+        history.stream()
+                .filter(entry -> entry.practiceId() == practice && Objects.equals(entry.developerAccountId(), developer))
+                .forEach(entry -> items.add(entry.itemId()));
+        return Set.of(Integer.toString(items.size()));
     }
 }

@@ -180,8 +180,7 @@ public final class FeedbackTextPolicy {
         var known = suppliedCounts;
         if (known == null) {
             known = quotes.get()
-                    .flatMap(quote -> NumberWords.words(quote).stream())
-                    .filter(NumberWords::isCount)
+                    .flatMap(quote -> NumberWords.counts(NumberWords.words(quote)).stream())
                     .map(NumberWords::value)
                     .collect(Collectors.toUnmodifiableSet());
             suppliedCounts = known;
@@ -195,8 +194,8 @@ public final class FeedbackTextPolicy {
      * one that", "add one"), and "one of 17" still states 17.
      */
     private static Set<String> statedCounts(String prose) {
-        return NumberWords.words(ITEM_REFERENCE.matcher(prose).replaceAll(" ")).stream()
-                .filter(word -> NumberWords.isCount(word) && !word.equals("one"))
+        return NumberWords.counts(NumberWords.words(ITEM_REFERENCE.matcher(prose).replaceAll(" "))).stream()
+                .filter(count -> !count.equals("one"))
                 .map(NumberWords::value)
                 .collect(Collectors.toUnmodifiableSet());
     }

@@ -162,6 +162,16 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
                 .isEqualTo(Rule.COUNT);
     }
 
+    /** A tens word and a following unit state one count, which a quote of only its tens does not supply (#5487). */
+    @ParameterizedTest
+    @ValueSource(strings = {"Twenty-one handlers drop the cause.", "Twenty one handlers drop the cause."})
+    void shouldRefuseACompoundCountThatNoCitedQuoteSupplies(String text) {
+        assertThat(FeedbackTextPolicy.suppliedBy(List.of("int pageSize = 20;")).broken(text))
+                .isEqualTo(Rule.COUNT);
+        assertThat(FeedbackTextPolicy.suppliedBy(List.of("int handlers = 21;")).broken(text))
+                .isNull();
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {

@@ -37,6 +37,14 @@ class NumberWordsTest extends BaseUnitTest {
         assertThat(NumberWords.value("dozen")).isEqualTo("dozen");
     }
 
+    @Test
+    void shouldReadATensWordWithAFollowingUnitAsOneCount() {
+        assertThat(NumberWords.counts(NumberWords.words("Twenty-one handlers, twenty one tests and twenty 3 retries")))
+                .containsExactly("21", "21", "twenty", "3");
+        assertThat(NumberWords.counts(NumberWords.words("one of 17 and thirty")))
+                .containsExactly("one", "17", "thirty");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"v2", "commit", "none", "all", "only", "someone"})
     void shouldReadNoNumberFromOtherWords(String word) {

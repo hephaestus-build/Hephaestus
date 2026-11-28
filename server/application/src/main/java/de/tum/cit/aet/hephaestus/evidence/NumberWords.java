@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.evidence;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -125,6 +126,24 @@ public final class NumberWords {
     public static String value(String count) {
         Integer value = VALUES.get(count);
         return value == null ? count : value.toString();
+    }
+
+    /**
+     * The counts in a text's words, in order: each numeral or count word as it is, and a tens word with a following unit
+     * ("twenty-one", "twenty one") as the one value they state, such as {@code 21}.
+     */
+    public static List<String> counts(List<String> words) {
+        var counts = new ArrayList<String>();
+        for (int i = 0; i < words.size(); i++) {
+            String word = words.get(i);
+            Integer tens = VALUES.get(word);
+            Integer unit = i + 1 < words.size() ? VALUES.get(words.get(i + 1)) : null;
+            if (tens != null && tens >= 20 && unit != null && unit >= 1 && unit <= 9) {
+                counts.add(Integer.toString(tens + unit));
+                i++;
+            } else if (isCount(word)) counts.add(word);
+        }
+        return counts;
     }
 
     /** Whether the word states any number: a count, or a word such as "several", "twice" or "third". */

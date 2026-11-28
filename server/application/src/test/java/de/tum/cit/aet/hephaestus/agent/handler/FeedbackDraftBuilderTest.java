@@ -215,7 +215,10 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
         assertThat(draft.page()).isEqualTo(new FeedbackDraft.Page(page.title(), page.body(), page.nextStep()));
     }
 
-    /** A practice page pattern may state how many items it spans: the server counted them (#5469). */
+    /**
+     * A practice page pattern may state how many items it spans: the server counts this run's item and the earlier
+     * occurrence in the support history, which the card does not cite (#5469).
+     */
     @ParameterizedTest
     @CsvSource({"Two changes forward unchecked tokens., true", "Three changes forward unchecked tokens., false"})
     void shouldAcceptOnlyTheItemCountThatAPracticePagePatternSpans(String body, boolean accepted) {
@@ -227,22 +230,20 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
         when(candidate.itemId()).thenReturn(7L);
         lenient().when(candidate.evidence()).thenReturn(new ResultEvidence(List.of(), null, null, List.of()));
         var earlier = mock(ResultHistoryEntry.class);
-        when(earlier.resultId()).thenReturn(prior);
-        lenient().when(earlier.developerAccountId()).thenReturn(5L);
+        lenient().when(earlier.resultId()).thenReturn(prior);
+        when(earlier.developerAccountId()).thenReturn(5L);
         when(earlier.itemId()).thenReturn(6L);
         var trace = new FeedbackCompositionTrace(
                 List.of(new FeedbackCompositionTrace.CopySupport(
                         FeedbackCopyKind.SUMMARY,
                         0,
-                        List.of(
-                                new FeedbackCompositionTrace.Support(current, null),
-                                new FeedbackCompositionTrace.Support(prior, null)))),
+                        List.of(new FeedbackCompositionTrace.Support(current, null)))),
                 List.of(),
                 null,
                 current);
         var piece = new ComposedFeedback(
                 FeedbackDestination.PRACTICE_PAGE,
-                List.of(current, prior),
+                List.of(current),
                 null,
                 List.of(),
                 null,
@@ -251,7 +252,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                         "Guard the token boundary", body, "Check invalid tokens before forwarding a request."));
         ThrowingCallable build = () -> FeedbackDraftBuilder.build(
                 job,
-                new FeedbackPackage(List.of(current, prior), List.of(piece), false, null),
+                new FeedbackPackage(List.of(current), List.of(piece), false, null),
                 List.of(new AdmittedResultSnapshot(current, candidate, List.of())),
                 List.of(earlier),
                 Map.of());
