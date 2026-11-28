@@ -245,7 +245,11 @@
 						}
 					}
 				},
-				"criteriaQuestion": { "type": ["string", "null"] }
+				"criteriaQuestion": { "type": ["string", "null"] },
+				"countSupplyGap": {
+					"description": "Why the evaluation does not supply a count that production quotes would supply. The reference may then fail the COUNT rule alone.",
+					"$ref": "#/$defs/text"
+				}
 			}
 		},
 		"gate": {

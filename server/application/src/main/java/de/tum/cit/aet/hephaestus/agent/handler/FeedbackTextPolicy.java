@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
+import de.tum.cit.aet.hephaestus.evidence.NumberWords;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import java.util.Collection;
@@ -31,9 +32,11 @@ import org.jspecify.annotations.Nullable;
 /**
  * The text policy for model-written feedback on every destination. Hephaestus places line notes and adds its own
  * links, so a composed text carries no link that a cited quote of the work did not supply, no provider mention, no raw
- * HTML, no image and no hidden or bidirectional control character. Code spans and code blocks render as text, so they
- * may quote code; Slack syntax is refused in them too. Delivery still sanitizes each copy for its provider
- * ({@code ScmFeedbackFormatter}); this policy refuses the text before anything is prepared.
+ * HTML, no image and no hidden or bidirectional control character. It states no count that no cited quote supplies
+ * either: a wrong number about a person's own work costs trust, and the server verified none that a model computed.
+ * Code spans and code blocks render as text, so they may quote code; Slack syntax is refused in them too. Delivery
+ * still sanitizes each copy for its provider ({@code ScmFeedbackFormatter}); this policy refuses the text before
+ * anything is prepared.
  */
 public final class FeedbackTextPolicy {
     public enum Rule {
@@ -41,7 +44,8 @@ public final class FeedbackTextPolicy {
         MENTION,
         HTML,
         IMAGE,
-        LINK
+        LINK,
+        COUNT
     }
 
     /** The rule that a text broke, and the field of the piece that holds it, such as {@code notes[1]}. */
@@ -59,8 +63,12 @@ public final class FeedbackTextPolicy {
     private static final Pattern BARE_LINK =
             Pattern.compile("(?i)(?<![\\p{L}\\p{N}])(?:https?://|ftp://|www\\.)[^\\s<>\"'`\\\\]+");
 
+    // An item reference such as `#5`: the item's number, not a count.
+    private static final Pattern ITEM_REFERENCE = Pattern.compile("#\\p{N}+");
+
     private final Supplier<Stream<String>> quotes;
     private @Nullable Set<String> supplied;
+    private @Nullable Set<String> suppliedCounts;
 
     /** The policy of a composition from every admitted result: their cited quotes supply its links. */
     FeedbackTextPolicy(List<AdmittedResultSnapshot> admitted) {
@@ -87,6 +95,15 @@ public final class FeedbackTextPolicy {
     /** The first model-written text of the piece that breaks a rule, or null when the piece may be prepared. */
     @Nullable
     public Refusal refusal(ComposedFeedback piece) {
+        return refusal(piece, Set.of());
+    }
+
+    /**
+     * As {@link #refusal(ComposedFeedback)}, where {@code verified} holds counts that the server computed from the
+     * review's own rows, such as the number of items that a practice page pattern spans.
+     */
+    @Nullable
+    public Refusal refusal(ComposedFeedback piece, Set<String> verified) {
         var texts = new LinkedHashMap<String, String>();
         String summary = piece.summary();
         if (summary != null) texts.put("summary", summary);
@@ -98,14 +115,20 @@ public final class FeedbackTextPolicy {
             texts.put("page.body", page.body());
             texts.put("page.nextStep", page.nextStep());
         }
-        return refusal(texts);
+        return refusal(texts, verified);
     }
 
     /** The first model-written text, by its field such as {@code notes[1]}, that breaks a rule; null when none does. */
     @Nullable
     public Refusal refusal(Map<String, String> textsByField) {
+        return refusal(textsByField, Set.of());
+    }
+
+    /** As {@link #refusal(Map)}, with counts that the server computed from the review's own rows. */
+    @Nullable
+    public Refusal refusal(Map<String, String> textsByField, Set<String> verified) {
         for (var text : textsByField.entrySet()) {
-            var rule = broken(text.getValue());
+            var rule = broken(text.getValue(), verified);
             if (rule != null) return new Refusal(rule, text.getKey());
         }
         return null;
@@ -114,6 +137,11 @@ public final class FeedbackTextPolicy {
     /** The first rule that the text breaks, or null when it may be prepared. */
     @Nullable
     Rule broken(String text) {
+        return broken(text, Set.of());
+    }
+
+    @Nullable
+    Rule broken(String text, Set<String> verified) {
         if (HiddenCharacters.hides(text)) return Rule.HIDDEN_CHARACTER;
         if (SLACK_SYNTAX.matcher(text).find()) return Rule.MENTION;
         var read = Reading.of(text);
@@ -124,6 +152,11 @@ public final class FeedbackTextPolicy {
         if (read.image) return Rule.IMAGE;
         if (MENTION.matcher(read.prose).find()) return Rule.MENTION;
         if (!read.links.isEmpty() && !supplied().containsAll(read.links)) return Rule.LINK;
+        var counts = statedCounts(read.prose.toString());
+        if (!counts.isEmpty()
+                && !counts.stream()
+                        .allMatch(count ->
+                                verified.contains(count) || suppliedCounts().contains(count))) return Rule.COUNT;
         return null;
     }
 
@@ -137,6 +170,36 @@ public final class FeedbackTextPolicy {
             supplied = known;
         }
         return known;
+    }
+
+    /**
+     * The counts in the verified quotes, also inside a quote's code and in an item reference: "14 of 17" in a composed
+     * text needs a quote that has 14 and 17, and "issue 14" one that has 14, such as "Closes #14".
+     */
+    private Set<String> suppliedCounts() {
+        var known = suppliedCounts;
+        if (known == null) {
+            known = quotes.get()
+                    .flatMap(quote -> NumberWords.counts(NumberWords.words(quote)).stream())
+                    .map(NumberWords::value)
+                    .collect(Collectors.toUnmodifiableSet());
+            suppliedCounts = known;
+        }
+        return known;
+    }
+
+    /**
+     * The counts that a composed text states, such as {@code 13} or {@code fourteen}. A numeral right after {@code #},
+     * such as {@code #5}, names an item and counts nothing. Nor does "one": it is also a pronoun and a determiner ("the
+     * one that", "add one"), and "one of 17" still states 17.
+     */
+    private static Set<String> statedCounts(String prose) {
+        return NumberWords.counts(
+                        NumberWords.words(ITEM_REFERENCE.matcher(prose).replaceAll(" ")))
+                .stream()
+                .filter(count -> !count.equals("one"))
+                .map(NumberWords::value)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** A bare link ends before trailing punctuation, and before a closing parenthesis that it does not open. */

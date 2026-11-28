@@ -2,7 +2,7 @@
 	"schema": "ichnaea.caseSet/1",
 	"id": "composition-set",
 	"description": "The 72 synthetic composition cases of the feedback eval.",
-	"digest": "sha256:83a8447d5bcee5bc33c0afa288a90aedcf9278279dcdffe078379b12c6f18fca",
+	"digest": "sha256:c3fc00c704dd899c246688e087b8a5d7b4b3d2cb60b9f8a04f56093deab51e0c",
 	"cases": [
 		{
 			"id": "gh-a-01-menu-view-does-its-own-networking",
@@ -36,7 +36,7 @@
 		},
 		{
 			"id": "gh-a-07-closes-the-wrong-issue",
-			"digest": "sha256:f00d67cec7c578e4e37419c8938710415f29f74da2f188a810c4d8141b4846e3",
+			"digest": "sha256:28b9fa0f2fbdb3efff4f3ac82fe4f9a5415e32de035a3cd84b36d88b11da0d0c",
 			"pool": "development"
 		},
 		{
@@ -101,7 +101,7 @@
 		},
 		{
 			"id": "gl-b-05-commit-subjects-wip-fix",
-			"digest": "sha256:7b655ccf4a6ddb75b251ba9d6da673775288ec0e1fc9d43ab6269cff23e34bb1",
+			"digest": "sha256:c31c7f2a6f913246256026871a07f029c2fb93a748e294eed38fff7a4697c7f9",
 			"pool": "development"
 		},
 		{
@@ -116,7 +116,7 @@
 		},
 		{
 			"id": "gl-b-08-copied-export-loops-and-thin-description",
-			"digest": "sha256:c9ff5e182c7fed122da81997202f3c4fab3d79c47720c926b659a8675a5e2f70",
+			"digest": "sha256:7e64dee04b1350f2c5a69a852bf21caaba9eac2a9c3f4aec0c7c33e5a4d3d956",
 			"pool": "development"
 		},
 		{
@@ -186,7 +186,7 @@
 		},
 		{
 			"id": "gh-c-07-webhook-retry-empty-result",
-			"digest": "sha256:d687ce162065874a80e3ddf40d51d329b3e89711f67b816eedebea8473e32ba3",
+			"digest": "sha256:98e5c2215a125a81ba64b3d0c2ea915fdc503c544b6c3acf84b13bdcace6ad8f",
 			"pool": "development"
 		},
 		{
@@ -201,7 +201,7 @@
 		},
 		{
 			"id": "gh-c-10-retry-settings-no-reason",
-			"digest": "sha256:db9a5b1feff8d414763bbb781576bc7c631be5f59f53126716812d8c5ccf9f5d",
+			"digest": "sha256:08c582eaf3bdfc4bec70f943aaf3a9c0d65df548e6fca4ad42769db6b1453ea9",
 			"pool": "development"
 		},
 		{
@@ -211,7 +211,7 @@
 		},
 		{
 			"id": "gh-c-12-inventory-per-page-zero",
-			"digest": "sha256:f7f911dbd696e54598ba7ce8ca72eefad8792e1fca74cd9693420613f46c5d17",
+			"digest": "sha256:162380449bcda26025d14f9447511693a5017a6eb9ed4042713e8670fdb45b4c",
 			"pool": "development"
 		},
 		{

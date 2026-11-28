@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.advice;
 
 import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
+import de.tum.cit.aet.hephaestus.evidence.NumberWords;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -21,15 +22,12 @@ final class AdviceText {
             "\\b(again|every time|each time|repeatedly|recurring|patterns?|often|usually|consistently|you keep|keeps)\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
-    /** Anything that is not a letter or a digit: punctuation, symbols, dashes and Markdown. */
-    private static final Pattern NOT_A_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
-
     private static final String WORK_NOUN = "(?:(?:pull|merge) +requests?|prs?|mrs?|issues?|reviews?)";
 
     /**
      * A work noun right after "before" or "after", with only spaces between them, is a moment, not work: "add two tests
      * before review". Any other character between them, such as a full stop or a line break, keeps the noun. So does a
-     * letter, a digit or a mark written against "before" or "after".
+     * letter or a digit written against "before" or "after".
      */
     private static final Pattern MOMENT =
             Pattern.compile("\\b(?<![\\p{L}\\p{N}_])(?:before|after) +" + WORK_NOUN + "\\b");
@@ -41,88 +39,6 @@ final class AdviceText {
     private static final Pattern NUMERAL_ON_WORK =
             Pattern.compile("(\\p{N})(?=(?:pull|merge|prs?|mrs?|issues?|reviews?)\\b)");
 
-    private static final Pattern NUMERAL = Pattern.compile("\\p{N}+\\p{L}*");
-    private static final Set<String> NUMBER_WORDS = Set.of(
-            "zero",
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-            "ten",
-            "eleven",
-            "twelve",
-            "thirteen",
-            "fourteen",
-            "fifteen",
-            "sixteen",
-            "seventeen",
-            "eighteen",
-            "nineteen",
-            "twenty",
-            "thirty",
-            "forty",
-            "fifty",
-            "sixty",
-            "seventy",
-            "eighty",
-            "ninety",
-            "hundred",
-            "hundreds",
-            "thousand",
-            "thousands",
-            "dozen",
-            "dozens",
-            "both",
-            "couple",
-            "pair",
-            "few",
-            "handful",
-            "several",
-            "many",
-            "multiple",
-            "numerous",
-            "various",
-            "single",
-            "once",
-            "twice",
-            "thrice",
-            "trio",
-            "million",
-            "millions",
-            "first",
-            "second",
-            "third",
-            "fourth",
-            "fifth",
-            "sixth",
-            "seventh",
-            "eighth",
-            "ninth",
-            "tenth",
-            "eleventh",
-            "twelfth",
-            "thirteenth",
-            "fourteenth",
-            "fifteenth",
-            "sixteenth",
-            "seventeenth",
-            "eighteenth",
-            "nineteenth",
-            "twentieth",
-            "thirtieth",
-            "fortieth",
-            "fiftieth",
-            "sixtieth",
-            "seventieth",
-            "eightieth",
-            "ninetieth",
-            "hundredth",
-            "thousandth");
     private static final Set<String> WORK = Set.of("pr", "prs", "mr", "mrs", "issue", "issues", "review", "reviews");
 
     private AdviceText() {}
@@ -142,8 +58,8 @@ final class AdviceText {
      */
     private static boolean countsWork(String text) {
         String lower = NUMERAL_ON_WORK.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("$1 ");
-        if (words(lower).stream().noneMatch(AdviceText::isNumber)) return false;
-        List<String> work = words(MOMENT.matcher(lower).replaceAll(" "));
+        if (NumberWords.words(lower).stream().noneMatch(NumberWords::isNumber)) return false;
+        List<String> work = NumberWords.words(MOMENT.matcher(lower).replaceAll(" "));
         for (int i = 0; i < work.size(); i++) if (workAt(work, i)) return true;
         return false;
     }
@@ -156,14 +72,5 @@ final class AdviceText {
             return next.equals("request") || next.equals("requests");
         }
         return WORK.contains(word);
-    }
-
-    private static boolean isNumber(String word) {
-        return NUMBER_WORDS.contains(word) || NUMERAL.matcher(word).matches();
-    }
-
-    /** The lowercase text as words: punctuation, symbols, dashes, line breaks and Markdown become word breaks. */
-    private static List<String> words(String lower) {
-        return NOT_A_WORD.splitAsStream(lower).filter(word -> !word.isEmpty()).toList();
     }
 }
