@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.0-rc.25
+
+### Patch Changes
+
+- When Hephaestus erases one of its answers, for example in a person's erasure, when conversation history expires, or when Slack is removed, Hephaestus's feedback history and later self-service data exports no longer show the words of the feedback that the answer showed. A self-service data export that was ready to download before the erasure expires, so you request a new one. The feedback still shows as delivered.
+
+  The upgrade rolls, and you do not need to do anything.
+
+- When a review's composition ends, Hephaestus now stops a repair whose retries are spent, or resumes a repair that waits for the composition. It also removes the inputs that it kept for the composition, unless a repair still waits for them or they hold the composition's record of tool calls. That record stays until the inputs expire. Before, this step ran after the end committed but without a transaction of its own, so it failed each time and logged "Could not remove original composition inputs".
+- A person's erasure, and a person's own account deletion, no longer stop for good when an answer that showed feedback about them stopped, failed or was not confirmed. Hephaestus erases its own answer. When the answer was a Slack reply that may hold the feedback, the erasure preview lists it as a copy outside Hephaestus, and the erasure waits for an administrator to confirm its removal.
+- Prepares a completed review to hand its results to the mentor without starting the earlier feedback composition. Nothing selects the mentor yet, so every review produces its feedback as before.
+- Each completed review now records which part of Hephaestus acts on its results, and keeps that choice for later attempts of the same review. Every review still produces its feedback as before. The new choice stays off, and only a staging test environment turns it on.
+- A person-data erasure now deletes a developer's lasting advice: its entries, revisions, observation references and the decision of each review, also advice written after the preview. The erasure's records list them without the advice text.
+- The release history on the instance overview no longer shows a false rollback when an older server restarts during a rolling update.
+  On Kubernetes, each rollout of the server now appears once, with the revision that Kubernetes gave it. A rollback through `helm rollback` or `kubectl rollout undo` is a new revision, so it appears as the newest entry, even when it runs an earlier release.
+  The server reads its revision with `get` on Pods and ReplicaSets in the release namespace. The chart grants this read-only access when it gives the server the Kubernetes API: with sandboxes, with backups, or with `networkPolicy.kubernetesApi` alone.
+  Without the Kubernetes API, each server start appears as one entry without a revision.
+  The server reads its revision when it becomes ready and then every minute. An entry can appear up to a minute late, and a revision that no server read is missing, which leaves a gap in the revisions.
+  The history starts with this release: entries that earlier releases recorded stay in the database but are no longer shown.
+- The database gains storage for the citable parts of work that a team project submits, and for the note sent with it. Nothing writes them yet, and the upgrade needs no action.
+- An hourly job now ends submitted team work past its expiry date and deletes its content. Nothing submits team work yet. The privacy-job alerts also watch the new job, `team_version_expiry`.
+- The erasure recovery manifest can withdraw submitted team work again after a database restore, with the optional lists `teamVersionWithdrawals` and `workspaceDepartures`. Nothing submits team work yet, so existing manifests stay valid. Recovery now stops on a manifest that has a fraction where it expects a whole number, such as an account ID, instead of cutting it off.
+
 ## 1.0.0-rc.24
 
 ### Minor Changes
