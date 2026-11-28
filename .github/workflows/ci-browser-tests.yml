@@ -115,7 +115,12 @@ jobs:
           docker compose -f server/compose.yaml run --rm -T postgres-roles
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
-          SERVER_JAR=${SERVER_JARS[0]}
+          # The server image runs the extracted layout on the JDK class loader. `java -jar` runs Spring Boot's
+          # nested-JAR loader instead, which reads every class and resource of the JAR under one lock.
+          # A class load pins its carrier thread, so class loads that wait for that lock can take every
+          # carrier from the virtual thread that holds it, and the server stops answering.
+          java -Djarmode=tools -jar "${SERVER_JARS[0]}" extract --destination "$RUNNER_TEMP/server"
+          SERVER_JAR="$RUNNER_TEMP/server/${SERVER_JARS[0]##*/}"
           # Fixture keys for this throwaway database; the e2e profile carries none.
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             HEPHAESTUS_SECURITY_ENCRYPTION_KEY=e2eFixtureSystemKeyNotForUse0001 HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=e2eFixtureCredentialKeyNotUse001 \
@@ -239,7 +244,9 @@ jobs:
           docker compose -f server/compose.yaml run --rm -T postgres-roles
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
-          SERVER_JAR=${SERVER_JARS[0]}
+          # The extracted layout, as in the webapp job.
+          java -Djarmode=tools -jar "${SERVER_JARS[0]}" extract --destination "$RUNNER_TEMP/server"
+          SERVER_JAR="$RUNNER_TEMP/server/${SERVER_JARS[0]##*/}"
           # Fixture keys for this throwaway database; the e2e profile carries none.
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             HEPHAESTUS_SECURITY_ENCRYPTION_KEY=e2eFixtureSystemKeyNotForUse0001 HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=e2eFixtureCredentialKeyNotUse001 \
