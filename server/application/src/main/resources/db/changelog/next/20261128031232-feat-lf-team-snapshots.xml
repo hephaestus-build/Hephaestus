@@ -84,7 +84,7 @@ ALTER TABLE public.team_snapshot
         </rollback>
     </changeSet>
     <changeSet id="1795813200000-2" author="hephaestus">
-        <comment>The rules of a snapshot, for every writer. Content arrives only with its version, never changes, and only its live link can be removed.</comment>
+        <comment>The rules of a snapshot, for every writer. Content arrives only with its version, never changes, leaves only when its version does, and only its live link can be removed.</comment>
         <createProcedure>
 CREATE FUNCTION public.admit_team_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -116,6 +116,18 @@ BEGIN
 END $$
         </createProcedure>
         <createProcedure>
+CREATE FUNCTION public.keep_team_snapshot_of_available_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    -- A version that is being deleted or has ended is no longer found as available.
+    PERFORM 1 FROM public.team_item_version v
+        WHERE v.id = OLD.version_id AND v.workspace_id = OLD.workspace_id AND v.state = 'AVAILABLE';
+    IF FOUND THEN
+        RAISE EXCEPTION 'a snapshot is deleted only with its version''s content' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
 CREATE FUNCTION public.delete_ended_team_version_content() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM public.team_snapshot s WHERE s.version_id = NEW.id AND s.workspace_id = NEW.workspace_id;
@@ -127,11 +139,15 @@ CREATE TRIGGER team_snapshot_admit BEFORE INSERT ON public.team_snapshot
     FOR EACH ROW EXECUTE FUNCTION public.admit_team_snapshot();
 CREATE TRIGGER team_snapshot_guard AFTER UPDATE ON public.team_snapshot
     FOR EACH ROW EXECUTE FUNCTION public.guard_team_snapshot();
+CREATE TRIGGER team_snapshot_kept AFTER DELETE ON public.team_snapshot
+    FOR EACH ROW EXECUTE FUNCTION public.keep_team_snapshot_of_available_version();
         </sql>
         <rollback>
+DROP TRIGGER team_snapshot_kept ON public.team_snapshot;
 DROP TRIGGER team_snapshot_guard ON public.team_snapshot;
 DROP TRIGGER team_snapshot_admit ON public.team_snapshot;
 DROP FUNCTION public.delete_ended_team_version_content();
+DROP FUNCTION public.keep_team_snapshot_of_available_version();
 DROP FUNCTION public.guard_team_snapshot();
 DROP FUNCTION public.admit_team_snapshot();
         </rollback>
