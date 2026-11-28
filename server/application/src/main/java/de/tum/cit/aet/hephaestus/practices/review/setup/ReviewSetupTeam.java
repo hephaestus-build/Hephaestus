@@ -17,7 +17,9 @@ import lombok.NoArgsConstructor;
  * project module; the database refuses a team that is not a standing team project of the workspace.
  */
 @Entity
-@Table(name = "review_setup_team", indexes = @Index(name = "idx_review_setup_team_setup", columnList = "setup_id, workspace_id"))
+@Table(
+        name = "review_setup_team",
+        indexes = @Index(name = "idx_review_setup_team_setup", columnList = "setup_id, workspace_id"))
 @IdClass(ReviewSetupTeam.Key.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

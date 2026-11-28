@@ -44,7 +44,8 @@ class ReviewSetupStorageIntegrationTest extends BaseIntegrationTest {
         UUID team = team(course);
         UUID elsewhere = team(otherCourse);
         UUID removed = team(course);
-        jdbc.update("UPDATE project_team SET removed_at = now() WHERE id = ? AND workspace_id = ?", removed, id(course));
+        jdbc.update(
+                "UPDATE project_team SET removed_at = now() WHERE id = ? AND workspace_id = ?", removed, id(course));
         UUID forTeams = setup(course, "TEAM");
         UUID forAdmins = setup(course, "OPERATIONAL");
 
@@ -85,8 +86,7 @@ class ReviewSetupStorageIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseASetupOutsideItsValues() {
         UUID setup = setup(course, "TEAM");
 
-        for (String change : List.of(
-                "cadence = 'HOURLY'", "budget_usd = 0", "scope = '[]'", "evidence_slots = '{}'")) {
+        for (String change : List.of("cadence = 'HOURLY'", "budget_usd = 0", "scope = '[]'", "evidence_slots = '{}'")) {
             assertThatThrownBy(() -> set(setup, change)).as(change).isInstanceOf(DataIntegrityViolationException.class);
         }
         assertThatThrownBy(() -> setup(course, "EVERYONE")).isInstanceOf(DataIntegrityViolationException.class);
