@@ -99,6 +99,7 @@ Maintainers run the report each month. They apply the two checks to the top entr
 The `test` profile starts no background work: no scheduled task, provider-event claimer, startup thread or `LISTEN` subscriber that acts on its own.
 `hephaestus.background-work.enabled` is false there, as in the `specs` and `cds-training` profiles.
 Thus no background write races a test or the cleanup that truncates its tables.
+
 A `LISTEN` connection that wakes the waits and streams of requests still runs, since the tests of those requests need it.
 Each cached test context keeps its own connection, and its reads can run while the cleanup truncates the tables.
 Thus the cleanup takes every table lock without waiting, or starts again.
