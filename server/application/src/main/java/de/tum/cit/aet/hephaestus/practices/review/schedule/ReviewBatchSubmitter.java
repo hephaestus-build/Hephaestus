@@ -63,6 +63,8 @@ public class ReviewBatchSubmitter {
                 case SOURCE_UNAVAILABLE, ITEM_INELIGIBLE, REQUEST_CONFLICT, REF_UNSUPPORTED ->
                     new SubmissionOutcome.Skipped();
                 case TRIAL_ACTIVE -> throw new IllegalStateException("Only a trial counts the active trials", refusal);
+                case SETUP_UNAVAILABLE, SETUP_UNSUPPORTED ->
+                    throw new IllegalStateException("A batch review has no review setup", refusal);
             };
         }
         return new SubmissionOutcome.Submitted();

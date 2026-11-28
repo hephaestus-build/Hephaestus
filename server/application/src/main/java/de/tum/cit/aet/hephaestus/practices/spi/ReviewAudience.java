@@ -14,8 +14,9 @@ public enum ReviewAudience {
     PERSONAL;
 
     /**
-     * The audience of a review created before reviews stored one: a scan or a trial is for admins, any other review is
-     * about a person's work. It is never {@link #TEAM}.
+     * The audience of a review that names none: a review created before reviews stored one, and a new review that no
+     * setup starts. A scan or a trial is for admins, and any other review is about a person's work. It is never
+     * {@link #TEAM}.
      */
     public static ReviewAudience ofOlder(ReviewKind kind, ReviewOrigin origin) {
         return kind == ReviewKind.SCAN || origin == ReviewOrigin.TRIAL ? OPERATIONAL : PERSONAL;

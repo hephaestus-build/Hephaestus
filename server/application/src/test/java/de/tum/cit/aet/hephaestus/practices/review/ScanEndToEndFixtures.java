@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.ScanDefinition;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
+import de.tum.cit.aet.hephaestus.practices.review.setup.SetupReviewRequests;
 import de.tum.cit.aet.hephaestus.practices.scan.ScanExportService;
 import de.tum.cit.aet.hephaestus.practices.scan.ScanReportItemsService;
 import de.tum.cit.aet.hephaestus.practices.scan.ScanRequestService;
@@ -43,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.scan.dto.StartScanRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
+import de.tum.cit.aet.hephaestus.practices.spi.SetupReviewRequest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -142,6 +144,9 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ScanRequestService scans;
+
+    @Autowired
+    private SetupReviewRequests setupReviews;
 
     @Autowired
     private ScanReportItemsService reports;
@@ -351,6 +356,39 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
     }
 
     /**
+     * A review setup of {@code workspace} for items of {@code itemKind}, read by {@code audience}, that selects {@code
+     * selected}. The rows are written with SQL, because nothing writes setups yet.
+     */
+    protected UUID setup(
+            Workspace workspace,
+            String itemKind,
+            String audience,
+            @Nullable BigDecimal budgetUsd,
+            Practice... selected) {
+        UUID id = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO review_setup(id, workspace_id, name, item_kind, audience, evidence_slots, budget_usd,"
+                        + " enabled, created_at) VALUES (?, ?, 'Repository check', ?, ?, '[]'::jsonb, ?, true, now())",
+                id,
+                workspace.getId(),
+                itemKind,
+                audience,
+                budgetUsd);
+        for (Practice practice : selected)
+            jdbc.update(
+                    "INSERT INTO review_setup_practice(setup_id, practice_id, workspace_id) VALUES (?, ?, ?)",
+                    id,
+                    practice.getId(),
+                    workspace.getId());
+        return id;
+    }
+
+    /** Starts a review through {@link SetupReviewRequests}, as the setup's request route and scheduler will. */
+    protected Scan review(SetupReviewRequest request) {
+        return new Scan(request.workspaceId(), setupReviews.request(request));
+    }
+
+    /**
      * A budget that admits one file of one practice and no more: what the scan driver reserves before it queues a file
      * ({@link ScanBudget#permits}), rounded up to the 4 decimals a budget holds. Each stub model call then reports
      * 1,000 prompt tokens, which cost 0.0001 at the review price, so the first file spends more than the rounding left.
@@ -379,18 +417,23 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
                     .pollInterval(Duration.ofMillis(250))
                     .until(() -> {
                         driver.tick();
+                        // A sandbox whose scan just closed would wait out its pull of a next run (AgentNextWaits).
+                        if (closed(scan)) return true;
                         dispatcher.dispatch();
                         runtime.composeQueued(scan.id());
                         sandbox.drive();
                         runtime.composeQueued(scan.id());
                         completion.tick();
-                        return !List.of("QUEUED", "RUNNING")
-                                .contains(status(scan).get("status"));
+                        return closed(scan);
                     });
         } catch (ConditionTimeoutException timeout) {
             throw new AssertionError("The scan did not close: " + state(scan) + " " + sandbox.calls, timeout);
         }
         return status(scan);
+    }
+
+    private boolean closed(Scan scan) {
+        return !List.of("QUEUED", "RUNNING").contains(status(scan).get("status"));
     }
 
     private Map<String, @Nullable Object> status(Scan scan) {
