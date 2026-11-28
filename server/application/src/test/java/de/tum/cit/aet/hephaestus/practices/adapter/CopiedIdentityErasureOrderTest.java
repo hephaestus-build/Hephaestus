@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationReplies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
@@ -28,6 +29,7 @@ class CopiedIdentityErasureOrderTest {
                         JsonMapper.builder().build(),
                         mock(FeedbackCopyCleanupCustody.class),
                         mock(PersonFeedbackAnswerRedaction.class),
+                        mock(PersonConversationReplies.class),
                         mock(PersonIdentityResolver.class),
                         mock(ScanReportService.class),
                         mock(AdviceRedaction.class))

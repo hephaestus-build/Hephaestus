@@ -84,12 +84,31 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
    Do the same for each copy of a send that ended `UNCERTAIN`.
 6. For such a copy with a `write_marker`, search the provider for the marker.
    Hephaestus appends it to the posted text.
-7. For a copy with a `conversation_entry_id`, read `conversation_id`, `turn_id`, `surface` and `slack_ts` of that `conversation_entry` row.
+7. For a copy with a `conversation_turn_id`, read `conversation_id`, `surface`, `status` and `started_at` of that `conversation_turn` row.
    The surface `APP` has no Slack copy.
+   A Slack turn has a Slack copy only if it ended `DONE`, and only for a claim at or after `started_at`.
+   Read `slack_ts` of the turn's `ANSWER` entries.
 8. For a Slack copy, read `slack_team_id` and `slack_channel_id` of the main conversation.
    For a thread, follow `conversation.parent_conversation_id` to the main conversation.
-9. If a Slack copy has no `slack_ts`, find the bot reply with the Slack [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
-10. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
+9. Identify a Slack reply only by its metadata.
+   Hephaestus tags each reply with the event type `heph_entry` and the question's entry ID in `entry_id`.
+   Read the messages with the Slack [conversations.history](https://docs.slack.dev/reference/methods/conversations.history/) or [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API, with `include_all_metadata=true`.
+   A reply that Slack did not confirm follows the question's `slack_ts`.
+   It is in the question's thread, or at the top level of the DM.
+   Never delete a message whose `entry_id` names another entry.
+   Never delete the question itself.
+10. The preview gives each Slack copy as a locator:
+    - `slack:<team>/<channel>/<ts>?question=<entry id>` names the reply.
+    - `slack:<team>/<channel>?after=<question ts>&thread=<thread ts>&question=<entry id>` means that Slack did not confirm the post.
+    - `slack:conversation/<id>` means that a Slack disconnect cleared the DM of the conversation. Record that you cannot find the reply.
+11. The channel of a locator is the DM that the conversation uses now.
+    If the person linked another Slack account after the reply, the reply is in an earlier DM of the bot.
+    Hephaestus cannot list its earlier DMs, because it does not request the Slack scope `im:read`.
+    If the named DM has no message with that `entry_id`, record `not found: possibly in the person's earlier DM`.
+    The erasure dialog has no choice for this case.
+    When you tick its box to finish the erasure, Hephaestus stores the copy as removed.
+    Keep the not-found result and its reason in the incident record.
+12. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
 
 ## Delete each copy
 
@@ -121,6 +140,7 @@ It cannot recall emails, screenshots or third-party archives.
 ## Purge, if requested
 
 1. Check that no copy is live and that no send of the feedback is `ADMITTED` or `EXECUTING`.
+   A Slack reply that the incident record keeps as not found is the only exception.
 2. For a purge, write the workspace ID in your restricted incident record. For a disconnect, write the workspace ID and the connection ID.
    After a database restore, you need them to erase again ([Reapply erasures after a restore](./erasure-recovery)).
 3. Purge the workspace, disconnect the provider, or [erase the person](./person-data-requests), as the request requires.
@@ -132,7 +152,7 @@ If you cannot prove step 1, keep the workspace paused and do not purge.
 1. Run the queries of [Find every copy](#find-every-copy) again.
    No send of the feedback is `ADMITTED` or `EXECUTING`.
 2. Look up each recorded provider reference.
-   Each copy is absent, or recorded in the incident record as kept.
+   Each copy is absent, or recorded in the incident record as kept or not found.
 
 ## Undo
 
