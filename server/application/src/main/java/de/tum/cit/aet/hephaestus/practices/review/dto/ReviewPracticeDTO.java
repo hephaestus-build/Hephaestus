@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeLevel;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,4 +33,6 @@ public record ReviewPracticeDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewResultCountsDTO results,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        PracticeScriptRunDTO script) {}
+        PracticeScriptRunDTO script,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) PracticeLevel level) {}

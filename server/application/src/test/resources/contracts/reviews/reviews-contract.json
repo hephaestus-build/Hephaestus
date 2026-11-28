@@ -1,0 +1,1237 @@
+{
+  "requests": {
+    "repositoryCommit": {
+      "setupId": "5e7a0000-0000-4000-8000-000000000001",
+      "item": {
+        "kind": "REPOSITORY_COMMIT",
+        "repositoryItemId": "4711",
+        "ref": "main",
+        "commit": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b"
+      },
+      "requestKey": "4e9e0000-0000-4000-8000-000000000004"
+    },
+    "submittedVersion": {
+      "setupId": "5e7a0000-0000-4000-8000-000000000001",
+      "item": {
+        "kind": "SUBMITTED_VERSION",
+        "versionId": "0e510000-0000-4000-8000-000000000003"
+      },
+      "requestKey": "4e9e0000-0000-4000-8000-000000000005"
+    }
+  },
+  "reviews": {
+    "repositoryCommitRequest": {
+      "summary": {
+        "id": "aaaa0000-0000-4000-8000-000000000011",
+        "kind": "SCAN",
+        "item": {
+          "id": "4711",
+          "kind": "scm.repository",
+          "label": "acme/shop",
+          "title": "acme/shop"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "REQUEST",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "tests-cover-changes",
+            "practiceName": "tests-cover-changes",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 40,
+              "reviewed": 40,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 33,
+              "notMet": 4,
+              "doesNotApply": 2,
+              "couldNotDetermine": 1
+            },
+            "script": null,
+            "level": "MEMBER"
+          },
+          {
+            "practiceSlug": "ci-runs-the-tests",
+            "practiceName": "ci-runs-the-tests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 34,
+          "notMet": 4,
+          "doesNotApply": 2,
+          "couldNotDetermine": 1
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 2,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "progress": null,
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "REPOSITORY_COMMIT",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "REPOSITORY_COMMIT",
+          "ref": "main",
+          "commit": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b"
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          },
+          {
+            "level": "MEMBER",
+            "counts": {
+              "listed": 40,
+              "reviewed": 40,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null
+      },
+      "detail": {
+        "id": "aaaa0000-0000-4000-8000-000000000011",
+        "kind": "SCAN",
+        "item": {
+          "id": "4711",
+          "kind": "scm.repository",
+          "label": "acme/shop",
+          "title": "acme/shop"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "REQUEST",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "tests-cover-changes",
+            "practiceName": "tests-cover-changes",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 40,
+              "reviewed": 40,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 33,
+              "notMet": 4,
+              "doesNotApply": 2,
+              "couldNotDetermine": 1
+            },
+            "script": null,
+            "level": "MEMBER"
+          },
+          {
+            "practiceSlug": "ci-runs-the-tests",
+            "practiceName": "ci-runs-the-tests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 34,
+          "notMet": 4,
+          "doesNotApply": 2,
+          "couldNotDetermine": 1
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 2,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "runtime": null,
+        "usage": {
+          "costUsd": "0.42",
+          "priced": true,
+          "includesUpperBound": false,
+          "calls": 12,
+          "inputTokens": 48000,
+          "outputTokens": 3200,
+          "attempts": []
+        },
+        "generatedPaths": null,
+        "progress": null,
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "REPOSITORY_COMMIT",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "REPOSITORY_COMMIT",
+          "ref": "main",
+          "commit": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b"
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          },
+          {
+            "level": "MEMBER",
+            "counts": {
+              "listed": 40,
+              "reviewed": 40,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null,
+        "evidence": [
+          {
+            "slot": "ci.configured",
+            "state": "PRESENT",
+            "readAt": "2026-12-01T09:00:00Z"
+          },
+          {
+            "slot": "ci.observed",
+            "state": "PRESENT",
+            "readAt": "2026-12-01T09:00:00Z"
+          },
+          {
+            "slot": "merge-rule",
+            "state": "MISSING",
+            "readAt": null
+          }
+        ]
+      }
+    },
+    "repositoryCommitSchedule": {
+      "summary": {
+        "id": "aaaa0000-0000-4000-8000-000000000012",
+        "kind": "SCAN",
+        "item": {
+          "id": "4711",
+          "kind": "scm.repository",
+          "label": "acme/shop",
+          "title": "acme/shop"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "SCHEDULE",
+        "status": "PARTIAL",
+        "createdAt": "2026-12-02T09:00:00Z",
+        "completedAt": "2026-12-02T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-02T09:00:00Z",
+        "stopReason": "BUDGET",
+        "practices": [
+          {
+            "practiceSlug": "tests-cover-changes",
+            "practiceName": "tests-cover-changes",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 40,
+              "reviewed": 37,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 3
+            },
+            "results": {
+              "met": 30,
+              "notMet": 4,
+              "doesNotApply": 2,
+              "couldNotDetermine": 1
+            },
+            "script": null,
+            "level": "MEMBER"
+          },
+          {
+            "practiceSlug": "ci-runs-the-tests",
+            "practiceName": "ci-runs-the-tests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 31,
+          "notMet": 4,
+          "doesNotApply": 2,
+          "couldNotDetermine": 1
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 2,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "progress": null,
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "REPOSITORY_COMMIT",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "REPOSITORY_COMMIT",
+          "ref": "main",
+          "commit": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b"
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          },
+          {
+            "level": "MEMBER",
+            "counts": {
+              "listed": 40,
+              "reviewed": 37,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 3
+            }
+          }
+        ],
+        "change": {
+          "baselineReviewId": "aaaa0000-0000-4000-8000-000000000011",
+          "version": "SAME",
+          "evidence": "CHANGED",
+          "setup": "SAME"
+        }
+      },
+      "detail": {
+        "id": "aaaa0000-0000-4000-8000-000000000012",
+        "kind": "SCAN",
+        "item": {
+          "id": "4711",
+          "kind": "scm.repository",
+          "label": "acme/shop",
+          "title": "acme/shop"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "SCHEDULE",
+        "status": "PARTIAL",
+        "createdAt": "2026-12-02T09:00:00Z",
+        "completedAt": "2026-12-02T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-02T09:00:00Z",
+        "stopReason": "BUDGET",
+        "practices": [
+          {
+            "practiceSlug": "tests-cover-changes",
+            "practiceName": "tests-cover-changes",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 40,
+              "reviewed": 37,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 3
+            },
+            "results": {
+              "met": 30,
+              "notMet": 4,
+              "doesNotApply": 2,
+              "couldNotDetermine": 1
+            },
+            "script": null,
+            "level": "MEMBER"
+          },
+          {
+            "practiceSlug": "ci-runs-the-tests",
+            "practiceName": "ci-runs-the-tests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 31,
+          "notMet": 4,
+          "doesNotApply": 2,
+          "couldNotDetermine": 1
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 2,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "runtime": null,
+        "usage": {
+          "costUsd": "0.42",
+          "priced": true,
+          "includesUpperBound": false,
+          "calls": 12,
+          "inputTokens": 48000,
+          "outputTokens": 3200,
+          "attempts": []
+        },
+        "generatedPaths": null,
+        "progress": null,
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "REPOSITORY_COMMIT",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "REPOSITORY_COMMIT",
+          "ref": "main",
+          "commit": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b"
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          },
+          {
+            "level": "MEMBER",
+            "counts": {
+              "listed": 40,
+              "reviewed": 37,
+              "reused": 6,
+              "withheld": 0,
+              "notReviewed": 3
+            }
+          }
+        ],
+        "change": {
+          "baselineReviewId": "aaaa0000-0000-4000-8000-000000000011",
+          "version": "SAME",
+          "evidence": "CHANGED",
+          "setup": "SAME"
+        },
+        "evidence": [
+          {
+            "slot": "ci.configured",
+            "state": "PRESENT",
+            "readAt": "2026-12-02T09:00:00Z"
+          },
+          {
+            "slot": "ci.observed",
+            "state": "PRESENT",
+            "readAt": "2026-12-02T09:00:00Z"
+          },
+          {
+            "slot": "merge-rule",
+            "state": "MISSING",
+            "readAt": null
+          }
+        ]
+      }
+    },
+    "submittedVersionRequest": {
+      "summary": {
+        "id": "bbbb0000-0000-4000-8000-000000000021",
+        "kind": "ITEM",
+        "item": {
+          "id": "9001",
+          "kind": "figma.board",
+          "label": "Checkout flow",
+          "title": "Checkout flow"
+        },
+        "itemVersion": "0e510000-0000-4000-8000-000000000003",
+        "origin": "REQUEST",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "flows-name-their-goal",
+            "practiceName": "flows-name-their-goal",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "SUBMITTED_VERSION",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "SUBMITTED_VERSION",
+          "versionId": "0e510000-0000-4000-8000-000000000003",
+          "number": 2
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null
+      },
+      "detail": {
+        "id": "bbbb0000-0000-4000-8000-000000000021",
+        "kind": "ITEM",
+        "item": {
+          "id": "9001",
+          "kind": "figma.board",
+          "label": "Checkout flow",
+          "title": "Checkout flow"
+        },
+        "itemVersion": "0e510000-0000-4000-8000-000000000003",
+        "origin": "REQUEST",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "flows-name-their-goal",
+            "practiceName": "flows-name-their-goal",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "runtime": null,
+        "usage": {
+          "costUsd": "0.42",
+          "priced": true,
+          "includesUpperBound": false,
+          "calls": 12,
+          "inputTokens": 48000,
+          "outputTokens": 3200,
+          "attempts": []
+        },
+        "generatedPaths": null,
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "SUBMITTED_VERSION",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "SUBMITTED_VERSION",
+          "versionId": "0e510000-0000-4000-8000-000000000003",
+          "number": 2
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null,
+        "evidence": []
+      }
+    },
+    "submittedVersionSchedule": {
+      "summary": {
+        "id": "bbbb0000-0000-4000-8000-000000000022",
+        "kind": "ITEM",
+        "item": {
+          "id": "9001",
+          "kind": "figma.board",
+          "label": "Checkout flow",
+          "title": "Checkout flow"
+        },
+        "itemVersion": "0e510000-0000-4000-8000-000000000006",
+        "origin": "SCHEDULE",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-02T09:00:00Z",
+        "completedAt": "2026-12-02T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-02T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "flows-name-their-goal",
+            "practiceName": "flows-name-their-goal",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "SUBMITTED_VERSION",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "SUBMITTED_VERSION",
+          "versionId": "0e510000-0000-4000-8000-000000000006",
+          "number": 3
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": {
+          "baselineReviewId": "bbbb0000-0000-4000-8000-000000000021",
+          "version": "CHANGED",
+          "evidence": "SAME",
+          "setup": "SAME"
+        }
+      },
+      "detail": {
+        "id": "bbbb0000-0000-4000-8000-000000000022",
+        "kind": "ITEM",
+        "item": {
+          "id": "9001",
+          "kind": "figma.board",
+          "label": "Checkout flow",
+          "title": "Checkout flow"
+        },
+        "itemVersion": "0e510000-0000-4000-8000-000000000006",
+        "origin": "SCHEDULE",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-02T09:00:00Z",
+        "completedAt": "2026-12-02T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-02T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "flows-name-their-goal",
+            "practiceName": "flows-name-their-goal",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "runtime": null,
+        "usage": {
+          "costUsd": "0.42",
+          "priced": true,
+          "includesUpperBound": false,
+          "calls": 12,
+          "inputTokens": 48000,
+          "outputTokens": 3200,
+          "attempts": []
+        },
+        "generatedPaths": null,
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": {
+          "id": "5e7a0000-0000-4000-8000-000000000001",
+          "name": "Team practices"
+        },
+        "versionKind": "SUBMITTED_VERSION",
+        "audience": {
+          "kind": "TEAM",
+          "teamProjectId": "7ea30000-0000-4000-8000-000000000002"
+        },
+        "reviewedVersion": {
+          "kind": "SUBMITTED_VERSION",
+          "versionId": "0e510000-0000-4000-8000-000000000006",
+          "number": 3
+        },
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": {
+          "baselineReviewId": "bbbb0000-0000-4000-8000-000000000021",
+          "version": "CHANGED",
+          "evidence": "SAME",
+          "setup": "SAME"
+        },
+        "evidence": []
+      }
+    },
+    "itemRevisionOlder": {
+      "summary": {
+        "id": "cccc0000-0000-4000-8000-000000000031",
+        "kind": "ITEM",
+        "item": {
+          "id": "5150",
+          "kind": "scm.pull_request",
+          "parentId": "4711",
+          "label": "acme/shop#42",
+          "title": "Pay with a saved card"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "EVENT",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "small-pull-requests",
+            "practiceName": "small-pull-requests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": null,
+        "versionKind": "ITEM_REVISION",
+        "audience": {
+          "kind": "PERSONAL",
+          "teamProjectId": null
+        },
+        "reviewedVersion": null,
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null
+      },
+      "detail": {
+        "id": "cccc0000-0000-4000-8000-000000000031",
+        "kind": "ITEM",
+        "item": {
+          "id": "5150",
+          "kind": "scm.pull_request",
+          "parentId": "4711",
+          "label": "acme/shop#42",
+          "title": "Pay with a saved card"
+        },
+        "itemVersion": "4f9c2e1b7a3d5e6f8091a2b3c4d5e6f708192a3b",
+        "origin": "EVENT",
+        "status": "COMPLETE",
+        "createdAt": "2026-12-01T09:00:00Z",
+        "completedAt": "2026-12-01T09:20:00Z",
+        "startedBy": null,
+        "batchId": null,
+        "orderedAt": "2026-12-01T09:00:00Z",
+        "stopReason": null,
+        "practices": [
+          {
+            "practiceSlug": "small-pull-requests",
+            "practiceName": "small-pull-requests",
+            "editedIn": "HEPHAESTUS",
+            "practiceVersionId": "1",
+            "number": 1,
+            "status": "DONE",
+            "reason": null,
+            "itemCounts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            },
+            "results": {
+              "met": 1,
+              "notMet": 0,
+              "doesNotApply": 0,
+              "couldNotDetermine": 0
+            },
+            "script": null,
+            "level": "ITEM"
+          }
+        ],
+        "results": {
+          "met": 1,
+          "notMet": 0,
+          "doesNotApply": 0,
+          "couldNotDetermine": 0
+        },
+        "feedback": {
+          "awaitingApproval": 0,
+          "ready": 0,
+          "delivered": 0,
+          "unconfirmed": 0,
+          "withheld": 0,
+          "rejected": 0,
+          "replaced": 0,
+          "failed": 0
+        },
+        "jobCount": 1,
+        "activeJobCount": 0,
+        "model": "review-model",
+        "runtime": null,
+        "usage": {
+          "costUsd": "0.42",
+          "priced": true,
+          "includesUpperBound": false,
+          "calls": 12,
+          "inputTokens": 48000,
+          "outputTokens": 3200,
+          "attempts": []
+        },
+        "generatedPaths": null,
+        "progress": {
+          "practicesEnded": 1,
+          "practicesTotal": 1,
+          "continuing": false,
+          "stage": "READY"
+        },
+        "setup": null,
+        "versionKind": "ITEM_REVISION",
+        "audience": {
+          "kind": "PERSONAL",
+          "teamProjectId": null
+        },
+        "reviewedVersion": null,
+        "coverage": [
+          {
+            "level": "ITEM",
+            "counts": {
+              "listed": 1,
+              "reviewed": 1,
+              "reused": 0,
+              "withheld": 0,
+              "notReviewed": 0
+            }
+          }
+        ],
+        "change": null,
+        "evidence": []
+      }
+    }
+  },
+  "schedules": [
+    {
+      "itemKind": "scm.repository",
+      "cadence": "WEEKLY",
+      "lookbackDays": null,
+      "enabled": true,
+      "budgetUsd": "25.00",
+      "id": "dddd0000-0000-4000-8000-000000000041",
+      "version": "3",
+      "nextRunAt": "2026-12-07T02:00:00Z",
+      "lastRunAt": "2026-11-30T02:00:00Z",
+      "createdBy": null,
+      "createdAt": "2026-11-02T10:00:00Z",
+      "updatedAt": "2026-11-02T10:00:00Z",
+      "setupId": null
+    }
+  ]
+}

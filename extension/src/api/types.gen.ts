@@ -4635,6 +4635,8 @@ export type PracticeItemTypeOption = {
 	scanSupported: boolean;
 };
 
+export type PracticeLevel = "ITEM" | "MEMBER";
+
 export type PracticePageCleanWork = {
 	item: ItemRef;
 	recordedAt: string;
@@ -5805,6 +5807,15 @@ export type ReplaceOutlineTokenRequest = {
 };
 
 /**
+ * A repository at the commit that the review pinned on its monitored default branch.
+ */
+export type RepositoryCommitVersion = {
+	commit: string;
+	kind: "REPOSITORY_COMMIT";
+	ref: string;
+};
+
+/**
  * Information about a git repository
  */
 export type RepositoryInfo = {
@@ -6031,6 +6042,16 @@ export type Review = {
 	stopReason: ReviewStopReason | null;
 };
 
+/**
+ * Who reads a review. A team review names its team project; no other audience names one.
+ */
+export type ReviewAudience = {
+	kind: ReviewAudienceKind;
+	teamProjectId: string | null;
+};
+
+export type ReviewAudienceKind = "OPERATIONAL" | "TEAM" | "PERSONAL";
+
 export type ReviewBatch = {
 	budgetUsd: string | null;
 	confirmedBy: AccountRef | null;
@@ -6111,6 +6132,18 @@ export type ReviewBucket = {
 
 export type ReviewCadence = "DAILY" | "WEEKLY";
 
+/**
+ * How a review differs from its baseline, the newest earlier closed review of the same setup and item (ADR 0167
+ * decision 6). The three sides are independent: one commit with other pinned evidence is the same version with changed
+ * evidence. Only the evidence can be unknown; the constructor refuses an unknown version or setup.
+ */
+export type ReviewChange = {
+	baselineReviewId: string;
+	evidence: ReviewDifference;
+	setup: ReviewDifference;
+	version: ReviewDifference;
+};
+
 export type ReviewContext = {
 	canInspectReviewDetails: boolean;
 	item?: ItemRef;
@@ -6120,13 +6153,25 @@ export type ReviewContext = {
 	workspaceSlug: string;
 };
 
+/**
+ * The planned pairs of the practices of one level, by what became of them. A review never sums two levels.
+ */
+export type ReviewCoverage = {
+	counts: ReviewItemCounts;
+	level: PracticeLevel;
+};
+
 export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED";
 
 export type ReviewDetail = {
 	activeJobCount: number;
+	audience: ReviewAudience;
 	batchId: string | null;
+	change: ReviewChange | null;
 	completedAt: string | null;
+	coverage: Array<ReviewCoverage>;
 	createdAt: string;
+	evidence: Array<ReviewEvidence>;
 	feedback: ReviewFeedbackCounts;
 	generatedPaths: GeneratedPathReview | null;
 	id: string;
@@ -6140,12 +6185,35 @@ export type ReviewDetail = {
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
 	results: ReviewResultCounts;
+	reviewedVersion: ReviewedVersion | null;
 	runtime: ReviewRuntime | null;
+	setup: ReviewSetupRef | null;
 	startedBy: ItemEvent | null;
 	status: ReviewStatus;
 	stopReason: ReviewStopReason | null;
 	usage: ReviewUsage;
+	versionKind: ReviewVersionKind;
 };
+
+/**
+ * Whether one side of a review differs from its baseline. Only the evidence can be unknown.
+ */
+export type ReviewDifference = "SAME" | "CHANGED" | "UNKNOWN";
+
+/**
+ * One source of evidence from outside the reviewed version, pinned when the review was created, such as the CI runs of
+ * a commit. Its slot names the source, for example <code>ci.observed</code>.
+ */
+export type ReviewEvidence = {
+	readAt: string | null;
+	slot: string;
+	state: ReviewEvidenceState;
+};
+
+/**
+ * What the server read for one evidence source when it created the review. A missing or incomplete source leaves its criteria Could not determine.
+ */
+export type ReviewEvidenceState = "PRESENT" | "INCOMPLETE" | "MISSING";
 
 export type ReviewFeedback = {
 	bodyPreview: string | null;
@@ -6221,6 +6289,10 @@ export type ReviewFeedbackDetail = {
 
 export type ReviewFeedbackSort = "NEWEST" | "OLDEST";
 
+/**
+ * The planned pairs of one practice, or of one practice level, by what became of them. Each planned pair is reviewed,
+ * withheld or not reviewed. A reused pair is reviewed too, so <code>reused</code> is a part of <code>reviewed</code>.
+ */
 export type ReviewItemCounts = {
 	listed: number;
 	notReviewed: number;
@@ -6334,6 +6406,7 @@ export type ReviewPractice = {
 	 */
 	editedIn: PracticeEditedIn;
 	itemCounts: ReviewItemCounts;
+	level: PracticeLevel;
 	number: null | number;
 	practiceName: string;
 	practiceSlug: string;
@@ -6589,6 +6662,7 @@ export type ReviewSchedule = {
 	lastRunAt: string | null;
 	lookbackDays: null | number;
 	nextRunAt: string;
+	setupId: string | null;
 	updatedAt: string;
 	version: string;
 };
@@ -6606,6 +6680,14 @@ export type ReviewScopeMode = "ALL" | "SELECTED";
 export type ReviewScopeRepository = {
 	baseBranches: Array<string>;
 	repositoryItemId: string;
+};
+
+/**
+ * The review setup that started a review, as the review keeps a copy of it (ADR 0165 decision 10).
+ */
+export type ReviewSetupRef = {
+	id: string;
+	name: string;
 };
 
 /**
@@ -6643,8 +6725,11 @@ export type ReviewStopReason = string;
 
 export type ReviewSummary = {
 	activeJobCount: number;
+	audience: ReviewAudience;
 	batchId: string | null;
+	change: ReviewChange | null;
 	completedAt: string | null;
+	coverage: Array<ReviewCoverage>;
 	createdAt: string;
 	feedback: ReviewFeedbackCounts;
 	id: string;
@@ -6658,9 +6743,12 @@ export type ReviewSummary = {
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
 	results: ReviewResultCounts;
+	reviewedVersion: ReviewedVersion | null;
+	setup: ReviewSetupRef | null;
 	startedBy: ItemEvent | null;
 	status: ReviewStatus;
 	stopReason: ReviewStopReason | null;
+	versionKind: ReviewVersionKind;
 };
 
 export type ReviewTimeShares = {
@@ -6727,6 +6815,8 @@ export type ReviewUsageAttempt = {
 	reasoningTokens: number;
 };
 
+export type ReviewVersionKind = "REPOSITORY_COMMIT" | "SUBMITTED_VERSION" | "ITEM_REVISION";
+
 export type ReviewedBy = {
 	by: ReviewedByKind;
 	humanReason: ReviewLimit | null;
@@ -6747,6 +6837,10 @@ export type ReviewedPractice = {
 	slug: string;
 	whatGoodLooksLike: string | null;
 	whyItMatters: string | null;
+};
+
+export type ReviewedVersion = (RepositoryCommitVersion | SubmittedVersion) & {
+	kind: string;
 };
 
 /**
@@ -7235,6 +7329,15 @@ export type StateDimension = {
 	label: string;
 	name: string;
 	values: Array<Value>;
+};
+
+/**
+ * The immutable version of a team item that the review pinned (ADR 0165), with its number in that item.
+ */
+export type SubmittedVersion = {
+	kind: "SUBMITTED_VERSION";
+	number: number;
+	versionId: string;
 };
 
 /**
