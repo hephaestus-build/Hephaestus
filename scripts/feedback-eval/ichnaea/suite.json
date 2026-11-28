@@ -11,7 +11,7 @@
 	"caseSet": {
 		"id": "composition-set",
 		"path": "scripts/feedback-eval/ichnaea/case-set.json",
-		"digest": "sha256:83a8447d5bcee5bc33c0afa288a90aedcf9278279dcdffe078379b12c6f18fca"
+		"digest": "sha256:c3fc00c704dd899c246688e087b8a5d7b4b3d2cb60b9f8a04f56093deab51e0c"
 	},
 	"replicates": 2,
 	"replicatesFor": [
