@@ -1219,7 +1219,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         var agent = mock(PracticePiAdapter.class);
         when(agent.parseResult(TIMED_OUT)).thenReturn(new AgentResult(false, Map.of()));
         var telemetry = new ReviewJobTelemetry(meterRegistry, Tracer.NOOP);
-        var terminal = new ReviewJobTerminal(jobRepository, agentRuns, continuation);
+        var terminal = new ReviewJobTerminal(jobRepository, agentRuns, continuation, context);
         return new ReviewAttemptResults(
                 jobRepository,
                 mock(ResultAdmissionService.class),
