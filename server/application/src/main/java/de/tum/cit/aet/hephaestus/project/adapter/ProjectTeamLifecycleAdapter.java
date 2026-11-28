@@ -10,7 +10,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * What else changes project teams. A workspace purge deletes them. An account claim moves the absorbed account's teams
+ * What else changes project teams. A workspace purge deletes them, and the database deletes their repository mappings
+ * with them. An account claim moves the absorbed account's teams
  * after its workspace memberships arrived and before the old ones are deleted. Leaving a workspace and erasing an
  * account need nothing here: the database deletes those rows with the membership.
  */

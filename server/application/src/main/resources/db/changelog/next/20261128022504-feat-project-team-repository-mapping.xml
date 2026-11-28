@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795832704490-1" author="hephaestus">
+        <comment>Repositories that a workspace admin maps to a team project (ADR 0167 decision 3). Nothing writes them yet. The team key carries the workspace, so a mapping never names a team of another workspace, and it goes with its team, also in a workspace purge. The repository item is a plain id (ADR 0138): this module does not reference the item table, and the audited writer checks the item through the item port.</comment>
+        <createTable tableName="project_team_repository">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="project_team_repositoryPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="repository_item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mapped_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="project_team_repository" columnNames="team_id, repository_item_id" constraintName="uk_project_team_repository"/>
+        <addForeignKeyConstraint baseTableName="project_team_repository" baseColumnNames="team_id,workspace_id" constraintName="sfk_project_team_repository_team" onDelete="CASCADE" referencedTableName="project_team" referencedColumnNames="id,workspace_id"/>
+        <createIndex tableName="project_team_repository" indexName="idx_project_team_repository_team">
+            <column name="team_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="project_team_repository" indexName="idx_project_team_repository_item">
+            <column name="repository_item_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

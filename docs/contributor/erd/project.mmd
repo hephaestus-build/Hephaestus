@@ -48,6 +48,14 @@ erDiagram
         TIMESTAMPTZ joined_at "NOT NULL"
     }
 
+    ProjectTeamRepository {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        UUID team_id FK,UK "NOT NULL"
+        BIGINT repository_item_id UK "NOT NULL"
+        TIMESTAMPTZ mapped_at "NOT NULL"
+    }
+
     Account["Account · Core"]
     Membership["Membership · Workspace (Tenancy)"]
     Workspace["Workspace · Workspace (Tenancy)"]
@@ -60,6 +68,7 @@ erDiagram
     Workspace ||--o{ ProjectTeam : has
     Membership ||--o{ ProjectTeamMember : belongs_to
     ProjectTeam ||--o{ ProjectTeamMember : belongs_to
+    ProjectTeam ||--o{ ProjectTeamRepository : has
 
     %% Styling
     classDef primaryEntity stroke-width:2px
