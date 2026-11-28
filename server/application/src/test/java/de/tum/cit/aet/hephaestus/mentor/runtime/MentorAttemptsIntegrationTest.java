@@ -101,12 +101,15 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
     private long account;
     /** What the authorization port answers for a stored stamp; false is a revoke. */
     private volatile boolean authorized = true;
+    /** Whether intake's capture admits the asker; false refuses an edit. */
+    private volatile boolean capturing = true;
 
     @BeforeEach
     void setUp() {
         account = linkedAccount();
         authorization = mock(MentorAuthorization.class);
         when(authorization.captureSlack(any(), any(), any())).thenAnswer(call -> {
+            if (!capturing) return Optional.empty();
             VerifiedActor actor = call.getArgument(0);
             Binding where = call.getArgument(1);
             return Optional.of(new ScopeStamp(
@@ -476,6 +479,34 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         admit(IngressKind.CONTROL_STOP, "e8", message, "1700000000.000100");
         assertThat(current(credential(lease))).isFalse();
         assertThat(renew(lease, LEASE)).isFalse();
+    }
+
+    /** An edit that authority refused keeps the version, so the admitted revision refuses until an admitted edit. */
+    @Test
+    void shouldRefuseADispatchAndARenewAfterAnUnauthorizedEditUntilAnAuthorizedEditAdmitsTheText() {
+        String message = message();
+        UUID request = ask(message);
+        AttemptLease first = claimOne(WorkClass.INTERACTIVE);
+        prepare(first);
+        observe(first);
+        assertThat(current(credential(first))).isTrue();
+
+        capturing = false;
+        admit(IngressKind.MESSAGE_EDITED, "u" + message, message, "1700000000.000200");
+        assertThat(owner.queryForMap("SELECT version, delivery_fence FROM mentor_request WHERE id = ?", request))
+                .containsEntry("version", 1)
+                .containsEntry("delivery_fence", "SOURCE_EDITED");
+        assertThat(current(credential(first))).as("the lease on the text before the refused edit").isFalse();
+        assertThat(renew(first, LEASE)).isFalse();
+
+        capturing = true;
+        admit(IngressKind.MESSAGE_EDITED, "a" + message, message, "1700000000.000300");
+        AttemptLease second = claimOne(WorkClass.INTERACTIVE);
+        assertThat(second.requestVersion()).isEqualTo(2);
+        prepare(second);
+        observe(second);
+        assertThat(current(credential(second))).as("the lease on the admitted edit").isTrue();
+        assertThat(current(credential(first))).isFalse();
     }
 
     /** Renew: a lease never runs past the attempt's work deadline, and a lapsed lease cannot be renewed. */

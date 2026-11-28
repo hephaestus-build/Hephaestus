@@ -119,7 +119,11 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
             nativeQuery = true)
     Optional<AttemptOf> attemptOf(@Param("account") long account, @Param("attempt") UUID attempt);
 
-    /** The live request at this version with its stored scope, held against a Stop, an edit or a settle. */
+    /**
+     * The live request at this version with its stored scope, held against a Stop, an edit or a settle. Its question
+     * must still read as the version admitted it: an edit that authority refused moves the source's revision, not the
+     * version. A request without an admitted revision matches nothing.
+     */
     @Query(value = """
             SELECT audience_transport AS "audienceTransport", audience_connection_id AS "audienceConnectionId",
                 audience_container_id AS "audienceContainerId", audience_thread_root AS "audienceThreadRoot",
@@ -134,6 +138,7 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
             JOIN mentor_source s ON s.account_id = r.account_id AND s.id = r.source_id
             WHERE r.account_id = :account AND r.id = :request AND r.version = :version
                 AND r.state IN ('OPEN', 'RUNNING') AND r.deadline > clock_timestamp()
+                AND s.revision = r.admitted_revision
             FOR SHARE OF r
             """, nativeQuery = true)
     Optional<LiveRequest> shareLiveRequest(
