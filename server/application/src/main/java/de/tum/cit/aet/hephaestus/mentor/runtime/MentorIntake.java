@@ -214,13 +214,13 @@ public class MentorIntake implements MentorIngress {
                 var _ = rows.openRequest(
                         opened(id, account, source.id(), envelope, Objects.requireNonNull(change.stamp())));
                 var _ = rows.linkRequest(eventId, account, id);
-                var _ = rows.queueAttempt(UUID.randomUUID(), account, id, BUDGET_SECONDS);
+                queueAttempt(account, id);
                 yield new RequestRef(id, 1);
             }
             case REVISED -> {
                 var _ = rows.revise(id, account, envelope.message().revision(), envelope.sourceRef());
                 // The older version's attempt is fenced at its next check; this one answers the edit.
-                var _ = rows.queueAttempt(UUID.randomUUID(), account, id, BUDGET_SECONDS);
+                queueAttempt(account, id);
                 // The request is locked, so its next version is the locked one plus one.
                 yield new RequestRef(id, Objects.requireNonNull(request).version() + 1);
             }
@@ -235,6 +235,14 @@ public class MentorIntake implements MentorIngress {
             case PENDING ->
                 throw new IllegalStateException("Only a sealed review's event waits, and intake writes none");
         };
+    }
+
+    /** The request row was written or locked in this transaction, so the insert must find it. */
+    private void queueAttempt(long account, UUID request) {
+        int queued = rows.queueAttempt(UUID.randomUUID(), account, request, BUDGET_SECONDS);
+        if (queued != 1) {
+            throw new IllegalStateException("Mentor request " + request + " queued " + queued + " attempts");
+        }
     }
 
     /** An absent authorization port, another transport or a stamp for another account opens no request. */

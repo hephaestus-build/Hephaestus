@@ -425,6 +425,21 @@ class MentorIntakeIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(1, 2);
     }
 
+    /** A Stop or a delete fences the request and keeps its version, so nothing is left to answer. */
+    @ParameterizedTest
+    @ValueSource(strings = {"CONTROL_STOP", "MESSAGE_DELETED"})
+    void shouldQueueNoAttemptWhenTheOwnerStopsOrDeletesTheQuestion(String kind) {
+        String message = message();
+        UUID request = opened(admit(IngressKind.MESSAGE, "e1", message, FIRST)).requestId();
+
+        // Each kind as the other tests send it: a Stop names the asked revision, a delete the newest.
+        assertThat(admit(IngressKind.valueOf(kind), "e2", message, kind.equals("CONTROL_STOP") ? FIRST : EDITED))
+                .isEqualTo(admitted("e2", new RequestRef(request, 1)));
+        assertThat(owner.queryForList(
+                        "SELECT request_version FROM mentor_attempt WHERE request_id = ?", Integer.class, request))
+                .containsExactly(1);
+    }
+
     /** S6: the owner row has no workspace, so a purge leaves it, and the account's next question opens normally. */
     @Test
     void shouldKeepTheOwnerRowAndOpenTheNextQuestionAfterAWorkspacePurge() {
