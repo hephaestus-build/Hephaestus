@@ -93,7 +93,7 @@ public class AccountWebController {
                     requiredMode = Schema.RequiredMode.REQUIRED)
             ConsentService.ConsentStatusDTO consent) {}
 
-    /** A provider instance the current user is linked to: its type + server-url origin. */
+    /** A provider instance the current user is linked to: its type and server-url origin, or an OIDC provider's issuer. */
     public record LinkedProviderDTO(String type, @Nullable String serverUrl) {}
 
     public record IdentityViewDTO(
@@ -204,12 +204,13 @@ public class AccountWebController {
 
     private IdentityViewDTO toView(Identity il, GitProviderRegistry.@Nullable IdentityProfile profile) {
         String providerType = gitProviderRegistry.providerTypeName(il.getProviderId());
+        String displayName = profile != null ? profile.displayName() : accountService.oidcProviderName(il);
         return new IdentityViewDTO(
                 il.getId(),
                 providerType,
                 il.getProviderUserKey(),
                 profile == null ? null : profile.login(),
-                profile == null ? null : profile.displayName(),
+                displayName,
                 profile == null ? null : profile.avatarUrl(),
                 il.getLastLoginAt());
     }

@@ -54,7 +54,7 @@ const ERROR_COPY = new Map<string, { title: string; description: string }>([
 			// Slack and Outline are both link-only: they can only be attached to an existing session.
 			title: "Sign in before connecting that account",
 			description:
-				"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from User settings.",
+				"Open Hephaestus, sign in as you usually do, then connect Slack or Outline from User settings.",
 		},
 	],
 	[

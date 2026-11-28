@@ -50,6 +50,12 @@ export function SignInButtons({ options, onSignIn, onDevSignIn }: SignInButtonsP
 			</p>
 		);
 	}
+	// A signed-out sign-in through single sign-on creates a new account, and accounts are never joined by
+	// email, so a person who already has one connects it from Settings instead.
+	const singleSignOn = oauthProviders.filter(
+		(provider) => provider.providerType?.toUpperCase() === "OIDC",
+	);
+	const otherWayIn = oauthProviders.length > singleSignOn.length;
 	return (
 		<div className="flex flex-col gap-2">
 			{oauthProviders.map((provider) => (
@@ -60,6 +66,15 @@ export function SignInButtons({ options, onSignIn, onDevSignIn }: SignInButtonsP
 				/>
 			))}
 			{hasDevSignIn && <DevSignInForm onSignIn={onDevSignIn} />}
+			{singleSignOn.length > 0 && otherWayIn && (
+				<p className="text-sm text-muted-foreground">
+					Already use Hephaestus? Sign in as before, then connect{" "}
+					{singleSignOn
+						.map((provider) => provider.displayName ?? provider.registrationId)
+						.join(" or ")}{" "}
+					in Settings.
+				</p>
+			)}
 		</div>
 	);
 }

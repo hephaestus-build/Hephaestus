@@ -25,23 +25,34 @@ import {
 } from "@/components/ui/select";
 import { hasText } from "@/lib/text";
 
-type ProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+type ProviderType = "GITHUB" | "GITLAB" | "OIDC" | "SLACK" | "OUTLINE";
 
 const PROVIDER_TYPE_ITEMS: { value: ProviderType; label: string }[] = [
 	{ value: "GITHUB", label: "GitHub" },
 	{ value: "GITLAB", label: "GitLab / self-hosted GitLab" },
+	{ value: "OIDC", label: "OpenID Connect (single sign-on)" },
 	{ value: "SLACK", label: "Slack / Sign in with Slack" },
 	{ value: "OUTLINE", label: "Outline (connect-only)" },
 ];
 
 function scopesPlaceholder(type: ProviderType): string {
-	if (type === "SLACK") {
+	if (type === "SLACK" || type === "OIDC") {
 		return "openid profile email";
 	}
 	if (type === "OUTLINE") {
 		return "read";
 	}
 	return "Leave blank to use the default for the provider type";
+}
+
+function baseUrlPlaceholder(type: ProviderType): string {
+	if (type === "OIDC") {
+		return "https://login.example.org/realms/example";
+	}
+	if (type === "OUTLINE") {
+		return "https://outline.example.com";
+	}
+	return "https://gitlab.example.com";
 }
 
 function toProviderType(value: string | null | undefined): ProviderType {
@@ -102,9 +113,12 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 	const [scopes, setScopes] = useState(editing?.scopes ?? "");
 	const [errors, setErrors] = useState<{ registrationId?: string; baseUrl?: string }>({});
 
-	const needsBaseUrl = type === "GITLAB" || type === "OUTLINE";
+	const needsBaseUrl = type === "GITLAB" || type === "OUTLINE" || type === "OIDC";
 	const isSlack = type === "SLACK";
 	const isOutline = type === "OUTLINE";
+	const isOidc = type === "OIDC";
+	// The issuer keys every identity that the provider signed in, so the server refuses to change it.
+	const baseUrlLocked = isEdit && isOidc;
 
 	const redirectUri =
 		editing?.redirectUri ??
@@ -116,10 +130,10 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		if (!isEdit && !REGISTRATION_ID_PATTERN.test(registrationId.trim())) {
 			next.registrationId = "Use lowercase letters, digits, and hyphens. Start with a letter.";
 		}
-		if (needsBaseUrl && (!isEdit || baseUrl.trim())) {
+		if (needsBaseUrl && !baseUrlLocked && (!isEdit || baseUrl.trim())) {
 			const value = baseUrl.trim();
 			if (!isEdit && !value) {
-				next.baseUrl = "Enter the instance base URL.";
+				next.baseUrl = isOidc ? "Enter the issuer URL." : "Enter the instance base URL.";
 			} else if (value && !value.startsWith("https://")) {
 				next.baseUrl = "Enter an HTTPS URL.";
 			}
@@ -136,7 +150,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		if (isEdit) {
 			const body: UpdateLoginProviderRequest = {
 				displayName: displayName.trim() || undefined,
-				baseUrl: needsBaseUrl ? baseUrl.trim() || undefined : undefined,
+				baseUrl: needsBaseUrl && !baseUrlLocked ? baseUrl.trim() || undefined : undefined,
 				clientId: clientId.trim() || undefined,
 				clientSecret: clientSecret.trim() || undefined,
 				scopes: scopes.trim() || undefined,
@@ -213,6 +227,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 						Slack app redirect URLs.
 					</FieldDescription>
 				)}
+				{isOidc && (
+					<FieldDescription>
+						People sign in with this provider, and connect it in User settings. Register a
+						confidential client that uses the authorization code flow with PKCE (S256), the scopes{" "}
+						<code>openid profile email</code>, and this redirect URI:{" "}
+						<code className="break-all">{redirectUri}</code>
+					</FieldDescription>
+				)}
 				{isOutline && (
 					<FieldDescription>
 						Outline is <strong>connect-only</strong>: users connect it in User settings so their
@@ -235,20 +257,24 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 
 			{needsBaseUrl && (
 				<Field data-invalid={hasText(errors.baseUrl) ? "true" : undefined}>
-					<FieldLabel htmlFor="lp-base-url">Instance base URL</FieldLabel>
+					<FieldLabel htmlFor="lp-base-url">
+						{isOidc ? "Issuer URL" : "Instance base URL"}
+					</FieldLabel>
 					<Input
 						id="lp-base-url"
 						type="url"
 						value={baseUrl}
 						onChange={(e) => setBaseUrl(e.target.value)}
-						placeholder={isOutline ? "https://outline.example.com" : "https://gitlab.example.com"}
+						placeholder={baseUrlPlaceholder(type)}
+						disabled={baseUrlLocked}
 						required={!isEdit}
 						aria-invalid={hasText(errors.baseUrl) ? "true" : undefined}
 						aria-describedby="lp-base-url-description"
 					/>
 					<FieldDescription id="lp-base-url-description">
-						HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to
-						self-hosted GitLab and Outline instances.
+						{isOidc
+							? "HTTPS only. The issuer that the provider’s discovery document names. You cannot change it after you create the provider."
+							: "HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to self-hosted GitLab and Outline instances."}
 					</FieldDescription>
 					{hasText(errors.baseUrl) && <FieldError>{errors.baseUrl}</FieldError>}
 				</Field>

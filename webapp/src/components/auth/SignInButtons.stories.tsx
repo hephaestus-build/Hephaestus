@@ -106,3 +106,35 @@ export const LongProviderName: Story = {
 	},
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };
+
+/**
+ * An operator names an OpenID Connect provider, so the button reads "Continue with" that name. A
+ * person who already signs in another way is told to connect it in Settings: a new sign-in through
+ * it creates a new account, and accounts are never joined by email.
+ */
+export const SingleSignOn: Story = {
+	args: {
+		options: {
+			status: "ready",
+			providers: [
+				{ registrationId: "github", displayName: "GitHub", providerType: "GITHUB" },
+				{
+					registrationId: "school",
+					displayName: "School Login",
+					providerType: "OIDC",
+					baseUrl: "https://login.school.test/realms/students",
+				},
+			],
+		},
+	},
+	play: async () => {
+		await expect(
+			await screen.findByRole("button", { name: "Continue with School Login" }),
+		).toBeEnabled();
+		await expect(
+			screen.getByText(
+				"Already use Hephaestus? Sign in as before, then connect School Login in Settings.",
+			),
+		).toBeVisible();
+	},
+};

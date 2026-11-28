@@ -88,7 +88,7 @@ It needs at least 32 printable, non-space ASCII characters, and must differ from
 ## Login
 
 `auth.state-cookie-key` checks `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`, a Base64-encoded 32-byte key that seals the OAuth state.
-`auth.login-provider` checks that at least one GitHub or GitLab sign-in provider is enabled in the provider catalog of the instance.
+`auth.login-provider` checks that at least one GitHub, GitLab or OpenID Connect sign-in provider is enabled in the provider catalog of the instance.
 Environment provider entries only seed the catalog.
 Slack and Outline only link accounts, so they do not satisfy this check.
 

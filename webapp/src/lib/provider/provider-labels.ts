@@ -14,6 +14,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 	GITLAB: "GitLab",
 	SLACK: "Slack",
 	OUTLINE: "Outline",
+	OIDC: "Single sign-on",
 	DEV: "Dev sign-in",
 };
 

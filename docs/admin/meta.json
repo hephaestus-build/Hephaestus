@@ -18,6 +18,7 @@
 		"connect-gitlab",
 		"connect-slack",
 		"connect-outline",
+		"sign-in-with-openid-connect",
 		"set-up-email",
 		"ai-providers",
 		"passkeys",

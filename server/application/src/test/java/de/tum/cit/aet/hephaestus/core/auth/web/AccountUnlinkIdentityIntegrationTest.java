@@ -9,8 +9,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -35,6 +38,12 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private LoginProviderRepository loginProviders;
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -211,6 +220,48 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
         assertThat(identityRepository.findActiveByAccountId(persistedId(account.getId())))
                 .extracting(Identity::getId)
                 .containsExactly(persistedId(oidc.getId()));
+    }
+
+    /** No mirror names an OIDC identity, so its login provider names it, and the issuer keeps its path. */
+    @Test
+    void shouldNameAnOidcIdentityByItsProviderAndReportItsExactIssuer() {
+        String issuer = "https://login.example.org/realms/students/";
+        LoginProvider provider = new LoginProvider();
+        provider.setRegistrationId("students");
+        provider.setType(LoginProvider.ProviderType.OIDC);
+        provider.setDisplayName("School Login");
+        provider.setBaseUrl(issuer);
+        provider.setClientId("client-id");
+        provider.replaceClientSecret("client-secret", systemSecrets);
+        provider.setScopes("openid profile email");
+        loginProviders.save(provider);
+        Account account = accountRepository.save(new Account("OIDC named"));
+        seedLink(account, IdentityProviderType.GITHUB, "https://github.com", "gh-named");
+        seedLink(account, IdentityProviderType.OIDC, issuer, "6b0d1c2e-opaque-subject");
+        String token = tokenFor(account);
+
+        webTestClient
+                .get()
+                .uri("/user/identities")
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(AccountWebController.IdentityViewDTO.class)
+                .value(views -> assertThat(views)
+                        .filteredOn(view -> view.providerType().equals("OIDC"))
+                        .extracting(AccountWebController.IdentityViewDTO::displayName)
+                        .containsExactly("School Login"));
+        webTestClient
+                .get()
+                .uri("/user")
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.linkedProviders[?(@.type == 'OIDC')].serverUrl")
+                .isEqualTo(issuer);
     }
 
     @Test
