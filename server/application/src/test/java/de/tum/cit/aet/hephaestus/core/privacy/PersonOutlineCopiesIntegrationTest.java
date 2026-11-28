@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextPathBuilder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
@@ -41,6 +42,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.sql.DriverManager;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +122,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     private ConversationTurnContextStore context;
 
     @Autowired
+    private ConversationContextPathBuilder paths;
+
+    @Autowired
     private ProductItemDirectoryQuery itemDirectory;
 
     private enum Target {
@@ -164,6 +169,49 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     private static List<Example> expectedErasure(Fixture fixture, Cell cell) {
         return cell.clearsSecondTeam() ? List.of(fixture.first(), fixture.second()) : List.of(fixture.first());
+    }
+
+    /** #5278 F2: a later answer whose basis read an erased copy goes with it; the other team's copy stays. */
+    @Test
+    void shouldEraseALaterAnswerThatReadAnErasedOutlineCopy() {
+        var fixture = fixture(true);
+        long workspaceId = fixture.first().document().getWorkspaceId();
+        var conversation = entries.findByIdAndWorkspaceId(fixture.first().answer(), workspaceId)
+                .orElseThrow()
+                .getConversationId();
+        turns.submit(
+                workspaceId,
+                conversation,
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        "What did it say?",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+        var later = claims.claimNext().orElseThrow();
+        paths.forTurn(workspaceId, later.getId(), ZoneOffset.UTC);
+        turns.end(
+                workspaceId,
+                later.getId(),
+                later.getAttempt(),
+                Objects.requireNonNull(later.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), COPIED_WORDS)),
+                        null,
+                        null));
+        UUID laterAnswer = entries.findByWorkspaceIdAndTurnIdAndKind(
+                        workspaceId, later.getId(), ConversationEntry.Kind.ANSWER)
+                .orElseThrow()
+                .getId();
+
+        UUID request = admit(fixture, Key.TEAM);
+        service.run(request);
+
+        assertThat(service.get(request).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertCopy(fixture.first(), fixture.first().answer(), true);
+        assertCopy(fixture.first(), laterAnswer, true);
+        assertCopy(fixture.control(), fixture.control().answer(), false);
     }
 
     @Test

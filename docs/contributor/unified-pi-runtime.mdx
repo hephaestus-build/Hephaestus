@@ -775,7 +775,10 @@ It goes with the entry that it names.
 When the developer deletes a message, `ConversationRedaction.deleteHistory` erases each entry whose basis holds the message.
 It continues through the entries whose basis holds an erased entry, until it reaches no more.
 Thus, an answer that copied the message through the path, through a search, or through an earlier answer loses its words too.
+
 The person-data erasure of the copying tool results and of the feedback copies does the same (`redactWithDerived`).
+So do a Slack disconnect and a Slack channel erasure, for the Slack entries and the copying tool results.
+A withdrawal that deletes practice results does the same for the answers that showed feedback based on them.
 Retention does not: an entry whose retention ends leaves the entries derived from it to their own retention.
 A Slack edit keeps the derived entries, and it erases only the copies of the earlier words.
 

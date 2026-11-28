@@ -3,12 +3,15 @@ package de.tum.cit.aet.hephaestus.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -25,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * The basis of a turn's attempt ({@link ConversationBasis}): what the server binds before it releases words, and what a
@@ -71,6 +75,12 @@ class ConversationBasisIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private SlackWorkspaceContentEraser slackContent;
+
+    @Autowired
+    private SlackChannelErasure slackChannels;
 
     private Workspace workspace;
     private Conversation main;
@@ -157,8 +167,8 @@ class ConversationBasisIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     /**
      * The walk passes through an entry that an earlier, non-transitive redaction erased: an app thread repeated a Slack
-     * answer that a Slack disconnect erased later, and the delete of the app question that the Slack answer read still
-     * reaches the thread's answer.
+     * answer that a redaction without its derived entries erased later, and the delete of the app question that the
+     * Slack answer read still reaches the thread's answer.
      */
     @Test
     void shouldEraseAnAnswerDerivedThroughAnAnswerThatAnEarlierRedactionErased() {
@@ -184,12 +194,131 @@ class ConversationBasisIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .containsExactly(slackAnswer);
         assertThat(sources(searching)).contains(slackAnswer).doesNotContain(source.question(), source.answer());
         UUID derived = end(searching, prompt, "Finch has code " + marker);
-        entries.redactSlackEntries(workspace.getId());
+        redaction.redact(List.of(slackAnswer));
         assertThat(redacted(slackAnswer, source.question(), derived)).containsExactly(true, false, false);
 
         entries.deleteMessage(workspace.getId(), source.question());
 
         assertThat(redacted(derived)).containsExactly(true);
+    }
+
+    /** #5278 S1: a Slack disconnect erases the app answer that repeated a Slack answer, through the basis. */
+    @Test
+    void shouldEraseAnAppAnswerDerivedFromASlackAnswerWhenSlackIsDisconnected() {
+        Answered opening = answer(main, "Hello", "How can I help?");
+        Conversation thread = conversations.openThread(workspace.getId(), opening.answer());
+        ConversationTurn slackTurn = claim(turns.submit(
+                workspace.getId(),
+                main.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.SLACK,
+                        "Give my project a code",
+                        "slack:" + UUID.randomUUID(),
+                        "9.0",
+                        null)));
+        UUID slackAnswer = end(slackTurn, context(slackTurn).prompt(), "The code is " + marker);
+        ConversationTurn searching = claim(ask(thread, "Find the code from Slack"));
+        String prompt = context(searching).prompt();
+        assertThat(search(searching, marker))
+                .extracting(ConversationEntryService.SearchHit::entryId)
+                .containsExactly(slackAnswer);
+        UUID derived = end(searching, prompt, "The code is " + marker);
+
+        slackContent.eraseWorkspace(workspace.getId());
+
+        assertThat(redacted(slackAnswer, derived)).containsOnly(true);
+        assertThat(redacted(opening.question(), opening.answer())).containsOnly(false);
+    }
+
+    /**
+     * #5278 S2: a Slack disconnect erases every tool result that could have copied a message, the answers after it, and
+     * an answer that read one of those.
+     */
+    @Test
+    void shouldEraseTheAnswersThatUsedACopyingToolResultWhenSlackIsDisconnected() {
+        Answered before = answer(main, "Hello", "How can I help?");
+        Copied copied = answerAfterRead(main, "Summarize the channel", "the channel said " + marker);
+        Answered later = answer(main, "And then?", "Then " + marker + " again.");
+
+        slackContent.eraseWorkspace(workspace.getId());
+
+        assertThat(redacted(copied.result(), copied.answer(), later.answer())).containsOnly(true);
+        assertThat(redacted(before.question(), before.answer(), copied.question(), later.question()))
+                .containsOnly(false);
+    }
+
+    /**
+     * #5278 S6: a Slack turn's tool result that copies no one's data takes no later app answer with it: only a result that
+     * can copy a message ({@link ConversationEntryRepository#COPIES_PERSON_DATA}) reaches the answers after it.
+     */
+    @Test
+    void shouldKeepALaterAppAnswerThatReadNothingOfSlackWhenSlackIsDisconnected() {
+        Answered opening = answer(main, "Hello", "How can I help?");
+        Conversation thread = conversations.openThread(workspace.getId(), opening.answer());
+        ConversationTurn slackTurn = claim(turns.submit(
+                workspace.getId(),
+                main.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.SLACK,
+                        "Did we talk about " + marker + "?",
+                        "slack:" + UUID.randomUUID(),
+                        "9.1",
+                        null)));
+        String prompt = context(slackTurn).prompt();
+        turns.end(
+                slackTurn.getWorkspaceId(),
+                slackTurn.getId(),
+                slackTurn.getAttempt(),
+                Objects.requireNonNull(slackTurn.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
+                        List.of(
+                                ConversationLedgerFixtures.user(ConversationLedgerFixtures.piId(), prompt),
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-search",
+                                        "search_conversation",
+                                        JsonNodeFactory.instance.objectNode().put("query", marker)),
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-search",
+                                        "search_conversation",
+                                        "{\"hits\":[]}",
+                                        false),
+                                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "No.")),
+                        null,
+                        null));
+        Answered unrelated = answer(thread, "Something else", "An unrelated answer.");
+
+        slackContent.eraseWorkspace(workspace.getId());
+
+        assertThat(redacted(unrelated.answer(), opening.answer())).containsOnly(false);
+    }
+
+    /** #5278 S3: a Slack channel erasure erases the same. */
+    @Test
+    void shouldEraseTheAnswersThatUsedACopyingToolResultWhenASlackChannelIsErased() {
+        Answered before = answer(main, "Hello", "How can I help?");
+        Copied copied = answerAfterRead(main, "Summarize the channel", "the channel said " + marker);
+        Answered later = answer(main, "And then?", "Then " + marker + " again.");
+
+        slackChannels.erase(workspace.getId(), "C" + marker, Instant.now());
+
+        assertThat(redacted(copied.result(), copied.answer(), later.answer())).containsOnly(true);
+        assertThat(redacted(before.answer())).containsExactly(false);
+    }
+
+    /** #5278 S4: the recovery replay of a channel erasure erases the same, up to the recorded cutoff. */
+    @Test
+    void shouldEraseTheAnswersThatUsedACopyingToolResultWhenAChannelErasureIsReplayed() {
+        Copied copied = answerAfterRead(main, "Summarize the channel", "the channel said " + marker);
+        Answered later = answer(main, "And then?", "Then " + marker + " again.");
+        Instant erasedAt = Instant.now();
+
+        slackChannels.replay(workspace.getId(), "C" + marker, erasedAt, erasedAt.plusSeconds(60));
+        slackChannels.replay(workspace.getId(), "C" + marker, erasedAt, erasedAt.plusSeconds(60));
+
+        assertThat(redacted(copied.result(), copied.answer(), later.answer())).containsOnly(true);
     }
 
     /** An attempt that started before attempts recorded their basis can still search; what it stores stays unproven. */
@@ -274,6 +403,44 @@ class ConversationBasisIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     private record Answered(UUID turn, UUID question, UUID answer) {}
+
+    private record Copied(UUID question, UUID result, UUID answer) {}
+
+    /** One turn that reads its context, calls {@code read}, and stores the result and one answer. */
+    private Copied answerAfterRead(Conversation conversation, String question, String read) {
+        ConversationTurnService.Submission asked = ask(conversation, question);
+        ConversationTurn turn = claim(asked);
+        String prompt = context(turn).prompt();
+        List<JsonNode> appended = List.of(
+                ConversationLedgerFixtures.user(ConversationLedgerFixtures.piId(), prompt),
+                ConversationLedgerFixtures.toolCall(
+                        ConversationLedgerFixtures.piId(),
+                        "call-read",
+                        "read",
+                        JsonNodeFactory.instance.objectNode().put("path", "slack/channel.md")),
+                ConversationLedgerFixtures.toolResult(
+                        ConversationLedgerFixtures.piId(), "call-read", "read", read, false),
+                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "It said " + read + "."));
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getRunId()),
+                new ConversationTurnService.Ending(ConversationTurn.Status.DONE, appended, null, null));
+        List<ConversationEntry> stored =
+                ConversationLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId());
+        UUID result = stored.stream()
+                .filter(entry -> entry.getKind() == ConversationEntry.Kind.TOOL_RESULT)
+                .map(ConversationEntry::getId)
+                .findFirst()
+                .orElseThrow();
+        UUID answer = stored.stream()
+                .filter(entry -> entry.getKind() == ConversationEntry.Kind.ANSWER)
+                .map(ConversationEntry::getId)
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        return new Copied(asked.question().getId(), result, answer);
+    }
 
     /** One turn that reads its context and stores one answer. */
     private Answered answer(Conversation conversation, String question, String answer) {

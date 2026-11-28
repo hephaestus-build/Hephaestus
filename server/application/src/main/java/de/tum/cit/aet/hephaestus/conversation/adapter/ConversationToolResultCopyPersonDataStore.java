@@ -231,7 +231,9 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                     """.formatted(ConversationEntryRepository.COPIES_PERSON_DATA),
                         Map.of("workspaceId", workspaceId, "sources", mapper.writeValueAsString(sources)),
                         (rs, index) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
-                redaction.redact(affected);
+                // The exact turns name what read the source, so only their basis readers go with them, and no
+                // later answer of the conversation.
+                redaction.redactWithReaders(affected);
             }
             // A running turn may hold a physical copy even when it stored no ledger entry yet.
             contextChanges.changed(workspaceId);

@@ -32,11 +32,11 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>A {@code SUMMARY} covers its own conversation's entries in its {@code fromSeq..toSeq} payload range. A
  *       thread's summary may also have read its main conversation, so a redaction there erases the summaries of all
  *       its threads: one more compaction costs less than erased words in Hephaestus's context.
- *   <li>A developer's delete, a person erasure, and advice that loses its text to an erasure or a withdrawal also
- *       erase what derives from the erased entries: every entry whose attempt's basis read one of them
- *       ({@link ConversationBasis}), and on through the entries derived from those. Retention, a Slack edit and the
- *       other redactions keep the derived entries: each has its own retention, and an edit keeps Hephaestus's answers
- *       to the earlier words.
+ *   <li>A developer's delete, a person erasure, a Slack disconnect or channel erasure, and advice that loses its text to
+ *       an erasure or a withdrawal also erase what derives from the erased entries: every entry whose attempt's basis
+ *       read one of them ({@link ConversationBasis}), and on through the entries derived from those. Retention, a
+ *       Slack edit and the other redactions keep the derived entries: each has its own retention, and an edit keeps
+ *       Hephaestus's answers to the earlier words.
  * </ul>
  *
  * <p>A redaction or an edit locks the main conversation row of every tree it changes, in id order, before it reads

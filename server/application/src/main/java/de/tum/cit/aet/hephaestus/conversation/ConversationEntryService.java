@@ -234,7 +234,8 @@ public class ConversationEntryService {
 
     /**
      * Erases every entry written on the Slack surface in a workspace when its Slack content is erased: the developers'
-     * Slack messages and everything Hephaestus wrote in Slack turns. Slack turns that have not ended stop.
+     * Slack messages and everything Hephaestus wrote in Slack turns, with every entry derived from them. Slack turns
+     * that have not ended stop.
      */
     @Transactional
     public void redactSlackEntries(long workspaceId) {
@@ -242,14 +243,15 @@ public class ConversationEntryService {
                 turns.findActiveByWorkspaceIdAndSurface(workspaceId, ConversationTurn.Surface.SLACK)) {
             turns.lockById(turn.getId()).ifPresent(this::stop);
         }
-        redaction.redact(
+        redaction.redactWithDerived(
                 entries.findUnredactedIdsByWorkspaceIdAndSurface(workspaceId, ConversationEntry.Surface.SLACK));
     }
 
     /**
      * Erases every tool result of a workspace that can copy anyone's data
-     * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them, when a source that they could
-     * have read leaves the workspace. No record says which source a result copied.
+     * ({@link ConversationEntryRepository#COPIES_PERSON_DATA}), with every copy of them and every answer that may have
+     * used them, when a source that they could have read leaves the workspace. No record says which source a result
+     * copied.
      *
      * @param cutoff the recorded copy-erasure cutoff on replay, or null to erase all existing results
      * @return the latest creation time of the selected results, if any
@@ -257,7 +259,7 @@ public class ConversationEntryService {
     @Transactional
     public Optional<Instant> redactCopyingToolResults(long workspaceId, @Nullable Instant cutoff) {
         var results = entries.findUnredactedCopyingToolResults(workspaceId, cutoff);
-        redaction.redact(results.stream()
+        redaction.redactWithDerived(results.stream()
                 .map(ConversationEntryRepository.CopyingToolResult::getId)
                 .toList());
         return results.stream()

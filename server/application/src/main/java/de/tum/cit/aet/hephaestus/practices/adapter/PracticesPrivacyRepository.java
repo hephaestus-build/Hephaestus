@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -42,6 +43,22 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
                     + " uuid[]))",
             nativeQuery = true)
     List<UUID> feedbackForResults(long ws, UUID[] ids);
+
+    /** A conversation copy of feedback: the turn that claimed it and the answer that a receipt bound, where known. */
+    interface ChatCopy {
+        @Nullable
+        UUID getTurn();
+
+        @Nullable
+        UUID getEntry();
+    }
+
+    @Query(
+            value = "SELECT c.conversation_turn_id AS turn, c.conversation_entry_id AS entry FROM feedback_copy c"
+                    + " WHERE c.workspace_id=:ws AND c.feedback_id=ANY(CAST(:feedback AS uuid[])) AND c.kind='CHAT_TURN'"
+                    + " AND (c.conversation_turn_id IS NOT NULL OR c.conversation_entry_id IS NOT NULL)",
+            nativeQuery = true)
+    List<ChatCopy> chatCopiesOf(long ws, UUID[] feedback);
 
     @Modifying
     @Query(
