@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.mentor.runtime;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.CommittedConsentQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class MentorReviewSealedIntake implements MentorReviewIntake {
     private final PersonDataWriteFence fence;
-    private final AccountDirectory accounts;
+    private final CommittedConsentQuery consents;
     private final AccountMembershipQuery memberships;
     private final OwnerScope owners;
     private final MentorEventRepository events;
@@ -39,7 +39,7 @@ public class MentorReviewSealedIntake implements MentorReviewIntake {
         if (!fence.holdForAccountWrite(account)) return new Outcome.Refused(Refusal.OWNER_REFUSED);
         // The fence share-locks the account row, so the committed values hold until the seal commits. A cached account
         // that the seal loaded earlier could predate a withdrawn choice, so this reads the row itself.
-        var consent = accounts.committedConsent(account).orElse(null);
+        var consent = consents.committedConsent(account).orElse(null);
         if (consent == null || consent.status() != Account.Status.ACTIVE)
             return new Outcome.Refused(Refusal.AUTHOR_INACTIVE);
         if (!consent.feedbackDeliveryEnabled() || consent.aiChoice() == null || consent.aiChoice() == AiChoice.NO_AI)
