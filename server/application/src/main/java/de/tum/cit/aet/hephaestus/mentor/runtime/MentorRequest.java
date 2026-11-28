@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -104,6 +105,7 @@ public class MentorRequest {
      * settled. An effect pins it, and its delivery is refused once it moved: a Stop that lost to completion still
      * fences the unsent answer.
      */
+    @ColumnDefault("0")
     private long deliveryGeneration;
 
     /** Why the delivery generation last moved. */
