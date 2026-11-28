@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { WAYFINDING } from "./fixtures";
+import { EMPTY_TEAM, WAYFINDING } from "./fixtures";
 import { RemoveTeamProjectDialog } from "./RemoveTeamProjectDialog";
 
 const meta = {
@@ -24,6 +24,26 @@ export const Default: Story = {
 		await expect(dialog).toHaveTextContent(/You cannot undo this\./u);
 		await userEvent.click(screen.getByRole("button", { name: "Remove team project" }));
 		await expect(args.onConfirm).toHaveBeenCalledWith(WAYFINDING);
+	},
+};
+
+/** A team with no members: the confirmation says no one loses access, and still that it cannot be undone (review of #5476). */
+export const NoMembers: Story = {
+	args: { team: EMPTY_TEAM },
+	play: async () => {
+		const dialog = await screen.findByRole("alertdialog", { name: "Remove Team Canteen?" });
+		await expect(dialog).toHaveTextContent(/The team has no members, so no one loses access\./u);
+		await expect(dialog).not.toHaveTextContent(/0 members/u);
+		await expect(dialog).toHaveTextContent(/You cannot undo this\./u);
+	},
+};
+
+/** A team with one member names that one member. */
+export const OneMember: Story = {
+	args: { team: { ...WAYFINDING, members: WAYFINDING.members.slice(0, 1) } },
+	play: async () => {
+		const dialog = await screen.findByRole("alertdialog", { name: "Remove Team Wayfinding?" });
+		await expect(dialog).toHaveTextContent(/Its member loses access/u);
 	},
 };
 
