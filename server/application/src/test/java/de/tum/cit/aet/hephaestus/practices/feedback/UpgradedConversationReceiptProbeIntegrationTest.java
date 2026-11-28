@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.assertj.core.api.SoftAssertions;
@@ -118,5 +120,8 @@ class UpgradedConversationReceiptProbeIntegrationTest extends AbstractFeedbackIn
         when(permission.find(
                         workspace.getId(), proof.getId(), developerId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Optional.of(retained));
+        // The history reads a page's support in one batch.
+        when(permission.findAll(eq(workspace.getId()), any(), eq(developerId), any()))
+                .thenReturn(Map.of(Objects.requireNonNull(proof.getId()), retained));
     }
 }
