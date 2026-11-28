@@ -138,6 +138,8 @@ de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.findRunningAtt
 de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.isHeld(java.util.UUID)
 de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.lockById(java.util.UUID)
 de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository.notifyLedger(java.lang.String, java.lang.String)
+de.tum.cit.aet.hephaestus.conversation.support.SupportShareRepository
+de.tum.cit.aet.hephaestus.conversation.support.SupportShareService
 de.tum.cit.aet.hephaestus.core.action.ActionBacklogSampler
 de.tum.cit.aet.hephaestus.core.action.ActionExecutor
 de.tum.cit.aet.hephaestus.core.action.AgentActionRepository.backlog(java.lang.String)
@@ -174,7 +176,6 @@ de.tum.cit.aet.hephaestus.core.auth.AccountService
 de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService
 de.tum.cit.aet.hephaestus.core.auth.AuthSessionService
 de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService
-de.tum.cit.aet.hephaestus.core.auth.UserViewAccessService
 de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService
 de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository
 de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionCleanupJob

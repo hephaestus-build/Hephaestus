@@ -412,10 +412,6 @@ hephaestus:
             client-session:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_CAPACITY:30}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_PERIOD:1m}
-            # Read-only user view — keyed by admin account, IP fallback
-            user-view:
-                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY:120}
-                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD:1m}
             # DELETE /user — keyed by account, IP fallback
             delete-user:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_CAPACITY:3}

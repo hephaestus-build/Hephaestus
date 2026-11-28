@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
-import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.CreateResultMarkRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.RemoveResultMarkRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ResultMarkDTO;
@@ -53,7 +52,6 @@ public class PracticeReviewOutputController {
     private final ResultMarkService marks;
     private final ResultPresentation presentation;
     private final ReviewLineageService lineage;
-    private final PerPersonResults perPerson;
 
     @GetMapping("/results")
     @Operation(operationId = "listReviewResults", summary = "List review results")
@@ -63,7 +61,6 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "NEWEST") ResultSort sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        perPerson.requirePersonFilterAllowed(ws.id(), filter.personId());
         return OffsetPageDTO.from(query.list(ws.id(), filter.toFilter(), sort, PageRequest.of(page, size)));
     }
 
@@ -83,7 +80,6 @@ public class PracticeReviewOutputController {
             @Valid @ParameterObject ReviewProblemFilterParams filter,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        perPerson.requirePersonFilterAllowed(ws.id(), filter.personId());
         return OffsetPageDTO.from(query.listProblems(
                 ws.id(), filter.toResultFilter(), filter.toProblemFilter(), PageRequest.of(page, size)));
     }

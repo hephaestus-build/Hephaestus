@@ -76,6 +76,9 @@ public class WorkspaceScopedTables {
             "mentor_event",
             "mentor_request",
             "mentor_source",
+            // A person's support share: it belongs to the person and its one recipient, not to the workspace it
+            // names (ADR 0164).
+            "support_share",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
             // Restricted recovery facts outlive the workspace or account they identify.

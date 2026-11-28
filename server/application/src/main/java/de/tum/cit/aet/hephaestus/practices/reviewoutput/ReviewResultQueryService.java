@@ -16,8 +16,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemSummaryDTO;
-import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundResultDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewProblemDetailDTO;
@@ -53,7 +51,6 @@ public class ReviewResultQueryService {
     private final ProblemRepository problems;
     private final ResultViewQuery views;
     private final ResultPresentation presentation;
-    private final ProductReferenceQuery references;
     private final EvidenceAuthorization authorization;
     private final ResultMarkService marks;
     private final ReviewResultListRepository listRows;
@@ -85,13 +82,6 @@ public class ReviewResultQueryService {
                                         Collectors.toList())));
         var feedback = listRows.feedbackCounts(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
-        var developers = references.namedDevelopers(
-                workspaceId,
-                rows.getContent().stream()
-                        .map(Result::getDeveloperId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList());
         return new PageImpl<>(
                 views.operatorViews(workspaceId, facts).stream()
                         .map(v -> {
@@ -115,7 +105,6 @@ public class ReviewResultQueryService {
                                     activeMarks.get(ResultMarkKind.INCORRECT),
                                     activeMarks.get(ResultMarkKind.ACCEPTED),
                                     summaries.getOrDefault(r.id(), List.of()),
-                                    r.developerId() == null ? null : developers.get(r.developerId()),
                                     Math.toIntExact(counts.getOrDefault(r.id(), 0L)),
                                     feedbackCounts(feedback.getOrDefault(r.id(), List.of())));
                         })
@@ -165,7 +154,6 @@ public class ReviewResultQueryService {
                 presentation.coverage(r, permitted),
                 r.getEndedAt(),
                 r.getEndReason(),
-                developer(v),
                 r.getEvidenceVersion(),
                 !permitted,
                 marks.list(ws, id).stream().map(m -> presentation.mark(ws, m)).toList(),
@@ -194,7 +182,6 @@ public class ReviewResultQueryService {
                 row.practiceSlug(),
                 row.practiceName(),
                 row.group(),
-                row.person(),
                 row.severity(),
                 row.summary(),
                 row.path(),
@@ -226,7 +213,6 @@ public class ReviewResultQueryService {
                 r.severity(),
                 permitted ? r.summary() : null,
                 v.item(),
-                developer(v),
                 r.recordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
@@ -239,12 +225,11 @@ public class ReviewResultQueryService {
             ResultView view,
             boolean permitted,
             Map<ResultMarkKind, Instant> marks,
-            @Nullable ReviewPersonDTO developer,
             @Nullable Instant disagreedAt) {}
 
     /**
-     * The results of {@code rows}, each with its view, its evidence permission, its active marks, its developer and its
-     * latest disagreement, read for all of them at once and keyed by result id.
+     * The results of {@code rows}, each with its view, its evidence permission, its active marks and its latest
+     * disagreement, read for all of them at once and keyed by result id.
      */
     private Map<UUID, Parent> parents(long ws, List<Problem> rows) {
         if (rows.isEmpty()) return Map.of();
@@ -263,17 +248,9 @@ public class ReviewResultQueryService {
         listRows.markTimes(ws, ids)
                 .forEach(mark -> marked.computeIfAbsent(mark.resultId(), ignored -> new EnumMap<>(ResultMarkKind.class))
                         .merge(mark.kind(), mark.createdAt(), (left, right) -> left.isAfter(right) ? left : right));
-        var developers = references.namedDevelopers(
-                ws,
-                loaded.stream()
-                        .map(Result::getDeveloperId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList());
         var disagreed = presentation.latestDisagreements(ws, ids);
         Map<UUID, Parent> parents = new HashMap<>();
         for (var r : loaded) {
-            var developer = r.getDeveloperId() == null ? null : developers.get(r.getDeveloperId());
             parents.put(
                     r.getId(),
                     new Parent(
@@ -281,7 +258,6 @@ public class ReviewResultQueryService {
                             Objects.requireNonNull(viewById.get(r.getId())),
                             permitted.contains(r.getId()),
                             marked.getOrDefault(r.getId(), Map.of()),
-                            developer,
                             disagreed.get(r.getId())));
         }
         return parents;
@@ -305,7 +281,6 @@ public class ReviewResultQueryService {
                 group == null
                         ? null
                         : new GroupRefDTO(group.getSlug(), group.getName(), group.getIcon(), group.getColor()),
-                parent.developer(),
                 p.getSeverity(),
                 dto.summary(),
                 primary == null ? null : primary.path(),
@@ -326,14 +301,5 @@ public class ReviewResultQueryService {
     private Result require(long ws, UUID id) {
         return results.findByIdAndWorkspaceId(id, ws)
                 .orElseThrow(() -> new EntityNotFoundException("Result", id.toString()));
-    }
-
-    private @Nullable ReviewPersonDTO developer(ResultView v) {
-        var r = v.result();
-        return r.developerId() == null
-                ? null
-                : references
-                        .namedDevelopers(r.workspaceId(), List.of(r.developerId()))
-                        .get(r.developerId());
     }
 }

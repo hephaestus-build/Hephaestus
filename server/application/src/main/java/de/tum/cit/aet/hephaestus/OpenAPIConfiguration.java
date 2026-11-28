@@ -4,9 +4,7 @@ import static de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter.CLOSED_PU
 import static de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter.OPEN_ENUM_NOTE;
 
 import de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter;
-import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.OpenWireCode;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
@@ -31,7 +29,6 @@ import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
-import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
@@ -56,7 +53,6 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OpenApiCustomizer;
-import org.springdoc.core.customizers.OperationCustomizer;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -164,21 +160,6 @@ public class OpenAPIConfiguration {
     private static final String DECIMAL_FORMAT = "decimal";
 
     private static final String NUMBER_TYPE = "number";
-
-    @Bean
-    public OperationCustomizer userViewReasonHeader() {
-        return (operation, handler) -> {
-            if (handler.hasMethodAnnotation(UserViewRead.class)) {
-                operation.addParametersItem(new HeaderParameter()
-                        .name(UserViewContextHolder.REASON_HEADER)
-                        .required(true)
-                        .schema(new StringSchema())
-                        .description(
-                                "Why the administrator views this account: percent-encoded UTF-8, 1–500 characters"));
-            }
-            return operation;
-        };
-    }
 
     @Bean
     NamedEnumModelConverter namedEnumModelConverter(JsonMapper mapper) {

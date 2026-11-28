@@ -34,7 +34,8 @@ export type AuthEventType = NonNullable<
 >[number];
 
 export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
-	USER_VIEW: "User view authorized",
+	// Only rows from before the user view was removed carry it.
+	USER_VIEW: "User view (removed)",
 	PASSKEY_CHANGED: "Passkey changes",
 	PASSKEY_VERIFIED: "Passkey verification",
 	LOGIN: "Sign-in",

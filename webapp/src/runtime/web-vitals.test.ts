@@ -7,7 +7,6 @@ import type { WebVitalsReport } from "@/api/types.gen";
 import { zWebVitalsReport } from "@/api/zod.gen";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
-import { USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
 
 import { deferred } from "@/test/async";
 import { journeyPageOf, landmarkOf, reportVisitVitals } from "./web-vitals";
@@ -57,17 +56,6 @@ function measured(
 ) {
 	return { name, value, id, attribution, navigationType, navigationURL };
 }
-
-const USER_VIEW = {
-	operatorAccountId: 1,
-	workspaceSlug: "acme",
-	workspaceName: "Acme",
-	accountId: "2",
-	providerLogin: "ada",
-	name: "Ada",
-	unclaimed: false,
-	reason: "Support request",
-};
 
 const PROFILE = [
 	"__root__",
@@ -276,11 +264,10 @@ describe("reportVisitVitals", () => {
 		expect(sent).toStrictEqual([]);
 	});
 
-	it("measures nothing for a visit that started outside sign-in or in a user view", async () => {
+	it("measures nothing for a visit that started outside sign-in", async () => {
 		const sent = receive();
-		await land("__root__", "/login");
-		sessionStorage.setItem(USER_VIEW_STORAGE_KEY, JSON.stringify(USER_VIEW));
-		await land(...PROFILE);
+		const visit = await land("__root__", "/login");
+		visit.navigate("/w/acme/practice-profile", ...PROFILE);
 
 		await hide();
 

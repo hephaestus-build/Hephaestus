@@ -96,13 +96,13 @@ async function rereadWorkspaces(queryClient: QueryClient) {
 	});
 }
 
-const viewAsUser = (name: string) => ({ name: `View as user in ${name}` });
+const administration = (name: string) => ({ name: `Open administration of ${name}` });
 
 describe("instance workspaces route", () => {
-	it("keeps the listed workspaces and their support actions through a failed refresh, then retries", async () => {
+	it("keeps the listed workspaces and their actions through a failed refresh, then retries", async () => {
 		const served = serveWorkspaces([aet, introCourse]);
 		const queryClient = renderRouteAt("/admin/workspaces");
-		await screen.findByRole("button", viewAsUser("AET"), ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", administration("AET"), ROUTE_RENDER_WAIT);
 		const answeredBefore = served.answered;
 
 		served.status = 503;
@@ -110,8 +110,8 @@ describe("instance workspaces route", () => {
 		expect(served.answered).toBe(answeredBefore + 1);
 		await screen.findByText("These workspaces may be out of date");
 		expect(screen.queryByText(/^We could not load workspaces/u)).toBeNull();
-		expect(screen.getByRole("button", viewAsUser("AET"))).toHaveProperty("disabled", false);
-		expect(screen.queryByRole("button", viewAsUser("Intro Course"))).toBeNull();
+		screen.getByRole("link", administration("AET"));
+		screen.getByRole("link", administration("Intro Course"));
 
 		const retry = deferred();
 		served.hold = retry.promise;
@@ -120,13 +120,13 @@ describe("instance workspaces route", () => {
 			await user.click(screen.getByRole("button", { name: "Retry" }));
 			const retrying = await screen.findByRole("button", { name: "Retrying…" });
 			expect(retrying.getAttribute("aria-disabled")).toBe("true");
-			screen.getByRole("button", viewAsUser("AET"));
+			screen.getByRole("link", administration("AET"));
 			expect(served.answered).toBe(answeredBefore + 1);
 
 			served.status = 200;
 			served.rows = [{ ...aet, memberCount: 43 }, introCourse, designLab];
 			retry.resolve();
-			await screen.findByRole("button", viewAsUser("Design Lab"));
+			await screen.findByRole("link", administration("Design Lab"));
 			expect(served.answered).toBe(answeredBefore + 2);
 			expect(screen.queryByText("These workspaces may be out of date")).toBeNull();
 			screen.getByText("43");
@@ -135,21 +135,21 @@ describe("instance workspaces route", () => {
 		}
 
 		await user.type(screen.getByRole("searchbox", { name: "Search workspaces" }), "intro");
-		await waitFor(() => expect(screen.queryByRole("button", viewAsUser("AET"))).toBeNull());
-		expect(screen.queryByRole("button", viewAsUser("Design Lab"))).toBeNull();
-		expect(screen.queryByRole("button", viewAsUser("Intro Course"))).toBeNull();
+		await waitFor(() => expect(screen.queryByRole("link", administration("AET"))).toBeNull());
+		expect(screen.queryByRole("link", administration("Design Lab"))).toBeNull();
+		screen.getByRole("link", administration("Intro Course"));
 	});
 
 	it("takes refused workspaces away and lists only what a later authorized read returns", async () => {
 		const served = serveWorkspaces([aet]);
 		const queryClient = renderRouteAt("/admin/workspaces");
-		await screen.findByRole("button", viewAsUser("AET"), ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", administration("AET"), ROUTE_RENDER_WAIT);
 		const answeredBefore = served.answered;
 
 		served.status = 403;
 		await rereadWorkspaces(queryClient);
 		expect(served.answered).toBe(answeredBefore + 1);
-		await waitFor(() => expect(screen.queryByRole("button", viewAsUser("AET"))).toBeNull());
+		await waitFor(() => expect(screen.queryByRole("link", administration("AET"))).toBeNull());
 		await screen.findByText("You do not have access to workspaces");
 		expect(screen.queryByText("AET")).toBeNull();
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
@@ -163,7 +163,7 @@ describe("instance workspaces route", () => {
 		served.status = 200;
 		served.rows = [designLab];
 		await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
-		await screen.findByRole("button", viewAsUser("Design Lab"));
+		await screen.findByRole("link", administration("Design Lab"));
 		expect(served.answered).toBe(answeredBefore + 3);
 		expect(screen.queryByText("AET")).toBeNull();
 		expect(screen.queryByText("We could not load workspaces")).toBeNull();
@@ -175,6 +175,6 @@ describe("instance workspaces route", () => {
 		await screen.findByText("You do not have access to workspaces", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 		expect(screen.queryByText("No workspaces yet")).toBeNull();
-		expect(screen.queryByRole("button", viewAsUser("Design Lab"))).toBeNull();
+		expect(screen.queryByRole("link", administration("Design Lab"))).toBeNull();
 	});
 });

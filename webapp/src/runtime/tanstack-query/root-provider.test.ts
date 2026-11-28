@@ -10,7 +10,6 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { problemStatusOf } from "@/lib/problem-detail";
-import { USER_VIEW_STORAGE_KEY, type UserViewSession } from "@/runtime/user-view/session";
 
 import { getContext } from "./root-provider";
 import { useQueryReadRefusal } from "./use-query-read-refusal";
@@ -151,34 +150,4 @@ it("retries a network error, a 429 and an outage before an answer, and gives up 
 	await waitFor(() => expect(problemStatusOf(result.current.error)).toBe(503));
 	expect(result.current.data).toBe("answer");
 	expect(read.answers).toStrictEqual([{ data: "never asked" }]);
-});
-
-it("never retries a read in a user view", async () => {
-	sessionStorage.setItem(
-		USER_VIEW_STORAGE_KEY,
-		JSON.stringify({
-			operatorAccountId: 1,
-			workspaceSlug: "acme",
-			workspaceName: "Acme",
-			accountId: "2",
-			providerLogin: "grace",
-			name: "Grace Hopper",
-			unclaimed: false,
-			reason: "Support request",
-		} satisfies UserViewSession),
-	);
-	try {
-		// The client decides from the session it starts with, as a user view starts with a page load.
-		vi.resetModules();
-		const viewed = await import("./root-provider");
-		const { queryClient } = viewed.getContext();
-		const read = queuedRead(outage, { data: "never asked" });
-		const query = queryClient
-			.getQueryCache()
-			.build(queryClient, { queryKey: READ_KEY, queryFn: read.queryFn, retryDelay: 0 });
-		await expect(query.fetch()).rejects.toBe(outage.error);
-		expect(read.requests).toBe(1);
-	} finally {
-		sessionStorage.removeItem(USER_VIEW_STORAGE_KEY);
-	}
 });

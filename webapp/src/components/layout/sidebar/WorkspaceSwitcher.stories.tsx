@@ -10,7 +10,6 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 const featureFlags = {
 	practicesEnabled: true,
 	publishesPublicActivity: false,
-	perPersonResultsForAdmins: false,
 	linkHosts: [] as string[],
 } as const;
 

@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.core.auth.mcp.dto.McpTokenErrorDTO;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.dto.McpTokenResponseDTO;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -233,9 +232,9 @@ public class McpAuthorizationController {
         };
     }
 
-    /** The signed-in browser account; an installed-client token or a user view never decides consent. */
+    /** The signed-in browser account; an installed-client token never decides consent. */
     private static Long browserAccount() {
-        if (CurrentAccount.sessionIdOrNull() != null || UserViewContextHolder.get() != null) {
+        if (CurrentAccount.sessionIdOrNull() != null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Consent is given in the web app only.");
         }
         return CurrentAccount.requireId();

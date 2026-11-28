@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -51,7 +51,6 @@ const meta = {
 		workspaces,
 		isLoading: false,
 		hasSearch: false,
-		onViewAsUser: fn(),
 	},
 } satisfies Meta<typeof AdminWorkspacesTable>;
 
@@ -59,18 +58,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * An active workspace opens its administration on the workspace settings, or starts a user view. A
- * suspended workspace opens only its administration, where an admin can resume it. A workspace being
- * deleted offers neither, and says so in place of the actions.
+ * An active or suspended workspace opens its administration on the workspace settings, where an admin
+ * can resume a suspended one. A workspace being deleted offers no action, and says so in its place.
  */
 export const Default: Story = {
-	play: async ({ args, canvas }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("link", { name: "Open administration of AET" })).toHaveAttribute(
 			"href",
 			"/w/aet/admin/settings",
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "View as user in AET" }));
-		await expect(args.onViewAsUser).toHaveBeenCalledWith(activeWorkspace);
 		const suspended = canvas.getByRole("row", { name: /Intro Course/u });
 		await expect(
 			within(suspended).getByRole("link", { name: "Open administration of Intro Course" }),
@@ -149,17 +145,13 @@ export const Refused: Story = {
 	},
 };
 
-/**
- * A failed refresh keeps the workspaces last read, with their support actions, under the failure. A
- * workspace that is not active still cannot be viewed.
- */
+/** A failed refresh keeps the workspaces last read, with their actions, under the failure. */
 export const RefreshFailed: Story = {
 	args: { refreshFailure: { error: { status: 503 }, onRetry: fn(), pending: false } },
 	play: async ({ canvas }) => {
 		canvas.getByText("These workspaces may be out of date");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
-		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
-		await expect(canvas.queryByRole("button", { name: "View as user in Intro Course" })).toBeNull();
+		await expect(canvas.getByRole("link", { name: "Open administration of AET" })).toBeVisible();
 	},
 };
 
@@ -170,7 +162,7 @@ export const RefreshRetrying: Story = {
 			"aria-disabled",
 			"true",
 		);
-		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
+		await expect(canvas.getByRole("link", { name: "Open administration of AET" })).toBeVisible();
 	},
 };
 

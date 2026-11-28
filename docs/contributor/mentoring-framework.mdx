@@ -471,10 +471,9 @@ Hephaestus has no path from one person to the employer, so that it stays outside
 | --- | --- | --- |
 | The person | Everything about themselves: conversation, memory, goals, check-ins, private checks and feedback | Planned |
 | Workspace admins | Each month, one practice outcome for each practice, from observations on the work only | Planned |
-| Workspace admins | Items inside an approval or a correction, with exact fields and an expiry | Planned |
-| Workspace admins | Results with names when the workspace enables **Per-person results for admins** | The 1.0 cutover removes this setting. |
-| Instance admins | Read-only access to permitted member pages through **View as user** | The [1.0 cutover](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) removes this access. |
-| Support | Only a support snapshot that the person shares with a named recipient and can revoke | Planned |
+| Workspace admins | Items inside an approval or a correction, with exact fields and an expiry | The reason of a disagreement shows for 30 days ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)). The observation lists, without names, stay until the monthly practice outcome replaces them. |
+| Instance admins | No person's pages, conversation or data download. The read-only user view and the names in the results of workspace admins are removed. | Exists ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)) |
+| Support | Only a support share: one conversation turn that the person shares with one instance admin for 7 days and can revoke | Exists |
 | Readers of the work | The copy on the work, which names the work and its author | Exists |
 | The instance operator | Whatever its servers, database, backups and model endpoints hold | A fact that no application can change |
 
@@ -494,7 +493,7 @@ Each consent is a separate decision, and Settings can change each one:
 - Product use.
 - Learning across workspaces: the person's acts, under the source and destination policies.
 - The **Full** Slack detail level, and a Slack place for a check-in, after one export notice.
-- A support snapshot.
+- A support share, for each turn that the person shares.
 - [Research use](./mentoring-evaluation.mdx#research-datasets-and-consent), only when the operator names a research organization.
 
 Hephaestus never asks for consent in a conversation or a notification.

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.DeliveredWorkFeedbackCopyDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,8 @@ class ResultProofPrivacyTest extends BaseUnitTest {
                 mock(ProductReferenceQuery.class),
                 mock(ResultCommunicationRepository.class),
                 mock(FeedbackVisibilityService.class),
-                new JsonMapper());
+                new JsonMapper(),
+                Clock.systemUTC());
         var result =
                 Result.builder().evidence(new JsonMapper().createObjectNode()).build();
         assertThat(presentation.evidence(result, false)).isNull();

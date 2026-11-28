@@ -35,7 +35,6 @@ class AuthRateLimitPropertiesTest extends BaseUnitTest {
                         "oauthAuthorization",
                         "refresh",
                         "clientSession",
-                        "userView",
                         "deleteUser",
                         "export",
                         "conversationTurns",

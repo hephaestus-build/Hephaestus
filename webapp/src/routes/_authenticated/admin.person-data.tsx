@@ -10,7 +10,6 @@ import {
 	adminPreviewPersonDataMutation,
 	adminErasePersonDataMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { adminExportPersonData } from "@/api/sdk.gen";
 import {
 	InstancePersonDataPage,
 	type InstancePersonDataPageState,
@@ -20,7 +19,6 @@ import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
-import { saveBlobFile } from "@/lib/download";
 import { instanceAdminHead } from "@/lib/page-title";
 import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 
@@ -67,20 +65,6 @@ function PersonDataRoute() {
 			await request.refetch();
 		},
 	});
-	const download = useMutation({
-		mutationFn: async (id: string) => {
-			const { data } = await adminExportPersonData({
-				path: { id },
-				parseAs: "blob",
-				throwOnError: true,
-			});
-			if (!(data instanceof Blob)) {
-				throw new Error("The export did not return a JSON file.");
-			}
-			saveBlobFile(data, "person-data.json");
-		},
-		onError,
-	});
 	// The form's native constraints guarantee positive integers and non-empty subjects here.
 	const onPreview = () => {
 		preview.mutate({
@@ -101,12 +85,7 @@ function PersonDataRoute() {
 			void request.refetch();
 		}
 	};
-	let pendingAction: "export" | "erase" | undefined;
-	if (download.isPending) {
-		pendingAction = "export";
-	} else if (erase.isPending) {
-		pendingAction = "erase";
-	}
+	const pendingAction = erase.isPending ? "erase" : undefined;
 	const currentRequest = request.data;
 	const loadError: unknown = providers.error ?? request.error ?? preview.error;
 	let state: InstancePersonDataPageState;
@@ -123,8 +102,7 @@ function PersonDataRoute() {
 			status: "ready",
 			request: currentRequest,
 			pendingAction,
-			actionError: erase.error ?? download.error ?? undefined,
-			onExport: () => download.mutate(currentRequest.id),
+			actionError: erase.error ?? undefined,
 			onErase: (externalCopiesRemoved) =>
 				erase.mutate({ path: { id: currentRequest.id }, body: { externalCopiesRemoved } }),
 		};

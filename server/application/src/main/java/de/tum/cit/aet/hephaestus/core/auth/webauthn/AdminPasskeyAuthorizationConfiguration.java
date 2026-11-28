@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 
 import de.tum.cit.aet.hephaestus.core.AdminAccess;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
-import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceAdminAssurance;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.lang.reflect.Method;
@@ -40,10 +39,8 @@ public class AdminPasskeyAuthorizationConfiguration {
             Object target = invocation.getThis();
             AdminAccess.@Nullable Scope scope =
                     scope(method, target == null ? method.getDeclaringClass() : target.getClass());
-            // A user-view confirmation needs the same fresh proof as the view requests it opens.
             boolean sensitive = !AnnotatedElementUtils.hasAnnotation(method, GetMapping.class)
-                    || AnnotatedElementUtils.hasAnnotation(method, RequiresRecentSignIn.class)
-                    || AnnotatedElementUtils.hasAnnotation(method, UserViewRead.class);
+                    || AnnotatedElementUtils.hasAnnotation(method, RequiresRecentSignIn.class);
             if (scope == AdminAccess.Scope.INSTANCE) {
                 policy.getObject().requireInstanceAdmin(authentication.get(), sensitive);
             }

@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
@@ -169,21 +168,18 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
-            var viewed = UserViewContextHolder.get();
-            // A personal space admits only its owner, as themselves: before any elevation, and never in a user view,
-            // which acts as the viewed account. Everyone else gets the answer for a workspace that does not exist,
-            // and no elevation is recorded. A signed-out request goes on to ask the person to sign in.
+            // A personal space admits only its owner, before any elevation. Everyone else gets the answer for a
+            // workspace that does not exist, and no elevation is recorded. A signed-out request goes on to ask the
+            // person to sign in.
             if (workspace.isPersonal()
-                    && (viewed != null
-                            || SecurityUtils.getCurrentAccountId()
-                                    .filter(account -> !account.equals(workspace.getPersonalAccountId()))
-                                    .isPresent())) {
+                    && SecurityUtils.getCurrentAccountId()
+                            .filter(account -> !account.equals(workspace.getPersonalAccountId()))
+                            .isPresent()) {
                 log.debug("Denied workspace access: reason=notPersonalOwner, workspaceId={}", workspace.getId());
                 sendWorkspaceNotFoundError(httpResponse, slug);
                 return;
             }
-            var currentUsers =
-                    viewed == null ? currentAccountUsers.resolve() : currentAccountUsers.resolve(viewed.accountId());
+            var currentUsers = currentAccountUsers.resolve();
             MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
             Set<WorkspaceRole> roles = membership.roles();
 
@@ -211,7 +207,7 @@ public class WorkspaceContextFilter implements Filter {
 
             if (roles.isEmpty()) {
                 // A signed-in account without a linked provider identity is still signed in: it lacks membership.
-                if (viewed == null && SecurityUtils.getCurrentAccountId().isEmpty()) {
+                if (SecurityUtils.getCurrentAccountId().isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
                     // A non-member gets the answer for a workspace that does not exist, as GitHub and GitLab
@@ -263,9 +259,7 @@ public class WorkspaceContextFilter implements Filter {
     }
 
     private MembershipResolution fetchUserRoles(Workspace workspace, Collection<ActorProfile> users) {
-        var viewed = UserViewContextHolder.get();
-        Long accountId =
-                viewed == null ? SecurityUtils.getCurrentAccountId().orElse(null) : Long.valueOf(viewed.accountId());
+        Long accountId = SecurityUtils.getCurrentAccountId().orElse(null);
         if (accountId == null) return MembershipResolution.EMPTY;
         var member = workspaceMembershipRepository
                 .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)

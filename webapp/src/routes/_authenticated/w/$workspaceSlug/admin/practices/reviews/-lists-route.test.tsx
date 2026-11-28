@@ -6,7 +6,6 @@ import { afterEach, assert, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ReviewSummary } from "@/api/types.gen";
 import {
 	resultDetail,
-	reviewAccounts,
 	reviewDetailCompleted,
 	reviewFeedback,
 	reviewProblems,
@@ -19,7 +18,7 @@ import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/revie
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
+import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
@@ -269,7 +268,7 @@ describe("practice review list routes", () => {
 		const { resultUrls, feedbackUrls } = recordRequests();
 
 		renderRouteAtWithRouter(
-			"/w/acme/admin/practices/reviews/results?developerId=7&order=ACTIONABILITY",
+			"/w/acme/admin/practices/reviews/results?from=2030-01-01&order=ACTIONABILITY",
 		);
 		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 		const scope = screen.getByRole("group", { name: "Applies to every tab" });
@@ -279,7 +278,7 @@ describe("practice review list routes", () => {
 
 		// "Clear scope" ends the shared scope; the list's own ordering is not part of it.
 		await userEvent.click(within(scope).getByRole("button", { name: "Clear scope" }));
-		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("personId")).toBeNull());
+		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("from")).toBeNull());
 		expect(resultUrls.at(-1)?.searchParams.get("sort")).toBe("ACTIONABILITY");
 
 		const tabs = screen.getByRole("navigation", { name: "Practice review sections" });
@@ -349,7 +348,7 @@ describe("practice review list routes", () => {
 		const scopedResult = resultDetail();
 
 		renderRouteAtWithRouter(
-			`/w/acme/admin/practices/reviews/problems?severity=["MAJOR"]&developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&resultId=${scopedResult.id}`,
+			`/w/acme/admin/practices/reviews/problems?severity=["MAJOR"]&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2030-09-01&to=2030-09-10&resultId=${scopedResult.id}`,
 		);
 		await screen.findByText("No problems match these filters", undefined, ROUTE_RENDER_WAIT);
 		// The scope names the observation it narrows to.
@@ -357,7 +356,7 @@ describe("practice review list routes", () => {
 
 		const requested = problemUrls.at(-1);
 		expect(values(requested, "severity")).toStrictEqual(["MAJOR"]);
-		expect(requested?.searchParams.get("personId")).toBe("7");
+		expect(requested?.searchParams.has("personId")).toBe(false);
 		expect(values(requested, "practiceSlug")).toStrictEqual(["thin-controllers"]);
 		expect(values(requested, "groupSlug")).toStrictEqual(["design"]);
 		expect(requested?.searchParams.get("from")).not.toBeNull();
@@ -405,29 +404,9 @@ describe("practice review list routes", () => {
 		expect(locationCountUrls).toHaveLength(0);
 	});
 
-	it("counts everything for the developer filtered to, and nothing narrower", async () => {
-		const { feedbackUrls, locationCountUrls } = recordRequests();
-
-		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/feedback?developerId=9&location=CONVERSATION&state=["DELIVERED"]',
-		);
-		await screen.findByText("No feedback for this developer yet", undefined, ROUTE_RENDER_WAIT);
-		// The empty state comes from the counts; the filtered list is its own request.
-		await waitFor(
-			() => expect(feedbackUrls.at(-1)?.searchParams.get("personId")).toBe("9"),
-			ROUTE_RENDER_WAIT,
-		);
-
-		expect(feedbackUrls.at(-1)?.searchParams.get("location")).toBe("CONVERSATION");
-		const counts = locationCountUrls.at(-1);
-		expect(counts?.searchParams.get("personId")).toBe("9");
-		expect(counts?.searchParams.get("location")).toBeNull();
-		expect(values(counts, "state")).toStrictEqual([]);
-	});
-
-	it("names a row's developer as text, so the row opens one thing", async () => {
+	it("names the developer of feedback on the work as text, so the row opens one thing", async () => {
 		recordRequests();
-		const [feedback] = reviewFeedback;
+		const feedback = reviewFeedback.find((row) => row.destination === "ON_WORK");
 		assert(feedback);
 		const name = developerLabel(feedback.person);
 		server.use(
@@ -442,19 +421,8 @@ describe("practice review list routes", () => {
 		expect(screen.queryByRole("link", { name: `All feedback for ${name}` })).toBeNull();
 	});
 
-	it("offers no filter by person and no Developer column while per-person results are off", async () => {
+	it("offers no filter by person and no Developer column (ADR 0125)", async () => {
 		const { resultUrls } = recordRequests();
-		const [result] = reviewResults;
-		assert(result);
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
-			),
-			http.get("*/workspaces/:workspaceSlug/practices/reviews/results", ({ request }) => {
-				resultUrls.push(new URL(request.url));
-				return HttpResponse.json(pageOf([{ ...result, person: null }]));
-			}),
-		);
 
 		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/results");
 		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
@@ -465,21 +433,13 @@ describe("practice review list routes", () => {
 		expect(resultUrls.flatMap((url) => values(url, "personId"))).toStrictEqual([]);
 	});
 
-	it("drops the person from an old address while per-person results are off", async () => {
+	it("asks for no person when an old address still names one", async () => {
 		const { resultUrls } = recordRequests();
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
-			),
-		);
 
-		const { router } = renderRouteAtWithRouter(
-			"/w/acme/admin/practices/reviews/results?developerId=7",
-		);
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/results?developerId=7");
 		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
 
-		expect(router.state.location.search).not.toHaveProperty("developerId");
 		expect(resultUrls.flatMap((url) => values(url, "personId"))).toStrictEqual([]);
 	});
 
@@ -518,19 +478,19 @@ describe("practice review list routes", () => {
 		}
 	});
 
-	it("sends the shared developer, practice, group, range and review to the reviews endpoint", async () => {
+	it("sends the shared practice, group, range and review to the reviews endpoint", async () => {
 		const { reviewUrls } = recordRequests();
 		const scopedReview = reviewDetailCompleted;
 
 		renderRouteAtWithRouter(
-			`/w/acme/admin/practices/reviews?developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&reviewId=${scopedReview.id}`,
+			`/w/acme/admin/practices/reviews?practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2030-09-01&to=2030-09-10&reviewId=${scopedReview.id}`,
 		);
 		await screen.findByText("No reviews match these filters", undefined, ROUTE_RENDER_WAIT);
 		// The scope names the review it narrows to by its work.
 		await screen.findByText(scopedReview.item.label, { exact: false }, ROUTE_RENDER_WAIT);
 
 		const requested = reviewUrls.at(-1);
-		expect(requested?.searchParams.get("personId")).toBe("7");
+		expect(requested?.searchParams.has("personId")).toBe(false);
 		expect(values(requested, "practiceSlug")).toStrictEqual(["thin-controllers"]);
 		expect(values(requested, "groupSlug")).toStrictEqual(["design"]);
 		expect(requested?.searchParams.get("from")).not.toBeNull();
@@ -578,11 +538,11 @@ describe("practice review list routes", () => {
 			const filters = screen.getByRole("group", { name: "Filters" });
 			expect(precedes(scope, sections)).toBe(true);
 			expect(precedes(sections, filters)).toBe(true);
-			within(scope).getByRole("combobox", { name: "Developer" });
+			within(scope).getByRole("combobox", { name: "Group" });
 			within(scope).getByRole("button", { name: new RegExp(`^${date}`, "u") });
 			within(scope).getByRole("button", { name: "Clear scope" });
 			within(filters).getByRole("combobox", { name: own });
-			expect(within(filters).queryByRole("combobox", { name: "Developer" })).toBeNull();
+			expect(screen.queryByRole("combobox", { name: "Developer" })).toBeNull();
 			expect(within(filters).queryByRole("button", { name: "Clear scope" })).toBeNull();
 		},
 	);
@@ -590,7 +550,9 @@ describe("practice review list routes", () => {
 	/** The overview keeps the scope it does not apply in the same row above the tabs. */
 	it("keeps the scope above the tabs on the overview, marked as not applied", async () => {
 		recordRequests();
-		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/overview?developerId=7");
+		renderRouteAtWithRouter(
+			"/w/acme/admin/practices/reviews/overview?from=2026-09-01&to=2026-09-10",
+		);
 
 		const scope = await screen.findByRole(
 			"group",
@@ -608,17 +570,17 @@ describe("practice review list routes", () => {
 		const { resultUrls } = recordRequests();
 
 		const { router } = renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/results?developerId=7&outcome=["NOT_MET"]',
+			'/w/acme/admin/practices/reviews/results?from=2030-01-01&outcome=["NOT_MET"]',
 		);
 		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
 
 		await waitFor(() => expect(values(resultUrls.at(-1), "outcome")).toStrictEqual([]));
-		expect(resultUrls.at(-1)?.searchParams.get("personId")).toBe("7");
-		expect(router.state.location.search).toMatchObject({ developerId: "7" });
+		expect(resultUrls.at(-1)?.searchParams.get("from")).not.toBeNull();
+		expect(router.state.location.search).toMatchObject({ from: "2030-01-01" });
 
 		await userEvent.click(screen.getByRole("button", { name: "Clear scope" }));
-		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("personId")).toBeNull());
+		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("from")).toBeNull());
 	});
 
 	/**
@@ -670,12 +632,11 @@ describe("practice review list routes", () => {
 		},
 	);
 
-	it("names who asked for a review and its failure on its row, and opens its sheet", async () => {
+	it("names how a review started, never who asked, and its failure on its row, and opens its sheet", async () => {
 		server.use(...reviewHandlers());
 		const requestedReview: ReviewSummary = {
 			...FIRST_PAGE,
 			origin: "REQUEST",
-			requestedBy: reviewAccounts.grace,
 			status: "FAILED",
 			stopReason: "TIMED_OUT",
 		};
@@ -688,9 +649,8 @@ describe("practice review list routes", () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices/reviews");
 		await screen.findByRole("link", { name: reviewLinkName(requestedReview) }, ROUTE_RENDER_WAIT);
 		const table = screen.getByRole("table", { name: "Practice reviews, newest first" });
-		const requester = reviewAccounts.grace.displayName;
-		assert(requester !== undefined);
-		await within(table).findByText(requester, undefined, ROUTE_RENDER_WAIT);
+		await within(table).findByText("Requested", undefined, ROUTE_RENDER_WAIT);
+		expect(within(table).queryByText("Grace Hopper")).toBeNull();
 		within(table).getByRole("columnheader", { name: "Started by" });
 		expect(within(table).getAllByText("Failed").length).toBeGreaterThan(0);
 		await userEvent.click(

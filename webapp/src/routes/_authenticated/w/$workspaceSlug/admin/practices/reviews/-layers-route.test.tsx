@@ -554,7 +554,7 @@ describe("the trace and a record over it", () => {
 			await act(async () => router.history.push(`${REVIEWS}?detail=${TRACE}`));
 			within(await traceSheet()).getByText("You started here");
 			await act(async () =>
-				router.history.push(`/w/other/admin/practices/reviews?detail=${TRACE}&developerId=7`),
+				router.history.push(`/w/other/admin/practices/reviews?detail=${TRACE}&from=2026-09-01`),
 			);
 			const otherReads = () => requested.filter((url) => apiPathOf(url).startsWith(`${OTHER}/`));
 			await waitFor(() => {

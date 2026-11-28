@@ -14,7 +14,6 @@ import { noticeCannotOpenWorkspace } from "@/components/workspace/cannot-open-wo
 import { defaultWorkspace, useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
-import { useAuth } from "@/runtime/auth/AuthContext";
 import {
 	isAppAdmin,
 	memberOnboardingGateOptions,
@@ -23,7 +22,6 @@ import {
 	resolveWorkspaceMembership,
 	workspaceListGateOptions,
 } from "@/runtime/auth/guard";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
 // The gate answers on navigation only. A workspace revoked while a reader sits on one of its pages
@@ -68,13 +66,12 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 			if (workspace.status === "SUSPENDED") {
 				return { workspace, administrationWorkspace: undefined };
 			}
-			const userView = getUserViewSession() !== undefined;
 			const settingUp =
 				location.pathname === `/w/${encodeURIComponent(params.workspaceSlug)}/onboarding`;
 			// The public activity notice renders with the page, so nothing moves down after it loads.
 			// An outage only leaves the notice to arrive later, as the member onboarding below does.
 			const publicActivity =
-				workspace.publishesPublicActivity && !userView && !settingUp
+				workspace.publishesPublicActivity && !settingUp
 					? context.queryClient
 							.query({
 								...getPublicActivityOnboardingOptions({ path: { slug: params.workspaceSlug } }),
@@ -104,7 +101,6 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 
 		const adminPath = `/w/${encodeURIComponent(params.workspaceSlug)}/admin`;
 		if (
-			getUserViewSession() === undefined &&
 			(location.pathname === adminPath || location.pathname.startsWith(`${adminPath}/`)) &&
 			isAppAdmin(await resolveCurrentUser(context.queryClient))
 		) {
@@ -157,7 +153,6 @@ const NO_HOSTS: readonly string[] = [];
 
 function WorkspaceLayout() {
 	const { workspaceSlug } = Route.useParams();
-	const { userView } = useAuth();
 	const { workspaces } = useActiveWorkspaceSlug();
 	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
 	const settingUp =
@@ -171,7 +166,7 @@ function WorkspaceLayout() {
 	});
 	const { notice, ...onboarding } = usePublicActivityOnboarding({
 		workspaceSlug,
-		enabled: workspace?.publishesPublicActivity === true && userView === undefined && !settingUp,
+		enabled: workspace?.publishesPublicActivity === true && !settingUp,
 	});
 	return (
 		// Model-written links on every page of the workspace may point only to its own hosts.

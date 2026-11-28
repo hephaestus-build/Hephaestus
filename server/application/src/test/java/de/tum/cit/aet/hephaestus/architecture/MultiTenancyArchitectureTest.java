@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController;
 import de.tum.cit.aet.hephaestus.agent.proxy.ResultAdmissionController;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
+import de.tum.cit.aet.hephaestus.conversation.support.OwnSupportShareController;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
@@ -304,6 +305,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             // (ActivityControllerIntegrationTest).
             NotificationPreferencesController.class,
             MyProductFeedbackController.class,
+            // The caller's own support shares: each read binds the caller's account, and a share names its workspace
+            // only for display (SupportShareIntegrationTest).
+            OwnSupportShareController.class,
             InstanceFeedbackController.class,
             PublicActivityOnboardingController.class,
             // Create and list workspaces, and check a GitLab token, before a workspace exists.

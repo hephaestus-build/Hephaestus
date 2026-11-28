@@ -87,15 +87,6 @@ public class ProductReferenceQuery {
         return ids.isEmpty() ? Map.of() : developersOf(workspaceId, rows.memberAccountIds(workspaceId, ids));
     }
 
-    /**
-     * The developers among {@code ids} while the workspace shows admins practice results per person, and none
-     * while it does not. The setting is read in the same statement as the members, so naming them costs no read.
-     */
-    @Transactional(readOnly = true)
-    public Map<Long, ReviewPersonDTO> namedDevelopers(long workspaceId, Collection<Long> ids) {
-        return ids.isEmpty() ? Map.of() : developersOf(workspaceId, rows.namedMemberAccountIds(workspaceId, ids));
-    }
-
     private Map<Long, ReviewPersonDTO> developersOf(long workspaceId, Collection<Long> eligible) {
         return accounts(workspaceId, eligible).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {

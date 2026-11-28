@@ -164,7 +164,22 @@ export function subjectLabel(entry: ConfigAuditEntryView): { label: string; hint
 	return { label: hasText(id) ? `${type} ${identifier(id)}` : type };
 }
 
+/**
+ * The one row that the removal of Per-person results for admins wrote for each workspace that had them
+ * on (ADR 0125). Its old value is the setting, and nothing replaces it.
+ */
+function isPerPersonResultsRemoval(entry: ConfigAuditEntryView): boolean {
+	return (
+		entry.entityType === "WORKSPACE_VISIBILITY" &&
+		entry.action === "DELETED" &&
+		(entry.changedKeys ?? []).includes("perPersonResultsForAdmins")
+	);
+}
+
 export function changeSummary(entry: ConfigAuditEntryView): string {
+	if (isPerPersonResultsRemoval(entry)) {
+		return "Names in admin practice results removed";
+	}
 	if (entry.action === "CREATED" || entry.action === "DELETED") {
 		return "";
 	}

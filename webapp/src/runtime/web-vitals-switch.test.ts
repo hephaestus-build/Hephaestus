@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
-import { USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
 
 import { reportVisitVitals } from "./web-vitals";
 
@@ -37,6 +36,14 @@ async function land(...routeIds: string[]) {
 	reportVisitVitals(router as unknown as AnyRouter, queryClient);
 	resolved();
 	await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
+	return {
+		/** Moves the same visit on to another page, as a route change does. */
+		navigate: async (...next: string[]) => {
+			router.state.matches = next.map((routeId) => ({ routeId }));
+			resolved();
+			await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
+		},
+	};
 }
 
 afterEach(() => {
@@ -56,28 +63,14 @@ describe("reportVisitVitals with page experience metrics off", () => {
 		expect(loaded.times).toBe(0);
 	});
 
-	it("does not load web-vitals outside sign-in or in a user view", async () => {
+	it("does not load web-vitals outside sign-in", async () => {
 		server.use(
 			http.get("*/user/features", () =>
 				HttpResponse.json(mockFeatureFlags({ PAGE_EXPERIENCE_METRICS: true })),
 			),
 		);
-		sessionStorage.setItem(
-			USER_VIEW_STORAGE_KEY,
-			JSON.stringify({
-				operatorAccountId: 1,
-				workspaceSlug: "acme",
-				workspaceName: "Acme",
-				accountId: "2",
-				providerLogin: "ada",
-				name: "Ada",
-				unclaimed: false,
-				reason: "Support request",
-			}),
-		);
-
-		await land("__root__", "/login");
-		await land(...PROFILE);
+		const visit = await land("__root__", "/login");
+		await visit.navigate(...PROFILE);
 
 		expect(loaded.times).toBe(0);
 	});

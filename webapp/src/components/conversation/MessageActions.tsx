@@ -1,5 +1,6 @@
 import {
 	CopyIcon,
+	LifeBuoyIcon,
 	MessageSquareReplyIcon,
 	ThumbsDownIcon,
 	ThumbsUpIcon,
@@ -25,6 +26,8 @@ export interface MessageActionsProps {
 	onReply?: () => void;
 	/** Offered on the developer's own messages. */
 	onDelete?: () => void;
+	/** Offered on a question and its answers: shares them with one instance admin, after a preview. */
+	onShareWithSupport?: () => void;
 }
 
 function Action({
@@ -73,6 +76,7 @@ export function MessageActions({
 	vote,
 	onReply,
 	onDelete,
+	onShareWithSupport,
 }: MessageActionsProps) {
 	return (
 		<TooltipProvider delay={0}>
@@ -103,6 +107,11 @@ export function MessageActions({
 				{onReply && (
 					<Action subject={subject} label="Reply in thread" onClick={onReply}>
 						<MessageSquareReplyIcon />
+					</Action>
+				)}
+				{onShareWithSupport && (
+					<Action subject={subject} label="Share with support" onClick={onShareWithSupport}>
+						<LifeBuoyIcon />
 					</Action>
 				)}
 				{onDelete && (

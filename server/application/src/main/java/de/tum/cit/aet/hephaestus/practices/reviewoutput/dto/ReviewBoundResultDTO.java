@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -27,9 +26,6 @@ public record ReviewBoundResultDTO(
         String summary,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ItemRefDTO item,
-
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewPersonDTO person,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant recordedAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Currentness currentness,

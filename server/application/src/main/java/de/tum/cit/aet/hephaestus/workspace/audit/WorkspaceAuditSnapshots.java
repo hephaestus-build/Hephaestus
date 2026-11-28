@@ -31,12 +31,6 @@ public final class WorkspaceAuditSnapshots {
             @Nullable Boolean publicActivityEnabled, boolean allowSearchEngines, boolean contributorsWithoutAccount)
             implements ConfigAuditSnapshot {}
 
-    /**
-     * Whether admins see practice results per person. The migration that introduced the setting wrote one created
-     * row per workspace that kept per-person results, with {@code keptFromBefore} set.
-     */
-    public record PerPersonResultsSnapshot(boolean perPersonResultsForAdmins) implements ConfigAuditSnapshot {}
-
     /** Presence of a stored SCM token — never the token itself. */
     public record TokenSnapshot(
             boolean tokenSet,

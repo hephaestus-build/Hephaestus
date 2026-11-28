@@ -26,7 +26,7 @@ export function deliveryFailures(
 	overview: ReviewOverviewState,
 ): AttentionGroup<ReviewCountState> {
 	const search: Partial<FeedbackSearch> = {
-		...scopeSearch(scope, "feedback"),
+		...scopeSearch(scope),
 		state: ["FAILED"],
 	};
 	return {
@@ -47,7 +47,7 @@ export function finishedInRange(
 ): { state: ReviewCountState; list: ReviewListTarget } {
 	const list: ReviewListTarget = {
 		list: "reviews",
-		search: { ...scopeSearch(scope, "reviews"), status: [...FINISHED_REVIEW_STATUSES] },
+		search: { ...scopeSearch(scope), status: [...FINISHED_REVIEW_STATUSES] },
 	};
 	if (overview.status !== "ready") {
 		return { state: overview, list };

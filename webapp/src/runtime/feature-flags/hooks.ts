@@ -26,11 +26,6 @@ async function fetchFeatureFlags(): Promise<FeatureFlags> {
 	return featureFlagsSchema.parse(data);
 }
 
-// The administrator's flags never apply in a view.
-const USER_VIEW_FLAGS: FeatureFlags = {
-	PAGE_EXPERIENCE_METRICS: false,
-};
-
 /** The signed-in reader's flags. Outside React, read them through the query client with these. */
 export const featureFlagsQueryOptions = queryOptions({
 	queryKey: getUserFeaturesQueryKey(),
@@ -45,13 +40,12 @@ function useFeatureFlagsQuery(): {
 	isLoading: boolean;
 	isError: boolean;
 } {
-	const { isAuthenticated, userView } = useAuth();
+	const { isAuthenticated } = useAuth();
 
-	const query = useQuery({
+	return useQuery({
 		...featureFlagsQueryOptions,
-		enabled: isAuthenticated && !userView,
+		enabled: isAuthenticated,
 	});
-	return userView ? { data: USER_VIEW_FLAGS, isLoading: false, isError: false } : query;
 }
 
 export function useFeatureFlags() {

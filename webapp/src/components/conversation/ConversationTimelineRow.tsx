@@ -107,8 +107,21 @@ function messageActions(
 				actions?.ask && threads && topLevel ? () => threads.onOpen(entry.id, "composer") : undefined
 			}
 			onDelete={actions && entry.kind === "USER" ? () => onDelete(entry) : undefined}
+			onShareWithSupport={shareWithSupport(entry, actions?.onShareWithSupport)}
 		/>
 	);
+}
+
+/** A question or an answer shares the question it belongs to; a message of no question shares nothing. */
+function shareWithSupport(
+	entry: ConversationEntry,
+	share: ((turnId: string) => void) | undefined,
+): (() => void) | undefined {
+	const { turnId } = entry;
+	if (share === undefined || turnId === undefined) {
+		return undefined;
+	}
+	return () => share(turnId);
 }
 
 export function DayMarker({ date }: { date: Date }) {

@@ -3,8 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
 import { beforeAll, afterEach, assert, expect, it, vi } from "vitest";
 
-import type { ConversationTurnRequest } from "@/api/types.gen";
+import type {
+	ConversationTurnRequest,
+	SupportShare,
+	SupportSharePreview,
+	SupportSharePreviewRequest,
+	SupportShareRequest,
+	SupportShareTurn,
+} from "@/api/types.gen";
 import { conversationEntriesOptions, conversationOptions } from "@/hooks/conversation-cache";
+import type { Wire } from "@/lib/dates";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -1690,4 +1698,104 @@ it("offers no example while the developer has unsent words, so an example never 
 
 	await userEvent.clear(composer);
 	await screen.findByRole("list", { name: "Example questions" });
+});
+
+const SHARE_DIGEST = "d".repeat(64);
+
+/** The server's preview of a share: the diagnostics, and the question only when the person adds the messages. */
+function sharePreviewFor(
+	turnId: string,
+	body: SupportSharePreviewRequest,
+): Wire<SupportSharePreview> {
+	const turn = {
+		turnId,
+		runId: "a0000000-0000-4000-8000-000000000098",
+		workspaceSlug: "acme",
+		surface: "APP",
+		status: "FAILED",
+		attempt: 1,
+		failureReason: "MODEL_UNAVAILABLE",
+		queuedAt: "2026-09-11T09:00:00.000Z",
+	} satisfies Wire<SupportShareTurn>;
+	const recipients = [{ accountId: "7", displayName: "Ada Lovelace" }];
+	if (!body.includeText) {
+		return { turn, messages: [], recipients, validForDays: 7 };
+	}
+	return {
+		turn,
+		messages: [
+			{
+				entryId: "e0000000-0000-4000-8000-000000000001",
+				author: "QUESTION",
+				text: "Why does my build fail on the second run?",
+				createdAt: "2026-09-11T09:00:00.000Z",
+			},
+		],
+		textDigest: SHARE_DIGEST,
+		recipients,
+		validForDays: 7,
+	};
+}
+
+it("shares a question with one instance admin only after its exact preview", async () => {
+	const fake = new ConversationFake();
+	const turnId = "a0000000-0000-4000-8000-000000000099";
+	fake.add({ kind: "USER", text: "Why does my build fail on the second run?", turnId });
+	serve(fake);
+	const previews: SupportSharePreviewRequest[] = [];
+	const shares: SupportShareRequest[] = [];
+	server.use(
+		http.post<PathParams, SupportSharePreviewRequest>(
+			"*/workspaces/acme/support-shares/turns/:turnId/preview",
+			async ({ request }) => {
+				const body = await request.json();
+				previews.push(body);
+				return HttpResponse.json(sharePreviewFor(turnId, body));
+			},
+		),
+		http.post<PathParams, SupportShareRequest>(
+			"*/workspaces/acme/support-shares/turns/:turnId",
+			async ({ request }) => {
+				shares.push(await request.json());
+				return HttpResponse.json(
+					{
+						id: "a0000000-0000-4000-8000-000000000097",
+						turnId,
+						workspaceSlug: "acme",
+						recipient: { accountId: "7", displayName: "Ada Lovelace" },
+						includesText: true,
+						state: "ACTIVE",
+						createdAt: "2026-09-11T09:05:00.000Z",
+						expiresAt: "2026-09-18T09:05:00.000Z",
+						readCount: 0,
+					} satisfies Wire<SupportShare>,
+					{ status: 201 },
+				);
+			},
+		),
+	);
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	await userEvent.click(
+		await screen.findByRole("button", { name: /^Share with support/u }, ROUTE_RENDER_WAIT),
+	);
+	const dialog = await screen.findByRole("dialog", { name: "Share with support" });
+	await waitFor(() => expect(previews).toStrictEqual([{ includeText: false }]));
+	await within(dialog).findByText("The AI model or its provider stopped answering");
+	expect(within(dialog).queryByRole("list", { name: "Shared messages" })).toBeNull();
+	expect(shares).toStrictEqual([]);
+
+	await userEvent.click(within(dialog).getByRole("switch", { name: "Include the messages" }));
+	await waitFor(() => expect(previews.at(-1)).toStrictEqual({ includeText: true }));
+	await within(dialog).findByRole("list", { name: "Shared messages" });
+	await userEvent.click(within(dialog).getByRole("combobox", { name: "Who reads it" }));
+	await userEvent.click(await screen.findByRole("option", { name: "Ada Lovelace" }));
+	await userEvent.click(within(dialog).getByRole("button", { name: "Share" }));
+
+	await waitFor(() =>
+		expect(shares).toStrictEqual([
+			{ recipientAccountId: "7", includeText: true, textDigest: SHARE_DIGEST },
+		]),
+	);
+	await within(dialog).findByText("Shared with Ada Lovelace");
 });

@@ -71,3 +71,14 @@ export const OwnMessage: Story = {
 		await expect(args.onDelete).toHaveBeenCalledOnce();
 	},
 };
+
+/** A question and its answers can be shared with support; the action opens the preview first. */
+export const ShareWithSupport: Story = {
+	args: { onShareWithSupport: fn() },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Share with support (Hephaestus, 10:42)" }),
+		);
+		await expect(args.onShareWithSupport).toHaveBeenCalledOnce();
+	},
+};

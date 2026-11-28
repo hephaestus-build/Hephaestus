@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackCopyRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.response.CorrectionWindow;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +54,7 @@ public class ResultPresentation {
     private final ResultCommunicationRepository communication;
     private final FeedbackVisibilityService visibility;
     private final JsonMapper json;
+    private final Clock clock;
 
     public String name(ResultView view) {
         return view.version() == null || view.version().getName() == null
@@ -233,10 +236,15 @@ public class ResultPresentation {
         return latest;
     }
 
+    /** Each current disagreement, with its explanation only while it is a correction ({@link CorrectionWindow}). */
     public List<FeedbackDisagreementDTO> disagreements(Result r) {
+        var now = clock.instant();
         return communication.disagreements(r.getWorkspaceId(), r.getId()).stream()
                 .map(row -> new FeedbackDisagreementDTO(
-                        row.getId(), row.getDestination(), row.getComment(), row.getRespondedAt()))
+                        row.getId(),
+                        row.getDestination(),
+                        CorrectionWindow.open(row.getRespondedAt(), now) ? row.getComment() : null,
+                        row.getRespondedAt()))
                 .toList();
     }
 

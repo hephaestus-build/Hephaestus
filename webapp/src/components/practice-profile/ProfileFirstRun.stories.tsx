@@ -282,15 +282,6 @@ export const NoModelForChoice: Story = {
 	},
 };
 
-/** A read-only user view shows the reason without a way to change someone else's choice. */
-export const NoAiInUserView: Story = {
-	args: { readiness: blocked("NO_AI"), aiChoiceLink: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Hephaestus does not review your work here")).toBeVisible();
-		await expect(canvas.queryByRole("button")).toBeNull();
-	},
-};
-
 /** A reason only a workspace admin can change names them and offers a member no button or link. */
 export const ReviewsOff: Story = {
 	args: { readiness: blocked("REVIEWS_OFF") },

@@ -12,7 +12,6 @@ import type { PracticeFacetOption } from "./ResultFilters";
 import { clearedScopeFilters, hasAppliedScope, readScope } from "./review-scope";
 import type { FeedbackSearch } from "./review-search";
 import { ReviewFilterBar } from "./ReviewFilterBar";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 
 const STATE_OPTIONS = statusFacetOptions(DELIVERY_STATE_DEFS);
@@ -66,16 +65,10 @@ export interface FeedbackFiltersProps {
 	onClearScope: () => void;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	/** How many rows the filters currently select, or `undefined` while that is unknown. */
 	total: number | undefined;
 	/** The one record the scope is filtered to, by name; absent for none, or for a selection. */
 	record?: ScopeRecordFilter;
-	/**
-	 * The name of the developer `developerId` identifies. It must name *that* developer: reading it
-	 * off the first row is right only while the filter is on.
-	 */
-	developerName?: string;
 }
 
 export function FeedbackFilters({
@@ -85,10 +78,8 @@ export function FeedbackFilters({
 	onClearScope,
 	groups,
 	practices,
-	people,
 	total,
 	record,
-	developerName,
 }: FeedbackFiltersProps) {
 	const state = listFacet("Delivery", STATE_OPTIONS, search.state, (values) =>
 		onPatch({ state: nonEmpty(values) }),
@@ -112,8 +103,6 @@ export function FeedbackFilters({
 			dateTitle="Composed"
 			groups={groups}
 			practices={practices}
-			people={people}
-			personName={developerName}
 			record={record}
 			facets={
 				<>

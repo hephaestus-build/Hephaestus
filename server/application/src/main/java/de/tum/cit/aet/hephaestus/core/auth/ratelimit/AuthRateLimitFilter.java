@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicUsageReadRequestMatcher;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.github.bucket4j.ConsumptionProbe;
@@ -30,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Token-bucket rate limiter for sensitive and resource-intensive endpoints. Sits on the
- * resource-server chain (covers {@code /auth/refresh}, read-only user views,
+ * resource-server chain (covers {@code /auth/refresh},
  * {@code DELETE /user}) and the oauth2Login chain (covers {@code GET /oauth2/authorization/*}); registered after
  * authentication so the account principal is resolvable from the {@link SecurityContextHolder}.
  *
@@ -71,7 +70,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         REFRESH("refresh", true, true),
         // Installed-client token, refresh and logout: body-authenticated by design, so keyed by IP.
         CLIENT_SESSION("client-session", false, true),
-        USER_VIEW("user-view", true, false),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
@@ -198,11 +196,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
                         || path.equals("/auth/client/logout"))) {
             return Endpoint.CLIENT_SESSION;
         }
-        // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
-        if (("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?"))
-                || UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
-            return Endpoint.USER_VIEW;
-        }
         if ("DELETE".equals(method) && path.equals("/user")) {
             return Endpoint.DELETE_USER;
         }
@@ -242,7 +235,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case OAUTH_AUTHORIZATION -> properties.oauthAuthorization();
             case REFRESH -> properties.refresh();
             case CLIENT_SESSION -> properties.clientSession();
-            case USER_VIEW -> properties.userView();
             case DELETE_USER -> properties.deleteUser();
             case EXPORT -> properties.export();
             case CONVERSATION_TURNS -> properties.conversationTurns();

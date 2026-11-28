@@ -18,6 +18,8 @@ import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -90,7 +92,11 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
     void shouldShowAnAdminTheAnswerAndOnlyADisagreementsExplanation() {
         var addressed = answered(FeedbackResolution.ADDRESSED, FeedbackUsefulness.HELPFUL, "Fixed it, thanks.");
         var notApplicable = answered(FeedbackResolution.NOT_APPLICABLE, null, "This file is generated.");
-        var disagreed = answered(FeedbackResolution.DISAGREE, FeedbackUsefulness.UNHELPFUL, "The rule allows this.");
+        var disagreed = answered(
+                FeedbackResolution.DISAGREE,
+                FeedbackUsefulness.UNHELPFUL,
+                "The rule allows this.",
+                Instant.now().minus(Duration.ofDays(1)));
         var ratedOnly = answered(null, FeedbackUsefulness.HELPFUL, "Private note.");
 
         answer(addressed)
@@ -119,6 +125,25 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .jsonPath("$.answer.usefulness")
                 .doesNotExist();
         answer(ratedOnly).jsonPath("$.answer").isEmpty();
+    }
+
+    /** ADR 0125 decision 3: a disagreement's explanation reaches an admin only as a correction, for 30 days. */
+    @Test
+    @WithAdminUser
+    void shouldShowADisagreementsExplanationOnlyFor30Days() {
+        var now = Instant.now();
+        var fresh = answered(FeedbackResolution.DISAGREE, null, "Still a correction.", now.minus(Duration.ofDays(29)));
+        var old =
+                answered(FeedbackResolution.DISAGREE, null, "No longer a correction.", now.minus(Duration.ofDays(31)));
+
+        answer(fresh).jsonPath("$.answer.comment").isEqualTo("Still a correction.");
+        answer(old)
+                .jsonPath("$.answer.resolution")
+                .isEqualTo("DISAGREE")
+                .jsonPath("$.answer.createdAt")
+                .exists()
+                .jsonPath("$.answer.comment")
+                .isEmpty();
     }
 
     @Test
@@ -153,8 +178,16 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
 
     private Feedback answered(
             @Nullable FeedbackResolution resolution, @Nullable FeedbackUsefulness usefulness, String comment) {
+        return answered(resolution, usefulness, comment, AT);
+    }
+
+    private Feedback answered(
+            @Nullable FeedbackResolution resolution,
+            @Nullable FeedbackUsefulness usefulness,
+            String comment,
+            Instant at) {
         var parent = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
-        respond(parent, resolution, usefulness, comment, 0);
+        respond(parent, resolution, usefulness, comment, at);
         return parent;
     }
 
@@ -164,6 +197,15 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
             @Nullable FeedbackUsefulness usefulness,
             @Nullable String comment,
             long secondsLater) {
+        respond(parent, resolution, usefulness, comment, AT.plusSeconds(secondsLater));
+    }
+
+    private void respond(
+            Feedback parent,
+            @Nullable FeedbackResolution resolution,
+            @Nullable FeedbackUsefulness usefulness,
+            @Nullable String comment,
+            Instant at) {
         responses.saveAndFlush(FeedbackResponse.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(workspace.getId())
@@ -171,7 +213,7 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .resolution(resolution)
                 .usefulness(usefulness)
                 .comment(comment)
-                .createdAt(AT.plusSeconds(secondsLater))
+                .createdAt(at)
                 .build());
     }
 

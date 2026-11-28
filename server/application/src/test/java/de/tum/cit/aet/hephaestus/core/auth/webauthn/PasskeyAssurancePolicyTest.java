@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -71,7 +70,6 @@ class PasskeyAssurancePolicyTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
-        UserViewContextHolder.clear();
     }
 
     @Test
@@ -95,16 +93,6 @@ class PasskeyAssurancePolicyTest {
     void shouldRejectInstalledClientWhenFreshPasskeyIsRequired() {
         SecurityContextHolder.getContext().setAuthentication(authentication(NOW, true));
         assertThatThrownBy(() -> policy(false, false).requireFresh()).isInstanceOf(PasskeyRequiredException.class);
-    }
-
-    @Test
-    void shouldRejectUserViewWhenFreshPasskeyIsRequired() {
-        SecurityContextHolder.getContext().setAuthentication(authentication(NOW, false));
-        UserViewContextHolder.set(new UserViewContextHolder.View(7L, 99L));
-        assertThatThrownBy(() -> policy(true, false).requireFresh())
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
     }
 
     @Test
@@ -236,16 +224,6 @@ class PasskeyAssurancePolicyTest {
         assertThat(disabled.assuranceEnforced()).isFalse();
         assertThatThrownBy(() -> policy(true, true).requireInstanceAdmin(oauth, true))
                 .isInstanceOf(PasskeyRequiredException.class);
-    }
-
-    @Test
-    void shouldKeepUserViewWriteProhibitionWhenAssuranceIsDisabled() {
-        SecurityContextHolder.getContext().setAuthentication(authentication(NOW, false));
-        UserViewContextHolder.set(new UserViewContextHolder.View(7L, 99L));
-        assertThatThrownBy(() -> policy(true, true, false).requireFresh())
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
     }
 
     @Test

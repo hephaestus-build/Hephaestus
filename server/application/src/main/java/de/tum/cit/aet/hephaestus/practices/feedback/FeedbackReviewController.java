@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.FeedbackDecisio
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCheckDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDetailDTO;
-import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReasonCountDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -54,7 +53,6 @@ public class FeedbackReviewController {
     private final FeedbackReadService reader;
     private final FeedbackDecisionService decisions;
     private final FeedbackStoreService store;
-    private final PerPersonResults perPerson;
 
     @GetMapping("/feedback")
     @Operation(operationId = "listReviewFeedback")
@@ -63,7 +61,6 @@ public class FeedbackReviewController {
             @Valid @ParameterObject @ModelAttribute FeedbackQueryFilter filter,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        perPerson.requirePersonFilterAllowed(workspace.id(), filter.personId());
         return OffsetPageDTO.from(reader.list(workspace.id(), filter, PageRequest.of(page, size)));
     }
 
@@ -71,7 +68,6 @@ public class FeedbackReviewController {
     @Operation(operationId = "countReviewFeedbackByLocation")
     public List<ReasonCountDTO> locations(
             WorkspaceContext workspace, @Valid @ParameterObject @ModelAttribute FeedbackQueryFilter filter) {
-        perPerson.requirePersonFilterAllowed(workspace.id(), filter.personId());
         return reader.locations(workspace.id(), filter);
     }
 
@@ -79,7 +75,6 @@ public class FeedbackReviewController {
     @Operation(operationId = "countReviewFeedbackByReason")
     public List<ReasonCountDTO> reasons(
             WorkspaceContext workspace, @Valid @ParameterObject @ModelAttribute FeedbackQueryFilter filter) {
-        perPerson.requirePersonFilterAllowed(workspace.id(), filter.personId());
         return reader.reasons(workspace.id(), filter);
     }
 

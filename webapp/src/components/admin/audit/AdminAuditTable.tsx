@@ -86,7 +86,7 @@ export function AdminAuditTable({
 						<EmptyTitle>{hasFilter ? "No events match your filters" : "No events yet"}</EmptyTitle>
 						{!hasFilter && (
 							<EmptyDescription>
-								Sign-ins, user views, role changes, and account deletions will appear here.
+								Sign-ins, role changes, and account deletions will appear here.
 							</EmptyDescription>
 						)}
 					</EmptyHeader>

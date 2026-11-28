@@ -15,25 +15,12 @@ import {
 	practiceGroups,
 	reviewResults,
 	selects,
-	workspaceMembers,
 	workspacePractices,
 } from "./fixtures";
 import { groupFacetOptions, practiceFacetOptions } from "./ResultFilters";
 import { ResultsListPage } from "./ResultsListPage";
 import { type ResultsSearch, resultsQuery, REVIEW_PAGE_SIZE } from "./review-search";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 
-const PEOPLE: ReviewPeople = {
-	options: workspaceMembers.map(({ account }) => ({
-		accountId: account.id,
-		label: account.displayName ?? `#${account.id}`,
-		secondary: account.identities[0]?.login ?? undefined,
-	})),
-	capped: false,
-	named: true,
-	isLoading: false,
-	isError: false,
-};
 const GROUPS: FacetSource = {
 	options: groupFacetOptions(practiceGroups),
 	isLoading: false,
@@ -86,8 +73,7 @@ function resultPage(
 			selects(search.practiceSlug, row.practiceSlug) &&
 			selects(query.severity, row.severity) &&
 			selects(query.outcome, row.outcome) &&
-			(query.reviewId === undefined || row.reviewId === query.reviewId) &&
-			(search.developerId === undefined || row.person?.accountId === search.developerId),
+			(query.reviewId === undefined || row.reviewId === query.reviewId),
 		REVIEW_PAGE_SIZE,
 	);
 }
@@ -109,7 +95,6 @@ const meta = {
 		results: pool(reviewResults),
 		groups: GROUPS,
 		practices: PRACTICES,
-		people: PEOPLE,
 	},
 	render: (args) => (
 		<StatefulPatch initial={args.search}>
@@ -152,7 +137,6 @@ export const Default: Story = {
 			canvas.getByRole("combobox", { name });
 		}
 		await expect(canvas.queryByRole("button", { name: /More filters/u })).toBeNull();
-		canvas.getByRole("combobox", { name: "Developer" });
 		canvas.getByRole("button", { name: "Recorded" });
 		canvas.getByText("The controller delegates before it does anything else");
 		canvas.getByText("The thread ends without naming what was chosen");
@@ -160,15 +144,8 @@ export const Default: Story = {
 	},
 };
 
-/**
- * While the workspace shows admins results without names, the server names no developer, so the
- * Developer column and the filter by person are gone.
- */
-export const WithoutNames: Story = {
-	args: {
-		people: { ...PEOPLE, named: false },
-		results: pool(reviewResults.map((result) => ({ ...result, person: null }))),
-	},
+/** A staff list names no developer (ADR 0125): no Developer column, no filter by person. */
+export const NamesNoDeveloper: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("16 observations.");
 		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();
@@ -184,18 +161,6 @@ export const FilterToOneSeverity: Story = {
 		await pickFacet(canvas, userEvent, "Severity", /Major/u);
 		await canvas.findByText("3 observations match your filters.");
 		await expect(canvas.queryByText(/leaks the ledger’s table name/u)).not.toBeInTheDocument();
-	},
-};
-
-export const FilterToOnePerson: Story = {
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 observations.");
-		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
-		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/u }));
-		await canvas.findByRole("combobox", { name: "Developer: Grace Hopper" });
-		await canvas.findByText("3 observations match your filters.");
 	},
 };
 

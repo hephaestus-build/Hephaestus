@@ -6,7 +6,7 @@ import { conversation, document, pullRequest } from "@/stories/practice-profile-
 import { expectNoPageOverflow, expectTargetSize } from "@/stories/reflow";
 import { inStoryYear } from "@/stories/story-clock";
 
-import { PracticeProfilePageHeader, profileAudience } from "./PracticeProfilePageHeader";
+import { PracticeProfilePageHeader, PROFILE_AUDIENCE } from "./PracticeProfilePageHeader";
 
 /** The ring's legend. */
 const LEGEND = "Practices by standing";
@@ -184,43 +184,15 @@ export const Loading: Story = {
 };
 
 /**
- * Who can see the page stays beside the intro, a place that does not go away. While the workspace's
- * per-person results setting is unknown, the sentence names the setting instead.
+ * Who can see the page stays beside the intro, a place that does not go away. No admin opens the
+ * page, and the results admins see on the work name nobody.
  */
 export const SaysWhoCanSeeIt: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Who can see this page" }));
-		await expect(within(await settledPopup()).getByText(profileAudience())).toBeVisible();
-	},
-};
-
-/** The workspace shows admins results per person: the reader is told, and that earlier results count. */
-export const AdminsSeeYourName: Story = {
-	args: { perPersonResults: true },
-	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Who can see this page" }));
-		await expect(
-			within(await settledPopup()).getByText(
-				/admins see your practice results with your name, earlier ones too/u,
-			),
-		).toBeVisible();
-	},
-};
-
-/**
- * Off: no name and no filter by person, and the sentence does not claim more, since each result
- * still shows the work it is about.
- */
-export const AdminsSeeNoName: Story = {
-	args: { perPersonResults: false },
-	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Who can see this page" }));
 		const popup = within(await settledPopup());
-		await expect(
-			popup.getByText(/admins see practice results with no name and cannot filter them by person/u),
-		).toBeVisible();
-		await expect(popup.getByText(/Each result still shows the work it is about\./u)).toBeVisible();
-		await expect(popup.queryByText(/anonymous/iu)).toBeNull();
+		await expect(popup.getByText(PROFILE_AUDIENCE)).toBeVisible();
+		await expect(popup.queryByText(/read-only view|per-person/iu)).toBeNull();
 	},
 };
 

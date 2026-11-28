@@ -56,7 +56,6 @@ import { ResultOutcome } from "./ReviewBadges";
 import { ReviewFact, ReviewFactGrid } from "./ReviewFactGrid";
 import { ReviewItemLink } from "./ReviewItem";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
-import { ReviewPerson } from "./ReviewPerson";
 
 const HIDDEN_EVIDENCE = "The evidence of this observation is hidden.";
 
@@ -165,11 +164,6 @@ export function ResultLevel({
 							<ReviewFact label="Practice">
 								<span className="break-words">{record.practiceName}</span>
 							</ReviewFact>
-							{record.person !== null && (
-								<ReviewFact label="Developer">
-									<ReviewPerson person={record.person} />
-								</ReviewFact>
-							)}
 							{hasText(record.item.title) && (
 								<ReviewFact label="Reviewed work">
 									<span className="break-words">{record.item.title}</span>

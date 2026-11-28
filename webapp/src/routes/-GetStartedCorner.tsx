@@ -118,7 +118,6 @@ export default function GetStartedCornerContainer({
 										reviewed: false,
 										...firstRunLinks({
 											workspaceSlug,
-											readOnly: false,
 											isAdmin,
 											returnTo: pathname,
 										}),

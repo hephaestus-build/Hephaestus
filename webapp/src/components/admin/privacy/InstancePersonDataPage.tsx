@@ -55,10 +55,9 @@ export type InstancePersonDataPageState =
 	| {
 			status: "ready";
 			request: PersonDataRequest;
-			pendingAction?: "export" | "erase";
-			/** A rejected export or erasure; the preview stays on screen. */
+			pendingAction?: "erase";
+			/** A rejected erasure; the preview stays on screen. */
 			actionError?: unknown;
-			onExport: () => void;
 			onErase: (externalCopiesRemoved: boolean) => void;
 	  };
 
@@ -311,8 +310,8 @@ function RequestCard({
 					{stores.length === 1 ? "store" : "stores"}.{" "}
 					{request.state === "PREVIEW" && (
 						<>
-							Export and erasure use exactly these rows. If the data changes, preview again. This
-							preview expires <RelativeTime value={request.expiresAt} />.
+							Erasure uses exactly these rows. If the data changes, preview again. This preview
+							expires <RelativeTime value={request.expiresAt} />.
 						</>
 					)}
 					{request.state === "ERASING" && "This page refreshes until the job finishes."}
@@ -320,7 +319,7 @@ function RequestCard({
 						`Stores already erased stay erased. Resume to finish the rest (failure code ${request.failureCode ?? "unknown"}).`}
 					{request.state === "COMPLETE" &&
 						"The audit record keeps store counts and the acting admin, not erased content or identities. Provider records that still exist upstream can be mirrored again, but Hephaestus does not process them."}
-					{request.state === "EXPIRED" && "Preview again to export or erase."}
+					{request.state === "EXPIRED" && "Preview again to erase."}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-6">
@@ -425,16 +424,6 @@ function RequestCard({
 				)}
 				{canErase && (
 					<div className="flex flex-wrap gap-2">
-						{request.state === "PREVIEW" && (
-							<Button
-								pending={pendingAction === "export"}
-								variant="outline"
-								disabled={pendingAction !== undefined}
-								onClick={state.onExport}
-							>
-								{pendingAction === "export" ? "Downloading…" : "Download JSON export"}
-							</Button>
-						)}
 						<Button
 							pending={pendingAction === "erase"}
 							variant="destructive"

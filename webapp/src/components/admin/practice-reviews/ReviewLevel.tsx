@@ -12,7 +12,6 @@ import type {
 	ReviewUsageAttempt,
 } from "@/api/types.gen";
 import { formatTokens } from "@/components/admin/usage/usage-utils";
-import { accountName } from "@/components/admin/users/account-labels";
 import { DotSeparator } from "@/components/common/DotSeparator";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
@@ -448,7 +447,6 @@ function ReviewWhat({
 				<span className="space-y-0.5">
 					<span className="block" title={origin.description}>
 						{origin.label}
-						{review.requestedBy !== null && ` by ${accountName(review.requestedBy)}`}
 					</span>
 					{event !== null && (
 						<span className="block text-muted-foreground">
@@ -498,7 +496,6 @@ export function reviewHistory(review: ReviewDetail): SheetEvent[] {
 			key: "asked",
 			at: review.createdAt,
 			title: "Asked for",
-			by: review.requestedBy === null ? undefined : accountName(review.requestedBy),
 		},
 	];
 	const jobs = review.runtime?.jobs ?? [];

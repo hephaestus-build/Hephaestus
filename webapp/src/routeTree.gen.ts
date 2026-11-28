@@ -37,6 +37,7 @@ import { Route as AuthenticatedAdminPersonDataRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminProviderRemovalsRouteImport } from './routes/_authenticated/admin.provider-removals'
 import { Route as AuthenticatedAdminResearchRouteImport } from './routes/_authenticated/admin.research'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
+import { Route as AuthenticatedAdminSupportSharesRouteImport } from './routes/_authenticated/admin.support-shares'
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin.usage'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminWorkspacesRouteImport } from './routes/_authenticated/admin.workspaces'
@@ -52,7 +53,6 @@ import { Route as AuthenticatedWWorkspaceSlugOnboardingRouteImport } from './rou
 import { Route as AuthenticatedWWorkspaceSlugPracticeProfileRouteImport } from './routes/_authenticated/w/$workspaceSlug/practice-profile'
 import { Route as AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRouteImport } from './routes/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
 import { Route as AuthenticatedWWorkspaceSlugWorkspaceActivityRouteImport } from './routes/_authenticated/w/$workspaceSlug/workspace-activity'
-import { Route as AuthenticatedWWorkspaceSlugViewAsRouteImport } from './routes/_authenticated/w_.$workspaceSlug.view-as'
 import { Route as AuthenticatedWorkspacesNewIndexRouteImport } from './routes/_authenticated/workspaces/new/index'
 import { Route as AuthenticatedWorkspacesNewGithubRouteImport } from './routes/_authenticated/workspaces/new/github'
 import { Route as AuthenticatedWorkspacesNewGitlabRouteImport } from './routes/_authenticated/workspaces/new/gitlab'
@@ -237,6 +237,12 @@ const AuthenticatedAdminSettingsRoute =
     path: '/settings',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminSupportSharesRoute =
+  AuthenticatedAdminSupportSharesRouteImport.update({
+    id: '/support-shares',
+    path: '/support-shares',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminUsageRoute = AuthenticatedAdminUsageRouteImport.update({
   id: '/usage',
   path: '/usage',
@@ -322,12 +328,6 @@ const AuthenticatedWWorkspaceSlugWorkspaceActivityRoute =
     id: '/workspace-activity',
     path: '/workspace-activity',
     getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
-  } as any)
-const AuthenticatedWWorkspaceSlugViewAsRoute =
-  AuthenticatedWWorkspaceSlugViewAsRouteImport.update({
-    id: '/w_/$workspaceSlug/view-as',
-    path: '/w/$workspaceSlug/view-as',
-    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedWorkspacesNewIndexRoute =
   AuthenticatedWorkspacesNewIndexRouteImport.update({
@@ -550,6 +550,7 @@ export interface FileRoutesByFullPath {
   '/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/support-shares': typeof AuthenticatedAdminSupportSharesRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -564,7 +565,6 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
-  '/w/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
   '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
@@ -625,6 +625,7 @@ export interface FileRoutesByTo {
   '/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/support-shares': typeof AuthenticatedAdminSupportSharesRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -637,7 +638,6 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
-  '/w/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
   '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
@@ -698,6 +698,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/_authenticated/admin/research': typeof AuthenticatedAdminResearchRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/support-shares': typeof AuthenticatedAdminSupportSharesRoute
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -712,7 +713,6 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/_authenticated/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/_authenticated/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
-  '/_authenticated/w_/$workspaceSlug/view-as': typeof AuthenticatedWWorkspaceSlugViewAsRoute
   '/_authenticated/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/_authenticated/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
   '/github/installations/$installationId/setup': typeof GithubInstallationsInstallationIdSetupRoute
@@ -777,6 +777,7 @@ export interface FileRouteTypes {
     | '/admin/provider-removals'
     | '/admin/research'
     | '/admin/settings'
+    | '/admin/support-shares'
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
@@ -791,7 +792,6 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/practice-profile'
     | '/w/$workspaceSlug/practices-across-the-workspace'
     | '/w/$workspaceSlug/workspace-activity'
-    | '/w/$workspaceSlug/view-as'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
     | '/github/installations/$installationId/setup'
@@ -852,6 +852,7 @@ export interface FileRouteTypes {
     | '/admin/provider-removals'
     | '/admin/research'
     | '/admin/settings'
+    | '/admin/support-shares'
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
@@ -864,7 +865,6 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/practice-profile'
     | '/w/$workspaceSlug/practices-across-the-workspace'
     | '/w/$workspaceSlug/workspace-activity'
-    | '/w/$workspaceSlug/view-as'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
     | '/github/installations/$installationId/setup'
@@ -924,6 +924,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/provider-removals'
     | '/_authenticated/admin/research'
     | '/_authenticated/admin/settings'
+    | '/_authenticated/admin/support-shares'
     | '/_authenticated/admin/usage'
     | '/_authenticated/admin/users'
     | '/_authenticated/admin/workspaces'
@@ -938,7 +939,6 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/practice-profile'
     | '/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
     | '/_authenticated/w/$workspaceSlug/workspace-activity'
-    | '/_authenticated/w_/$workspaceSlug/view-as'
     | '/_authenticated/workspaces/new/github'
     | '/_authenticated/workspaces/new/gitlab'
     | '/github/installations/$installationId/setup'
@@ -1190,6 +1190,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/support-shares': {
+      id: '/_authenticated/admin/support-shares'
+      path: '/support-shares'
+      fullPath: '/admin/support-shares'
+      preLoaderRoute: typeof AuthenticatedAdminSupportSharesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/usage': {
       id: '/_authenticated/admin/usage'
       path: '/usage'
@@ -1294,13 +1301,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/w/$workspaceSlug/workspace-activity'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
-    }
-    '/_authenticated/w_/$workspaceSlug/view-as': {
-      id: '/_authenticated/w_/$workspaceSlug/view-as'
-      path: '/w/$workspaceSlug/view-as'
-      fullPath: '/w/$workspaceSlug/view-as'
-      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugViewAsRouteImport
-      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/workspaces/new/': {
       id: '/_authenticated/workspaces/new/'
@@ -1554,6 +1554,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminProviderRemovalsRoute: typeof AuthenticatedAdminProviderRemovalsRoute
   AuthenticatedAdminResearchRoute: typeof AuthenticatedAdminResearchRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminSupportSharesRoute: typeof AuthenticatedAdminSupportSharesRoute
   AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminWorkspacesRoute: typeof AuthenticatedAdminWorkspacesRoute
@@ -1573,6 +1574,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
     AuthenticatedAdminProviderRemovalsRoute,
   AuthenticatedAdminResearchRoute: AuthenticatedAdminResearchRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+  AuthenticatedAdminSupportSharesRoute: AuthenticatedAdminSupportSharesRoute,
   AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminWorkspacesRoute: AuthenticatedAdminWorkspacesRoute,
@@ -1767,7 +1769,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedVerifyPasskeyRoute: typeof AuthenticatedVerifyPasskeyRoute
   AuthenticatedWWorkspaceSlugRouteRoute: typeof AuthenticatedWWorkspaceSlugRouteRouteWithChildren
   AuthenticatedMcpAuthorizeRoute: typeof AuthenticatedMcpAuthorizeRoute
-  AuthenticatedWWorkspaceSlugViewAsRoute: typeof AuthenticatedWWorkspaceSlugViewAsRoute
   AuthenticatedWorkspacesNewGithubRoute: typeof AuthenticatedWorkspacesNewGithubRoute
   AuthenticatedWorkspacesNewGitlabRoute: typeof AuthenticatedWorkspacesNewGitlabRoute
   AuthenticatedWorkspacesNewIndexRoute: typeof AuthenticatedWorkspacesNewIndexRoute
@@ -1782,8 +1783,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedWWorkspaceSlugRouteRoute:
     AuthenticatedWWorkspaceSlugRouteRouteWithChildren,
   AuthenticatedMcpAuthorizeRoute: AuthenticatedMcpAuthorizeRoute,
-  AuthenticatedWWorkspaceSlugViewAsRoute:
-    AuthenticatedWWorkspaceSlugViewAsRoute,
   AuthenticatedWorkspacesNewGithubRoute: AuthenticatedWorkspacesNewGithubRoute,
   AuthenticatedWorkspacesNewGitlabRoute: AuthenticatedWorkspacesNewGitlabRoute,
   AuthenticatedWorkspacesNewIndexRoute: AuthenticatedWorkspacesNewIndexRoute,

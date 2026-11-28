@@ -32,7 +32,6 @@ import {
 } from "@/runtime/browser-faults";
 import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
-import { applyUserViewHeaders } from "@/runtime/user-view/session";
 import { reportVisitVitals } from "@/runtime/web-vitals";
 
 import { routeTree } from "./routeTree.gen";
@@ -46,9 +45,7 @@ client.setConfig({
 	fetch: csrfFetch,
 });
 
-client.interceptors.request.use((request) =>
-	applyUserViewHeaders(applyStateChangingHeaders(request)),
-);
+client.interceptors.request.use(applyStateChangingHeaders);
 
 const router = createRouter({
 	...ROUTER_SEARCH,

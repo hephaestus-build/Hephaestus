@@ -1,7 +1,6 @@
 import { cn } from "cn";
 import type { ReviewPerson as ReviewPersonData } from "@/api/types.gen";
 import { MemberAvatar } from "@/components/activity/MemberAvatar";
-import type { RecordTableColumn } from "@/components/practice-vocabulary/RecordTable";
 import { hasText } from "@/lib/text";
 
 import { developerLabel } from "./review-format";
@@ -38,8 +37,8 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 }
 
 /**
- * Who a piece of feedback is for. Its developer is `null` only for private feedback while the
- * workspace shows admins results without names.
+ * Who a piece of feedback is for. Only feedback on the work names its developer, as the work does:
+ * feedback on a practice page or in a conversation names nobody to staff.
  */
 export function FeedbackPerson({ person }: { person: ReviewPersonData | null }) {
 	return person === null ? (
@@ -47,14 +46,4 @@ export function FeedbackPerson({ person }: { person: ReviewPersonData | null }) 
 	) : (
 		<ReviewPerson person={person} />
 	);
-}
-
-/** The column a result table names its developer in, so a table can leave it out by identity. */
-export const DEVELOPER_COLUMN: RecordTableColumn = { label: "Developer", className: "w-44" };
-
-/** The columns while the workspace shows admins results without names. */
-export function withoutDeveloper(
-	columns: readonly RecordTableColumn[],
-): readonly RecordTableColumn[] {
-	return columns.filter((column) => column !== DEVELOPER_COLUMN);
 }

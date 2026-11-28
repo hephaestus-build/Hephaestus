@@ -60,6 +60,10 @@
 		"access": "internal"
 	},
 	{
+		"operation": "DELETE /user/support-shares/{shareId}",
+		"access": "internal"
+	},
+	{
 		"operation": "DELETE /workspaces/{workspaceSlug}",
 		"access": "internal"
 	},
@@ -335,6 +339,14 @@
 		]
 	},
 	{
+		"operation": "GET /admin/support-shares",
+		"access": "internal"
+	},
+	{
+		"operation": "GET /admin/support-shares/{shareId}",
+		"access": "internal"
+	},
+	{
 		"operation": "GET /admin/users",
 		"access": "internal"
 	},
@@ -492,6 +504,10 @@
 	},
 	{
 		"operation": "GET /user/slack/preferences",
+		"access": "internal"
+	},
+	{
+		"operation": "GET /user/support-shares",
 		"access": "internal"
 	},
 	{
@@ -670,10 +686,6 @@
 	},
 	{
 		"operation": "GET /workspaces/{workspaceSlug}/passkey-policy",
-		"access": "internal"
-	},
-	{
-		"operation": "GET /workspaces/{workspaceSlug}/per-person-results",
 		"access": "internal"
 	},
 	{
@@ -989,14 +1001,6 @@
 		"access": "internal"
 	},
 	{
-		"operation": "GET /workspaces/{workspaceSlug}/user-view/users",
-		"access": "internal"
-	},
-	{
-		"operation": "GET /workspaces/{workspaceSlug}/user-view/users/{accountId}",
-		"access": "internal"
-	},
-	{
 		"operation": "GET /workspaces/{workspaceSlug}/users",
 		"access": "internal"
 	},
@@ -1097,10 +1101,6 @@
 	},
 	{
 		"operation": "PATCH /workspaces/{workspaceSlug}/passkey-policy",
-		"access": "internal"
-	},
-	{
-		"operation": "PATCH /workspaces/{workspaceSlug}/per-person-results",
 		"access": "internal"
 	},
 	{
@@ -1235,10 +1235,6 @@
 	},
 	{
 		"operation": "POST /admin/person-data/{id}/erase",
-		"access": "internal"
-	},
-	{
-		"operation": "POST /admin/person-data/{id}/export",
 		"access": "internal"
 	},
 	{
@@ -1575,6 +1571,14 @@
 	},
 	{
 		"operation": "POST /workspaces/{workspaceSlug}/slack/channels",
+		"access": "internal"
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/support-shares/turns/{turnId}",
+		"access": "internal"
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/support-shares/turns/{turnId}/preview",
 		"access": "internal"
 	},
 	{

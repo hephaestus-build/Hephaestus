@@ -136,7 +136,6 @@ public class ReviewSummaryQueryService {
                     .orElse(null);
             var eventId = review.getEventId();
             var event = eventId == null ? null : reads.refs.events().get(eventId);
-            var requester = review.getRequestedById();
             summaries.put(
                     review.getId(),
                     new ReviewSummaryDTO(
@@ -149,7 +148,6 @@ public class ReviewSummaryQueryService {
                             review.getCreatedAt(),
                             review.getCompletedAt(),
                             event,
-                            requester == null ? null : reads.refs.requesters().get(requester),
                             review.getBatchId(),
                             review.getOrderedAt(),
                             review.getStopReason(),
@@ -287,7 +285,6 @@ public class ReviewSummaryQueryService {
                 s.createdAt(),
                 s.completedAt(),
                 s.startedBy(),
-                s.requestedBy(),
                 s.batchId(),
                 s.orderedAt(),
                 s.stopReason(),

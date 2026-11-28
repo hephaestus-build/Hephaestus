@@ -66,8 +66,7 @@ export function ChangeRoleDialog({
 						{granting ? (
 							<>
 								<strong>{name}</strong> gets the {APP_ROLE_LABELS[nextRole]} role. It gives full
-								access to administer this instance, including managing other users and read-only
-								user views.
+								access to administer this instance, including managing other users.
 							</>
 						) : (
 							<>

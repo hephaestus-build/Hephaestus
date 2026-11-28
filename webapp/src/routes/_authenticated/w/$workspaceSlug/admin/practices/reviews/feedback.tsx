@@ -1,10 +1,7 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import {
-	countReviewFeedbackByLocationOptions,
-	listReviewFeedbackInfiniteOptions,
-} from "@/api/@tanstack/react-query.gen";
+import { listReviewFeedbackInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { FeedbackListPage } from "@/components/admin/practice-reviews/FeedbackListPage";
 import { practiceReviewsHead } from "@/components/admin/practice-reviews/review-levels";
 import {
@@ -13,7 +10,6 @@ import {
 	feedbackSearchSchema,
 	REVIEW_PAGE_SIZE,
 } from "@/components/admin/practice-reviews/review-search";
-import { panelState } from "@/components/common/panel-state";
 import { useReviewScopeSources } from "@/hooks/use-review-scope-sources";
 import { useScopeRecordFilter } from "@/hooks/use-scope-record-filter";
 import { useSearchState } from "@/lib/search-params";
@@ -46,31 +42,18 @@ function FeedbackListRoute() {
 		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, feedbackQueryResult.isError, feedbackQueryResult.error);
-	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);
-	const developerCountsQuery = useQuery({
-		...countReviewFeedbackByLocationOptions({
-			path: { workspaceSlug },
-			query: { personId: search.developerId },
-		}),
-		enabled: search.developerId !== undefined,
-	});
+	const { groups, practices } = useReviewScopeSources(workspaceSlug);
 
 	const record = useScopeRecordFilter(workspaceSlug, search);
 
 	return (
 		<FeedbackListPage
 			record={record}
-			workspaceSlug={workspaceSlug}
 			search={search}
 			onSearchChange={updateSearch}
 			feedback={pagedListState(feedbackQueryResult, (feedback) => feedback.id)}
 			groups={groups}
 			practices={practices}
-			people={people}
-			developerCounts={panelState(developerCountsQuery, (counts) => ({
-				status: "ready" as const,
-				counts,
-			}))}
 		/>
 	);
 }

@@ -122,7 +122,7 @@ the pull request that implemented it, not in a separate plan.
 Impersonation is removed (the migration guide lists what an operator drops); the impersonation
 passages above are decision history. Instance administrators read a workspace member's private
 practice pages and conversations through
-[read-only user views](../contributor/instance-admin.mdx#read-only-user-views) instead.
+[read-only user views](../contributor/instance-admin.mdx#earlier-user-views) instead.
 
 The viewed user is the synced SCM user behind a workspace membership, who may have no account at
 all, so Spring Security's
@@ -167,7 +167,7 @@ server holding a view session: the stateless cookie session and the per-request 
 the only state. Read-only is therefore enforced rather than true by construction: Spring Security
 admits only an instance administrator's `GET` during a view. The rejection of `SwitchUserFilter`
 stands.
-Mechanics: [read-only user views](../contributor/instance-admin.mdx#read-only-user-views).
+Mechanics: [read-only user views](../contributor/instance-admin.mdx#earlier-user-views).
 
 ## Update — 2026-09-26
 

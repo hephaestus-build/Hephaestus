@@ -10,7 +10,6 @@ import { QUEUE_STATE_LABELS } from "./review-queue";
 import { clearedScopeFilters, hasAppliedScope, readScope } from "./review-scope";
 import type { ReviewsSearch } from "./review-search";
 import { ReviewFilterBar } from "./ReviewFilterBar";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 
 const STATUS_OPTIONS = statusFacetOptions(REVIEW_STATUS_DEFS);
@@ -38,7 +37,6 @@ export interface ReviewFiltersProps {
 	onClearScope: () => void;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	total: number | undefined;
 	record?: ScopeRecordFilter;
 }
@@ -50,7 +48,6 @@ export function ReviewFilters({
 	onClearScope,
 	groups,
 	practices,
-	people,
 	total,
 	record,
 }: ReviewFiltersProps) {
@@ -66,7 +63,6 @@ export function ReviewFilters({
 			dateTitle="Created"
 			groups={groups}
 			practices={practices}
-			people={people}
 			record={record}
 			facets={status.control}
 			pills={status.pills}

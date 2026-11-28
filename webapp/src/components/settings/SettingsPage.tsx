@@ -35,6 +35,7 @@ import {
 	SlackPreferencesSection,
 	type SlackPreferencesSectionProps,
 } from "./SlackPreferencesSection";
+import { SupportSharesSection, type SupportSharesSectionProps } from "./SupportSharesSection";
 import {
 	hasWeeklyDigest,
 	WeeklyDigestSection,
@@ -57,6 +58,7 @@ export interface SettingsPageProps {
 	showSlackPreferencesSection?: boolean;
 	sessionsProps: SessionsSectionProps;
 	leaveWorkspaceProps: LeaveWorkspaceSectionProps;
+	supportSharesProps: SupportSharesSectionProps;
 	dangerZoneProps: DangerZoneSectionProps;
 	isLoading?: boolean;
 	settingsError?: boolean;
@@ -78,6 +80,7 @@ export function SettingsPage({
 	showSlackPreferencesSection = true,
 	sessionsProps,
 	leaveWorkspaceProps,
+	supportSharesProps,
 	dangerZoneProps,
 	isLoading = false,
 	settingsError = false,
@@ -107,6 +110,7 @@ export function SettingsPage({
 		{ id: "preferences", label: "Preferences" },
 		...(showResearchSection ? [{ id: "research", label: "Research participation" }] : []),
 		{ id: "workspaces", label: "Workspaces" },
+		{ id: "support-shares", label: "Support shares" },
 		{ id: "danger-zone", label: "Danger zone" },
 	];
 
@@ -219,6 +223,11 @@ export function SettingsPage({
 				<Separator />
 				<div id="workspaces" className="scroll-mt-20">
 					<LeaveWorkspaceSection {...leaveWorkspaceProps} />
+				</div>
+
+				<Separator />
+				<div id="support-shares" className="scroll-mt-20">
+					<SupportSharesSection {...supportSharesProps} />
 				</div>
 
 				<Separator />

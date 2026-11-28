@@ -536,7 +536,6 @@ interface ResultSpec {
 	capturedAt?: string;
 	recordedAt: string;
 	item?: ItemRef;
-	aboutTheWork?: true;
 	/** Denied evidence hides text and citations without changing problem counts. */
 	evidenceHidden?: true;
 	unknownProof?: true;
@@ -559,7 +558,6 @@ interface ReviewSpec {
 	person: ReviewPerson | null;
 	origin?: ReviewSummary["origin"];
 	event?: string;
-	requestedBy?: AccountRef;
 	batchId?: string;
 	pending?: string[];
 	withheld?: { practiceSlug: string; reason: string }[];
@@ -1140,7 +1138,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		startedAt: "2026-07-26T16:00:00Z",
 		person: grace,
 		origin: "REQUEST",
-		requestedBy: reviewAccounts.grace,
 		results: [
 			{
 				id: "eeeeeeee-3333-3333-3333-333333333333",
@@ -1543,7 +1540,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		startedAt: "2026-07-27T20:00:00Z",
 		person: null,
 		origin: "REQUEST",
-		requestedBy: reviewAccounts.grace,
 		jobs: 4,
 		results: [
 			{
@@ -1555,7 +1551,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				outcome: "NOT_MET",
 				recordedAt: "2026-07-27T20:12:00Z",
 				item: scannedFiles[0],
-				aboutTheWork: true,
 				problems: [
 					{
 						severity: "MAJOR",
@@ -1580,7 +1575,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				outcome: "MET",
 				recordedAt: "2026-07-27T20:14:00Z",
 				item: scannedFiles[1],
-				aboutTheWork: true,
 			},
 		],
 		feedback: [],
@@ -1805,7 +1799,6 @@ function toResult(review: ReviewSpec, spec: ResultSpec): ReviewResult {
 		id: spec.id,
 		reviewId: review.id,
 		item: itemOf(review, spec),
-		person: spec.aboutTheWork === true ? null : review.person,
 		practiceSlug: spec.practiceSlug,
 		practiceName: practiceNameOf(spec.practiceSlug),
 		outcome: spec.outcome,
@@ -1833,7 +1826,6 @@ export function boundResultOf(result: ReviewBoundResult): ReviewBoundResult {
 		id: result.id,
 		reviewId: result.reviewId,
 		item: result.item,
-		person: result.person,
 		practiceSlug: result.practiceSlug,
 		practiceName: result.practiceName,
 		outcome: result.outcome,
@@ -1872,7 +1864,6 @@ function toProblemRows(review: ReviewSpec, spec: ResultSpec): ReviewProblem[] {
 			resultId: result.id,
 			reviewId: result.reviewId,
 			item: result.item,
-			person: result.person,
 			practiceSlug: result.practiceSlug,
 			practiceName: result.practiceName,
 			group: groupRefOf(result.practiceSlug),
@@ -2171,7 +2162,8 @@ function toFeedback(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback {
 		id: spec.id,
 		reviewId: review.id,
 		item: review.item,
-		person: developerOfFeedback(review),
+		// Only feedback on the work names its developer, as the work does (ADR 0125).
+		person: spec.destination === "ON_WORK" ? developerOfFeedback(review) : null,
 		destination: spec.destination,
 		state: spec.state,
 		stopReason: spec.stopReason ?? null,
@@ -2441,7 +2433,6 @@ function toReview(review: ReviewSpec): ReviewSummary {
 		progress: null,
 		stopReason: review.stopReason ?? null,
 		startedBy: startedByOf(review),
-		requestedBy: review.requestedBy ?? null,
 		batchId: review.batchId ?? null,
 		createdAt,
 		orderedAt: createdAt,
@@ -2458,10 +2449,6 @@ function toReview(review: ReviewSpec): ReviewSummary {
 export const reviews: ReviewSummary[] = allReviews
 	.map(toReview)
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-export function reviewDeveloperOf(reviewId: string): ReviewPerson | null {
-	return allReviews.find((entry) => entry.id === reviewId)?.person ?? null;
-}
 
 export function reviewRefOf(review: ReviewSummary): ReviewRef {
 	return {
@@ -2999,7 +2986,6 @@ const queueItem = (
 	index: number,
 	state: "running" | "waiting" | "held",
 	item: ItemRef,
-	person: ReviewPerson | null,
 	minutes: number,
 ): ReviewQueueItem => ({
 	reviewId: `0c0c0c0c-0000-4000-8000-${String(index).padStart(12, "0")}`,
@@ -3008,17 +2994,16 @@ const queueItem = (
 	progress: null,
 	heldForBudget: state === "held",
 	item,
-	person,
 	since: minutesBefore(minutes),
 });
 
 export const reviewQueueHead = {
-	runningLong: queueItem(1, "running", reviewItem, ada, 3),
-	runningShort: queueItem(2, "running", gitlabMergeRequest, grace, 1),
-	waitingLong: queueItem(3, "waiting", webhookRetryPullRequest, alan, 4),
-	waitingShort: queueItem(4, "waiting", leagueColumnsPullRequest, katherine, 2),
-	waitingNew: queueItem(5, "waiting", invoiceBackfillMergeRequest, barbara, 1),
-	scanJob: queueItem(6, "held", scannedRepository, null, 1),
+	runningLong: queueItem(1, "running", reviewItem, 3),
+	runningShort: queueItem(2, "running", gitlabMergeRequest, 1),
+	waitingLong: queueItem(3, "waiting", webhookRetryPullRequest, 4),
+	waitingShort: queueItem(4, "waiting", leagueColumnsPullRequest, 2),
+	waitingNew: queueItem(5, "waiting", invoiceBackfillMergeRequest, 1),
+	scanJob: queueItem(6, "held", scannedRepository, 1),
 };
 
 export const idleReviewQueue: ReviewQueue = {

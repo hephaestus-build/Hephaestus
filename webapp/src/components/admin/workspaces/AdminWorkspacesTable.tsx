@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Building2, Settings, Users } from "lucide-react";
+import { Building2, Settings } from "lucide-react";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { QueryErrorAlert, type QueryErrorAlertProps } from "@/components/common/QueryErrorAlert";
 import { definitionFor, isKnownValue, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -29,7 +29,6 @@ export interface AdminWorkspacesTableProps {
 	/** Reading the list again failed; the workspaces last read stay, with the failure above them. */
 	refreshFailure?: RefreshFailure;
 	hasSearch: boolean;
-	onViewAsUser: (workspace: AdminWorkspaceView) => void;
 }
 
 type WorkspaceStatus = AdminWorkspaceView["status"];
@@ -89,7 +88,6 @@ export function AdminWorkspacesTable({
 	loadFailure,
 	refreshFailure,
 	hasSearch,
-	onViewAsUser,
 }: AdminWorkspacesTableProps) {
 	if (loadFailure !== undefined) {
 		return <QueryErrorAlert title="We could not load workspaces" {...loadFailure} />;
@@ -167,18 +165,6 @@ export function AdminWorkspacesTable({
 											<Settings aria-hidden />
 											Open administration
 										</Link>
-										{/* The server answers no user-view read of a workspace that is not active. */}
-										{ws.status === "ACTIVE" && (
-											<Button
-												variant="outline"
-												size="sm"
-												aria-label={`View as user in ${ws.displayName}`}
-												onClick={() => onViewAsUser(ws)}
-											>
-												<Users aria-hidden />
-												View as user
-											</Button>
-										)}
 									</div>
 								)}
 							</TableCell>

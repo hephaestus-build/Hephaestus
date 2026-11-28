@@ -108,14 +108,14 @@ export const Busy: Story = {
 		await expect(levelsOpenedBy(oldest)).toEqual(["review:0c0c0c0c-0000-4000-8000-000000000003"]);
 		const rows = rowsOf(canvas);
 		await expect(rows).toHaveLength(3);
-		// A small table: work, developer, state and how long, each column lined up down the rows.
+		// A small table: work, state and how long, each column lined up down the rows. No developer.
 		await expect(
 			within(canvas.getByRole("table", { name: "First in the queue" }))
 				.getAllByRole("columnheader")
 				.map((head) => head.textContent),
-		).toEqual(["Work", "Developer", "State", "Since / Waited"]);
-		await expect(rows[0]).toHaveTextContent("#1423Ada LovelaceRunning3 min");
-		await expect(rows[2]).toHaveTextContent("#1431Alan TuringWaiting4 min");
+		).toEqual(["Work", "State", "Since / Waited"]);
+		await expect(rows[0]).toHaveTextContent("#1423Running3 min");
+		await expect(rows[2]).toHaveTextContent("#1431Waiting4 min");
 		const lefts = (column: number) =>
 			new Set(
 				rows.map((row) => Math.round(row.children[column]?.getBoundingClientRect().left ?? 0)),
@@ -248,7 +248,8 @@ export const OnHold: Story = {
 		});
 		await expect(new URL(held.href).searchParams.get("queueState")).toBe("HELD");
 		await expect(rowsOf(canvas)).toHaveLength(1);
-		await expect(rowsOf(canvas)[0]).toHaveTextContent("#1431Alan TuringOn hold42 min");
+		// A row names its work, never a person (ADR 0164).
+		await expect(rowsOf(canvas)[0]).toHaveTextContent("#1431On hold42 min");
 	},
 };
 

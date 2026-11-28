@@ -199,13 +199,7 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
                         FROM.minusSeconds(20),
                         1,
                         List.of(new ReviewQueueJob(
-                                jobId,
-                                result.getReviewId(),
-                                result.getItemId(),
-                                result.getDeveloperId(),
-                                ReviewJobStatus.QUEUED,
-                                true,
-                                FROM)),
+                                jobId, result.getReviewId(), result.getItemId(), ReviewJobStatus.QUEUED, true, FROM)),
                         4,
                         48));
         get("/queue")

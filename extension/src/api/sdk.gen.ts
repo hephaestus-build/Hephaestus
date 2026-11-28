@@ -70,9 +70,6 @@ import type {
 	AdminExportAuthEventsData,
 	AdminExportAuthEventsErrors,
 	AdminExportAuthEventsResponses,
-	AdminExportPersonDataData,
-	AdminExportPersonDataErrors,
-	AdminExportPersonDataResponses,
 	AdminGetConfigurationReadinessData,
 	AdminGetConfigurationReadinessErrors,
 	AdminGetConfigurationReadinessResponses,
@@ -283,6 +280,9 @@ import type {
 	CreateReviewScheduleData,
 	CreateReviewScheduleErrors,
 	CreateReviewScheduleResponses,
+	CreateSupportShareData,
+	CreateSupportShareErrors,
+	CreateSupportShareResponses,
 	CreateWorkspaceData,
 	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
@@ -502,9 +502,6 @@ import type {
 	GetPasskeyVerificationOptionsData,
 	GetPasskeyVerificationOptionsErrors,
 	GetPasskeyVerificationOptionsResponses,
-	GetPerPersonResultsData,
-	GetPerPersonResultsErrors,
-	GetPerPersonResultsResponses,
 	GetPersonalGoalData,
 	GetPersonalGoalErrors,
 	GetPersonalGoalResponses,
@@ -628,9 +625,6 @@ import type {
 	GetUsersWithTeamsData,
 	GetUsersWithTeamsErrors,
 	GetUsersWithTeamsResponses,
-	GetUserViewUserData,
-	GetUserViewUserErrors,
-	GetUserViewUserResponses,
 	GetWorkspaceData,
 	GetWorkspaceErrors,
 	GetWorkspacePasskeyPolicyData,
@@ -735,6 +729,9 @@ import type {
 	ListOwnReviewsData,
 	ListOwnReviewsErrors,
 	ListOwnReviewsResponses,
+	ListOwnSupportSharesData,
+	ListOwnSupportSharesErrors,
+	ListOwnSupportSharesResponses,
 	ListPracticeDraftsData,
 	ListPracticeDraftsErrors,
 	ListPracticeDraftsResponses,
@@ -753,6 +750,9 @@ import type {
 	ListProductFeedbackNeedsActionData,
 	ListProductFeedbackNeedsActionErrors,
 	ListProductFeedbackNeedsActionResponses,
+	ListReceivedSupportSharesData,
+	ListReceivedSupportSharesErrors,
+	ListReceivedSupportSharesResponses,
 	ListResponses,
 	ListResultMarksData,
 	ListResultMarksErrors,
@@ -805,9 +805,6 @@ import type {
 	ListSlackChannelsData,
 	ListSlackChannelsErrors,
 	ListSlackChannelsResponses,
-	ListUserViewUsersData,
-	ListUserViewUsersErrors,
-	ListUserViewUsersResponses,
 	ListWorkspaceConfigAuditEventsData,
 	ListWorkspaceConfigAuditEventsErrors,
 	ListWorkspaceConfigAuditEventsResponses,
@@ -841,12 +838,18 @@ import type {
 	PreviewReviewScopeData,
 	PreviewReviewScopeErrors,
 	PreviewReviewScopeResponses,
+	PreviewSupportShareData,
+	PreviewSupportShareErrors,
+	PreviewSupportShareResponses,
 	PurgeWorkspaceData,
 	PurgeWorkspaceErrors,
 	PurgeWorkspaceResponses,
 	ReadData,
 	ReadErrors,
 	ReadResponses,
+	ReadSupportShareData,
+	ReadSupportShareErrors,
+	ReadSupportShareResponses,
 	RecheckFeedbackDeliveryData,
 	RecheckFeedbackDeliveryErrors,
 	RecheckFeedbackDeliveryResponses,
@@ -967,6 +970,9 @@ import type {
 	RevokeSessionData,
 	RevokeSessionErrors,
 	RevokeSessionResponses,
+	RevokeSupportShareData,
+	RevokeSupportShareErrors,
+	RevokeSupportShareResponses,
 	SavePersonalGoalData,
 	SavePersonalGoalErrors,
 	SavePersonalGoalResponses,
@@ -1069,9 +1075,6 @@ import type {
 	UpdatePasskeyProtectionData,
 	UpdatePasskeyProtectionErrors,
 	UpdatePasskeyProtectionResponses,
-	UpdatePerPersonResultsData,
-	UpdatePerPersonResultsErrors,
-	UpdatePerPersonResultsResponses,
 	UpdatePracticeData,
 	UpdatePracticeErrors,
 	UpdatePracticeGroupData,
@@ -2069,22 +2072,6 @@ export const adminErasePersonData = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-/**
- * Download the preview's frozen scope as one JSON file
- */
-export const adminExportPersonData = <ThrowOnError extends boolean = false>(
-	options: Options<AdminExportPersonDataData, ThrowOnError>,
-): RequestResult<AdminExportPersonDataResponses, AdminExportPersonDataErrors, ThrowOnError> =>
-	(options.client ?? client).post<
-		AdminExportPersonDataResponses,
-		AdminExportPersonDataErrors,
-		ThrowOnError
-	>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/admin/person-data/{id}/export",
-		...options,
-	});
-
 export const getInstanceCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<GetInstanceCatalogData, ThrowOnError>,
 ): RequestResult<GetInstanceCatalogResponses, GetInstanceCatalogErrors, ThrowOnError> =>
@@ -2840,6 +2827,40 @@ export const adminUpdateSilentMode = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * List the support shares you can read now
+ */
+export const listReceivedSupportShares = <ThrowOnError extends boolean = false>(
+	options?: Options<ListReceivedSupportSharesData, ThrowOnError>,
+): RequestResult<
+	ListReceivedSupportSharesResponses,
+	ListReceivedSupportSharesErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListReceivedSupportSharesResponses,
+		ListReceivedSupportSharesErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/support-shares",
+		...options,
+	});
+
+/**
+ * Read a support share addressed to you
+ *
+ * Each read counts, and the person sees the count and the time of the last read.
+ */
+export const readSupportShare = <ThrowOnError extends boolean = false>(
+	options: Options<ReadSupportShareData, ThrowOnError>,
+): RequestResult<ReadSupportShareResponses, ReadSupportShareErrors, ThrowOnError> =>
+	(options.client ?? client).get<ReadSupportShareResponses, ReadSupportShareErrors, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/support-shares/{shareId}",
+		...options,
 	});
 
 /**
@@ -4113,6 +4134,40 @@ export const getSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/slack/preferences",
+		...options,
+	});
+
+/**
+ * List your support shares, also the ended ones
+ */
+export const listOwnSupportShares = <ThrowOnError extends boolean = false>(
+	options?: Options<ListOwnSupportSharesData, ThrowOnError>,
+): RequestResult<ListOwnSupportSharesResponses, ListOwnSupportSharesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListOwnSupportSharesResponses,
+		ListOwnSupportSharesErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/support-shares",
+		...options,
+	});
+
+/**
+ * Revoke a support share now
+ *
+ * The recipient can no longer read it. It stays in your list as revoked.
+ */
+export const revokeSupportShare = <ThrowOnError extends boolean = false>(
+	options: Options<RevokeSupportShareData, ThrowOnError>,
+): RequestResult<RevokeSupportShareResponses, RevokeSupportShareErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RevokeSupportShareResponses,
+		RevokeSupportShareErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/support-shares/{shareId}",
 		...options,
 	});
 
@@ -5619,44 +5674,6 @@ export const updateWorkspacePasskeyPolicy = <ThrowOnError extends boolean = fals
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-/**
- * Whether workspace admins see practice results per person
- */
-export const getPerPersonResults = <ThrowOnError extends boolean = false>(
-	options: Options<GetPerPersonResultsData, ThrowOnError>,
-): RequestResult<GetPerPersonResultsResponses, GetPerPersonResultsErrors, ThrowOnError> =>
-	(options.client ?? client).get<
-		GetPerPersonResultsResponses,
-		GetPerPersonResultsErrors,
-		ThrowOnError
-	>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/per-person-results",
-		...options,
-	});
-
-/**
- * Turn per-person results for admins on or off
- *
- * Only a workspace owner turns it on. Any workspace admin turns it off.
- */
-export const updatePerPersonResults = <ThrowOnError extends boolean = false>(
-	options: Options<UpdatePerPersonResultsData, ThrowOnError>,
-): RequestResult<UpdatePerPersonResultsResponses, UpdatePerPersonResultsErrors, ThrowOnError> =>
-	(options.client ?? client).patch<
-		UpdatePerPersonResultsResponses,
-		UpdatePerPersonResultsErrors,
-		ThrowOnError
-	>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/per-person-results",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -7699,6 +7716,46 @@ export const updateStatus = <ThrowOnError extends boolean = false>(
 	});
 
 /**
+ * Share this turn with one instance admin for 7 days
+ */
+export const createSupportShare = <ThrowOnError extends boolean = false>(
+	options: Options<CreateSupportShareData, ThrowOnError>,
+): RequestResult<CreateSupportShareResponses, CreateSupportShareErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateSupportShareResponses,
+		CreateSupportShareErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/support-shares/turns/{turnId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Show exactly what an instance admin would read if you share this turn
+ */
+export const previewSupportShare = <ThrowOnError extends boolean = false>(
+	options: Options<PreviewSupportShareData, ThrowOnError>,
+): RequestResult<PreviewSupportShareResponses, PreviewSupportShareErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		PreviewSupportShareResponses,
+		PreviewSupportShareErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/support-shares/turns/{turnId}/preview",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
  * Whether a sync is running in this workspace
  */
 export const getWorkspaceSyncProgress = <ThrowOnError extends boolean = false>(
@@ -7813,32 +7870,6 @@ export const updateToken = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-/**
- * List workspace users and their linked account status
- */
-export const listUserViewUsers = <ThrowOnError extends boolean = false>(
-	options: Options<ListUserViewUsersData, ThrowOnError>,
-): RequestResult<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError>(
-		{
-			security: [{ scheme: "bearer", type: "http" }],
-			url: "/workspaces/{workspaceSlug}/user-view/users",
-			...options,
-		},
-	);
-
-/**
- * Confirm access to a workspace user
- */
-export const getUserViewUser = <ThrowOnError extends boolean = false>(
-	options: Options<GetUserViewUserData, ThrowOnError>,
-): RequestResult<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/user-view/users/{accountId}",
-		...options,
 	});
 
 /**

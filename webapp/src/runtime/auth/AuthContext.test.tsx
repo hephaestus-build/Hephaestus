@@ -3,24 +3,17 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { useState } from "react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
-import { clearUserView, getUserViewSession } from "@/runtime/user-view/session";
 import { deferred } from "@/test/async";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import { testQueryClient } from "@/test/router-harness";
-import { storeUserView } from "@/test/user-view";
 
 import { AuthProvider, useAuth } from "./AuthContext";
 
-beforeEach(() => storeUserView());
-
-afterEach(() => {
-	clearUserView();
-	restoreNavigation();
-});
+afterEach(restoreNavigation);
 
 function SignOut() {
 	const { logout, username } = useAuth();
@@ -55,28 +48,28 @@ function renderSignOut() {
 	);
 }
 
-it("keeps the view and the viewed user when sign-out fails", async () => {
+it("keeps the reader signed in when sign-out fails", async () => {
 	server.use(http.post("*/auth/logout", () => HttpResponse.error()));
 	renderSignOut();
-	await screen.findByText("Acting as alex");
-
-	await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-	await screen.findByText("Sign-out settled");
-
-	expect(getUserViewSession()?.accountId).toBe("11");
-	expect(screen.queryByText("Acting as alex")).not.toBeNull();
-});
-
-it("ends the view when sign-out succeeds", async () => {
-	server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status: 204 })));
-	renderSignOut();
-	await screen.findByText("Acting as alex");
+	await screen.findByText("Acting as octocat");
 	const assigned = captureNavigation();
 
 	await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
 	await screen.findByText("Sign-out settled");
 
-	expect(getUserViewSession()).toBeUndefined();
+	expect(assigned).toStrictEqual([]);
+	expect(screen.queryByText("Acting as octocat")).not.toBeNull();
+});
+
+it("leaves for the start page when sign-out succeeds", async () => {
+	server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status: 204 })));
+	renderSignOut();
+	await screen.findByText("Acting as octocat");
+	const assigned = captureNavigation();
+
+	await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+	await screen.findByText("Sign-out settled");
+
 	expect(assigned).toStrictEqual(["/"]);
 });
 

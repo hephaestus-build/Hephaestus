@@ -188,6 +188,15 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "host_pairing",
                     "Host pairing requests (ADR 0166). Pairing writes come only in a release after the registration"));
 
+    /**
+     * Personal tables that only the account purge erases, because no erasure inventory names their store yet (ADR 0164).
+     * Each entry names that erasure and the issue that registers the store.
+     */
+    private static final Map<String, String> PURGED_WITH_THE_ACCOUNT = Map.of(
+            "support_share",
+            "ConversationPersonDataCatalog.eraseAccount deletes the person's shares and the shares addressed to them;"
+                    + " #5364");
+
     /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
     private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(
             "provider_resource_repair",
@@ -379,6 +388,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE.keySet(), registry.stores()))
                 .as("a table that a registered store erases leaves REGISTERED_NEXT_RELEASE")
                 .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE.keySet());
+        // Such a table goes with the account purge until its store joins the erasure inventory.
+        required.removeAll(PURGED_WITH_THE_ACCOUNT.keySet());
+        assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
+                .contains("support_share.account_id", "support_share.recipient_account_id");
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);

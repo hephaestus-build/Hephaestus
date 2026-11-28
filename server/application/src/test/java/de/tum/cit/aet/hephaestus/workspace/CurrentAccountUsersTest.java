@@ -27,8 +27,9 @@ class CurrentAccountUsersTest extends BaseUnitTest {
 
     @Test
     void shouldKeepLinkOrderAndDeduplicateRepeatedActors() {
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext("42", new String[0], "token"));
         when(providers.accountActors(42L)).thenReturn(List.of(actor(1L, 7L), actor(2L, 8L), actor(1L, 7L)));
-        assertThat(resolver.resolve(42L)).extracting(ActorProfile::actorId).containsExactly(7L, 8L);
+        assertThat(resolver.resolve()).extracting(ActorProfile::actorId).containsExactly(7L, 8L);
     }
 
     @Test

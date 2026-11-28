@@ -69,7 +69,7 @@ public class WorkspaceAccessService {
     }
 
     /**
-     * A membership the caller holds in this workspace, or, in a user view, the viewed member holds.
+     * A membership the caller holds in this workspace.
      * Instance-admin elevation lends a role to administer a workspace, never a place in it.
      */
     public boolean isMemberWithoutElevation() {

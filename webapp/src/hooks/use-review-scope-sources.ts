@@ -6,14 +6,11 @@ import {
 	type PracticeFacetOption,
 	practiceFacetOptions,
 } from "@/components/admin/practice-reviews/ResultFilters";
-import type { ReviewPeople } from "@/components/admin/practice-reviews/ReviewPersonFacet";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
-import { useReviewPeople } from "@/hooks/use-review-people";
 
 export interface ReviewScopeSources {
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 }
 
 /**
@@ -23,7 +20,6 @@ export interface ReviewScopeSources {
 export function useReviewScopeSources(workspaceSlug: string): ReviewScopeSources {
 	const groupsQuery = useQuery({ ...listPracticeGroupsOptions({ path: { workspaceSlug } }) });
 	const practicesQuery = useQuery({ ...listPracticesOptions({ path: { workspaceSlug } }) });
-	const people = useReviewPeople(workspaceSlug);
 	return {
 		groups: {
 			options: groupFacetOptions(groupsQuery.data),
@@ -35,6 +31,5 @@ export function useReviewScopeSources(workspaceSlug: string): ReviewScopeSources
 			isLoading: practicesQuery.isLoading,
 			isError: practicesQuery.isError,
 		},
-		people,
 	};
 }

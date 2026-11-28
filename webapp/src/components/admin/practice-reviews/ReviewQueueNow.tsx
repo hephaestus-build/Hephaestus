@@ -16,7 +16,6 @@ import {
 } from "@/components/practice-vocabulary/review-status-defs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { durationText } from "@/lib/dates";
-import { firstNonBlank } from "@/lib/text";
 
 import { type CardFigure, FigureCaption, FigureRow } from "./CardFigures";
 import { OVERVIEW_TYPE } from "./overview-type-scale";
@@ -281,21 +280,18 @@ const QUEUE_HEAD = cn("pb-1 font-medium", OVERVIEW_TYPE.caption);
 const QUEUE_CELL = "py-0.5 align-middle";
 
 /**
- * The first reviews in line as a small table: the work, which opens the review, the developer, the
- * state and how long it has run or waited. Each column lines up down the rows; the developer takes
- * what room is left and truncates first, so the time is never cut off. A held review's time runs
- * from its request, since its hold points at the next check of the cap.
+ * The first reviews in line as a small table: the work, which opens the review, the state and how
+ * long it has run or waited. It names no developer (ADR 0125). Each column lines up down the rows;
+ * the work takes what room is left and truncates first, so the time is never cut off. A held
+ * review's time runs from its request, since its hold points at the next check of the cap.
  */
 function QueueTable({ queue, rows }: { queue: ReviewQueue; rows: readonly ReviewQueueItem[] }) {
 	return (
 		<table aria-label="First in the queue" className="w-full text-sm">
 			<thead>
 				<tr className="border-b text-left">
-					<th scope="col" className={cn(QUEUE_HEAD, "pr-4")}>
-						Work
-					</th>
 					<th scope="col" className={cn(QUEUE_HEAD, "w-full pr-4")}>
-						Developer
+						Work
 					</th>
 					<th scope="col" className={cn(QUEUE_HEAD, "pr-4")}>
 						State
@@ -326,23 +322,16 @@ function QueueRow({ queue, item }: { queue: ReviewQueue; item: ReviewQueueItem }
 	const StateIcon = def.icon;
 	return (
 		<tr>
-			<td className={cn(QUEUE_CELL, "pr-4 whitespace-nowrap")}>
+			{/* `max-w-0` lets the cell shrink below its words, so the work truncates, not the row. */}
+			<td className={cn(QUEUE_CELL, "max-w-0 pr-4 whitespace-nowrap")}>
 				<InlineLink
-					className="inline-flex items-center gap-1.5"
+					className="inline-flex max-w-full items-center gap-1.5"
 					title={item.item.title ?? undefined}
 					render={<DetailStackLink entry={reviewLevel(item.reviewId)} single />}
 				>
 					<Icon className="size-3.5 shrink-0" />
-					<span>{item.item.label}</span>
+					<span className="truncate">{item.item.label}</span>
 				</InlineLink>
-			</td>
-			{/* `max-w-0` lets the cell shrink below its words, so the name truncates, not the row. */}
-			<td className={cn(QUEUE_CELL, "max-w-0 pr-4", OVERVIEW_TYPE.label)}>
-				<span className="block truncate">
-					{item.person
-						? (firstNonBlank(item.person.displayName, item.person.providerLogin) ?? "")
-						: ""}
-				</span>
 			</td>
 			<td className={cn(QUEUE_CELL, "pr-4 whitespace-nowrap", OVERVIEW_TYPE.label)}>
 				<span

@@ -11,7 +11,6 @@ import { reportWebVitals } from "@/api/sdk.gen";
 import type { WebVital } from "@/api/types.gen";
 import type { FileRoutesById } from "@/routeTree.gen";
 import { featureFlagsQueryOptions } from "@/runtime/feature-flags/hooks";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** The journey pages the server knows by name. Every other page reports as `OTHER`. */
 const JOURNEY_PAGES: [keyof FileRoutesById, WebVital["page"]][] = [
@@ -190,8 +189,7 @@ export function reportVisitVitals(router: AnyRouter, queryClient: QueryClient) {
 			return;
 		}
 		landed = true;
-		// A user view shows another person's pages; the administrator's visit is no reader's.
-		if (restored || page === null || getUserViewSession() !== undefined) {
+		if (restored || page === null) {
 			return;
 		}
 		landing = page;

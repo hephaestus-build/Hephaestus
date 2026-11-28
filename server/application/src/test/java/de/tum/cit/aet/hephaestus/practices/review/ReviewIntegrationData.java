@@ -119,8 +119,6 @@ public class ReviewIntegrationData {
     private Scenario scenario(ItemKind kind, PracticeDefinition definition, long sourceId, String practiceSlug) {
         var workspace = WorkspaceTestFixtures.activeWorkspace("s5-" + UUID.randomUUID());
         workspace.getFeatures().setPracticesEnabled(true);
-        // A workspace that ran reviews before the setting existed keeps per-person results for its admins.
-        workspace.setPerPersonResultsForAdmins(true);
         workspaces.saveAndFlush(workspace);
         var account = accounts.saveAndFlush(new Account("S5 developer"));
         var membership = new Membership();

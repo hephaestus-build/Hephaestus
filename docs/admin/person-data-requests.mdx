@@ -1,6 +1,6 @@
 ---
 title: Answer an access or erasure request
-description: Export or erase what Hephaestus holds about one person with the person-data console, and reply to the request.
+description: Preview or erase what Hephaestus holds about one person with the person-data console, and reply to the request.
 page_type: how-to
 ---
 
@@ -12,7 +12,7 @@ A member can also delete their own account under [Danger zone](/user/user-settin
 ## Before you start
 
 - You are an instance admin with a recent sign-in.
-  The preview, the export and the erasure require it.
+  The preview and the erasure require it.
 - You verified the identity and the authority of the requester, as your privacy procedure and the [data-protection documentation](./dsms) require.
 - You have the exact identities of the person.
   An identity is an account ID, or a provider instance with the native provider user ID.
@@ -31,26 +31,22 @@ A member can also delete their own account under [Danger zone](/user/user-settin
 5. Select **Preview data**.
 6. Check the resolved identities and the row count of each store.
 
-   Export and erasure use exactly the rows of this preview.
+   The erasure uses exactly the rows of this preview.
    The preview expires after 48 hours.
    If the data changes, preview again.
 
 ## Answer an access request
 
-1. Select **Download JSON export**.
+No console page hands you the records of a person ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)).
+A later release delivers them to the person's own data exports (#5390).
 
-   The export has a schema version and a `stores` object, keyed by store name.
-   It has no credentials, no session capabilities and no profiles of other people.
-   It does not redact names, secrets or details of other people in source text.
-   Its `git_repository_history` section lists the repositories whose history can hold commits of the person.
-
-2. Read the shared-source and free-text content of the export for the rights of other people (GDPR Art. 15(4)).
-3. If a disclosure would harm another person, redact that part of the delivery copy, and record the risk.
-   Do not change the canonical records.
-4. Write the reply from your [record of processing](./dsms/record-of-processing.mdx).
+1. Ask the person to download their data under [Export your data](/user/user-settings#export-your-data).
+   That export holds their account data, their conversations and the feedback delivered to them.
+2. Use the preview to name the stores that hold data about the person, and their row counts.
+3. Write the reply from your [record of processing](./dsms/record-of-processing.mdx).
    Include the purposes, categories, recipients, retention, rights, complaint route, sources and transfer safeguards (GDPR Art. 15).
-5. Send the export and the reply to the verified requester through a secure channel.
-6. Delete your delivery copy when its expiry date comes.
+4. For the records that the export leaves out, follow the procedure of your instance outside Hephaestus.
+   Record what you send.
 
 The export alone does not complete the reply.
 The [EDPB right-of-access guidelines](https://www.edpb.europa.eu/documents/guideline/guidelines-012022-on-data-subject-rights-right-of-access_en) give the full duty.
@@ -94,11 +90,9 @@ It keeps no erased content and no identity of the person.
 
 ## Check that it worked
 
-1. For an access request, open the export.
-   It has a `stores` entry for each store that the preview listed with rows.
-2. For an erasure, open the request.
+1. For an erasure, open the request.
    It shows **Erasure complete**.
-3. Select **Preview data** again for the same identities.
+2. Select **Preview data** again for the same identities.
    Only the rows that the personal-data map keeps after an erasure remain.
 
 ## Troubleshooting
@@ -122,7 +116,7 @@ Keep the request open while you check the selection and the origin of the copies
 
 **Check:** The request shows **Erasure complete**.
 
-### The export or the erasure refuses the preview
+### The erasure refuses the preview
 
 **Cause:** A provider write started, or its result changed, after the preview.
 An unconfirmed write, or a comment without an exact locator, also stops the request and names its send or review.
@@ -132,7 +126,7 @@ An unconfirmed write, or a comment without an exact locator, also stops the requ
 1. Inspect the named send or review, and the provider locators.
 2. Select **Preview data** again.
 
-**Check:** The export or the erasure accepts the new preview.
+**Check:** The erasure accepts the new preview.
 
 ### A server with evidence is offline
 

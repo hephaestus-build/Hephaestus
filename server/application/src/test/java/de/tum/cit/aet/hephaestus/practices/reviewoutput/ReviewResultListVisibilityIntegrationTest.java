@@ -123,8 +123,6 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         assertThat(shown.markedIncorrectAt()).isNull();
         assertThat(shown.feedback().delivered()).isEqualTo(1);
         assertThat(shown.feedback().ready()).isZero();
-        assertThat(shown.person()).isNotNull();
-        assertThat(shown.person().accountId()).isEqualTo(Long.toString(account));
         var withheld = page.getContent().getLast();
         assertThat(withheld.id()).isEqualTo(hidden.getId());
         assertThat(withheld.summary()).isNull();
@@ -173,14 +171,12 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
             assertThat(row.problems())
                     .singleElement()
                     .satisfies(problem -> assertThat(problem.summary()).isEqualTo("A recorded problem"));
-            assertThat(row.person()).isNotNull();
             assertThat(row.feedback().delivered()).isEqualTo(1);
         });
         assertThat(larger.cost().statements())
                 .as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements())
-                // One of them reads whether the workspace shows admins results per person.
-                .isLessThanOrEqualTo(16);
+                .isLessThanOrEqualTo(15);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }

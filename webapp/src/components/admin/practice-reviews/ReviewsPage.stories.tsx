@@ -20,7 +20,7 @@ import { REVIEWABLE_ON_DEMAND } from "./job-utils";
 import { reviewLevel } from "./review-levels";
 import { REVIEW_PAGE_SIZE, type ReviewsSearch, reviewsQuery } from "./review-search";
 import { type ReviewRequestActions, ReviewsPage } from "./ReviewsPage";
-import { STORY_GROUPS, STORY_PEOPLE, STORY_PRACTICES } from "./story-scope-sources";
+import { STORY_GROUPS, STORY_PRACTICES } from "./story-scope-sources";
 
 const loadMoreReviews = fn();
 const retryReviews = fn();
@@ -67,7 +67,6 @@ const meta = {
 		reviews: loadedList(reviews),
 		groups: STORY_GROUPS,
 		practices: STORY_PRACTICES,
-		people: STORY_PEOPLE,
 	},
 	render: (args) => (
 		<StatefulPatch initial={args.search}>

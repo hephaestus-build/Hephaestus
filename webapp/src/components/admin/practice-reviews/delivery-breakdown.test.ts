@@ -5,7 +5,7 @@ import { deliveredByLocationCounts } from "./fixtures";
 
 const SCOPE = { from: "2026-09-10", to: "2026-10-09" };
 /** The scope as a Feedback link carries it: every key, the ones it does not narrow by empty. */
-const SEARCH = { ...SCOPE, practiceSlug: undefined, developerId: undefined };
+const SEARCH = { ...SCOPE, practiceSlug: undefined };
 
 describe("deliveredByLocation", () => {
 	it("counts delivered feedback per location, in the Location filter's order", () => {

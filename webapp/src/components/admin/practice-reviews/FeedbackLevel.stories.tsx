@@ -263,10 +263,12 @@ async function expectHeaderChip(panel: HTMLElement, label: string) {
 	await expect(precedes(within(panel).getByRole("heading", { level: 2 }), chip)).toBe(true);
 }
 
-/** The sheet's title: the developer and where the feedback goes, never its text. */
+/** The sheet's title: the developer of feedback on the work and where it goes, never its text. */
 function titleOf(feedback: ReviewFeedbackDetail): string {
 	const where = FEEDBACK_LOCATION_DEFS[feedback.location].label;
-	return `For ${developerLabel(feedback.person)} · ${where}`;
+	return feedback.person === null
+		? `Feedback · ${where}`
+		: `For ${developerLabel(feedback.person)} · ${where}`;
 }
 
 function history(panel: HTMLElement) {
@@ -316,11 +318,11 @@ export const Withheld: Story = {
 
 /** The level's default: delivered feedback, with its sections parted, at one size, and foldable. */
 /**
- * Feedback on a practice page while the workspace has per-person results for admins off: the server
- * names nobody, so the sheet says where the feedback goes and not for whom.
+ * Feedback on a practice page: the server names nobody to staff (ADR 0125), so the sheet says where
+ * the feedback goes and not for whom.
  */
 export const WithoutTheDeveloper: Story = {
-	args: { feedback: ready({ ...practicePageCard, person: null }) },
+	args: { feedback: ready(practicePageCard) },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveTextContent(

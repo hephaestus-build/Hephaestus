@@ -302,10 +302,8 @@ The [database prerequisites](../admin/compatibility-policy#database-baseline-pre
 
 ### Expand and contract
 
-These rolling rules apply from 1.0.0 on.
-Before 1.0.0, the stopped-cutover waiver in [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md#decision) permits replacement and removal in one change.
-[ADR 0096](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md#decision) keeps this cutover and the 1.0.0 boundary.
-A change that uses the waiver ships a **Stop every role** migration note and does not run old and new roles together.
+These rolling rules apply to every release after the 1.0 cutover, every release candidate included: each one rolls.
+Only the cutover itself stopped every role ([ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md#decision), [ADR 0096](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md#decision)).
 
 A change that the previous release cannot run beside takes two releases.
 Release *N* stops reads and writes, and migrates data if necessary.
@@ -409,10 +407,11 @@ The compatibility guard reads this table from the latest release tag.
 Thus, it permits a drop only after a release has listed the object.
 The changeset that drops the object also removes its row and its exclusion.
 
-The 1.0 cutover dropped every earlier pending contraction, so the table is empty.
+The 1.0 cutover dropped every earlier pending contraction.
 
 | Object                                                                           | Changelog that stopped writing it | Exclusion to remove               |
 | -------------------------------------------------------------------------------- | --------------------------------- | --------------------------------- |
+| `workspace.per_person_results_for_admins` (#5365) | `…-feat-private-data-operator-model.xml` | `column:per_person_results_for_admins` |
 
 ## CI validation
 

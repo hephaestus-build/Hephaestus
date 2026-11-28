@@ -95,8 +95,11 @@ public class PersonDataService {
         return new Snapshot(r, r.getSelectionsJson() == null ? List.of() : deliveries(selections(r)));
     }
 
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public JsonNode export(UUID id) {
+    /**
+     * The preview's frozen records, in the caller's transaction, for the store tests. No route returns them: an
+     * instance admin never downloads a person's data (ADR 0164).
+     */
+    JsonNode bundle(UUID id) {
         PersonDataRequest r = require(id);
         requirePreview(r);
         var selected = selections(r);
