@@ -197,7 +197,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "Submitted team items (ADR 0165). Item writes come only in a release after the registration"),
             Map.entry(
                     "team_item_version",
-                    "Submitted team versions (ADR 0165). Version writes come only in a release after the registration"));
+                    "Submitted team versions (ADR 0165). Version writes come only in a release after the registration"),
+            Map.entry(
+                    "team_snapshot",
+                    "Submitted team content (ADR 0165). Snapshot writes come only in a release after the registration"));
 
     /**
      * Personal tables that only the account purge erases, because no erasure inventory names their store yet (ADR 0164).

@@ -719,6 +719,28 @@ erDiagram
         BIGINT team_id PK,FK
     }
 
+    TeamSnapshot {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID version_id FK,UK "NOT NULL"
+        VARCHAR(64) snapshot_key UK "NOT NULL"
+        VARCHAR(16) role "NOT NULL"
+        VARCHAR(16) entry_route "NOT NULL"
+        BYTEA content "NOT NULL"
+        VARCHAR(100) media_type "NOT NULL"
+        VARCHAR(64) content_sha256 "NOT NULL"
+        BYTEA normalized
+        VARCHAR(64) normalized_sha256
+        VARCHAR(64) normalizer_id
+        INTEGER normalizer_version
+        VARCHAR(8) normalized_by
+        BYTEA preview
+        VARCHAR(16) source_how "NOT NULL"
+        JSONB source_revision
+        TEXT live_link
+        JSONB limitations "NOT NULL"
+    }
+
     User {
         BIGINT id PK
         TIMESTAMPTZ created_at
@@ -841,6 +863,7 @@ erDiagram
     ProjectTeam ||--o{ TeamItem : has
     TeamItem ||--o{ TeamItemVersion : has
     Account ||--o{ TeamItemVersion : references
+    TeamItemVersion ||--o{ TeamSnapshot : has
     IdentityProvider ||--o{ User : references
 
     %% Many-to-Many relationships
