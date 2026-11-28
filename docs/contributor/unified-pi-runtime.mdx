@@ -329,6 +329,8 @@ Then those readers show none.
 The copy still stores the words, so a server of the previous release can read them while an upgrade rolls.
 The person export of a data request also copies them from `feedback_copy.body`.
 Issue #5504 removes them.
+A receipt that the 1.0 upgrade brought from 0.x has no answer and no `write_started_at`.
+Its stored words have no other home, so those readers show them for that case only.
 
 An unconfirmed or failed piece is no longer `READY`.
 Thus, no later turn or later attempt lists it or shows it again.

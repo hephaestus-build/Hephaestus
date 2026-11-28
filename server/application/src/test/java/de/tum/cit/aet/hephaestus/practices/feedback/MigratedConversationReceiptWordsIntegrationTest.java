@@ -29,16 +29,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.assertj.core.api.SoftAssertions;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Review probe for #5160. The 0.x upgrade wrote each delivered conversation receipt with its words (changelog
- * 1791486276211), then cleared its answer binding and dropped the chat tables (changelog 1792397538973). The copy is the
- * only home of those words, and no redaction touched them.
+ * The 1.0 upgrade wrote each delivered 0.x conversation receipt with its words (changelog 1791486276211), then cleared
+ * its answer binding and dropped the chat tables (changelog 1792397538973). Such a copy has no answer and no write fence,
+ * so its words have no other home, and the feedback history and the self-service export show them. A receipt of this
+ * release has a write fence: when an erasure deletes its answer and clears the binding, it shows no words, although the
+ * copy still stores them until #5504.
  */
-class UpgradedConversationReceiptProbeIntegrationTest extends AbstractFeedbackIntegrationTest {
+class MigratedConversationReceiptWordsIntegrationTest extends AbstractFeedbackIntegrationTest {
     private static final String WORDS = "Words that the upgrade kept on the receipt.";
 
     @Autowired
@@ -62,24 +65,54 @@ class UpgradedConversationReceiptProbeIntegrationTest extends AbstractFeedbackIn
         var proof = result();
         bind(row, proof);
         authorize(proof);
-        jdbc.update(
-                "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,state,created_at,posted_at)"
-                        + " VALUES (?,?,?,'CHAT_TURN',0,?,'POSTED',?,?)",
-                FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0),
-                workspace.getId(),
-                row.getId(),
-                WORDS,
-                Timestamp.from(AT),
-                Timestamp.from(AT));
+        receipt(row, null);
 
         var soft = new SoftAssertions();
-        soft.assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10).stream()
-                        .filter(entry -> entry.feedbackId().equals(row.getId()))
-                        .map(entry -> Objects.toString(entry.body(), "")))
+        soft.assertThat(historyWords(row))
                 .as("the developer's feedback history")
                 .containsExactly(WORDS);
         soft.assertThat(exportedWords(row)).as("the self-service export").containsExactly(WORDS);
         soft.assertAll();
+    }
+
+    @Test
+    void shouldShowNoWordsOfAReceiptOfThisReleaseWhoseAnswerWasErased() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        // What an erasure leaves when it deletes the answer and its turn: the bindings are cleared, the write fence
+        // and the stored words stay.
+        receipt(row, Timestamp.from(AT.minusSeconds(5)));
+
+        var soft = new SoftAssertions();
+        soft.assertThat(historyWords(row))
+                .as("the developer's feedback history")
+                .containsExactly("");
+        soft.assertThat(exportedWords(row)).as("the self-service export").containsExactly("");
+        soft.assertAll();
+    }
+
+    private void receipt(Feedback row, @Nullable Timestamp writeStartedAt) {
+        var copy = FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0);
+        jdbc.update(
+                "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,state,write_key,"
+                        + "write_started_at,created_at,posted_at) VALUES (?,?,?,'CHAT_TURN',0,?,'POSTED',?,?,?,?)",
+                copy,
+                workspace.getId(),
+                row.getId(),
+                WORDS,
+                writeStartedAt == null ? null : copy.toString(),
+                writeStartedAt,
+                Timestamp.from(AT),
+                Timestamp.from(AT));
+    }
+
+    private List<String> historyWords(Feedback row) {
+        return history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10).stream()
+                .filter(entry -> entry.feedbackId().equals(row.getId()))
+                .map(entry -> Objects.toString(entry.body(), ""))
+                .toList();
     }
 
     private List<String> exportedWords(Feedback row) {
@@ -87,8 +120,8 @@ class UpgradedConversationReceiptProbeIntegrationTest extends AbstractFeedbackIn
         long id = Objects.requireNonNull(exports.requestExport(act).getId());
         await().atMost(Duration.ofSeconds(30))
                 .until(() -> exports.downloadPayload(id, act).isPresent());
-        var bundle = mapper.readTree(new String(
-                exports.downloadPayload(id, act).orElseThrow(), StandardCharsets.UTF_8));
+        var bundle =
+                mapper.readTree(new String(exports.downloadPayload(id, act).orElseThrow(), StandardCharsets.UTF_8));
         var received = bundle.path("feedbackReceived")
                 .valueStream()
                 .filter(entry ->
