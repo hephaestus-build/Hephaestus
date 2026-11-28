@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
-    <!-- Each change set locks at most one existing table. -->
+    <!-- Each change set locks at most one existing table, or takes them in the order of an older server's delete. -->
     <changeSet id="1795832700000-1" author="hephaestus">
         <comment>Review setups (ADR 0167): what a review checks, on which kind of item and for which readers. Nothing writes them yet.</comment>
         <createTable tableName="review_setup">
@@ -53,6 +53,7 @@ ALTER TABLE public.review_setup
         </rollback>
     </changeSet>
     <changeSet id="1795832700000-2" author="hephaestus">
+        <comment>The practice key comes first: an erasure on an older server deletes practices before it deletes a personal space, whose cascade reaches review_setup, and the same order here cannot deadlock with it.</comment>
         <createTable tableName="review_setup_practice">
             <column name="setup_id" type="UUID">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="review_setup_practicePK"/>
@@ -64,8 +65,8 @@ ALTER TABLE public.review_setup
                 <constraints nullable="false"/>
             </column>
         </createTable>
-        <addForeignKeyConstraint baseTableName="review_setup_practice" baseColumnNames="setup_id,workspace_id" constraintName="sfk_review_setup_practice_setup" onDelete="CASCADE" referencedTableName="review_setup" referencedColumnNames="id,workspace_id"/>
         <addForeignKeyConstraint baseTableName="review_setup_practice" baseColumnNames="practice_id,workspace_id" constraintName="sfk_review_setup_practice_practice" onDelete="CASCADE" referencedTableName="practice" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="review_setup_practice" baseColumnNames="setup_id,workspace_id" constraintName="sfk_review_setup_practice_setup" onDelete="CASCADE" referencedTableName="review_setup" referencedColumnNames="id,workspace_id"/>
         <createIndex tableName="review_setup_practice" indexName="idx_review_setup_practice_setup">
             <column name="setup_id"/>
             <column name="workspace_id"/>
