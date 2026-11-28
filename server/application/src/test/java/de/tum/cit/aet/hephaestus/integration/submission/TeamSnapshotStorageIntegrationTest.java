@@ -175,6 +175,18 @@ class TeamSnapshotStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseToDeleteASnapshotWhileItsVersionIsAvailable() {
+        UUID version = submitted(student);
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "DELETE FROM team_snapshot WHERE version_id = ? AND workspace_id = ?",
+                        version,
+                        workspace()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(snapshots(version)).isOne();
+    }
+
+    @Test
     void shouldRefuseContentThatDoesNotMatchItsDescription() {
         for (Map<String, String> override : List.of(
                 Map.of("snapshot_key", "'../escape'"),
