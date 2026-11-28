@@ -556,13 +556,14 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         assertComposedWithoutMeasurement(reviewId, work);
         assertThat(membership(reviewId, practice)).containsEntry("state", "JUDGED");
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM review_composition_basis b JOIN review_job j ON j.id = b.job_id"
-                                + " WHERE j.review_id = ?",
-                        Long.class,
-                        reviewId))
-                .as("the composition reads the inputs that staging kept")
-                .isEqualTo(1);
+        // The composition completed from the inputs that staging kept; with nothing to repair, its end releases them.
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(jdbc.queryForObject(
+                                "SELECT count(*) FROM review_composition_basis b JOIN review_job j ON j.id = b.job_id"
+                                        + " WHERE j.review_id = ?",
+                                Long.class,
+                                reviewId))
+                        .isZero());
         assertThat(reviewRow(reviewId).get("status")).isNotEqualTo("FAILED");
     }
 

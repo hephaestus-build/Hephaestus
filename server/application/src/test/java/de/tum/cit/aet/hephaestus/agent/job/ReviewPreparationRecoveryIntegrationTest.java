@@ -400,7 +400,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 context.getBean(AgentRunAuthority.class),
                 mock(ReviewPoolAdmission.class));
         var reviewRuns = context.getBean(ReviewRunKind.class);
-        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
+        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class), context);
         var meters = new SimpleMeterRegistry();
         var results = new ReviewAttemptResults(
                 jobs,
