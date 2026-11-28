@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795759500000-1" author="hephaestus">
+        <comment>A sealed review's producer is pinned on the review once and copied to the job that sealed it (ADR 0160). Every existing review takes LEGACY, and so does a review that a server before the pin writes.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.review ADD COLUMN feedback_producer VARCHAR(16) DEFAULT 'LEGACY';
+ALTER TABLE public.review_job ADD COLUMN feedback_producer VARCHAR(16) DEFAULT 'LEGACY' NOT NULL;
+ALTER TABLE public.review_job ADD COLUMN feedback_producer_reason VARCHAR(32);
+-- Each producer column accepts exactly its enum.
+ALTER TABLE public.review ADD CONSTRAINT ck_review_feedback_producer
+    CHECK (feedback_producer IS NULL OR feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'));
+ALTER TABLE public.review_job ADD CONSTRAINT ck_review_job_feedback_producer
+    CHECK (feedback_producer IN ('LEGACY', 'MENTOR', 'WORK_PLACE'));
+ALTER TABLE public.review_job ADD CONSTRAINT ck_review_job_feedback_producer_reason
+    CHECK (feedback_producer_reason IS NULL OR feedback_producer_reason IN ('INHERITED', 'GATE_CLOSED',
+        'NOT_SELECTED', 'UNSUPPORTED_ROUTE', 'NO_LINKED_AUTHOR', 'SEVERAL_AUTHORS', 'AUTHOR_INACTIVE',
+        'AUTHOR_NOT_MEMBER', 'AUTHOR_NOT_CONSENTING', 'OWNER_REFUSED', 'EVENT_MISMATCH', 'OWNER_BOUND'));
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE public.review_job DROP COLUMN feedback_producer_reason, DROP COLUMN feedback_producer</sql>
+            <sql>ALTER TABLE public.review DROP COLUMN feedback_producer</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

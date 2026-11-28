@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
 import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -75,6 +76,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewProducerPin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -178,7 +180,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         mapper,
                         new PracticeCatalogInjector(mapper),
                         jobs,
-                        events),
+                        legacyProducer(events)),
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
@@ -956,5 +958,17 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         lenient().when(candidate.practiceId()).thenReturn(practiceId);
         lenient().when(candidate.outcome()).thenReturn(outcome);
         return new AdmittedResultSnapshot(id, candidate, List.of());
+    }
+
+    /** The real hand-off with its gate closed, as by default: every seal stays LEGACY and is announced. */
+    static FeedbackProducerSelection legacyProducer(ApplicationEventPublisher events) {
+        var pins = mock(ReviewProducerPin.class);
+        lenient().when(pins.pinned(anyLong(), any())).thenReturn(Optional.empty());
+        return new FeedbackProducerSelection(
+                new FeedbackProducerProperties(),
+                pins,
+                mock(ReviewJobAssignments.class),
+                mock(MentorReviewIntake.class),
+                events);
     }
 }

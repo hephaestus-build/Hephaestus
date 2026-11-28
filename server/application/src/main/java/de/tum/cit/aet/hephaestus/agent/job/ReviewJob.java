@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -92,6 +93,20 @@ public class ReviewJob {
     @RawObservationAccess.Metadata
     @Column(name = "run_id", nullable = false)
     private UUID runId;
+
+    /**
+     * The producer of the review's outcomes, copied from the review's pin when this job seals (ADR 0160). A server before
+     * the pin seals with the column default, LEGACY.
+     */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'LEGACY'")
+    @Column(name = "feedback_producer", nullable = false, length = 16)
+    private FeedbackProducer feedbackProducer = FeedbackProducer.LEGACY;
+
+    /** Why the seal chose {@link #feedbackProducer}; null until a seal that knows the pin chooses. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "feedback_producer_reason", length = 32)
+    private @Nullable FeedbackProducerReason feedbackProducerReason;
 
     /**
      * The model pool that last admitted this job's measurement. The pool counts its running measurements when it decides

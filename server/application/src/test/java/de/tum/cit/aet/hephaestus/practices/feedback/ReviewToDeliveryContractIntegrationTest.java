@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -186,6 +187,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -413,6 +415,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AccountDirectory accounts;
+
+    @Autowired
+    private FeedbackProducerProperties producers;
 
     @Autowired
     private OwnerScope owners;
@@ -1085,6 +1090,113 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 if (!refused.getKey().contains("DELETING")) mayHaveMentor(review);
             }
         }
+    }
+
+    @Test
+    void shouldPinLegacyAndWriteNoMentorEventWhileTheGateIsClosed() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            producers.setMentorWorkspaceIds(Set.of(review.workspaceId()));
+            try {
+                seal(review);
+            } finally {
+                producers.setMentorWorkspaceIds(Set.of());
+            }
+            assertThat(producer(review)).containsExactly("LEGACY", "GATE_CLOSED", "LEGACY");
+            assertThat(mentorEvents(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldPinTheMentorAtSealAndLeaveTheCopyOnTheWorkToAComposer() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            withMentorSelected(review, () -> {
+                seal(review);
+                seal(review);
+            });
+            assertThat(producer(review)).containsExactly("MENTOR", "OWNER_BOUND", "MENTOR");
+            assertThat(mentorEvents(review))
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.get("admission_digest"))
+                            .isEqualTo(jobs.findById(review.identity().jobId())
+                                    .orElseThrow()
+                                    .getAdmissionDigest()));
+            assertThat(jdbc.queryForObject(
+                            "SELECT producer FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isEqualTo("COMPOSER");
+        }
+    }
+
+    @Test
+    void shouldPinTheWorkPlaceWhenTheAuthorMadeNoAiChoice() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            jdbc.update("UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", review.developerId());
+            withMentorSelected(review, () -> seal(review));
+            assertThat(producer(review)).containsExactly("WORK_PLACE", "AUTHOR_NOT_CONSENTING", "WORK_PLACE");
+            assertThat(mentorEvents(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldKeepTheLegacyPinOfAReviewThatAServerBeforeThePinWrote() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            // Such a server omits the column, so the review takes its default.
+            jdbc.update(
+                    "UPDATE review SET feedback_producer=DEFAULT WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            withMentorSelected(review, () -> seal(review));
+            assertThat(producer(review)).containsExactly("LEGACY", "INHERITED", "LEGACY");
+            assertThat(mentorEvents(review)).isEmpty();
+        }
+    }
+
+    /** An author who may have a mentor, and a staged review that no seal pinned yet, as a producer-aware server writes. */
+    private void unpinnedAndStaged(ClaimedReview review) {
+        mayHaveMentor(review);
+        jdbc.update(
+                "UPDATE review SET feedback_producer=NULL WHERE workspace_id=? AND id=?",
+                review.workspaceId(),
+                review.reviewId());
+        admission.stage(review.identity(), request(review));
+    }
+
+    private void withMentorSelected(ClaimedReview review, Runnable seal) {
+        producers.setAllowMentorBeforeAdviceErasure(true);
+        producers.setMentorWorkspaceIds(Set.of(review.workspaceId()));
+        try {
+            seal.run();
+        } finally {
+            producers.setAllowMentorBeforeAdviceErasure(false);
+            producers.setMentorWorkspaceIds(Set.of());
+        }
+    }
+
+    private void seal(ClaimedReview review) {
+        admission.admit(
+                review.identity(),
+                new SealResultsRequestDTO(
+                        3, review.reviewId(), review.identity().jobId(), 0),
+                () -> {});
+    }
+
+    /** The job's producer and reason, then the review's pin. */
+    private List<@Nullable String> producer(ClaimedReview review) {
+        var job = jdbc.queryForMap(
+                "SELECT feedback_producer, feedback_producer_reason FROM review_job WHERE id=?",
+                review.identity().jobId());
+        var pin = jdbc.queryForObject(
+                "SELECT feedback_producer FROM review WHERE workspace_id=? AND id=?",
+                String.class,
+                review.workspaceId(),
+                review.reviewId());
+        return Arrays.asList((String) job.get("feedback_producer"), (String) job.get("feedback_producer_reason"), pin);
     }
 
     /** An active, visible member who made an explicit AI choice and keeps practice feedback delivery on. */

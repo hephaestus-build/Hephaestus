@@ -25,6 +25,23 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQueries, ScanMembershipQueries {
+    /** The review's pinned producer, NULL until its first seal chooses one. */
+    @Query(
+            value = "SELECT feedback_producer FROM review WHERE workspace_id = :workspaceId AND id = :reviewId",
+            nativeQuery = true)
+    Optional<String> findFeedbackProducer(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
+
+    /** Pins the first producer: the column is never written again, and the entity never writes it. */
+    @Modifying
+    @Query(value = """
+        UPDATE review SET feedback_producer = :producer
+        WHERE workspace_id = :workspaceId AND id = :reviewId AND feedback_producer IS NULL
+        """, nativeQuery = true)
+    int pinFeedbackProducer(
+            @Param("workspaceId") long workspaceId,
+            @Param("reviewId") UUID reviewId,
+            @Param("producer") String producer);
+
     /**
      * Whether a later review of the item, not cancelled and not a trial, takes the practice over from this one: it
      * already judged or reused it, or it is still open with the practice selected. A later review that ended without

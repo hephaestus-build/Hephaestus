@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -92,6 +93,16 @@ public class Review {
     @Column(name = "status", nullable = false, length = 16)
     @Setter(AccessLevel.NONE)
     private ReviewStatus status = ReviewStatus.QUEUED;
+
+    /**
+     * The producer of the review's outcomes, which its first seal pins (ADR 0160). A new review starts without one. A
+     * review that a server before the pin wrote takes the column default, LEGACY. Only the pin writes it.
+     */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'LEGACY'")
+    @Column(name = "feedback_producer", length = 16, updatable = false)
+    @Setter(AccessLevel.NONE)
+    private @Nullable FeedbackProducer feedbackProducer;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 48)

@@ -66,7 +66,7 @@ class PracticeResultStagingTest extends BaseUnitTest {
             mapper,
             new PracticeCatalogInjector(mapper),
             mock(ReviewJobRepository.class),
-            mock(ApplicationEventPublisher.class));
+            ResultAdmissionServiceTest.legacyProducer(mock(ApplicationEventPublisher.class)));
 
     @BeforeEach
     void setup() {

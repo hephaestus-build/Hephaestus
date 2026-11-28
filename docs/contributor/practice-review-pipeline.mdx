@@ -804,7 +804,7 @@ A digest covers every byte. A later feedback-mode change leaves the digest as it
 The copy expires two hours after the seal, at the copy deadline of [ADR 0122](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md), or earlier with its inputs.
 
 The row names the producer of the review's copy on the work: `LEGACY` for `review_compose`, or `COMPOSER`.
-Every row is `LEGACY` until the cutover, and a row never changes.
+A row is `LEGACY` when the review's producer is `LEGACY`, and `COMPOSER` for the two new producers. A row never changes.
 
 `WorkPlaceComposer` renders the review on the work from a handoff and the public history of Hephaestus's own copies.
 The legacy composition renders the same turn through `OnWorkTurn`.
@@ -816,6 +816,48 @@ No production code calls the composer yet.
 `WorkPlaceComposerBoundaryArchTest` fails when the composer side depends, even transitively, on a private source or a write path.
 It also fails when any class other than the scope builds a handoff.
 The cutover gate is in ADR 0121 § Update — 2026-11-26.
+
+### Feedback producer at seal
+
+[ADR 0160](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0160-a-sealed-review-hands-off-to-the-mentor.md) gives each sealed review one producer: `LEGACY`, `MENTOR` or `WORK_PLACE`.
+The first seal of an item review chooses it and pins it on the review, under the review's write lock.
+Every later seal of the review takes the pin, and the job that seals copies it with its reason.
+A review that a server before the pin wrote takes `LEGACY`, the column default.
+
+The seal chooses in this order:
+
+1. A pinned review keeps its pin.
+2. `LEGACY` while the gate is closed or the workspace does not select the mentor.
+3. `LEGACY` for every route without a cutover.
+4. `WORK_PLACE` when no author practice names one linked person.
+5. `MENTOR` when the author qualifies, else `WORK_PLACE` with the reason.
+
+A route without a cutover is a backfill, an item other than a pull or merge request, or a practice about another role.
+
+The author qualifies when all of these are true at seal:
+
+- The author has a linked account that is active.
+- The account made an explicit AI choice: it is set, and it is not No AI.
+- The account keeps practice feedback delivery on.
+- The person data write fence admits the account.
+- The account has a current, visible membership in the workspace.
+
+ADR 0160 gives the reason for the rule.
+
+For `MENTOR`, the seal writes one `REVIEW_SEALED` mailbox event with IDs only: the workspace, the review, the job and the admission digest.
+The event belongs to the author.
+The seal takes the account's write fence, rereads the account under it, and holds the membership row until it commits, in that order.
+So a leave, a hide, a status change or a preference change commits after the seal or refuses the event.
+A deletion of the review deletes its event. A Slack disconnect deletes provider events only.
+
+Two settings select the mentor, and both are off by default:
+
+- `hephaestus.practice-review.feedback-producer.allow-mentor-before-advice-erasure` opens the gate. It is for a synthetic proof environment only.
+- `hephaestus.practice-review.feedback-producer.mentor-workspace-ids` lists the workspaces.
+
+The gate stays closed in production until a release opens it.
+That release must come after the release that registers the advice stores in the erasure inventory.
+Every seal, claim and repair replica must also run a release that knows the producer.
 
 ### Checked publication per destination
 
