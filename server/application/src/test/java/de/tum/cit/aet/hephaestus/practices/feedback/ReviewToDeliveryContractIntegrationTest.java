@@ -66,8 +66,11 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
@@ -107,6 +110,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -158,6 +163,7 @@ import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
@@ -183,13 +189,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
@@ -211,6 +221,7 @@ import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
@@ -385,6 +396,21 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ApplicationContext context;
+
+    @Autowired
+    private MentorReviewIntake mentorIntake;
+
+    @Autowired
+    private WorkspaceLifecycleService lifecycle;
+
+    @Autowired
+    private AccountDirectory accounts;
+
+    @Autowired
+    private OwnerScope owners;
+
+    @Autowired
+    private MentorWorkspaceErasure workspaceErasure;
 
     @BeforeEach
     void deliverPublicCopies() {
@@ -871,6 +897,220 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .extracting(practice -> practice.path("slug").asString())
                     .containsExactly(review.practiceSlug());
         }
+    }
+
+    @Test
+    void shouldWriteOneReviewSealedEventForAnAuthorWhoMayHaveAMentor() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            var digest = "a".repeat(64);
+
+            var admitted = admitSealed(review, digest);
+            assertThat(admitted).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+            assertThat(admitSealed(review, digest)).as("the same seal again").isEqualTo(admitted);
+            assertThat(admitSealed(review, "b".repeat(64)))
+                    .as("another admission of the review")
+                    .isEqualTo(new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.EVENT_MISMATCH));
+
+            assertThat(mentorEvents(review)).singleElement().satisfies(event -> {
+                assertThat(event.get("id")).isEqualTo(((MentorReviewIntake.Outcome.Admitted) admitted).eventId());
+                assertThat(event.get("kind")).isEqualTo("REVIEW_SEALED");
+                assertThat(event.get("disposition")).isEqualTo("PENDING");
+                assertThat(event.get("account_id")).isEqualTo(review.developerId());
+                assertThat(event.get("job_id")).isEqualTo(review.identity().jobId());
+                assertThat(event.get("admission_digest")).isEqualTo(digest);
+                assertThat(event.get("source_id")).isNull();
+                assertThat(event.get("binding_id")).isNull();
+            });
+            // A Slack disconnect erases only the provider events of the workspace.
+            transactions.executeWithoutResult(status -> workspaceErasure.eraseWorkspace(review.workspaceId()));
+            assertThat(mentorEvents(review)).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldCommitBothOfTwoSimultaneousReviewSealedEventsOfOneReview() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            var digest = "a".repeat(64);
+            var sealed = new MentorReviewIntake.SealedReview(
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.identity().jobId(),
+                    review.developerId(),
+                    digest,
+                    Instant.now());
+            try (var executor = Executors.newFixedThreadPool(2)) {
+                for (int round = 0; round < 200; round++) {
+                    var barrier = new CyclicBarrier(2);
+                    Callable<MentorReviewIntake.Outcome> seal =
+                            () -> Objects.requireNonNull(transactions.execute(status -> {
+                                arrive(barrier);
+                                return mentorIntake.admit(sealed);
+                            }));
+                    var first = executor.submit(seal);
+                    var second = executor.submit(seal);
+                    var outcomes = List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+                    assertThat(outcomes)
+                            .as("round %d", round)
+                            .hasSize(2)
+                            .allSatisfy(outcome ->
+                                    assertThat(outcome).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class));
+                    assertThat(outcomes.getFirst()).as("round %d", round).isEqualTo(outcomes.getLast());
+                    assertThat(mentorEvents(review)).as("round %d", round).hasSize(1);
+                    transactions.executeWithoutResult(status -> {
+                        owners.ofJob(review.developerId());
+                        jdbc.update(
+                                "DELETE FROM mentor_event WHERE workspace_id=? AND review_id=?",
+                                review.workspaceId(),
+                                review.reviewId());
+                    });
+                }
+            }
+        }
+    }
+
+    private static void arrive(CyclicBarrier barrier) {
+        try {
+            barrier.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (BrokenBarrierException | TimeoutException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void shouldRefuseWhenTheAuthorWithdrawsAiConsentBeforeTheWriteFence() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            long account = review.developerId();
+            var preferenceUpdate = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+            preferenceUpdate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+            var outcome = transactions.execute(status -> {
+                assertThat(accounts.find(account).orElseThrow().aiChoice()).isEqualTo(AiChoice.CLOUD);
+                preferenceUpdate.executeWithoutResult(inner -> {
+                    assertThat(jdbc.update("UPDATE account SET ai_choice='NO_AI' WHERE id=?", account))
+                            .isEqualTo(1);
+                });
+                return mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                        review.workspaceId(),
+                        review.reviewId(),
+                        review.identity().jobId(),
+                        account,
+                        "a".repeat(64),
+                        Instant.now()));
+            });
+
+            assertThat(outcome)
+                    .isEqualTo(
+                            new MentorReviewIntake.Outcome.Refused(MentorReviewIntake.Refusal.AUTHOR_NOT_CONSENTING));
+            assertThat(mentorEvents(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldKeepOneAuthorsReviewSealedEventsOfTwoWorkspacesApartThroughAPurge() {
+        try (var first = claimedReview(FeedbackMode.AUTOMATIC);
+                var second = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(first);
+            long author = first.developerId();
+            jdbc.update(
+                    "INSERT INTO membership (workspace_id, account_id, role, role_source) VALUES (?, ?, 'MEMBER', 'PERSON')",
+                    second.workspaceId(),
+                    author);
+            assertThat(admitSealed(first, "a".repeat(64))).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+            var inSecond = new MentorReviewIntake.SealedReview(
+                    second.workspaceId(),
+                    second.reviewId(),
+                    second.identity().jobId(),
+                    author,
+                    "b".repeat(64),
+                    Instant.now());
+            MentorReviewIntake.Outcome admittedInSecond =
+                    Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(inSecond)));
+            assertThat(admittedInSecond).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
+
+            transactions.executeWithoutResult(status -> lifecycle.purgeAgain(second.workspaceId()));
+
+            assertThat(mentorEvents(first)).as("the other workspace's event").hasSize(1);
+            Integer purged = transactions.execute(status -> {
+                owners.ofJob(author);
+                return jdbc.queryForObject(
+                        "SELECT count(*) FROM mentor_event WHERE workspace_id=?", Integer.class, second.workspaceId());
+            });
+            assertThat(purged).as("the purged workspace's event").isZero();
+        }
+    }
+
+    @Test
+    void shouldWriteNoReviewSealedEventForAnAuthorWhoMayHaveNoMentor() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            long account = review.developerId();
+            var cases = List.of(
+                    Map.entry(
+                            "UPDATE account SET ai_choice=NULL, ai_choice_at=NULL WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET ai_choice='NO_AI' WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET feedback_delivery_enabled=false WHERE id=?", "AUTHOR_NOT_CONSENTING"),
+                    Map.entry("UPDATE account SET status='UNCLAIMED' WHERE id=?", "AUTHOR_INACTIVE"),
+                    Map.entry("UPDATE account SET status='BLOCKED' WHERE id=?", "OWNER_REFUSED"),
+                    Map.entry(
+                            "UPDATE membership SET hidden=true WHERE workspace_id=" + review.workspaceId()
+                                    + " AND account_id=?",
+                            "AUTHOR_NOT_MEMBER"),
+                    Map.entry(
+                            "UPDATE membership SET left_at=now() WHERE workspace_id=" + review.workspaceId()
+                                    + " AND account_id=?",
+                            "AUTHOR_NOT_MEMBER"),
+                    // Last: an account that is being deleted never becomes active again.
+                    Map.entry("UPDATE account SET status='DELETING' WHERE id=?", "OWNER_REFUSED"));
+            for (var refused : cases) {
+                jdbc.update(refused.getKey(), account);
+                assertThat(admitSealed(review, "a".repeat(64)))
+                        .as(refused.getKey())
+                        .isEqualTo(new MentorReviewIntake.Outcome.Refused(
+                                MentorReviewIntake.Refusal.valueOf(refused.getValue())));
+                assertThat(mentorEvents(review)).as(refused.getKey()).isEmpty();
+                if (!refused.getKey().contains("DELETING")) mayHaveMentor(review);
+            }
+        }
+    }
+
+    /** An active, visible member who made an explicit AI choice and keeps practice feedback delivery on. */
+    private void mayHaveMentor(ClaimedReview review) {
+        jdbc.update(
+                "UPDATE account SET status='ACTIVE', ai_choice='CLOUD', ai_choice_at=now(), feedback_delivery_enabled=true"
+                        + " WHERE id=?",
+                review.developerId());
+        jdbc.update(
+                "UPDATE membership SET hidden=false, left_at=NULL WHERE workspace_id=? AND account_id=?",
+                review.workspaceId(),
+                review.developerId());
+    }
+
+    private MentorReviewIntake.Outcome admitSealed(ClaimedReview review, String digest) {
+        return Objects.requireNonNull(
+                transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                        review.workspaceId(),
+                        review.reviewId(),
+                        review.identity().jobId(),
+                        review.developerId(),
+                        digest,
+                        Instant.now()))));
+    }
+
+    /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */
+    private List<Map<String, @Nullable Object>> mentorEvents(ClaimedReview review) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            owners.ofJob(review.developerId());
+            return jdbc.queryForList(
+                    "SELECT * FROM mentor_event WHERE workspace_id=? AND review_id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+        }));
     }
 
     @Test

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.auth.spi.CommittedConsentQuery;
 import de.tum.cit.aet.hephaestus.core.event.AiChoiceChangedEvent;
 import java.time.Clock;
 import java.time.ZoneId;
@@ -28,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @WorkspaceAgnostic("Account status and choices span all workspaces")
 @RequiredArgsConstructor
-public class AccountDirectoryService implements AccountDirectory {
+public class AccountDirectoryService implements AccountDirectory, CommittedConsentQuery {
     /** The zone ids this runtime knows. A stored id can be unknown after a time zone data update. */
     private static final Set<String> KNOWN_ZONES = Set.copyOf(ZoneId.getAvailableZoneIds());
 
@@ -40,6 +41,13 @@ public class AccountDirectoryService implements AccountDirectory {
     @Transactional(readOnly = true)
     public Optional<AccountView> find(long accountId) {
         return accounts.findById(accountId).map(AccountDirectoryService::view);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Consent> committedConsent(long accountId) {
+        return accounts.findCommittedConsent(accountId)
+                .map(row -> new Consent(row.getStatus(), row.getAiChoice(), row.getFeedbackDeliveryEnabled()));
     }
 
     @Override

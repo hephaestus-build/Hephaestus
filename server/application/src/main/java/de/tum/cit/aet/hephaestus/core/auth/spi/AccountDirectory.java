@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 public interface AccountDirectory {
+    /** It may return this transaction's cached account; after a lock or fence, read consent fresh. */
     Optional<AccountView> find(long accountId);
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);

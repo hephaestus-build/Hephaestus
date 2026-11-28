@@ -71,6 +71,14 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
         """)
     boolean isActiveVisibleMember(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
 
+    /** The current, visible membership row, share-locked: a leave or a hide waits for the caller's commit. */
+    @Query(value = """
+        SELECT m.account_id FROM membership m
+        WHERE m.workspace_id = :workspaceId AND m.account_id = :accountId AND m.left_at IS NULL AND m.hidden = false
+        FOR SHARE
+        """, nativeQuery = true)
+    List<Long> lockActiveVisibleMembership(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
+
     @Query("""
         SELECT COUNT(m) > 0 FROM Membership m JOIN Account a ON a.id = m.id.accountId
         WHERE m.workspace.id = :workspaceId AND m.id.accountId = :accountId AND m.leftAt IS NULL

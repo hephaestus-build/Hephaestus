@@ -17,15 +17,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
-/** One admitted provider event, kept once per binding and provider event id, with what intake did with it. */
+/**
+ * One admitted mailbox event, with what intake did with it. A provider event is kept once per binding and provider
+ * event id, and names its source. A sealed review's event is kept once per review, and names the review, its job and
+ * its admission instead. A CHECK keeps each kind to its own columns.
+ */
 @Entity
 @PersonOwned
 @Table(
         name = "mentor_event",
-        uniqueConstraints =
-                @UniqueConstraint(
-                        name = "uk_mentor_event_key",
-                        columnNames = {"binding_id", "native_event_id"}),
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_mentor_event_key",
+                    columnNames = {"binding_id", "native_event_id"}),
+            @UniqueConstraint(
+                    name = "uk_mentor_event_review",
+                    columnNames = {"review_id", "workspace_id"})
+        },
         indexes = {
             @Index(name = "idx_mentor_event_source", columnList = "account_id, source_id"),
             @Index(name = "idx_mentor_event_request", columnList = "account_id, request_id")
@@ -39,17 +47,15 @@ public class MentorEvent {
 
     private long accountId;
 
-    private long bindingId;
+    private @Nullable Long bindingId;
 
-    @Column(nullable = false)
-    private String nativeEventId;
+    private @Nullable String nativeEventId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private IngressKind kind;
 
-    @Column(nullable = false)
-    private UUID sourceId;
+    private @Nullable UUID sourceId;
 
     private @Nullable UUID requestId;
 
@@ -62,8 +68,18 @@ public class MentorEvent {
     private @Nullable Reason reason;
 
     /** The retained provider record, {@code provider-event:<id>}; the event row holds no message text. */
-    @Column(nullable = false, length = 64)
-    private String sourceRef;
+    @Column(length = 64)
+    private @Nullable String sourceRef;
+
+    /** A sealed review's workspace, review, job and admission digest; null for a provider event. */
+    private @Nullable Long workspaceId;
+
+    private @Nullable UUID reviewId;
+
+    private @Nullable UUID jobId;
+
+    @Column(length = 64)
+    private @Nullable String admissionDigest;
 
     @Column(nullable = false)
     private Instant occurredAt;
@@ -72,6 +88,8 @@ public class MentorEvent {
     private Instant receivedAt;
 
     public enum Disposition {
+        /** A sealed review waits for the mentor's review handler. */
+        PENDING,
         /** The event opened its request at version 1. */
         OPENED,
         /** A newer revision raised the open request's version. */

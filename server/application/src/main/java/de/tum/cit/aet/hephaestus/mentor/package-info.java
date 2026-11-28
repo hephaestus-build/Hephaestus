@@ -4,7 +4,16 @@
  */
 @ApplicationModule(
         displayName = "Mentor",
-        allowedDependencies = {"core", "core::person-data", "core::runtime", "workspace::spi"})
+        allowedDependencies = {
+            "core",
+            "core::auth-spi",
+            "core::auth-types",
+            "core::person-data",
+            "core::runtime",
+            // A mentor row goes with its review: the review keys point at practices (sfk_mentor_event_review).
+            "practices::spi",
+            "workspace::spi"
+        })
 @NullMarked
 package de.tum.cit.aet.hephaestus.mentor;
 

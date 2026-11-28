@@ -63,6 +63,9 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
                     + " and its Slack disconnect erase the row",
             "support_share",
             "a person's share with one instance admin; workspace_id only names the workspace of the shared turn",
+            "mentor_event",
+            "an account-owned row under row-level security; workspace_id names a sealed review's workspace, and is"
+                    + " NULL for a provider event, which its source scopes",
             "llm_call_permit",
             "instance-owned admission to shared provider capacity; workspace_id only orders fair grants, and is NULL"
                     + " only for a product feedback call",
