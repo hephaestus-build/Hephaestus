@@ -292,13 +292,21 @@ class CascadeTableTest extends BaseUnitTest {
                     CascadeDependent.DERIVED_ANSWER,
                     Action.KEEP,
                     List.of(
+                            BASIS + "shouldEraseAnAppAnswerDerivedFromASlackAnswerWhenSlackIsDisconnected",
+                            BASIS + "shouldEraseTheAnswersThatUsedACopyingToolResultWhenSlackIsDisconnected",
+                            BASIS + "shouldEraseTheAnswersThatUsedACopyingToolResultWhenASlackChannelIsErased",
+                            BASIS + "shouldEraseTheAnswersThatUsedACopyingToolResultWhenAChannelErasureIsReplayed",
+                            CLAIMED + "shouldRedactTheAnswersThatShowedFeedbackWhenItsSourceIsWithdrawn",
                             ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsEvidenceIsWithdrawn",
                             ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsSlackThreadIsErased"),
-                    "A withdrawal that deletes results (an SCM mirror erasure, an Outline or Slack disconnect, a"
-                            + " channel erasure) erases every answer whose basis read advice from them. Otherwise an app"
-                            + " answer that repeats an erased source keeps the conversation retention (personal-data"
-                            + " map, conversations), until #5278 makes the Slack erasures transitive and #5158 and #5277"
-                            + " reach the other sources. A Slack disconnect also erases every entry written in Slack."),
+                    "A Slack disconnect and a channel erasure erase the Slack entries and every tool result that could"
+                            + " have copied a message, with the answers after such a result and every answer whose basis"
+                            + " read one of them. A withdrawal that deletes results (an SCM mirror erasure, an Outline or"
+                            + " Slack disconnect, a channel erasure) erases the answers that showed feedback based on"
+                            + " them or read advice from them, with what derives from those. Gap, owned by #5158 and"
+                            + " #5277: an Outline disconnect or collection removal, an SCM mirror erasure and a"
+                            + " repository removal erase no copying tool result, so an answer that used one keeps the"
+                            + " conversation retention (personal-data map, conversations)."),
             new Cell(
                     CascadeCause.ERASURE,
                     CascadeDependent.DERIVED_ANSWER,
@@ -309,13 +317,12 @@ class CascadeTableTest extends BaseUnitTest {
                             "core.privacy.PersonOutlineCopiesIntegrationTest#outlineErasureStateTable",
                             CLAIMED + "shouldRedactALaterAnswerThatReadTheMessageWhichShowedTheFeedback",
                             ADVICE + "shouldEraseTheAnswerThatReadAdviceWhenItsEvidenceIsErased",
-                            ADVICE + "shouldEraseALaterAnswerThatReadOnlyTheAnswerThatReadAdvice"),
+                            ADVICE + "shouldEraseALaterAnswerThatReadOnlyTheAnswerThatReadAdvice",
+                            "core.privacy.PersonOutlineCopiesIntegrationTest#shouldEraseALaterAnswerThatReadAnErasedOutlineCopy"),
                     "The answers of turns that read the person's data are erased, with every answer whose basis read"
                             + " one of them, a feedback copy about the person, or advice from the person's results. An"
                             + " answer written before attempts recorded their basis has unknown sources: it stays app"
-                            + " history, and Hephaestus never reads it again. Gap, owned by #5278: the Outline branch"
-                            + " of the copy erasure redacts the answers that it reaches without what derives from"
-                            + " them."),
+                            + " history, and Hephaestus never reads it again."),
             new Cell(CascadeCause.NARROWING, CascadeDependent.DERIVED_ANSWER, Action.KEEP, List.of(), NARROWING_GAP),
             // SLACK_POST
             new Cell(

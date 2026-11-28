@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.adapter.ConversationPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -24,6 +25,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -40,7 +43,10 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -56,6 +62,7 @@ class ClaimedFeedbackAnswerErasureIntegrationTest extends AbstractWorkspaceInteg
     private static final ConversationLlmConfig ADMITTED = LlmCatalogTestFixtures.admittedConversationConfig();
     private static final String WORDS = "Pin the base image by digest in the release workflow.";
     private static final AtomicLong SLACK_TS = new AtomicLong();
+    private static final AtomicLong SOURCE = new AtomicLong(9_100L);
 
     @Autowired
     private ConversationService conversations;
@@ -92,6 +99,15 @@ class ClaimedFeedbackAnswerErasureIntegrationTest extends AbstractWorkspaceInteg
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ApplicationEventPublisher events;
+
+    @Autowired
+    private DocumentFeedbackErasure documents;
+
+    @Autowired
+    private ConversationFeedbackErasure slack;
 
     private Workspace workspace;
     private long teammate;
@@ -157,6 +173,71 @@ class ClaimedFeedbackAnswerErasureIntegrationTest extends AbstractWorkspaceInteg
                 .hasSize(1)
                 .allSatisfy(this::assertRedacted);
         assertNoEntryHoldsTheWordsAndTheQuestionsStay();
+    }
+
+    /** How the source of the result behind the feedback leaves the workspace, and whether the answers go with it. */
+    enum Withdrawal {
+        SCM_MIRROR_ERASURE("scm.pull_request", true),
+        OUTLINE_DISCONNECT("docs.document", true),
+        SLACK_DISCONNECT("chat.thread", true),
+        SLACK_CHANNEL_ERASURE("chat.thread", true),
+        SLACK_RETENTION("chat.thread", false);
+
+        final String kind;
+        final boolean erases;
+
+        Withdrawal(String kind, boolean erases) {
+            this.kind = kind;
+            this.erases = erases;
+        }
+    }
+
+    /**
+     * #5278: a source withdrawal deletes the result behind feedback that a conversation showed. The message that showed
+     * it and a later answer whose basis read that message go with it. A retention keeps them: each has its own.
+     */
+    @ParameterizedTest
+    @EnumSource(Withdrawal.class)
+    void shouldRedactTheAnswersThatShowedFeedbackWhenItsSourceIsWithdrawn(Withdrawal withdrawal) {
+        long source = SOURCE.incrementAndGet();
+        var work = modelFixtures.work(workspace, "withdrawn-" + source, withdrawal.kind, source);
+        Result withdrawn = modelFixtures.result(work, teammate, "Withdrawn result");
+        ConversationTurn showing = attempt(ConversationTurn.Surface.APP);
+        UUID feedback = claimedAbout(showing, withdrawn);
+        end(
+                showing,
+                List.of(
+                        ConversationLedgerFixtures.showFeedback(
+                                ConversationLedgerFixtures.piId(),
+                                "Here is what I saw.",
+                                Map.of("call-1", feedback),
+                                WORDS),
+                        shown("call-1")));
+        assertThat(settled(feedback)).startsWith("DELIVERED/POSTED/");
+        ConversationTurn followUp = attempt(ConversationTurn.Surface.APP);
+        paths.forTurn(workspace.getId(), followUp.getId(), ZoneOffset.UTC);
+        end(followUp, List.of(ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "So: " + WORDS)));
+
+        long ws = workspace.getId();
+        switch (withdrawal) {
+            case SCM_MIRROR_ERASURE ->
+                transactions.executeWithoutResult(status -> events.publishEvent(new ScmMirrorErasedEvent(ws)));
+            case OUTLINE_DISCONNECT -> documents.eraseAllDocumentsForWorkspace(ws);
+            case SLACK_DISCONNECT -> slack.eraseAllConversationForWorkspace(ws);
+            case SLACK_CHANNEL_ERASURE -> slack.eraseForThreads(ws, List.of(source));
+            case SLACK_RETENTION -> slack.expireForThreads(ws, List.of(source));
+        }
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM result WHERE id=?", Long.class, withdrawn.getId()))
+                .isZero();
+        if (withdrawal.erases) {
+            assertThat(answers(showing)).hasSize(1).allSatisfy(this::assertRedacted);
+            assertThat(answers(followUp)).hasSize(1).allSatisfy(this::assertRedacted);
+            assertNoEntryHoldsTheWordsAndTheQuestionsStay();
+        } else {
+            assertThat(answers(showing)).hasSize(1).allSatisfy(this::assertKept);
+            assertThat(answers(followUp)).hasSize(1).allSatisfy(this::assertKept);
+        }
     }
 
     /** The turn's answers after the call read the words too, although their basis predates the turn. */
@@ -303,14 +384,18 @@ class ClaimedFeedbackAnswerErasureIntegrationTest extends AbstractWorkspaceInteg
 
     /** Feedback for the teammate that the attempt claimed, with the teammate's result from the copying review as its basis. */
     private UUID claimedAbout(ConversationTurn turn) {
+        return claimedAbout(turn, teammateResult);
+    }
+
+    private UUID claimedAbout(ConversationTurn turn, Result result) {
         UUID feedback = ConversationFeedbackRows.claimedBy(jdbc, workspace.getId(), teammate, turn.getId(), WORDS);
         jdbc.update(
                 "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(?,?,?,?,?,0)",
-                FeedbackIds.basis(feedback, teammateResult.getId(), null),
+                FeedbackIds.basis(feedback, result.getId(), null),
                 workspace.getId(),
                 feedback,
-                teammateResult.getId(),
+                result.getId(),
                 teammate);
         return feedback;
     }
@@ -363,6 +448,13 @@ class ClaimedFeedbackAnswerErasureIntegrationTest extends AbstractWorkspaceInteg
                         Boolean.class,
                         entry))
                 .as("answer %s is redacted", entry)
+                .isTrue();
+    }
+
+    private void assertKept(UUID entry) {
+        assertThat(jdbc.queryForObject(
+                        "SELECT redacted_at IS NULL FROM conversation_entry WHERE id=?", Boolean.class, entry))
+                .as("answer %s keeps its words", entry)
                 .isTrue();
     }
 
