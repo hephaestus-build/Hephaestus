@@ -467,7 +467,9 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         owner.update(
                 "UPDATE mentor_attempt SET observed_at = clock_timestamp() + interval '30 seconds' WHERE id = ?",
                 lease.attemptId());
-        assertThat(current(held)).as("an observation stamped after the database clock").isFalse();
+        assertThat(current(held))
+                .as("an observation stamped after the database clock")
+                .isFalse();
         observe(lease);
         assertThat(current(held)).as("a fresh observation of the DM").isTrue();
     }
@@ -513,7 +515,9 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(owner.queryForMap("SELECT version, delivery_fence FROM mentor_request WHERE id = ?", request))
                 .containsEntry("version", 1)
                 .containsEntry("delivery_fence", "SOURCE_EDITED");
-        assertThat(current(credential(first))).as("the lease on the text before the refused edit").isFalse();
+        assertThat(current(credential(first)))
+                .as("the lease on the text before the refused edit")
+                .isFalse();
         assertThat(renew(first, LEASE)).isFalse();
 
         capturing = true;
@@ -522,7 +526,9 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(second.requestVersion()).isEqualTo(2);
         prepare(second);
         observe(second);
-        assertThat(current(credential(second))).as("the lease on the admitted edit").isTrue();
+        assertThat(current(credential(second)))
+                .as("the lease on the admitted edit")
+                .isTrue();
         assertThat(current(credential(first))).isFalse();
     }
 
