@@ -28,8 +28,8 @@ class TeamVersionExpirySweeper {
 
     private static final Logger log = LoggerFactory.getLogger(TeamVersionExpirySweeper.class);
 
-    /** The versions that one batch ends at most. */
-    static final int BATCH = 100;
+    /** The versions that one batch ends at most. Small, because each takes all its content with it in one transaction. */
+    static final int BATCH = 20;
 
     /** A run starts no batch after this, so it normally ends inside {@code lockAtMostFor}. */
     static final Duration BUDGET = Duration.ofMinutes(4);
@@ -61,8 +61,12 @@ class TeamVersionExpirySweeper {
                 expired += batch;
             } while (batch == BATCH && clock.instant().isBefore(deadline));
             // Asked, not inferred from the batches: a held version is skipped, and a full last batch may drain all.
-            metrics.record(Job.TEAM_VERSION_EXPIRY, versions.existsDue() ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            boolean remains = versions.existsDue();
+            metrics.record(Job.TEAM_VERSION_EXPIRY, remains ? Outcome.INCOMPLETE : Outcome.SUCCESS);
             metrics.recordAffected(Job.TEAM_VERSION_EXPIRY, expired);
+            if (remains) {
+                log.warn("team.expiry: a version past its expiry date remains after the run");
+            }
             if (expired > 0) {
                 log.info("team.expiry: ended {} version(s) past their expiry date", expired);
             }
