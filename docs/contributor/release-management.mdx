@@ -702,18 +702,7 @@ Record the decision with the release evidence. Do not change a check or label to
 
 ### Promote the qualified candidate
 
-Promote the final candidate only when it has all of this evidence:
-
-- Every test tier passed in strict mode on its source commit.
-- The cutover rehearsal passed on it. Follow [Upgrade to 1.0](/admin/upgrade-to-1-0) word for word.
-- The drills passed on it, including the [isolated restore drill](/admin/backup-restore#isolated-restore-drill).
-- It ran in production for its promotion watch. At the end of the watch:
-  - Every [service level objective](/admin/observability#service-level-objectives) is met.
-  - The event inbox has no dead letters.
-  - Wasted model spend is below 5 %.
-
-The candidate does not wait for a number of days in production.
-Strict-mode test evidence replaces a calendar soak.
+For 1.0.0, record the candidate's qualification evidence in the [signed release check](#release-check-for-10).
 
 Freeze `main` at the last qualified candidate's source commit.
 Do not exit prerelease mode or merge a stable Version PR before promotion.
@@ -763,7 +752,6 @@ A stable Version PR cannot bypass candidate promotion and rebuild the images.
 Before 1.0.0, in 0.x and in its release candidates, `verify-changesets` accepts a `major` changeset only under the slug `release-1-0-0`.
 The usual rules still apply: the summary needs `**Operators:**`, and a migration fragment of the same slug must exist.
 From the first stable 1.0.0 version on, a `major` changeset is ordinary, without a code change.
-Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
 The [release check for 1.0](#release-check-for-10), signed in the release plan, is the gate for `1.0.0` ([#5034](https://github.com/hephaestus-build/Hephaestus/issues/5034)).
 
 1. Make sure that every action before the first candidate in the 1.0 tracking issue is done.
@@ -792,6 +780,7 @@ We never version `webapp` and `docs` individually.
 
 A maintainer checks the [immutable release candidate](#release-candidates) and records each passing result in the [release-plan template](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/templates/release-plan.json).
 Include the evidence location or result for each entry. Use evidence that can be published with the release.
+This checklist and [#5034](https://github.com/hephaestus-build/Hephaestus/issues/5034) define the gate for stable 1.0.0.
 The [1.0 release epic](https://github.com/hephaestus-build/Hephaestus/issues/4878) tracks the milestone.
 
 Wait for every issue marked **Freeze** to merge before running the freeze checks.
@@ -809,17 +798,20 @@ They protect the public API, vocabulary, and portable download format.
 | Release plan entry | What to record |
 | --- | --- |
 | `freeze` | The results of the freeze checks above and the maintainer's decision. |
-| `deterministic-ci` | Passing strict CI on the candidate commit. Include the scenario harness canary detectors ([#4897](https://github.com/hephaestus-build/Hephaestus/issues/4897)) and the 20 scripted cases on the packaged candidate ([#4960](https://github.com/hephaestus-build/Hephaestus/issues/4960)). Include `RequiredProblemsTest` and `FeedbackFairnessTest` ([#4983](https://github.com/hephaestus-build/Hephaestus/issues/4983)). |
+| `deterministic-ci` | Passing results from every test tier in strict mode on the candidate commit. Include the scenario harness canary detectors ([#4897](https://github.com/hephaestus-build/Hephaestus/issues/4897)) and the 20 scripted cases on the packaged candidate ([#4960](https://github.com/hephaestus-build/Hephaestus/issues/4960)). Include `RequiredProblemsTest` and `FeedbackFairnessTest` ([#4983](https://github.com/hephaestus-build/Hephaestus/issues/4983)). |
 | `packaged-isolation` | A passing `PackagedIsolationTest` for composer isolation on the packaged candidate, with the packaged harness and scenario suite ([#4946](https://github.com/hephaestus-build/Hephaestus/issues/4946), [#4960](https://github.com/hephaestus-build/Hephaestus/issues/4960)). |
 | `reference-model` | Before grading, pin the reference local model selected by the capacity benchmark ([#4949](https://github.com/hephaestus-build/Hephaestus/issues/4949)). |
 | `rubric-judge` | Before grading, pin the rubric judge from a different model family ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)). |
 | `judge-spot-check-rule` | Before grading, record how the release owner selects the sample of grades to check ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)). |
 | `release-evaluation` | The candidate's release evaluation cases ([#4961](https://github.com/hephaestus-build/Hephaestus/issues/4961)) pass on the pinned reference local model. Include the required-problem case ([#4983](https://github.com/hephaestus-build/Hephaestus/issues/4983)). Record the human spot-check results, including disagreements with the judge. |
 | `contact-simulation` | One contact simulation from the candidate source shows zero hard-rule breaches. The exact contact timing and frequency counts show no regression ([#4959](https://github.com/hephaestus-build/Hephaestus/issues/4959)). |
-| `restore-and-recovery` | Passing restore and journal replay drills on the candidate ([#4968](https://github.com/hephaestus-build/Hephaestus/issues/4968), [#5012](https://github.com/hephaestus-build/Hephaestus/issues/5012)). Run the stopped-migration drill with background provider access verification ([#5023](https://github.com/hephaestus-build/Hephaestus/issues/5023)). Run the external-effect restore and failover drill on the packaged candidate ([#5026](https://github.com/hephaestus-build/Hephaestus/issues/5026)). Run the packaged Slack recovery check ([#4975](https://github.com/hephaestus-build/Hephaestus/issues/4975)). |
-| `upgrade` | A maintainer's upgrade from seeded 1.0.0-rc.1 to the candidate. Follow the [upgrade guide](/admin/upgrade-to-1-0), record every deviation, and include the guide completeness check for all 1.0 changesets ([#5024](https://github.com/hephaestus-build/Hephaestus/issues/5024)). |
+| `restore-and-recovery` | Passing [isolated restore](/admin/backup-restore#isolated-restore-drill) and journal replay drills on the candidate ([#4968](https://github.com/hephaestus-build/Hephaestus/issues/4968), [#5012](https://github.com/hephaestus-build/Hephaestus/issues/5012)). Run the stopped-migration drill with background provider access verification ([#5023](https://github.com/hephaestus-build/Hephaestus/issues/5023)). Run the external-effect restore and failover drill on the packaged candidate ([#5026](https://github.com/hephaestus-build/Hephaestus/issues/5026)). Run the packaged Slack recovery check ([#4975](https://github.com/hephaestus-build/Hephaestus/issues/4975)). |
+| `upgrade` | The passing cutover rehearsal from seeded 1.0.0-rc.1 to the candidate. A maintainer follows the [upgrade guide](/admin/upgrade-to-1-0) step by step. Record every deviation and include the guide completeness check for all 1.0 changesets ([#5024](https://github.com/hephaestus-build/Hephaestus/issues/5024)). |
 | `red-team` | A red-team run on the packaged candidate by someone who did not design the boundaries. Use the canary detectors ([#4897](https://github.com/hephaestus-build/Hephaestus/issues/4897)). Try to read another person's data, leak private content into a comment on the work, hide a Major problem, and inject instructions through repository content. No canary escapes. |
-| `first-week` | The manual product walk on the packaged candidate. Ask a first question ([#4912](https://github.com/hephaestus-build/Hephaestus/issues/4912)), use the private extension check and an agreed check-in ([#5003](https://github.com/hephaestus-build/Hephaestus/issues/5003), [#4938](https://github.com/hephaestus-build/Hephaestus/issues/4938)), and test Slack direct messages and channel threads ([#5010](https://github.com/hephaestus-build/Hephaestus/issues/5010)). Include the channel-reader and reverse-state checks ([#5017](https://github.com/hephaestus-build/Hephaestus/issues/5017)). Leave a workspace, download portable data, and import it ([#4997](https://github.com/hephaestus-build/Hephaestus/issues/4997), [#4973](https://github.com/hephaestus-build/Hephaestus/issues/4973), [#4987](https://github.com/hephaestus-build/Hephaestus/issues/4987)). |
+| `first-week` | The manual product walk on the packaged candidate. Ask a first question ([#4912](https://github.com/hephaestus-build/Hephaestus/issues/4912)), try an agreed check-in ([#4938](https://github.com/hephaestus-build/Hephaestus/issues/4938)), and test Slack direct messages and channel threads ([#5010](https://github.com/hephaestus-build/Hephaestus/issues/5010)). Include the channel-reader and reverse-state checks ([#5017](https://github.com/hephaestus-build/Hephaestus/issues/5017)). Leave a workspace, download portable data, and import it ([#4997](https://github.com/hephaestus-build/Hephaestus/issues/4997), [#4973](https://github.com/hephaestus-build/Hephaestus/issues/4973), [#4987](https://github.com/hephaestus-build/Hephaestus/issues/4987)). |
+| `account-first-journey` | On staging, follow one test account through a real practice review to private guidance with citations. Verify that the same mentoring relationship continues in a verified Slack DM after opt-in. Record the candidate build and publishable evidence of the review, citations, opt-in, verified route, and continuation ([#4879](https://github.com/hephaestus-build/Hephaestus/issues/4879), [#4885](https://github.com/hephaestus-build/Hephaestus/issues/4885), [#4888](https://github.com/hephaestus-build/Hephaestus/issues/4888)). This is the M7 path. Run the full mentor acceptance gate after it passes. |
+| `reviews-workflow` | Record the [one-build acceptance and cutover evidence in #5464](https://github.com/hephaestus-build/Hephaestus/issues/5464) on one pinned build. Link the compatibility and parity results and the rollback drill. Show that existing reviews keep their data and audiences. Show that cutover produces exactly one scheduled run and one delivery. |
+| `production-watch` | Record when the candidate ran in production and the results at the end of the watch. Every [service level objective](/admin/observability#service-level-objectives) is met. The event inbox has no dead letters. Wasted model spend is below 5 %. The watch has no fixed minimum duration ([#5034](https://github.com/hephaestus-build/Hephaestus/issues/5034)). |
 | `timing-and-capacity` | The results, tested envelope, and cost estimate from running the comment-timing and capacity benchmarks by hand on the candidate ([#4949](https://github.com/hephaestus-build/Hephaestus/issues/4949)). |
 | `speech` | English and German dictation and read-aloud spot-checks on the candidate with a provider that supports speech endpoints ([#4970](https://github.com/hephaestus-build/Hephaestus/issues/4970)). Add a spot-check for speech-to-speech voice when it ships. |
 | `operator-confirmations` | For the candidate deployment, record privacy statement approval, the existing GitHub App grants and authenticated connection, and the GitLab default URL. Record a fresh candidate visual baseline and closure of the research participant mapping ([#5034](https://github.com/hephaestus-build/Hephaestus/issues/5034)). |
