@@ -37,8 +37,7 @@ final class RestoredOwnerContent {
             List<PersonDataRecovery.TeamVersionWithdrawal> versions,
             List<PersonDataRecovery.WorkspaceDeparture> departures) {
         for (var version : versions) teamWork.withdrawAgain(version.workspaceId(), version.versionId());
-        for (var departure : departures)
-            teamWork.withdrawDepartedAgain(departure.workspaceId(), departure.accountId());
+        for (var departure : departures) teamWork.withdrawDepartedAgain(departure.workspaceId(), departure.accountId());
     }
 
     void deleteAgain(List<PersonDataRecovery.MessageDeletion> deletedMessages, Set<UUID> recordIds) {
