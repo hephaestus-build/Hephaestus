@@ -162,20 +162,13 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                """
+    @ValueSource(strings = {"""
                 "noLaterErasures":false,
-                "teamVersionWithdrawals":[{"workspaceId":0,"versionId":"7c1e2f4a-9b3d-4e6f-8a10-5c2d7e9f1b34"}]""",
-                """
-                "noLaterErasures":false,"teamVersionWithdrawals":[{"workspaceId":3}]""",
-                """
-                "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":0,"accountId":57}]""",
-                """
-                "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":3,"accountId":0}]""",
-                """
-                "noLaterErasures":true,"workspaceDepartures":[{"workspaceId":3,"accountId":57}]"""
-            })
+                "teamVersionWithdrawals":[{"workspaceId":0,"versionId":"7c1e2f4a-9b3d-4e6f-8a10-5c2d7e9f1b34"}]""", """
+                "noLaterErasures":false,"teamVersionWithdrawals":[{"workspaceId":3}]""", """
+                "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":0,"accountId":57}]""", """
+                "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":3,"accountId":0}]""", """
+                "noLaterErasures":true,"workspaceDepartures":[{"workspaceId":3,"accountId":57}]"""})
     void shouldKeepProcessingStoppedForATeamWorkListItCannotApply(String lists, CapturedOutput output)
             throws Exception {
         assertBlocked(manifest("""
