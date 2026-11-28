@@ -51,7 +51,7 @@
         <sql>
 ALTER TABLE public.team_element
     ADD CONSTRAINT ck_team_element_id CHECK (element_id != ''),
-    ADD CONSTRAINT ck_team_element_kind CHECK (btrim(kind) != ''),
+    ADD CONSTRAINT ck_team_element_kind CHECK (kind ~ '[^[:space:]]'),
     ADD CONSTRAINT ck_team_element_parent CHECK (parent_element_id != element_id),
     ADD CONSTRAINT ck_team_element_text CHECK (octet_length(text) &lt;= 2097152 AND position(chr(13) IN text) = 0),
     ADD CONSTRAINT ck_team_element_lines CHECK (first_line &gt;= 1
@@ -136,7 +136,7 @@ DROP FUNCTION public.admit_team_element();
         <addUniqueConstraint tableName="team_context" columnNames="version_id, workspace_id" constraintName="uk_team_context_version"/>
         <sql>
 ALTER TABLE public.team_context
-    ADD CONSTRAINT ck_team_context_text CHECK (btrim(text) != '' AND char_length(text) &lt;= 10000);
+    ADD CONSTRAINT ck_team_context_text CHECK (text ~ '[^[:space:]]' AND char_length(text) &lt;= 10000);
         </sql>
         <rollback>
             <dropTable tableName="team_context"/>

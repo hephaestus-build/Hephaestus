@@ -200,6 +200,7 @@ class TeamElementContextStorageIntegrationTest extends BaseIntegrationTest {
                 Map.of("element_id", "''"),
                 Map.of("element_id", "'frame'"),
                 Map.of("kind", "' '"),
+                Map.of("kind", "chr(9)"),
                 Map.of("parent_element_id", "'absent'"),
                 Map.of("parent_element_id", "'cell'"),
                 Map.of("first_line", "1", "last_line", "1"),
