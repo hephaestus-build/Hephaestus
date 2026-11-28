@@ -8,6 +8,7 @@ import type {
 	TeamMentorMessageData,
 	TeamRevisit,
 } from "./team-place-entries";
+import type { TeamThreadData } from "./team-threads";
 
 /** Synthetic people and work only. */
 export const YOU: TeamMemberRef = {
@@ -98,4 +99,18 @@ export const REVISIT: TeamRevisit = {
 	finding: "CHANGE_SHOWN",
 	statement: "The route is now documented. The step-free entrance is still unverified.",
 	citations: CITATIONS.slice(1),
+};
+
+export const REVIEW_THREAD: TeamThreadData = {
+	id: "t1000000-0000-4000-8000-000000000001",
+	title: "Journey map, version 1",
+	review: { itemTitle: "Journey map", versionSequence: 1, versionState: "AVAILABLE" },
+	lastActivityAt: minutesBefore(110),
+};
+
+export const LATER_REVIEW_THREAD: TeamThreadData = {
+	id: "t1000000-0000-4000-8000-000000000002",
+	title: "Journey map, version 2",
+	review: { itemTitle: "Journey map", versionSequence: 2, versionState: "AVAILABLE" },
+	lastActivityAt: minutesBefore(20),
 };
