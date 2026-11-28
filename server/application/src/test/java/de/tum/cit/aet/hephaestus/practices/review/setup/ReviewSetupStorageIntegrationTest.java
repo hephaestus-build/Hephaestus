@@ -68,6 +68,32 @@ class ReviewSetupStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepNamedTeamsInTheSetupsWorkspaceWhenTheTeamMoves() {
+        UUID team = team(course);
+        UUID setup = setup(course, "TEAM");
+        name(course, setup, team);
+
+        try {
+            jdbc.update(
+                    "UPDATE project_team SET workspace_id = ? WHERE id = ? AND workspace_id = ?",
+                    id(otherCourse),
+                    team,
+                    id(course));
+        } catch (DataIntegrityViolationException refusedMove) {
+            // A database guard may refuse the move instead of removing the choice.
+        }
+
+        assertThat(count(
+                        """
+                        SELECT count(*) FROM review_setup_team choice
+                        JOIN project_team team ON team.id = choice.team_id
+                        WHERE choice.setup_id = ? AND choice.workspace_id <> team.workspace_id
+                        """,
+                        setup))
+                .isZero();
+    }
+
+    @Test
     void shouldKeepTheKindAndAudienceOfASetupAndItsRemoval() {
         UUID setup = setup(course, "TEAM");
 
