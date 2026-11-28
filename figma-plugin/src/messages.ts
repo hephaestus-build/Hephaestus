@@ -4,7 +4,7 @@ import type { SelectionSummary } from "./selection-summary.ts";
 /** What the plugin's main thread tells the panel. */
 export type MainMessage =
 	| { type: "selection"; summary: SelectionSummary }
-	| { type: "relaunch"; result: RelaunchWrite | "NO_SINGLE_NODE" };
+	| { type: "relaunch"; result: RelaunchWrite | "NOT_ONE_TAGGABLE_NODE" };
 
 /** What the panel asks the main thread. Only an explicit press in the panel sends one. */
 export interface UiMessage {

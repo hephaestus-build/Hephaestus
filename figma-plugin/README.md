@@ -1,8 +1,9 @@
 # Figma plugin
 
 The Hephaestus host for FigJam and Figma Design.
-It shows the team's authorized feedback, or links to it, through the host team grant (#5442).
-It keeps no review, chat or state of its own.
+This first unit shows what a selection holds and sends nothing.
+Later units show the team's authorized feedback, or link to it, through the host team grant (#5442).
+The plugin keeps no review, chat or state of its own.
 It is not published.
 
 ## Build and import for development

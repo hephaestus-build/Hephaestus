@@ -11,6 +11,9 @@ function selectionText(summary: SelectionSummary): string {
 		case "EMPTY": {
 			return "Nothing is selected. Select the work you want feedback on.";
 		}
+		case "ALL_HIDDEN": {
+			return "Everything selected is hidden, and hidden layers are never captured. Select visible work.";
+		}
 		case "UNSUPPORTED": {
 			return `Hephaestus cannot read this selection yet: ${count(summary.notCaptured, "item", "items")} of a kind it does not capture.`;
 		}
@@ -35,7 +38,7 @@ const RELAUNCH_TEXT: Record<Extract<MainMessage, { type: "relaunch" }>["result"]
 	UNSUPPORTED:
 		"This kind of node cannot hold a button. Members open Hephaestus from Actions instead.",
 	REFUSED: "Figma did not allow the change. Members open Hephaestus from Actions instead.",
-	NO_SINGLE_NODE: "Select exactly one section or frame first.",
+	NOT_ONE_TAGGABLE_NODE: "Select exactly one section, frame or table first.",
 };
 
 function byId<T extends HTMLElement>(id: string, kind: new () => T): T {
@@ -62,6 +65,8 @@ globalThis.addEventListener("message", (event: MessageEvent<{ pluginMessage?: Ma
 	const message = event.data.pluginMessage;
 	if (message?.type === "selection") {
 		selection.textContent = selectionText(message.summary);
+		// A result about the previous selection would read as one about this one.
+		relaunchStatus.textContent = "";
 	} else if (message?.type === "relaunch") {
 		relaunchStatus.textContent = RELAUNCH_TEXT[message.result];
 	}

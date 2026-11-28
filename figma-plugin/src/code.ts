@@ -16,8 +16,18 @@ function sendSelection() {
 	send({ type: "selection", summary: summarizeSelection(figma.currentPage.selection) });
 }
 
-// Opening the panel, also from a relaunch button, reads only counts. It captures and sends nothing.
-figma.showUI(__html__, { width: 320, height: 380, title: "Hephaestus", position: panelPosition() });
+/** The node types an instructor can give the relaunch button (PLUGIN-DESIGN § 1). */
+const TAGGABLE: ReadonlySet<string> = new Set(["SECTION", "FRAME", "TABLE"]);
+
+// Opening the panel, also from a relaunch button, reads only counts. It captures and sends nothing. With nothing
+// selected, the panel opens where Figma puts it, as the proven probe did.
+const position = panelPosition();
+figma.showUI(__html__, {
+	width: 320,
+	height: 380,
+	title: "Hephaestus",
+	...(position === undefined ? {} : { position }),
+});
 figma.on("selectionchange", sendSelection);
 sendSelection();
 
@@ -30,6 +40,9 @@ figma.ui.on("message", (value: unknown) => {
 	const node = selection.length === 1 ? selection[0] : undefined;
 	send({
 		type: "relaunch",
-		result: node === undefined ? "NO_SINGLE_NODE" : setReviewRelaunch(node, message.enabled),
+		result:
+			node === undefined || !TAGGABLE.has(node.type)
+				? "NOT_ONE_TAGGABLE_NODE"
+				: setReviewRelaunch(node, message.enabled),
 	});
 });
