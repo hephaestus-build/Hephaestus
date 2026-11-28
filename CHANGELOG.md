@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.0.0-rc.24
+
+### Minor Changes
+
+- Staff no longer see a person's private content in Hephaestus.
+  Instance admins no longer have **View as user** or the download of a person's data.
+  **Per-person results for admins** is removed, so workspace admins see practice results without names.
+  A workspace admin still sees the reason for a disagreement, for 30 days, to correct the result.
+
+  To get help, a person selects **Share with support** on one question of their conversation and shares it with one instance admin.
+  The admin reads exactly what the person previewed, for 7 days, and the person can revoke the share and sees each read.
+  Without the messages, the share shows only how Hephaestus handled the question, with the run ID for the server logs.
+  An access request is answered outside Hephaestus for now. A later release delivers the records to the person's own data exports.
+
+  **Operators:** Move scripts off the removed View as user, person-data export and per-person results routes. Remove the overrides `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` and `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, which the server no longer reads.
+
+### Patch Changes
+
+- Feedback on your work no longer states a count that its evidence does not show. When a written comment would state a number, such as "13 of 17 commit subjects", that none of the quoted evidence contains, Hephaestus asks for the comment again without that number. Numbers in quoted code and references such as #5 stay.
+- When you erase a person, Hephaestus now also removes its answers in a teammate's conversation that may repeat feedback about that person. This includes a later answer in the same reply, an answer that built on the reply, and a Slack reply that Silent Mode kept in Hephaestus.
+- The database gains storage for editor host pairing and team grants. Nothing writes it yet, and the upgrade needs no action.
+- Prepares the mentor to receive completed pull and merge request reviews for the person who wrote the work. Nothing uses it yet, so reviews and their feedback work as before.
+- The personal mentor can now record a new question for the asker's account. No Slack or app route uses it yet: every route stays on the current conversation path, so nothing changes for operators or people. No route turns on before the release that adds the mentor's records to person export and erasure.
+- The personal mentor can now record an edit or a deletion of a question it holds: a newer edit raises the question's version, and a deletion stops it. No Slack or app route uses it yet, so nothing changes for operators or people. No route turns on before the release that adds the mentor's records to person export and erasure.
+- The upgrade adds three empty tables for the personal mentor's intake. Each row belongs to one account, and PostgreSQL row-level security limits it to that account. Nothing writes them yet, so nothing changes for operators or people. A workspace purge and a Slack disconnect already erase them. Person export and erasure include them from the next release on, before anything writes them.
+- The agent image runs Node.js 24.22.3, and Hephaestus builds with it. This Node.js security release fixes vulnerabilities in 24.22.2.
+- This release prepares sign-in through an OpenID Connect provider, which the next release adds. It can read such a provider and its connected accounts, so you can upgrade to the next release, and roll back from it, without stopping the server. You cannot add an OpenID Connect provider yet.
+- During a rolling release, an instance admin can confirm a person erasure on any server, also when a server of the newer release made the preview. Before, a server of the older release refused the confirmation with "The preview scope changed".
+- A person erasure no longer stops when a rolling release adds a person-data store. A server of the older release leaves the request for one of the newer release, and a server of the newer release finishes it. The new `HephaestusPersonErasureDeferred` alert fires if an erasure keeps waiting for an hour, for example when no running server knows its stores.
+- The database gains the storage for personal AI conversations of accounts with no workspace: a model for each data-handling tier, two monthly caps for the instance's personal purse, and the paying account on each usage record. Nothing uses it yet. Personal AI stays off until an instance admin sets a model and both caps in a later release.
+- Each read of practice standings, the practice profile overview and its review list pins a piece of work once for its freshness, instead of again when it reads the work's sources.
+- The mentor can now write lasting advice on a developer's private Practice Profile, but only in a workspace that `hephaestus.practices.advice.writable-workspace-ids` lists. The list is empty by default, so no workspace writes advice. Do not list a production workspace yet: a later release turns advice on, after person-data requests and erasure cover it.
+- The database gains storage for team projects and their members. Nothing writes it yet, and the upgrade needs no action.
+- Start the next practice review when its model pool has free slots. A wide review can work through its practices in waves.
+- The review API now states the one stage of every item review, from queued to ready, partly checked, withheld, failed or stopped, with no percentage or time estimate.
+- The database gains storage for review setups, which name the practices, the kind of work and the readers of a review. Nothing writes them yet, and the upgrade needs no action.
+- Each read of practice standings, the practice profile overview and its review list checks whether a piece of work is readable once, instead of again in each part of the read.
+- Stop a stalled practice program when the review watchdog fires so other practices can run and the review can retry. The sandbox log names the program host's last step with a fixed code.
+- The app can now show the form where a team project member records a team decision, with one note in their own words and a draft note from Hephaestus to start from. Nothing is recorded until the member selects Record, and a draft never replaces the member's own words for good. No page shows the form yet.
+- The app can now show a team project's decisions: one current record per problem, open, acted on or dismissed, with the note and who recorded it and when. No page shows them yet, so nothing changes for operators or people.
+- The app can now show a review discussion for a team project: each member's message under their own name, and Hephaestus's messages with the places in the work they cite and what Hephaestus used. No page shows it yet, so nothing changes for operators or people.
+- The app can now show who reads what is sent from a message field, only you or your team, and keeps a separate unsent draft for each. It can also list a team project's reviews, each with its review discussion, and say when a reviewed version is gone. No page shows these yet.
+- Workspace admins can now be shown their team projects: each team with its members and counts, never its content. They can create one and add or remove its members from the workspace's members. No page shows it yet, so nothing changes for operators or people.
+- Workspace admins can now be asked to confirm removing a team project. The confirmation says that every member loses access at once, that every version the team sent is withdrawn, and that this cannot be undone. A change that was not saved says so on its team. No page shows it yet.
+- The database gains storage for the content of work that a team project submits. Nothing writes it yet, and the upgrade needs no action.
+- The database gains storage for the work that a team project submits, as items with versions. Nothing writes it yet, and the upgrade needs no action.
+
 ## 1.0.0-rc.23
 
 ### Minor Changes
