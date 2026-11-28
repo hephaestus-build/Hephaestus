@@ -165,11 +165,16 @@ public class ReviewCompositionContinuation {
         }
     }
 
+    /**
+     * Ends what an ended attempt kept for its composition: a repair whose retries are spent stops, a pending repair
+     * resumes and keeps the inputs, and otherwise the inputs go unless their tool trace is still read.
+     */
     @Transactional
     public void forget(ReviewJob job) {
+        // A stopped repair is not pending; reading it again here would see the row from before the stop's update.
         if (job.spentAttempts() > capacity.reviewRetries())
             repairs.stop(job.getWorkspaceId(), job.getReviewId(), "RETRIES_EXHAUSTED");
-        if (repairs.pending(job.getWorkspaceId(), job.getReviewId())) {
+        else if (repairs.pending(job.getWorkspaceId(), job.getReviewId())) {
             reviewRuns.resumeComposition(job.getWorkspaceId(), job.getReviewId());
             return;
         }

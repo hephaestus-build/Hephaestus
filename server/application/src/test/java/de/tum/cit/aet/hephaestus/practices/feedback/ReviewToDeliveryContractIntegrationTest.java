@@ -2626,10 +2626,20 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
                     .as("the resumed composition reads the kept inputs")
                     .isPresent();
-            // Remove the resumed attempt and its run, so no background claim ends this review in a later test.
-            UUID next = jobs.findById(ended.getId()).orElseThrow().getRunId();
-            jdbc.update("DELETE FROM review_job WHERE workspace_id=? AND id=?", review.workspaceId(), ended.getId());
-            jdbc.update("DELETE FROM agent_run WHERE workspace_id=? AND id=?", review.workspaceId(), next);
+            // End the resumed review within this test, so no later test counts its end.
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
+                    "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
+                    ended.getId());
+            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+                completion.tick();
+                assertThat(jdbc.queryForObject(
+                                "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                                String.class,
+                                review.workspaceId(),
+                                review.reviewId()))
+                        .isIn("COMPLETE", "CANCELLED", "FAILED");
+            });
         }
     }
 
