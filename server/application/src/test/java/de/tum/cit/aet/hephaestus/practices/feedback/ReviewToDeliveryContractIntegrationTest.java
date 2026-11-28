@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerProperties;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackProducerSelection;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -42,6 +43,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionAttemptEnded;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionInputsRelease;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
+import de.tum.cit.aet.hephaestus.agent.job.FeedbackProducerReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewComposeRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
@@ -78,6 +80,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -142,6 +145,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackReadbackObservedEvent;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -209,6 +213,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -411,6 +416,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private MentorReviewIntake mentorIntake;
 
     @Autowired
+    private PersonDataCopyFence copyFence;
+
+    @Autowired
     private WorkspaceLifecycleService lifecycle;
 
     @Autowired
@@ -418,6 +426,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private FeedbackProducerProperties producers;
+
+    @Autowired
+    private FeedbackProducerSelection producerSelection;
 
     @Autowired
     private OwnerScope owners;
@@ -958,6 +969,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     var barrier = new CyclicBarrier(2);
                     Callable<MentorReviewIntake.Outcome> seal =
                             () -> Objects.requireNonNull(transactions.execute(status -> {
+                                copyFence.holdForCapture();
                                 arrive(barrier);
                                 return mentorIntake.admit(sealed);
                             }));
@@ -1008,6 +1020,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     assertThat(jdbc.update("UPDATE account SET ai_choice='NO_AI' WHERE id=?", account))
                             .isEqualTo(1);
                 });
+                copyFence.holdForCapture();
                 return mentorIntake.admit(new MentorReviewIntake.SealedReview(
                         review.workspaceId(),
                         review.reviewId(),
@@ -1042,8 +1055,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     author,
                     "b".repeat(64),
                     Instant.now());
-            MentorReviewIntake.Outcome admittedInSecond =
-                    Objects.requireNonNull(transactions.execute(status -> mentorIntake.admit(inSecond)));
+            MentorReviewIntake.Outcome admittedInSecond = Objects.requireNonNull(transactions.execute(status -> {
+                copyFence.holdForCapture();
+                return mentorIntake.admit(inSecond);
+            }));
             assertThat(admittedInSecond).isInstanceOf(MentorReviewIntake.Outcome.Admitted.class);
 
             transactions.executeWithoutResult(status -> lifecycle.purgeAgain(second.workspaceId()));
@@ -1055,6 +1070,23 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         "SELECT count(*) FROM mentor_event WHERE workspace_id=?", Integer.class, second.workspaceId());
             });
             assertThat(purged).as("the purged workspace's event").isZero();
+        }
+    }
+
+    @Test
+    void shouldRefuseAReviewSealedEventOutsideTheSealsCopyFence() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            mayHaveMentor(review);
+            assertThatThrownBy(() ->
+                            transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
+                                    review.workspaceId(),
+                                    review.reviewId(),
+                                    review.identity().jobId(),
+                                    review.developerId(),
+                                    "a".repeat(64),
+                                    Instant.now()))))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(mentorEvents(review)).isEmpty();
         }
     }
 
@@ -1157,6 +1189,82 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldSealAMentorReviewFromPublicInputsOnly() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            // A private history file that the staged inputs kept: the seal of a new producer never reads it again.
+            var canary = Base64.getEncoder().encodeToString("PRIVATE-HISTORY-CANARY".getBytes(StandardCharsets.UTF_8));
+            assertThat(jdbc.update(
+                            "UPDATE review_composition_basis SET payload=jsonb_set(payload, '{files,inputs/history/canary.md}',"
+                                    + " to_jsonb(?::text)) WHERE workspace_id=? AND job_id=?",
+                            canary,
+                            review.workspaceId(),
+                            review.identity().jobId()))
+                    .isOne();
+            var answer = new AtomicReference<AdmissionResponseDTO>();
+            withMentorSelected(
+                    review,
+                    () -> answer.set(admission.admit(
+                            review.identity(),
+                            new SealResultsRequestDTO(
+                                    3, review.reviewId(), review.identity().jobId(), 0),
+                            () -> {})));
+
+            assertThat(producer(review).getFirst()).isEqualTo("MENTOR");
+            assertThat(answer.get().practicePageSupport()).isNull();
+            assertThat(answer.get().conversationEligibility()).isNull();
+            assertThat(answer.get().privateHistory()).isNull();
+            assertThat(answer.get().privateProgress().decidedResultIds()).isEmpty();
+            assertThat(jdbc.queryForObject(
+                            "SELECT payload::text FROM review_composition_basis WHERE workspace_id=? AND job_id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.identity().jobId()))
+                    .doesNotContain("inputs/history/")
+                    .doesNotContain(canary);
+            assertThat(jdbc.queryForObject(
+                            "SELECT payload::text FROM work_place_handoff WHERE workspace_id=? AND review_id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .doesNotContain(canary);
+        }
+    }
+
+    @Test
+    void shouldKeepTheFirstSealsProducerForALaterJobAlsoAfterTheFirstJobIsGone() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            unpinnedAndStaged(review);
+            withMentorSelected(review, () -> seal(review));
+            var sealed = jobs.findById(review.identity().jobId()).orElseThrow();
+            var snapshot = assignments.review(sealed);
+            var later = new ReviewJob();
+            later.setId(UUID.randomUUID());
+            later.setReviewId(review.reviewId());
+            later.setWorkspaceId(review.workspaceId());
+
+            // The gate is closed now, so only the pin can make the later job MENTOR.
+            FeedbackProducerSelection.Choice inherited =
+                    transactions.execute(status -> producerSelection.choose(later, snapshot, "b".repeat(64)));
+            assertThat(inherited)
+                    .isEqualTo(new FeedbackProducerSelection.Choice(
+                            FeedbackProducer.MENTOR, FeedbackProducerReason.INHERITED));
+            transactions.executeWithoutResult(status -> {
+                assertThat(jdbc.update(
+                                "DELETE FROM review_job WHERE workspace_id=? AND id=?",
+                                review.workspaceId(),
+                                review.identity().jobId()))
+                        .isOne();
+                assertThat(producerSelection.choose(later, snapshot, "b".repeat(64)))
+                        .as("the first job was pruned")
+                        .isEqualTo(new FeedbackProducerSelection.Choice(
+                                FeedbackProducer.MENTOR, FeedbackProducerReason.INHERITED));
+                status.setRollbackOnly();
+            });
+        }
+    }
+
     /** An author who may have a mentor, and a staged review that no seal pinned yet, as a producer-aware server writes. */
     private void unpinnedAndStaged(ClaimedReview review) {
         mayHaveMentor(review);
@@ -1211,15 +1319,20 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 review.developerId());
     }
 
+    /** Admits as the seal does: inside the copy fence that keeps an erasure out until the commit. */
+    private MentorReviewIntake.Outcome sealHeld(MentorReviewIntake.SealedReview sealed) {
+        copyFence.holdForCapture();
+        return mentorIntake.admit(sealed);
+    }
+
     private MentorReviewIntake.Outcome admitSealed(ClaimedReview review, String digest) {
-        return Objects.requireNonNull(
-                transactions.execute(status -> mentorIntake.admit(new MentorReviewIntake.SealedReview(
-                        review.workspaceId(),
-                        review.reviewId(),
-                        review.identity().jobId(),
-                        review.developerId(),
-                        digest,
-                        Instant.now()))));
+        return Objects.requireNonNull(transactions.execute(status -> sealHeld(new MentorReviewIntake.SealedReview(
+                review.workspaceId(),
+                review.reviewId(),
+                review.identity().jobId(),
+                review.developerId(),
+                digest,
+                Instant.now()))));
     }
 
     /** The review's mailbox events, read as their author: row-level security hides them from everyone else. */
@@ -2949,6 +3062,59 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(resumed).isFalse();
             continuation.forget(jobs.findById(review.identity().jobId()).orElseThrow());
         }
+    }
+
+    @Test
+    void shouldRefuseACompositionPackageForAReviewWhoseSealChoseAnotherProducer() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            var proposal = composition(response, SUMMARY, context);
+            jdbc.update(
+                    "UPDATE review_job SET feedback_producer='MENTOR' WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.identity().jobId());
+
+            assertThatThrownBy(() -> admission.checkPackage(review.identity(), proposal))
+                    .isInstanceOf(AdmissionConflictException.class);
+        }
+    }
+
+    @Test
+    void shouldResumeOnlyTheLegacyCompositionOfAReviewThatNoSealPinnedToAnotherProducer() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            ActionTestSupport.drain(executor, jdbc);
+            transactions.executeWithoutResult(status -> {
+                jdbc.update(
+                        "UPDATE agent_run SET state='QUEUED', leased_until=NULL WHERE id=?",
+                        review.identity().runId());
+                RuntimeJobTestData.updateJobs(
+                        jdbc,
+                        "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                        review.workspaceId(),
+                        review.identity().jobId());
+            });
+            String job = "UPDATE review_job SET feedback_producer=? WHERE workspace_id=? AND id=?";
+            String pin = "UPDATE review SET feedback_producer=? WHERE workspace_id=? AND id=?";
+
+            jdbc.update(job, "MENTOR", review.workspaceId(), review.identity().jobId());
+            assertThat(resume(review)).as("a job that sealed for the mentor").isFalse();
+            jdbc.update(job, "LEGACY", review.workspaceId(), review.identity().jobId());
+            jdbc.update(pin, "MENTOR", review.workspaceId(), review.reviewId());
+            assertThat(resume(review))
+                    .as("a LEGACY job of a review that a later seal pinned")
+                    .isFalse();
+            jdbc.update(pin, "LEGACY", review.workspaceId(), review.reviewId());
+            assertThat(resume(review)).as("the same review, LEGACY throughout").isTrue();
+        }
+    }
+
+    private boolean resume(ClaimedReview review) {
+        return Boolean.TRUE.equals(
+                transactions.execute(status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId())));
     }
 
     @Test

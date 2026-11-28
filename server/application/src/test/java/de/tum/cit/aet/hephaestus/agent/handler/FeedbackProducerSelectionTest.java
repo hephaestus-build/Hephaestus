@@ -56,6 +56,21 @@ class FeedbackProducerSelectionTest {
     }
 
     @Test
+    void shouldSealOnlyTheObservationsOfAnItemKindThatLegacyNeverComposesForEvenWithTheGateClosed() {
+        var closed = new FeedbackProducerProperties();
+        var teamItem = new ItemRef(1, 2, new ItemKind("submission.figma_frame"), 20L, null, null);
+        assigned(assignment(AUTHOR, AboutRole.AUTHOR));
+
+        var choice = new FeedbackProducerSelection(
+                        closed, pins, assignments, intake, mock(ApplicationEventPublisher.class))
+                .choose(job, review(teamItem, ReviewOrigin.REQUEST), "d");
+
+        assertThat(choice).isEqualTo(choice(FeedbackProducer.OBSERVATIONS, FeedbackProducerReason.TEAM_MENTORING_OFF));
+        verify(pins).pin(job.getWorkspaceId(), job.getReviewId(), FeedbackProducer.OBSERVATIONS);
+        verify(intake, never()).admit(any());
+    }
+
+    @Test
     void shouldStayLegacyWhenTheGateIsClosedByDefault() {
         var closed = new FeedbackProducerProperties();
         closed.setMentorWorkspaceIds(Set.of(job.getWorkspaceId()));
@@ -114,6 +129,15 @@ class FeedbackProducerSelectionTest {
         assigned(assignment(AUTHOR, AboutRole.AUTHOR), assignment(AUTHOR + 1, AboutRole.AUTHOR));
         assertThat(choose(review(PULL_REQUEST, ReviewOrigin.REQUEST)))
                 .isEqualTo(choice(FeedbackProducer.WORK_PLACE, FeedbackProducerReason.SEVERAL_AUTHORS));
+        verify(intake, never()).admit(any());
+    }
+
+    @Test
+    void shouldTreatAPracticeWithNoRoleAsARouteWithACutover() {
+        // A result with no role has no private destination on LEGACY either: the page and the conversation need a role.
+        assigned(assignment(null, null));
+        assertThat(choose(review(PULL_REQUEST, ReviewOrigin.REQUEST)))
+                .isEqualTo(choice(FeedbackProducer.WORK_PLACE, FeedbackProducerReason.NO_LINKED_AUTHOR));
         verify(intake, never()).admit(any());
     }
 

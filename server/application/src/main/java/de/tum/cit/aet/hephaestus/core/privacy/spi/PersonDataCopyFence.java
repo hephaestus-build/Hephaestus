@@ -15,6 +15,9 @@ public interface PersonDataCopyFence {
     /** Short progress writes skip their frame when an erasure owns capture admission. */
     boolean tryHoldForCapture();
 
+    /** Whether the caller's transaction already holds the fence for a capture, so an erasure waits for its commit. */
+    boolean heldForCapture();
+
     void holdForErasure();
 
     /** Queues admission behind existing captures for a bounded time. The transaction must roll back on timeout. */

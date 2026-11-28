@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorReviewIntake;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -72,7 +74,22 @@ public class FeedbackProducerSelection {
         events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId(), job.getId()));
     }
 
+    /**
+     * The item kinds whose reviews LEGACY composes for. Any other kind, such as a team's submitted version (ADR 0165),
+     * fails closed: it gets only its sealed observations until the team's mentor can produce for it.
+     */
+    static final Set<ItemKind> LEGACY_KINDS = Set.of(
+            WorkPlaceHandoffEnrolment.PULL_REQUEST,
+            new ItemKind("scm.pull_request_review"),
+            new ItemKind("scm.issue"),
+            new ItemKind("scm.file"),
+            new ItemKind("scm.repository"),
+            new ItemKind("docs.document"),
+            new ItemKind("chat.thread"));
+
     private Choice decide(ReviewJob job, ReviewSnapshot review, String admissionDigest) {
+        if (!LEGACY_KINDS.contains(review.item().kind()))
+            return new Choice(FeedbackProducer.OBSERVATIONS, FeedbackProducerReason.TEAM_MENTORING_OFF);
         if (!properties.isAllowMentorBeforeAdviceErasure()) return legacy(FeedbackProducerReason.GATE_CLOSED);
         if (!properties.getMentorWorkspaceIds().contains(job.getWorkspaceId()))
             return legacy(FeedbackProducerReason.NOT_SELECTED);

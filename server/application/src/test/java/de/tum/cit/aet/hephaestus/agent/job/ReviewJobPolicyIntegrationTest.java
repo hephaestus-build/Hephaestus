@@ -74,6 +74,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
+import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -214,6 +216,62 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var claimed = claimLeased(jobs.findById(job.getId()).orElseThrow()).orElseThrow();
 
         assertThat(claimed.withholdOnly()).isEqualTo(CompositionStop.RETRIES_EXHAUSTED);
+    }
+
+    @Test
+    void shouldComposeOnlyForALegacyProducer() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        for (var producer : FeedbackProducer.values()) {
+            jdbc.update("UPDATE review_job SET feedback_producer=? WHERE id=?", producer.name(), job.getId());
+            var stored = jobs.findById(job.getId()).orElseThrow();
+            assertThat(reviewRuns.composes(stored)).as(producer.name()).isEqualTo(producer == FeedbackProducer.LEGACY);
+        }
+    }
+
+    @Test
+    void shouldRefuseToComposeAReviewWhoseSealChoseTheMentor() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        jdbc.update(
+                "UPDATE review_job SET admission_attempt=0, admission_digest=?, feedback_producer='MENTOR' WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+
+        assertThatThrownBy(() ->
+                        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE kind='REVIEW_COMPOSE' AND concurrency_key=?",
+                        Integer.class,
+                        ReviewRunKind.subject(job.getReviewId())))
+                .isZero();
+    }
+
+    @Test
+    void shouldCompleteAMentorReviewWhoseLeaseWasLostWithoutAModelOrAComposition() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        jdbc.update(
+                "UPDATE review_job SET admission_attempt=0, admission_digest=?, feedback_producer='MENTOR' WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+        Boolean requeued = transactions.execute(
+                status -> reviewRuns.requeue(job.getId(), started.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null));
+        assertThat(requeued).isTrue();
+
+        assertThat(claimLeased(jobs.findById(job.getId()).orElseThrow()))
+                .as("the claim ends the job instead of starting it")
+                .isEmpty();
+
+        var ended = jobs.findById(job.getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+        assertThat(ended.getProcessingStatus()).isEqualTo(ProcessingStatus.PENDING);
+        assertThat(RuntimeJobTestData.runState(jdbc, ended)).isEqualTo("ENDED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE kind='REVIEW_COMPOSE' AND concurrency_key=?",
+                        Integer.class,
+                        ReviewRunKind.subject(job.getReviewId())))
+                .isZero();
     }
 
     @Test

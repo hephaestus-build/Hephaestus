@@ -15,10 +15,12 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackProducer;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewProducerPin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -78,6 +80,7 @@ public class ReviewRunKind implements AgentRunHandler {
     private final ReviewStart reviewStart;
     private final FeedbackRepair repairs;
     private final MeterRegistry meters;
+    private final ReviewProducerPin pins;
 
     ReviewRunKind(
             ReviewJobRepository jobs,
@@ -89,7 +92,8 @@ public class ReviewRunKind implements AgentRunHandler {
             ObjectMapper mapper,
             ReviewStart reviewStart,
             FeedbackRepair repairs,
-            MeterRegistry meters) {
+            MeterRegistry meters,
+            ReviewProducerPin pins) {
         this.jobs = jobs;
         this.runs = runs;
         this.capacity = capacity;
@@ -100,6 +104,7 @@ public class ReviewRunKind implements AgentRunHandler {
         this.reviewStart = reviewStart;
         this.repairs = repairs;
         this.meters = meters;
+        this.pins = pins;
         compositionUnconfirmed(AgentRunStopReason.ATTEMPTS_EXHAUSTED);
         compositionUnconfirmed(AgentRunStopReason.DEADLINE);
     }
@@ -132,9 +137,13 @@ public class ReviewRunKind implements AgentRunHandler {
     public static final String ATTEMPT_OF_RUN =
             "(CASE WHEN r.state = 'QUEUED' THEN r.lease_epoch ELSE r.lease_epoch - 1 END)";
 
-    /** Whether an admitted attempt goes on to the run that composes its feedback: a trial never composes (ADR 0118). */
+    /**
+     * Whether an admitted attempt goes on to the run that composes its feedback. A trial never composes (ADR 0118), and
+     * neither does a seal that chose another producer than LEGACY (ADR 0160): its producer acts on the sealed review.
+     */
     public boolean composes(ReviewJob job) {
-        return assignments.review(job).origin() != ReviewOrigin.TRIAL;
+        return job.getFeedbackProducer() == FeedbackProducer.LEGACY
+                && assignments.review(job).origin() != ReviewOrigin.TRIAL;
     }
 
     /** The subject of a review's runs: one review runs one attempt at a time. */
@@ -277,6 +286,8 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
+        if (job.getFeedbackProducer() != FeedbackProducer.LEGACY)
+            throw new IllegalStateException("A review whose producer is not LEGACY never composes");
         if (runs.end(fence, AgentRunStopReason.HANDED_OFF) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing =
@@ -366,6 +377,11 @@ public class ReviewRunKind implements AgentRunHandler {
     public boolean resumeComposition(long workspaceId, UUID reviewId) {
         receipts.holdCopyAdmission();
         if (jobs.lockParentByReview(workspaceId, reviewId).isEmpty()) return false;
+        // A job that sealed before the pin existed is LEGACY, but a later seal can pin another producer on the review:
+        // its composition then never resumes, so the review never gets both kinds of feedback.
+        if (pins.pinned(workspaceId, reviewId)
+                .filter(pinned -> pinned != FeedbackProducer.LEGACY)
+                .isPresent()) return false;
         var resumable = jobs.lockResumableComposition(workspaceId, reviewId, capacity.reviewRetries())
                 .orElse(null);
         if (resumable == null) return false;

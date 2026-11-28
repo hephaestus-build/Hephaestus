@@ -266,6 +266,19 @@ public class EvidenceFileReads {
      * unreadable file, leaves nothing to retain rather than a part.
      */
     public Optional<Map<String, byte[]>> originalCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
+        return compositionInputs(identity, true);
+    }
+
+    /**
+     * {@link #originalCompositionInputs} without the staged history of earlier results, which this read never opens:
+     * for a seal whose producer composes nothing from that history (ADR 0160).
+     */
+    public Optional<Map<String, byte[]>> publicCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
+        return compositionInputs(identity, false);
+    }
+
+    private Optional<Map<String, byte[]>> compositionInputs(
+            ResultAdmissionService.AdmissionIdentity identity, boolean history) {
         Path root = directory(
                 layout.jobsRoot(), identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
         jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
@@ -284,8 +297,10 @@ public class EvidenceFileReads {
             Path rendered = root.resolve(INDEX_MARKDOWN_PATH);
             if (Files.isRegularFile(rendered, LinkOption.NOFOLLOW_LINKS))
                 files.put(INDEX_MARKDOWN_PATH, Files.readAllBytes(rendered));
-            for (String prefix : List.of(
-                    SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)) {
+            for (String prefix : history
+                    ? List.of(
+                            SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)
+                    : List.of(SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX)) {
                 Path directory = root.resolve(prefix);
                 if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) continue;
                 try (var entries = Files.walk(directory)) {
