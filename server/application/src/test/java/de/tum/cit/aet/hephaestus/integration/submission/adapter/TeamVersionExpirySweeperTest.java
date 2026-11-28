@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.submission.TeamItemVersionRepositor
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -54,6 +55,20 @@ class TeamVersionExpirySweeperTest extends BaseUnitTest {
                 .expireDue(TeamVersionExpirySweeper.BATCH);
         assertThat(runs("incomplete")).isOne();
         assertThat(runs("success")).isZero();
+    }
+
+    @Test
+    void shouldReportSuccessWhenTheLastFullBatchDrainsTheBacklog() {
+        var remaining = new AtomicInteger(TeamVersionExpirySweeper.BATCH);
+        when(versions.expireDue(TeamVersionExpirySweeper.BATCH)).thenAnswer(invocation -> {
+            clock.advance(TeamVersionExpirySweeper.BUDGET);
+            return remaining.getAndSet(0);
+        });
+
+        sweeper.sweep();
+
+        assertThat(remaining.get()).isZero();
+        assertThat(runs("success")).isOne();
     }
 
     @Test
