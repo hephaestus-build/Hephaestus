@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,6 +73,9 @@ final class ReviewSandboxStub implements SandboxClaims {
     final List<Call> calls = new CopyOnWriteArrayList<>();
     private final Map<String, Claim> claims = new ConcurrentHashMap<>();
     private final Set<String> measured = ConcurrentHashMap.newKeySet();
+    /** The review that each sandbox measured, by its claim's name. */
+    private final Map<String, String> served = new ConcurrentHashMap<>();
+
     private volatile Runnable beforeStart = () -> {};
     /** Where the next measurement loses its server. */
     private enum Loss {
@@ -164,7 +168,17 @@ final class ReviewSandboxStub implements SandboxClaims {
      * runs on the composer's own kind, which its own test drives; this sandbox pulls no more.
      */
     void drive() throws IOException, InterruptedException {
+        drive(null);
+    }
+
+    /**
+     * As {@link #drive()}, for {@code review} only: a sandbox that measured another review is not pulled, since its pull
+     * would wait out the gateway's wait for a run that never comes.
+     */
+    void drive(@Nullable UUID review) throws IOException, InterruptedException {
         for (Claim claim : claims.values()) {
+            String other = served.get(claim.name());
+            if (review != null && other != null && !other.equals(review.toString())) continue;
             if (!measured.add(claim.name())) continue;
             String gateway = Objects.requireNonNull(claim.env().get("HEPHAESTUS_GATEWAY_URL"));
             String token = Objects.requireNonNull(claim.env().get("HEPHAESTUS_SANDBOX_TOKEN"));
@@ -196,7 +210,7 @@ final class ReviewSandboxStub implements SandboxClaims {
                 calls.add(new Call("context", 409, new String(context.body(), StandardCharsets.UTF_8)));
                 continue;
             }
-            Loss lost = measure(gateway + "/internal/llm", base + "/runtime", headers);
+            Loss lost = measure(claim.name(), gateway + "/internal/llm", base + "/runtime", headers);
             if (lost != Loss.AFTER_FIRST_STAGE) {
                 var ended = send(
                         base + "/end",
@@ -216,11 +230,12 @@ final class ReviewSandboxStub implements SandboxClaims {
      *
      * @return where it lost its server, or null when it measured
      */
-    private @Nullable Loss measure(String proxy, String runtime, Map<String, String> token)
+    private @Nullable Loss measure(String name, String proxy, String runtime, Map<String, String> token)
             throws IOException, InterruptedException {
         Map<String, byte[]> workspace =
                 untar(send(runtime + "/workspace", token, null).body());
         JsonNode task = mapper.readTree(workspace.get(SandboxLayout.TASK_ENVELOPE_FILENAME));
+        served.put(name, task.path("reviewId").asString());
         JsonNode manifest = mapper.readTree(workspace.get(SandboxLayout.MANIFEST_PATH));
         var scan = files;
         @Nullable String record = scan == null ? coreRecordPath(manifest, workspace) : null;

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewProgressDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewResultCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRuntimeDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSetupRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageAttemptDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageDTO;
@@ -80,7 +81,17 @@ public class ReviewSummaryQueryService {
     }
 
     public Page<ReviewSummaryDTO> list(long workspaceId, ReviewFilterParams filter, Pageable page) {
-        var found = reviews.search(workspaceId, filter, page);
+        return list(workspaceId, filter, null, page);
+    }
+
+    /**
+     * The reviews that {@code filter} selects, newest first unless it sorts otherwise.
+     *
+     * @param setupId the review setup whose history to list (ADR 0167 decision 4), or null for every review
+     */
+    public Page<ReviewSummaryDTO> list(
+            long workspaceId, ReviewFilterParams filter, @Nullable UUID setupId, Pageable page) {
+        var found = reviews.search(workspaceId, filter, setupId, page);
         var summaries = summaries(workspaceId, found.getContent());
         return found.map(review -> Objects.requireNonNull(summaries.get(review.getId())));
     }
@@ -167,7 +178,9 @@ public class ReviewSummaryQueryService {
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
                             model,
                             reads.progress.get(review.getId()),
-                            null,
+                            Optional.ofNullable(review.getSetupId())
+                                    .map(reads.setups::get)
+                                    .orElse(null),
                             versionKind(review),
                             audience(review),
                             null,
@@ -213,6 +226,8 @@ public class ReviewSummaryQueryService {
         final Map<UUID, Map<FeedbackState, Integer>> feedback = new HashMap<>();
         final ReviewReferences.PageRefs refs;
         final Map<UUID, ReviewProgressDTO> progress;
+        /** The setup of each review that a setup started; a deleted setup is not here, and its reviews keep none. */
+        final Map<UUID, ReviewSetupRefDTO> setups;
 
         SummaryReads(long ws, List<Review> page) {
             var ids = page.stream().map(Review::getId).toList();
@@ -263,6 +278,15 @@ public class ReviewSummaryQueryService {
                                     row.getReviewId(), ignored -> new EnumMap<>(FeedbackState.class))
                             .put(row.getState(), Math.toIntExact(row.getCount())));
             refs = pageReferences.read(ws, page);
+            var setupIds = page.stream()
+                    .map(Review::getSetupId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            setups = setupIds.isEmpty()
+                    ? Map.of()
+                    : reviews.findSetupRefs(ws, setupIds).stream()
+                            .collect(Collectors.toMap(ReviewSetupRefDTO::id, Function.identity()));
         }
 
         private void addResults(ReviewRepository.PracticeResultCounts row) {

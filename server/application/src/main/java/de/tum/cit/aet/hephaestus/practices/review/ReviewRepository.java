@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSetupRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -218,6 +219,23 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     List<Review> findByWorkspaceIdAndBatchIdOrderByCreatedAtAsc(long workspaceId, UUID batchId);
 
     List<Review> findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(long workspaceId, long itemId);
+
+    /** The scans of an item that one review setup started, newest first. */
+    List<Review> findByWorkspaceIdAndItemIdAndKindAndSetupIdOrderByOrderedAtDesc(
+            long workspaceId, long itemId, ReviewKind kind, UUID setupId);
+
+    /** The scans of an item that no review setup started, newest first. */
+    List<Review> findByWorkspaceIdAndItemIdAndKindAndSetupIdIsNullOrderByOrderedAtDesc(
+            long workspaceId, long itemId, ReviewKind kind);
+
+    /** The name of each review setup of {@code setupIds} that still exists. */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSetupRefDTO(s.id, s.name)
+          FROM ReviewSetup s
+         WHERE s.workspaceId = :workspaceId AND s.id IN :setupIds
+        """)
+    List<ReviewSetupRefDTO> findSetupRefs(
+            @Param("workspaceId") long workspaceId, @Param("setupIds") Collection<UUID> setupIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Review r WHERE r.id = :id AND r.workspaceId = :workspaceId")

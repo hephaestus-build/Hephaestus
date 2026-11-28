@@ -354,12 +354,19 @@ public class ScanReportService {
                 assignment.getMethod().epoch());
     }
 
+    /**
+     * The newest earlier closed scan of the same item and branch that the same review setup started (ADR 0167 decision
+     * 6). A scan that no setup started compares only with scans that no setup started, as before setups existed.
+     */
     private @Nullable Review baseline(Review current) {
-        return reviews
-                .findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(current.getWorkspaceId(), current.getItemId())
-                .stream()
-                .filter(r -> r.getKind() == ReviewKind.SCAN
-                        && r.getStatus().isTerminal()
+        var setup = current.getSetupId();
+        var candidates = setup == null
+                ? reviews.findByWorkspaceIdAndItemIdAndKindAndSetupIdIsNullOrderByOrderedAtDesc(
+                        current.getWorkspaceId(), current.getItemId(), ReviewKind.SCAN)
+                : reviews.findByWorkspaceIdAndItemIdAndKindAndSetupIdOrderByOrderedAtDesc(
+                        current.getWorkspaceId(), current.getItemId(), ReviewKind.SCAN, setup);
+        return candidates.stream()
+                .filter(r -> r.getStatus().isTerminal()
                         && !r.getId().equals(current.getId())
                         && new ReviewOrder(r.getOrderedAt(), r.getCreatedAt(), r.getId())
                                         .compareTo(new ReviewOrder(

@@ -421,7 +421,7 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
                         if (closed(scan)) return true;
                         dispatcher.dispatch();
                         runtime.composeQueued(scan.id());
-                        sandbox.drive();
+                        sandbox.drive(scan.id());
                         runtime.composeQueued(scan.id());
                         completion.tick();
                         return closed(scan);
@@ -449,6 +449,16 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
                                 + " WHERE review_id = ? ORDER BY id",
                         scan.id())
                 .toString();
+    }
+
+    /** The review that the closed scan's frozen report compares with, or null when it has no baseline. */
+    protected @Nullable UUID baseline(Scan scan) {
+        String baseline = jdbc.queryForObject(
+                "SELECT report->>'baselineScanId' FROM review WHERE id = ? AND workspace_id = ?",
+                String.class,
+                scan.id(),
+                scan.workspaceId());
+        return baseline == null ? null : UUID.fromString(baseline);
     }
 
     /** The report's items, in report order. */
