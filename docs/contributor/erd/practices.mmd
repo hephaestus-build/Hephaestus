@@ -342,6 +342,10 @@ erDiagram
         VARCHAR(64) request_digest
         JSONB checks "NOT NULL"
         BOOLEAN cancel_requested "NOT NULL"
+        UUID setup_id FK
+        VARCHAR(24) version_kind
+        VARCHAR(16) audience
+        UUID audience_team_id
     }
 
     ReviewBatch {
@@ -547,6 +551,7 @@ erDiagram
     ItemEvent ||--o{ Review : reviewed
     Item ||--o{ Review : reviewed
     Account ||--o{ Review : reviewed
+    ReviewSetup ||--o{ Review : reviewed
     Workspace ||--o{ Review : reviewed
     Account ||--o{ ReviewBatch : confirmed_by_account_id
     Item ||--o{ ReviewBatch : reviewed
