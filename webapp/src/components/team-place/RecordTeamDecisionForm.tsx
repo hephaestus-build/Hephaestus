@@ -47,11 +47,14 @@ export interface RecordTeamDecisionFormProps {
 	teamName: string;
 	/** The state the problem has now, preselected. A new decision starts Open. */
 	currentState?: TeamDecisionState;
-	/** The current record of the problem when the form opened, if one exists. */
+	/** The current record of the problem when the form opened, if one exists. Later values are ignored. */
 	currentRecordId?: string;
 	/** The answer leaves the team a real choice, so the note shows the prompt as its placeholder. */
 	prompt?: boolean;
-	/** A note Hephaestus drafted. "Use this draft" copies it into the note for editing; it records nothing. */
+	/**
+	 * A note Hephaestus drafted. "Use this draft" fills an empty note with it, or adds it below the member's words, for
+	 * editing. It records nothing and removes nothing.
+	 */
 	draftNote?: string;
 	/** The member's explicit Record, the only write. */
 	onRecord: (decision: RecordedDecision) => void;
@@ -78,18 +81,19 @@ export function RecordTeamDecisionForm({
 }: RecordTeamDecisionFormProps) {
 	const [state, setState] = useState<TeamDecisionState>(currentState);
 	const [note, setNote] = useState("");
-	// The member's own words that a draft replaced, so "Use this draft" never loses them.
-	const [replaced, setReplaced] = useState<string | undefined>(undefined);
+	// Fixed when the form opens: a record that appears later must make the server refuse this one, never be superseded
+	// by a member who did not see it.
+	const [supersedesId] = useState(currentRecordId);
 	const id = useId();
 
-	function applyDraft(draft: string) {
-		setReplaced(note.trim() === "" || note === draft ? replaced : note);
-		setNote(draft);
+	/** The one rule: only the member's own typing removes a character of their note. A draft fills or adds, never replaces. */
+	function addDraft(draft: string) {
+		setNote(note === "" ? draft : `${note}\n\n${draft}`);
 	}
 
 	function submit(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		onRecord({ state, note: note.trim(), supersedesId: currentRecordId });
+		onRecord({ state, note: note.trim(), supersedesId });
 	}
 
 	return (
@@ -133,24 +137,15 @@ export function RecordTeamDecisionForm({
 					<p className="whitespace-pre-line text-muted-foreground" dir="auto">
 						{draftNote}
 					</p>
-					<div className="flex flex-wrap gap-2">
-						<Button type="button" variant="outline" size="sm" onClick={() => applyDraft(draftNote)}>
-							Use this draft
-						</Button>
-						{replaced !== undefined && note === draftNote && (
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								onClick={() => {
-									setNote(replaced);
-									setReplaced(undefined);
-								}}
-							>
-								Restore your note
-							</Button>
-						)}
-					</div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="w-fit"
+						onClick={() => addDraft(draftNote)}
+					>
+						Use this draft
+					</Button>
 				</div>
 			)}
 			{recordError !== undefined && (

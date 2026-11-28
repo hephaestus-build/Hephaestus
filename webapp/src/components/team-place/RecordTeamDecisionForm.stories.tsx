@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { RecordTeamDecisionForm } from "./RecordTeamDecisionForm";
+import { Button } from "@/components/ui/button";
+
+import { RecordTeamDecisionForm, type RecordTeamDecisionFormProps } from "./RecordTeamDecisionForm";
 
 const DRAFT =
 	"We will check the step-free route to the return point, because the map currently assumes it exists. Next review: look for a route observation or an explicit unknown.";
@@ -70,18 +73,76 @@ export const DraftUsedThenEdited: Story = {
 	},
 };
 
-/** A member wrote first, then used the draft: their own words are one press away, never lost (review of #5471). */
-export const DraftAfterOwnWords: Story = {
+const OWN = "We disagree: the route is documented in our appendix.";
+
+/**
+ * The order table for "Use this draft" (review of #5471): whatever the order of typing, drafting and editing, the
+ * member's own words stay. Only their typing removes a character.
+ */
+export const OwnWordsThenDraft: Story = {
 	args: { prompt: true, draftNote: DRAFT },
 	play: async ({ args, canvas }) => {
 		const note = canvas.getByRole("textbox", { name: "Note" });
-		await userEvent.type(note, "We disagree: the route is documented in our appendix.");
+		await userEvent.type(note, OWN);
 		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
-		await expect(note).toHaveValue(DRAFT);
-		await userEvent.click(canvas.getByRole("button", { name: "Restore your note" }));
-		await expect(note).toHaveValue("We disagree: the route is documented in our appendix.");
-		await expect(canvas.queryByRole("button", { name: "Restore your note" })).toBeNull();
+		await expect(note).toHaveValue(`${OWN}\n\n${DRAFT}`);
 		await expect(args.onRecord).not.toHaveBeenCalled();
+	},
+};
+
+/** The draft, edited, then the draft again: the edited text stays, and the draft is added below it. */
+export const DraftEditedThenDraftAgain: Story = {
+	args: { prompt: true, draftNote: DRAFT },
+	play: async ({ canvas }) => {
+		const note = canvas.getByRole("textbox", { name: "Note" });
+		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
+		await userEvent.type(note, " Ask Alan to walk it.");
+		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
+		await expect(note).toHaveValue(`${DRAFT} Ask Alan to walk it.\n\n${DRAFT}`);
+	},
+};
+
+/** Own words, the draft twice: the member's words still lead the note. */
+export const OwnWordsThenDraftTwice: Story = {
+	args: { prompt: true, draftNote: DRAFT },
+	play: async ({ canvas }) => {
+		const note = canvas.getByRole("textbox", { name: "Note" });
+		await userEvent.type(note, OWN);
+		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Use this draft" }));
+		await expect(note).toHaveValue(`${OWN}\n\n${DRAFT}\n\n${DRAFT}`);
+	},
+};
+
+/** The form, with a control that changes the current record after it opened, as a refetch would. */
+function NewerRecordArrives(args: RecordTeamDecisionFormProps) {
+	const [seen, setSeen] = useState(args.currentRecordId);
+	return (
+		<>
+			<Button
+				size="sm"
+				variant="outline"
+				onClick={() => setSeen("d1000000-0000-4000-8000-000000000099")}
+			>
+				A newer record arrives
+			</Button>
+			<RecordTeamDecisionForm {...args} currentRecordId={seen} />
+		</>
+	);
+}
+
+/** The record the member saw is fixed when the form opens; a record that arrives later is not taken over silently. */
+export const SupersedesTheRecordSeenAtOpening: Story = {
+	args: { currentRecordId: "d1000000-0000-4000-8000-000000000001" },
+	render: (args) => <NewerRecordArrives {...args} />,
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "A newer record arrives" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Record" }));
+		await expect(args.onRecord).toHaveBeenCalledWith({
+			state: "OPEN",
+			note: "",
+			supersedesId: "d1000000-0000-4000-8000-000000000001",
+		});
 	},
 };
 
