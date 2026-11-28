@@ -8,6 +8,7 @@ import jakarta.persistence.PersistenceContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.hibernate.Session;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -23,12 +24,13 @@ public class ReviewQueriesImpl implements ReviewQueries {
     private @Nullable EntityManager entityManager;
 
     @Override
-    public Page<Review> search(long ws, ReviewFilterParams filter, Pageable page) {
+    public Page<Review> search(long ws, ReviewFilterParams filter, @Nullable UUID setupId, Pageable page) {
         var where = new StringBuilder(" WHERE q.workspace_id=:ws");
         var params = new LinkedHashMap<String, Object>();
         params.put("ws", ws);
         add(where, params, "q.id=:id", "id", filter.reviewId());
         add(where, params, "q.item_id=:item", "item", filter.itemId());
+        add(where, params, "q.setup_id=:setup", "setup", setupId);
         add(
                 where,
                 params,
