@@ -171,8 +171,10 @@ final class PersonDataRecovery implements SmartLifecycle {
             long size = Files.size(path);
             reason = FailureReason.MANIFEST_INVALID;
             if (size > MAX_MANIFEST_BYTES) throw new IllegalStateException();
+            // A fraction must not be cut to a whole number: it would name another account, workspace or record.
             Manifest manifest = mapper.readerFor(Manifest.class)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
                     .readValue(Files.readAllBytes(path));
             reason = FailureReason.MANIFEST_VERSION;
             if (manifest.version() != 5) throw new IllegalStateException();

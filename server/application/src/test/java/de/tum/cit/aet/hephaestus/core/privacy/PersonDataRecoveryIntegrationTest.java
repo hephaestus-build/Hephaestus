@@ -169,6 +169,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":0,"accountId":57}]""", """
                 "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":3,"accountId":0}]""", """
                 "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":3,"accountId":57.9}]""", """
+                "noLaterErasures":false,"workspaceDepartures":[{"workspaceId":3,"accountId":"57.9"}]""", """
                 "noLaterErasures":false,
                 "teamVersionWithdrawals":[{"workspaceId":3.9,"versionId":"7c1e2f4a-9b3d-4e6f-8a10-5c2d7e9f1b34"}]""", """
                 "noLaterErasures":true,"workspaceDepartures":[{"workspaceId":3,"accountId":57}]"""})
