@@ -146,11 +146,13 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
 
     /**
      * The attempt when the credential still holds it on its frozen route: whether its observation was bound at this
-     * epoch and is still fresh. Held against a reclaim, a renew and the commit.
+     * epoch and is still fresh. An observation stamped after the database clock is not fresh: an app clock that runs
+     * ahead would otherwise keep it fresh past its window. Held against a reclaim, a renew and the commit.
      */
     @Query(value = """
             SELECT COALESCE(observed_epoch = lease_epoch
-                    AND observed_at > clock_timestamp() - make_interval(secs => :fresh), false)
+                    AND observed_at > clock_timestamp() - make_interval(secs => :fresh)
+                    AND observed_at <= clock_timestamp(), false)
             FROM mentor_attempt
             WHERE account_id = :#{#c.accountId()} AND id = :#{#c.attemptId()} AND lease_epoch = :#{#c.leaseEpoch()}
                 AND lease_token = :#{#c.leaseToken()} AND state = 'LEASED' AND leased_until > clock_timestamp()

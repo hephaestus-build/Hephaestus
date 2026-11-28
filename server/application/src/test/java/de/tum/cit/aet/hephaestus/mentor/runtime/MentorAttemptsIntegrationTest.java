@@ -464,8 +464,25 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
                 "UPDATE mentor_attempt SET observed_at = clock_timestamp() - interval '61 seconds' WHERE id = ?",
                 lease.attemptId());
         assertThat(current(held)).as("an observation older than 60 seconds").isFalse();
+        owner.update(
+                "UPDATE mentor_attempt SET observed_at = clock_timestamp() + interval '30 seconds' WHERE id = ?",
+                lease.attemptId());
+        assertThat(current(held)).as("an observation stamped after the database clock").isFalse();
         observe(lease);
         assertThat(current(held)).as("a fresh observation of the DM").isTrue();
+    }
+
+    /** Only a Slack question has its dispatch checks: any other transport refuses until its own checks land. */
+    @Test
+    void shouldRefuseADispatchForAQuestionOnAnotherTransportThanSlack() {
+        UUID request = ask(message());
+        AttemptLease lease = claimOne(WorkClass.INTERACTIVE);
+        prepare(lease);
+        observe(lease);
+        assertThat(current(credential(lease))).isTrue();
+
+        owner.update("UPDATE mentor_request SET audience_transport = 'APP' WHERE id = ?", request);
+        assertThat(current(credential(lease))).isFalse();
     }
 
     @Test

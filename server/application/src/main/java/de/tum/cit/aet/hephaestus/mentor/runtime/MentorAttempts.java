@@ -107,8 +107,8 @@ public class MentorAttempts {
     /**
      * The dispatch fence: whether the credential may still make a model call, in the caller's transaction. Before
      * evidence is read and inside each grant, it holds the request and then the attempt against a Stop, an edit, a
-     * reclaim and the commit, and rechecks the request's stored authority under its guards. A Slack attempt also needs
-     * an observation bound at this lease epoch that is still fresh. Database only.
+     * reclaim and the commit, and rechecks the request's stored authority under its guards. Only a Slack attempt can
+     * pass, and it also needs an observation bound at this lease epoch that is still fresh. Database only.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean current(AttemptCredential credential) {
@@ -122,10 +122,15 @@ public class MentorAttempts {
         var observed = attempts.shareHeldAttempt(credential, seconds(ProviderObservation.FRESH_FOR));
         if (observed.isEmpty()) return false;
         var audience = audience(request.get());
-        if (audience.transport() == Transport.SLACK && !observed.get()) return false;
+        boolean observedNow = switch (audience.transport()) {
+            case SLACK -> observed.get();
+            // No intake opens an app question yet. It refuses until the app intake (A1) brings its own checks.
+            case APP -> false;
+        };
+        if (!observedNow) return false;
         @Nullable MentorAuthorization port = authorization.getIfAvailable();
         if (port == null || !port.isCurrent(stamp(account, request.get()), audience)) return false;
-        return audience.transport() != Transport.SLACK || sourceLive(request.get());
+        return sourceLive(request.get());
     }
 
     /**
