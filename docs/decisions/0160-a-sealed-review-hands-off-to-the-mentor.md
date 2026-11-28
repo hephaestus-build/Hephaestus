@@ -10,7 +10,7 @@
 
 **Relates to:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (contact)
 
-**Amended by:** [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) (proposed: a `TEAM` producer for reviews of team items, and team guidance in the `TEAM` audience)
+**Amended by:** [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) (proposed: a `TEAM` producer for reviews of team items, and team guidance in the `TEAM` audience), [ADR 0167](0167-a-project-has-one-reviews-workflow.md) (proposed: the seal chooses the producer by audience)
 
 ## Context
 
