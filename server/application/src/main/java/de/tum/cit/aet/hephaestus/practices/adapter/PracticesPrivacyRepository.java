@@ -91,6 +91,11 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     @Query(value = "DELETE FROM review_schedule WHERE workspace_id=:ws", nativeQuery = true)
     int deleteWorkspaceSchedules(long ws);
 
+    /** Their practice and team choices go with them. */
+    @Modifying
+    @Query(value = "DELETE FROM review_setup WHERE workspace_id=:ws", nativeQuery = true)
+    int deleteWorkspaceSetups(long ws);
+
     @Modifying
     @Query(value = "DELETE FROM practice_version WHERE workspace_id=:ws", nativeQuery = true)
     int deleteWorkspaceVersions(long ws);

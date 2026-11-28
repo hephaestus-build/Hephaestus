@@ -434,6 +434,34 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
     }
 
+    ReviewSetup {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(100) name "NOT NULL"
+        VARCHAR(1000) description
+        VARCHAR(64) item_kind "NOT NULL"
+        VARCHAR(16) audience "NOT NULL"
+        JSONB scope
+        JSONB evidence_slots "NOT NULL"
+        VARCHAR(16) cadence
+        NUMERIC(18,6) budget_usd
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ removed_at
+    }
+
+    ReviewSetupPractice {
+        UUID setup_id PK,FK
+        BIGINT practice_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    ReviewSetupTeam {
+        UUID setup_id PK,FK
+        UUID team_id PK
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
     UsageRelease {
         DATE period_start PK
         JSONB figures "NOT NULL"
@@ -537,6 +565,8 @@ erDiagram
     Workspace ||--o{ ReviewPractice : reviewed
     Account ||--o{ ReviewSchedule : reviewed
     Workspace ||--o{ ReviewSchedule : reviewed
+    Workspace ||--o{ ReviewSetup : reviewed
+    ReviewSetup ||--o{ ReviewSetupTeam : reviewed
 
     %% Many-to-Many relationships
     Feedback }o--o{ FeedbackBasi : feedback_id
@@ -548,6 +578,8 @@ erDiagram
     ReviewBatch }o--o{ ReviewBatchTarget : reviewed
     Item }o--o{ ReviewBatchTarget : reviewed
     Workspace }o--o{ ReviewBatchTarget : reviewed
+    Practice }o--o{ ReviewSetupPractice : reviewed
+    ReviewSetup }o--o{ ReviewSetupPractice : reviewed
 
     %% Styling
     classDef primaryEntity stroke-width:2px

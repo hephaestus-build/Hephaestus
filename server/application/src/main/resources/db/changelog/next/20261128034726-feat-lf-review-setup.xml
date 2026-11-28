@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!-- Each change set locks at most one existing table, or takes them in the order of an older server's delete. -->
+    <changeSet id="1795832700000-1" author="hephaestus">
+        <comment>Review setups (ADR 0167): what a review checks, on which kind of item and for which readers. Nothing writes them yet.</comment>
+        <createTable tableName="review_setup">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_setupPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="item_kind" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="audience" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scope" type="JSONB"/>
+            <column name="evidence_slots" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cadence" type="VARCHAR(16)"/>
+            <column name="budget_usd" type="NUMERIC(18, 6)"/>
+            <column name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="removed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="review_setup" columnNames="id, workspace_id" constraintName="uk_review_setup_workspace"/>
+        <addForeignKeyConstraint baseTableName="review_setup" baseColumnNames="workspace_id" constraintName="sfk_review_setup_workspace" onDelete="CASCADE" referencedTableName="workspace" referencedColumnNames="id"/>
+        <createIndex tableName="review_setup" indexName="idx_review_setup_workspace">
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>
+ALTER TABLE public.review_setup
+    ADD CONSTRAINT ck_review_setup_item_kind CHECK (item_kind ~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'),
+    ADD CONSTRAINT ck_review_setup_audience CHECK (audience IN ('OPERATIONAL', 'TEAM', 'PERSONAL')),
+    ADD CONSTRAINT ck_review_setup_cadence CHECK (cadence IN ('DAILY', 'WEEKLY')),
+    ADD CONSTRAINT ck_review_setup_budget CHECK (budget_usd > 0),
+    ADD CONSTRAINT ck_review_setup_scope CHECK (jsonb_typeof(scope) = 'object'),
+    ADD CONSTRAINT ck_review_setup_evidence_slots CHECK (jsonb_typeof(evidence_slots) = 'array');
+        </sql>
+        <rollback>
+            <dropTable tableName="review_setup"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795832700000-2" author="hephaestus">
+        <comment>The practice key comes first: an erasure on an older server deletes practices before it deletes a personal space, whose cascade reaches review_setup, and the same order here cannot deadlock with it.</comment>
+        <createTable tableName="review_setup_practice">
+            <column name="setup_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_setup_practicePK"/>
+            </column>
+            <column name="practice_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_setup_practicePK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="review_setup_practice" baseColumnNames="practice_id,workspace_id" constraintName="sfk_review_setup_practice_practice" onDelete="CASCADE" referencedTableName="practice" referencedColumnNames="id,workspace_id"/>
+        <addForeignKeyConstraint baseTableName="review_setup_practice" baseColumnNames="setup_id,workspace_id" constraintName="sfk_review_setup_practice_setup" onDelete="CASCADE" referencedTableName="review_setup" referencedColumnNames="id,workspace_id"/>
+        <createIndex tableName="review_setup_practice" indexName="idx_review_setup_practice_setup">
+            <column name="setup_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="review_setup_practice" indexName="idx_review_setup_practice_practice">
+            <column name="practice_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795832700000-3" author="hephaestus">
+        <createTable tableName="review_setup_team">
+            <column name="setup_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_setup_teamPK"/>
+            </column>
+            <column name="team_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="review_setup_teamPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="review_setup_team" baseColumnNames="setup_id,workspace_id" constraintName="sfk_review_setup_team_setup" onDelete="CASCADE" referencedTableName="review_setup" referencedColumnNames="id,workspace_id"/>
+        <createIndex tableName="review_setup_team" indexName="idx_review_setup_team_setup">
+            <column name="setup_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795832700000-4" author="hephaestus">
+        <comment>For every writer: a setup keeps its workspace, kind and audience, and only a team setup names teams, each a standing team project of the same workspace. Update guards only validate, so they run after the row write.</comment>
+        <createProcedure>
+CREATE FUNCTION public.guard_review_setup() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id, NEW.workspace_id, NEW.item_kind, NEW.audience, NEW.created_at)
+        IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.item_kind, OLD.audience, OLD.created_at)
+        OR (OLD.removed_at IS NOT NULL AND NEW.removed_at IS DISTINCT FROM OLD.removed_at) THEN
+        RAISE EXCEPTION 'a review setup keeps its kind and audience, and a removed one stays removed'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.admit_review_setup_team() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.review_setup s
+        WHERE s.id = NEW.setup_id AND s.workspace_id = NEW.workspace_id AND s.audience = 'TEAM';
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'only a team review setup names teams' USING ERRCODE = '23514';
+    END IF;
+    PERFORM 1 FROM public.project_team t
+        WHERE t.id = NEW.team_id AND t.workspace_id = NEW.workspace_id AND t.removed_at IS NULL;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a review setup names standing team projects of its workspace' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER review_setup_guard AFTER UPDATE ON public.review_setup
+    FOR EACH ROW EXECUTE FUNCTION public.guard_review_setup();
+CREATE TRIGGER review_setup_team_admit BEFORE INSERT ON public.review_setup_team
+    FOR EACH ROW EXECUTE FUNCTION public.admit_review_setup_team();
+CREATE TRIGGER review_setup_team_still_admitted AFTER UPDATE ON public.review_setup_team
+    FOR EACH ROW EXECUTE FUNCTION public.admit_review_setup_team();
+        </sql>
+        <rollback>
+DROP TRIGGER review_setup_team_still_admitted ON public.review_setup_team;
+DROP TRIGGER review_setup_team_admit ON public.review_setup_team;
+DROP TRIGGER review_setup_guard ON public.review_setup;
+DROP FUNCTION public.admit_review_setup_team();
+DROP FUNCTION public.guard_review_setup();
+        </rollback>
+    </changeSet>
+    <changeSet id="1795832700000-5" author="hephaestus">
+        <comment>A team project never moves to another workspace. A review setup names a team by a plain id, which the admission trigger checks when it is written, so a moved team would leave the name behind in the old workspace.</comment>
+        <createProcedure>
+CREATE FUNCTION public.keep_project_team_workspace() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.id IS DISTINCT FROM OLD.id OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+        RAISE EXCEPTION 'a team project keeps its id and its workspace' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER project_team_keeps_workspace AFTER UPDATE OF id, workspace_id ON public.project_team
+    FOR EACH ROW EXECUTE FUNCTION public.keep_project_team_workspace();
+        </sql>
+        <rollback>
+DROP TRIGGER project_team_keeps_workspace ON public.project_team;
+DROP FUNCTION public.keep_project_team_workspace();
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

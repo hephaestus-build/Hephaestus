@@ -132,6 +132,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "review_practice",
             "catalog_entry",
             "practice_group",
+            // Configuration of reviews: practices, item kind, audience and budget, with no person.
+            "review_setup",
+            "review_setup_practice",
+            "review_setup_team",
             "workspace_practice_repository", // A repository item id and a directory.
             "review_scope_repository",
             "pull_request_closing_issue",
