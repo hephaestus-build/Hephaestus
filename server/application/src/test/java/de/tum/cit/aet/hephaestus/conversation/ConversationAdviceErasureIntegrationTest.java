@@ -33,6 +33,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * #5278: advice that loses its text to an erasure or a withdrawal takes back every answer whose basis read it, and what
@@ -176,6 +177,41 @@ class ConversationAdviceErasureIntegrationTest extends AbstractWorkspaceIntegrat
 
         assertThat(redacted(read.answer(), other.answer())).containsExactly(true, false);
         assertThat(revisionText(unrelated)).isNotNull();
+    }
+
+    @Test
+    void shouldKeepAnOlderThreadAnswerWhenTheAdviceReaderAlsoUsedACopyingTool() {
+        Result evidence = observed();
+        UUID revision = revision(1, evidence);
+        Answered parent = answer("What is two plus two?", "Four.");
+        Conversation thread = conversations.openThread(ws, parent.answer());
+        ConversationTurn older = claim(turns.submit(
+                ws,
+                thread.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP, "And three plus three?", UUID.randomUUID().toString(), null, null)));
+        UUID unrelated = end(older, context(older).prompt(), "Six.");
+
+        ConversationTurn reader = claim(ask("What should I change?"));
+        String prompt = read(reader, revision);
+        UUID affected = end(
+                reader,
+                prompt,
+                "Name the rollback.",
+                List.of(
+                        ConversationLedgerFixtures.toolCall(
+                                ConversationLedgerFixtures.piId(),
+                                "context-1",
+                                "fetch_context",
+                                JsonNodeFactory.instance.objectNode().put("path", "team.json")),
+                        ConversationLedgerFixtures.toolResult(
+                                ConversationLedgerFixtures.piId(), "context-1", "fetch_context", "Team notes.", false)));
+        assertThat(sources(older.getId())).doesNotContain(affected);
+        assertThat(redacted(affected, unrelated)).containsExactly(false, false);
+
+        delete(evidence, AdviceStaleCause.ERASURE);
+
+        assertThat(redacted(affected, unrelated)).containsExactly(true, false);
     }
 
     /** A5: the walk stays in the workspace that the deletion names. */
@@ -384,9 +420,14 @@ class ConversationAdviceErasureIntegrationTest extends AbstractWorkspaceIntegrat
 
     /** Ends the turn with its question's Pi entry and one answer, and returns the answer's entry id. */
     private UUID end(ConversationTurn turn, String prompt, String answer) {
-        List<JsonNode> appended = List.of(
-                ConversationLedgerFixtures.user(ConversationLedgerFixtures.piId(), prompt),
-                ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), answer));
+        return end(turn, prompt, answer, List.of());
+    }
+
+    private UUID end(ConversationTurn turn, String prompt, String answer, List<JsonNode> toolEntries) {
+        List<JsonNode> appended = new ArrayList<>();
+        appended.add(ConversationLedgerFixtures.user(ConversationLedgerFixtures.piId(), prompt));
+        appended.addAll(toolEntries);
+        appended.add(ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), answer));
         turns.end(
                 turn.getWorkspaceId(),
                 turn.getId(),
