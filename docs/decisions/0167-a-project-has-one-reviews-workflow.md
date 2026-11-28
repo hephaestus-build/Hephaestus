@@ -57,7 +57,7 @@ An admin who configures reviews must not read a team's content because of that r
    - An export holds only what its reader may read.
    - A `TEAM` review of a repository needs an admin to map the repository to the team project first (`team_project_repository`). When the mapping is removed, later reviews cannot be `TEAM` reviews. No earlier review changes.
 4. **One read model.** The history, detail and comparison of each review that a setup starts extend `ReviewSummaryDTO` and `ReviewDetailDTO`. The schedule of a setup extends `ReviewScheduleDTO`. No second DTO family exists for an audience or for a kind of item. A contract test with a JSON fixture holds the field shapes. Until the cutover, the scan routes and their DTOs (`ScanSummaryDTO`, `ScanDetailDTO` and the scan report) stay as today's operational view. The DTOs of a person's reviews and of trials stay as they are.
-5. **Coverage counts the planned pairs of each practice as reviewed, reused, withheld or not reviewed, for each level.**
+5. **Coverage counts the planned pairs of each practice as reviewed, withheld or not reviewed, for each level.** A reused pair counts as reviewed, and the reused count is a part of the reviewed count.
    - A practice reviews at one level: the item itself (the repository at its commit, or the submitted version), or each listed member of the item (a file of the repository). A setup for a repository can select practices of both levels. An item-level practice reviews the repository item at the commit, with the evidence pinned for it.
    - Member observations never add up to an observation about the item.
    - A review that closes with a planned pair not reviewed is Partial. It shows its coverage, and it never reads as complete.
