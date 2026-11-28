@@ -167,15 +167,28 @@ public class ReviewSummaryQueryService {
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
                             model,
                             reads.progress.get(review.getId()),
-                            // No review stores a setup or an audience yet (ADR 0167 decision 2): each reads as older.
                             null,
-                            ReviewVersionKind.ofOlder(review.getKind()),
-                            new ReviewAudienceDTO(ReviewAudience.ofOlder(review.getKind(), review.getOrigin()), null),
+                            versionKind(review),
+                            audience(review),
                             null,
                             coverage(practices),
                             null));
         }
         return summaries;
+    }
+
+    /** What the review pinned, or, for a review from before reviews stored it, what its kind says. */
+    static ReviewVersionKind versionKind(Review review) {
+        var stored = review.getVersionKind();
+        return stored == null ? ReviewVersionKind.ofOlder(review.getKind()) : stored;
+    }
+
+    /** Who reads the review, or, for a review from before reviews stored it, never a team (ADR 0167 decision 2). */
+    static ReviewAudienceDTO audience(Review review) {
+        var stored = review.getAudience();
+        return stored == null
+                ? new ReviewAudienceDTO(ReviewAudience.ofOlder(review.getKind(), review.getOrigin()), null)
+                : new ReviewAudienceDTO(stored, review.getAudienceTeamId());
     }
 
     /** The planned pairs of each practice level, summed only within that level (ADR 0167 decision 5). */
