@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPref
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
@@ -52,7 +53,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.server.ResponseStatusException;
@@ -140,12 +140,13 @@ class ProductFeedbackCleanupIntegrationTest extends AbstractProductFeedbackFilin
     }
 
     /**
-     * Runs every due scrub, then one announcement on the bean behind its lock proxy. The lock's 30-second floor would
-     * skip every announcement after the first; the replica test covers the lock itself.
+     * Runs every due scrub, then one announcement. The lock's 30-second floor would skip every announcement after the
+     * first, so the sweep frees the lock first; the replica test covers the lock itself.
      */
     private void sweep() {
         ActionTestSupport.drain(executor, jdbc);
-        AopTestUtils.<CleanupService>getUltimateTargetObject(cleanup).announceDue();
+        ScheduledLocks.free(jdbc, CleanupService.class, "announceDue");
+        cleanup.announceDue();
     }
 
     @Test

@@ -112,6 +112,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -665,8 +666,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
      * this or another class left is released first: otherwise this pass would settle nothing.
      */
     private void settle() {
-        jdbc.update("UPDATE shedlock SET lock_until = timezone('utc', CURRENT_TIMESTAMP) - INTERVAL '1 second'"
-                + " WHERE name = 'practice-job-completion'");
+        ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
         completion.tick();
     }
 

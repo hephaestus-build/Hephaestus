@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -378,11 +379,13 @@ abstract class ScanEndToEndFixtures extends AbstractWorkspaceIntegrationTest {
             await().atMost(Duration.ofMinutes(2))
                     .pollInterval(Duration.ofMillis(250))
                     .until(() -> {
+                        ScheduledLocks.free(jdbc, ScanDriver.class, "tick");
                         driver.tick();
                         dispatcher.dispatch();
                         runtime.composeQueued(scan.id());
                         sandbox.drive();
                         runtime.composeQueued(scan.id());
+                        ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
                         completion.tick();
                         return !List.of("QUEUED", "RUNNING")
                                 .contains(status(scan).get("status"));

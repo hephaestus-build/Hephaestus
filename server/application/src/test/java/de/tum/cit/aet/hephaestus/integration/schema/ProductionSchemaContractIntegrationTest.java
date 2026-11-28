@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.TestCacheConfiguration;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -177,6 +178,7 @@ class ProductionSchemaContractIntegrationTest {
                 "SELECT partition_schema || '.' || partition_table FROM " + newest, String.class);
         jdbcTemplate.execute("DROP TABLE " + partition);
 
+        ScheduledLocks.free(jdbcTemplate, AuthEventPartitionMaintenance.class, "maintain");
         partitionMaintenance.maintain();
 
         assertThat(jdbcTemplate.queryForObject("SELECT table_exists FROM " + newest, Boolean.class))
@@ -441,6 +443,7 @@ class ProductionSchemaContractIntegrationTest {
                 .doesNotThrowAnyException();
         long stale = insertAuditRow(workspaceId, ConfigAuditRetentionJob.RETENTION_DAYS + 1);
         long inside = insertAuditRow(workspaceId, ConfigAuditRetentionJob.RETENTION_DAYS - 1);
+        ScheduledLocks.free(jdbcTemplate, ConfigAuditRetentionJob.class, "sweep");
         retentionJob.sweep();
         assertThat(auditRowExists(stale)).isFalse();
         assertThat(auditRowExists(inside)).isTrue();

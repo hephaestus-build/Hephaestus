@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -72,6 +73,7 @@ class ConnectionAuditRepositoryIntegrationTest extends AbstractWorkspaceIntegrat
         jdbc.update(
                 "UPDATE connection_audit SET actor_account_id=? WHERE id IN (?,?)", accountId(owner), expired, inside);
 
+        ScheduledLocks.free(jdbc, ConnectionAuditRetentionJob.class, "sweep");
         retention.sweep();
 
         assertThat(jdbc.queryForList(

@@ -165,6 +165,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -226,7 +227,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.BootstrapUtils;
-import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -1188,7 +1188,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
                     review.identity().jobId());
             await().untilAsserted(() -> {
-                settleTerminalJobs();
+                ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
+                completion.tick();
                 assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
                                 review.workspaceId(),
                                 review.reviewId(),
@@ -1338,7 +1339,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             job.getId(),
                             0))
                     .isOne();
-            settleTerminalJobs();
+            ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
+            completion.tick();
             assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
                             review.workspaceId(),
                             review.reviewId(),
@@ -1565,15 +1567,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 "SELECT r.leased_until FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.id = ?",
                 Instant.class,
                 jobId));
-    }
-
-    /**
-     * Settles terminal jobs now. The bean's ShedLock holds its lock for at least a second after each tick, and it skips
-     * a call made in that second without running it, such as a call right after an earlier test's tick.
-     */
-    private void settleTerminalJobs() {
-        AopTestUtils.<ReviewJobCompletionService>getUltimateTargetObject(completion)
-                .tick();
     }
 
     /** The attempt's holder stopped renewing its run, and the reaper takes it back. */
@@ -2646,7 +2639,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
                     ended.getId());
             await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-                settleTerminalJobs();
+                ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
+                completion.tick();
                 assertThat(jdbc.queryForObject(
                                 "SELECT status FROM review WHERE workspace_id=? AND id=?",
                                 String.class,
@@ -3334,7 +3328,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             UUID queued = queuedComposition(job, Instant.EPOCH);
 
             reaper.reap();
-            settleTerminalJobs();
+            ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
+            completion.tick();
 
             assertThat(runState(queued)).isEqualTo("ENDED");
             var ended = jobs.findById(job.getId()).orElseThrow();

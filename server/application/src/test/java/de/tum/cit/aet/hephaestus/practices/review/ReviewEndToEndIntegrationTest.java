@@ -47,6 +47,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -926,6 +927,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         dispatcher.dispatch();
                         sandbox.drive();
                         runtime.composeQueued(reviewId);
+                        ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
                         completion.tick();
                         // A practice withheld at its start is final before the review that held it ends.
                         return !jdbc.queryForList(

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.TrialDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -146,6 +147,7 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
         var expired = endedTrial(Instant.now().minus(Duration.ofDays(31)));
         var recent = endedTrial(Instant.now().minus(Duration.ofDays(1)));
 
+        ScheduledLocks.free(jdbc, ResultRetentionService.class, "purge");
         retention.purge();
 
         assertThat(read(expired).outcomeRemoved()).isTrue();
