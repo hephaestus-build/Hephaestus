@@ -158,7 +158,8 @@ public class LoginProviderAdminController {
 
             @Nullable
             @Schema(
-                    description = "Instance base URL (GitLab only; GitHub is always github.com)",
+                    description = "Instance base URL of a self-hosted GitLab or Outline, or the exact issuer of an"
+                            + " OpenID Connect provider. GitHub and Slack have a fixed host.",
                     example = "https://gitlab.example.com")
             String baseUrl,
 
@@ -172,7 +173,10 @@ public class LoginProviderAdminController {
 
     public record UpdateLoginProviderRequestDTO(
             @Nullable String displayName,
-            @Nullable String baseUrl,
+
+            @Nullable @Schema(description = "Omit to keep it. The issuer of an OpenID Connect provider cannot change.")
+            String baseUrl,
+
             @Nullable String clientId,
 
             @Nullable @Schema(description = "Omit to leave the existing secret unchanged")

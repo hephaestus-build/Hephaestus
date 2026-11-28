@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Wires the login {@link LoginProviderClientRegistrationRepository} from the {@code login_provider}
@@ -24,8 +25,19 @@ public class LoginProviderConfiguration {
             AuthProperties authProperties,
             OutlineOriginPolicy outlineOriginPolicy,
             ScmServerEndpointPolicy scmEndpoints,
-            SystemSecrets secrets) {
+            SystemSecrets secrets,
+            OidcDiscovery oidcDiscovery) {
         return new LoginProviderClientRegistrationRepository(
-                loginProviderRepository, authProperties.apiBaseUrl(), outlineOriginPolicy, scmEndpoints, secrets);
+                loginProviderRepository,
+                authProperties.apiBaseUrl(),
+                outlineOriginPolicy,
+                scmEndpoints,
+                secrets,
+                oidcDiscovery);
+    }
+
+    @Bean
+    public OidcDiscovery oidcDiscovery(ScmServerEndpointPolicy scmEndpoints, ObjectMapper objectMapper) {
+        return new OidcDiscovery(scmEndpoints, objectMapper);
     }
 }

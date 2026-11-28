@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,9 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     private static final ScmServerEndpointPolicy ENDPOINTS =
             new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of()));
 
+    // Only the OIDC tests read an issuer, and they mock its discovery.
+    private static final OidcDiscovery DISCOVERY = mock(OidcDiscovery.class);
+
     private static final OutlineOriginPolicy OUTLINE_ORIGINS =
             new OutlineOriginPolicy(Set.of("https://wiki.example.com"));
 
@@ -57,18 +61,69 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotOfferAnOidcProviderThatThisReleaseOnlyReads() {
+    void shouldBuildAnOidcRegistrationFromTheDiscoveredEndpointsWithoutUserInfo() {
+        LoginProviderRepository repo = mock(LoginProviderRepository.class);
+        LoginProvider oidc = provider(
+                "school", LoginProvider.ProviderType.OIDC, "https://login.example.org/realms/school", "openid email");
+        when(repo.findByRegistrationId("school")).thenReturn(Optional.of(oidc));
+        OidcDiscovery discovery = mock(OidcDiscovery.class);
+        when(discovery.discover("https://login.example.org/realms/school"))
+                .thenReturn(new OidcDiscovery.Result(
+                        new OidcDiscovery.Endpoints(
+                                "https://login.example.org/realms/school",
+                                "https://login.example.org/realms/school/auth",
+                                "https://login.example.org/realms/school/token",
+                                "https://login.example.org/realms/school/certs"),
+                        ""));
+
+        ClientRegistration registration = new LoginProviderClientRegistrationRepository(
+                        repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, discovery)
+                .findByRegistrationId("school");
+
+        assertNotNull(registration);
+        var details = registration.getProviderDetails();
+        assertThat(details.getIssuerUri()).isEqualTo("https://login.example.org/realms/school");
+        assertThat(details.getJwkSetUri()).isEqualTo("https://login.example.org/realms/school/certs");
+        assertThat(details.getUserInfoEndpoint().getUri()).isNullOrEmpty();
+        assertThat(details.getUserInfoEndpoint().getUserNameAttributeName()).isEqualTo("sub");
+        assertThat(LoginProviderClientRegistrationRepository.isOidcProvider(registration))
+                .isTrue();
+    }
+
+    /** Another server can replace a row under the same registration id; the old registration must not survive it. */
+    @Test
+    void shouldRebuildTheRegistrationWhenTheRowUnderItsIdWasReplaced() {
+        LoginProviderRepository repo = mock(LoginProviderRepository.class);
+        LoginProvider gitlab =
+                provider("school", LoginProvider.ProviderType.GITLAB, "https://gitlab.lrz.de", "read_user");
+        gitlab.setId(1L);
+        LoginProvider oidc = provider(
+                "school", LoginProvider.ProviderType.OIDC, "https://login.example.org/realms/school", "openid");
+        oidc.setId(2L);
+        when(repo.findByRegistrationId("school"))
+                .thenReturn(Optional.of(gitlab))
+                .thenReturn(Optional.of(oidc));
+        OidcDiscovery discovery = mock(OidcDiscovery.class);
+        when(discovery.discover(any())).thenReturn(new OidcDiscovery.Result(null, "unreachable"));
+        var registrations = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, discovery);
+
+        assertThat(registrations.findByRegistrationId("school")).isNotNull();
+        assertThat(registrations.findByRegistrationId("school")).isNull();
+    }
+
+    @Test
+    void shouldNotOfferAnOidcProviderWhenItsIssuerCannotBeRead() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
         LoginProvider github = provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user");
         LoginProvider oidc = provider(
-                "school",
-                LoginProvider.ProviderType.OIDC,
-                "https://login.example.org/realms/school",
-                "openid profile email");
+                "school", LoginProvider.ProviderType.OIDC, "https://login.example.org/realms/school", "openid");
         when(repo.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(github, oidc));
         when(repo.findByRegistrationId("school")).thenReturn(Optional.of(oidc));
+        OidcDiscovery discovery = mock(OidcDiscovery.class);
+        when(discovery.discover(any())).thenReturn(new OidcDiscovery.Result(null, "unreachable"));
         var registrations = new LoginProviderClientRegistrationRepository(
-                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS);
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, discovery);
 
         assertThat(registrations.listRegistrations())
                 .extracting(ClientRegistration::getRegistrationId)
@@ -77,14 +132,14 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    // An OIDC registration needs its issuer's discovery document; this release does not sign in through OIDC.
+    // An OIDC registration needs its issuer's discovery document, which the OIDC tests mock.
     @EnumSource(value = LoginProvider.ProviderType.class, names = "OIDC", mode = EnumSource.Mode.EXCLUDE)
     void shouldPinCallbackToApexWhenAuthorizationRequestUsesTenantHost(LoginProvider.ProviderType type) {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
         when(repo.findByRegistrationId("provider"))
                 .thenReturn(Optional.of(provider("provider", type, "https://wiki.example.com", "openid profile")));
         var registrations = new LoginProviderClientRegistrationRepository(
-                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS);
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY);
         var request = new MockHttpServletRequest("GET", "/oauth2/authorization/provider");
         request.setServletPath("/oauth2/authorization/provider");
         request.setScheme("https");
@@ -115,7 +170,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                                 "openid profile")));
 
         List<ClientRegistration> registrations = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                 .listRegistrations();
 
         assertThat(registrations).hasSize(2);
@@ -148,7 +203,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         "slack", LoginProvider.ProviderType.SLACK, "https://slack.com", "openid profile email")));
 
         LoginProviderClientRegistrationRepository repository = new LoginProviderClientRegistrationRepository(
-                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS);
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY);
 
         List<ClientRegistration> picker = repository.listRegistrations();
         assertThat(picker).extracting(ClientRegistration::getRegistrationId).containsExactly("github", "slack");
@@ -168,12 +223,14 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     @Test
     void primaryProviderSatisfiesSignInReadiness() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
-        when(repo.existsByEnabledTrueAndTypeIn(
-                        Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB)))
+        when(repo.existsByEnabledTrueAndTypeIn(Set.of(
+                        LoginProvider.ProviderType.GITHUB,
+                        LoginProvider.ProviderType.GITLAB,
+                        LoginProvider.ProviderType.OIDC)))
                 .thenReturn(true);
 
         assertThat(new LoginProviderClientRegistrationRepository(
-                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                         .hasEnabledPrimarySignInProvider())
                 .isTrue();
     }
@@ -182,12 +239,14 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     void signInReadinessQueriesOnlyPrimaryProviderTypes() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
         assertThat(new LoginProviderClientRegistrationRepository(
-                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                         .hasEnabledPrimarySignInProvider())
                 .isFalse();
         verify(repo)
-                .existsByEnabledTrueAndTypeIn(
-                        Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB));
+                .existsByEnabledTrueAndTypeIn(Set.of(
+                        LoginProvider.ProviderType.GITHUB,
+                        LoginProvider.ProviderType.GITLAB,
+                        LoginProvider.ProviderType.OIDC));
     }
 
     @Test
@@ -198,7 +257,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
         ClientRegistration outline = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                 .findByRegistrationId("outline");
 
         assertNotNull(outline);
@@ -220,7 +279,12 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
         ClientRegistration outline = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", new OutlineOriginPolicy(Set.of()), ENDPOINTS, SECRETS)
+                        repo,
+                        "https://hephaestus.build",
+                        new OutlineOriginPolicy(Set.of()),
+                        ENDPOINTS,
+                        SECRETS,
+                        DISCOVERY)
                 .findByRegistrationId("outline");
 
         assertThat(outline).isNull();
@@ -234,7 +298,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("gitlab-lrz", LoginProvider.ProviderType.GITLAB, "https://gitlab.lrz.de", "openid")));
 
         ClientRegistration reg = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                 .findByRegistrationId("gitlab-lrz");
 
         assertNotNull(reg);
@@ -252,13 +316,13 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user")));
 
         ClientRegistration prefixed = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                        repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                 .findByRegistrationId("github");
         assertNotNull(prefixed);
         assertThat(prefixed.getRedirectUri()).isEqualTo("https://hephaestus.build/api/login/oauth2/code/github");
 
         ClientRegistration root = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY)
                 .findByRegistrationId("github");
         assertNotNull(root);
         assertThat(root.getRedirectUri()).isEqualTo("https://hephaestus.build/login/oauth2/code/github");
@@ -274,12 +338,12 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of("10.20.30.40")));
 
         var admitted = new LoginProviderClientRegistrationRepository(
-                repo, "https://hephaestus.build", OUTLINE_ORIGINS, listed, SECRETS);
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, listed, SECRETS, DISCOVERY);
         assertNotNull(admitted.findByRegistrationId("corp"));
         assertThat(admitted.listRegistrations()).hasSize(1);
 
         var removed = new LoginProviderClientRegistrationRepository(
-                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS);
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS, SECRETS, DISCOVERY);
         assertThat(removed.findByRegistrationId("corp")).isNull();
         assertThat(removed.listRegistrations()).isEmpty();
     }

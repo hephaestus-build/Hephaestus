@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.core.auth.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,8 +34,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -52,11 +56,16 @@ class LoginProviderServiceTest extends BaseUnitTest {
     static void declarePublicHosts() {
         OfflineNetwork.answer("gitlab.lrz.de", OfflineNetwork.PUBLIC_ADDRESS);
         OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
+        OfflineNetwork.answer("login.example.org", OfflineNetwork.PUBLIC_ADDRESS);
     }
 
     private final LoginProviderRepository repository = mock(LoginProviderRepository.class);
     private final LoginProviderClientRegistrationRepository registrationCache =
             mock(LoginProviderClientRegistrationRepository.class);
+    // The real issuer checks; a test stubs the network read.
+    private final OidcDiscovery oidcDiscovery = spy(new OidcDiscovery(
+            new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+            new ObjectMapper()));
 
     /** The real logger over a mocked writer: a mocked logger would assert nothing about what reaches the ledger. */
     private final AuthEventWriter authEventWriter = mock(AuthEventWriter.class);
@@ -73,7 +82,9 @@ class LoginProviderServiceTest extends BaseUnitTest {
                 new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")),
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
-                SECRETS);
+                SECRETS,
+                oidcDiscovery,
+                mock(PlatformTransactionManager.class));
     }
 
     private LoginProviderService adminService() {
@@ -302,66 +313,122 @@ class LoginProviderServiceTest extends BaseUnitTest {
         verify(registrationCache).evict("gitlab-acme");
     }
 
-    @Test
-    void shouldRefuseToCreateAnOidcProviderWhenThisReleaseOnlyReadsTheType() {
-        var draft = new LoginProviderService.Draft(
+    private static LoginProviderService.Draft oidcDraft(String issuer, @Nullable String scopes) {
+        return new LoginProviderService.Draft(
                 "school",
                 LoginProvider.ProviderType.OIDC,
                 "School Login",
-                "https://login.example.org/realms/school",
+                issuer,
                 "client-id",
                 "client-secret",
-                null);
+                scopes);
+    }
 
-        assertThatThrownBy(() -> adminService().create(draft))
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "http://login.example.org/realms/school",
+                "https://127.0.0.1/realms/school",
+                "https://169.254.169.254/latest",
+                "https://login.internal/realms/school",
+                "https://login.example.org/realms/school?realm=other",
+                "https://user:secret@login.example.org/realms/school"
+            })
+    void shouldRefuseAnOidcIssuerThatIsNotAPublicHttpsUrlWithoutReadingIt(String issuer) {
+        assertThatThrownBy(() -> adminService().create(oidcDraft(issuer, null)))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
+        verify(oidcDiscovery, never()).refresh(any());
         verify(repository, never()).saveAndFlush(any());
     }
 
     @Test
-    void shouldNotSeedAnOidcProviderWhenThisReleaseOnlyReadsTheType() {
-        service(Map.of(
-                        "school",
-                        new AuthProperties.LoginProviderSeed(
-                                LoginProvider.ProviderType.OIDC,
-                                "https://login.example.org/realms/school",
-                                "client-id",
-                                "client-secret",
-                                "School Login")))
-                .seedFromEnvOnStartup();
+    void shouldRefuseAnOidcProviderWhoseDiscoveryDocumentCannotBeUsed() {
+        doReturn(new OidcDiscovery.Result(null, "The discovery document names another issuer."))
+                .when(oidcDiscovery)
+                .refresh("https://login.example.org/realms/school/");
 
-        verify(repository, never()).save(any());
+        assertThatThrownBy(() -> adminService().create(oidcDraft("https://login.example.org/realms/school/", null)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getReason())
+                                .isEqualTo("The discovery document names another issuer."));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    /** An issuer that cannot be read when a person clicks starts no flow, so Spring never answers with a 500. */
+    @Test
+    void shouldStartNoSignInThroughAnOidcProviderWhoseIssuerCannotBeReadNow() {
+        LoginProvider oidc = new LoginProvider();
+        oidc.setRegistrationId("school");
+        oidc.setType(LoginProvider.ProviderType.OIDC);
+        oidc.setEnabled(true);
+        when(repository.findByRegistrationId("school")).thenReturn(Optional.of(oidc));
+        when(registrationCache.findByRegistrationId("school")).thenReturn(null);
+
+        assertThat(adminService().findEnabled("school")).isEmpty();
     }
 
     @Test
-    void shouldRefuseAnOidcPatchThatOmitsTheIssuer() {
+    void shouldRefuseOidcScopesWithoutOpenid() {
+        doReturn(new OidcDiscovery.Result(
+                        new OidcDiscovery.Endpoints(
+                                "https://login.example.org/realms/school",
+                                "https://login.example.org/auth",
+                                "https://login.example.org/token",
+                                "https://login.example.org/certs"),
+                        ""))
+                .when(oidcDiscovery)
+                .refresh(any());
+        when(repository.saveAndFlush(any())).thenAnswer(saved -> saved.getArgument(0));
+        LoginProvider oidc = new LoginProvider();
+        oidc.setRegistrationId("school");
+        oidc.setType(LoginProvider.ProviderType.OIDC);
+        when(repository.findByRegistrationIdForUpdate("school")).thenReturn(Optional.of(oidc));
+
+        assertThatThrownBy(() -> adminService().create(oidcDraft("https://login.example.org/realms/school", "profile")))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> adminService()
+                        .update("school", new LoginProviderService.Patch(null, null, null, null, "email", null)))
+                .isInstanceOf(ResponseStatusException.class);
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRefuseToChangeTheIssuerOfAnOidcProvider() {
+        LoginProvider oidc = new LoginProvider();
+        oidc.setRegistrationId("school");
+        oidc.setType(LoginProvider.ProviderType.OIDC);
+        oidc.setBaseUrl("https://login.example.org/realms/school");
+        when(repository.findByRegistrationIdForUpdate("school")).thenReturn(Optional.of(oidc));
+
+        assertThatThrownBy(() -> adminService()
+                        .update(
+                                "school",
+                                new LoginProviderService.Patch(
+                                        null, "https://login.example.org/realms/other", null, null, null, null)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
+        assertThat(oidc.getBaseUrl()).isEqualTo("https://login.example.org/realms/school");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRenameAnOidcProviderWithoutTouchingItsIssuer() {
         var provider = new LoginProvider();
         provider.setRegistrationId("school");
         provider.setType(LoginProvider.ProviderType.OIDC);
         provider.setBaseUrl("https://login.example.org/realms/school");
         provider.setDisplayName("School Login");
         when(repository.findByRegistrationIdForUpdate("school")).thenReturn(Optional.of(provider));
+        when(repository.saveAndFlush(any())).thenAnswer(saved -> saved.getArgument(0));
 
-        assertThatThrownBy(() -> adminService()
-                        .update("school", new LoginProviderService.Patch("New name", null, null, null, null, null)))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(422));
-        verify(repository, never()).saveAndFlush(any());
-    }
+        adminService().update("school", new LoginProviderService.Patch("TUM Login", null, null, null, null, null));
 
-    @Test
-    void shouldRefuseToDeleteAnOidcProviderThatALaterReleaseWrote() {
-        var provider = new LoginProvider();
-        provider.setRegistrationId("school");
-        provider.setType(LoginProvider.ProviderType.OIDC);
-        provider.setEnabled(true);
-        when(repository.findByRegistrationId("school")).thenReturn(Optional.of(provider));
-
-        assertThatThrownBy(() -> adminService().delete("school")).isInstanceOf(ResponseStatusException.class);
-        verify(repository, never()).delete(any());
+        assertThat(provider.getDisplayName()).isEqualTo("TUM Login");
+        assertThat(provider.getBaseUrl()).isEqualTo("https://login.example.org/realms/school");
     }
 
     @Test
@@ -527,7 +594,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseToDeleteGitHubWhenOnlyAnOidcProviderThatThisReleaseCannotServeRemains() {
+    void shouldDeleteGitHubWhenAnOidcProviderStillSignsPeopleIn() {
         LoginProvider github = new LoginProvider();
         github.setRegistrationId("github");
         github.setType(LoginProvider.ProviderType.GITHUB);
@@ -539,8 +606,9 @@ class LoginProviderServiceTest extends BaseUnitTest {
         when(repository.findByRegistrationId("github")).thenReturn(Optional.of(github));
         when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(github, oidc));
 
-        assertThatThrownBy(() -> adminService().delete("github")).isInstanceOf(ResponseStatusException.class);
-        verify(repository, never()).delete(any());
+        adminService().delete("github");
+
+        verify(repository).delete(github);
     }
 
     @Test

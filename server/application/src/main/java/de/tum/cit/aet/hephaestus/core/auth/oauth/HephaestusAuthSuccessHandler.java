@@ -38,6 +38,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     private static final Logger log = LoggerFactory.getLogger(HephaestusAuthSuccessHandler.class);
 
     private final AccountProvisioningService provisioningService;
+    private final ProviderBinding providerBinding;
     private final HephaestusJwtIssuer jwtIssuer;
     private final AuthIntentCookie authIntentCookie;
     private final AuthProperties authProperties;
@@ -62,8 +63,10 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             InstalledClientRegistry installedClients,
             Clock clock,
             CsrfTokenRepository csrfTokens,
+            ProviderBinding providerBinding,
             @Value("${hephaestus.webapp.url:}") String webappBaseUrl) {
         this.provisioningService = provisioningService;
+        this.providerBinding = providerBinding;
         this.jwtIssuer = jwtIssuer;
         this.authIntentCookie = authIntentCookie;
         this.authProperties = authProperties;
@@ -143,7 +146,8 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
 
         AccountProvisioningService.ProvisionResult provisioned;
         try {
-            provisioned = provisioningService.resolveOrProvision(registrationId, subject, principal, intent);
+            provisioned = providerBinding.provision(
+                    token, () -> provisioningService.resolveOrProvision(registrationId, subject, principal, intent));
         } catch (LinkOnlyProviderLoginException e) {
             log.warn("auth.success: refused link-only provider login: registrationId={}", registrationId);
             refuse(request, response, client, "link_requires_auth");

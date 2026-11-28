@@ -1589,7 +1589,7 @@ export type CreateLlmModelRequest = {
 
 export type CreateLoginProviderRequest = {
 	/**
-	 * Instance base URL (GitLab only; GitHub is always github.com)
+	 * Instance base URL of a self-hosted GitLab or Outline, or the exact issuer of an OpenID Connect provider. GitHub and Slack have a fixed host.
 	 */
 	baseUrl?: string;
 	clientId: string;
@@ -8067,6 +8067,9 @@ export type UpdateLlmModelSharingRequest = {
 };
 
 export type UpdateLoginProviderRequest = {
+	/**
+	 * Omit to keep it. The issuer of an OpenID Connect provider cannot change.
+	 */
 	baseUrl?: string;
 	clientId?: string;
 	/**

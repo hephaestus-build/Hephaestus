@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -29,7 +30,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -59,11 +62,6 @@ public class LoginProviderService implements SystemSecretOwner {
 
     private static final Logger log = LoggerFactory.getLogger(LoginProviderService.class);
 
-    // Expand step of a rolling upgrade: this release reads OIDC rows, and only the next one writes them,
-    // so a server of the previous release never meets a type that it cannot read.
-    private static final String OIDC_NOT_YET = "This release cannot add or change an OpenID Connect login provider."
-            + " Upgrade to the next release to manage one.";
-
     private final LoginProviderRepository repository;
     private final LoginProviderClientRegistrationRepository registrationCache;
     private final AuthProperties authProperties;
@@ -72,6 +70,8 @@ public class LoginProviderService implements SystemSecretOwner {
     private final OutlineOriginPolicy outlineOriginPolicy;
     private final ScmServerEndpointPolicy scmEndpoints;
     private final SystemSecrets secrets;
+    private final OidcDiscovery oidcDiscovery;
+    private final TransactionTemplate transactions;
 
     public LoginProviderService(
             LoginProviderRepository repository,
@@ -81,8 +81,12 @@ public class LoginProviderService implements SystemSecretOwner {
             ObjectMapper objectMapper,
             OutlineOriginPolicy outlineOriginPolicy,
             ScmServerEndpointPolicy scmEndpoints,
-            SystemSecrets secrets) {
+            SystemSecrets secrets,
+            OidcDiscovery oidcDiscovery,
+            PlatformTransactionManager transactionManager) {
         this.repository = repository;
+        this.oidcDiscovery = oidcDiscovery;
+        this.transactions = new TransactionTemplate(transactionManager);
         this.secrets = secrets;
         this.registrationCache = registrationCache;
         this.authProperties = authProperties;
@@ -109,14 +113,17 @@ public class LoginProviderService implements SystemSecretOwner {
     /**
      * The enabled provider behind a registration id, or empty when unknown/disabled — the
      * login-begin lookup ({@code AuthBeginController}): an unknown or disabled provider must not
-     * start an OAuth flow, and the row's type drives the link-only gate.
+     * start an OAuth flow, and the row's type drives the link-only gate. No transaction: an OIDC
+     * registration can read its issuer.
      */
-    @Transactional(readOnly = true)
     public Optional<LoginProvider> findEnabled(String registrationId) {
+        // An OIDC issuer that cannot be read now starts no flow: Spring would answer a missing registration with a 500.
         return repository
                 .findByRegistrationId(registrationId)
                 .filter(LoginProvider::isEnabled)
-                .filter(this::isApproved);
+                .filter(this::isApproved)
+                .filter(provider -> provider.getType() != LoginProvider.ProviderType.OIDC
+                        || registrationCache.findByRegistrationId(registrationId) != null);
     }
 
     @Transactional(readOnly = true)
@@ -131,9 +138,21 @@ public class LoginProviderService implements SystemSecretOwner {
                         HttpStatus.NOT_FOUND, "The login provider was not found: " + registrationId));
     }
 
-    /** Create a new login provider (instance admin). The client secret is sealed at rest. */
-    @Transactional
+    /**
+     * Create a new login provider (instance admin). The client secret is sealed at rest. An OIDC issuer's
+     * discovery document is read first, with no transaction open.
+     */
     public LoginProvider create(Draft draft) {
+        if (draft.type() == LoginProvider.ProviderType.OIDC) {
+            OidcDiscovery.Result discovered = oidcDiscovery.refresh(resolveBaseUrl(draft.type(), draft.baseUrl()));
+            if (discovered.endpoints() == null) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, discovered.reason());
+            }
+        }
+        return Objects.requireNonNull(transactions.execute(status -> insert(draft)));
+    }
+
+    private LoginProvider insert(Draft draft) {
         String registrationId =
                 draft.registrationId() == null ? "" : draft.registrationId().trim();
         if (!registrationId.matches("^[a-z][a-z0-9-]{1,62}$")) {
@@ -172,12 +191,19 @@ public class LoginProviderService implements SystemSecretOwner {
                 .findByRegistrationIdForUpdate(registrationId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "The login provider was not found: " + registrationId));
-        requireWritable(provider);
         // Field NAMES only — this list goes into the audit trail, so it must stay free of values.
         List<String> changed = new ArrayList<>();
         if (patch.displayName() != null && !patch.displayName().isBlank()) {
             provider.setDisplayName(patch.displayName().trim());
             changed.add("displayName");
+        }
+        if (patch.baseUrl() != null
+                && !patch.baseUrl().isBlank()
+                && provider.getType() == LoginProvider.ProviderType.OIDC) {
+            // The issuer is the namespace of every identity it signed in. Another issuer is another provider.
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "The issuer of an OpenID Connect provider cannot change. Add a provider for the new issuer.");
         }
         if (patch.baseUrl() != null && !patch.baseUrl().isBlank()) {
             provider.setBaseUrl(resolveBaseUrl(provider.getType(), patch.baseUrl()));
@@ -216,7 +242,6 @@ public class LoginProviderService implements SystemSecretOwner {
     @Transactional
     public void delete(String registrationId) {
         LoginProvider provider = loadRequired(registrationId);
-        requireWritable(provider);
         if (provider.isEnabled()) {
             requireNotLastEnabled(registrationId, "delete");
         }
@@ -224,13 +249,6 @@ public class LoginProviderService implements SystemSecretOwner {
         registrationCache.evict(registrationId);
         audit(AuthEvent.EventType.LOGIN_PROVIDER_DELETED, provider, null);
         log.info("auth.login-provider: admin deleted '{}'", registrationId);
-    }
-
-    // A later release owns an OIDC row; this one neither changes nor removes it.
-    private static void requireWritable(LoginProvider provider) {
-        if (provider.getType() == LoginProvider.ProviderType.OIDC) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, OIDC_NOT_YET);
-        }
     }
 
     // Audit changed field names only; provider values can contain credentials.
@@ -386,8 +404,13 @@ public class LoginProviderService implements SystemSecretOwner {
             return GITHUB_COM;
         }
         if (type == LoginProvider.ProviderType.OIDC) {
-            // The admin API, an update and the environment seed all pass here.
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, OIDC_NOT_YET);
+            String issuer = baseUrl == null ? "" : baseUrl.trim();
+            try {
+                oidcDiscovery.validateIssuer(issuer);
+            } catch (InvalidInputException e) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage(), e);
+            }
+            return issuer;
         }
         if (type == LoginProvider.ProviderType.SLACK) {
             // Slack login is slack.com only (the registration builder hardcodes the slack.com OIDC
@@ -413,9 +436,7 @@ public class LoginProviderService implements SystemSecretOwner {
         return value;
     }
 
-    // This release does not sign in through an OIDC row that a later release wrote; it only reads the row.
     private boolean isApproved(LoginProvider provider) {
-        if (provider.getType() == LoginProvider.ProviderType.OIDC) return false;
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
                 || outlineOriginPolicy.allows(provider.getBaseUrl()));
     }
@@ -436,6 +457,12 @@ public class LoginProviderService implements SystemSecretOwner {
     // openid selects Spring's OIDC path; GitLab and Outline registrations require plain OAuth2.
     private static String sanitizeScopesOrThrow(LoginProvider.ProviderType type, String scopes) {
         String trimmed = scopes.trim();
+        // Without it Spring takes the plain OAuth2 path, which validates no ID token.
+        if (type == LoginProvider.ProviderType.OIDC
+                && !List.of(trimmed.split("\\s+")).contains("openid")) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT, "An OpenID Connect provider needs the scope “openid”.");
+        }
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
             String replacement = type == LoginProvider.ProviderType.GITLAB ? "“read_user”" : "“read”";
             for (String scope : trimmed.split("\\s+", -1)) {
@@ -453,7 +480,7 @@ public class LoginProviderService implements SystemSecretOwner {
         return trimmed;
     }
 
-    // Only a provider that this release signs in through prevents lockout.
+    // Link-only providers cannot prevent lockout; count only providers that can start a sign-in.
     private void requireNotLastEnabled(String registrationId, String verb) {
         List<LoginProvider> enabled = repository.findByEnabledTrueOrderByDisplayNameAsc().stream()
                 .filter(p -> p.getType() != null && p.getType().signsIn())

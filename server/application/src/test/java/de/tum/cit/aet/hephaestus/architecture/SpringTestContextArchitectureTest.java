@@ -66,6 +66,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
             assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
+            assignment("core.auth.oauth.OidcSignInIntegrationTest", "oidc-test-issuer"),
             assignment("core.auth.mcp.McpAuthorizationConformanceIntegrationTest", "dev-login"),
             assignment("core.auth.mcp.McpPasskeyConsentIntegrationTest", "required-passkeys"),
             assignment("core.auth.mcp.McpTokenRestRefusalIntegrationTest", "mcp-audience-overlap"),
@@ -328,6 +329,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
+            Map.entry(
+                    "oidc-test-issuer",
+                    "a test OpenID Connect issuer on one loopback port that the egress guard admits, and a bootstrap"
+                            + " admin list, so a sign-in runs over real HTTP"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("agent-off-e2e", "E2E profile precedence with agent jobs off and no Kubernetes Pod metadata"),
             Map.entry(
@@ -384,6 +389,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.auth.clientsession.ClientSessionIntegrationTest",
             "core.auth.consent.ConsentSignInBootstrapIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
+            "core.auth.oauth.OidcSignInIntegrationTest",
             "core.auth.mcp.McpAuthorizationConformanceIntegrationTest",
             "core.auth.mcp.McpPasskeyConsentIntegrationTest",
             "core.auth.mcp.McpTokenRestRefusalIntegrationTest",

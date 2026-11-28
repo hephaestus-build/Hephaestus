@@ -12,6 +12,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -51,12 +54,13 @@ public class LoginProvider {
             return this == SLACK || this == OUTLINE;
         }
 
-        /**
-         * Whether this release signs in through the type. OIDC is not link-only, but this release only reads
-         * an OIDC row that a later release wrote, so it cannot keep an instance open.
-         */
+        /** Whether a person can sign in through the type, so that a provider of it keeps an instance open. */
         public boolean signsIn() {
-            return this == GITHUB || this == GITLAB;
+            return this == GITHUB || this == GITLAB || this == OIDC;
+        }
+
+        public static Set<ProviderType> signingIn() {
+            return Arrays.stream(values()).filter(ProviderType::signsIn).collect(Collectors.toUnmodifiableSet());
         }
     }
 
@@ -107,10 +111,29 @@ public class LoginProvider {
     /**
      * Normalize on write (trim + strip trailing slashes) so the {@code (type, base_url)} uniqueness
      * is meaningful — {@code https://gitlab.lrz.de} and {@code https://gitlab.lrz.de/} are the same
-     * instance.
+     * instance. An OIDC issuer compares as an exact string (OpenID Connect Core § 3.1.3.7), so it
+     * keeps its spelling; set the type first.
      */
     public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl.trim().replaceAll("/+$", "");
+        this.baseUrl =
+                type == ProviderType.OIDC ? baseUrl.trim() : baseUrl.trim().replaceAll("/+$", "");
+    }
+
+    /**
+     * The version of the row that a sign-in registration is built from. A sign-in completes only against the row
+     * version that started it, so an admin who replaces or edits the row meanwhile never gets a subject keyed into
+     * the new row's namespace.
+     */
+    public String registrationVersion() {
+        return String.join(
+                "|",
+                String.valueOf(id),
+                String.valueOf(type),
+                baseUrl,
+                clientId,
+                scopes,
+                displayName,
+                String.valueOf(updatedAt));
     }
 
     public String clientSecret(SystemSecrets secrets) {
