@@ -1121,9 +1121,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(ended.getErrorMessage()).isEqualTo("The container timed out.");
         // A timed-out composition is never resumed, so the release after its commit removes the inputs it kept (#5491).
         await().atMost(Duration.ofSeconds(30))
-                .untilAsserted(() -> assertThat(
-                                compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
-                        .isEmpty());
+                .untilAsserted(
+                        () -> assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
+                                .isEmpty());
         assertThat(output).doesNotContain("Could not remove original composition inputs");
         assertThat(usageCalls(jobId)).containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
     }

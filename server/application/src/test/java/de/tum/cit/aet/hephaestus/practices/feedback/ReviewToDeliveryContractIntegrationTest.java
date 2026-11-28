@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.Application;
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
@@ -21,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.WorkPlaceScope;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -36,6 +39,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionAttemptEnded;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionInputsRelease;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewComposeRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
@@ -149,6 +153,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
@@ -229,6 +234,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -2609,8 +2615,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var ended = completedCompositionAwaitingReadback(review);
 
-            transactions.executeWithoutResult(status ->
-                    events.publishEvent(new CompositionAttemptEnded(review.workspaceId(), ended.getId())));
+            transactions.executeWithoutResult(
+                    status -> events.publishEvent(new CompositionAttemptEnded(review.workspaceId(), ended.getId())));
 
             await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
                 var resumed = jobs.findById(ended.getId()).orElseThrow();
@@ -2620,6 +2626,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
                     .as("the resumed composition reads the kept inputs")
                     .isPresent();
+            // Remove the resumed attempt and its run, so no background claim ends this review in a later test.
+            UUID next = jobs.findById(ended.getId()).orElseThrow().getRunId();
+            jdbc.update("DELETE FROM review_job WHERE workspace_id=? AND id=?", review.workspaceId(), ended.getId());
+            jdbc.update("DELETE FROM agent_run WHERE workspace_id=? AND id=?", review.workspaceId(), next);
         }
     }
 
@@ -2631,17 +2641,26 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldStopARepairWhoseRetriesAreSpentWhenItsCompositionEnds() throws Exception {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var ended = completedCompositionAwaitingReadback(review);
-            jdbc.update(
-                    "UPDATE agent_run SET attempt=99 WHERE workspace_id=? AND id=?",
-                    review.workspaceId(),
-                    ended.getRunId());
+            // An ended run's attempt is final, so the release reads a limit that even a first attempt exceeds.
+            var capacity = spy(context.getBean(AgentCapacityProperties.class));
+            when(capacity.reviewRetries()).thenReturn(-1);
+            var release = new CompositionInputsRelease(
+                    jobs,
+                    new ReviewCompositionContinuation(
+                            compositionBases,
+                            context.getBean(JobEvidenceFiles.class),
+                            context.getBean(AttemptCopyReceipts.class),
+                            context.getBean(ObjectMapper.class),
+                            context.getBean(ReviewAssignmentStore.class),
+                            context.getBean(FeedbackRepair.class),
+                            capacity,
+                            context.getBean(ReviewRunKind.class)));
 
-            transactions.executeWithoutResult(status ->
-                    events.publishEvent(new CompositionAttemptEnded(review.workspaceId(), ended.getId())));
+            transactions.executeWithoutResult(
+                    status -> release.ended(new CompositionAttemptEnded(review.workspaceId(), ended.getId())));
 
-            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(
-                            compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
-                    .isEmpty());
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
+                    .isEmpty();
             assertThat(jdbc.queryForList(
                             "SELECT composition->>'stop' FROM feedback WHERE workspace_id=? AND review_id=?"
                                     + " AND destination='ON_WORK'",
@@ -2656,7 +2675,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     /** A review whose composition completed and whose feedback on the work waits for its readback. */
     private ReviewJob completedCompositionAwaitingReadback(ClaimedReview review) throws Exception {
         var admitted = admitStaged(review.identity(), request(review));
-        var publicationContext = admission.publicFeedbackHistory(review.identity()).publicationContext();
+        var publicationContext =
+                admission.publicFeedbackHistory(review.identity()).publicationContext();
         admission.publishPackage(review.identity(), composition(admitted, SUMMARY, publicationContext));
         ActionTestSupport.drain(executor, jdbc);
         RuntimeJobTestData.updateJobs(
