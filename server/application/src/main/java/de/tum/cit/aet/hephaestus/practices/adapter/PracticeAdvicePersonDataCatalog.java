@@ -22,8 +22,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"practice_advice_source", "practice_advice_revision", "practice_advice"})
+@PersonDataStores({"practice_advice_receipt", "practice_advice_source", "practice_advice_revision", "practice_advice"})
 @ErasesColumns({
+    "practice_advice_receipt.person_account_id",
     "practice_advice_source.person_account_id",
     "practice_advice_revision.person_account_id",
     "practice_advice.person_account_id"
@@ -37,6 +38,17 @@ public class PracticeAdvicePersonDataCatalog implements PersonDataCatalog {
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                // The decision of each review, without its content digest: the digest only matches a retry.
+                new LiveJdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "practice_advice_receipt",
+                        "practice_advice_receipt",
+                        OWN,
+                        "advice_id,workspace_id,review_id,kind,version,written_at",
+                        "advice_id,review_id,workspace_id",
+                        "",
+                        -140),
                 new LiveJdbcPersonDataStore(
                         jdbc,
                         mapper,
@@ -47,7 +59,7 @@ public class PracticeAdvicePersonDataCatalog implements PersonDataCatalog {
                         "id,workspace_id",
                         "",
                         -139),
-                // An instance admin downloads this export, and only the developer reads advice, so it holds no text.
+                // Only the developer reads advice, so the person-data records hold no text (ADR 0160).
                 new LiveJdbcPersonDataStore(
                         jdbc,
                         mapper,

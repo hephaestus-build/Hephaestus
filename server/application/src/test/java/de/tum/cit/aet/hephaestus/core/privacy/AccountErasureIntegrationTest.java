@@ -503,7 +503,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         // An older replica had the same scope and admission hold, with no advice keys in its inventory.
         var oldSelection =
                 mapper.readValue(Objects.requireNonNull(preview.request().getSelectionsJson()), ObjectNode.class);
-        oldSelection.remove(List.of("practice_advice", "practice_advice_revision", "practice_advice_source"));
+        oldSelection.remove(List.of(
+                "practice_advice", "practice_advice_revision", "practice_advice_source", "practice_advice_receipt"));
         jdbc.update("UPDATE person_data_request SET selections_json=? WHERE id=?", oldSelection.toString(), id);
 
         personData.run(id);

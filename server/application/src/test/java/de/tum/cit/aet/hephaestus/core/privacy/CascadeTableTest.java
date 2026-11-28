@@ -637,6 +637,7 @@ class CascadeTableTest extends BaseUnitTest {
             "person_data_store_administration",
             "person_evidence_copy",
             "practice_advice",
+            "practice_advice_receipt",
             "practice_advice_revision",
             "practice_advice_source",
             "practice_version",

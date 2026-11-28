@@ -569,6 +569,24 @@ final class PersonErasureAllStoresFixture {
                 true,
                 "ordinal",
                 0);
+        row(
+                "practice_advice_receipt",
+                "advice_id",
+                advice,
+                "workspace_id",
+                workspace,
+                "review_id",
+                person.review(),
+                "person_account_id",
+                account,
+                "kind",
+                "REVISE",
+                "content_digest",
+                new byte[32],
+                "version",
+                1L,
+                "written_at",
+                now);
         // A thread resolution goes with the person's copy on the work.
         UUID copyId = jdbc
                 .query(
