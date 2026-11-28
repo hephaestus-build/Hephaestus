@@ -189,7 +189,11 @@ class ConversationAdviceErasureIntegrationTest extends AbstractWorkspaceIntegrat
                 ws,
                 thread.getId(),
                 new ConversationTurnService.Question(
-                        ConversationTurn.Surface.APP, "And three plus three?", UUID.randomUUID().toString(), null, null)));
+                        ConversationTurn.Surface.APP,
+                        "And three plus three?",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null)));
         UUID unrelated = end(older, context(older).prompt(), "Six.");
 
         ConversationTurn reader = claim(ask("What should I change?"));
@@ -205,7 +209,11 @@ class ConversationAdviceErasureIntegrationTest extends AbstractWorkspaceIntegrat
                                 "fetch_context",
                                 JsonNodeFactory.instance.objectNode().put("path", "team.json")),
                         ConversationLedgerFixtures.toolResult(
-                                ConversationLedgerFixtures.piId(), "context-1", "fetch_context", "Team notes.", false)));
+                                ConversationLedgerFixtures.piId(),
+                                "context-1",
+                                "fetch_context",
+                                "Team notes.",
+                                false)));
         assertThat(sources(older.getId())).doesNotContain(affected);
         assertThat(redacted(affected, unrelated)).containsExactly(false, false);
 

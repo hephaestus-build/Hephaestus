@@ -30,7 +30,7 @@ class ConversationAdviceErasure implements AdviceErasureListener {
     public void staleRevisions(long workspaceId, Collection<UUID> revisionIds, AdviceStaleCause cause) {
         switch (cause) {
             case ERASURE, WITHDRAWAL ->
-                redaction.redactWithDerived(basis.entriesThatReadAdvice(workspaceId, revisionIds));
+                redaction.redactWithReaders(basis.entriesThatReadAdvice(workspaceId, revisionIds));
             case RETENTION -> {}
         }
     }

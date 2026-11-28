@@ -122,7 +122,7 @@ de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.countChangedS
 de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.findDueForRetention(long, de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind, java.lang.Long, de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository$DuePage, int)
 de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.findOwnMessages(long)
 de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.lockTreesOf([Ljava.util.UUID;)
-de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.redactWithCopies([Ljava.util.UUID;, java.lang.String, boolean, boolean)
+de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.redactWithCopies([Ljava.util.UUID;, java.lang.String, boolean, boolean, boolean)
 de.tum.cit.aet.hephaestus.conversation.ConversationRepository.findMemberWorkspaceIds(long)
 de.tum.cit.aet.hephaestus.conversation.ConversationRepository.lockScope(java.lang.String)
 de.tum.cit.aet.hephaestus.conversation.ConversationRepository.shareHistory(java.lang.String)

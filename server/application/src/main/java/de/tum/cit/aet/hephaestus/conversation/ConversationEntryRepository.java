@@ -777,11 +777,13 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
 
     /**
      * Redacts these entries and their copies as {@link ConversationRedaction} describes; without {@code withTargets}, only
-     * the copies. With {@code withDerivedAnswers}, it also redacts every entry derived from one it redacts: the answers
-     * after a tool result that can copy anyone's data ({@link #COPIES_PERSON_DATA}), which no basis records, the entries
-     * whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far as they reach. The
-     * walk passes through entries that an earlier redaction erased, also when one of {@code ids} is one, because what
-     * derived from them before that redaction still holds their words. Only entries that still hold words change.
+     * the copies. With {@code withCopiedAnswers}, it also redacts the answers after a target tool result that can copy
+     * anyone's data ({@link #COPIES_PERSON_DATA}), which no basis records: the later ones of its conversation, every one
+     * of its threads, and its own turn's. With {@code withDerivedAnswers}, it also redacts every entry derived from one it
+     * redacts: the entries whose basis read one ({@link ConversationBasis}), then the entries derived from those, as far
+     * as they reach. The walk passes through entries that an earlier redaction erased, also when one of {@code ids} is
+     * one, because what derived from them before that redaction still holds their words. Only entries that still hold
+     * words change.
      */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
     @Query(value = """
@@ -794,7 +796,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                 JOIN conversation_entry a ON a.conversation_id = e.conversation_id
                     OR a.conversation_id IN (
                         SELECT c.id FROM conversation c WHERE c.parent_conversation_id = e.conversation_id)
-                WHERE :withDerivedAnswers AND a.kind IN ('ANSWER', 'DIGEST') AND a.redacted_at IS NULL
+                WHERE :withCopiedAnswers AND a.kind IN ('ANSWER', 'DIGEST') AND a.redacted_at IS NULL
                   AND
             """ + COPIES_PERSON_DATA + """
                   AND (a.conversation_id <> e.conversation_id OR a.seq > e.seq OR a.turn_id = e.turn_id)
@@ -885,6 +887,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             @Param("ids") UUID[] ids,
             @Param("erased") String erased,
             @Param("withTargets") boolean withTargets,
+            @Param("withCopiedAnswers") boolean withCopiedAnswers,
             @Param("withDerivedAnswers") boolean withDerivedAnswers);
 
     /** How many of these entries are redacted, or were edited at or after {@code since}. */

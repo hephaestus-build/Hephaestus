@@ -32,11 +32,11 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>A {@code SUMMARY} covers its own conversation's entries in its {@code fromSeq..toSeq} payload range. A
  *       thread's summary may also have read its main conversation, so a redaction there erases the summaries of all
  *       its threads: one more compaction costs less than erased words in Hephaestus's context.
- *   <li>A developer's delete, a person erasure, a Slack disconnect or channel erasure, and advice that loses its text to
- *       an erasure or a withdrawal also erase what derives from the erased entries: every entry whose attempt's basis
- *       read one of them ({@link ConversationBasis}), and on through the entries derived from those. Retention, a
- *       Slack edit and the other redactions keep the derived entries: each has its own retention, and an edit keeps
- *       Hephaestus's answers to the earlier words.
+ *   <li>A developer's delete, a person erasure, and advice that loses its text to an erasure or a withdrawal also
+ *       erase what derives from the erased entries: every entry whose attempt's basis read one of them
+ *       ({@link ConversationBasis}), and on through the entries derived from those. Retention, a Slack edit and the
+ *       other redactions keep the derived entries: each has its own retention, and an edit keeps Hephaestus's answers
+ *       to the earlier words.
  * </ul>
  *
  * <p>A redaction or an edit locks the main conversation row of every tree it changes, in id order, before it reads
@@ -85,7 +85,7 @@ public class ConversationRedaction {
     @Transactional
     public boolean deleteHistory(long workspaceId, long accountId, List<UUID> entryIds) {
         if (!historyRemoval.fence(workspaceId, accountId, entryIds)) return false;
-        redactWithCopies(entryIds, true);
+        redactWithCopies(entryIds, true, true);
         return true;
     }
 
@@ -101,14 +101,24 @@ public class ConversationRedaction {
      */
     @Transactional
     public void redactWithDerived(Collection<UUID> entryIds) {
-        redactWithCopies(entryIds, true);
+        redactWithCopies(entryIds, true, true);
+    }
+
+    /**
+     * Redacts the entries and every copy of them, in any workspace, with every entry whose basis read one of them and what
+     * derives from those. A tool result among them takes no later answer with it: the caller knows exactly which entries
+     * read the source, as an attempt's basis names them.
+     */
+    @Transactional
+    public void redactWithReaders(Collection<UUID> entryIds) {
+        redactWithCopies(entryIds, false, true);
     }
 
     private void redactWithCopies(Collection<UUID> entryIds) {
-        redactWithCopies(entryIds, false);
+        redactWithCopies(entryIds, false, false);
     }
 
-    private void redactWithCopies(Collection<UUID> entryIds, boolean withDerivedAnswers) {
+    private void redactWithCopies(Collection<UUID> entryIds, boolean withCopiedAnswers, boolean withDerivedAnswers) {
         if (entryIds.isEmpty()) {
             return;
         }
@@ -116,7 +126,7 @@ public class ConversationRedaction {
         entries.lockTreesOf(ids);
         entries.flush();
         List<ConversationEntryRepository.EntryRef> messages =
-                entries.redactWithCopies(ids, ERASED, true, withDerivedAnswers);
+                entries.redactWithCopies(ids, ERASED, true, withCopiedAnswers, withDerivedAnswers);
         if (messages.stream().anyMatch(ConversationEntryRepository.EntryRef::getRedactionPending))
             throw new IllegalStateException("A selected conversation entry was not redacted");
         // Tool results, summaries and system entries are never shown, so only messages change an open conversation.
@@ -158,7 +168,7 @@ public class ConversationRedaction {
     public void eraseCopiesOf(Collection<UUID> entryIds) {
         if (!entryIds.isEmpty()) {
             entries.flush();
-            entries.redactWithCopies(entryIds.toArray(UUID[]::new), ERASED, false, false);
+            entries.redactWithCopies(entryIds.toArray(UUID[]::new), ERASED, false, false, false);
         }
     }
 
@@ -174,7 +184,8 @@ public class ConversationRedaction {
      *     ({@link ConversationEntryRepository#COPIES_PERSON_DATA}) ran since the attempt started. That step runs after every
      *     step that erases a source, so the attempt may have read the person's data. The step records no workspace, so a
      *     step for a person in any workspace counts.
-     * @return whether an entry of the attempt's basis was erased after the attempt read it ({@link ConversationBasis})
+     * @return whether a source of the attempt's basis was erased after the attempt read it: an entry, or an advice
+     *     revision that lost its text ({@link ConversationBasis#lostSource})
      */
     @Transactional
     public boolean eraseStaleCopies(ConversationTurn attempt, List<ConversationEntry> appended, boolean personErased) {
