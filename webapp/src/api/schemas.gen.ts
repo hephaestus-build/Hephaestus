@@ -9042,6 +9042,11 @@ export const PracticeItemTypeOptionSchema = {
 	],
 } as const;
 
+export const PracticeLevelSchema = {
+	type: "string",
+	enum: ["ITEM", "MEMBER"],
+} as const;
+
 export const PracticePageCleanWorkSchema = {
 	type: "object",
 	properties: {
@@ -11870,6 +11875,28 @@ export const ReplaceOutlineTokenRequestSchema = {
 	required: ["token"],
 } as const;
 
+export const RepositoryCommitVersionSchema = {
+	allOf: [
+		{
+			type: "object",
+			properties: {
+				commit: {
+					type: "string",
+				},
+				kind: {
+					type: "string",
+					enum: ["REPOSITORY_COMMIT"],
+				},
+				ref: {
+					type: "string",
+				},
+			},
+		},
+	],
+	description: "A repository at the commit that the review pinned on its monitored default branch.",
+	required: ["commit", "kind", "ref"],
+} as const;
+
 export const RepositoryInfoSchema = {
 	type: "object",
 	description: "Information about a git repository",
@@ -12626,6 +12653,27 @@ export const ReviewSchema = {
 	],
 } as const;
 
+export const ReviewAudienceSchema = {
+	type: "object",
+	description:
+		"Who reads a review. A team review names its team project; no other audience names one.",
+	properties: {
+		kind: {
+			$ref: "#/components/schemas/ReviewAudienceKind",
+		},
+		teamProjectId: {
+			type: ["string", "null"],
+			format: "uuid",
+		},
+	},
+	required: ["kind", "teamProjectId"],
+} as const;
+
+export const ReviewAudienceKindSchema = {
+	type: "string",
+	enum: ["OPERATIONAL", "TEAM", "PERSONAL"],
+} as const;
+
 export const ReviewBatchSchema = {
 	type: "object",
 	properties: {
@@ -12917,6 +12965,28 @@ export const ReviewCadenceSchema = {
 	enum: ["DAILY", "WEEKLY"],
 } as const;
 
+export const ReviewChangeSchema = {
+	type: "object",
+	description:
+		"How a review differs from its baseline, the newest earlier closed review of the same setup and item (ADR 0167\n decision 6). The three sides are independent: one commit with other pinned evidence is the same version with changed\n evidence. Only the evidence can be unknown; the constructor refuses an unknown version or setup.",
+	properties: {
+		baselineReviewId: {
+			type: "string",
+			format: "uuid",
+		},
+		evidence: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+		setup: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+		version: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+	},
+	required: ["baselineReviewId", "evidence", "setup", "version"],
+} as const;
+
 export const ReviewContextSchema = {
 	type: "object",
 	properties: {
@@ -12943,6 +13013,21 @@ export const ReviewContextSchema = {
 	required: ["canInspectReviewDetails", "requestAllowed", "workspaceId", "workspaceSlug"],
 } as const;
 
+export const ReviewCoverageSchema = {
+	type: "object",
+	description:
+		"The planned pairs of the practices of one level, by what became of them. A review never sums two levels.",
+	properties: {
+		counts: {
+			$ref: "#/components/schemas/ReviewItemCounts",
+		},
+		level: {
+			$ref: "#/components/schemas/PracticeLevel",
+		},
+	},
+	required: ["counts", "level"],
+} as const;
+
 export const ReviewDecisionSchema = {
 	type: "string",
 	enum: ["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"],
@@ -12955,17 +13040,42 @@ export const ReviewDetailSchema = {
 			type: "integer",
 			format: "int32",
 		},
+		audience: {
+			$ref: "#/components/schemas/ReviewAudience",
+		},
 		batchId: {
 			type: ["string", "null"],
 			format: "uuid",
+		},
+		change: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewChange",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		completedAt: {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		coverage: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewCoverage",
+			},
+		},
 		createdAt: {
 			type: "string",
 			format: "date-time",
+		},
+		evidence: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewEvidence",
+			},
 		},
 		feedback: {
 			$ref: "#/components/schemas/ReviewFeedbackCounts",
@@ -13026,10 +13136,30 @@ export const ReviewDetailSchema = {
 		results: {
 			$ref: "#/components/schemas/ReviewResultCounts",
 		},
+		reviewedVersion: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewedVersion",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
 		runtime: {
 			anyOf: [
 				{
 					$ref: "#/components/schemas/ReviewRuntime",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
+		setup: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewSetupRef",
 				},
 				{
 					type: "null",
@@ -13062,12 +13192,19 @@ export const ReviewDetailSchema = {
 		usage: {
 			$ref: "#/components/schemas/ReviewUsage",
 		},
+		versionKind: {
+			$ref: "#/components/schemas/ReviewVersionKind",
+		},
 	},
 	required: [
 		"activeJobCount",
+		"audience",
 		"batchId",
+		"change",
 		"completedAt",
+		"coverage",
 		"createdAt",
+		"evidence",
 		"feedback",
 		"generatedPaths",
 		"id",
@@ -13081,12 +13218,48 @@ export const ReviewDetailSchema = {
 		"practices",
 		"progress",
 		"results",
+		"reviewedVersion",
 		"runtime",
+		"setup",
 		"startedBy",
 		"status",
 		"stopReason",
 		"usage",
+		"versionKind",
 	],
+} as const;
+
+export const ReviewDifferenceSchema = {
+	type: "string",
+	description:
+		"Whether one side of a review differs from its baseline. Only the evidence can be unknown.",
+	enum: ["SAME", "CHANGED", "UNKNOWN"],
+} as const;
+
+export const ReviewEvidenceSchema = {
+	type: "object",
+	description:
+		"One source of evidence from outside the reviewed version, pinned when the review was created, such as the CI runs of\n a commit. Its slot names the source, for example <code>ci.observed</code>.",
+	properties: {
+		readAt: {
+			type: ["string", "null"],
+			format: "date-time",
+		},
+		slot: {
+			type: "string",
+		},
+		state: {
+			$ref: "#/components/schemas/ReviewEvidenceState",
+		},
+	},
+	required: ["readAt", "slot", "state"],
+} as const;
+
+export const ReviewEvidenceStateSchema = {
+	type: "string",
+	description:
+		"What the server read for one evidence source when it created the review. A missing or incomplete source leaves its criteria Could not determine.",
+	enum: ["PRESENT", "INCOMPLETE", "MISSING"],
 } as const;
 
 export const ReviewFeedbackSchema = {
@@ -13433,6 +13606,8 @@ export const ReviewFeedbackSortSchema = {
 
 export const ReviewItemCountsSchema = {
 	type: "object",
+	description:
+		"The planned pairs of one practice, or of one practice level, by what became of them. Each planned pair is reviewed,\n withheld or not reviewed. A reused pair is reviewed too, so <code>reused</code> is a part of <code>reviewed</code>.",
 	properties: {
 		listed: {
 			type: "integer",
@@ -13798,6 +13973,9 @@ export const ReviewPracticeSchema = {
 		itemCounts: {
 			$ref: "#/components/schemas/ReviewItemCounts",
 		},
+		level: {
+			$ref: "#/components/schemas/PracticeLevel",
+		},
 		number: {
 			type: ["null", "integer"],
 			format: "int32",
@@ -13835,6 +14013,7 @@ export const ReviewPracticeSchema = {
 	required: [
 		"editedIn",
 		"itemCounts",
+		"level",
 		"number",
 		"practiceName",
 		"practiceSlug",
@@ -14794,6 +14973,10 @@ export const ReviewScheduleSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		setupId: {
+			type: ["string", "null"],
+			format: "uuid",
+		},
 		updatedAt: {
 			type: "string",
 			format: "date-time",
@@ -14813,6 +14996,7 @@ export const ReviewScheduleSchema = {
 		"lastRunAt",
 		"lookbackDays",
 		"nextRunAt",
+		"setupId",
 		"updatedAt",
 		"version",
 	],
@@ -14861,6 +15045,22 @@ export const ReviewScopeRepositorySchema = {
 		},
 	},
 	required: ["baseBranches", "repositoryItemId"],
+} as const;
+
+export const ReviewSetupRefSchema = {
+	type: "object",
+	description:
+		"The review setup that started a review, as the review keeps a copy of it (ADR 0165 decision 10).",
+	properties: {
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		name: {
+			type: "string",
+		},
+	},
+	required: ["id", "name"],
 } as const;
 
 export const ReviewStageSchema = {
@@ -14964,13 +15164,32 @@ export const ReviewSummarySchema = {
 			type: "integer",
 			format: "int32",
 		},
+		audience: {
+			$ref: "#/components/schemas/ReviewAudience",
+		},
 		batchId: {
 			type: ["string", "null"],
 			format: "uuid",
 		},
+		change: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewChange",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
 		completedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		coverage: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewCoverage",
+			},
 		},
 		createdAt: {
 			type: "string",
@@ -15025,6 +15244,26 @@ export const ReviewSummarySchema = {
 		results: {
 			$ref: "#/components/schemas/ReviewResultCounts",
 		},
+		reviewedVersion: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewedVersion",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
+		setup: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewSetupRef",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
 		startedBy: {
 			anyOf: [
 				{
@@ -15048,11 +15287,17 @@ export const ReviewSummarySchema = {
 				},
 			],
 		},
+		versionKind: {
+			$ref: "#/components/schemas/ReviewVersionKind",
+		},
 	},
 	required: [
 		"activeJobCount",
+		"audience",
 		"batchId",
+		"change",
 		"completedAt",
+		"coverage",
 		"createdAt",
 		"feedback",
 		"id",
@@ -15066,9 +15311,12 @@ export const ReviewSummarySchema = {
 		"practices",
 		"progress",
 		"results",
+		"reviewedVersion",
+		"setup",
 		"startedBy",
 		"status",
 		"stopReason",
+		"versionKind",
 	],
 } as const;
 
@@ -15320,6 +15568,11 @@ export const ReviewUsageAttemptSchema = {
 	],
 } as const;
 
+export const ReviewVersionKindSchema = {
+	type: "string",
+	enum: ["REPOSITORY_COMMIT", "SUBMITTED_VERSION", "ITEM_REVISION"],
+} as const;
+
 export const ReviewedBySchema = {
 	type: "object",
 	properties: {
@@ -15407,6 +15660,30 @@ export const ReviewedPracticeSchema = {
 		},
 	},
 	required: ["group", "name", "slug", "whatGoodLooksLike", "whyItMatters"],
+} as const;
+
+export const ReviewedVersionSchema = {
+	discriminator: {
+		mapping: {
+			REPOSITORY_COMMIT: "#/components/schemas/RepositoryCommitVersion",
+			SUBMITTED_VERSION: "#/components/schemas/SubmittedVersion",
+		},
+		propertyName: "kind",
+	},
+	oneOf: [
+		{
+			$ref: "#/components/schemas/RepositoryCommitVersion",
+		},
+		{
+			$ref: "#/components/schemas/SubmittedVersion",
+		},
+	],
+	properties: {
+		kind: {
+			type: "string",
+		},
+	},
+	required: ["kind"],
 } as const;
 
 export const ReviewerSchema = {
@@ -16605,6 +16882,31 @@ export const StateDimensionSchema = {
 		},
 	},
 	required: ["label", "name", "values"],
+} as const;
+
+export const SubmittedVersionSchema = {
+	allOf: [
+		{
+			type: "object",
+			properties: {
+				kind: {
+					type: "string",
+					enum: ["SUBMITTED_VERSION"],
+				},
+				number: {
+					type: "integer",
+					format: "int32",
+				},
+				versionId: {
+					type: "string",
+					format: "uuid",
+				},
+			},
+		},
+	],
+	description:
+		"The immutable version of a team item that the review pinned (ADR 0165), with its number in that item.",
+	required: ["kind", "number", "versionId"],
 } as const;
 
 export const SupportShareSchema = {

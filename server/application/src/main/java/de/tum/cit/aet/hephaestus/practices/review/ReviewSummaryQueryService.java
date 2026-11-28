@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewAudienceDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewCoverageDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewItemCountsDTO;
@@ -25,12 +27,15 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageDTO;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeLevel;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScriptQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -136,6 +141,7 @@ public class ReviewSummaryQueryService {
                     .orElse(null);
             var eventId = review.getEventId();
             var event = eventId == null ? null : reads.refs.events().get(eventId);
+            var practices = practices(review, rows, reads);
             summaries.put(
                     review.getId(),
                     new ReviewSummaryDTO(
@@ -151,7 +157,7 @@ public class ReviewSummaryQueryService {
                             review.getBatchId(),
                             review.getOrderedAt(),
                             review.getStopReason(),
-                            practices(review, rows, reads),
+                            practices,
                             reads.resultCounts(review.getId(), null),
                             ReviewFeedbackCountsDTO.from(reads.feedback.getOrDefault(review.getId(), Map.of())),
                             Math.toIntExact(jobs.values().stream()
@@ -160,9 +166,26 @@ public class ReviewSummaryQueryService {
                             Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.QUEUED, 0L)
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
                             model,
-                            reads.progress.get(review.getId())));
+                            reads.progress.get(review.getId()),
+                            // No review stores a setup or an audience yet (ADR 0167 decision 2): each reads as older.
+                            null,
+                            ReviewVersionKind.ofOlder(review.getKind()),
+                            new ReviewAudienceDTO(ReviewAudience.ofOlder(review.getKind(), review.getOrigin()), null),
+                            null,
+                            coverage(practices),
+                            null));
         }
         return summaries;
+    }
+
+    /** The planned pairs of each practice level, summed only within that level (ADR 0167 decision 5). */
+    static List<ReviewCoverageDTO> coverage(List<ReviewPracticeDTO> practices) {
+        var byLevel = new EnumMap<PracticeLevel, ReviewItemCountsDTO>(PracticeLevel.class);
+        for (var practice : practices)
+            byLevel.merge(practice.level(), practice.itemCounts(), ReviewItemCountsDTO::plus);
+        return byLevel.entrySet().stream()
+                .map(level -> new ReviewCoverageDTO(level.getKey(), level.getValue()))
+                .toList();
     }
 
     /** Everything a page of summaries reads, each kind of fact in one query for all of its reviews. */
@@ -297,7 +320,14 @@ public class ReviewSummaryQueryService {
                 runtimeDTO,
                 usage(ws, id),
                 null,
-                s.progress());
+                s.progress(),
+                s.setup(),
+                s.versionKind(),
+                s.audience(),
+                s.reviewedVersion(),
+                s.coverage(),
+                s.change(),
+                List.of());
     }
 
     public ReviewUsageDTO usage(long ws, UUID id) {
@@ -358,7 +388,8 @@ public class ReviewSummaryQueryService {
                                     .filter(run ->
                                             run.practiceId().equals(p.getId().toString()))
                                     .max(Comparator.comparingInt(PracticeScriptRunDTO::attempt))
-                                    .orElse(null));
+                                    .orElse(null),
+                            PracticeLevel.ofOlder(review.getKind()));
                 })
                 .toList();
     }

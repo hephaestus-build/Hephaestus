@@ -2,6 +2,7 @@ import { addDays } from "date-fns";
 import type {
 	AccountRef,
 	EvidenceCitation,
+	FeedbackAnswer,
 	FeedbackBasis,
 	FeedbackCheck,
 	FeedbackCheckFacts,
@@ -9,7 +10,6 @@ import type {
 	FeedbackCopyCounts,
 	FeedbackDecision,
 	FeedbackDisagreement,
-	FeedbackAnswer,
 	FeedbackSend,
 	ItemEvent,
 	ItemFacts,
@@ -27,13 +27,14 @@ import type {
 	ReviewBoundFeedback,
 	ReviewBoundResult,
 	ReviewBucket,
+	ReviewCoverage,
 	ReviewDetail,
-	ReviewPerson,
 	ReviewFeedback,
 	ReviewFeedbackCounts,
 	ReviewFeedbackDetail,
 	ReviewJob,
 	ReviewOverview,
+	ReviewPerson,
 	ReviewPractice,
 	ReviewPracticeCounts,
 	ReviewProblem,
@@ -2360,6 +2361,34 @@ const PRACTICE_STATUS_OF: Record<ReviewStatus, ReviewPractice["status"]> = {
 	CANCELLED: "FAILED",
 };
 
+function levelOf(review: ReviewSpec): ReviewPractice["level"] {
+	return (review.kind ?? "ITEM") === "SCAN" ? "MEMBER" : "ITEM";
+}
+
+/** The planned pairs of each practice level, summed only within it, as the server sums them. */
+export function coverageOf(practices: ReviewPractice[]): ReviewCoverage[] {
+	const byLevel = new Map<ReviewPractice["level"], ReviewCoverage["counts"]>();
+	for (const { level, itemCounts } of practices) {
+		const sum = byLevel.get(level) ?? {
+			listed: 0,
+			reviewed: 0,
+			reused: 0,
+			withheld: 0,
+			notReviewed: 0,
+		};
+		byLevel.set(level, {
+			listed: sum.listed + itemCounts.listed,
+			reviewed: sum.reviewed + itemCounts.reviewed,
+			reused: sum.reused + itemCounts.reused,
+			withheld: sum.withheld + itemCounts.withheld,
+			notReviewed: sum.notReviewed + itemCounts.notReviewed,
+		});
+	}
+	return [...byLevel.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([level, counts]) => ({ level, counts }));
+}
+
 function practicesOf(review: ReviewSpec): ReviewPractice[] {
 	const slugs = [
 		...new Set([...review.results.map((result) => result.practiceSlug), ...(review.pending ?? [])]),
@@ -2385,6 +2414,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 			},
 			results: resultCounts(results.map((result) => result.outcome)),
 			script: null,
+			level: levelOf(review),
 		};
 	});
 	const withheld = (review.withheld ?? []).map(({ practiceSlug, reason }): ReviewPractice => ({
@@ -2398,6 +2428,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 		itemCounts: { listed: 1, reviewed: 0, reused: 0, withheld: 1, notReviewed: 0 },
 		results: resultCounts([]),
 		script: null,
+		level: levelOf(review),
 	}));
 	return [...reviewed, ...withheld];
 }
@@ -2423,6 +2454,8 @@ function startedByOf(review: ReviewSpec): ItemEvent | null {
 
 function toReview(review: ReviewSpec): ReviewSummary {
 	const createdAt = new Date(review.startedAt);
+	const scan = (review.kind ?? "ITEM") === "SCAN";
+	const practices = practicesOf(review);
 	return {
 		id: review.id,
 		kind: review.kind ?? "ITEM",
@@ -2437,12 +2470,22 @@ function toReview(review: ReviewSpec): ReviewSummary {
 		createdAt,
 		orderedAt: createdAt,
 		completedAt: finishedAt(review),
-		practices: practicesOf(review),
+		practices,
 		results: resultCounts(review.results.map((result) => result.outcome)),
 		feedback: feedbackCounts(review.feedback.map((item) => item.state)),
 		jobCount: review.jobs ?? 1,
 		activeJobCount: review.status === "RUNNING" || review.status === "QUEUED" ? 1 : 0,
 		model: MODEL,
+		// No review stores a setup or an audience yet: each reads as older (ADR 0167).
+		setup: null,
+		versionKind: scan ? "REPOSITORY_COMMIT" : "ITEM_REVISION",
+		audience: {
+			kind: scan || originOf(review) === "TRIAL" ? "OPERATIONAL" : "PERSONAL",
+			teamProjectId: null,
+		},
+		reviewedVersion: null,
+		coverage: coverageOf(practices),
+		change: null,
 	};
 }
 
@@ -2544,6 +2587,7 @@ function detailOf(summary: ReviewSummary, jobs: ReviewJob[] | null): ReviewDetai
 		runtime: jobs === null ? null : { jobs },
 		usage: usageOf(jobs ?? []),
 		generatedPaths: null,
+		evidence: [],
 	};
 }
 
@@ -2582,6 +2626,7 @@ function standaloneReview(
 		results: resultCounts([]),
 		feedback: ZERO_FEEDBACK,
 		practices: [],
+		coverage: [],
 		...overrides,
 	};
 	const runtime = jobs(summary);

@@ -161,6 +161,8 @@ public class ReviewScheduleService {
                                 .accounts(s.getWorkspaceId(), List.of(s.getCreatedByAccountId()))
                                 .get(s.getCreatedByAccountId()),
                 s.getCreatedAt(),
-                s.getUpdatedAt());
+                s.getUpdatedAt(),
+                // A recurring check belongs to no setup until the scheduler starts reviews of setups (ADR 0167).
+                null);
     }
 }

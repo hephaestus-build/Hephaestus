@@ -2845,6 +2845,13 @@ export const getReviewTimingResponseTransformer = async (
 	return data;
 };
 
+const reviewEvidenceSchemaResponseTransformer = (data: any) => {
+	if (data.readAt) {
+		data.readAt = new Date(data.readAt);
+	}
+	return data;
+};
+
 const reviewJobSchemaResponseTransformer = (data: any) => {
 	data.availableAt = new Date(data.availableAt);
 	if (data.completedAt) {
@@ -2866,6 +2873,7 @@ const reviewDetailSchemaResponseTransformer = (data: any) => {
 		data.completedAt = new Date(data.completedAt);
 	}
 	data.createdAt = new Date(data.createdAt);
+	data.evidence = data.evidence.map((item: any) => reviewEvidenceSchemaResponseTransformer(item));
 	data.item = itemRefSchemaResponseTransformer(data.item);
 	data.orderedAt = new Date(data.orderedAt);
 	data.practices = data.practices.map((item: any) => reviewPracticeSchemaResponseTransformer(item));

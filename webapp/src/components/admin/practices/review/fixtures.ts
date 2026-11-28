@@ -59,6 +59,7 @@ export function reviewSchedule(overrides: Partial<ReviewSchedule> = {}): ReviewS
 		createdAt: new Date("2026-08-01T09:00:00Z"),
 		updatedAt: new Date("2026-08-01T09:00:00Z"),
 		version: "0",
+		setupId: null,
 		...overrides,
 	};
 }

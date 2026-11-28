@@ -205,6 +205,7 @@ const withheldPractice: ReviewPractice = {
 	itemCounts: { listed: 1, reviewed: 0, reused: 0, withheld: 1, notReviewed: 0 },
 	results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
 	script: null,
+	level: "ITEM",
 };
 
 const reviewCases: LineageStateCase[] = [
@@ -675,6 +676,7 @@ export const richReviewFixture = (() => {
 			script: null,
 			itemCounts: { listed: 1, reviewed: 1, reused: 0, withheld: 0, notReviewed: 0 },
 			results: resultCounts([result.outcome]),
+			level: "ITEM",
 		})),
 	});
 	if (review.runtime === null || review.runtime.jobs.length !== 1) {
