@@ -54,6 +54,7 @@ class ScheduledJobLockTest {
             Map.entry("ContributorService#evictContributorsCache", "LOCAL"),
             Map.entry("ReleaseCheckService#poll", "LOCAL"),
             Map.entry("GitHubAppSubscriptionMonitor#check", "LOCAL"),
+            Map.entry("ReleaseHistory#report", "ROW"),
             Map.entry("CredentialRotationService#rotateBatch", "ROW"),
             Map.entry("SyncJobService#refreshLeases", "LOCAL"),
             Map.entry("SyncJobService#flushBufferedProgress", "LOCAL"),

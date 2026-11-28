@@ -1204,6 +1204,14 @@ needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml
 {{- end -}}
 
 {{/*
+"true" when the server reaches the Kubernetes API: for the sandboxes, for the backup schedules, or, once the operator
+states the API endpoint, for the revision of its rollout (docs/admin/instance-admin.mdx § Update checks).
+*/}}
+{{- define "hephaestus.kubernetesApiAccess" -}}
+{{- or .Values.sandbox.enabled (eq (include "hephaestus.backupsRead" .) "true") (ne (toString .Values.networkPolicy.kubernetesApi.cidr) "") -}}
+{{- end -}}
+
+{{/*
 The groups of files/hephaestus-alerts.yml that apply to this release, as a JSON list. The server reports the backup
 age only when hephaestus.backupsRead gives it the backup CronJobs, so the group hephaestus-backups renders on the same
 switch.

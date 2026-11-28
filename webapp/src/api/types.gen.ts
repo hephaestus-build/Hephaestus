@@ -5719,15 +5719,25 @@ export type ReleaseResearchDataset = {
 };
 
 /**
- * A release the server role started on this instance.
+ * A rollout of the server Deployment, as its Deployment revision numbers it, or one server start where the server
+ * could not read its rollout.
  */
 export type ReleaseStart = {
 	channel: ReleaseChannel;
 	commit?: string;
 	environment: string;
+	/**
+	 * the entry's row, which identifies it among entries with the same time
+	 */
+	id: number;
 	image?: string;
 	/**
-	 * when the server role first started this release; a restart does not change it
+	 * the Deployment revision of the rollout; absent for a server start
+	 */
+	revision?: number;
+	/**
+	 * when the first server of the rollout recorded it, by the database clock; a restart does not
+	 * change it
 	 */
 	startedAt: Date;
 	version: string;
@@ -5743,7 +5753,7 @@ export type ReleaseStatus = {
 	 */
 	failure?: ReleaseCheckFailure;
 	/**
-	 * the releases this instance ran, newest first
+	 * the rollouts of this deployment environment, newest first
 	 */
 	history: Array<ReleaseStart>;
 	/**
@@ -5771,7 +5781,7 @@ export type ReleaseStatus = {
 	 */
 	running: RunningRelease;
 	/**
-	 * when this instance started the running release, absent unless the newest start is it
+	 * when the newest rollout became active, absent unless this server runs it
 	 */
 	runningSince?: Date;
 	/**

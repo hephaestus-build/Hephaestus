@@ -281,3 +281,36 @@ The shared composer, review and digest have no goal capability.
 
 The 1.0 release walk-through saves and forgets a goal before the person connects a project.
 It checks owner access, exact journal replay, export withdrawal, and a separate personal-goal canary for a default and a granted DM.
+
+## Update — 2026-11-28: One goal for each account, and a project only scopes its practice links
+
+The update of 2026-11-27 moved the personal goal to the account, but decisions 1 to 3 still describe workspace rows.
+This update states the rules that the merged code follows (`account/PersonalGoal.java`, `account/PersonalGoals.java`).
+For a personal goal, it replaces decision 1's workspace binding, decision 2's limit and decision 3's table.
+
+- **The account owns the goal.** The `personal_goal` row has the owner account and no workspace or project. Its access boundary is the PostgreSQL owner policy.
+- **A person has one current goal.** The limit of three active goals in each workspace does not apply. Its text has 1 to 500 characters.
+- **A project only scopes practice links.** A goal has no practice link now. A link comes with its first caller. It is then a separate row that names the goal and a practice that one of the person's projects uses. The link row binds its workspace (ADR 0084). A project decides which practices a goal can link. It never owns, reads or deletes the goal.
+- **Close, Reopen and goal check-ins come with their first caller.** That change adds their rows to the table below.
+
+| State | Act or event | Next state |
+| --- | --- | --- |
+| No goal | **Save** | A goal with a new revision. The confirmation shows **Undo**. |
+| A goal | **Undo** of the save | A **Forget** at the revision that the save returned |
+| A goal | **Edit** the text | The same goal with a new revision. The confirmation shows **Undo**. |
+| A goal | **Undo** of an edit | An **Edit** back to the earlier words, as a new revision |
+| A goal | **Forget**, after a recent sign-in | No goal. The words are cleared, and the row keeps the goal ID and revision, so a retry confirms the same deletion. The journal records a deletion fact with the goal ID only. Decision 6 makes its uses stale. |
+| Any | An act that names a revision other than the current one | Refused as changed since shown, under the owner lock |
+| Any | The account is not active, or its erasure has started | **Save**, **Edit** and **Forget** are refused |
+| A goal with a link | The practice leaves the project's practices | The goal and the link stay. The line says that the practice is no longer in use. **Edit** removes it. |
+| A goal | The membership in a project ends | The goal stays. That project's links stop showing. |
+| A goal | The workspace is purged | The goal stays. That workspace's links are deleted with it. |
+| A goal | The account is erased | No goal, and no link |
+
+Each change of the words, and each **Forget**, expires a ready export of the owner.
+
+Decision 5's list shows the goal in each workspace, next to the account's help settings.
+Decision 6 applies unchanged.
+
+In § Consequences, "three active goals" reads "one goal". In § Revisit trigger, the first line reads "People ask for more than one goal".
+In § Confirmation, the state table test covers the rows above, and the owner-only test covers one account that is a member of two workspaces.

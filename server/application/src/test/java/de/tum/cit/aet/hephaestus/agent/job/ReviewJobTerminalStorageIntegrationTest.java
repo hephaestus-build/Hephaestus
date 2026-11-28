@@ -75,7 +75,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         var job = running(
                 "runtime-outcome-" + status.name().toLowerCase(Locale.ROOT).replace('_', '-'));
         var fence = RuntimeJobTestData.fence(jdbc, job);
-        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
+        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class), event -> {});
 
         assertThat(transactions.<Integer>execute(
                         tx -> terminal.transition(job.getId(), fence, status, Instant.now(), null)))
@@ -95,7 +95,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void shouldPreserveARefusalAndEndItsRunAsFailed() {
         var job = running("runtime-refused");
         var fence = RuntimeJobTestData.fence(jdbc, job);
-        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
+        var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class), event -> {});
         var refusal = new JsonMapper().createObjectNode().put("outcome", RefusalOutcome.WORKSPACE_REFUSED.name());
 
         assertThat(transactions.<Integer>execute(tx -> terminal.refuse(job.getId(), fence, refusal)))
@@ -112,7 +112,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         var job = running("runtime-outcome-stale");
         var stale = mock(AgentRuns.class);
         when(stale.end(any(), any())).thenReturn(AgentRuns.EndOutcome.STALE);
-        var terminal = new ReviewJobTerminal(jobs, stale, mock(ReviewCompositionContinuation.class));
+        var terminal = new ReviewJobTerminal(jobs, stale, mock(ReviewCompositionContinuation.class), event -> {});
         var fence = RuntimeJobTestData.fence(jdbc, job);
 
         assertThatThrownBy(() -> transactions.execute(tx ->

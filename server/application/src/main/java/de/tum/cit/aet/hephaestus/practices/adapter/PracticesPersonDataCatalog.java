@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.adapter;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationReplies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -82,6 +83,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
     private final ObjectMapper mapper;
     private final FeedbackCopyCleanupCustody custody;
     private final PersonFeedbackAnswerRedaction answers;
+    private final PersonConversationReplies replies;
     private final PersonIdentityResolver identities;
     private final ScanReportService reports;
     private final AdviceRedaction advice;
@@ -207,6 +209,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                         new ExternalFeedbackPersonDataStore(
                                 custody,
                                 answers,
+                                replies,
                                 jdbc,
                                 mapper,
                                 "feedback_copy",

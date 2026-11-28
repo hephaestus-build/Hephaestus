@@ -301,6 +301,18 @@ erDiagram
         BYTEA private_key "NOT NULL"
     }
 
+    ReleaseActivation {
+        BIGINT id PK
+        TIMESTAMPTZ activated_at "NOT NULL"
+        VARCHAR(16) channel "NOT NULL"
+        VARCHAR(40) commit_sha
+        VARCHAR(36) deployment_uid UK
+        VARCHAR(64) environment UK "NOT NULL"
+        VARCHAR(512) image
+        BIGINT revision UK
+        VARCHAR(128) version "NOT NULL"
+    }
+
     ReleaseStart {
         BIGINT id PK
         VARCHAR(16) channel "NOT NULL"

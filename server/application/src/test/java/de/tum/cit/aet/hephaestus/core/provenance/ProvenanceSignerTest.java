@@ -43,7 +43,7 @@ class ProvenanceSignerTest extends BaseUnitTest {
     private final ProvenanceSigningKeyRepository repository = mock(ProvenanceSigningKeyRepository.class);
     private final ProvenanceKeys keys = new ProvenanceKeys(repository, secrets, Clock.fixed(AT, ZoneOffset.UTC));
     private final RunningRelease release =
-            new RunningRelease("1.0.0", new ReleaseProperties("", "", true, "local"), new MockEnvironment());
+            new RunningRelease("1.0.0", new ReleaseProperties("", "", true, "local", ""), new MockEnvironment());
     private ProvenanceSigningKey stored;
 
     @BeforeEach

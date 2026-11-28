@@ -374,7 +374,7 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 			${bound})
 		UPDATE review_practice SET method = jsonb_build_object('epoch', 1, 'modelDigest', review_model_digest(slots.models),
 			'models', slots.models)
-		FROM slots WHERE review_id = '${REVIEW}';
+		FROM (SELECT jsonb_strip_nulls(models) AS models FROM slots) slots WHERE review_id = '${REVIEW}';
 		INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key)
 		VALUES ('${runId}', 978001, 'REVIEW', 'BATCH', 'review:${REVIEW}');
 		INSERT INTO review_job (id, review_id, workspace_id, run_id, submitted_at, trace_id, input, config_snapshot)

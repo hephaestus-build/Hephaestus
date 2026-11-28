@@ -266,6 +266,8 @@ ReadReceipt.endLine
 ReadReceipt.matches
 ReadReceipt.startLine
 ReasonCountDTO.count
+ReleaseStartDTO.id # the row of a release history entry
+ReleaseStartDTO.revision # the Deployment revision of a server rollout
 RemovalGuardDTO.previousFiles
 RemovalGuardDTO.wouldRemove
 RepositoryInfoDTO.id  # identifier

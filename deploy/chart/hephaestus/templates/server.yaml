@@ -9,7 +9,8 @@
 {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) plus two minutes to boot and finish starting. */}}
 {{- $startupSeconds := 720 }}
 {{- $backups := eq (include "hephaestus.backupsRead" .) "true" }}
-{{- if or $sandbox.enabled $backups }}
+{{- $api := eq (include "hephaestus.kubernetesApiAccess" .) "true" }}
+{{- if $api }}
 {{- include "hephaestus.kubernetesApiCheck" . }}
 {{- end }}
 apiVersion: v1
@@ -19,6 +20,39 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
 automountServiceAccountToken: false
+{{- if $api }}
+---
+# The server reads its own Pod and that Pod's ReplicaSet for the Deployment revision of its rollout. RBAC cannot name a
+# Pod or a ReplicaSet before Kubernetes creates it, so the Role grants get on all of them in this namespace, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "rollout-reader") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "rollout-reader") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "hephaestus.name" (dict "root" . "component" "rollout-reader") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -61,9 +95,9 @@ spec:
         {{- include "hephaestus.podLabels" (dict "root" . "component" "server") | nindent 8 }}
     spec:
       serviceAccountName: {{ $name }}
-      # The Kubernetes API, only for the sandboxes (the Role in sandbox.yaml) and the backup schedules (the Role in
-      # postgresql-backup.yaml). Without either, the server has no token.
-      automountServiceAccountToken: {{ or $sandbox.enabled $backups }}
+      # The Kubernetes API, only for the sandboxes (the Role in sandbox.yaml), the backup schedules (the Role in
+      # postgresql-backup.yaml) and the revision of its rollout (the Role below). Without it, the server has no token.
+      automountServiceAccountToken: {{ $api }}
       priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
@@ -309,6 +343,14 @@ spec:
             {{- end }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
+            {{- if $api }}
+            # The server reads its Pod, its ReplicaSet and that ReplicaSet's Deployment revision for release history
+            # (docs/admin/instance-admin.mdx § Update checks). Without the API, each server start is one entry.
+            - name: HEPHAESTUS_RELEASE_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- end }}
             - name: HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED
               value: {{ $config.commitIdentityResolutionEnabled | quote }}
           ports:

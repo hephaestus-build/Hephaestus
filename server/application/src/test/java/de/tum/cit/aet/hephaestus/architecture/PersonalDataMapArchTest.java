@@ -141,6 +141,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "pull_request_closing_issue",
             "pull_request_requested_team",
             "release_start",
+            // A ReplicaSet's template hash, a release version, a commit and an image digest.
+            "release_activation",
             // Rounded instance totals of a half-year that passed the floors of 5 people and 5 workspaces (ADR 0153).
             "usage_release",
             "provider_event_step", // Event ids and step names contain no person data.
@@ -163,18 +165,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * them loses nothing. The release that registers a table's store removes its entry.
      */
     private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.ofEntries(
-            Map.entry(
-                    "practice_advice",
-                    "Advice entries (ADR 0160). Advice writes come only in a release after the registration"),
-            Map.entry(
-                    "practice_advice_revision",
-                    "Advice revisions (ADR 0160). Advice writes come only in a release after the registration"),
-            Map.entry(
-                    "practice_advice_source",
-                    "Advice sources (ADR 0160). Advice writes come only in a release after the registration"),
-            Map.entry(
-                    "practice_advice_receipt",
-                    "One advice decision per review, by the entry's owner key (ADR 0160). Deleted with its entry"),
             Map.entry(
                     "mentor_event",
                     "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),

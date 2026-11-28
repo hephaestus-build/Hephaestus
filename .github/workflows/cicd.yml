@@ -78,6 +78,7 @@ jobs:
       queue-server-image: ${{ (github.event_name == 'merge_group' && (steps.filter.outputs.server-image == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.kubernetes == 'true')) }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       kubernetes-recovery: ${{ github.event_name == 'pull_request' && steps.filter.outputs.kubernetes-recovery == 'true' }}
+      release-history: ${{ github.event_name == 'pull_request' && steps.filter.outputs.release-history == 'true' }}
       # Checks that a release runs, selected when a change touches what they guard, so the change
       # that would break one fails on its own CI: ci-cd.mdx § Release checks on the change.
       # A push to main runs neither: its merge group did, and the nightly run on main repeats them.
@@ -726,6 +727,7 @@ jobs:
               - 'server/application/src/main/java/**/integration/slack/**'
               - 'scripts/sandbox-isolation*.ts'
               - 'scripts/sandbox-prepull-drill.ts'
+              - 'scripts/release-history-drill.ts'
               - 'scripts/crd-schemas.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
               - 'scripts/lib/runner-disk.ts'
@@ -780,6 +782,10 @@ jobs:
               - 'scripts/kubernetes-cluster.ts'
               - '.github/workflows/ci-kubernetes.yml'
               - '.github/workflows/kubernetes-nightly.yml'
+            # The release history drill runs only where the Kubernetes legs run, so only its script also selects them.
+            release-history:
+              - 'deploy/chart/hephaestus/templates/server.yaml'
+              - 'scripts/release-history-drill.ts'
             migrations:
               - 'server/application/src/main/resources/db/**'
             # Release notes and generated schema docs accompany a migration without changing Java behavior.
@@ -1449,6 +1455,7 @@ jobs:
       queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
       eviction-drill: ${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
+      history-drill: ${{ needs.detect-changes.outputs.release-history == 'true' }}
 
   # The latest release's chart, images and scripts upgraded to this run's, when the chart or the drill
   # changed. The drill resolves every image by the run's commit tag, under which `Docker` built or

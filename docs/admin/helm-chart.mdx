@@ -361,16 +361,19 @@ Each pod meets the Kubernetes Restricted Pod Security Standard:
 - A non-root user, `RuntimeDefault` seccomp, and no privilege escalation.
 - All capabilities dropped and a read-only root filesystem.
 - No host path, host network, or container runtime socket.
-- No service account token, except on three Pods. The server has one with `sandbox.enabled` or `postgresql.backup.enabled`. The agent-sandbox controller and the VictoriaMetrics Pod of the monitoring stack also have one.
+- No service account token, except on three Pods. The server has one with `sandbox.enabled`, `postgresql.backup.enabled` or `networkPolicy.kubernetesApi`. The agent-sandbox controller and the VictoriaMetrics Pod of the monitoring stack also have one.
 
-The server's service account has two Roles, and only with the feature that needs it:
+The server's service account has up to three Roles, and only with the feature that needs it:
 
 - With `sandbox.enabled`: the sandbox Role, in the sandbox namespace only ([Sandboxes](./sandboxes)).
 - With `postgresql.backup.enabled`: `get` on the two backup CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`, by name, in the release namespace. No `list`, no `watch`, and no other resource.
   The server reads when the last backup succeeded, for `HephaestusBackupStale` ([Backup metrics](./metrics#backup-metrics)).
   A backup that never runs, such as a Job that waits `Pending`, fails no Job. Only its CronJob shows that no backup succeeded.
+- With any of these, or with `networkPolicy.kubernetesApi` alone: `get` on Pods and ReplicaSets in the release namespace. No `list`, no `watch`, and no other resource.
+  The server reads its own Pod and the Pod's ReplicaSet. The ReplicaSet gives the revision of its rollout for the release history ([Instance administration](./instance-admin#update-checks)).
+  RBAC cannot name a Pod or a ReplicaSet before Kubernetes creates it. Thus, the Role covers all of them in the namespace.
 
-Without either feature, the server has no token and no egress to the Kubernetes API.
+Without any of these, the server has no token and no egress to the Kubernetes API.
 The token also carries what the cluster grants to every authenticated identity, by default API discovery and self reviews of access.
 Check it with `kubectl auth can-i --list --as=system:serviceaccount:<namespace>:<release>-server`.
 

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.database.PracticeMigrationFixture;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationReplies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
@@ -73,6 +74,7 @@ class AgentPersonDataCatalogDatabaseTest {
                 mapper,
                 mock(FeedbackCopyCleanupCustody.class),
                 mock(PersonFeedbackAnswerRedaction.class),
+                mock(PersonConversationReplies.class),
                 mock(PersonIdentityResolver.class),
                 mock(ScanReportService.class),
                 mock(AdviceRedaction.class));

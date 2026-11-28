@@ -901,8 +901,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(call -> new AgentResult(
                         false,
                         Map.of("exitCode", call.<SandboxResult>getArgument(0).exitCode())));
-        var terminal =
-                new ReviewJobTerminal(jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class));
+        var terminal = new ReviewJobTerminal(
+                jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class), context);
         return new ReviewAttemptResults(
                 jobs,
                 admission,

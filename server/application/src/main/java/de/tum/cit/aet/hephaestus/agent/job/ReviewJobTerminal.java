@@ -16,11 +16,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.MissingNode;
 
@@ -45,20 +44,29 @@ public class ReviewJobTerminal {
     private final ReviewJobRepository jobs;
     private final AgentRuns runs;
     private final @Nullable ReviewCompositionContinuation continuation;
+    private final ApplicationEventPublisher events;
 
     /**
      * @param continuation absent where this process captures no work, so a composition keeps no inputs
      */
     @Autowired
     public ReviewJobTerminal(
-            ReviewJobRepository jobs, AgentRuns runs, ObjectProvider<ReviewCompositionContinuation> continuation) {
-        this(jobs, runs, continuation.getIfAvailable());
+            ReviewJobRepository jobs,
+            AgentRuns runs,
+            ObjectProvider<ReviewCompositionContinuation> continuation,
+            ApplicationEventPublisher events) {
+        this(jobs, runs, continuation.getIfAvailable(), events);
     }
 
-    ReviewJobTerminal(ReviewJobRepository jobs, AgentRuns runs, @Nullable ReviewCompositionContinuation continuation) {
+    ReviewJobTerminal(
+            ReviewJobRepository jobs,
+            AgentRuns runs,
+            @Nullable ReviewCompositionContinuation continuation,
+            ApplicationEventPublisher events) {
         this.jobs = jobs;
         this.runs = runs;
         this.continuation = continuation;
+        this.events = events;
     }
 
     /** Moves the attempt's job to a terminal status and ends its run; 0 when the attempt no longer owns the job. */
@@ -102,7 +110,7 @@ public class ReviewJobTerminal {
     /**
      * Ends an attempt that composed its review’s feedback. Its run’s end settles open model calls. The job keeps
      * what its measuring attempt recorded under {@link #MEASURED}; only a completed measurement waits for delivery.
-     * After the commit, the inputs that the composition kept go.
+     * After the commit, {@link CompositionInputsRelease} releases what the review kept for its composition.
      *
      * @return false when the attempt no longer owns the job
      */
@@ -121,14 +129,7 @@ public class ReviewJobTerminal {
         ReviewJob completed = jobs.findById(jobId).orElseThrow();
         if (status == ReviewJobStatus.COMPLETED) completed.setProcessingStatus(ProcessingStatus.PENDING);
         jobs.saveAndFlush(completed);
-        if (TransactionSynchronizationManager.isSynchronizationActive())
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    forgetCompositionInputs(completed);
-                }
-            });
-        else forgetCompositionInputs(completed);
+        events.publishEvent(new CompositionAttemptEnded(completed.getWorkspaceId(), completed.getId()));
         return true;
     }
 

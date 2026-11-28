@@ -103,9 +103,9 @@ spec:
           protocol: TCP
         {{- end }}
     {{- end }}
-    {{- if or .Values.sandbox.enabled (eq (include "hephaestus.backupsRead" .) "true") }}
+    {{- if eq (include "hephaestus.kubernetesApiAccess" .) "true" }}
     # The Kubernetes API, at the address and port that the operator qualified for the network plugin: for the
-    # sandboxes and for the backup schedules.
+    # sandboxes, the backup schedules and the revision of the server's rollout.
     - to:
         - ipBlock:
             cidr: {{ .Values.networkPolicy.kubernetesApi.cidr }}

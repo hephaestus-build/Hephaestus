@@ -26,9 +26,11 @@ const status = {
 	runningSince: "2026-09-08T00:00:00Z",
 	history: [
 		{
+			id: 2,
 			version: "1.2.3",
 			channel: "RELEASE",
 			environment: "production",
+			revision: 2,
 			startedAt: "2026-09-08T00:00:00Z",
 		},
 	],

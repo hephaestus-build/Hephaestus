@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
+import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.activation;
 import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.running;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -59,7 +60,7 @@ class ReleaseCheckServiceTest {
 
     private ReleaseCheckService service(String version, boolean enabled) {
         var properties = new ReleaseProperties(
-                ReleaseFixtures.COMMIT, ReleaseFixtures.IMAGE, enabled, ReleaseFixtures.ENVIRONMENT);
+                ReleaseFixtures.COMMIT, ReleaseFixtures.IMAGE, enabled, ReleaseFixtures.ENVIRONMENT, "");
         return new ReleaseCheckService(running(version), history, client, clock, properties);
     }
 
@@ -76,16 +77,17 @@ class ReleaseCheckServiceTest {
     private static final Failed OUTAGE = new Failed(ReleaseCheckFailure.UNAVAILABLE, null);
 
     @Test
-    void shouldReportWhenTheRunningReleaseLastStartedWhenAnInstanceRolledBackToIt() {
-        var current = running("1.2.3").get();
-        var newer = running("1.3.0").get();
-        when(history.recent())
-                .thenReturn(List.of(
-                        ReleaseHistory.startOf(current, NOW),
-                        ReleaseHistory.startOf(newer, NOW.minus(DAY)),
-                        ReleaseHistory.startOf(current, NOW.minus(DAY.multipliedBy(2)))));
+    void shouldReportTheRolloutsAndWhenTheRunningRolloutBecameActive() {
+        // A rollback to 1.2.3 is revision 3 of the Deployment, after 1.3.0 in revision 2.
+        var recent = List.of(
+                activation("1.2.3", 3, NOW),
+                activation("1.3.0", 2, NOW.minus(DAY)),
+                activation("1.2.3", 1, NOW.minus(DAY.multipliedBy(2))));
+        when(history.recent()).thenReturn(recent);
+        when(history.runningSince(recent)).thenReturn(NOW);
         var status = service("1.2.3", true).status();
         assertThat(status.runningSince()).isEqualTo(NOW);
+        assertThat(status.history()).extracting(ReleaseStartDTO::revision).containsExactly(3L, 2L, 1L);
         assertThat(status.history()).extracting(ReleaseStartDTO::version).containsExactly("1.2.3", "1.3.0", "1.2.3");
     }
 
@@ -94,16 +96,6 @@ class ReleaseCheckServiceTest {
         // The poll runs every minute, and a development build never checks.
         service("0.0.0-development", true).poll();
         verifyNoInteractions(history);
-    }
-
-    @Test
-    void shouldReportNoStartWhenTheNewestStartIsAnotherRelease() {
-        // Recording the rollback to 1.2.3 failed, so its earlier run is the only 1.2.3 row.
-        when(history.recent())
-                .thenReturn(List.of(
-                        ReleaseHistory.startOf(running("1.3.0").get(), NOW),
-                        ReleaseHistory.startOf(running("1.2.3").get(), NOW.minus(DAY))));
-        assertThat(service("1.2.3", true).status().runningSince()).isNull();
     }
 
     @Test

@@ -54,6 +54,13 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                             "core.auth.audit.AuthEventWriter.writeInCurrentTransaction",
                             false)),
             Map.entry(
+                    "agent.job.CompositionInputsRelease.ended",
+                    new Repair(
+                            RepairKind.DURABLE,
+                            "The publication registry and NotificationRedeliveryJob redeliver the release; ReviewCompositionContinuation.forget stops, resumes or removes only what is still there.",
+                            "notification.NotificationRedeliveryJob.resubmitFailed",
+                            true)),
+            Map.entry(
                     "agent.job.FeedbackRepairWake.observed",
                     new Repair(
                             RepairKind.DURABLE,

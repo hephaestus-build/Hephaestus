@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.release;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -18,8 +19,8 @@ import org.jspecify.annotations.Nullable;
  * @param retryUntil   the wait GitHub named on a rate limit; a manual check before it is refused
  * @param failure      why the last attempt did not complete, when {@code status} is {@code FAILED}
  * @param latest       the newest published release as of {@code lastSuccess}
- * @param runningSince when this instance started the running release, absent unless the newest start is it
- * @param history      the releases this instance ran, newest first
+ * @param runningSince when the newest rollout became active, absent unless this server runs it
+ * @param history      the rollouts of this deployment environment, newest first
  */
 public record ReleaseStatusDTO(
         @NonNull RunningReleaseDTO running,
@@ -54,25 +55,33 @@ public record ReleaseStatusDTO(
             @NonNull List<RuntimeRole> roles) {}
 
     /**
-     * A release the server role started on this instance.
+     * A rollout of the server Deployment, as its Deployment revision numbers it, or one server start where the server
+     * could not read its rollout.
      *
-     * @param startedAt when the server role first started this release; a restart does not change it
+     * @param id        the entry's row, which identifies it among entries with the same time
+     * @param revision  the Deployment revision of the rollout; absent for a server start
+     * @param startedAt when the first server of the rollout recorded it, by the database clock; a restart does not
+     *                  change it
      */
     public record ReleaseStartDTO(
+            @NonNull Long id,
             @NonNull String version,
             @NonNull ReleaseChannel channel,
             @NonNull String environment,
             @Nullable String commit,
             @Nullable String image,
+            @Nullable Long revision,
             @NonNull Instant startedAt) {
-        static ReleaseStartDTO from(ReleaseStart entry) {
+        static ReleaseStartDTO from(ReleaseActivation entry) {
             return new ReleaseStartDTO(
+                    Objects.requireNonNull(entry.getId()),
                     entry.getVersion(),
                     entry.getChannel(),
                     entry.getEnvironment(),
                     entry.getCommit(),
                     entry.getImage(),
-                    entry.getStartedAt());
+                    entry.getRevision(),
+                    entry.getActivatedAt());
         }
     }
 

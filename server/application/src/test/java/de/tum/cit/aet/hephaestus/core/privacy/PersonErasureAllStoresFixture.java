@@ -507,6 +507,86 @@ final class PersonErasureAllStoresFixture {
                 account,
                 "ordinal",
                 1);
+        // The person's advice about the practice of their result, written from that result.
+        UUID advice = UUID.randomUUID();
+        UUID revision = UUID.randomUUID();
+        long practice = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT practice_id FROM result WHERE id=? AND workspace_id=?",
+                Long.class,
+                person.result(),
+                workspace));
+        row(
+                "practice_advice",
+                "id",
+                advice,
+                "workspace_id",
+                workspace,
+                "person_account_id",
+                account,
+                "practice_id",
+                practice,
+                "state",
+                "CURRENT",
+                "version",
+                1L,
+                "latest_revision",
+                1,
+                "created_at",
+                now);
+        row(
+                "practice_advice_revision",
+                "id",
+                revision,
+                "workspace_id",
+                workspace,
+                "person_account_id",
+                account,
+                "advice_id",
+                advice,
+                "number",
+                1,
+                "text",
+                CANARY + " advice",
+                "review_id",
+                person.review(),
+                "cited_count",
+                1,
+                "source_count",
+                1,
+                "written_at",
+                now);
+        row(
+                "practice_advice_source",
+                "workspace_id",
+                workspace,
+                "person_account_id",
+                account,
+                "revision_id",
+                revision,
+                "result_id",
+                person.result(),
+                "cited",
+                true,
+                "ordinal",
+                0);
+        row(
+                "practice_advice_receipt",
+                "advice_id",
+                advice,
+                "workspace_id",
+                workspace,
+                "review_id",
+                person.review(),
+                "person_account_id",
+                account,
+                "kind",
+                "REVISE",
+                "content_digest",
+                new byte[32],
+                "version",
+                1L,
+                "written_at",
+                now);
         // A thread resolution goes with the person's copy on the work.
         UUID copyId = jdbc
                 .query(

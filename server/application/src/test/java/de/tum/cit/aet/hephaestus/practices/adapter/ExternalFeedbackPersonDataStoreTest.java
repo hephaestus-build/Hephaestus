@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationReplies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
@@ -45,6 +46,7 @@ class ExternalFeedbackPersonDataStoreTest {
         var store = new ExternalFeedbackPersonDataStore(
                 mock(FeedbackCopyCleanupCustody.class),
                 mock(PersonFeedbackAnswerRedaction.class),
+                mock(PersonConversationReplies.class),
                 jdbc,
                 mapper,
                 "copies",
